@@ -348,14 +348,12 @@ function instagramUsername(config: GameConfig | null): string | undefined {
   }
 }
 
-function buildPlatformOpenTarget(config: GameConfig | null, platform: Platform): { appUrl: string; webUrl: string } {
+function buildPlatformOpenTarget(config: GameConfig | null, platform: Platform): { appUrl?: string; webUrl: string } {
   const webUrl = platformUrl(config, platform)
 
   if (platform === 'GOOGLE') {
     const fallback = webUrl || 'https://www.google.com/maps'
-    const encodedFallback = encodeURIComponent(fallback)
     return {
-      appUrl: `comgooglemaps://?q=${encodedFallback}`,
       webUrl: fallback,
     }
   }
@@ -917,6 +915,14 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     window.sessionStorage.setItem(openedPlatformStorageKey(brandId), platform)
     setSelectedPlatform(platform)
     const target = buildPlatformOpenTarget(config, platform)
+
+    // Google review links are already universal HTTPS deep links. Passing the
+    // whole URL through a Maps text-search scheme searches for the URL instead
+    // of opening the review composer, especially on iOS.
+    if (!target.appUrl) {
+      window.location.assign(target.webUrl)
+      return
+    }
 
     const fallbackTimer = window.setTimeout(() => {
       window.location.assign(target.webUrl)

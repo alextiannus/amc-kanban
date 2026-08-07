@@ -41,7 +41,12 @@ assert.match(customerGameClient, /if \(!copied\)[\s\S]*?return/, 'copy failures 
 assert.match(customerGameClient, /<CheckCircle2/)
 assert.match(customerGameClient, /<ExternalLink/)
 
-assert.match(customerGameClient, /comgooglemaps:\/\//)
+assert.doesNotMatch(
+  customerGameClient,
+  /comgooglemaps:\/\//,
+  'Google review URLs must not be converted into Google Maps text-search queries',
+)
+assert.match(customerGameClient, /if \(!target\.appUrl\) \{[\s\S]*?window\.location\.assign\(target\.webUrl\)[\s\S]*?return/)
 assert.match(customerGameClient, /xhsdiscover:\/\//)
 assert.match(customerGameClient, /instagram:\/\//)
 assert.match(customerGameClient, /window\.setTimeout\(\(\) => \{[\s\S]*?\}, 900\)/)
