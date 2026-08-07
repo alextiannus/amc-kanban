@@ -1,228 +1,96 @@
-# Product Requirement Document (PRD): Interactive Lucky Wheel Game Module (AI-Vue)
+# Product Requirement Document: Interactive Lucky Wheel Game
 
-## 1. Executive Summary & Goals
+## 1. Current Product Contract
 
-The AMC Interactive Lucky Wheel Game (AI-Vue) is an on-the-spot customer engagement widget. It follows the browser language and automatically prepares editable sharing drafts. The customer input is hidden: Google starts from a localized internal seed (Chinese: `这个商家不错`; English: `This business is good.`), while all platform versions are expanded with the brand name, description, location, and published menu facts. Public posting is never required for points or prizes.
+The customer activity uses one permanent brand QR URL: `https://amc-kanban.immedi.ai/game/{brandId}`. Activity dates, prize configuration, and round identifiers never appear in the QR payload.
 
-### Key Objectives:
-- **Hidden Default Seed**: Do not show experience tags or a Google input field; initialize a localized default sentence automatically.
-- **Automatic Sharing Assistant**: Prepare social brand-introduction drafts and expand the default Google seed with published merchant facts without a generate button.
-- **Zero Friction**: Eliminate login barriers. Customer participation is session-based and instantaneous.
-- **Clerk-Oriented Controls**: Simplify task validation and prize claiming with a direct 6-digit PIN entry on the customer's device.
+Each brand schedules explicit activity rounds. A round is active for the half-open UTC interval `[startsAt, endsAt)`, displayed and edited in the brand timezone. Rounds for the same game cannot overlap. When no round is active, draft generation, entry-point awards, and spins are paused; the public page shows the next scheduled start when available.
 
----
+During an active round, the first customer screen automatically prepares editable drafts for every enabled platform among Google, Xiaohongshu, and Instagram. The first successful “copy and open” action on any enabled platform grants 5 points. The system rewards the platform-opening action only: it does not verify, track, or claim that a public review or post was submitted. A database uniqueness constraint guarantees one entry award per activity round and anonymous browser session.
 
-## 2. User Scenarios & UX Flow
+After the entry award has been claimed, returning to the page or scanning the permanent QR again opens the game-only view. That view contains points, wheel/grid, results, unclaimed rewards, and the prize pool; it does not contain the sharing cards or an “Optional public sharing” section.
 
-### 2.1 Customer H5 Experience (Mobile First)
+## 2. Customer Flow
 
 ```mermaid
 graph TD
-    A[Scan QR Code in Store] --> B[Enter Game Homepage]
-    B --> C[Use Browser Language]
-    B --> D[Auto-generate Xiaohongshu and Instagram Brand Drafts]
-    B --> E[Use Hidden Localized Default Seed]
-    E --> F[Auto-generate Google Review With Brand Facts]
-    E --> G[Submit On-page Feedback]
-    G --> H[Clerk Enters PIN]
-    H --> I[Receive +5 Points Once Per Business Day]
-    D --> J[Preview and Edit Platform Versions]
-    F --> J
-    J --> K[Copy and Open External Platform]
-    K --> L[Optional Public Sharing]
-    I --> M[Spin Wheel - Cost 5 Points]
-    M --> N[Win Reward & Display 6-Character Code]
-    N --> O[Show Clerk to Claim Reward]
+    A[Scan permanent brand QR] --> B{Active round?}
+    B -- No --> C[Paused state and next start]
+    B -- Yes --> D{Entry award already claimed?}
+    D -- No --> E[Auto-generate all enabled platform drafts]
+    E --> F[Customer reviews or edits draft]
+    F --> G[Copy and open any platform]
+    G --> H[Atomically grant 5 points once for this round]
+    H --> I[Open external platform]
+    D -- Yes --> J[Game-only view]
+    I --> J
+    J --> K[Spin: costs 5 points]
+    K --> L[Show result and redemption code]
 ```
 
-- **UI Details**: Mobile-first white cards on a neutral background, with a merchant-colored header and game accents. The wheel/grid, platform drafts, PIN confirmation, and prize pool remain readable at a 390 px viewport without horizontal scrolling.
-- **Automatic Locale**: Draft language follows the browser/page locale. The customer page has no separate language selector.
-- **Automatic Social Drafts**: On the first visit of the business day, enabled Xiaohongshu and Instagram cards are populated automatically from published merchant facts. These drafts use neutral brand-introduction wording and must not claim the customer visited, purchased, or recommends the business.
-- **Google Hidden Seed**: Google Review input is hidden. The page supplies `这个商家不错` for Chinese browsers or `This business is good.` for other browsers and automatically expands it with the merchant's published brand name, description, location, and menu facts. The draft remains editable and continues to show the accuracy reminder before copying.
-- **Editable Platform Drafts**: Each version remains editable before a full-width “Copy and open” action. Google drafts contain no hashtags, requested rating, or promotional reward language; social drafts use at most five relevant hashtags.
-- **Return Continuity**: Server-generated drafts can be restored after refresh. Customer edits and the opened platform are stored in `brandId`-scoped `sessionStorage`; customer edits are not written back to the server.
-- **Accessibility and Failure Handling**: The automatic-generation status, editors, and platform actions provide bilingual labels, ARIA live status, visible keyboard focus, and touch feedback. Clipboard failure keeps the customer on the page and exposes manual-copy guidance instead of navigating away.
+- Browser language selects Chinese or English draft output; there is no manual language picker.
+- All enabled platform drafts are generated in one request and remain editable. Google comes first visually, followed by Xiaohongshu and Instagram.
+- Before copying, the customer confirms that the edited text reflects their genuine experience. Google output must not request a star rating or mention points, prizes, discounts, free goods, or incentives.
+- Clipboard failure and reward-request failure keep the customer on the page. Navigation occurs only after copying succeeds and the reward endpoint returns either newly awarded or already claimed.
+- The anonymous identity is the existing `brandId`-scoped local-storage session. Clearing browser data or changing devices creates a new anonymous identity.
+- Returning through `pageshow` or page visibility refreshes the server status so the game view appears without relying on the current point balance.
 
-### 2.2 Merchant Dashboard & Table Tent QR Poster
+## 3. Merchant Flow and Round Scheduling
 
-- **Merchant Controls**:
-  - Customize and download printable PDF table tents with brand logos and call-to-actions.
-  - Set game configuration: customize wheel segments, win probabilities, and Clerk PIN.
-  - Track prize inventory and claimed coupons.
-  - Use one permanent QR code per brand. The QR payload is always `https://amc-kanban.immedi.ai/game/{brandId}` and never contains a prize ID, configuration ID, timestamp, or version.
-  - Saving reward, probability, inventory, poster copy, or poster theme changes takes effect immediately for future visits without requiring the merchant to reprint the QR sticker.
+- Merchants can create multiple future rounds with explicit start and end times. Times are entered in the brand timezone and stored as UTC.
+- A future round may be edited or deleted. Once active, its start is locked and only its end may be changed, subject to validity and overlap checks. Ended rounds are read-only.
+- Starting a new round resets only entry-award eligibility. Existing points, daily spin counts, prize inventory, issued rewards, redemption records, and permanent QR codes remain unchanged.
+- The dashboard shows scheduled, active, and ended states. A game with no active round is intentionally paused.
+- Super Rola is not backfilled with an automatic round during rollout; its first round must be scheduled explicitly in the dashboard.
 
----
+## 4. Data and API Contract
 
-## 3. Detailed Feature Requirements
-
-### 3.1 Session & Auth Management (Zero Login)
-- No email, phone, or password inputs required for the customer.
-- H5 generates a random UUID client-side and stores it in `localStorage` under `amc-game-session:{brandId}`.
-- Points, feedback tasks, AI share drafts, and spin logs are bound to the `sessionId` + `brandId`.
-- Session is transient. Clearing browser cache deletes points and uncollected prizes.
-
-### 3.2 Feedback Points Task
-- The customer submits the localized default sentence. The client maps it to the compatibility tag `OTHER`; the task type is `EXPERIENCE_FEEDBACK` and starts as `PENDING`.
-- A valid clerk PIN changes the task to `APPROVED` and grants exactly 5 points. The same game session can receive this reward only once per brand business day.
-- Cached clients may still submit `REVIEW_SUBMIT`; the server normalizes it to the same once-per-day feedback reward and ignores `reviewPlatform` when determining eligibility.
-- `/api/game/status` returns the current business day's feedback task so pending PIN and already-awarded states survive refresh.
-
-### 3.3 AI Sharing Drafts & Abuse Protection
-- The public draft endpoint validates an existing game session, enabled platforms, browser locale, draft mode, and the 240-character detail limit.
-- `BRAND_INTRO` mode returns only enabled Xiaohongshu/Instagram drafts from published merchant facts. `EXPERIENCE` mode receives the client-provided localized default sentence and returns Google plus enabled social versions using the brand name, description, location, and menu facts. Invalid output or unavailable AI falls back to deterministic editable templates.
-- Google output must remain neutral and must never request a rating or mention incentives, discounts, free goods, or rewards. This follows the [Google Maps policy on incentivized reviews](https://support.google.com/contributionpolicy/answer/16597558?hl=en) and [Google Maps contributed-content policy](https://support.google.com/contributionpolicy/answer/7400114?hl=en-GB).
-- Limits are three generation attempts per session/business day, 60 AI calls per HMAC-anonymized IP/business day, and 300 AI calls per brand/business day. Quota reservation is atomic; raw IP addresses are never stored.
-- Reaching the session limit returns the latest draft without another model call. IP/brand limits or model failure return a template fallback so the customer never reaches a dead end.
-
-### 3.4 Spin Resilience & Guardrails
-- **Spin Crash Protection**: If the browser reloads or crashes mid-spin, the server has already committed the spin event. Upon remounting, the H5 queries `/api/game/status`. If an unclaimed (`UNCLAIMED`) prize exists, it bypasses the spin animation and directly shows the redemption card.
-- **Infinite/Limited Inventories**: Prize inventories support numeric limits or `Null` representing infinite supply. The server enforces transactional inventory decrements on spin.
-- **Reward Identity**: Changing a reward name or type creates a new reward definition with fresh inventory and claim counters. Probability or inventory-limit-only edits retain the existing reward identity and counters.
-- **Issued Reward Preservation**: Every spin log snapshots the reward name, type, and image at win time. Later reward edits or deletion never change an issued reward, its redemption terms, or its expiry.
-
----
-
-## 4. Prisma Database Schema
+### 4.1 Models
 
 ```prisma
-model GameConfig {
-  id                 String      @id @default(cuid())
-  brandId            String      @unique
-  brand              Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  
-  title              String      @default("Lucky Spin Wheel")
-  description        String?     
-  themeColor         String      @default("#3b82f6") 
-  
-  taskPhotoEnabled   Boolean     @default(true)
-  taskReviewEnabled  Boolean     @default(true)
-  clerkPin           String      @default("123456")
-  maxSpinsPerUserDay Int         @default(3)
-  
-  prizes             GamePrize[]
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+model GameActivityRound {
+  id           String     @id @default(cuid())
+  gameConfigId String
+  gameConfig   GameConfig @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
+  startsAt     DateTime
+  endsAt       DateTime
+  entryRewards GameEntryReward[]
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([gameConfigId, startsAt, endsAt])
 }
 
-model GamePrize {
-  id                 String      @id @default(cuid())
-  gameConfigId       String
-  gameConfig         GameConfig  @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
-  
-  name               String      
-  type               String      // COUPON | PHYSICAL | POINTS | THANKS
-  probability        Float       
-  totalInventory     Int?        // Null represents infinite inventory
-  claimedCount       Int         @default(0)
-  imageUrl           String?
-  
-  spinLogs           GameSpinLog[]
-  
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
-}
+model GameEntryReward {
+  id            String            @id @default(cuid())
+  roundId       String
+  round         GameActivityRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  sessionId     String
+  session       GameSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  platform      String
+  pointsAwarded Int               @default(5)
+  createdAt     DateTime          @default(now())
 
-model GameSession {
-  id                 String                   @id @default(cuid())
-  brandId            String
-  brand              Brand                    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  
-  sessionId          String                   
-  pointsBalance      Int                      @default(0)
-  
-  tasks              CustomerTaskSubmission[]
-  spinLogs           GameSpinLog[]
-  shareDrafts        GameShareDraft[]
-
-  createdAt          DateTime                 @default(now())
-  updatedAt          DateTime                 @updatedAt
-
-  @@unique([brandId, sessionId])
-}
-
-model CustomerTaskSubmission {
-  id                 String           @id @default(cuid())
-  sessionId          String
-  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  brandId            String
-  
-  taskType           String           
-  status             String           @default("PENDING") 
-  pointsAwarded      Int              @default(0)
-  experienceTags     String[]         @default([])
-  experienceNote     String?
-  rewardDate         String?
-  
-  images             String[]         
-  imageMd5s          String[]         
-  copyrightAgreed    Boolean          @default(true)
-  
-  reviewPlatform     String?          
-  reviewTimeRaw      String?          
-  
-  isManualOverride   Boolean          @default(false) 
-  reviewedAt         DateTime?
-  
-  createdAt          DateTime         @default(now())
-
-  @@unique([sessionId, taskType, rewardDate])
-}
-
-model GameShareDraft {
-  id                 String           @id @default(cuid())
-  brandId            String
-  sessionId          String
-  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  activityDate       String
-  locale             String
-  experienceTags     String[]         @default([])
-  experienceNote     String?
-  drafts             Json?
-  generationSource   String           @default("fallback")
-  generationCount    Int              @default(0)
-  aiCallCount        Int              @default(0)
-  ipHash             String?
-  lastLimitReason    String?
-  generatedAt        DateTime?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
-  @@unique([sessionId, activityDate])
-  @@index([brandId, activityDate])
-  @@index([ipHash, activityDate])
-}
-
-model GameSpinLog {
-  id                 String           @id @default(cuid())
-  sessionId          String
-  session            GameSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  prizeId            String?
-  prize              GamePrize?       @relation(fields: [prizeId], references: [id], onDelete: SetNull)
-  prizeNameSnapshot  String
-  prizeTypeSnapshot  String
-  prizeImageSnapshot String?
-  
-  pointsDeducted     Int              @default(5)
-  redemptionCode     String           @unique 
-  status             String           @default("UNCLAIMED") // UNCLAIMED | CLAIMED | EXPIRED
-  
-  claimedAt          DateTime?
-  expiresAt          DateTime?
-  
-  createdAt          DateTime         @default(now())
+  @@unique([roundId, sessionId])
+  @@index([sessionId, createdAt])
 }
 ```
 
----
+### 4.2 APIs
 
-## 5. Security & Operation Safeguards
+- `GET/POST/PATCH/DELETE /api/game/rounds`: authenticated round management. Mutations require brand ownership, reject overlaps, and enforce future/active/ended edit rules.
+- `POST /api/game/entry-reward`: public atomic award endpoint accepting `brandId`, public `sessionId`, and enabled `platform`. The server resolves the active round and never trusts a client round ID. No active round returns `409` with `code: "ACTIVITY_INACTIVE"`.
+- `GET /api/game/status`: returns points and prize state plus `activeRound`, `nextRound`, and `entryRewardClaimed` for the current round.
+- `POST /api/game/share-drafts`: requires an active round and `mode: "AUTO"`; one generation returns all enabled platforms. Existing quota and deterministic fallback protections remain.
+- `POST /api/game/spin`: requires an active round in addition to existing balance, daily-limit, inventory, and server-side random-selection checks.
 
-### 5.1 Rate Limiting & API Shielding
-1. **AI quota reservation**: A serializable database transaction atomically reserves at most 3 generations per brand/session/business day, 60 model calls per HMAC-anonymized IP/day, and 300 model calls per brand/day.
-2. **IP privacy**: The server stores only a one-way HMAC of a trusted client IP. If no trusted IP is available, session and brand limits still apply.
-3. **Safe fallback**: Model unavailability, invalid structured output, or IP/brand exhaustion returns deterministic editable templates with `source: "fallback"`; session exhaustion returns the latest draft without another model call.
-4. **Spin integrity**: Point deduction and prize selection remain server-side; the client cannot supply a chosen prize.
+Reward creation and the 5-point increment occur in one serializable transaction. The unique `[roundId, sessionId]` constraint and duplicate handling make rapid clicks and retries idempotent.
 
-### 5.2 Experience Data Boundary
-Experience tags, the optional note, and the latest generated server draft are retained for task audit and refresh recovery. Customer edits remain only in brand-scoped `sessionStorage`. AMC does not track publication, request screenshots, or ingest public posts as proof for points. Draft generation may use only customer-provided experience and published merchant facts; the UI continuously asks the customer to verify truthfulness before sharing.
+## 5. Acceptance and Safety
+
+- Google, Xiaohongshu, or Instagram may be the first rewarded platform; later platform opens in the same round do not add points.
+- A new round makes the same anonymous session eligible for one new entry award.
+- No active round prevents generation, awarding, and spinning without deleting balances or history.
+- Prize edits preserve the existing permanent-QR and issued-prize snapshot contracts.
+- Public copy says that the reward is for the first platform-opening action. It must never say AMC verified a review or post.
+- Round management, reward idempotency, page restoration, deep links, clipboard failure, inactive state, prize history, typecheck, and production build are required release checks.

@@ -359,7 +359,7 @@ Permanent QR contract:
 
 职责：店内扫码活动、抽奖配置、任务配置、海报和参与状态。
 
-顾客积分依据是站内真实体验反馈经店员 PIN 确认；公开平台分享完全自愿，不追踪、不截图验证，也不影响积分或奖品。AI 分享助手使用匿名公开接口一次返回所有已启用平台的可编辑草稿；每个游戏 session 和品牌营业日最多生成 3 次，并以 HMAC 匿名 IP 和品牌日额度防刷。缓存客户端的 `REVIEW_SUBMIT` 会按当日 `EXPERIENCE_FEEDBACK` 处理，`reviewPlatform` 不参与奖励资格判断。
+每个品牌通过起止时间明确的活动轮次控制顾客入口；轮次按品牌时区编辑、UTC 保存且不得重叠。生效轮次内，AI 分享助手一次返回全部已启用平台的可编辑草稿；同一轮次和匿名浏览器 session 首次成功复制并打开任意平台时原子发放 5 积分。系统不验证公开发布。没有生效轮次时，生成、领分和抽奖均暂停。
 
 接口：
 
@@ -367,12 +367,14 @@ Permanent QR contract:
 - `POST /api/game/spin`
 - `GET /api/game/status`
 - `GET/POST /api/game/share-drafts`
+- `GET/POST/PATCH/DELETE /api/game/rounds`
+- `POST /api/game/entry-reward`
 - `POST /api/game/tasks`
 - `POST /api/game/tasks/override`
 
-`POST /api/game/share-drafts` 接收 `brandId`、`sessionId`、浏览器 `locale` 与 `mode`。`BRAND_INTRO` 无需体验输入，只为启用的小红书/Instagram 生成基于商家公开资料的中性品牌介绍；`EXPERIENCE` 接收客户端按浏览器语言提供的默认 `experienceNote`（中文“这个商家不错”，英文 `This business is good.`），结合品牌名称、品牌介绍、门店地点和公开菜单信息生成 Google Review 及已启用平台版本。响应返回 `draftId`、按实际生成平台组织的 `drafts`、`source`、生成次数/剩余额度、可选 `limitReason` 与 `generatedAt`。`GET` 使用 `brandId`、`sessionId` 查询当日最新草稿；无草稿时返回字段稳定的空结果。
+`POST /api/game/share-drafts` 接收 `brandId`、`sessionId`、浏览器 `locale` 与 `mode: "AUTO"`，在生效轮次内一次生成全部已启用平台。响应保留 `draftId`、`drafts`、`source`、生成次数/剩余额度、可选 `limitReason` 与 `generatedAt`。现有 session、IP 和品牌额度继续防刷。
 
-`POST /api/game/tasks` 接受 `EXPERIENCE_FEEDBACK` 及兼容输入 `REVIEW_SUBMIT`；公开分享平台不参与奖励判断。`GET /api/game/status` 额外返回 `todayFeedbackSubmission`，其他既有响应字段保持兼容。
+`POST /api/game/entry-reward` 接受 `brandId`、`sessionId` 和已启用 `platform`，服务端解析当前轮次并在串行化事务中创建唯一奖励记录和增加 5 积分；重复请求幂等返回，非活动期返回 `409 ACTIVITY_INACTIVE`。`GET /api/game/status` 返回 `activeRound`、`nextRound` 与 `entryRewardClaimed`。`POST /api/game/spin` 同样要求当前存在生效轮次。
 
 前端页面：
 
@@ -531,7 +533,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **199** 个 API 路径、**282** 个 HTTP 方法组合。
+共 **202** 个 API 路径、**289** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -662,10 +664,12 @@ Permanent QR contract:
 | POST | `/api/data-analysis/upload` |
 | GET | `/api/events` |
 | GET, POST | `/api/game/config` |
+| POST | `/api/game/entry-reward` |
 | GET, POST | `/api/game/redemptions` |
+| DELETE, GET, PATCH, POST | `/api/game/rounds` |
+| GET, POST | `/api/game/share-drafts` |
 | POST | `/api/game/spin` |
 | GET | `/api/game/status` |
-| GET, POST | `/api/game/share-drafts` |
 | POST | `/api/game/tasks` |
 | POST | `/api/game/tasks/override` |
 | GET | `/api/integrations/amc-growth/sso/start` |

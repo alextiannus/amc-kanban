@@ -2,19 +2,16 @@ import { NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { callLLM } from '@/lib/llmRouter'
+import { findActiveAndNextGameRounds } from '@/lib/gameActivityRounds'
 import {
   GAME_SHARE_BRAND_DAILY_AI_LIMIT,
   GAME_SHARE_IP_DAILY_AI_LIMIT,
   GAME_SHARE_SESSION_LIMIT,
-  buildBrandIntroFallbackDrafts,
-  buildBrandIntroPrompt,
-  buildFallbackDrafts,
-  buildGameSharePrompt,
+  buildAutoShareFallbackDrafts,
+  buildAutoSharePrompt,
   enabledSharePlatforms,
   extractClientIp,
-  getBusinessDate,
   hashClientIp,
-  normalizeExperienceInput,
   parseGeneratedDrafts,
   type GameShareDrafts,
 } from '@/lib/gameShareDrafts'
@@ -57,6 +54,7 @@ async function getGameContext(brandId: string, publicSessionId: string) {
           knowledge: { select: { menuItems: true } },
           gameConfig: {
             select: {
+              id: true,
               taskReviewEnabled: true,
               taskGoogleMapsEnabled: true,
               taskXiaohongshuEnabled: true,
@@ -122,7 +120,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Game sharing assistant is unavailable' }, { status: 404 })
   }
 
-  const activityDate = getBusinessDate(context.brand.timezone)
+  const { activeRound } = await findActiveAndNextGameRounds(prisma, context.brand.gameConfig.id)
+  if (!activeRound) {
+    return NextResponse.json({ error: 'This activity is not currently active.', code: 'ACTIVITY_INACTIVE' }, { status: 409 })
+  }
+  const activityDate = `round:${activeRound.id}`
   const draft = await prisma.gameShareDraft.findUnique({
     where: { sessionId_activityDate: { sessionId: context.id, activityDate } },
     select: {
@@ -229,16 +231,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'brandId and sessionId are required' }, { status: 400 })
     }
 
-    const draftMode = body.mode === 'BRAND_INTRO' ? 'BRAND_INTRO' : 'EXPERIENCE'
-    const normalized = draftMode === 'BRAND_INTRO'
-      ? {
-          locale: body.locale === 'zh' ? 'zh' as const : 'en' as const,
-          experienceTags: [],
-          experienceNote: null,
-        }
-      : normalizeExperienceInput(body)
-    if ('error' in normalized && normalized.error) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 })
+    if (body.mode !== 'AUTO') {
+      return NextResponse.json({ error: 'mode must be AUTO' }, { status: 400 })
+    }
+    const normalized = {
+      locale: body.locale === 'zh' ? 'zh' as const : 'en' as const,
+      experienceTags: [],
+      experienceNote: null,
     }
 
     const context = await getGameContext(brandId, publicSessionId)
@@ -246,12 +245,16 @@ export async function POST(request: Request) {
     if (!context || !config || config.taskReviewEnabled === false) {
       return NextResponse.json({ error: 'Game sharing assistant is unavailable' }, { status: 404 })
     }
-    const platforms = enabledSharePlatforms(config).filter((platform) => draftMode === 'EXPERIENCE' || platform !== 'GOOGLE')
+    const { activeRound } = await findActiveAndNextGameRounds(prisma, config.id)
+    if (!activeRound) {
+      return NextResponse.json({ error: 'This activity is not currently active.', code: 'ACTIVITY_INACTIVE' }, { status: 409 })
+    }
+    const platforms = enabledSharePlatforms(config)
     if (platforms.length === 0) {
       return NextResponse.json(emptyResponse())
     }
 
-    const activityDate = getBusinessDate(context.brand.timezone)
+    const activityDate = `round:${activeRound.id}`
     const ipHash = hashClientIp(extractClientIp(request))
     const reservation = await reserveGeneration({
       context,
@@ -270,45 +273,26 @@ export async function POST(request: Request) {
       }))
     }
 
-    const fallbackDrafts = draftMode === 'BRAND_INTRO'
-      ? buildBrandIntroFallbackDrafts({
-          brandName: context.brand.name,
-          brandLocation: context.brand.location,
-          locale: normalized.locale,
-          platforms,
-        })
-      : buildFallbackDrafts({
-          brandName: context.brand.name,
-          locale: normalized.locale,
-          experienceTags: normalized.experienceTags,
-          experienceNote: normalized.experienceNote,
-          platforms,
-        })
+    const fallbackDrafts = buildAutoShareFallbackDrafts({
+      brandName: context.brand.name,
+      brandLocation: context.brand.location,
+      locale: normalized.locale,
+      platforms,
+    })
 
     let drafts = fallbackDrafts
     let source = 'fallback'
     let limitReason: string | null = reservation.limitReason
     if (reservation.allowAi) {
       try {
-        const prompt = draftMode === 'BRAND_INTRO'
-          ? buildBrandIntroPrompt({
-              brandName: context.brand.name,
-              brandLocation: context.brand.location,
-              brandDescription: context.brand.description,
-              menuNames: menuNames(context.brand.knowledge?.menuItems),
-              locale: normalized.locale,
-              platforms,
-            })
-          : buildGameSharePrompt({
-              brandName: context.brand.name,
-              brandLocation: context.brand.location,
-              brandDescription: context.brand.description,
-              menuNames: menuNames(context.brand.knowledge?.menuItems),
-              locale: normalized.locale,
-              experienceTags: normalized.experienceTags,
-              experienceNote: normalized.experienceNote,
-              platforms,
-            })
+        const prompt = buildAutoSharePrompt({
+          brandName: context.brand.name,
+          brandLocation: context.brand.location,
+          brandDescription: context.brand.description,
+          menuNames: menuNames(context.brand.knowledge?.menuItems),
+          locale: normalized.locale,
+          platforms,
+        })
         const result = await callLLM('copywriting', prompt, 700)
         const parsed = result.text ? parseGeneratedDrafts(result.text, platforms) : null
         if (parsed) {
@@ -336,7 +320,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       draftId: reservation.draft.id,
-      mode: draftMode,
+      mode: 'AUTO',
       locale: normalized.locale,
       experienceTags: normalized.experienceTags,
       experienceNote: normalized.experienceNote,

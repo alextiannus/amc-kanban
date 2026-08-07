@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { findActiveAndNextGameRounds, publicGameRound } from '@/lib/gameActivityRounds'
 import { getBusinessDate } from '@/lib/gameShareDrafts'
 
 export async function GET(request: Request) {
@@ -52,10 +53,26 @@ export async function GET(request: Request) {
     const config = await prisma.gameConfig.findUnique({
       where: { brandId },
       select: {
+        id: true,
         maxSpinsPerUserDay: true,
         brand: { select: { timezone: true } },
       },
     })
+
+    const roundState = config
+      ? await findActiveAndNextGameRounds(prisma, config.id)
+      : { activeRound: null, nextRound: null }
+    const entryReward = roundState.activeRound
+      ? await prisma.gameEntryReward.findUnique({
+          where: {
+            roundId_sessionId: {
+              roundId: roundState.activeRound.id,
+              sessionId: session.id,
+            },
+          },
+          select: { platform: true, pointsAwarded: true, createdAt: true },
+        })
+      : null
 
     const rewardDate = getBusinessDate(config?.brand.timezone)
     const todayFeedbackSubmission = await prisma.customerTaskSubmission.findUnique({
@@ -88,6 +105,14 @@ export async function GET(request: Request) {
       spinsTodayCount,
       maxSpinsPerUserDay,
       spinsRemainingToday: Math.max(maxSpinsPerUserDay - spinsTodayCount, 0),
+      activeRound: publicGameRound(roundState.activeRound),
+      nextRound: publicGameRound(roundState.nextRound),
+      entryRewardClaimed: Boolean(entryReward),
+      entryReward: entryReward ? {
+        platform: entryReward.platform,
+        pointsAwarded: entryReward.pointsAwarded,
+        createdAt: entryReward.createdAt,
+      } : null,
       todayFeedbackSubmission: todayFeedbackSubmission ? {
         submissionId: todayFeedbackSubmission.id,
         status: todayFeedbackSubmission.status,

@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye, Search, TicketCheck } from 'lucide-react'
+import { Save, Loader2, Plus, Trash2, HelpCircle, Check, Copy, Printer, RefreshCw, Eye, Search, TicketCheck, CalendarClock } from 'lucide-react'
 import QRCode from 'qrcode'
 import { getPermanentGameUrl, getPermanentPosterUrl, PERMANENT_GAME_QR_OPTIONS } from '@/lib/gameQr'
 
@@ -37,6 +37,60 @@ interface GameConfig {
 interface Props {
   brandId: string
   brandName: string
+}
+
+interface ActivityRound {
+  id: string
+  startsAt: string
+  endsAt: string
+  createdAt: string
+  updatedAt: string
+}
+
+function zonedDateParts(value: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(value)
+  const pick = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value || 0)
+  return { year: pick('year'), month: pick('month'), day: pick('day'), hour: pick('hour'), minute: pick('minute'), second: pick('second') }
+}
+
+function utcToRoundInput(value: string, timeZone: string) {
+  const parts = zonedDateParts(new Date(value), timeZone)
+  const pad = (input: number) => String(input).padStart(2, '0')
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`
+}
+
+function roundInputToUtc(value: string, timeZone: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value)
+  if (!match) throw new Error('请填写完整的活动日期和时间。')
+  const desired = match.slice(1).map(Number)
+  const wallClockUtc = Date.UTC(desired[0], desired[1] - 1, desired[2], desired[3], desired[4])
+  let candidate = wallClockUtc
+  for (let index = 0; index < 3; index += 1) {
+    const shown = zonedDateParts(new Date(candidate), timeZone)
+    const shownAsUtc = Date.UTC(shown.year, shown.month - 1, shown.day, shown.hour, shown.minute)
+    candidate += wallClockUtc - shownAsUtc
+  }
+  const finalParts = zonedDateParts(new Date(candidate), timeZone)
+  if ([finalParts.year, finalParts.month, finalParts.day, finalParts.hour, finalParts.minute].some((part, index) => part !== desired[index])) {
+    throw new Error('该本地时间在品牌时区中不存在，请选择其他时间。')
+  }
+  return new Date(candidate).toISOString()
+}
+
+function activityRoundStatus(round: ActivityRound) {
+  const now = Date.now()
+  if (new Date(round.endsAt).getTime() <= now) return 'ENDED' as const
+  if (new Date(round.startsAt).getTime() <= now) return 'ACTIVE' as const
+  return 'UPCOMING' as const
 }
 
 function allocateGridSlots(prizesList: Prize[]): Prize[] {
@@ -122,6 +176,12 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [activityRounds, setActivityRounds] = useState<ActivityRound[]>([])
+  const [brandTimezone, setBrandTimezone] = useState('Asia/Singapore')
+  const [newRoundStartsAt, setNewRoundStartsAt] = useState('')
+  const [newRoundEndsAt, setNewRoundEndsAt] = useState('')
+  const [roundEdits, setRoundEdits] = useState<Record<string, { startsAt: string; endsAt: string }>>({})
+  const [roundBusy, setRoundBusy] = useState<string | null>(null)
 
   // QR code state
   const [qrCodeUrl, setQrCodeUrl] = useState('')
@@ -129,7 +189,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
 
   // Poster customizations
   const [posterTitle, setPosterTitle] = useState('Scan & Win!')
-  const [posterDesc, setPosterDesc] = useState('Share your visit feedback to earn points. Public posting is optional.')
+  const [posterDesc, setPosterDesc] = useState('Open any sharing platform once per activity round to receive 5 points.')
   const [stickerTheme, setStickerTheme] = useState<'black' | 'blue' | 'green' | 'purple' | 'gold'>('black')
   const [googlePlaceId, setGooglePlaceId] = useState('')
   const [googleReviewUrl, setGoogleReviewUrl] = useState('')
@@ -163,6 +223,20 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       }
       const data = await res.json()
       setConfig(data)
+
+      const roundsRes = await fetch(`/api/game/rounds?brandId=${encodeURIComponent(brandId)}`, { cache: 'no-store' })
+      if (!roundsRes.ok) {
+        const roundsError = await roundsRes.json().catch(() => ({})) as { error?: string }
+        throw new Error(roundsError.error || 'Failed to load activity rounds')
+      }
+      const roundsData = await roundsRes.json() as { rounds: ActivityRound[]; timezone: string }
+      const timezone = roundsData.timezone || 'Asia/Singapore'
+      setBrandTimezone(timezone)
+      setActivityRounds(roundsData.rounds)
+      setRoundEdits(Object.fromEntries(roundsData.rounds.map((round) => [round.id, {
+        startsAt: utcToRoundInput(round.startsAt, timezone),
+        endsAt: utcToRoundInput(round.endsAt, timezone),
+      }])))
       
       // Initialize states from persistent config values
       if (data.posterTitle) setPosterTitle(data.posterTitle)
@@ -198,6 +272,90 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       active = false
     }
   }, [brandId])
+
+  const upsertRound = useCallback((round: ActivityRound) => {
+    setActivityRounds((current) => [...current.filter((item) => item.id !== round.id), round]
+      .sort((left, right) => new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime()))
+    setRoundEdits((current) => ({
+      ...current,
+      [round.id]: {
+        startsAt: utcToRoundInput(round.startsAt, brandTimezone),
+        endsAt: utcToRoundInput(round.endsAt, brandTimezone),
+      },
+    }))
+  }, [brandTimezone])
+
+  const createActivityRound = async () => {
+    setError(null)
+    setRoundBusy('new')
+    try {
+      const startsAt = roundInputToUtc(newRoundStartsAt, brandTimezone)
+      const endsAt = roundInputToUtc(newRoundEndsAt, brandTimezone)
+      const response = await fetch('/api/game/rounds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, startsAt, endsAt }),
+      })
+      const data = await response.json().catch(() => ({})) as { round?: ActivityRound; error?: string }
+      if (!response.ok || !data.round) throw new Error(data.error || 'Unable to create activity round')
+      upsertRound(data.round)
+      setNewRoundStartsAt('')
+      setNewRoundEndsAt('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create activity round')
+    } finally {
+      setRoundBusy(null)
+    }
+  }
+
+  const updateActivityRound = async (round: ActivityRound) => {
+    const edit = roundEdits[round.id]
+    if (!edit) return
+    const status = activityRoundStatus(round)
+    setError(null)
+    setRoundBusy(round.id)
+    try {
+      const payload: { brandId: string; roundId: string; startsAt?: string; endsAt: string } = {
+        brandId,
+        roundId: round.id,
+        endsAt: roundInputToUtc(edit.endsAt, brandTimezone),
+      }
+      if (status === 'UPCOMING') payload.startsAt = roundInputToUtc(edit.startsAt, brandTimezone)
+      const response = await fetch('/api/game/rounds', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await response.json().catch(() => ({})) as { round?: ActivityRound; error?: string }
+      if (!response.ok || !data.round) throw new Error(data.error || 'Unable to update activity round')
+      upsertRound(data.round)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update activity round')
+    } finally {
+      setRoundBusy(null)
+    }
+  }
+
+  const deleteActivityRound = async (round: ActivityRound) => {
+    if (!confirm('确定删除这个尚未开始的活动轮次吗？')) return
+    setError(null)
+    setRoundBusy(round.id)
+    try {
+      const response = await fetch(`/api/game/rounds?brandId=${encodeURIComponent(brandId)}&roundId=${encodeURIComponent(round.id)}`, { method: 'DELETE' })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error || 'Unable to delete activity round')
+      setActivityRounds((current) => current.filter((item) => item.id !== round.id))
+      setRoundEdits((current) => {
+        const next = { ...current }
+        delete next[round.id]
+        return next
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete activity round')
+    } finally {
+      setRoundBusy(null)
+    }
+  }
 
   const handleSave = async () => {
     if (!config) return
@@ -431,7 +589,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
         <div className="min-w-0">
           <h2 className="text-base font-black text-slate-800 dark:text-slate-100 leading-tight">店内活动设置</h2>
           <p className="text-[10px] text-slate-400 mt-0.5 hidden sm:block">
-            配置扫码抽奖游戏。顾客提交真实体验后由员工确认积分，公开分享完全自愿。
+            配置活动轮次、三平台领分入口、抽奖和奖品核销。
           </p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -563,7 +721,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                   <span className="group relative text-slate-400 cursor-help">
                     <HelpCircle size={11} />
                     <span className="absolute bottom-full left-0 mb-1.5 hidden group-hover:block w-44 p-2 rounded bg-slate-950 text-[10px] text-white leading-normal z-50 shadow-xl">
-                      顾客提交站内真实体验后，店员输入此密码确认并发放积分
+                      用于店员查询和核销顾客中奖兑换码；入口积分由系统自动发放。
                     </span>
                   </span>
                 </label>
@@ -591,7 +749,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
 
             {/* Platform toggles — compact chips */}
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">可选分享平台</label>
+              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">领分与分享平台</label>
               <div className="grid grid-cols-3 gap-2">
                 {[
                   { key: 'taskGoogleMapsEnabled' as const, label: 'Google Maps', icon: '📍' },
@@ -671,6 +829,131 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
                     className="w-full px-3 py-2 rounded-xl text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition"
                   />
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Activity rounds */}
+          <div className="space-y-4 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">
+                  <CalendarClock size={15} className="text-blue-500" />
+                  活动轮次
+                </h3>
+                <p className="mt-1 text-[10px] leading-4 text-slate-400">
+                  按品牌时区 {brandTimezone} 排期；没有进行中的轮次时，顾客端自动暂停，永久二维码不变。
+                </p>
+              </div>
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${activityRounds.some((round) => activityRoundStatus(round) === 'ACTIVE') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                {activityRounds.some((round) => activityRoundStatus(round) === 'ACTIVE') ? '活动进行中' : '当前暂停'}
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900 dark:bg-blue-950/10">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400">新增未来轮次</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="space-y-1 text-[10px] font-bold text-slate-500">
+                  开始时间
+                  <input
+                    type="datetime-local"
+                    value={newRoundStartsAt}
+                    onChange={(event) => setNewRoundStartsAt(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </label>
+                <label className="space-y-1 text-[10px] font-bold text-slate-500">
+                  结束时间
+                  <input
+                    type="datetime-local"
+                    value={newRoundEndsAt}
+                    onChange={(event) => setNewRoundEndsAt(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                  />
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => void createActivityRound()}
+                disabled={!newRoundStartsAt || !newRoundEndsAt || roundBusy !== null}
+                className="mt-3 flex min-h-10 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {roundBusy === 'new' ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                创建轮次
+              </button>
+            </div>
+
+            {activityRounds.length === 0 ? (
+              <div className="rounded-xl bg-amber-50 px-3 py-4 text-center text-xs font-bold text-amber-700">
+                尚未配置活动轮次，活动保持暂停。
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {activityRounds.map((round) => {
+                  const status = activityRoundStatus(round)
+                  const edit = roundEdits[round.id] || {
+                    startsAt: utcToRoundInput(round.startsAt, brandTimezone),
+                    endsAt: utcToRoundInput(round.endsAt, brandTimezone),
+                  }
+                  const readonly = status === 'ENDED'
+                  const startLocked = status !== 'UPCOMING'
+                  const statusCopy = status === 'ACTIVE' ? '进行中' : status === 'UPCOMING' ? '未开始' : '已结束'
+                  const statusStyle = status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : status === 'UPCOMING' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-500'
+                  return (
+                    <div key={round.id} className="rounded-xl border border-slate-100 p-3 dark:border-slate-800">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className={`rounded-full px-2 py-1 text-[9px] font-black ${statusStyle}`}>{statusCopy}</span>
+                        <span className="text-[9px] font-mono text-slate-400">{round.id.slice(-8)}</span>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <label className="space-y-1 text-[10px] font-bold text-slate-500">
+                          开始时间 {status === 'ACTIVE' && '（已锁定）'}
+                          <input
+                            type="datetime-local"
+                            value={edit.startsAt}
+                            disabled={startLocked}
+                            onChange={(event) => setRoundEdits((current) => ({ ...current, [round.id]: { ...edit, startsAt: event.target.value } }))}
+                            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          />
+                        </label>
+                        <label className="space-y-1 text-[10px] font-bold text-slate-500">
+                          结束时间
+                          <input
+                            type="datetime-local"
+                            value={edit.endsAt}
+                            disabled={readonly}
+                            onChange={(event) => setRoundEdits((current) => ({ ...current, [round.id]: { ...edit, endsAt: event.target.value } }))}
+                            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          />
+                        </label>
+                      </div>
+                      {!readonly && (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void updateActivityRound(round)}
+                            disabled={roundBusy !== null}
+                            className="flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-[10px] font-black text-white disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900"
+                          >
+                            {roundBusy === round.id ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                            保存轮次
+                          </button>
+                          {status === 'UPCOMING' && (
+                            <button
+                              type="button"
+                              onClick={() => void deleteActivityRound(round)}
+                              disabled={roundBusy !== null}
+                              className="flex min-h-9 items-center justify-center rounded-lg border border-red-200 px-3 py-2 text-red-600 disabled:opacity-50"
+                              aria-label="删除轮次"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

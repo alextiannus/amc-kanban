@@ -49,6 +49,7 @@
     "test:game-permanent-qr": "node --experimental-strip-types scripts/test-game-permanent-qr.mts",
     "test:game-platform-actions": "node --experimental-strip-types scripts/test-game-platform-actions.mts",
     "test:game-share-drafts": "node --experimental-strip-types scripts/test-game-share-drafts.mts",
+    "test:game-activity-rounds": "node --experimental-strip-types scripts/test-game-activity-rounds.mts",
     "migrate:crew-auth": "node --experimental-strip-types scripts/migrate-crew-auth.mts",
     "migrate:user-keys": "node scripts/migrate-ai-agents-to-user-keys.mjs",
     "generate:service-terms-pdfs": "python3 scripts/generate-service-terms-pdfs.py",

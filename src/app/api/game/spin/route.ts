@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { findActiveAndNextGameRounds } from '@/lib/gameActivityRounds'
 import { buildPrizeSnapshot } from '@/lib/gamePrizes'
 
 function generateRedemptionCode(): string {
@@ -37,6 +38,11 @@ export async function POST(request: Request) {
       })
       if (!config) {
         throw new Error('Game config not found')
+      }
+
+      const { activeRound } = await findActiveAndNextGameRounds(tx, config.id)
+      if (!activeRound) {
+        throw new Error('This activity is not currently active.')
       }
 
       // 3. Points balance check

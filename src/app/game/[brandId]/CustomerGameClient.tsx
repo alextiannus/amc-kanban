@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { BookOpen, CheckCircle2, Copy, ExternalLink, MapPin } from 'lucide-react'
+import { BookOpen, CheckCircle2, Copy, MapPin } from 'lucide-react'
 
 type Prize = {
   id?: string
@@ -27,6 +27,7 @@ type GameConfig = {
   brand?: {
     name?: string
     location?: string | null
+    timezone?: string | null
     googleReviewUrl?: string | null
     googleReviewAppUrl?: string | null
     googleBusinessUrl?: string | null
@@ -45,6 +46,14 @@ type GameStatus = {
     prizeType: string
     redemptionCode: string
   }[]
+  activeRound: { id: string; startsAt: string; endsAt: string } | null
+  nextRound: { id: string; startsAt: string; endsAt: string } | null
+  entryRewardClaimed: boolean
+  entryReward?: {
+    platform: Platform
+    pointsAwarded: number
+    createdAt: string
+  } | null
   todayFeedbackSubmission?: {
     submissionId: string
     status: 'PENDING' | 'APPROVED' | 'REJECTED'
@@ -63,13 +72,8 @@ type SpinResult = {
 
 type Platform = 'GOOGLE' | 'XIAOHONGSHU' | 'INSTAGRAM'
 
-type PendingSubmission = {
-  submissionId: string
-}
-
 type Locale = 'zh' | 'en'
 type ShareDrafts = Partial<Record<Platform, string>>
-type ShareDraftMode = 'BRAND_INTRO' | 'EXPERIENCE'
 
 type ShareDraftResponse = {
   draftId: string | null
@@ -108,11 +112,13 @@ const copy = {
     showCode: 'Show this code to store staff.',
     noCodeNeeded: 'No redemption code needed.',
     unclaimedRewards: 'Unclaimed rewards',
-    earnPoints: 'Earn points',
-    staffConfirmation: 'Staff confirmation',
-    staffPin: 'Staff PIN',
-    checking: 'Checking',
-    confirm: 'Confirm',
+    activityPaused: 'This activity is currently paused.',
+    nextRoundStarts: (value: string) => `Next round starts ${value}.`,
+    prepareSharing: 'Prepare your sharing draft',
+    entryRewardBody: 'The first time you copy and open any platform in this activity round, 5 points are added automatically.',
+    truthConfirm: 'I reviewed these drafts and will keep only details that match my genuine experience.',
+    rewardAndOpen: (platform: string) => `Get 5 points and open ${platform}`,
+    rewarding: 'Adding 5 points...',
     prizePool: 'Prize pool',
     chance: (value: string) => `${value}% chance`,
     unlimited: 'Unlimited',
@@ -130,22 +136,14 @@ const copy = {
     xiaohongshu: 'Xiaohongshu',
     instagram: 'Instagram',
     noPrize: 'No prize',
-    generatingGoogle: 'Creating your Google Review draft...',
-    generatingSocial: 'Preparing platform drafts from the merchant’s published information...',
+    generatingSocial: 'Preparing all platform drafts from the merchant’s published information...',
     generationsLeft: (count: number) => `${count} AI generation${count === 1 ? '' : 's'} left today`,
     truthNotice: 'AI draft: review it before sharing and keep only information that is accurate.',
     fallbackNotice: 'AI is temporarily unavailable or a usage limit was reached. Editable basic templates are shown instead.',
-    optionalSharing: 'Optional public sharing',
-    optionalSharingBody: 'Sharing publicly is voluntary and does not affect points or prizes.',
     copyAndOpen: (platform: string) => `Copy and open ${platform}`,
     copyFailed: 'Could not copy automatically. Your draft is still here—please press and hold to copy it manually.',
     copiedOpening: (platform: string) => `Copied. Opening ${platform}...`,
-    submitFeedback: 'Submit experience and claim 5 points',
-    submittingFeedback: 'Submitting experience...',
-    feedbackRewardBody: 'Store staff confirms this in-store feedback with the PIN. Public posting is not required.',
-    feedbackPending: 'Experience submitted. Ask store staff to enter the PIN.',
-    feedbackRewarded: 'Today’s 5 experience points have been received.',
-    waitingFeedbackConfirmation: 'This experience is waiting for store staff PIN confirmation.',
+    rewardFailed: 'Unable to add entry points. Please try again before opening the platform.',
   },
   zh: {
     openPlatform: '打开平台',
@@ -170,11 +168,13 @@ const copy = {
     showCode: '请向店员出示兑换码。',
     noCodeNeeded: '无需兑换码。',
     unclaimedRewards: '待领取奖品',
-    earnPoints: '赚取积分',
-    staffConfirmation: '员工确认',
-    staffPin: '员工 PIN',
-    checking: '确认中',
-    confirm: '确认',
+    activityPaused: '当前活动暂停中。',
+    nextRoundStarts: (value: string) => `下一轮将在 ${value} 开始。`,
+    prepareSharing: '准备你的分享文案',
+    entryRewardBody: '本轮首次复制并打开任意一个平台时，系统自动增加 5 积分。',
+    truthConfirm: '我已检查草稿，分享时只保留符合本人真实体验的内容。',
+    rewardAndOpen: (platform: string) => `领取 5 积分并打开 ${platform}`,
+    rewarding: '正在增加 5 积分...',
     prizePool: '奖品池',
     chance: (value: string) => `${value}% 概率`,
     unlimited: '不限量',
@@ -192,32 +192,20 @@ const copy = {
     xiaohongshu: '小红书',
     instagram: 'Instagram',
     noPrize: '谢谢参与',
-    generatingGoogle: '正在生成 Google Review 草稿…',
-    generatingSocial: '正在根据商家公开资料准备各平台草稿…',
+    generatingSocial: '正在根据商家公开资料准备全部平台草稿…',
     generationsLeft: (count: number) => `今日还可生成 ${count} 次`,
     truthNotice: 'AI 草稿：分享前请检查内容，只保留准确的信息。',
     fallbackNotice: 'AI 暂时不可用或已达到调用额度，当前展示可编辑的基础模板。',
-    optionalSharing: '自愿公开分享',
-    optionalSharingBody: '是否公开分享完全自愿，不影响积分或奖品。',
     copyAndOpen: (platform: string) => `复制并打开 ${platform}`,
     copyFailed: '自动复制失败，文案仍已保留；请长按文案手动复制。',
     copiedOpening: (platform: string) => `已复制，正在打开 ${platform}…`,
-    submitFeedback: '提交体验，领取 5 积分',
-    submittingFeedback: '体验提交中...',
-    feedbackRewardBody: '站内体验由店员输入 PIN 确认，公开发布不是领取积分的条件。',
-    feedbackPending: '体验已提交，请让店员输入 PIN 确认。',
-    feedbackRewarded: '今日 5 体验积分已领取。',
-    waitingFeedbackConfirmation: '本次体验正在等待店员输入 PIN 确认。',
+    rewardFailed: '无法增加入口积分，请重试后再打开平台。',
   },
 }
 
 function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
   return window.navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
-}
-
-function defaultExperienceNote(locale: Locale): string {
-  return locale === 'zh' ? '这个商家不错' : 'This business is good.'
 }
 
 function getSessionId(brandId: string): string {
@@ -684,23 +672,19 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
-  const [pendingSubmission, setPendingSubmission] = useState<PendingSubmission | null>(null)
-  const [staffPin, setStaffPin] = useState('')
-  const [submittingTask, setSubmittingTask] = useState(false)
-  const [confirmingTask, setConfirmingTask] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [spinResult, setSpinResult] = useState<SpinResult | null>(null)
   const [wheelRotation, setWheelRotation] = useState(0)
   const [gridActiveSlot, setGridActiveSlot] = useState<number | null>(null)
   const [locale, setLocale] = useState<Locale>('en')
-  const [experienceNote, setExperienceNote] = useState('')
-  const [lastGeneratedExperienceNote, setLastGeneratedExperienceNote] = useState('')
   const [shareDraftId, setShareDraftId] = useState<string | null>(null)
   const [shareDrafts, setShareDrafts] = useState<ShareDrafts>({})
   const [shareSource, setShareSource] = useState<'ai' | 'fallback' | null>(null)
   const [generationsRemaining, setGenerationsRemaining] = useState(3)
-  const [generatingMode, setGeneratingMode] = useState<ShareDraftMode | null>(null)
+  const [generatingDrafts, setGeneratingDrafts] = useState(false)
   const [copiedPlatform, setCopiedPlatform] = useState<Platform | null>(null)
+  const [truthConfirmed, setTruthConfirmed] = useState(false)
+  const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
   const generationRequestInFlight = useRef(false)
 
   const accent = config?.themeColor || '#2563eb'
@@ -708,7 +692,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
   const spinsRemaining = status?.spinsRemainingToday ?? dailyLimit
-  const experienceIsValid = Boolean(experienceNote.trim())
   const activePlatforms = useMemo<Platform[]>(() => {
     if (!config) return []
     const platforms: Platform[] = []
@@ -717,22 +700,24 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     if (config.taskInstagramEnabled) platforms.push('INSTAGRAM')
     return platforms
   }, [config])
+  const activityActive = Boolean(status?.activeRound)
+  const showGame = activityActive && Boolean(status?.entryRewardClaimed)
+  const formatRoundTime = (value: string) => {
+    try {
+      return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: config?.brand?.timezone || undefined,
+      }).format(new Date(value))
+    } catch {
+      return new Date(value).toLocaleString()
+    }
+  }
 
-  const requestShareDrafts = useCallback(async ({
-    requestedSessionId,
-    requestLocale,
-    mode,
-    note,
-  }: {
-    requestedSessionId: string
-    requestLocale: Locale
-    mode: ShareDraftMode
-    note?: string
-  }) => {
+  const requestShareDrafts = useCallback(async (requestedSessionId: string, requestLocale: Locale) => {
     if (!requestedSessionId || generationRequestInFlight.current) return
-    if (mode === 'EXPERIENCE' && !note?.trim()) return
     generationRequestInFlight.current = true
-    setGeneratingMode(mode)
+    setGeneratingDrafts(true)
     setError('')
     setMessage('')
     try {
@@ -743,9 +728,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           brandId,
           sessionId: requestedSessionId,
           locale: requestLocale,
-          mode,
-          experienceTags: mode === 'EXPERIENCE' ? ['OTHER'] : [],
-          experienceNote: mode === 'EXPERIENCE' ? note?.trim() : undefined,
+          mode: 'AUTO',
         }),
       })
       const data = await response.json().catch(() => ({})) as Partial<ShareDraftResponse> & { error?: string }
@@ -757,15 +740,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       setShareDraftId(data.draftId || null)
       setShareSource(data.source || null)
       setGenerationsRemaining(data.generationsRemaining ?? 0)
-      if (mode === 'EXPERIENCE' && returnedDrafts.GOOGLE) setLastGeneratedExperienceNote(note?.trim() || '')
-      setShareDrafts((currentDrafts) => {
-        const nextDrafts = mode === 'BRAND_INTRO'
-          ? { ...currentDrafts, ...returnedDrafts }
-          : {
-              ...returnedDrafts,
-              ...(currentDrafts.XIAOHONGSHU ? { XIAOHONGSHU: currentDrafts.XIAOHONGSHU } : {}),
-              ...(currentDrafts.INSTAGRAM ? { INSTAGRAM: currentDrafts.INSTAGRAM } : {}),
-            }
+      setShareDrafts(() => {
+        const nextDrafts = returnedDrafts
         if (data.draftId) {
           window.sessionStorage.setItem(draftEditsStorageKey(brandId), JSON.stringify({ draftId: data.draftId, drafts: nextDrafts }))
         }
@@ -775,8 +751,17 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       setError(copy[requestLocale].submitFailed)
     } finally {
       generationRequestInFlight.current = false
-      setGeneratingMode(null)
+      setGeneratingDrafts(false)
     }
+  }, [brandId])
+
+  const refreshStatus = useCallback(async (requestedSessionId: string) => {
+    if (!requestedSessionId) return null
+    const response = await fetch(`/api/game/status?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(requestedSessionId)}`, { cache: 'no-store' })
+    if (!response.ok) throw new Error(copy[detectLocale()].statusLoadFailed)
+    const data = await response.json() as GameStatus
+    setStatus(data)
+    return data
   }, [brandId])
 
   useEffect(() => {
@@ -803,7 +788,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     const initializeTimer = window.setTimeout(() => {
       setLocale(detectedLocale)
       setSessionId(id)
-      setExperienceNote(defaultExperienceNote(detectedLocale))
     }, 0)
 
     async function load() {
@@ -820,45 +804,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         const statusData = await statusRes.json() as GameStatus
         setConfig(configData)
         setStatus(statusData)
-        if (statusData.todayFeedbackSubmission?.status === 'PENDING') {
-          setPendingSubmission({ submissionId: statusData.todayFeedbackSubmission.submissionId })
-        }
-
-        if (configData.taskReviewEnabled !== false) {
-          const draftRes = await fetch(`/api/game/share-drafts?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(id)}`, { cache: 'no-store' })
-          if (draftRes.ok) {
-            const draftData = await draftRes.json() as ShareDraftResponse
-            setShareDraftId(draftData.draftId)
-            setShareSource(draftData.source)
-            setGenerationsRemaining(draftData.generationsRemaining)
-            const defaultNote = defaultExperienceNote(detectedLocale)
-            setExperienceNote(defaultNote)
-            setLastGeneratedExperienceNote(
-              draftData.drafts.GOOGLE && draftData.experienceNote === defaultNote ? defaultNote : '',
-            )
-
-            const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
-            setShareDrafts(localEdits?.draftId === draftData.draftId ? { ...draftData.drafts, ...localEdits.drafts } : draftData.drafts)
-            if (localEdits && localEdits.draftId !== draftData.draftId) {
-              window.sessionStorage.removeItem(draftEditsStorageKey(brandId))
-            }
-
-            const socialPlatforms = [
-              configData.taskXiaohongshuEnabled ? 'XIAOHONGSHU' : null,
-              configData.taskInstagramEnabled ? 'INSTAGRAM' : null,
-            ].filter((platform): platform is Platform => Boolean(platform))
-            const needsSocialDrafts = !draftData.experienceNote
-              && socialPlatforms.some((platform) => !draftData.drafts[platform])
-              && draftData.generationsRemaining > 0
-            if (needsSocialDrafts) {
-              void requestShareDrafts({
-                requestedSessionId: id,
-                requestLocale: detectedLocale,
-                mode: 'BRAND_INTRO',
-              })
-            }
-          }
-        }
       } catch (err) {
         setError(err instanceof Error ? err.message : copy[detectLocale()].openFailed)
       } finally {
@@ -870,67 +815,79 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     return () => window.clearTimeout(initializeTimer)
   }, [brandId, requestShareDrafts])
 
-  async function submitFeedback() {
-    if (!sessionId || submittingTask) return
-    if (!experienceIsValid) return
-    setError('')
-    setMessage('')
-    setSubmittingTask(true)
-    const form = new FormData()
-    form.set('brandId', brandId)
-    form.set('sessionId', sessionId)
-    form.set('taskType', 'EXPERIENCE_FEEDBACK')
-    form.set('experienceTags', JSON.stringify(['OTHER']))
-    form.set('experienceNote', experienceNote.trim())
-    const response = await fetch('/api/game/tasks', { method: 'POST', body: form })
-    const data = await response.json().catch(() => ({}))
-    setSubmittingTask(false)
-    if (!response.ok) {
-      setError(data.error || t.submitFailed)
-      return
-    }
-    if (data.status === 'APPROVED') {
-      setStatus((prev) => prev ? {
-        ...prev,
-        todayFeedbackSubmission: { submissionId: data.submissionId, status: 'APPROVED', pointsAwarded: data.pointsAwarded || 5 },
-      } : prev)
-      setMessage(t.feedbackRewarded)
-    } else {
-      setPendingSubmission({ submissionId: data.submissionId })
-      setStatus((prev) => prev ? {
-        ...prev,
-        todayFeedbackSubmission: { submissionId: data.submissionId, status: 'PENDING', pointsAwarded: 0 },
-      } : prev)
-      setStaffPin('')
-      setMessage(t.feedbackPending)
-    }
-  }
+  useEffect(() => {
+    const activeRoundId = status?.activeRound?.id
+    if (!sessionId || !config || !activeRoundId || status.entryRewardClaimed || config.taskReviewEnabled === false) return
+    let cancelled = false
 
-  async function confirmSubmission() {
-    if (!pendingSubmission || !staffPin.trim() || confirmingTask) return
-    setError('')
-    setMessage('')
-    setConfirmingTask(true)
-    const response = await fetch('/api/game/tasks/override', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ submissionId: pendingSubmission.submissionId, pinCode: staffPin.trim() }),
-    })
-    const data = await response.json().catch(() => ({}))
-    setConfirmingTask(false)
-    if (!response.ok) {
-      setError(data.error || t.confirmationFailed)
-      return
+    async function loadRoundDrafts() {
+      try {
+        const response = await fetch(`/api/game/share-drafts?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
+        if (!response.ok || cancelled) return
+        const draftData = await response.json() as ShareDraftResponse
+        if (cancelled) return
+        setTruthConfirmed(false)
+        setShareDraftId(draftData.draftId)
+        setShareSource(draftData.source)
+        setGenerationsRemaining(draftData.generationsRemaining)
+
+        const localEdits = parseDraftEdits(window.sessionStorage.getItem(draftEditsStorageKey(brandId)))
+        const nextDrafts = localEdits?.draftId === draftData.draftId
+          ? { ...draftData.drafts, ...localEdits.drafts }
+          : draftData.drafts
+        setShareDrafts(nextDrafts)
+        if (localEdits && localEdits.draftId !== draftData.draftId) {
+          window.sessionStorage.removeItem(draftEditsStorageKey(brandId))
+        }
+        if (activePlatforms.some((platform) => !nextDrafts[platform]) && draftData.generationsRemaining > 0) {
+          void requestShareDrafts(sessionId, locale)
+        }
+      } catch {
+        if (!cancelled) setError(copy[locale].submitFailed)
+      }
     }
-    setStatus((prev) => prev ? {
-      ...prev,
-      pointsBalance: data.pointsBalance,
-      todayFeedbackSubmission: { submissionId: pendingSubmission.submissionId, status: 'APPROVED', pointsAwarded: data.pointsAwarded || 5 },
-    } : { pointsBalance: data.pointsBalance, unclaimedPrizes: [], todayFeedbackSubmission: { submissionId: pendingSubmission.submissionId, status: 'APPROVED', pointsAwarded: data.pointsAwarded || 5 } })
-    setPendingSubmission(null)
-    setStaffPin('')
-    setMessage(t.taskConfirmed)
-  }
+
+    void loadRoundDrafts()
+    return () => { cancelled = true }
+  }, [activePlatforms, brandId, config, locale, requestShareDrafts, sessionId, status?.activeRound?.id, status?.entryRewardClaimed])
+
+  useEffect(() => {
+    if (!sessionId) return
+    const handlePageShow = () => { void refreshStatus(sessionId).catch(() => undefined) }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') handlePageShow()
+    }
+    window.addEventListener('pageshow', handlePageShow)
+    window.addEventListener('focus', handlePageShow)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow)
+      window.removeEventListener('focus', handlePageShow)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [refreshStatus, sessionId])
+
+  useEffect(() => {
+    if (!sessionId) return
+    const boundary = status?.activeRound?.endsAt || status?.nextRound?.startsAt
+    if (!boundary) return
+    let cancelled = false
+    let timer = 0
+    const schedule = () => {
+      const untilBoundary = new Date(boundary).getTime() - Date.now() + 250
+      const delay = Math.min(Math.max(untilBoundary, 1_000), 6 * 60 * 60 * 1_000)
+      timer = window.setTimeout(() => {
+        void refreshStatus(sessionId).finally(() => {
+          if (!cancelled && untilBoundary > delay) schedule()
+        })
+      }, delay)
+    }
+    schedule()
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [refreshStatus, sessionId, status?.activeRound?.endsAt, status?.nextRound?.startsAt])
 
   function openPlatform(platform: Platform) {
     window.sessionStorage.setItem(openedPlatformStorageKey(brandId), platform)
@@ -955,15 +912,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     window.location.assign(target.appUrl)
   }
 
-  useEffect(() => {
-    const note = experienceNote.trim()
-    if (!sessionId || !config?.taskGoogleMapsEnabled || !note || note === lastGeneratedExperienceNote || generationsRemaining <= 0) return
-    const timer = window.setTimeout(() => {
-      void requestShareDrafts({ requestedSessionId: sessionId, requestLocale: locale, mode: 'EXPERIENCE', note })
-    }, 800)
-    return () => window.clearTimeout(timer)
-  }, [config?.taskGoogleMapsEnabled, experienceNote, generatingMode, generationsRemaining, lastGeneratedExperienceNote, locale, requestShareDrafts, sessionId])
-
   function updateDraft(platform: Platform, value: string) {
     const nextDrafts = { ...shareDrafts, [platform]: value }
     setShareDrafts(nextDrafts)
@@ -974,7 +922,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
   async function copyAndOpenPlatform(platform: Platform) {
     const text = shareDrafts[platform]?.trim()
-    if (!text) return
+    if (!text || !truthConfirmed || rewardingPlatform) return
     setError('')
     let copied = false
     try {
@@ -998,6 +946,41 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     if (!copied) {
       setError(t.copyFailed)
       return
+    }
+    setRewardingPlatform(platform)
+    try {
+      const response = await fetch('/api/game/entry-reward', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, sessionId, platform }),
+      })
+      const data = await response.json().catch(() => ({})) as {
+        error?: string
+        pointsBalance?: number
+        pointsAwarded?: number
+        platform?: Platform
+        activeRound?: GameStatus['activeRound']
+      }
+      if (!response.ok) {
+        setError(data.error || t.rewardFailed)
+        return
+      }
+      setStatus((current) => current ? {
+        ...current,
+        pointsBalance: data.pointsBalance ?? current.pointsBalance,
+        activeRound: data.activeRound ?? current.activeRound,
+        entryRewardClaimed: true,
+        entryReward: {
+          platform: data.platform || platform,
+          pointsAwarded: data.pointsAwarded || 5,
+          createdAt: new Date().toISOString(),
+        },
+      } : current)
+    } catch {
+      setError(t.rewardFailed)
+      return
+    } finally {
+      setRewardingPlatform(null)
     }
     setCopiedPlatform(platform)
     setMessage(t.copiedOpening(platformLabel(platform, locale)))
@@ -1090,7 +1073,25 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         </header>
 
         <div className="-mt-5 flex-1 space-y-4 rounded-t-[28px] bg-slate-50 px-5 pb-8 pt-5">
-          {config && (
+          {!activityActive && (
+            <section className="rounded-[28px] bg-white p-6 text-center shadow-sm">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl" aria-hidden="true">⏸</span>
+              <h2 className="mt-4 text-lg font-black text-slate-950">{t.activityPaused}</h2>
+              {status?.nextRound && (
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                  {t.nextRoundStarts(formatRoundTime(status.nextRound.startsAt))}
+                </p>
+              )}
+            </section>
+          )}
+
+          {activityActive && !status?.entryRewardClaimed && activePlatforms.length === 0 && (
+            <section className="rounded-2xl bg-white p-5 text-center text-sm font-bold text-slate-600 shadow-sm">
+              {t.activityNotReady}
+            </section>
+          )}
+
+          {showGame && config && (
             <section className="rounded-[28px] bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <div>
@@ -1117,7 +1118,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </section>
           )}
 
-          {spinResult && (
+          {showGame && spinResult && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-xs font-bold uppercase text-emerald-700">{t.youWon}</p>
               <h2 className="mt-1 text-xl font-black text-emerald-950">{spinResult.prize.name}</h2>
@@ -1132,7 +1133,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </div>
           )}
 
-          {status?.unclaimedPrizes?.length ? (
+          {showGame && status?.unclaimedPrizes?.length ? (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
               <p className="text-xs font-black uppercase text-slate-400">{t.unclaimedRewards}</p>
               <div className="mt-3 space-y-2">
@@ -1146,14 +1147,14 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </div>
           ) : null}
 
-          {config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
+          {activityActive && !status?.entryRewardClaimed && config?.taskReviewEnabled !== false && activePlatforms.length > 0 && (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs font-black text-slate-800">{t.optionalSharing}</p>
-              <p className="mt-1 text-xs leading-5 text-slate-500">{t.optionalSharingBody}</p>
+              <p className="text-xs font-black text-slate-800">{t.prepareSharing}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-500">{t.entryRewardBody}</p>
 
-              {generatingMode && (
+              {generatingDrafts && (
                 <p role="status" aria-live="polite" className="mt-3 rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold leading-5 text-blue-700">
-                  {generatingMode === 'EXPERIENCE' ? t.generatingGoogle : t.generatingSocial}
+                  {t.generatingSocial}
                 </p>
               )}
               <p className="mt-2 text-center text-[11px] font-bold text-slate-400">{t.generationsLeft(generationsRemaining)}</p>
@@ -1161,6 +1162,16 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
               {shareSource === 'fallback' && (
                 <p role="status" className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold leading-5 text-slate-600">{t.fallbackNotice}</p>
               )}
+
+              <label className="mt-3 flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-semibold leading-5 text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={truthConfirmed}
+                  onChange={(event) => setTruthConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span>{t.truthConfirm}</span>
+              </label>
 
               <div className="mt-4">
                 <div className="mt-3 space-y-3">
@@ -1191,90 +1202,39 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                           <button
                             type="button"
                             onClick={() => copyAndOpenPlatform(platform)}
-                            disabled={!draft.trim()}
+                            disabled={!draft.trim() || !truthConfirmed || Boolean(rewardingPlatform)}
                             className={`mt-2 flex min-h-12 w-full items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-black text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:opacity-50 ${visual.icon} ${visual.focus}`}
                           >
                             {copiedPlatform === platform ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                            {t.copyAndOpen(label)}
+                            {rewardingPlatform === platform ? t.rewarding : t.rewardAndOpen(label)}
                           </button>
                         </section>
                       )
                     }
 
                     return (
-                      <button
+                      <div
                         key={platform}
-                        type="button"
-                        aria-pressed={isOpened}
                         aria-label={`${t.openPlatform}: ${label}`}
-                        onClick={() => openPlatform(platform)}
-                        className={`group flex min-h-[56px] w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left transition duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] ${visual.focus} ${isOpened ? visual.active : visual.idle}`}
+                        className={`flex min-h-[56px] w-full items-center gap-3 rounded-xl border-2 px-3 py-2.5 text-left ${visual.idle}`}
                       >
                         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${visual.icon}`} aria-hidden="true">
                           <PlatformIcon className="h-5 w-5" strokeWidth={2.25} />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-black text-slate-900">{label}</span>
-                          <span className={`mt-0.5 block text-xs font-bold ${isOpened ? visual.text : 'text-slate-500'}`}>{isOpened ? t.opened : t.openPlatform}</span>
+                          <span className="mt-0.5 block text-xs font-bold text-slate-500">{t.generatingSocial}</span>
                         </span>
-                        <span className={isOpened ? visual.text : 'text-slate-400'} aria-hidden="true">
-                          {isOpened ? <CheckCircle2 className="h-5 w-5" /> : <ExternalLink className="h-5 w-5 transition-transform group-hover:translate-x-0.5" />}
-                        </span>
-                      </button>
+                        <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-500" aria-hidden="true" />
+                      </div>
                     )
                   })}
                 </div>
               </div>
-
-              <div className="mt-5 border-t border-slate-100 pt-4">
-                <p className="text-xs font-black text-slate-800">{t.earnPoints}</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">{t.feedbackRewardBody}</p>
-                {status?.todayFeedbackSubmission?.status === 'APPROVED' ? (
-                  <div role="status" className="mt-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-3 text-sm font-black text-emerald-700">
-                    <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
-                    {t.feedbackRewarded}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={submitFeedback}
-                    disabled={submittingTask || !experienceIsValid || Boolean(pendingSubmission)}
-                    className="mt-3 min-h-12 w-full rounded-xl px-3 py-3 text-sm font-black text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
-                    style={experienceIsValid && !pendingSubmission ? { background: accent } : undefined}
-                  >
-                    {submittingTask ? t.submittingFeedback : pendingSubmission ? t.feedbackPending : t.submitFeedback}
-                  </button>
-                )}
-              </div>
-
-              {pendingSubmission && (
-                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-black uppercase text-slate-400">{t.staffConfirmation}</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-slate-500">{t.waitingFeedbackConfirmation}</p>
-                  <div className="mt-3 flex gap-2">
-                    <input
-                      value={staffPin}
-                      onChange={(event) => setStaffPin(event.target.value)}
-                      inputMode="numeric"
-                      type="password"
-                      placeholder={t.staffPin}
-                      className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-slate-400"
-                    />
-                    <button
-                      onClick={confirmSubmission}
-                      disabled={confirmingTask || !staffPin.trim()}
-                      className="rounded-xl px-4 py-3 text-sm font-black text-white disabled:opacity-60"
-                      style={{ background: accent }}
-                    >
-                      {confirmingTask ? t.checking : t.confirm}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
-          <div className="rounded-2xl bg-white p-4 shadow-sm">
+          {showGame && <div className="rounded-2xl bg-white p-4 shadow-sm">
             <h2 className="text-sm font-black">{t.prizePool}</h2>
             <div className="mt-3 grid gap-2">
               {activePrizes.map((prize) => (
@@ -1294,7 +1254,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                 </div>
               ))}
             </div>
-          </div>
+          </div>}
 
           {(error || message) && (
             <div className={`rounded-2xl p-4 text-sm font-bold ${error ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>

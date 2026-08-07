@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { canOwnBrand } from '@/lib/brandAccess'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
+import { assertValidTimeZone } from '@/lib/gameActivityRounds'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -97,6 +98,14 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()
+  if (body.timezone !== undefined) {
+    try {
+      assertValidTimeZone(body.timezone)
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid timezone' }, { status: 400 })
+    }
+  }
+  const normalizedTimezone = body.timezone === undefined ? undefined : body.timezone.trim()
 
   // Helper: only update if key present in body; empty string = clear
   const opt = (val: unknown) => {
@@ -119,7 +128,7 @@ export async function PATCH(request: Request, { params }: Params) {
     data: {
       ...(body.name !== undefined && { name: body.name.trim() }),
       ...(body.location !== undefined && { location: opt(body.location) }),
-      ...(body.timezone !== undefined && { timezone: body.timezone }),
+      ...(normalizedTimezone !== undefined && { timezone: normalizedTimezone }),
       // Brand profile
       ...(body.description !== undefined && { description: opt(body.description) }),
       ...(body.website !== undefined && { website: opt(body.website) }),
@@ -261,12 +270,12 @@ export async function PATCH(request: Request, { params }: Params) {
         // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
         // unless it's a direct Google Business Profile account.
         try {
-          const postfastPlatformHandles = pfResult.accounts.map((acc: any) => ({
+          const postfastPlatformHandles = pfResult.accounts.map((acc) => ({
             platformId: acc.platformId,
             handle: acc.handle
           }))
 
-          const dbAccounts = await prisma.socialAccount.findMany({
+          const dbAccounts: Array<{ id: string; platformId: string; handle: string }> = await prisma.socialAccount.findMany({
             where: { brandId: id },
             select: { id: true, platformId: true, handle: true }
           })
@@ -278,11 +287,11 @@ export async function PATCH(request: Request, { params }: Params) {
 
           const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
 
-          const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
+          const accountsToDelete = dbAccounts.filter((dbAcc) => {
             if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
               return false
             }
-            const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
+            const isMatched = postfastPlatformHandles.some((pfAcc) =>
               pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
               pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
             )
@@ -290,7 +299,7 @@ export async function PATCH(request: Request, { params }: Params) {
           })
 
           if (accountsToDelete.length > 0) {
-            const idsToDelete = accountsToDelete.map((a: any) => a.id)
+            const idsToDelete = accountsToDelete.map((account) => account.id)
             await prisma.socialAccount.deleteMany({
               where: { id: { in: idsToDelete } }
             })
@@ -302,7 +311,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
         postfastSync = {
           synced: syncResults.success,
-          accounts: pfResult.accounts.map((a: any) => `${a.platformId}:${a.handle}`),
+          accounts: pfResult.accounts.map((account) => `${account.platformId}:${account.handle}`),
         }
         console.log(`[Settings] PostFast sync complete: ${syncResults.success}/${pfResult.accounts.length} accounts synced for brand ${id}` + (syncResults.errors.length > 0 ? ` (${syncResults.failed} failed: ${syncResults.errors.join('; ')})` : ''))
       } else if (!pfResult.success) {

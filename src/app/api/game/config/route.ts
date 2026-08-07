@@ -22,8 +22,7 @@ function googleReviewAppUrlFromMeta(value: unknown) {
   return typeof appReviewUrl === 'string' ? appReviewUrl : null
 }
 
-function exposeGoogleReviewAppUrl(config: any) {
-  if (!config?.brand) return config
+function exposeGoogleReviewAppUrl<T extends { brand: { googleLinksMeta: unknown } }>(config: T) {
   const { googleLinksMeta, ...brand } = config.brand
   return {
     ...config,
@@ -64,6 +63,7 @@ export async function GET(request: Request) {
           select: {
             name: true,
             location: true,
+            timezone: true,
             googlePlaceId: true,
             googleBusinessUrl: true,
             googleReviewUrl: true,
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
         data: {
           brandId,
           title: '幸运大轮盘',
-          description: '提交本次到店真实体验并由店员确认即可获得 5 积分；AI 分享文案和公开发布完全自愿。每次抽奖消耗 5 积分。',
+          description: '本轮首次打开任一分享平台可获得 5 积分。系统不验证是否公开发布；每次抽奖消耗 5 积分。',
           themeColor: '#3b82f6',
           taskPhotoEnabled: false,
           taskReviewEnabled: true,
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
           maxSpinsPerUserDay: 3,
           templateType: 'WHEEL',
           posterTitle: 'Scan & Win!',
-          posterDesc: 'Share your visit feedback to earn points. Public posting is optional.',
+          posterDesc: 'Open any sharing platform once per activity round to receive 5 points.',
           posterTheme: 'black',
           prizes: {
             create: [
@@ -114,6 +114,7 @@ export async function GET(request: Request) {
             select: {
               name: true,
               location: true,
+              timezone: true,
               googlePlaceId: true,
               googleBusinessUrl: true,
               googleReviewUrl: true,
@@ -208,7 +209,7 @@ export async function POST(request: Request) {
           maxSpinsPerUserDay: maxSpinsPerUserDay ?? 3,
           templateType: templateType ?? 'WHEEL',
           posterTitle: posterTitle ?? 'Scan & Win!',
-          posterDesc: posterDesc ?? 'Share your visit feedback to earn points. Public posting is optional.',
+          posterDesc: posterDesc ?? 'Open any sharing platform once per activity round to receive 5 points.',
           posterTheme: posterTheme ?? 'black',
         },
         update: {

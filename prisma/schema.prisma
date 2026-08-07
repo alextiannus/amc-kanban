@@ -686,12 +686,28 @@ model GameConfig {
   templateType           String  @default("WHEEL")
 
   posterTitle String @default("Scan & Win!")
-  posterDesc  String @default("Share your visit feedback to earn points. Public posting is optional.")
+  posterDesc  String @default("Open any sharing platform once per activity round to receive 5 points.")
   posterTheme String @default("black")
 
-  prizes    GamePrize[]
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  prizes         GamePrize[]
+  activityRounds GameActivityRound[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+}
+
+model GameActivityRound {
+  id           String     @id @default(cuid())
+  gameConfigId String
+  gameConfig   GameConfig @relation(fields: [gameConfigId], references: [id], onDelete: Cascade)
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  entryRewards GameEntryReward[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([gameConfigId, startsAt, endsAt])
 }
 
 model GamePrize {
@@ -720,15 +736,31 @@ model GameSession {
   sessionId     String
   pointsBalance Int    @default(0)
 
-  tasks       CustomerTaskSubmission[]
-  spinLogs    GameSpinLog[]
-  shareDrafts GameShareDraft[]
+  tasks        CustomerTaskSubmission[]
+  spinLogs     GameSpinLog[]
+  shareDrafts  GameShareDraft[]
+  entryRewards GameEntryReward[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, sessionId])
   @@index([brandId, sessionId])
+}
+
+model GameEntryReward {
+  id        String            @id @default(cuid())
+  roundId   String
+  round     GameActivityRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   GameSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  platform      String
+  pointsAwarded Int      @default(5)
+  createdAt     DateTime @default(now())
+
+  @@unique([roundId, sessionId])
+  @@index([sessionId, createdAt])
 }
 
 model CustomerTaskSubmission {
