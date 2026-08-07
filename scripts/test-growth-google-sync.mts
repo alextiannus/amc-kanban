@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   expiredGrowthLegacyClearPatch,
+  googleWriteReviewUrl,
   isFreshConfirmedGoogle,
   normalizeGrowthStores,
   preserveExistingGoogleValues,
@@ -55,6 +56,8 @@ const locations: GrowthMerchantLocation[] = [
 ]
 
 assert.equal(selectPrimaryGrowthLocation(locations)?.location_key, 'orchard', 'latest active location must be primary')
+assert.equal(googleWriteReviewUrl('ChIJ test/id'), 'https://search.google.com/local/writereview?placeid=ChIJ%20test%2Fid')
+assert.equal(googleWriteReviewUrl(''), null)
 assert.equal(isFreshConfirmedGoogle(locations[0], now), true)
 assert.equal(isFreshConfirmedGoogle(locations[1], now), false, 'expired Google data must not be treated as current')
 
@@ -64,7 +67,7 @@ assert.equal(stores[0].isPrimary, true)
 assert.deepEqual(stores[0].googleBusiness, {
   placeId: 'place-orchard',
   businessUrl: 'https://maps.google.com/place-orchard',
-  reviewUrl: 'https://maps.google.com/place-orchard/review/new',
+  reviewUrl: 'https://search.google.com/local/writereview?placeid=place-orchard',
   reviewsUrl: 'https://maps.google.com/place-orchard/reviews',
   directionsUrl: 'https://maps.google.com/place-orchard/directions',
   photosUrl: 'https://maps.google.com/place-orchard/photos',

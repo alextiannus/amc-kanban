@@ -59,6 +59,12 @@ function time(value?: string | null) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
+export function googleWriteReviewUrl(placeId?: string | null) {
+  const normalizedPlaceId = String(placeId || '').trim()
+  if (!normalizedPlaceId) return null
+  return `https://search.google.com/local/writereview?placeid=${encodeURIComponent(normalizedPlaceId)}`
+}
+
 export function isFreshConfirmedGoogle(location: GrowthMerchantLocation, now = new Date()) {
   const google = location.google
   if (!google?.place_id || google.confirmation_status !== 'confirmed') return false
@@ -98,10 +104,13 @@ export function normalizeGrowthStores(locations: GrowthMerchantLocation[], now =
       isPrimary: location === primary,
     }
     if (isFreshConfirmedGoogle(location, now) && google) {
+      const reviewUrl = google.links?.write_review
+        ? googleWriteReviewUrl(google.place_id) || google.links.write_review
+        : null
       store.googleBusiness = {
         placeId: google.place_id!,
         ...(google.links?.place ? { businessUrl: google.links.place } : {}),
-        ...(google.links?.write_review ? { reviewUrl: google.links.write_review } : {}),
+        ...(reviewUrl ? { reviewUrl } : {}),
         ...(google.links?.reviews ? { reviewsUrl: google.links.reviews } : {}),
         ...(google.links?.directions ? { directionsUrl: google.links.directions } : {}),
         ...(google.links?.photos ? { photosUrl: google.links.photos } : {}),
