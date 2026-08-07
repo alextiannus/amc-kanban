@@ -37,7 +37,7 @@ graph TD
 
 ## 3. Merchant Flow and Round Scheduling
 
-- Merchants can create multiple future rounds with explicit start and end times. Times are entered in the brand timezone and stored as UTC.
+- Merchants can create multiple rounds with explicit start and end times. Times are entered in the brand timezone and stored as UTC. A new round may start in the past when its end remains in the future; it becomes active immediately.
 - A future round may be edited or deleted. Once active, its start is locked and only its end may be changed, subject to validity and overlap checks. Ended rounds are read-only.
 - Starting a new round resets only entry-award eligibility. Existing points, daily spin counts, prize inventory, issued rewards, redemption records, and permanent QR codes remain unchanged.
 - The dashboard shows scheduled, active, and ended states. A game with no active round is intentionally paused.

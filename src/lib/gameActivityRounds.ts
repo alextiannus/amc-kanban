@@ -60,6 +60,13 @@ export function assertRoundWindow(startsAt: Date, endsAt: Date) {
   }
 }
 
+export function assertNewRoundWindow(startsAt: Date, endsAt: Date, now: Date = new Date()) {
+  assertRoundWindow(startsAt, endsAt)
+  if (endsAt <= now) {
+    throw new Error('A new activity round must end in the future.')
+  }
+}
+
 export function assertValidTimeZone(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !value.trim()) {
     throw new Error('timezone must be a valid IANA time zone.')

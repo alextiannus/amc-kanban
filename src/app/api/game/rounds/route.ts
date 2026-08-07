@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { canHumanAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
 import {
   assertNoRoundOverlap,
+  assertNewRoundWindow,
   assertRoundWindow,
   assertValidTimeZone,
   parseRoundDate,
@@ -71,8 +72,7 @@ export async function POST(request: Request) {
     brandTimezone(config)
     const startsAt = parseRoundDate(body.startsAt, 'startsAt')
     const endsAt = parseRoundDate(body.endsAt, 'endsAt')
-    assertRoundWindow(startsAt, endsAt)
-    if (startsAt <= new Date()) throw new Error('A new activity round must start in the future.')
+    assertNewRoundWindow(startsAt, endsAt)
 
     const round = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await assertNoRoundOverlap(tx, { gameConfigId: config.id, startsAt, endsAt })

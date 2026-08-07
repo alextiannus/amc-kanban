@@ -851,7 +851,8 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
             </div>
 
             <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-3 dark:border-blue-900 dark:bg-blue-950/10">
-              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400">新增未来轮次</p>
+              <p className="mb-2 text-[10px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-400">新增活动轮次</p>
+              <p className="mb-2 text-[10px] leading-4 text-slate-500">开始时间可以早于当前时间；只要结束时间仍在未来，创建后会立即生效。</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1 text-[10px] font-bold text-slate-500">
                   开始时间

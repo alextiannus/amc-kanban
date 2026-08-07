@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import {
   assertNoRoundOverlap,
+  assertNewRoundWindow,
   assertRoundWindow,
   assertValidTimeZone,
   findActiveAndNextGameRounds,
@@ -10,6 +11,16 @@ import {
 
 assert.doesNotThrow(() => assertRoundWindow(new Date('2026-08-08T00:00:00Z'), new Date('2026-08-09T00:00:00Z')))
 assert.throws(() => assertRoundWindow(new Date('2026-08-09T00:00:00Z'), new Date('2026-08-09T00:00:00Z')), /later/)
+assert.doesNotThrow(() => assertNewRoundWindow(
+  new Date('2026-08-06T00:00:00Z'),
+  new Date('2026-08-09T00:00:00Z'),
+  new Date('2026-08-07T00:00:00Z'),
+), 'a past start is allowed when the round still ends in the future')
+assert.throws(() => assertNewRoundWindow(
+  new Date('2026-08-05T00:00:00Z'),
+  new Date('2026-08-06T00:00:00Z'),
+  new Date('2026-08-07T00:00:00Z'),
+), /must end in the future/)
 assert.doesNotThrow(() => assertValidTimeZone('Asia/Shanghai'))
 assert.throws(() => assertValidTimeZone('Invalid/Timezone'), /valid IANA/)
 
@@ -53,6 +64,8 @@ assert.match(rewardRoute, /alreadyClaimed: true/)
 assert.match(rewardRoute, /\['P2002', 'P2034'\]/)
 assert.doesNotMatch(rewardRoute, /body\?\.roundId/)
 assert.match(roundsRoute, /Activity rounds cannot overlap|assertNoRoundOverlap/)
+assert.match(roundsRoute, /assertNewRoundWindow/)
+assert.doesNotMatch(roundsRoute, /A new activity round must start in the future/)
 assert.match(roundsRoute, /The start time of an active round is locked/)
 assert.match(roundsRoute, /An ended round is read-only/)
 assert.match(roundsRoute, /assertValidTimeZone/)
