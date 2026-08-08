@@ -128,7 +128,8 @@ export async function POST(request: Request) {
       const isThanks = selectedPrize.type === 'THANKS'
 
       // 10. Record Spin Log. THANKS keeps an internal code for audit uniqueness, but customers do not see it.
-      await tx.gameSpinLog.create({
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      const spinLog = await tx.gameSpinLog.create({
         data: {
           sessionId: session.id,
           prizeId: selectedPrize.id,
@@ -136,7 +137,7 @@ export async function POST(request: Request) {
           pointsDeducted: 5,
           redemptionCode,
           status: isThanks ? 'RECORDED' : 'UNCLAIMED',
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Valid for 30 days
+          expiresAt, // Valid for 30 days
         },
       })
 
@@ -149,7 +150,11 @@ export async function POST(request: Request) {
           type: selectedPrize.type,
           imageUrl: selectedPrize.imageUrl,
         },
+        spinLogId: isThanks ? null : spinLog.id,
         redemptionCode: isThanks ? null : redemptionCode,
+        redemptionStatus: isThanks ? null : 'UNCLAIMED',
+        createdAt: spinLog.createdAt,
+        expiresAt: isThanks ? null : expiresAt,
         pointsBalance: session.pointsBalance - 5,
         spinsTodayCount: spinsTodayAfter,
         maxSpinsPerUserDay: config.maxSpinsPerUserDay,

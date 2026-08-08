@@ -370,6 +370,8 @@ Permanent QR contract:
 - `GET/POST /api/game/share-draft-pool`
 - `GET/POST/PATCH/DELETE /api/game/rounds`
 - `POST /api/game/entry-reward`
+- `GET/POST /api/game/redemptions`
+- `POST /api/game/redemptions/self`
 - `POST /api/cron/game-share-draft-pool`
 - `POST /api/game/tasks`
 - `POST /api/game/tasks/override`
@@ -377,6 +379,8 @@ Permanent QR contract:
 `GET /api/game/share-drafts` 接收 `brandId`、`sessionId` 与浏览器 `locale`，在生效轮次内从当前配置指纹的库存中租用一组文案。响应保留 `draftId`、`drafts`、`source` 与 `generatedAt`。同一 session/轮次在 15 分钟租约内返回并续租同一组；过期未使用的租约退回库存。空池返回 `draftId: null` 的即时基础模板并排队补货，公开路径绝不调用 LLM。
 
 `POST /api/game/entry-reward` 接受 `brandId`、`sessionId`、已启用 `platform` 和可选 `draftId`，服务端解析当前轮次并在串行化事务中创建唯一奖励记录、增加 5 积分及消费有效租约；重复请求幂等返回且不重复消费，fallback 没有 `draftId` 时仍可领分，非活动期返回 `409 ACTIVITY_INACTIVE`。`GET /api/game/status` 返回 `activeRound`、`nextRound` 与 `entryRewardClaimed`。`POST /api/game/spin` 同样要求当前存在生效轮次。
+
+`POST /api/game/spin` 对可兑换奖品同时返回 `spinLogId`。`POST /api/game/redemptions/self` 接受 `brandId`、匿名 `sessionId` 与 `spinLogId`，只允许当前 session 核销自己的奖品，并以条件更新原子完成 `UNCLAIMED -> CLAIMED`。同一所有者重试幂等返回 `alreadyClaimed: true`，过期返回 `409 REDEMPTION_EXPIRED`，跨 session 查询统一返回 `404`。`GET /api/game/status` 返回最近奖品的状态、`claimedAt` 与 `expiresAt`；已核销奖品保留记录但返回 `redemptionCode: null`。活动暂停不阻止有效历史奖品核销。现有 `GET/POST /api/game/redemptions` 店员 PIN 流程复用同一原子状态转换。
 
 `GET/POST /api/game/share-draft-pool` 仅允许品牌所有者查看中英文可用/锁定库存、生成状态、最近生成时间和错误，或以 `202` 请求异步补充至每种语言 5 组。保存游戏配置、调整平台或创建轮次会自动排队补充。`POST /api/cron/game-share-draft-pool` 使用 `x-cron-secret` 鉴权，建议 Render 每分钟执行一次，处理待补充、库存不足和失败重试；任务租约防止并发超量生成。
 
@@ -537,7 +541,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **204** 个 API 路径、**291** 个 HTTP 方法组合。
+共 **205** 个 API 路径、**292** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -671,6 +675,7 @@ Permanent QR contract:
 | GET, POST | `/api/game/config` |
 | POST | `/api/game/entry-reward` |
 | GET, POST | `/api/game/redemptions` |
+| POST | `/api/game/redemptions/self` |
 | DELETE, GET, PATCH, POST | `/api/game/rounds` |
 | GET, POST | `/api/game/share-draft-pool` |
 | GET | `/api/game/share-drafts` |

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { findActiveAndNextGameRounds, publicGameRound } from '@/lib/gameActivityRounds'
 import { getBusinessDate } from '@/lib/gameShareDrafts'
+import { effectiveGameRedemptionStatus } from '@/lib/gameRedemptions'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -32,22 +33,26 @@ export async function GET(request: Request) {
       })
     }
 
-    // 2. Query any unclaimed spin logs for crash resilience
-    const unclaimedSpins = await prisma.gameSpinLog.findMany({
+    // 2. Query recent issued rewards so claimed/expired state survives refreshes and rescans.
+    const rewardLogs = await prisma.gameSpinLog.findMany({
       where: {
         sessionId: session.id,
-        status: 'UNCLAIMED',
+        status: { in: ['UNCLAIMED', 'CLAIMED', 'EXPIRED'] },
       },
       select: {
         id: true,
         prizeNameSnapshot: true,
         prizeTypeSnapshot: true,
         redemptionCode: true,
+        status: true,
         createdAt: true,
+        claimedAt: true,
+        expiresAt: true,
       },
       orderBy: {
         createdAt: 'desc',
       },
+      take: 50,
     })
 
     const config = await prisma.gameConfig.findUnique({
@@ -100,6 +105,30 @@ export async function GET(request: Request) {
     })
     const maxSpinsPerUserDay = config?.maxSpinsPerUserDay ?? 3
 
+    const now = new Date()
+    const issuedPrizes = rewardLogs.map((log: {
+      id: string
+      prizeNameSnapshot: string
+      prizeTypeSnapshot: string
+      redemptionCode: string
+      status: string
+      createdAt: Date
+      claimedAt: Date | null
+      expiresAt: Date | null
+    }) => {
+      const status = effectiveGameRedemptionStatus(log.status, log.expiresAt, now)
+      return {
+        logId: log.id,
+        prizeName: log.prizeNameSnapshot,
+        prizeType: log.prizeTypeSnapshot,
+        status,
+        redemptionCode: status === 'UNCLAIMED' ? log.redemptionCode : null,
+        createdAt: log.createdAt,
+        claimedAt: status === 'CLAIMED' ? log.claimedAt : null,
+        expiresAt: log.expiresAt,
+      }
+    })
+
     return NextResponse.json({
       pointsBalance: session.pointsBalance,
       spinsTodayCount,
@@ -118,19 +147,8 @@ export async function GET(request: Request) {
         status: todayFeedbackSubmission.status,
         pointsAwarded: todayFeedbackSubmission.pointsAwarded,
       } : null,
-      unclaimedPrizes: unclaimedSpins.map((log: {
-        id: string
-        prizeNameSnapshot: string
-        prizeTypeSnapshot: string
-        redemptionCode: string
-        createdAt: Date
-      }) => ({
-        logId: log.id,
-        prizeName: log.prizeNameSnapshot,
-        prizeType: log.prizeTypeSnapshot,
-        redemptionCode: log.redemptionCode,
-        createdAt: log.createdAt,
-      })),
+      issuedPrizes,
+      unclaimedPrizes: issuedPrizes.filter((prize: { status: string }) => prize.status === 'UNCLAIMED'),
     })
   } catch (e: unknown) {
     console.error('[GET /api/game/status]', e)

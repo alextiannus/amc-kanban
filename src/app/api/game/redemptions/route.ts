@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { claimGameRedemption, effectiveGameRedemptionStatus, GameRedemptionError } from '@/lib/gameRedemptions'
 
 function normalizeCode(code: string): string {
   return code.trim().toUpperCase()
@@ -63,7 +64,7 @@ export async function GET(request: Request) {
     }) => ({
       id: log.id,
       redemptionCode: log.redemptionCode,
-      status: log.status,
+      status: effectiveGameRedemptionStatus(log.status, log.expiresAt),
       prizeName: log.prizeNameSnapshot,
       prizeType: log.prizeTypeSnapshot,
       pointsDeducted: log.pointsDeducted,
@@ -88,52 +89,28 @@ export async function POST(request: Request) {
         select: { clerkPin: true },
       })
       if (!config) throw new Error('Game configuration not found')
-      if (config.clerkPin !== pinCode) throw new Error('Incorrect staff PIN code.')
+      if (config.clerkPin !== pinCode) {
+        throw new GameRedemptionError('Incorrect staff PIN code.', 'INCORRECT_STAFF_PIN', 403)
+      }
 
-      const log = await tx.gameSpinLog.findUnique({
-        where: { redemptionCode: normalizeCode(redemptionCode) },
-        include: { session: true },
+      return claimGameRedemption(tx, {
+        brandId,
+        redemptionCode: normalizeCode(redemptionCode),
       })
-      if (!log || log.session.brandId !== brandId) {
-        throw new Error('Redemption code not found for this brand.')
-      }
-      if (log.prizeTypeSnapshot === 'THANKS') {
-        throw new Error('This is a thank-you result and does not need redemption.')
-      }
-      if (log.status === 'CLAIMED') {
-        throw new Error('This prize has already been redeemed.')
-      }
-      if (log.expiresAt && log.expiresAt < new Date()) {
-        await tx.gameSpinLog.update({
-          where: { id: log.id },
-          data: { status: 'EXPIRED' },
-        })
-        throw new Error('This redemption code has expired.')
-      }
-
-      const updated = await tx.gameSpinLog.update({
-        where: { id: log.id },
-        data: {
-          status: 'CLAIMED',
-          claimedAt: new Date(),
-        },
-        include: { session: true },
-      })
-
-      return {
-        id: updated.id,
-        redemptionCode: updated.redemptionCode,
-        status: updated.status,
-        prizeName: updated.prizeNameSnapshot,
-        prizeType: updated.prizeTypeSnapshot,
-        createdAt: updated.createdAt,
-        claimedAt: updated.claimedAt,
-        sessionId: updated.session.sessionId,
-      }
     })
+
+    if (result.status === 'EXPIRED') {
+      return NextResponse.json(
+        { error: 'This redemption code has expired.', code: 'REDEMPTION_EXPIRED' },
+        { status: 409 },
+      )
+    }
 
     return NextResponse.json({ redemption: result })
   } catch (error: unknown) {
+    if (error instanceof GameRedemptionError) {
+      return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    }
     const message = error instanceof Error ? error.message : 'Unable to redeem this code.'
     return NextResponse.json({ error: message }, { status: 400 })
   }

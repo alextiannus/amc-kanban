@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
-import { BookOpen, CheckCircle2, Copy, MapPin } from 'lucide-react'
+import { BookOpen, CheckCircle2, Copy, MapPin, TicketCheck } from 'lucide-react'
 
 type Prize = {
   id?: string
@@ -46,6 +46,7 @@ type GameStatus = {
     prizeType: string
     redemptionCode: string
   }[]
+  issuedPrizes?: IssuedPrize[]
   activeRound: { id: string; startsAt: string; endsAt: string } | null
   nextRound: { id: string; startsAt: string; endsAt: string } | null
   entryRewardClaimed: boolean
@@ -63,7 +64,12 @@ type GameStatus = {
 
 type SpinResult = {
   prize: { id?: string; name: string; type: string; imageUrl?: string | null }
+  spinLogId: string | null
   redemptionCode: string | null
+  redemptionStatus: RedemptionStatus | null
+  createdAt: string
+  claimedAt?: string | null
+  expiresAt: string | null
   pointsBalance: number
   spinsTodayCount?: number
   maxSpinsPerUserDay?: number
@@ -81,6 +87,19 @@ type ShareDraftResponse = {
   drafts: ShareDrafts
   source: 'ai' | 'fallback' | null
   generatedAt: string | null
+}
+
+type RedemptionStatus = 'UNCLAIMED' | 'CLAIMED' | 'EXPIRED'
+
+type IssuedPrize = {
+  logId: string
+  prizeName: string
+  prizeType: string
+  status: RedemptionStatus
+  redemptionCode: string | null
+  createdAt: string
+  claimedAt: string | null
+  expiresAt: string | null
 }
 
 const copy = {
@@ -106,7 +125,15 @@ const copy = {
     youWon: 'You won',
     showCode: 'Show this code to store staff.',
     noCodeNeeded: 'No redemption code needed.',
-    unclaimedRewards: 'Unclaimed rewards',
+    issuedRewards: 'Your rewards',
+    useNow: 'Use now',
+    usingNow: 'Using...',
+    used: 'Used',
+    expired: 'Expired',
+    codeInvalidated: 'Code invalidated',
+    useWarning: 'Once used, this code cannot be restored',
+    usedAt: (value: string) => `Used ${value}`,
+    useFailed: 'Unable to use this reward. The code is still valid; please try again.',
     activityPaused: 'This activity is currently paused.',
     nextRoundStarts: (value: string) => `Next round starts ${value}.`,
     heroCta: 'Review now, earn points, and spin to win',
@@ -156,7 +183,15 @@ const copy = {
     youWon: '恭喜中奖',
     showCode: '请向店员出示兑换码。',
     noCodeNeeded: '无需兑换码。',
-    unclaimedRewards: '待领取奖品',
+    issuedRewards: '我的奖品',
+    useNow: '立即使用',
+    usingNow: '使用中...',
+    used: '已使用',
+    expired: '已过期',
+    codeInvalidated: '兑换码已作废',
+    useWarning: '点击后兑换码立即作废，不可恢复',
+    usedAt: (value: string) => `使用时间：${value}`,
+    useFailed: '无法使用该奖品，兑换码仍然有效，请重试。',
     activityPaused: '当前活动暂停中。',
     nextRoundStarts: (value: string) => `下一轮将在 ${value} 开始。`,
     heroCta: '立即评价，获取积分抽奖',
@@ -665,6 +700,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [loadingDrafts, setLoadingDrafts] = useState(false)
   const [copiedPlatform, setCopiedPlatform] = useState<Platform | null>(null)
   const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
+  const [redeemingLogId, setRedeemingLogId] = useState<string | null>(null)
 
   const accent = config?.themeColor || '#2563eb'
   const t = copy[locale]
@@ -692,6 +728,31 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       return new Date(value).toLocaleString()
     }
   }
+  const formatRedemptionTime = (value: string) => {
+    try {
+      return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: config?.brand?.timezone || undefined,
+      }).format(new Date(value))
+    } catch {
+      return new Date(value).toLocaleString()
+    }
+  }
+  const issuedPrizes = status?.issuedPrizes ?? status?.unclaimedPrizes?.map((prize) => ({
+    ...prize,
+    status: 'UNCLAIMED' as const,
+    createdAt: '',
+    claimedAt: null,
+    expiresAt: null,
+  })) ?? []
+  const currentSpinPrize = spinResult?.spinLogId
+    ? issuedPrizes.find((prize) => prize.logId === spinResult.spinLogId)
+    : null
+  const currentSpinStatus = currentSpinPrize?.status ?? spinResult?.redemptionStatus ?? null
+  const currentSpinCode = currentSpinPrize ? currentSpinPrize.redemptionCode : spinResult?.redemptionCode ?? null
+  const currentSpinClaimedAt = currentSpinPrize?.claimedAt ?? spinResult?.claimedAt ?? null
+  const historicalPrizes = issuedPrizes.filter((prize) => !showGame || prize.logId !== spinResult?.spinLogId)
 
   const requestShareDrafts = useCallback(async (requestedSessionId: string, requestLocale: Locale, silent = false) => {
     if (!requestedSessionId) return
@@ -941,6 +1002,96 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     openPlatform(platform)
   }
 
+  function updateStatusAfterSpin(data: SpinResult) {
+    setStatus((current) => {
+      if (!current) return current
+      const currentIssued = current.issuedPrizes ?? current.unclaimedPrizes.map((prize) => ({
+        ...prize,
+        status: 'UNCLAIMED' as const,
+        createdAt: '',
+        claimedAt: null,
+        expiresAt: null,
+      }))
+      const nextIssued = data.spinLogId && data.redemptionCode
+        ? [{
+            logId: data.spinLogId,
+            prizeName: data.prize.name,
+            prizeType: data.prize.type,
+            status: 'UNCLAIMED' as const,
+            redemptionCode: data.redemptionCode,
+            createdAt: data.createdAt,
+            claimedAt: null,
+            expiresAt: data.expiresAt,
+          }, ...currentIssued.filter((prize) => prize.logId !== data.spinLogId)]
+        : currentIssued
+
+      return {
+        ...current,
+        pointsBalance: data.pointsBalance,
+        spinsTodayCount: data.spinsTodayCount,
+        maxSpinsPerUserDay: data.maxSpinsPerUserDay,
+        spinsRemainingToday: data.spinsRemainingToday,
+        issuedPrizes: nextIssued,
+        unclaimedPrizes: nextIssued
+          .filter((prize) => prize.status === 'UNCLAIMED' && prize.redemptionCode)
+          .map((prize) => ({
+            logId: prize.logId,
+            prizeName: prize.prizeName,
+            prizeType: prize.prizeType,
+            redemptionCode: prize.redemptionCode as string,
+          })),
+      }
+    })
+  }
+
+  async function redeemReward(spinLogId: string) {
+    if (!sessionId || redeemingLogId) return
+    setError('')
+    setMessage('')
+    setRedeemingLogId(spinLogId)
+
+    try {
+      const response = await fetch('/api/game/redemptions/self', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, sessionId, spinLogId }),
+      })
+      const data = await response.json().catch(() => ({})) as {
+        error?: string
+        code?: string
+        redemption?: { claimedAt?: string | null }
+      }
+      if (!response.ok) {
+        if (data.code === 'REDEMPTION_EXPIRED') {
+          await refreshStatus(sessionId).catch(() => undefined)
+          throw new Error(t.expired)
+        }
+        throw new Error(t.useFailed)
+      }
+
+      const claimedAt = data.redemption?.claimedAt || new Date().toISOString()
+      setStatus((current) => {
+        if (!current) return current
+        const currentIssued = current.issuedPrizes ?? []
+        const nextIssued = currentIssued.map((prize) => prize.logId === spinLogId
+          ? { ...prize, status: 'CLAIMED' as const, redemptionCode: null, claimedAt }
+          : prize)
+        return {
+          ...current,
+          issuedPrizes: nextIssued,
+          unclaimedPrizes: current.unclaimedPrizes.filter((prize) => prize.logId !== spinLogId),
+        }
+      })
+      setSpinResult((current) => current?.spinLogId === spinLogId
+        ? { ...current, redemptionCode: null, redemptionStatus: 'CLAIMED', claimedAt }
+        : current)
+    } catch (claimError) {
+      setError(claimError instanceof Error ? claimError.message : t.useFailed)
+    } finally {
+      setRedeemingLogId(null)
+    }
+  }
+
   async function spin() {
     if (!sessionId || spinning) return
     setError('')
@@ -970,13 +1121,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         setGridActiveSlot(targetSlot)
         setSpinning(false)
         setSpinResult(data)
-        setStatus((prev) => prev ? {
-          ...prev,
-          pointsBalance: data.pointsBalance,
-          spinsTodayCount: data.spinsTodayCount,
-          maxSpinsPerUserDay: data.maxSpinsPerUserDay,
-          spinsRemainingToday: data.spinsRemainingToday,
-        } : prev)
+        updateStatusAfterSpin(data)
       }, (33 + targetSlot) * 80)
       return
     }
@@ -985,13 +1130,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     window.setTimeout(() => {
       setSpinning(false)
       setSpinResult(data)
-      setStatus((prev) => prev ? {
-        ...prev,
-        pointsBalance: data.pointsBalance,
-        spinsTodayCount: data.spinsTodayCount,
-        maxSpinsPerUserDay: data.maxSpinsPerUserDay,
-        spinsRemainingToday: data.spinsRemainingToday,
-      } : prev)
+      updateStatusAfterSpin(data)
     }, 5000)
   }
 
@@ -1076,10 +1215,37 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="text-xs font-bold uppercase text-emerald-700">{t.youWon}</p>
               <h2 className="mt-1 text-xl font-black text-emerald-950">{spinResult.prize.name}</h2>
-              {spinResult.redemptionCode ? (
+              {currentSpinStatus === 'CLAIMED' ? (
+                <div className="mt-3 rounded-xl border border-emerald-200 bg-white px-3 py-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-emerald-700">
+                    <CheckCircle2 className="h-5 w-5" />
+                    <span className="text-sm font-black">{t.used}</span>
+                  </div>
+                  <p className="mt-1 text-xs font-bold text-slate-500">{t.codeInvalidated}</p>
+                  {currentSpinClaimedAt && (
+                    <p className="mt-1 text-[11px] font-semibold text-slate-400">{t.usedAt(formatRedemptionTime(currentSpinClaimedAt))}</p>
+                  )}
+                </div>
+              ) : currentSpinStatus === 'EXPIRED' ? (
+                <div className="mt-3 rounded-xl bg-white px-3 py-3 text-center text-sm font-black text-slate-500">
+                  {t.expired}
+                </div>
+              ) : currentSpinCode && spinResult.spinLogId ? (
                 <>
-                  <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-2xl font-black tracking-[0.2em] text-emerald-700">{spinResult.redemptionCode}</p>
+                  <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-2xl font-black tracking-[0.2em] text-emerald-700">{currentSpinCode}</p>
                   <p className="mt-2 text-xs font-semibold text-emerald-700">{t.showCode}</p>
+                  <button
+                    type="button"
+                    onClick={() => redeemReward(spinResult.spinLogId as string)}
+                    disabled={Boolean(redeemingLogId)}
+                    className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
+                  >
+                    {redeemingLogId === spinResult.spinLogId
+                      ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                      : <TicketCheck className="h-4 w-4" />}
+                    {redeemingLogId === spinResult.spinLogId ? t.usingNow : t.useNow}
+                  </button>
+                  <p className="mt-2 text-center text-[11px] font-semibold text-amber-700">{t.useWarning}</p>
                 </>
               ) : (
                 <p className="mt-2 rounded-xl bg-white px-3 py-2 text-center text-sm font-black text-emerald-700">{t.noCodeNeeded}</p>
@@ -1087,14 +1253,53 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </div>
           )}
 
-          {showGame && status?.unclaimedPrizes?.length ? (
+          {historicalPrizes.length ? (
             <div className="rounded-2xl bg-white p-4 shadow-sm">
-              <p className="text-xs font-black uppercase text-slate-400">{t.unclaimedRewards}</p>
-              <div className="mt-3 space-y-2">
-                {status.unclaimedPrizes.map((prize) => (
-                  <div key={prize.logId} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
-                    <span className="text-sm font-bold">{prize.prizeName}</span>
-                    <span className="font-black tracking-widest" style={{ color: accent }}>{prize.redemptionCode}</span>
+              <p className="text-xs font-black uppercase text-slate-400">{t.issuedRewards}</p>
+              <div className="mt-3 space-y-3">
+                {historicalPrizes.map((prize) => (
+                  <div key={prize.logId} className="rounded-xl bg-slate-50 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-black text-slate-900">{prize.prizeName}</span>
+                      <span className={`rounded-full px-2 py-1 text-[10px] font-black ${
+                        prize.status === 'CLAIMED'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : prize.status === 'EXPIRED'
+                            ? 'bg-slate-200 text-slate-500'
+                            : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {prize.status === 'CLAIMED' ? t.used : prize.status === 'EXPIRED' ? t.expired : t.useNow}
+                      </span>
+                    </div>
+
+                    {prize.status === 'UNCLAIMED' && prize.redemptionCode ? (
+                      <>
+                        <p className="mt-3 rounded-lg bg-white px-3 py-2 text-center text-xl font-black tracking-[0.2em]" style={{ color: accent }}>
+                          {prize.redemptionCode}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => redeemReward(prize.logId)}
+                          disabled={Boolean(redeemingLogId)}
+                          className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-black text-white transition hover:bg-emerald-700 active:scale-[0.99] disabled:opacity-50"
+                        >
+                          {redeemingLogId === prize.logId
+                            ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                            : <TicketCheck className="h-4 w-4" />}
+                          {redeemingLogId === prize.logId ? t.usingNow : t.useNow}
+                        </button>
+                        <p className="mt-2 text-center text-[11px] font-semibold text-amber-700">{t.useWarning}</p>
+                      </>
+                    ) : (
+                      <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-center">
+                        <p className="text-xs font-black text-slate-500">
+                          {prize.status === 'CLAIMED' ? t.codeInvalidated : t.expired}
+                        </p>
+                        {prize.status === 'CLAIMED' && prize.claimedAt && (
+                          <p className="mt-1 text-[11px] font-semibold text-slate-400">{t.usedAt(formatRedemptionTime(prize.claimedAt))}</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

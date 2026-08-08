@@ -10,6 +10,8 @@
 - 页面语言直接跟随顾客浏览器。生效轮次内首次进入时，从后台文案池即时租用全部已启用平台（Google Review、小红书、Instagram）的一组可编辑草稿；顾客公开请求不得调用或等待 AI。每个品牌按当前资料/平台配置指纹维持中文、英文各 5 组，空池时即时返回安全基础模板并异步补货。
 - 同一品牌、活动轮次和匿名浏览器 session 中，首次成功“复制并打开”任意一个已启用平台时原子发放 5 积分；第二、第三个平台仍可打开但不重复发分。奖励对象是平台跳转动作，系统不追踪、不验证，也不得宣称公开评论或帖子已经提交。
 - 领分成功后，顾客返回页面或重新扫码直接进入纯抽奖界面；抽奖界面不得再显示平台草稿或 “Optional public sharing”。新轮次只恢复领分资格，不重置积分、每日抽奖次数、奖品库存、中奖或兑奖历史。
+- 非“谢谢参与”奖品按中奖时生成的 `GameSpinLog` 兑换。顾客可在中奖结果或历史奖品卡片点击本地化的“立即使用 / Use now”，无需店员 PIN 或二次确认；服务端只允许当前品牌匿名 session 核销自己的 `spinLogId`，并以条件更新原子完成 `UNCLAIMED -> CLAIMED`，双击、并发和重试不得重复核销。
+- 顾客直接核销后兑换码永久失效且不可恢复。页面继续保留奖品名称、“已使用 / Used”和 `claimedAt`，但服务端与页面不再返回或显示完整兑换码；未过期奖品即使活动轮次暂停仍可查看和使用。现有店员 PIN 查询/核销入口继续保留，并与顾客端复用同一原子核销规则。
 - Google 草稿不得要求星级，也不得包含折扣、免费商品、奖励或其他激励评价话术，遵循 [Google 激励评价政策](https://support.google.com/contributionpolicy/answer/16597558?hl=en) 与 [Google Maps 内容政策](https://support.google.com/contributionpolicy/answer/7400114?hl=en-GB)。
 - Google Review、小红书和 Instagram 使用纵向操作卡，Google 排在首位。草稿和编辑内容按 `brandId` 隔离；复制与领分均成功后沿用现有 App deep link 与 900ms 网页 fallback。
 - 顾客端活动标题下固定显示本地化 CTA：中文“立即评价，获取积分抽奖”，英文“Review now, earn points, and spin to win”；不直接展示数据库 `config.description`。保留三平台可编辑文本框，但删除 Prepare 标题、生成次数、AI/fallback 提示、真实性确认框和生成等待状态。

@@ -572,7 +572,7 @@ export default function GameSettingsDashboard({ brandId, brandName }: Props) {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || '核销失败')
       setRedemptionResult(data.redemption)
-      setRedemptionMessage('核销成功，系统已存档。')
+      setRedemptionMessage(data.redemption?.alreadyClaimed ? '该兑换码此前已核销，不会重复使用。' : '核销成功，系统已存档。')
     } catch (err) {
       setRedemptionError(err instanceof Error ? err.message : '核销失败')
     } finally {
