@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { assembleVideoClips } from '@/lib/videoGeneration'
+import { assembleRemoteVideo } from '@/lib/amc-content/remoteContentService'
 
 export const maxDuration = 120
 
@@ -23,7 +23,6 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     const brandId = typeof body?.brandId === 'string' ? body.brandId.trim() : ''
     const title = typeof body?.title === 'string' ? body.title.trim() : '最终成片'
-    const aspectRatio = typeof body?.aspectRatio === 'string' ? body.aspectRatio.trim() : '9:16'
     const clipUrls = Array.isArray(body?.clipUrls)
       ? body.clipUrls.map((item: unknown) => typeof item === 'string' ? item.trim() : '').filter(Boolean)
       : []
@@ -35,13 +34,26 @@ export async function POST(request: Request) {
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const execution = await assembleVideoClips({
+    const execution = await assembleRemoteVideo({
       brandId,
       actorId: actor.id,
+      actorType: actor.type,
+      actorRole: actor.role,
       title,
       clipUrls,
-      aspectRatio,
-      scriptSummary,
+      voiceoverUrl: optionalString(body.voiceoverUrl),
+      musicUrl: optionalString(body.musicUrl),
+      logoUrl: optionalString(body.logoUrl),
+      subtitles: Array.isArray(body.subtitles) ? body.subtitles : undefined,
+      addressText: optionalString(body.addressText),
+      ctaText: optionalString(body.ctaText),
+      finalText: optionalString(body.finalText) || scriptSummary,
+      referenceTexts: stringArray(body.referenceTexts),
+      referenceAssetIds: stringArray(body.referenceAssetIds),
+      projectId: optionalString(body.projectId),
+      variantId: optionalString(body.variantId),
+      promptBundleVersionId: optionalString(body.promptBundleVersionId),
+      parentAssetIds: stringArray(body.parentAssetIds),
     })
 
     return NextResponse.json({ success: true, execution })
@@ -49,4 +61,15 @@ export async function POST(request: Request) {
     console.error('[VideoAssemble] failed:', err)
     return NextResponse.json({ error: err.message || 'Video assembly failed' }, { status: 500 })
   }
+}
+
+function optionalString(value: unknown): string | undefined {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return text || undefined
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean)
+    : []
 }

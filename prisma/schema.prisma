@@ -1032,6 +1032,12 @@ model LLMConfig {
   isDefault   Boolean  @default(false)
   priority    Int      @default(0) // Higher number = higher priority in fallback chain (tried first)
   taskTags    String[] // e.g., ["copywriting", "reasoning", "translation"]
+  capabilities      String[] @default([])
+  timeoutMs         Int      @default(120000)
+  maxRetries        Int      @default(1)
+  fallbackProfileIds String[] @default([])
+  costMetadata      Json?
+  secretRef         String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

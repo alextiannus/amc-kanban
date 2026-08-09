@@ -5,6 +5,7 @@ import { isAmcOperator } from '@/lib/amcOperator'
 import { validateLLMConfig } from '@/lib/llmRouter'
 import { validateVideoProviderConfig } from '@/lib/videoGeneration'
 import { isMiniMaxTtsConfig, validateMiniMaxTtsConfig } from '@/lib/minimaxTtsValidation'
+import { incompatibleFallbackIds, inferExecutionCapabilities, normalizeCapabilities, unsupportedTasks } from '@/lib/modelCapabilities'
 
 function maskKey(key: string | null | undefined): string | null {
   if (!key) return null
@@ -36,10 +37,12 @@ export async function GET() {
       orderBy: { updatedAt: 'desc' },
     })
 
-    const maskedConfigs = configs.map((c: any) => ({
-      ...c,
-      apiKey: maskKey(c.apiKey),
-    }))
+    const maskedConfigs = configs
+      .filter((c: any) => !isVideoModelConfig(c.provider, c.taskTags) && !(c.taskTags || []).some((tag: string) => ['tts_generation', 'tts'].includes(normalizeTaskTag(tag))))
+      .map((c: any) => ({
+        ...c,
+        apiKey: maskKey(c.apiKey),
+      }))
 
     return NextResponse.json({ configs: maskedConfigs })
   } catch (error: any) {
@@ -72,6 +75,13 @@ export async function POST(request: Request) {
       isEnabled = true,
       isDefault = false,
       taskTags = [],
+      capabilities = [],
+      priority = 0,
+      timeoutMs = 120000,
+      maxRetries = 1,
+      fallbackProfileIds = [],
+      costMetadata = null,
+      secretRef = null,
     } = body
 
     if (!provider || !displayName || !modelName || !apiKey) {
@@ -84,6 +94,21 @@ export async function POST(request: Request) {
     }
 
     const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
+    if (isVideoModelConfig(provider, cleanTaskTags) || cleanTaskTags.some((tag) => tag === 'tts_generation' || tag === 'tts')) {
+      return NextResponse.json({ error: 'Video and TTS profiles are owned by AMC-Content. Configure them in Content Lab.' }, { status: 409 })
+    }
+    const cleanCapabilities = inferExecutionCapabilities(String(provider), cleanTaskTags, normalizeCapabilities(capabilities))
+    const unsupported = unsupportedTasks(cleanTaskTags, cleanCapabilities)
+    if (unsupported.length) {
+      return NextResponse.json({ error: `Capabilities do not satisfy tasks: ${unsupported.join(', ')}` }, { status: 400 })
+    }
+    const cleanFallbackIds = Array.isArray(fallbackProfileIds) ? fallbackProfileIds.map(String).map((item) => item.trim()).filter(Boolean) : []
+    if (cleanFallbackIds.length) {
+      const fallbacks = await prisma.lLMConfig.findMany({ where: { id: { in: cleanFallbackIds } }, select: { id: true, provider: true, taskTags: true, capabilities: true } })
+      if (fallbacks.length !== new Set(cleanFallbackIds).size) return NextResponse.json({ error: 'One or more fallback profiles do not exist' }, { status: 400 })
+      const incompatible = incompatibleFallbackIds(cleanTaskTags, fallbacks)
+      if (incompatible.length) return NextResponse.json({ error: `Fallback profiles are not task/capability compatible: ${incompatible.join(', ')}` }, { status: 400 })
+    }
 
     if (isMiniMaxTtsConfig(provider, modelName, baseUrl, cleanTaskTags)) {
       const validation = await validateMiniMaxTtsConfig({
@@ -134,6 +159,13 @@ export async function POST(request: Request) {
         isEnabled: Boolean(isEnabled),
         isDefault: Boolean(isDefault),
         taskTags: cleanTaskTags,
+        capabilities: cleanCapabilities,
+        priority: Number.isInteger(priority) ? priority : 0,
+        timeoutMs: Math.max(1000, Math.min(600000, Number(timeoutMs) || 120000)),
+        maxRetries: Math.max(0, Math.min(5, Number(maxRetries) || 0)),
+        fallbackProfileIds: cleanFallbackIds,
+        costMetadata: costMetadata && typeof costMetadata === 'object' ? costMetadata : undefined,
+        secretRef: secretRef ? String(secretRef).trim() : null,
       },
     })
 

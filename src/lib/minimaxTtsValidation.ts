@@ -11,7 +11,7 @@ export function isMiniMaxTtsConfig(provider: unknown, modelName: unknown, baseUr
   const model = String(modelName || '').trim().toLowerCase()
   const endpoint = String(baseUrl || '').trim().toLowerCase()
 
-  return tags.includes('tts') || model.startsWith('speech-') || endpoint.includes('/t2a')
+  return tags.includes('tts') || tags.includes('tts_generation') || model.startsWith('speech-') || endpoint.includes('/t2a')
 }
 
 export async function validateMiniMaxTtsConfig(input: {

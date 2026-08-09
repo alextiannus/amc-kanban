@@ -7,6 +7,7 @@ import { submitDraftForDelivery } from '@/lib/draftSubmission'
 import { postfastDeletePost } from '@/lib/integrations/postfast'
 import { McpClientManager } from '@/lib/mcp/clientManager'
 import { resolveBrandIdentity } from '@/lib/brandIdentity'
+import { generateTtsAudio } from '@/lib/ttsGeneration'
 
 function safeEnqueue(controller: ReadableStreamDefaultController, data: Uint8Array) {
   try {
@@ -15,8 +16,6 @@ function safeEnqueue(controller: ReadableStreamDefaultController, data: Uint8Arr
     console.warn('[voice-chat] safeEnqueue skipped: controller is closed/inactive', err)
   }
 }
-
-const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 
 function polishVoiceReply(reply: string, isEnglish: boolean): string {
   let text = reply
@@ -52,41 +51,21 @@ function polishVoiceReply(reply: string, isEnglish: boolean): string {
  * Returns null if TTS is not configured or on any error (caller falls back to
  * client-side TTS request).
  */
-async function synthesizeSpeechB64(text: string, voiceId: string): Promise<string | null> {
+async function synthesizeSpeechB64(
+  text: string,
+  voiceId: string,
+  context: { brandId: string; actorId: string; actorType?: string; actorRole?: string },
+): Promise<string | null> {
   try {
-    const ttsConfig = await prisma.lLMConfig.findFirst({
-      where: { isEnabled: true, provider: 'minimax', taskTags: { has: 'tts' } },
-      orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+    const routed = await generateTtsAudio({
+      text: text.slice(0, 600),
+      voiceId,
+      brandId: context.brandId,
+      actorId: context.actorId,
+      actorType: context.actorType,
+      actorRole: context.actorRole,
     })
-    const apiKey = ttsConfig?.apiKey || null
-    if (!apiKey) return null
-
-    const ttsModel = ttsConfig?.modelName || 'speech-2.8-hd'
-    const endpoint = ttsConfig?.baseUrl || 'https://api.minimaxi.com/v1/t2a_v2'
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: ttsModel,
-        text: text.slice(0, 600),
-        stream: false,
-        output_format: 'hex',
-        voice_setting: { voice_id: voiceId || DEFAULT_MINIMAX_VOICE_ID, speed: 1.0, vol: 1.0, pitch: 0 },
-        audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3' },
-      }),
-      signal: AbortSignal.timeout(8_000),
-    })
-
-    if (!response.ok) return null
-
-    const json = await response.json()
-    const hex: string = json.data?.audio || json.data?.audio_file || ''
-    if (!hex) return null
-
-    // Convert hex → binary buffer → base64
-    const raw = hex.match(/.{1,2}/g)?.map((b: string) => parseInt(b, 16)) ?? []
-    return Buffer.from(new Uint8Array(raw)).toString('base64')
+    return routed.audio.toString('base64')
   } catch (err) {
     console.warn('[voice-chat] TTS inline synthesis failed, client will fallback:', err)
     return null
@@ -573,7 +552,12 @@ export async function POST(request: Request, { params }: Params) {
         let audiob64: string | null = null
         if (voiceId) {
           const tts0 = Date.now()
-          audiob64 = await synthesizeSpeechB64(finalReply, voiceId)
+          audiob64 = await synthesizeSpeechB64(finalReply, voiceId, {
+            brandId,
+            actorId: actor.id,
+            actorType: actor.type,
+            actorRole: actor.role,
+          })
           console.log(`[voice-chat] TTS inline ${audiob64 ? 'ok' : 'skipped'} in ${Date.now() - tts0}ms`)
         }
 

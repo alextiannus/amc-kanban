@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import {
+  inferExecutionCapabilities,
+  incompatibleFallbackIds,
+  normalizeCapabilities,
+  unsupportedTasks,
+} from '../src/lib/modelCapabilities.ts'
+
+const seedance = inferExecutionCapabilities('seedance', ['video_generation'], [])
+assert.ok(seedance.includes('video_output'))
+assert.ok(seedance.includes('reference_video'))
+assert.ok(!seedance.includes('video_input'), 'video output providers must not be inferred as analysis models')
+assert.deepEqual(unsupportedTasks(['reference_video_analysis'], seedance), ['reference_video_analysis'])
+
+const gemini = normalizeCapabilities(['video_input', 'structured_json', 'text_input'])
+assert.deepEqual(unsupportedTasks(['reference_video_analysis'], gemini), [])
+
+const tts = inferExecutionCapabilities('minimax', ['tts_generation'], [])
+assert.ok(tts.includes('audio_output'))
+assert.deepEqual(unsupportedTasks(['tts_generation'], tts), [])
+
+const incompatible = incompatibleFallbackIds(['video_generation'], [
+  { id: 'video-ok', provider: 'fal', taskTags: ['video_generation'], capabilities: [] },
+  { id: 'text-only', provider: 'openai', taskTags: ['video_generation'], capabilities: ['text_input', 'structured_json'] },
+])
+assert.deepEqual(incompatible, ['text-only'])
+
+const localVideoExecutor = readFileSync(new URL('../src/lib/videoGeneration.ts', import.meta.url), 'utf8')
+const createRoute = readFileSync(new URL('../src/app/api/content/video/create/route.ts', import.meta.url), 'utf8')
+const statusRoute = readFileSync(new URL('../src/app/api/content/video/status/route.ts', import.meta.url), 'utf8')
+const schema = readFileSync(new URL('../prisma/schema.prisma', import.meta.url), 'utf8')
+assert.ok(localVideoExecutor.includes('moved to AMC-Content'))
+assert.ok(!createRoute.includes('generateVideoFromPlan'))
+assert.ok(statusRoute.includes('refreshRemoteVideoJob'))
+assert.ok(!schema.includes('model VideoProductionJob'))
+assert.ok(!schema.includes('model VideoPerformanceSnapshot'))
+
+console.log('SUCCESS: Kanban proxies Content-owned video execution and retains no local production job tables')

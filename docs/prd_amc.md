@@ -175,9 +175,10 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
     *   **流式执行日志**：参考 Postiz，将文案生成拆分为“分析主题 $\rightarrow$ 提取钩子 $\rightarrow$ 多语种文案生成 $\rightarrow$ 视觉构图 $\rightarrow$ 最佳排期计算”的透明步骤，并在前端流式展现。
     *   **多语种本地化适配**：能够智能识别目标受众，并在文案中混合本地俗语（如新加坡的 Singlish 词汇 *chope* 等）以提高互动。
 *   **知识库建设**：
-    *   **爆品素材与爆品文案脚本库**：`amc-content` 维护按平台隔离的原始爆品素材，并通过人工入池、AI 文本特征提取、确定性聚类和 AI 脚本合成生成候选脚本。爆品脚本作为 Kanban 与 Content Center 左侧一级入口，内部按“爆品文案脚本”和“挖掘运行记录”分区；素材库只负责原始素材、分类档案和脚本入池。候选脚本至少由 3 条素材、2 个不同商家或来源账号支持，必须人工发布后才能供生产使用；视频素材一期只读取已有标题、正文、Hashtag、搜索关键词及精选评论，不分析画面、字幕、声音或镜头。
+    *   **爆品素材、参考视频与脚本库**：`amc-content` 维护按平台隔离的原始爆品素材，并通过人工入池、文本特征提取、参考视频多模态拆解、确定性聚类和 AI 脚本合成生成候选脚本。文本脚本延续“至少 3 条素材、2 个不同商家或来源账号且人工发布”的生产门槛；参考视频则输出带时间码证据的拆解卡，沉淀 Hook、AIDA、镜头、声音、CTA、可迁移结构、不可迁移事实和禁止复制元素。竞品视频只允许人工录入，且发送给生成模型前必须由 `ADMIN` 或 `AMC_PRINCIPAL` 确认 `generation_reference` 权利用途。
     *   **Kanban 脚本选择与版本固定**：文案创作按品牌、平台、市场、行业、品类、语言和主题推荐最多 5 个已发布脚本，运营可手工切换或明确选择“不使用爆品脚本”。草稿保存固定脚本版本，重新生成继续使用该版本；无匹配脚本时回退现有 Copywriter + RAG。品牌事实、合规和平台规则优先于脚本，脚本优先于普通 RAG 灵感。
-    *   **一期产出边界**：脚本只约束标题、正文、Hook、CTA 和 Hashtag；不生成图片、图文模板、视频脚本、分镜、音频或字幕。所有生成记录脚本、固定版本、来源素材和选择方式，并对来源专属事实及原句相似度进行检查，超过阈值自动重写一次。
+    *   **结构化视频资产链**：视频项目依次生成并版本化 `ReferenceVideoAnalysis`、`SellingPointPackage`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`VideoGenerationJob`、`GeneratedClip`、`FinalVideo`、`PublishPackage`、`PerformanceSnapshot`。每个资产记录父资产、输入哈希、模型 profile、真实模型、fallback 路径、提示词版本、审核、成本和错误；上游变化将下游标记为 `stale`。缺少权利确认、业务事实、必要素材或人工审核时不得提交生成或发布。
+    *   **多供应商解耦**：Seedance、Volcengine、Kie.ai、FAL 只作为可选 `video_generation` profile。参考视频分析必须选择支持 `video_input + structured_json` 的模型，或通过 FFmpeg 关键帧 + ASR + OCR 的预处理路径交给支持 `image_input + structured_json` 的模型；不得静默退化为纯文本猜测。完整规范见 [`PRD-AI-Video-Creator.md`](./PRD-AI-Video-Creator.md)。
     *   **通用敏感词与合规词库**：针对各个国家的广告法和平台规则进行内容安全过滤。
 
 ### 2. 管理层 AI (AMC MM & AMC Agent - 功能一致，权限隔离)
@@ -1615,6 +1616,10 @@ src/agents/skills/
 | Growth V2 初级报告证据归纳 | `growth_report_analysis` | Growth → `/api/internal/llm-generate` → `callLLM()`；使用 JSON 模式、受控模型尝试次数和调用截止时间 |
 | 商家端 TTS 语音合成 | `tts` | `tts-proxy/route.ts` → `LLMConfig[tts]` → MiniMax T2A API |
 | 多模态图像分析 | `google` provider | `generateMultimodalText()` → `LLMConfig[provider=google]` |
+| 参考视频分析 | `reference_video_analysis` | AMC-Content 能力路由；要求 `video_input + structured_json`，或关键帧/ASR/OCR 预处理路径 |
+| 视频片段生成 | `video_generation` | AMC-Content 通用 Adapter；Seedance/Volcengine/Kie.ai/FAL 均为可选 profile，Kanban 仅调用 Content |
+| 品牌口播 | `tts_generation` | AMC-Content TTS Adapter；要求 `audio_output`，Kanban 不保存供应商密钥 |
+| 创意质量审核 | `creative_quality_review` | AMC-Content 事实、品牌、合规、权利与相似度复核 |
 | 管理后台 AI 建议 | `companion` | browser → `/api/llm/chat` → `callLLMChat` |
 
 ### 关键文件

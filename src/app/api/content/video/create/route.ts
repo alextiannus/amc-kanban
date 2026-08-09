@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { createRemoteVideoPlan } from '@/lib/amc-content/remoteContentService'
-import { generateVideoFromPlan } from '@/lib/videoGeneration'
 
 export const maxDuration = 120
 
@@ -77,6 +76,14 @@ export async function POST(request: Request) {
           usageReport: body.usageReport && typeof body.usageReport === 'object' ? body.usageReport : undefined,
           scriptPresetId: optionalString(body.scriptPresetId),
           scriptDraft: body.scriptDraft && typeof body.scriptDraft === 'object' ? body.scriptDraft : undefined,
+          executionMode: executionMode === 'submit' ? 'submit' : 'plan_only',
+          projectId: optionalString(body.projectId),
+          referenceAnalysisAssetId: optionalString(body.referenceAnalysisAssetId),
+          approvedAssetVersionIds: body.approvedAssetVersionIds && typeof body.approvedAssetVersionIds === 'object' ? body.approvedAssetVersionIds : undefined,
+          providerProfileId: optionalString(body.providerProfileId),
+          providerProfileIdsByVariant: body.providerProfileIdsByVariant && typeof body.providerProfileIdsByVariant === 'object' ? body.providerProfileIdsByVariant : undefined,
+          modelProfileIds: body.modelProfileIds && typeof body.modelProfileIds === 'object' ? body.modelProfileIds : undefined,
+          generationReferences: Array.isArray(body.generationReferences) ? body.generationReferences : undefined,
           actorId: actor.id,
           actorType: actor.type,
           actorRole: actor.role,
@@ -84,19 +91,9 @@ export async function POST(request: Request) {
 
     let execution: unknown = undefined
     if (executionMode === 'submit') {
-      const remoteResult = result as { result?: any; remote?: { result?: any } }
-      const plan = remoteResult.result || remoteResult.remote?.result
-      if (!plan) {
-        return NextResponse.json({ error: 'Video plan was not returned by content service' }, { status: 502 })
-      }
-      execution = await generateVideoFromPlan({
-        brandId,
-        actorId: actor.id,
-        plan,
-        assetIds,
-        imageUrls: mediaUrls,
-        aspectRatio: optionalString(body.aspectRatio),
-      })
+      const remoteResult = result as { result?: any; execution?: any; remote?: { result?: any; execution?: any } }
+      execution = remoteResult.execution || remoteResult.remote?.execution
+      if (!execution) return NextResponse.json({ error: 'AMC-Content did not execute the approved video plan' }, { status: 502 })
     }
 
     return NextResponse.json({

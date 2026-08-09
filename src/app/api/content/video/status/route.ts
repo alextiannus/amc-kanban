@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { refreshVideoGenerationTask } from '@/lib/videoGeneration'
+import { refreshRemoteVideoJob } from '@/lib/amc-content/remoteContentService'
 
 export const maxDuration = 60
 
@@ -23,25 +23,18 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => null)
     const brandId = typeof body?.brandId === 'string' ? body.brandId.trim() : ''
     const taskId = typeof body?.taskId === 'string' ? body.taskId.trim() : ''
-    const title = typeof body?.title === 'string' ? body.title.trim() : undefined
-    const assetIds = Array.isArray(body?.assetIds)
-      ? body.assetIds.map((item: unknown) => typeof item === 'string' ? item.trim() : '').filter(Boolean)
-      : []
-    const videoRole = body?.videoRole === 'final' ? 'final' : 'scene'
-
     if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
     if (!taskId) return NextResponse.json({ error: 'taskId is required' }, { status: 400 })
 
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const execution = await refreshVideoGenerationTask({
+    const execution = await refreshRemoteVideoJob({
       brandId,
       actorId: actor.id,
-      taskId,
-      title,
-      assetIds,
-      videoRole,
+      actorType: actor.type,
+      actorRole: actor.role,
+      jobId: taskId,
     })
 
     return NextResponse.json({ success: true, execution })

@@ -1,43 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { generateTtsAudio } from '@/lib/ttsGeneration'
 
 export const dynamic = 'force-dynamic'
 
-const DEFAULT_ENDPOINT = 'https://api.minimaxi.com/v1/t2a_v2'
-const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 const MAX_TEXT_LENGTH = 600
-const UPSTREAM_TIMEOUT_MS = 8_000
 
 /**
- * POST /api/mm/tts-proxy
- *
- * Server-side MiniMax TTS proxy. API key is now read from LLMConfig
- * (provider='minimax', taskTags includes 'tts') instead of SystemConfig.
+ * Server-side TTS proxy. The execution profile is dynamically selected from
+ * LLMConfig taskTags=tts_generation; the legacy tts tag remains compatible.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession()
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // Read TTS config from LLMConfig[tts] — no SystemConfig dependency
-  const ttsConfig = await prisma.lLMConfig.findFirst({
-    where: { isEnabled: true, provider: 'minimax', taskTags: { has: 'tts' } },
-    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
-  })
-
-  const apiKey = ttsConfig?.apiKey || null
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'MiniMax TTS is not configured. Add a LLMConfig entry: provider=minimax, taskTags=[tts], apiKey=<key>.' },
-      { status: 503 },
-    )
-  }
-
-  // Allow model override from LLMConfig.modelName; env var still supported for backward compat
-  const ttsModel = ttsConfig?.modelName || process.env.MINIMAX_TTS_MODEL || 'speech-2.8-hd'
-  const ttsEndpoint = ttsConfig?.baseUrl || process.env.MINIMAX_TTS_ENDPOINT || DEFAULT_ENDPOINT
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let text = ''
   let voiceId = ''
@@ -48,90 +23,39 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
-
   if (!text) return NextResponse.json({ error: 'text is required' }, { status: 400 })
   if (text.length > MAX_TEXT_LENGTH) {
-    return NextResponse.json(
-      { error: `text must be ${MAX_TEXT_LENGTH} characters or fewer` },
-      { status: 400 },
-    )
+    return NextResponse.json({ error: `text must be ${MAX_TEXT_LENGTH} characters or fewer` }, { status: 400 })
   }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS)
-  const startedAt = performance.now()
-
   try {
-    const response = await fetch(ttsEndpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: ttsModel,
-        text,
-        stream: false,
-        output_format: 'hex',  // tell API to return audio as hex string in data.audio
-        voice_setting: {
-          voice_id: voiceId || process.env.MINIMAX_TTS_VOICE_ID || DEFAULT_MINIMAX_VOICE_ID,
-          speed: 1,
-          vol: 1,
-          pitch: 0,
-        },
-        audio_setting: {
-          sample_rate: 32000,
-          bitrate: 128000,
-          format: 'mp3',
-          channel: 1,
-        },
-      }),
-      signal: controller.signal,
-      cache: 'no-store',
+    const result = await generateTtsAudio({
+      text,
+      voiceId,
+      actorId: session.user.id,
+      actorType: session.user.type ?? 'HUMAN',
+      actorRole: session.user.role,
     })
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '')
-      console.error('[MiniMax TTS Proxy] Upstream error:', response.status, errText.slice(0, 200))
-      return NextResponse.json({ error: 'MiniMax TTS request failed' }, { status: 502 })
-    }
-
-    const payload = await response.json()
-    const statusCode = payload?.base_resp?.status_code
-    const audioHex = payload?.data?.audio
-
-    if (statusCode !== 0 || typeof audioHex !== 'string' || !audioHex) {
-      const msg = payload?.base_resp?.status_msg ?? 'unknown'
-      const trace = payload?.trace_id ?? ''
-      console.error(`[MiniMax TTS Proxy] Invalid response: statusCode=${statusCode} msg="${msg}" trace=${trace}`)
-      return NextResponse.json({ error: `MiniMax TTS error: ${statusCode} - ${msg}` }, { status: 502 })
-    }
-
-    const audio = Buffer.from(audioHex, 'hex')
-    if (audio.length === 0) {
-      return NextResponse.json({ error: 'MiniMax TTS returned empty audio' }, { status: 502 })
-    }
-
-    const durationMs = Math.round(performance.now() - startedAt)
-    console.log(`[MiniMax TTS Proxy] ✅ ${audio.length} bytes in ${durationMs}ms`)
-
-    return new Response(new Uint8Array(audio), {
+    return new Response(new Uint8Array(result.audio), {
       status: 200,
       headers: {
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': String(audio.length),
+        'Content-Type': result.contentType,
+        'Content-Length': String(result.audio.length),
         'Cache-Control': 'private, no-store',
-        'Server-Timing': `minimax;dur=${durationMs}`,
-        'X-TTS-Provider': 'minimax',
+        'Server-Timing': `tts;dur=${result.provenance.latencyMs}`,
+        'X-TTS-Provider': result.provenance.provider,
+        'X-TTS-Model': result.provenance.modelName,
+        'X-TTS-Profile': result.provenance.profileId,
+        'X-TTS-Fallback-Path': result.provenance.fallbackPath.join(','),
       },
     })
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      return NextResponse.json({ error: 'MiniMax TTS timed out' }, { status: 504 })
+    const message = error instanceof Error ? error.message : 'TTS generation failed'
+    if (message === 'TTS_MODEL_NOT_CONFIGURED') {
+      return NextResponse.json({ error: 'TTS is not configured. Add an enabled tts_generation model profile.' }, { status: 503 })
     }
-    console.error('[MiniMax TTS Proxy] Request error:', error)
-    return NextResponse.json({ error: 'MiniMax TTS request failed' }, { status: 502 })
-  } finally {
-    clearTimeout(timeout)
+    if (message.toLowerCase().includes('timeout')) return NextResponse.json({ error: 'TTS timed out' }, { status: 504 })
+    console.error('[TTS Proxy] request failed:', error)
+    return NextResponse.json({ error: message }, { status: 502 })
   }
 }

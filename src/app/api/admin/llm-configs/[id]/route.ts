@@ -5,6 +5,7 @@ import { isAmcOperator } from '@/lib/amcOperator'
 import { validateLLMConfig } from '@/lib/llmRouter'
 import { validateVideoProviderConfig } from '@/lib/videoGeneration'
 import { isMiniMaxTtsConfig, validateMiniMaxTtsConfig } from '@/lib/minimaxTtsValidation'
+import { incompatibleFallbackIds, inferExecutionCapabilities, normalizeCapabilities, unsupportedTasks } from '@/lib/modelCapabilities'
 
 function maskKey(key: string | null | undefined): string | null {
   if (!key) return null
@@ -60,6 +61,13 @@ export async function PATCH(request: Request, { params }: Params) {
       isEnabled,
       isDefault,
       taskTags,
+      capabilities,
+      priority,
+      timeoutMs,
+      maxRetries,
+      fallbackProfileIds,
+      costMetadata,
+      secretRef,
     } = body
 
     let nextApiKey = current.apiKey
@@ -81,6 +89,26 @@ export async function PATCH(request: Request, { params }: Params) {
     const nextTaskTags = taskTags !== undefined
       ? Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
       : current.taskTags
+    if (isVideoModelConfig(testProvider, nextTaskTags) || nextTaskTags.some((tag: string) => tag === 'tts_generation' || tag === 'tts')) {
+      return NextResponse.json({ error: 'Video and TTS profiles are owned by AMC-Content. Configure them in Content Lab.' }, { status: 409 })
+    }
+    const nextCapabilities = inferExecutionCapabilities(
+      testProvider,
+      nextTaskTags,
+      capabilities !== undefined ? normalizeCapabilities(capabilities) : normalizeCapabilities(current.capabilities),
+    )
+    const unsupported = unsupportedTasks(nextTaskTags, nextCapabilities)
+    if (unsupported.length) return NextResponse.json({ error: `Capabilities do not satisfy tasks: ${unsupported.join(', ')}` }, { status: 400 })
+    const nextFallbackIds = fallbackProfileIds !== undefined
+      ? Array.isArray(fallbackProfileIds) ? fallbackProfileIds.map(String).map((item) => item.trim()).filter(Boolean) : []
+      : current.fallbackProfileIds
+    if (nextFallbackIds.includes(id)) return NextResponse.json({ error: 'A profile cannot fall back to itself' }, { status: 400 })
+    if (nextFallbackIds.length) {
+      const fallbacks = await prisma.lLMConfig.findMany({ where: { id: { in: nextFallbackIds } }, select: { id: true, provider: true, taskTags: true, capabilities: true } })
+      if (fallbacks.length !== new Set(nextFallbackIds).size) return NextResponse.json({ error: 'One or more fallback profiles do not exist' }, { status: 400 })
+      const incompatible = incompatibleFallbackIds(nextTaskTags, fallbacks)
+      if (incompatible.length) return NextResponse.json({ error: `Fallback profiles are not task/capability compatible: ${incompatible.join(', ')}` }, { status: 400 })
+    }
 
     if (isMiniMaxTtsConfig(testProvider, testModelName, testBaseUrl, nextTaskTags)) {
       const validation = await validateMiniMaxTtsConfig({
@@ -129,6 +157,13 @@ export async function PATCH(request: Request, { params }: Params) {
         ...(isEnabled !== undefined && { isEnabled: Boolean(isEnabled) }),
         isDefault: nextIsDefault,
         ...(taskTags !== undefined && { taskTags: nextTaskTags }),
+        ...(capabilities !== undefined && { capabilities: nextCapabilities }),
+        ...(priority !== undefined && { priority: Number.isInteger(priority) ? priority : current.priority }),
+        ...(timeoutMs !== undefined && { timeoutMs: Math.max(1000, Math.min(600000, Number(timeoutMs) || current.timeoutMs)) }),
+        ...(maxRetries !== undefined && { maxRetries: Math.max(0, Math.min(5, Number(maxRetries) || 0)) }),
+        ...(fallbackProfileIds !== undefined && { fallbackProfileIds: nextFallbackIds }),
+        ...(costMetadata !== undefined && { costMetadata: costMetadata && typeof costMetadata === 'object' ? costMetadata : null }),
+        ...(secretRef !== undefined && { secretRef: secretRef ? String(secretRef).trim() : null }),
       },
     })
 
@@ -173,6 +208,14 @@ export async function DELETE(request: Request, { params }: Params) {
 
     if (!current) {
       return NextResponse.json({ error: 'Config not found' }, { status: 404 })
+    }
+
+    const referencedBy = await prisma.lLMConfig.findFirst({
+      where: { fallbackProfileIds: { has: id } },
+      select: { id: true, displayName: true },
+    })
+    if (referencedBy) {
+      return NextResponse.json({ error: `Config is used as fallback by ${referencedBy.displayName}` }, { status: 409 })
     }
 
     await prisma.lLMConfig.delete({

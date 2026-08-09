@@ -31,8 +31,24 @@ export interface LLMConfigRecord {
   isEnabled: boolean
   isDefault: boolean
   taskTags: string[]
+  capabilities: string[]
+  priority: number
+  timeoutMs: number
+  maxRetries: number
+  fallbackProfileIds: string[]
+  costMetadata: Record<string, unknown> | null
+  secretRef: string | null
   createdAt: string
   updatedAt: string
+}
+
+type ModelTaskRouteRecord = {
+  task: string
+  executionDomain: 'amc-content' | 'amc-kanban'
+  requiredCapabilities: string[]
+  primaryProfileId?: string
+  primaryModelName?: string
+  fallbackProfileIds: string[]
 }
 
 interface PostfastKeyRecord {
@@ -117,6 +133,8 @@ export default function SystemTab({
   // MiniMax TTS test
   const [testingTts, setTestingTts] = useState(false)
   const [ttsTestResult, setTtsTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [modelTaskRoutes, setModelTaskRoutes] = useState<ModelTaskRouteRecord[]>([])
+  const [modelTaskServices, setModelTaskServices] = useState<Record<string, string>>({})
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
   const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
   const [postfastKeysLoading, setPostfastKeysLoading] = useState(false)
@@ -229,6 +247,13 @@ export default function SystemTab({
     isEnabled: true,
     isDefault: false,
     taskTagsStr: '',
+    capabilitiesStr: 'text_input, structured_json',
+    priority: 0,
+    timeoutMs: 120000,
+    maxRetries: 1,
+    fallbackProfileIdsStr: '',
+    costMetadataStr: '',
+    secretRef: '',
   })
 
   const handleOpenNewLLM = () => {
@@ -242,6 +267,13 @@ export default function SystemTab({
       isEnabled: true,
       isDefault: false,
       taskTagsStr: '',
+      capabilitiesStr: 'text_input, structured_json',
+      priority: 0,
+      timeoutMs: 120000,
+      maxRetries: 1,
+      fallbackProfileIdsStr: '',
+      costMetadataStr: '',
+      secretRef: '',
     })
     setLlmFormError(null)
     setLlmConfigModalOpen(true)
@@ -258,6 +290,13 @@ export default function SystemTab({
       isEnabled: config.isEnabled,
       isDefault: config.isDefault,
       taskTagsStr: config.taskTags.join(', '),
+      capabilitiesStr: (config.capabilities || []).join(', '),
+      priority: config.priority || 0,
+      timeoutMs: config.timeoutMs || 120000,
+      maxRetries: config.maxRetries || 0,
+      fallbackProfileIdsStr: (config.fallbackProfileIds || []).join(', '),
+      costMetadataStr: config.costMetadata ? JSON.stringify(config.costMetadata, null, 2) : '',
+      secretRef: config.secretRef || '',
     })
     setLlmFormError(null)
     setLlmConfigModalOpen(true)
@@ -277,6 +316,16 @@ export default function SystemTab({
         .split(',')
         .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
         .filter(Boolean)
+      const capabilities = llmForm.capabilitiesStr
+        .split(',')
+        .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
+        .filter(Boolean)
+      const fallbackProfileIds = llmForm.fallbackProfileIdsStr
+        .split(',')
+        .map(t => t.trim())
+        .filter(Boolean)
+      let costMetadata: Record<string, unknown> | null = null
+      if (llmForm.costMetadataStr.trim()) costMetadata = JSON.parse(llmForm.costMetadataStr)
 
       const body: any = {
         provider: llmForm.provider,
@@ -286,6 +335,13 @@ export default function SystemTab({
         isEnabled: llmForm.isEnabled,
         isDefault: llmForm.isDefault,
         taskTags: tags,
+        capabilities,
+        priority: llmForm.priority,
+        timeoutMs: llmForm.timeoutMs,
+        maxRetries: llmForm.maxRetries,
+        fallbackProfileIds,
+        costMetadata,
+        secretRef: llmForm.secretRef || null,
       }
       
       if (llmForm.apiKey.trim()) {
@@ -336,6 +392,14 @@ export default function SystemTab({
   useEffect(() => {
     if (activeAccordion === 'postfast' && postfastKeys.length === 0 && !postfastKeysLoading) {
       void fetchPostfastKeys()
+    }
+    if (activeAccordion === 'llm') {
+      void fetch('/api/admin/model-tasks').then(async (response) => {
+        if (!response.ok) return
+        const data = await response.json()
+        setModelTaskRoutes(Array.isArray(data.items) ? data.items : [])
+        setModelTaskServices(data.services || {})
+      }).catch(() => undefined)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccordion])
@@ -460,6 +524,13 @@ export default function SystemTab({
                               {config.taskTags.map(t => <span key={t} className="bg-indigo-50/50 text-indigo-600 px-1 rounded text-[8px] border border-indigo-100">{t}</span>)}
                             </p>
                           )}
+                          {(config.capabilities || []).length > 0 && (
+                            <p className="flex items-center gap-1 flex-wrap"><span className="text-slate-400">能力:</span>
+                              {config.capabilities.map(capability => <span key={capability} className="bg-cyan-50/60 text-cyan-700 px-1 rounded text-[8px] border border-cyan-100">{capability}</span>)}
+                            </p>
+                          )}
+                          <p><span className="text-slate-400">路由:</span> priority {config.priority} · timeout {config.timeoutMs}ms · retry {config.maxRetries}</p>
+                          {(config.fallbackProfileIds || []).length > 0 && <p className="truncate"><span className="text-slate-400">Fallback:</span> {config.fallbackProfileIds.join(' → ')}</p>}
                         </div>
                       </div>
 
@@ -508,7 +579,7 @@ export default function SystemTab({
                   在那里可以配置多个模型、设置优先级、启用/禁用，并为不同场景（语音、文案、多模态）指定专用模型。
                 </p>
                 <p className="text-[10px] text-indigo-500 dark:text-indigo-500">
-                  MiniMax TTS：provider=minimax，taskTags 含 tts<br/>
+                  MiniMax TTS：provider=minimax，taskTags 含 tts_generation（旧 tts 仍兼容）<br/>
                   文案生成：taskTags 含 copywriting<br/>
                   AI 语音伴侣：taskTags 含 companion<br/>
                   视频生成：provider=seedance / kieai / fal / volcengine，taskTags 含 video_generation 或 image_to_video
@@ -1058,14 +1129,23 @@ export default function SystemTab({
                           : prev.modelName
 
                         const taskTagsStr = newProvider === 'minimax' && !prev.taskTagsStr.trim()
-                          ? 'tts'
-                          : prev.taskTagsStr
+                          ? 'tts_generation'
+                          : ['seedance', 'fal', 'kieai', 'volcengine'].includes(newProvider) && !prev.taskTagsStr.trim()
+                            ? 'video_generation'
+                            : prev.taskTagsStr
+                        const capabilitiesStr = ['seedance', 'fal', 'kieai', 'volcengine'].includes(newProvider)
+                          && (!prev.capabilitiesStr.trim() || prev.capabilitiesStr === 'text_input, structured_json')
+                          ? 'video_output, reference_video, reference_image, reference_audio'
+                          : newProvider === 'minimax' && (!prev.capabilitiesStr.trim() || prev.capabilitiesStr === 'text_input, structured_json')
+                            ? 'text_input, audio_output'
+                            : prev.capabilitiesStr
 
                         return {
                           ...prev,
                           provider: newProvider,
                           modelName,
                           taskTagsStr,
+                          capabilitiesStr,
                         }
                       })
                     }}
@@ -1075,12 +1155,7 @@ export default function SystemTab({
                     <option value="openai">OpenAI compatible</option>
                     <option value="anthropic">Anthropic Claude</option>
                     <option value="deepseek">DeepSeek API</option>
-                    <option value="minimax">MiniMax TTS</option>
                     <option value="custom_shim">自定义格式 (Shim)</option>
-                    <option value="seedance">Seedance Video</option>
-                    <option value="fal">Fal Video</option>
-                    <option value="kieai">Kie.ai Video</option>
-                    <option value="volcengine">Volcengine Video</option>
                   </select>
                 </label>
 
@@ -1125,6 +1200,63 @@ export default function SystemTab({
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
                   />
                 </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">能力标签 (Capabilities)</span>
+                  <input
+                    value={llmForm.capabilitiesStr}
+                    onChange={e => setLlmForm(prev => ({ ...prev, capabilitiesStr: e.target.value }))}
+                    placeholder="video_output, reference_video, reference_image"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
+                  />
+                </label>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-2">
+                  <label className="space-y-1.5 block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Priority</span>
+                    <input type="number" value={llmForm.priority} onChange={e => setLlmForm(prev => ({ ...prev, priority: Number(e.target.value) }))} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
+                  </label>
+                  <label className="space-y-1.5 block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Timeout ms</span>
+                    <input type="number" min={1000} value={llmForm.timeoutMs} onChange={e => setLlmForm(prev => ({ ...prev, timeoutMs: Number(e.target.value) }))} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
+                  </label>
+                  <label className="space-y-1.5 block">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Max retries</span>
+                    <input type="number" min={0} max={5} value={llmForm.maxRetries} onChange={e => setLlmForm(prev => ({ ...prev, maxRetries: Number(e.target.value) }))} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
+                  </label>
+                </div>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Fallback profile IDs</span>
+                  <input value={llmForm.fallbackProfileIdsStr} onChange={e => setLlmForm(prev => ({ ...prev, fallbackProfileIdsStr: e.target.value }))} placeholder="逗号分隔的 LLMConfig ID" className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Cost metadata (JSON)</span>
+                  <textarea value={llmForm.costMetadataStr} onChange={e => setLlmForm(prev => ({ ...prev, costMetadataStr: e.target.value }))} placeholder='{"currency":"USD","perSecond":0.02}' rows={3} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Secret reference</span>
+                  <input value={llmForm.secretRef} onChange={e => setLlmForm(prev => ({ ...prev, secretRef: e.target.value }))} placeholder="内部密钥引用标识；不填写真实 key" className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
+                </label>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">统一任务路由状态</p>
+                  <p className="text-[9px] text-slate-400">Content: {modelTaskServices.amcContent || 'loading'} · Kanban: {modelTaskServices.amcKanban || 'loading'}</p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {modelTaskRoutes.map((route) => (
+                    <div key={route.task} className="rounded-lg border border-slate-100 dark:border-slate-800 p-2 text-[9px] text-slate-500">
+                      <p className="font-bold text-slate-700 dark:text-slate-200">{route.task} <span className="font-normal text-slate-400">· {route.executionDomain}</span></p>
+                      <p>primary: {route.primaryModelName || route.primaryProfileId || 'unconfigured'}</p>
+                      <p>fallback: {route.fallbackProfileIds?.join(' → ') || 'none'}</p>
+                      <p>requires: {route.requiredCapabilities?.join(' + ') || 'none'}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">

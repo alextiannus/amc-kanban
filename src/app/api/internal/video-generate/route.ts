@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { generateVideoFromPlan } from '@/lib/videoGeneration'
+import { executeRemoteVideoPlan } from '@/lib/amc-content/remoteContentService'
 
 export const maxDuration = 120
 
@@ -36,16 +36,19 @@ export async function POST(request: Request) {
   if (!plan) return NextResponse.json({ error: 'plan is required' }, { status: 400 })
 
   try {
-    const execution = await generateVideoFromPlan({
+    const execution = await executeRemoteVideoPlan({
       brandId,
       actorId,
+      actorType,
+      actorRole,
       plan: {
         ...plan,
         seedanceJobs: Array.isArray(body.seedanceJobs) ? body.seedanceJobs : plan.seedanceJobs,
+        videoGenerationJobs: Array.isArray(body.videoGenerationJobs) ? body.videoGenerationJobs : plan.videoGenerationJobs,
       },
+      videoGenerationJobs: Array.isArray(body.videoGenerationJobs) ? body.videoGenerationJobs : plan.videoGenerationJobs,
       assetIds: stringArray(body.assetIds),
       imageUrls: stringArray(body.imageUrls),
-      aspectRatio: stringOrEmpty(body.aspectRatio) || plan.assembly?.outputAspectRatio,
     })
     return NextResponse.json(execution)
   } catch (err: any) {

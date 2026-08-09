@@ -29,6 +29,21 @@ export type RemoteVideoCreatorRequest = {
   usageReport?: Record<string, unknown>
   scriptPresetId?: string
   scriptDraft?: unknown
+  executionMode?: 'plan_only' | 'submit'
+  projectId?: string
+  referenceAnalysisAssetId?: string
+  approvedAssetVersionIds?: Record<string, string>
+  providerProfileId?: string
+  providerProfileIdsByVariant?: Partial<Record<'variant-a' | 'variant-b' | 'variant-c', string>>
+  modelProfileIds?: Record<string, string>
+  generationReferences?: Array<{
+    assetId: string
+    sourceType: 'owned' | 'licensed' | 'competitor'
+    allowedUses: Array<'analysis' | 'generation_reference' | 'publish_derivative'>
+    confirmedBy?: string
+    confirmedRole?: string
+    expiresAt?: string
+  }>
   actorId?: string
   actorType?: string
   actorRole?: string
@@ -225,6 +240,14 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
       usageReport: input.usageReport,
       scriptPresetId: input.scriptPresetId,
       scriptDraft: input.scriptDraft,
+      executionMode: input.executionMode || 'plan_only',
+      projectId: input.projectId,
+      referenceAnalysisAssetId: input.referenceAnalysisAssetId,
+      approvedAssetVersionIds: input.approvedAssetVersionIds,
+      providerProfileId: input.providerProfileId,
+      providerProfileIdsByVariant: input.providerProfileIdsByVariant,
+      modelProfileIds: input.modelProfileIds,
+      generationReferences: input.generationReferences,
     }),
     cache: 'no-store',
   })
@@ -233,6 +256,83 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
   if (!response.ok) {
     throw new Error(data?.error || `Remote video creator failed with ${response.status}`)
   }
+  return data
+}
+
+export async function executeRemoteVideoPlan(input: {
+  brandId: string
+  actorId: string
+  actorType?: string
+  actorRole?: string
+  plan: unknown
+  videoGenerationJobs?: unknown[]
+  assetIds?: string[]
+  imageUrls?: string[]
+}): Promise<any> {
+  return callRemoteVideoJson('/v1/video/execute', input, input)
+}
+
+export async function refreshRemoteVideoJob(input: {
+  jobId: string
+  brandId: string
+  actorId: string
+  actorType?: string
+  actorRole?: string
+}): Promise<any> {
+  return callRemoteVideoJson(`/v1/video/jobs/${encodeURIComponent(input.jobId)}/refresh`, { brandId: input.brandId }, input)
+}
+
+export async function assembleRemoteVideo(input: {
+  actorId: string
+  actorType?: string
+  actorRole?: string
+  [key: string]: unknown
+}): Promise<any> {
+  return callRemoteVideoJson('/v1/video/assemble', input, input)
+}
+
+export async function generateRemoteTts(input: {
+  text: string
+  voiceId?: string
+  profileId?: string
+  brandId?: string
+  projectId?: string
+  actorId?: string
+  actorType?: string
+  actorRole?: string
+}): Promise<{ audio: Buffer; contentType: string; asset?: unknown; provenance?: unknown }> {
+  const data = await callRemoteVideoJson('/v1/tts/generate', input, input)
+  if (typeof data?.audioBase64 !== 'string' || !data.audioBase64) throw new Error('AMC-Content TTS returned no audio')
+  return {
+    audio: Buffer.from(data.audioBase64, 'base64'),
+    contentType: typeof data.contentType === 'string' ? data.contentType : 'audio/mpeg',
+    asset: data.asset,
+    provenance: data.provenance,
+  }
+}
+
+async function callRemoteVideoJson(
+  path: string,
+  body: unknown,
+  actor: { actorId?: string; actorType?: string; actorRole?: string },
+): Promise<any> {
+  const isLocal = process.env.NODE_ENV !== 'production'
+    || process.env.APP_BASE_URL?.includes('localhost')
+    || process.env.JWT_SECRET?.includes('local')
+    || process.env.JWT_SECRET?.includes('change-in-production')
+  const baseUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '') || (isLocal ? 'http://localhost:4010' : undefined)
+  if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') throw new Error('AMC content service is not configured for video execution')
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : undefined)
+  if (token) headers.authorization = `Bearer ${token}`
+  if (actor.actorId) headers['x-amc-actor-id'] = actor.actorId
+  if (actor.actorType) headers['x-amc-actor-type'] = actor.actorType
+  if (actor.actorRole) headers['x-amc-actor-role'] = actor.actorRole
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(120000),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw new Error(data?.error || `AMC content video request failed with ${response.status}`)
   return data
 }
 
