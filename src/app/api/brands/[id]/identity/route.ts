@@ -5,26 +5,17 @@ import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import {
   BRAND_IDENTITY_FIELDS,
-  findGrowthIdentityEntry,
   normalizePublishingFrequency,
   resolveBrandIdentity,
-  serializeGrowthIdentityValue,
   type BrandIdentityFieldKey,
 } from '@/lib/brandIdentity'
 import {
-  ensureGrowthMerchantForBrand,
-  GrowthDataCenterError,
-  publishGrowthMerchantKnowledgeRevision,
-  readGrowthMerchantKnowledge,
-} from '@/lib/growthDataCenter'
+  isGrowthIdentityField,
+  queueAndSyncGrowthIdentityChange,
+  type GrowthIdentityField,
+} from '@/lib/brandIdentitySync'
 
 type Params = { params: Promise<{ id: string }> }
-
-const GROWTH_FIELDS = {
-  brandTone: 'brand.tone',
-  targetAudience: 'audience.primary',
-  sellingPoints: 'brand.unique_selling_points',
-} as const
 
 export async function GET(request: Request, { params }: Params) {
   const auth = await resolveSessionOrApiKey(request)
@@ -53,21 +44,35 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   try {
-    if (isGrowthField(field)) {
-      await saveGrowthField(id, field, body, auth.user)
+    let syncStatus: 'published' | 'pending_sync' | 'sync_conflict' | 'local' = 'local'
+    let savedGrowthValue: string | string[] | undefined
+    let publishedVersion: number | undefined
+    if (isGrowthIdentityField(field)) {
+      const result = await saveGrowthField(id, field, body, auth.user)
+      syncStatus = result.state === 'discarded' ? 'published' : result.state
+      savedGrowthValue = result.value
+      publishedVersion = result.publishedVersion
     } else {
       await saveKanbanField(id, field, body?.value, auth.user)
     }
-    const identity = await resolveBrandIdentity(id, { canEdit: true, skipGrowth: !isGrowthField(field) })
+    const identity = await resolveBrandIdentity(id, { canEdit: true, skipGrowth: !isGrowthIdentityField(field) })
     if (!identity) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-    return NextResponse.json({ ok: true, field: identity.fields[field] })
+    const resolvedField = identity.fields[field]
+    const responseField = isGrowthIdentityField(field) && syncStatus === 'published' && resolvedField.status !== 'published'
+      ? {
+          key: field,
+          value: savedGrowthValue ?? resolvedField.value,
+          source: 'growth' as const,
+          status: 'published' as const,
+          editable: true,
+          version: publishedVersion ?? resolvedField.version,
+        }
+      : resolvedField
+    return NextResponse.json(
+      { ok: true, syncStatus, growthAvailable: identity.growthAvailable, field: responseField },
+      { status: syncStatus === 'pending_sync' || syncStatus === 'sync_conflict' ? 202 : 200 }
+    )
   } catch (error) {
-    if (error instanceof GrowthDataCenterError) {
-      const message = error.status === 409
-        ? '该字段已被其他人更新，请刷新后重试'
-        : 'AMC-Growth 暂时不可用，未保存本次修改'
-      return NextResponse.json({ error: error.code, message }, { status: error.status })
-    }
     if (error instanceof IdentityValidationError) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
@@ -78,7 +83,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
 async function saveGrowthField(
   brandId: string,
-  field: keyof typeof GROWTH_FIELDS,
+  field: GrowthIdentityField,
   body: Record<string, unknown>,
   actor: { id: string; email?: string; type: string; userRoles?: string[] }
 ) {
@@ -93,46 +98,29 @@ async function saveGrowthField(
     where: { id: brandId },
     select: {
       id: true,
-      name: true,
-      location: true,
-      address: true,
-      description: true,
-      growthBrandKey: true,
+      knowledge: { select: { brandTone: true, audienceAssumptions: true, productAssumptions: true } },
     },
   })
   if (!brand) throw new IdentityValidationError('品牌不存在')
-  try {
-    const brandKey = brand.growthBrandKey || await ensureGrowthMerchantForBrand(brand)
-    const growth = await readGrowthMerchantKnowledge(brandKey)
-    const entries = Array.isArray(growth.items) ? growth.items : []
-    const current = findGrowthIdentityEntry(entries, field)
-    const currentVersion = Number(current?.version) || 0
-    if (currentVersion !== expectedVersion) {
-      throw new GrowthDataCenterError(409, 'knowledge_revision_conflict')
-    }
-    const statement = field === 'sellingPoints' ? (value as string[]).join('；') : value as string
-    await publishGrowthMerchantKnowledgeRevision({
-      brandKey,
-      knowledgeKey: GROWTH_FIELDS[field],
-      expectedVersion,
-      statement,
-      structuredValue: serializeGrowthIdentityValue(field, value, current?.structured_value),
-      actor: {
-        id: actor.id,
-        email: actor.email,
-        type: actor.type,
-        roles: actor.userRoles || [],
-      },
-    })
-  } catch (error) {
-    if (error instanceof GrowthDataCenterError) throw error
-    throw new GrowthDataCenterError(503, 'growth_unavailable')
-  }
+  const oldValue = field === 'brandTone'
+    ? optionalText(brand.knowledge?.brandTone)
+    : field === 'targetAudience'
+      ? optionalText(brand.knowledge?.audienceAssumptions)
+      : legacyStringList(brand.knowledge?.productAssumptions)
+  const result = await queueAndSyncGrowthIdentityChange({
+    brandId,
+    field,
+    value,
+    expectedVersion,
+    actor,
+    oldValue,
+  })
+  return { ...result, value }
 }
 
 async function saveKanbanField(
   brandId: string,
-  field: Exclude<BrandIdentityFieldKey, keyof typeof GROWTH_FIELDS>,
+  field: Exclude<BrandIdentityFieldKey, GrowthIdentityField>,
   rawValue: unknown,
   actor: { id: string; email?: string; type: string }
 ) {
@@ -246,6 +234,12 @@ function stringList(value: unknown) {
   return Array.isArray(value) ? value.map(optionalText).filter(Boolean) : []
 }
 
+function legacyStringList(value: unknown) {
+  return typeof value === 'string'
+    ? value.split(/\r?\n/).map(item => item.replace(/^[-•]\s*/, '').trim()).filter(Boolean)
+    : []
+}
+
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -255,7 +249,3 @@ function jsonValue(value: unknown) {
 }
 
 class IdentityValidationError extends Error {}
-
-function isGrowthField(field: BrandIdentityFieldKey): field is keyof typeof GROWTH_FIELDS {
-  return Object.prototype.hasOwnProperty.call(GROWTH_FIELDS, field)
-}

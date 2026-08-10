@@ -541,7 +541,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **205** 个 API 路径、**292** 个 HTTP 方法组合。
+共 **209** 个 API 路径、**296** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -563,6 +563,7 @@ Permanent QR contract:
 | GET | `/api/admin/message-templates` |
 | PATCH | `/api/admin/message-templates/{id}` |
 | POST | `/api/admin/message-templates/{id}/test` |
+| GET | `/api/admin/model-tasks` |
 | POST | `/api/admin/permissions` |
 | GET, PATCH, POST | `/api/admin/postfast-keys` |
 | PATCH | `/api/admin/subscriptions/{id}` |
@@ -632,6 +633,7 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/drafts/sync-statuses` |
 | DELETE, GET, POST | `/api/brands/{id}/folders` |
 | GET, PATCH | `/api/brands/{id}/identity` |
+| POST | `/api/brands/{id}/identity/{field}/sync` |
 | GET, PATCH | `/api/brands/{id}/knowledge` |
 | POST | `/api/brands/{id}/logo` |
 | POST | `/api/brands/{id}/mcp/execute` |
@@ -663,6 +665,7 @@ Permanent QR contract:
 | POST | `/api/content/video/status` |
 | POST | `/api/copywriter/generate-hooks` |
 | POST | `/api/cron/apify-sync-all` |
+| POST | `/api/cron/brand-identity-sync` |
 | POST | `/api/cron/game-share-draft-pool` |
 | POST | `/api/cron/postfast-sync-all` |
 | GET | `/api/dashboard/assets` |
@@ -708,6 +711,7 @@ Permanent QR contract:
 | POST | `/api/internal/content-log` |
 | POST | `/api/internal/llm-generate` |
 | POST | `/api/internal/video-generate` |
+| POST | `/api/internal/video-performance` |
 | GET, POST | `/api/invite/{token}` |
 | DELETE, GET, POST | `/api/learn/faq` |
 | DELETE, GET, POST | `/api/learn/school` |

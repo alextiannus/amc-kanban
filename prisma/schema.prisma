@@ -415,11 +415,37 @@ model Brand {
   mcpServerConfigs  McpServerConfig[]
   companionSkills   CompanionSkill[]
   notifications     Notification[]
+  identityPendingChanges BrandIdentityPendingChange[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+model BrandIdentityPendingChange {
+  id              String   @id @default(cuid())
+  brandId         String
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  field           String
+  value           Json
+  expectedVersion Int      @default(0)
+  status          String   @default("PENDING") // PENDING | PROCESSING | CONFLICT
+  attempts        Int      @default(0)
+  nextAttemptAt   DateTime @default(now())
+  lastErrorCode   String?
+  lastErrorMessage String?
+  remoteVersion   Int?
+  actorId         String?
+  actorType       String   @default("HUMAN")
+  actorName       String?
+  actorRoles      String[] @default([])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([brandId, field])
+  @@index([status, nextAttemptAt])
+  @@index([brandId])
 }
 
 model BrandSubscription {

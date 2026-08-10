@@ -1709,7 +1709,9 @@ Admin → AI 模型配置 页面：
 - 商家或内部人员提交的补充信息使用 `POST /v1/merchants/:brandKey/knowledge-candidates`，默认形成带来源的候选，不直接覆盖已发布事实。
 - Kanban 品牌资料页的“品牌定位与特征”使用统一字段接口：`brand.tone`、`audience.primary`、`brand.unique_selling_points` 读取 Growth 正式版本；运营区域、品牌 Voice、品牌形象、推广重点和发布频次仍属于 Kanban 工作区与内容执行配置。
 - 对该品牌拥有 `WRITE` 权限的 Kanban 用户可在定位区逐行编辑。Growth 所属字段通过受服务令牌保护的内部接口立即发布不可变新版本，旧版本转为 `superseded`；Kanban 所属字段局部更新并写入 `AuditLog`。只读成员只能查看。
-- Kanban 发送 Growth 即时发布请求时必须携带当前 `expected_version` 和可信操作者信息；版本冲突返回 `409`，不得静默覆盖。Growth 不可用时不得把本地兼容值冒充为 Growth 正式值，也不得写入第二份商家知识。
+- Kanban 发送 Growth 即时发布请求时必须携带当前 `expected_version` 和可信操作者信息。保存请求先进入按“品牌 + 字段”唯一的可靠写入队列，再立即尝试发布；Growth 不可用时页面显示“已保存，待同步”，该值可在 Kanban 内容执行中立即使用，但不得标记为 Growth 正式版本。后台每 5 分钟重试并在成功后删除待同步记录。
+- Growth 版本冲突不得静默覆盖。Kanban 保留本次待同步值并显示冲突，由品牌写权限用户明确选择“覆盖到 Growth”或“采用 Growth 最新值”；待同步队列是命令缓冲，不构成第二份正式商家主数据。
+- 生产环境必须配置与 Growth 一致的 `AMC_KNOWLEDGE_TOKEN`、正确的 `AMC_GROWTH_API_URL`，并使用 `CRON_SECRET` 每 5 分钟调用 `POST /api/cron/brand-identity-sync`；缺少这些配置不会丢失用户修改，但待同步状态不会自动清除。
 - 下游系统通过 `POST /v1/internal/knowledge/search` 获取受控知识，通过 `POST /v1/internal/knowledge-usage` 回传实际使用记录。
 - Kanban 的订阅等业务变化通过 `POST /v1/internal/merchant-events` 发给 Growth。事件必须包含 `event_id`、`event_type`、`producer`、`brand_key`、`occurred_at` 和 `payload`，并按 `event_id` 幂等。
 

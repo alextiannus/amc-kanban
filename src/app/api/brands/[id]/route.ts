@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canWriteBrandProject } from '@/lib/brandAccess'
@@ -96,13 +97,19 @@ export async function PATCH(request: Request, { params }: Params) {
   const body = await request.json()
   const { name, description, logoUrl, location, timezone, autoPilot, address, phone, website } = body
 
-  const updated = await prisma.brand.update({
-    where: { id },
-    data: {
+  const nextDescription = description !== undefined
+    ? (typeof description === 'string' ? description.trim() || null : description)
+    : undefined
+
+  const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const currentBrand = description !== undefined
+      ? await tx.brand.findUnique({ where: { id }, select: { description: true } })
+      : null
+    const result = await tx.brand.update({
+      where: { id },
+      data: {
       ...(name !== undefined && { name: typeof name === 'string' ? name.trim() : name }),
-      ...(description !== undefined && {
-        description: typeof description === 'string' ? description.trim() || null : description,
-      }),
+      ...(description !== undefined && { description: nextDescription }),
       ...(logoUrl !== undefined && {
         logoUrl: typeof logoUrl === 'string' ? logoUrl.trim() || null : logoUrl,
       }),
@@ -120,7 +127,24 @@ export async function PATCH(request: Request, { params }: Params) {
       }),
       ...(timezone !== undefined && { timezone }),
       ...(autoPilot !== undefined && { autoPilot }),
-    },
+      },
+    })
+    if (description !== undefined && currentBrand?.description !== nextDescription) {
+      await tx.auditLog.create({
+        data: {
+          actorId: session.user.id,
+          actorType: session.user.type || 'HUMAN',
+          actorName: session.user.email || null,
+          action: 'BRAND_STORY_UPDATED',
+          resourceId: id,
+          resourceType: 'Brand',
+          oldValue: { description: currentBrand?.description || null },
+          newValue: { description: nextDescription || null },
+          metadata: { brandId: id, field: 'description', source: 'kanban' },
+        },
+      })
+    }
+    return result
   })
 
   if (autoPilot !== undefined) {

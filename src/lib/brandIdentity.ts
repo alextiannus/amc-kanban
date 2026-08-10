@@ -13,8 +13,8 @@ export const BRAND_IDENTITY_FIELDS = [
 ] as const
 
 export type BrandIdentityFieldKey = typeof BRAND_IDENTITY_FIELDS[number]
-export type BrandIdentitySource = 'growth' | 'kanban' | 'legacy'
-export type BrandIdentityStatus = 'published' | 'local' | 'legacy' | 'missing' | 'unavailable' | 'unlinked'
+export type BrandIdentitySource = 'growth' | 'kanban' | 'legacy' | 'kanban_pending'
+export type BrandIdentityStatus = 'published' | 'local' | 'legacy' | 'missing' | 'unavailable' | 'unlinked' | 'pending_sync' | 'sync_conflict'
 
 export type PublishingFrequencyValue = {
   postsPerDay: number
@@ -37,6 +37,9 @@ export type BrandIdentityField = {
   knowledgeId?: string
   updatedAt?: string
   warning?: string
+  syncError?: string
+  pendingSince?: string
+  remoteVersion?: number
 }
 
 export type BrandIdentitySnapshot = {
@@ -46,7 +49,16 @@ export type BrandIdentitySnapshot = {
   fields: Record<BrandIdentityFieldKey, BrandIdentityField>
 }
 
-type GrowthKnowledgeEntry = {
+type PendingIdentityOverlay = {
+  value: unknown
+  expectedVersion: number
+  status: string
+  lastErrorCode: string | null
+  updatedAt: Date
+  remoteVersion: number | null
+}
+
+export type GrowthKnowledgeEntry = {
   knowledge_id?: string
   knowledge_key?: string
   statement?: string
@@ -84,6 +96,22 @@ export async function resolveBrandIdentity(
   })
   if (!brand) return null
 
+  const pendingChanges = await prisma.brandIdentityPendingChange.findMany({
+    where: { brandId },
+    select: {
+      field: true,
+      value: true,
+      expectedVersion: true,
+      status: true,
+      lastErrorCode: true,
+      updatedAt: true,
+      remoteVersion: true,
+    },
+  })
+  const pendingByField = new Map<string, PendingIdentityOverlay>(
+    pendingChanges.map((change: PendingIdentityOverlay & { field: string }) => [change.field, change])
+  )
+
   let growthAvailable = true
   let growthEntries: GrowthKnowledgeEntry[] = []
   if (brand.growthBrandKey && !options.skipGrowth) {
@@ -107,9 +135,9 @@ export async function resolveBrandIdentity(
   const canEdit = Boolean(options.canEdit)
 
   const fields = {
-    brandTone: growthField('brandTone', growthEntries, legacyValues.brandTone, brand.growthBrandKey, growthAvailable, canEdit),
-    targetAudience: growthField('targetAudience', growthEntries, legacyValues.targetAudience, brand.growthBrandKey, growthAvailable, canEdit),
-    sellingPoints: growthField('sellingPoints', growthEntries, legacyValues.sellingPoints, brand.growthBrandKey, growthAvailable, canEdit),
+    brandTone: withPendingIdentity('brandTone', growthField('brandTone', growthEntries, legacyValues.brandTone, brand.growthBrandKey, growthAvailable, canEdit), pendingByField.get('brandTone'), canEdit),
+    targetAudience: withPendingIdentity('targetAudience', growthField('targetAudience', growthEntries, legacyValues.targetAudience, brand.growthBrandKey, growthAvailable, canEdit), pendingByField.get('targetAudience'), canEdit),
+    sellingPoints: withPendingIdentity('sellingPoints', growthField('sellingPoints', growthEntries, legacyValues.sellingPoints, brand.growthBrandKey, growthAvailable, canEdit), pendingByField.get('sellingPoints'), canEdit),
     operatingRegion: localField('operatingRegion', text(brand.location), canEdit),
     brandVoice: localField('brandVoice', text(promoPlan.brandVoice), canEdit),
     brandImage: localField('brandImage', text(promoPlan.brandImage), canEdit),
@@ -179,7 +207,7 @@ function growthField(
   if (entry) {
     return {
       key: field,
-      value: growthDisplayValue(field, entry),
+      value: growthIdentityDisplayValue(field, entry),
       source: 'growth',
       status: 'published',
       editable: canEdit && growthAvailable,
@@ -199,9 +227,43 @@ function growthField(
     value: legacyValue,
     source: hasLegacy ? 'legacy' : 'growth',
     status,
-    editable: canEdit && (growthAvailable || !growthBrandKey),
+    editable: canEdit,
     version: 0,
-    warning: status === 'unavailable' ? 'AMC-Growth 暂时不可用，当前显示兼容数据。' : undefined,
+    warning: status === 'unavailable' ? 'AMC-Growth 暂时不可用，修改后将先保存并等待自动同步。' : undefined,
+  }
+}
+
+function withPendingIdentity(
+  field: 'brandTone' | 'targetAudience' | 'sellingPoints',
+  base: BrandIdentityField,
+  pending: {
+    value: unknown
+    expectedVersion: number
+    status: string
+    lastErrorCode: string | null
+    updatedAt: Date
+    remoteVersion: number | null
+  } | undefined,
+  canEdit: boolean
+): BrandIdentityField {
+  if (!pending) return base
+  const value = field === 'sellingPoints'
+    ? stringList(pending.value)
+    : text(pending.value)
+  const conflict = pending.status === 'CONFLICT'
+  return {
+    key: field,
+    value,
+    source: 'kanban_pending',
+    status: conflict ? 'sync_conflict' : 'pending_sync',
+    editable: canEdit,
+    version: pending.expectedVersion,
+    pendingSince: pending.updatedAt.toISOString(),
+    remoteVersion: pending.remoteVersion ?? undefined,
+    syncError: pending.lastErrorCode || undefined,
+    warning: conflict
+      ? '本次修改已保存，但与 AMC-Growth 最新版本冲突，请选择处理方式。'
+      : '本次修改已保存并生效，正在等待同步到 AMC-Growth。',
   }
 }
 
@@ -209,7 +271,7 @@ function localField(key: BrandIdentityFieldKey, value: BrandIdentityValue, edita
   return { key, value, source: 'kanban', status: 'local', editable }
 }
 
-function growthDisplayValue(field: 'brandTone' | 'targetAudience' | 'sellingPoints', entry: GrowthKnowledgeEntry) {
+export function growthIdentityDisplayValue(field: 'brandTone' | 'targetAudience' | 'sellingPoints', entry: GrowthKnowledgeEntry) {
   if (field === 'sellingPoints') {
     const list = stringList(entry.structured_value)
     return list.length ? list : legacyList(entry.statement)

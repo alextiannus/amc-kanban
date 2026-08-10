@@ -15,6 +15,7 @@ import remarkGfm from 'remark-gfm'
 import type {
   BrandIdentityFieldKey,
   BrandIdentitySnapshot,
+  BrandIdentityStatus,
   BrandIdentityValue,
   PublishingFrequencyValue,
 } from '@/lib/brandIdentity'
@@ -67,10 +68,13 @@ type IdentityRowProps = {
   value: React.ReactNode
   editable: boolean
   warning?: string
+  status?: BrandIdentityStatus
+  syncing?: boolean
+  onSyncAction?: (action: 'retry' | 'overwrite' | 'use_growth') => void
   onEdit: () => void
 }
 
-function IdentityRow({ label, englishLabel, icon, iconClassName, value, editable, warning, onEdit }: IdentityRowProps) {
+function IdentityRow({ label, englishLabel, icon, iconClassName, value, editable, warning, status, syncing, onSyncAction, onEdit }: IdentityRowProps) {
   return (
     <div className="group relative px-4 md:px-6 py-4 grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-2 md:gap-4">
       <div className="flex items-start gap-2 pt-0.5">
@@ -85,6 +89,23 @@ function IdentityRow({ label, englishLabel, icon, iconClassName, value, editable
       <div className="min-w-0 text-sm text-slate-700 dark:text-slate-200 leading-relaxed">
         {value}
         {warning && <p className="mt-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400">{warning}</p>}
+        {status === 'pending_sync' && onSyncAction && (
+          <div className="mt-2 flex items-center gap-2">
+            <span className="inline-flex rounded-full bg-amber-100 dark:bg-amber-950/40 px-2 py-0.5 text-[9px] font-black text-amber-700 dark:text-amber-300">已保存 · 待同步</span>
+            <button type="button" disabled={syncing} onClick={() => onSyncAction('retry')} className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 hover:text-amber-800 disabled:opacity-50">
+              <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />立即重试
+            </button>
+          </div>
+        )}
+        {status === 'sync_conflict' && onSyncAction && (
+          <div className="mt-2 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/20 p-2.5">
+            <p className="text-[10px] font-black text-rose-700 dark:text-rose-300">同步冲突：Growth 中已有更新</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" disabled={syncing} onClick={() => onSyncAction('overwrite')} className="rounded-lg bg-rose-600 px-2.5 py-1 text-[10px] font-bold text-white disabled:opacity-50">覆盖到 Growth</button>
+              <button type="button" disabled={syncing} onClick={() => onSyncAction('use_growth')} className="rounded-lg border border-rose-200 dark:border-rose-800 px-2.5 py-1 text-[10px] font-bold text-rose-700 dark:text-rose-300 disabled:opacity-50">采用 Growth 最新值</button>
+            </div>
+          </div>
+        )}
       </div>
       {editable && (
         <button
@@ -186,6 +207,7 @@ export default function BrandProfileView({
   const [editingIdentityField, setEditingIdentityField] = useState<BrandIdentityFieldKey | null>(null)
   const [identityDraft, setIdentityDraft] = useState<BrandIdentityValue>('')
   const [identitySaving, setIdentitySaving] = useState(false)
+  const [identitySyncingField, setIdentitySyncingField] = useState<BrandIdentityFieldKey | null>(null)
   const [identityError, setIdentityError] = useState('')
 
   // Controlled vs Uncontrolled logic
@@ -703,6 +725,7 @@ ${storeLines}
         showToastVal('品牌信息已保存', 'success')
         setEditingName(false)
         const data = await res.json()
+        setDraftDesc(data.description || '')
         if (onUpdate) onUpdate(data)
       } else {
         showToastVal('保存失败，请重试', 'error')
@@ -790,12 +813,49 @@ ${storeLines}
         fields: { ...snapshot.fields, [editingIdentityField]: nextField },
       } : snapshot)
       updateLocalIdentityState(editingIdentityField, nextField.value)
-      showToastVal(`${IDENTITY_LABELS[editingIdentityField]}已保存并立即生效`, 'success')
+      if (data.syncStatus === 'pending_sync') {
+        showToastVal(`${IDENTITY_LABELS[editingIdentityField]}已保存并生效，等待同步到 AMC-Growth`, 'info')
+      } else if (data.syncStatus === 'sync_conflict') {
+        showToastVal(`${IDENTITY_LABELS[editingIdentityField]}已保存并生效，但需要处理同步冲突`, 'info')
+      } else {
+        showToastVal(`${IDENTITY_LABELS[editingIdentityField]}已保存并立即生效`, 'success')
+      }
       setEditingIdentityField(null)
     } catch (error) {
       setIdentityError(error instanceof Error ? error.message : '保存失败，请重试')
     } finally {
       setIdentitySaving(false)
+    }
+  }
+
+  const handleIdentitySyncAction = async (
+    field: BrandIdentityFieldKey,
+    action: 'retry' | 'overwrite' | 'use_growth'
+  ) => {
+    setIdentitySyncingField(field)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/identity/${field}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || '同步操作失败')
+      const nextField = data.field
+      setIdentitySnapshot(snapshot => snapshot ? {
+        ...snapshot,
+        growthAvailable: data.growthAvailable ?? snapshot.growthAvailable,
+        fields: { ...snapshot.fields, [field]: nextField },
+      } : snapshot)
+      updateLocalIdentityState(field, nextField.value)
+      if (data.syncStatus === 'published') showToastVal(`${IDENTITY_LABELS[field]}已同步到 AMC-Growth`, 'success')
+      else if (data.syncStatus === 'discarded') showToastVal(`已采用 AMC-Growth 的${IDENTITY_LABELS[field]}`, 'success')
+      else if (data.syncStatus === 'sync_conflict') showToastVal('Growth 版本再次变化，请重新处理冲突', 'info')
+      else showToastVal('同步暂未完成，系统将继续自动重试', 'info')
+    } catch (error) {
+      showToastVal(error instanceof Error ? error.message : '同步操作失败', 'error')
+    } finally {
+      setIdentitySyncingField(null)
     }
   }
 
@@ -945,6 +1005,11 @@ ${storeLines}
   const editingPublishingFrequency = identityDraft && typeof identityDraft === 'object' && !Array.isArray(identityDraft)
     ? identityDraft as PublishingFrequencyValue
     : { postsPerDay: 1, platforms: {} }
+  const identitySyncProps = (field: BrandIdentityFieldKey) => ({
+    status: identityField(field)?.status,
+    syncing: identitySyncingField === field,
+    onSyncAction: (action: 'retry' | 'overwrite' | 'use_growth') => handleIdentitySyncAction(field, action),
+  })
 
   return (
     <motion.div
@@ -1330,13 +1395,13 @@ ${storeLines}
                 </div>
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   <IdentityRow label="AI 品牌声调" englishLabel="Brand Tone" icon={<Sparkles className="w-3.5 h-3.5 text-amber-500" />} iconClassName="bg-amber-50 dark:bg-amber-950/30"
-                    value={identityText('brandTone', activeBrandTone) || emptyIdentityValue} editable={Boolean(identityField('brandTone')?.editable)} warning={identityField('brandTone')?.warning} onEdit={() => openIdentityEditor('brandTone')} />
+                    value={identityText('brandTone', activeBrandTone) || emptyIdentityValue} editable={Boolean(identityField('brandTone')?.editable)} warning={identityField('brandTone')?.warning} {...identitySyncProps('brandTone')} onEdit={() => openIdentityEditor('brandTone')} />
                   <IdentityRow label="目标客群" englishLabel="Target Audience" icon={<Users className="w-3.5 h-3.5 text-blue-500" />} iconClassName="bg-blue-50 dark:bg-blue-950/30"
-                    value={identityText('targetAudience', draftAudience) || emptyIdentityValue} editable={Boolean(identityField('targetAudience')?.editable)} warning={identityField('targetAudience')?.warning} onEdit={() => openIdentityEditor('targetAudience')} />
+                    value={identityText('targetAudience', draftAudience) || emptyIdentityValue} editable={Boolean(identityField('targetAudience')?.editable)} warning={identityField('targetAudience')?.warning} {...identitySyncProps('targetAudience')} onEdit={() => openIdentityEditor('targetAudience')} />
                   <IdentityRow label="核心卖点" englishLabel="Selling Points" icon={<Star className="w-3.5 h-3.5 text-emerald-500" />} iconClassName="bg-emerald-50 dark:bg-emerald-950/30"
                     value={identityList('sellingPoints', draftProduct.split(/\r?\n/).filter(Boolean)).length ? (
                       <ul className="space-y-1 list-disc pl-4">{identityList('sellingPoints', draftProduct.split(/\r?\n/).filter(Boolean)).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul>
-                    ) : emptyIdentityValue} editable={Boolean(identityField('sellingPoints')?.editable)} warning={identityField('sellingPoints')?.warning} onEdit={() => openIdentityEditor('sellingPoints')} />
+                    ) : emptyIdentityValue} editable={Boolean(identityField('sellingPoints')?.editable)} warning={identityField('sellingPoints')?.warning} {...identitySyncProps('sellingPoints')} onEdit={() => openIdentityEditor('sellingPoints')} />
                   <IdentityRow label="运营区域" englishLabel="Location" icon={<MapPin className="w-3.5 h-3.5 text-slate-500" />} iconClassName="bg-slate-100 dark:bg-slate-800"
                     value={identityText('operatingRegion', draftLocation) || emptyIdentityValue} editable={Boolean(identityField('operatingRegion')?.editable)} warning={identityField('operatingRegion')?.warning} onEdit={() => openIdentityEditor('operatingRegion')} />
                   <IdentityRow label="品牌 Voice" englishLabel="Brand Voice" icon={<Sparkles className="w-3.5 h-3.5 text-rose-500" />} iconClassName="bg-rose-50 dark:bg-rose-950/30"
