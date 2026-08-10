@@ -12,6 +12,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown,
   Lock, Plus,
   BookOpen,
+  Video,
 } from 'lucide-react'
 import { type BoardView, type MenuGroupDef, type AppRole, getMenuGroups } from '@/lib/permissions'
 import { type Brand } from './BrandSwitcher'
@@ -26,6 +27,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Bot, Shield,
   Briefcase, TrendingUp, Sparkles,
   BookOpen,
+  Video,
 }
 
 function NavIcon({ name, size = 16 }: { name: string; size?: number }) {
@@ -48,6 +50,7 @@ interface SidebarProps {
 const COLLAPSED_KEY = 'amc.sidebar.collapsed'
 const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
   'inspiration-library',
+  'video-production',
   'viral-copy-scripts',
   'amc-content-roles',
   'amc-growth',
@@ -64,6 +67,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '智能规划': 'Growth Planning',
   'AI 角色库': 'AI Role Library',
   '爆品素材库': 'Viral Inspiration Library',
+  '视频生产': 'Video Production',
   '爆品脚本': 'Viral Copy Scripts',
   '品牌故事': 'Brand Story',
   '发布日历': 'Publishing Calendar',
@@ -289,6 +293,10 @@ export default function Sidebar({
     if (item.comingSoon) return
     if (item.href) {
       let targetUrl = item.href
+      if (item.id === 'video-production' && activeBrand?.id) {
+        const separator = targetUrl.includes('?') ? '&' : '?'
+        targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
+      }
       if (targetUrl.includes('amc-growth.immedi.ai')) {
         const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
         if (isLocal) {

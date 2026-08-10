@@ -6,7 +6,7 @@ import { getSession } from '@/lib/auth'
 type LabTokenPayload = {
   sub: string
   email?: string
-  role: 'ADMIN'
+  role: 'ADMIN' | 'AMC_PRINCIPAL'
   exp: number
 }
 
@@ -14,8 +14,10 @@ export default async function ContentLabEntryPage() {
   const session = await getSession()
   if (!session?.user?.id) redirect('/')
   const roles = session.user.userRoles || []
-  const canAccess = session.user.role === 'ADMIN' || roles.includes('ADMIN') || roles.includes('AMC_PRINCIPAL')
-  if (!canAccess) redirect('/admin')
+  const role = session.user.role === 'ADMIN' || roles.includes('ADMIN')
+    ? 'ADMIN'
+    : roles.includes('AMC_PRINCIPAL') ? 'AMC_PRINCIPAL' : null
+  if (!role) redirect('/admin')
 
   const isLocal = process.env.NODE_ENV !== 'production'
     || process.env.APP_BASE_URL?.includes('localhost')
@@ -32,7 +34,7 @@ export default async function ContentLabEntryPage() {
     const token = signLabToken({
       sub: session.user.id,
       email: session.user.email,
-      role: 'ADMIN',
+      role,
       exp: Math.floor(Date.now() / 1000) + 60 * 60,
     }, secret)
     redirect(`${contentUrl}/admin/content-lab#labToken=${encodeURIComponent(token)}`)

@@ -25,6 +25,8 @@
     "media:backfill": "node --experimental-strip-types scripts/backfill-media-technical-metadata.mts --apply",
     "test:llm-routing-policy": "node --experimental-strip-types scripts/test-llm-routing-policy.mts",
     "test:video-model-routing": "node --experimental-strip-types scripts/test-video-model-routing.mts",
+    "test:video-production-entry": "node --experimental-strip-types scripts/test-video-production-entry.mts",
+    "test:video-production-playwright": "node --experimental-strip-types scripts/test-video-production-playwright.mts",
     "test:execution": "node --experimental-strip-types scripts/test-project-execution.mts",
     "test:assignment-pool": "node --experimental-strip-types scripts/test-assignment-pool.mts",
     "test:assignment-flow": "node --experimental-strip-types scripts/test-assignment-flow.mts",

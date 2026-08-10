@@ -8,8 +8,8 @@
 
 AMC 视频能力按任务解耦，不绑定任何单一厂商：
 
-- `amc-content` 负责参考视频理解、卖点、文案、分镜、标准提示词、资产版本链和创意质量审核。
-- `amc-kanban` 负责视频生成、TTS、异步任务、媒体回存、后期、审核发布和互动指标同步。
+- `amc-content` 负责参考视频理解、卖点、文案、分镜、标准提示词、资产版本链、视频生成、TTS、异步任务、媒体回存、后期、创意质量审核和视频生产工作台。
+- `amc-kanban` 只负责工作台入口、身份签名和当前商家上下文；后续发布阶段再负责排期、社交平台授权与 PostFast 调用，不执行视频/TTS供应商任务。
 - Seedance、Volcengine、Kie.ai、FAL 只是可注册到 `video_generation` 的供应商；Seedance 不是分析模型，也不是通用业务类型。
 - AMC-Content 保存并解析视频、TTS和媒体处理供应商配置；AMC-Kanban 只保存社交平台/PostFast密钥，不接触内容生产供应商密钥。
 
@@ -117,11 +117,7 @@ VideoGenerationJob
 
 发布前检查关键帧感知哈希、视觉向量、音频指纹、VO/字幕 5-gram、人脸、Logo、商标和业务事实。近重复、参考原音频、文本重合超过 22% 或未授权商标命中时阻断发布。
 
-审核至少覆盖品牌一致性、业务事实、平台合规和权利。首版不自动批准、不自动抓取竞品视频。审核通过后由 Kanban/PostFast 发布；AMC-Content 不保存平台密钥。
-
-72 小时和 168 小时回传播放、曝光、完播、点赞、评论、收藏、分享及发布异常。首版只称为互动表现，不称订单或营收转化。
-
-实现接口 `POST /api/internal/video-performance` 只接受上述互动字段和 `windowHours=72|168`，按项目、变体、平台和平台帖子去重，并同步为 AMC-Content 的 `PerformanceSnapshot` 版本资产。
+审核至少覆盖品牌一致性、业务事实、平台合规和权利。当前工作台首版不自动批准、不自动抓取竞品视频、不创建 Kanban 草稿、不发布，也不回流互动指标；只允许下载人工批准且未被相似度/授权检查阻断的成片。发布、A/B 和 72/168 小时互动回流属于后续阶段。
 
 ## 6. API 与界面
 
@@ -134,12 +130,11 @@ AMC-Content：
 - `GET /v1/video/jobs/:id`：查询供应商任务、fallback、成本和成片状态。
 - `POST /v1/video/jobs/:id/assemble`：在 Content 内完成字幕、配音、音乐、Logo和多比例派生。
 - `POST /v1/tts/generate`：按 Content 的 `tts_generation` 路由生成口播。
-- `GET /api/admin/model-tasks`：Kanban 管理后台聚合两服务的任务归属、能力要求、主模型和 fallback 状态，不返回任何密钥。
-- `POST /api/internal/video-performance`：保存并回流 72/168 小时互动快照。
+- `/v1/lab/video-projects*`：项目列表、创建、阶段摘要、拆解、反馈重跑、审核、估价确认、生成、单镜头重试、合成和审核后下载。
 
-Content Lab 展示拆解卡、产物版本链、每阶段实际模型/fallback、成本/耗时/失败统计，并允许为单项目选择新模型后创建新版本。
+AMC-Content 新增独立“视频生产”工作台，使用现有黄色 Content Center 视觉系统，按“参考素材、拆解卡、卖点与脚本、分镜与 Prompt、视频生成、合成与下载”六步展示。Content Lab 的“模型与路由”对 `ADMIN` 可编辑、对 `AMC_PRINCIPAL` 只读；API Key 仍只存在 AMC-Content 的 Render 环境变量，页面只显示 `secretRef` 和已配置/缺失状态。
 
-Kanban 通过 AMC-Content API 展示任务路由、执行状态和成本，不保存或执行视频/TTS配置。Kanban 的视频创建、状态和合成接口是鉴权代理；发布、排期和社交平台密钥继续归 Kanban。
+Kanban 左侧“视频生产”仅向 `ADMIN`、`AMC_PRINCIPAL`展示，通过短期签名跳转并传递已授权的当前商家；Kanban 不保存或执行视频/TTS 配置。
 
 ## 7. 验收
 
