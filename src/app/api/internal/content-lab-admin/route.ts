@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { writeAuditLog } from '@/lib/audit'
 
 const VALID_TAGS = ['include', 'exclude', 'needs_rewrite'] as const
 
@@ -151,6 +152,14 @@ async function annotateLog(body: any) {
       isAnnotated: true,
       trainingTag: true,
     },
+  })
+  await writeAuditLog({
+    actor: { id: optionalString(body.annotatedBy), type: 'HUMAN' },
+    action: 'CONTENT_LAB_PRODUCTION_REVIEWED',
+    resourceId: id,
+    resourceType: 'CopywriterLog',
+    newValue: log,
+    metadata: { trainingTag, isGoldStandard: Boolean(body.isGoldStandard) },
   })
   return { ok: true, log }
 }

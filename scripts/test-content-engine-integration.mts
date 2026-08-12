@@ -150,6 +150,8 @@ function testContentLabStandaloneEntry() {
   assertIncludes(internalAdmin, "body.action === 'catalog'", 'internal admin bridge exposes catalog data')
   assertIncludes(internalAdmin, "body.action === 'logs'", 'internal admin bridge exposes review logs')
   assertIncludes(internalAdmin, "body.action === 'annotateLog'", 'internal admin bridge exposes log annotation')
+  assertIncludes(internalAdmin, 'CONTENT_LAB_PRODUCTION_REVIEWED', 'record review writes an immutable audit event')
+  assertIncludes(internalAdmin, 'optionalString(body.annotatedBy)', 'record review audit preserves the real Content Lab operator')
   assertIncludes(internalAdmin, 'CONTENT_SERVICE_INTERNAL_TOKEN', 'internal admin bridge is service-token protected')
   assertIncludes(internalAdmin, 'const copywriterId = optionalString(body.copywriterId)', 'internal log bridge accepts agent-specific copywriter filters')
   assertIncludes(internalAdmin, 'const platform = optionalString(body.platform)', 'internal log bridge accepts platform filters for agent records')
