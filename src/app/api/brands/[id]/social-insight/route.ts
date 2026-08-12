@@ -7,11 +7,23 @@ import { fetchGoogleReviews, fetchGoogleGBPReviews, getGoogleAccessToken } from 
 import { writeAuditLog } from '@/lib/audit'
 import {
   asArray,
-  computePeriodTrend,
   detectContentType,
   extractKeywordsFromTexts,
-  toNumber,
 } from './socialInsightUtils'
+import { dateOnlyInTimeZone, parseSocialInsightRange, shiftDateOnly } from '@/lib/socialInsightDates'
+import {
+  apifyPostHistoryInputs,
+  loadAccountMetricHistory,
+  loadPersistedPosts,
+  loadPersistedReviews,
+  persistSocialAccountMetrics,
+  persistSocialPosts,
+  persistSocialReviews,
+  reviewHistoryInputs,
+  socialHistoryAvailability,
+  type SocialHistoryPostInput,
+  type SocialHistoryReviewInput,
+} from '@/lib/socialInsightHistory'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -429,30 +441,11 @@ export async function GET(req: Request, { params }: Params) {
   const toParam   = url.searchParams.get('to')
   const platformFilter = url.searchParams.get('platform') || 'all'
 
-  const now = new Date()
-  const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000)
-  let from = defaultFrom, to = now
-
-  if (fromParam) {
-    const p = new Date(fromParam)
-    if (Number.isNaN(p.getTime())) return NextResponse.json({ error: 'Invalid from date' }, { status: 400 })
-    from = p
-  }
-  if (toParam) {
-    const p = new Date(toParam)
-    if (Number.isNaN(p.getTime())) return NextResponse.json({ error: 'Invalid to date' }, { status: 400 })
-    to = p
-  }
-
-  const rangeMs = to.getTime() - from.getTime()
-  if (rangeMs < 0) return NextResponse.json({ error: 'from date must be before to date' }, { status: 400 })
-  const rangeDays = Math.ceil(rangeMs / 86400000)
-  if (rangeDays > 180) return NextResponse.json({ error: 'Date range cannot exceed 180 days' }, { status: 400 })
-
   const brand = await prisma.brand.findFirst({
     where: { id },
     select: {
       id: true, name: true, location: true,
+      timezone: true,
       postfastApiKey: true,
       postfastSnapshot: true,
       postfastSyncedAt: true,
@@ -476,13 +469,15 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: '此品牌的订阅服务已到期或未激活，请前往“服务协议与订阅”进行激活后重试。' }, { status: 402 })
   }
 
-  const dateRangeLabel = `${from.toISOString().slice(0, 10)} → ${to.toISOString().slice(0, 10)}`
+  let range: ReturnType<typeof parseSocialInsightRange>
+  try {
+    range = parseSocialInsightRange(fromParam, toParam, brand.timezone)
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid date range' }, { status: 400 })
+  }
+  const { from, to, previousFrom, previousTo, days: rangeDays } = range
 
-  // Previous period window: same length, immediately before current period.
-  // Subtract 1 ms from previousTo so the boundary instant (from) belongs
-  // exclusively to the current period and is never double-counted.
-  const previousTo   = new Date(from.getTime() - 1)
-  const previousFrom = new Date(from.getTime() - rangeMs)
+  const dateRangeLabel = `${range.fromDate} → ${range.toDate} (${range.timeZone})`
 
   // ── Parallel data fetch ──────────────────────────────────────────────────
   const [
@@ -511,7 +506,11 @@ export async function GET(req: Request, { params }: Params) {
       select: { id: true, type: true, occurredAt: true, source: true, metadata: true },
     }),
     prisma.actionItem.findMany({
-      where: { brandId: id, type: { in: ['sentiment_alert', 'apify_review'] } },
+      where: {
+        brandId: id,
+        type: { in: ['sentiment_alert', 'apify_review'] },
+        createdAt: { gte: from, lte: to },
+      },
       select: {
         id: true,
         title: true,
@@ -545,6 +544,117 @@ export async function GET(req: Request, { params }: Params) {
       select: { id: true, timestamp: true, metadata: true, action: true },
     }),
   ])
+
+  const apifyMeta = (latestApifyLog?.metadata ?? {}) as Record<string, unknown>
+  const apifySyncedAt: string | null = latestApifyLog?.timestamp?.toISOString() ?? null
+  const apifyInstagramPosts = asArray<ApifyCachedPost>(apifyMeta.instagramPosts)
+  const apifyTiktokPosts = asArray<ApifyCachedPost>(apifyMeta.tiktokPosts)
+  const apifyXiaohongshuPosts = asArray<ApifyCachedPost>(apifyMeta.xiaohongshuPosts)
+  const apifyFacebookPosts = asArray<ApifyCachedPost>(apifyMeta.facebookPosts)
+  const apifyGoogleReviews = asArray<ApifyCachedReview>(apifyMeta.googleReviews)
+  const capturedAt = new Date()
+
+  const analyticsHistoryInputs = (items: AnalyticsPost[]): SocialHistoryPostInput[] => items.map((post) => ({
+    source: post.source,
+    externalId: post.id.replace(/^pf_/, ''),
+    platform: post.platform,
+    handle: post.handle,
+    caption: post.caption,
+    postUrl: post.postUrl,
+    publishedAt: post.publishedAt,
+    contentType: post.contentType,
+    status: post.status,
+    mediaUrls: post.mediaUrls,
+    likes: post.likes,
+    comments: post.comments,
+    shares: post.shares,
+    impressions: post.impressions,
+    reach: post.reach,
+  }))
+  const dbReviewHistoryInputs: SocialHistoryReviewInput[] = sentimentAlerts.map((item: any) => {
+    const payload = item.payload && typeof item.payload === 'object' ? item.payload as Record<string, unknown> : {}
+    return {
+      source: String(payload.source ?? 'database'),
+      externalId: item.id,
+      platform: String(payload.platform ?? 'google'),
+      reviewerName: typeof payload.reviewerName === 'string' ? payload.reviewerName : null,
+      rating: payload.rating,
+      text: typeof payload.reviewText === 'string' ? payload.reviewText : item.description,
+      replyText: typeof payload.replyText === 'string' ? payload.replyText : null,
+      reviewUrl: typeof payload.reviewUrl === 'string' ? payload.reviewUrl : null,
+      publishedAt: typeof payload.publishedAt === 'string' ? payload.publishedAt : item.createdAt,
+      raw: { actionItemId: item.id },
+    }
+  })
+  const googleHistoryInputs: SocialHistoryReviewInput[] = googleResult.reviews.map((review) => ({
+    source: review.source,
+    platform: 'google',
+    reviewerName: review.reviewerName,
+    rating: review.rating,
+    text: review.text,
+    replyText: review.replyText,
+    publishedAt: review.createTime,
+    raw: review,
+  }))
+  const profileMetrics = [
+    ...asArray<Record<string, unknown>>(apifyMeta.instagramProfiles),
+    ...asArray<Record<string, unknown>>(apifyMeta.tiktokProfiles),
+    ...asArray<Record<string, unknown>>(apifyMeta.facebookProfiles),
+  ].map((profile) => ({
+    platform: String(profile.platform ?? 'unknown'),
+    handle: String(profile.handle ?? ''),
+    followerCount: profile.followerCount,
+    followingCount: profile.followingCount,
+    postCount: profile.postCount,
+    ratingScore: profile.ratingScore,
+    raw: profile,
+  }))
+
+  await Promise.all([
+    persistSocialPosts(id, [
+      ...analyticsHistoryInputs(pfResult.posts),
+      ...analyticsHistoryInputs(internalDrafts),
+      ...apifyPostHistoryInputs([
+        ...apifyInstagramPosts,
+        ...apifyTiktokPosts,
+        ...apifyXiaohongshuPosts,
+        ...apifyFacebookPosts,
+      ] as unknown as Record<string, unknown>[]),
+    ], capturedAt),
+    persistSocialReviews(id, [
+      ...dbReviewHistoryInputs,
+      ...googleHistoryInputs,
+      ...reviewHistoryInputs(apifyGoogleReviews as unknown as Record<string, unknown>[], 'apify'),
+    ], capturedAt),
+    persistSocialAccountMetrics(id, [
+      ...accounts.map((account: any) => ({
+        platform: account.platformId,
+        handle: account.handle,
+        followerCount: account.followerCount,
+        ratingScore: account.ratingScore,
+        raw: { source: 'social_account' },
+      })),
+      ...profileMetrics,
+    ], capturedAt),
+  ])
+
+  const [persistedPosts, previousPosts, persistedReviews, accountMetricHistory, availability] = await Promise.all([
+    loadPersistedPosts(id, from, to, platformFilter),
+    loadPersistedPosts(id, previousFrom, previousTo, platformFilter),
+    loadPersistedReviews(id, from, to),
+    loadAccountMetricHistory(id, from, to),
+    socialHistoryAvailability(id),
+  ])
+  const normalizedReviews = persistedReviews as Array<{
+    id: string
+    source: string
+    platform: string
+    reviewerName: string | null
+    rating: number
+    text: string
+    replyText: string | null
+    publishedAt: Date
+  }>
 
   // Log data fetch operations (fire & forget)
   writeAuditLog({
@@ -600,61 +710,9 @@ export async function GET(req: Request, { params }: Params) {
   })
 
   // ── Build posts dataset ──────────────────────────────────────────────────
-  const filteredPostfastPosts = platformFilter === 'all'
-    ? pfResult.posts
-    : pfResult.posts.filter(p => p.platform.toLowerCase() === platformFilter.toLowerCase())
-
-  // Merge Apify cached posts (Instagram + TikTok + Xiaohongshu) if available
-  const apifyMeta = (latestApifyLog?.metadata ?? {}) as Record<string, unknown>
-  const apifySyncedAt: string | null = latestApifyLog?.timestamp?.toISOString() ?? null
-  const apifyInstagramPosts = asArray<ApifyCachedPost>(apifyMeta.instagramPosts)
-  const apifyTiktokPosts = asArray<ApifyCachedPost>(apifyMeta.tiktokPosts)
-  const apifyXiaohongshuPosts = asArray<ApifyCachedPost>(apifyMeta.xiaohongshuPosts)
-  const apifyPosts: AnalyticsPost[] = [
-    ...apifyInstagramPosts,
-    ...apifyTiktokPosts,
-    ...apifyXiaohongshuPosts,
-  ]
-    .filter((p) => {
-      if (platformFilter !== 'all' && p.platform?.toLowerCase() !== platformFilter.toLowerCase()) return false
-      // Include post if it has no date (can't determine), or if the date is within range.
-      // Also include posts up to 180 days before `from` to catch content that drives
-      // ongoing engagement even if published earlier (e.g. evergreen IG posts).
-      if (!p.publishedAt) return true
-      const d = new Date(p.publishedAt).getTime()
-      // Exclude obvious sentinel/epoch dates (before 2020)
-      if (d < new Date('2020-01-01').getTime()) return false
-      // Include anything published up to 6 months before the window start, or within the window
-      const sixMonthsBeforeFrom = from.getTime() - 180 * 24 * 60 * 60 * 1000
-      return d >= sixMonthsBeforeFrom && d <= to.getTime()
-    })
-
-    .map((p): AnalyticsPost => ({
-      id: `apify_${p.source}_${p.postId ?? Math.random()}`,
-      source: p.source ?? 'apify',
-      platform: p.platform ?? 'unknown',
-      handle: p.handle ?? '',
-      caption: p.caption ?? '',
-      postUrl: p.url ?? null,
-      publishedAt: p.publishedAt ?? new Date().toISOString(),
-      contentType: detectContentType(p.caption ?? '', [], []),
-      status: 'published',
-      hashtags: [],
-      mediaUrls: p.imageUrl ? [p.imageUrl] : [],
-      scheduledAt: null,
-      likes: toNumber(p.likes),
-      comments: toNumber(p.comments),
-      shares: toNumber(p.shares),
-      impressions: toNumber(p.views),
-      reach: toNumber(p.views),
-      engRate: toNumber(p.views) > 0
-        ? Number((((toNumber(p.likes) + toNumber(p.comments) + toNumber(p.shares)) / toNumber(p.views)) * 100).toFixed(2))
-        : 0,
-    }))
-
-  const posts: AnalyticsPost[] = dedupeAnalyticsPosts([...filteredPostfastPosts, ...internalDrafts, ...apifyPosts])
-  const hasPostfastData = pfResult.posts.length > 0
-  const hasApifyData = apifyPosts.length > 0 || asArray<ApifyCachedReview>(apifyMeta.googleReviews).length > 0
+  const posts: AnalyticsPost[] = dedupeAnalyticsPosts(persistedPosts as AnalyticsPost[])
+  const hasPostfastData = posts.some((post) => post.source === 'postfast')
+  const hasApifyData = posts.some((post) => !['postfast', 'internal'].includes(post.source)) || normalizedReviews.some((review) => review.source === 'apify')
 
   // ── KPI aggregates ───────────────────────────────────────────────────────
   // Only count posts that were actually published (have real engagement data or status=published)
@@ -684,10 +742,8 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   const dayMap = new Map<string, any>()
-  const endDay = new Date(to); endDay.setHours(23, 59, 59, 999)
-
   for (const p of posts) {
-    const key = p.publishedAt.slice(0, 10)
+    const key = dateOnlyInTimeZone(new Date(p.publishedAt), range.timeZone)
     const platform = p.platform.toLowerCase()
     const interactions = p.likes + p.comments + p.shares
     if (!dayMap.has(key)) {
@@ -708,11 +764,9 @@ export async function GET(req: Request, { params }: Params) {
   }
 
   // Fill gaps
-  const cursor = new Date(from); cursor.setHours(0, 0, 0, 0)
-  while (cursor <= endDay) {
-    const key = cursor.toISOString().slice(0, 10)
+  for (let dayOffset = 0; dayOffset < range.days; dayOffset++) {
+    const key = shiftDateOnly(range.fromDate, dayOffset)
     if (!dayMap.has(key)) dayMap.set(key, createEmptyDay(key))
-    cursor.setDate(cursor.getDate() + 1)
   }
 
   const timeSeries = Array.from(dayMap.values())
@@ -727,14 +781,26 @@ export async function GET(req: Request, { params }: Params) {
       return d
     })
 
-  // ── In-period trend deltas ────────────────────────────────────────────────
+  // Compare with the immediately preceding period of equal length.
+  const previousAnalyticsPosts = previousPosts as AnalyticsPost[]
+  const previousEngagement = previousAnalyticsPosts.reduce((sum, post) => sum + post.likes + post.comments + post.shares, 0)
+  const previousImpressions = previousAnalyticsPosts.reduce((sum, post) => sum + post.impressions, 0)
+  const previousLikes = previousAnalyticsPosts.reduce((sum, post) => sum + post.likes, 0)
+  const previousReach = previousAnalyticsPosts.length > 0
+    ? Math.round(previousAnalyticsPosts.reduce((sum, post) => sum + post.reach, 0) / previousAnalyticsPosts.length)
+    : 0
+  const previousEngRate = previousImpressions > 0 ? (previousEngagement / previousImpressions) * 100 : 0
+  const periodTrend = (current: number, previous: number): number | null => {
+    if (previous === 0) return current > 0 ? 100 : null
+    return Number((((current - previous) / previous) * 100).toFixed(1))
+  }
   const kpiTrends = {
-    engagement:   computePeriodTrend(timeSeries, 'engagement'),
-    impressions:  computePeriodTrend(timeSeries, 'impressions'),
-    reach:        computePeriodTrend(timeSeries, 'reach'),
-    likes:        computePeriodTrend(timeSeries, 'likes'),
-    engRate:      computePeriodTrend(timeSeries, 'engRate'),
-    postCount:    computePeriodTrend(timeSeries, 'postCount'),
+    engagement: periodTrend(totalEngagement, previousEngagement),
+    impressions: periodTrend(totalImpressions, previousImpressions),
+    reach: periodTrend(avgReach, previousReach),
+    likes: periodTrend(totalLikes, previousLikes),
+    engRate: periodTrend(avgEngRate, previousEngRate),
+    postCount: periodTrend(totalPosts, previousAnalyticsPosts.length),
   }
 
   // ── Top Posts ────────────────────────────────────────────────────────────
@@ -761,11 +827,27 @@ export async function GET(req: Request, { params }: Params) {
   // ── Brand Stats (real, for competitor tab) ───────────────────────────────
   const publishedPosts = posts.filter((p: any) => p.status === 'published')
   const postsPerWeek   = rangeDays > 0 ? Math.round((publishedPosts.length / rangeDays) * 7 * 10) / 10 : 0
+  const accountsForRange = accounts.map((account: any) => {
+    const key = `${String(account.platformId).toLowerCase()}:${String(account.handle).toLowerCase()}`
+    const atEnd = accountMetricHistory.atEnd.get(key)
+    const beforeStart = accountMetricHistory.beforeStart.get(key)
+    const followerCount = atEnd?.followerCount ?? null
+    const followerDelta = followerCount !== null && beforeStart?.followerCount !== null && beforeStart?.followerCount !== undefined
+      ? followerCount - beforeStart.followerCount
+      : null
+    return {
+      ...account,
+      followerCount,
+      followerDelta,
+      ratingScore: atEnd?.ratingScore ?? account.ratingScore,
+      snapshotAt: atEnd?.capturedAt ?? null,
+    }
+  })
   const brandStats = {
     postsPerWeek,
     avgEngRate,
-    followersInstagram: accounts.find((a: any) => a.platformId === 'instagram')?.followerCount ?? null,
-    followersTotal: accounts.reduce((s: any, a: any) => s + (a.followerCount ?? 0), 0),
+    followersInstagram: accountsForRange.find((a: any) => a.platformId === 'instagram')?.followerCount ?? null,
+    followersTotal: accountsForRange.reduce((sum: number, account: any) => sum + (account.followerCount ?? 0), 0),
   }
 
   // ── Conversion events ────────────────────────────────────────────────────
@@ -782,7 +864,7 @@ export async function GET(req: Request, { params }: Params) {
 
   const convDayMap = new Map<string, { date: string; nav_click: number; booking_click: number; coupon_redemption: number; total: number }>()
   conversions.forEach((c: any) => {
-    const key = c.occurredAt.toISOString().slice(0, 10)
+    const key = dateOnlyInTimeZone(c.occurredAt, range.timeZone)
     if (!convDayMap.has(key)) convDayMap.set(key, { date: key, nav_click: 0, booking_click: 0, coupon_redemption: 0, total: 0 })
     const day = convDayMap.get(key)!
     day.total++
@@ -791,33 +873,14 @@ export async function GET(req: Request, { params }: Params) {
     else if (c.type === 'coupon_redemption') day.coupon_redemption++
   })
 
-  const cCursor = new Date(from); cCursor.setHours(0, 0, 0, 0)
-  while (cCursor <= endDay) {
-    const key = cCursor.toISOString().slice(0, 10)
+  for (let dayOffset = 0; dayOffset < range.days; dayOffset++) {
+    const key = shiftDateOnly(range.fromDate, dayOffset)
     if (!convDayMap.has(key)) convDayMap.set(key, { date: key, nav_click: 0, booking_click: 0, coupon_redemption: 0, total: 0 })
-    cCursor.setDate(cCursor.getDate() + 1)
   }
   const conversionTimeSeries = Array.from(convDayMap.values()).sort((a, b) => a.date.localeCompare(b.date))
 
-  // ── Sentiment — real ratings from DB alerts + Google reviews ─────────────
-  const allRatings: number[] = []
-
-  // From DB sentiment alerts (includes apify_review type)
-  sentimentAlerts.forEach((item: any) => {
-    const pl = item.payload && typeof item.payload === 'object'
-      ? (item.payload as { rating?: unknown })
-      : null
-    if (typeof pl?.rating === 'number') allRatings.push(pl.rating)
-  })
-
-  // From Google reviews (GBP/Places live fetch)
-  googleResult.reviews.forEach(r => { if (r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating) })
-
-  // From Apify cached Google Maps reviews
-  const apifyGoogleReviews = asArray<ApifyCachedReview>(apifyMeta.googleReviews)
-  apifyGoogleReviews.forEach((r: any) => {
-    if (typeof r.rating === 'number' && r.rating >= 1 && r.rating <= 5) allRatings.push(r.rating)
-  })
+  // ── Sentiment — normalized reviews strictly inside the selected range ────
+  const allRatings = normalizedReviews.map((review) => review.rating).filter((rating) => rating >= 1 && rating <= 5)
 
   // Compute sentiment percentages from real data
   let positivePct: number, neutralPct: number, negativePct: number, ratingOutOfFive: number | null
@@ -832,93 +895,58 @@ export async function GET(req: Request, { params }: Params) {
     ratingOutOfFive = Number((allRatings.reduce((s, r) => s + r, 0) / total).toFixed(1))
   } else {
     // No real review data — return nulls, do NOT fabricate percentages
-    const dbRating = accounts.find((a: any) => a.platformId === 'google')?.ratingScore ?? null
+    const dbRating = accountsForRange.find((a: any) => a.platformId === 'google')?.ratingScore ?? null
     ratingOutOfFive = dbRating
     positivePct = 0; neutralPct = 0; negativePct = 0
   }
 
   // ── Real keyword extraction from all review texts ────────────────────────
-  const reviewTexts: string[] = []
-
-  // From DB sentiment alerts (includes apify_review type)
-  sentimentAlerts.forEach((item: any) => {
-    const pl = item.payload && typeof item.payload === 'object'
-      ? (item.payload as { reviewText?: unknown })
-      : null
-    if (typeof pl?.reviewText === 'string') reviewTexts.push(pl.reviewText)
-    else if (item.description) reviewTexts.push(item.description)
-  })
-
-  // From Google reviews (live)
-  googleResult.reviews.forEach(r => { if (r.text) reviewTexts.push(r.text) })
-
-  // From Apify cached Google Maps reviews
-  apifyGoogleReviews.forEach((r: any) => { if (r.text) reviewTexts.push(r.text) })
-
+  const reviewTexts = normalizedReviews.map((review) => review.text).filter(Boolean)
   const realKeywords = extractKeywordsFromTexts(reviewTexts)
 
-  // ── Build review feed (DB + Google, no duplicates) ───────────────────────
-  const googleAccount = accounts.find((a: any) => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase()))
+  // ── Build normalized review feed ─────────────────────────────────────────
+  const googleAccount = accountsForRange.find((a: any) => ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(a.platformId.toLowerCase()))
   const googleAccountHandle = googleAccount ? (googleAccount.displayName || googleAccount.handle) : null
-
-  const dbReviews = sentimentAlerts.map((item: any) => {
-    const pl = item.payload && typeof item.payload === 'object'
-      ? (item.payload as { platform?: unknown; reviewerName?: unknown; rating?: unknown; reviewText?: unknown; replyText?: unknown })
-      : null
-    const hasReply = !!(pl?.replyText) || item.status === 'resolved' || item.status === 'approved' || item.status === 'auto_resolved'
-    return {
-      id: item.id,
-      platform: typeof pl?.platform === 'string' ? pl.platform : 'google',
-      reviewerName: typeof pl?.reviewerName === 'string' ? pl.reviewerName : '匿名顾客',
-      rating: typeof pl?.rating === 'number' ? pl.rating : 2,
-      text: typeof pl?.reviewText === 'string' ? pl.reviewText : (item.description ?? ''),
-      replyStatus: hasReply ? 'replied' : 'pending',
-      replyText: typeof pl?.replyText === 'string' ? pl.replyText : undefined,
-      createdAt: item.createdAt.toISOString(),
-      source: 'db',
-      accountHandle: (item as any).account?.displayName || (item as any).account?.handle || googleAccountHandle,
-    }
-  })
-
-  const googleReviewFeed = googleResult.reviews.map((r: any, idx: number) => ({
-    id: `google_${idx}`,
-    platform: 'google',
-    reviewerName: r.reviewerName,
-    rating: r.rating,
-    text: r.text,
-    replyStatus: r.replyText ? 'replied' : 'pending',
-    replyText: r.replyText,
-    createdAt: r.createTime,
-    source: 'google',
+  const reviewFeed = normalizedReviews.slice(0, 50).map((review) => ({
+    id: review.id,
+    platform: review.platform,
+    reviewerName: review.reviewerName ?? '匿名顾客',
+    rating: review.rating,
+    text: review.text,
+    replyStatus: review.replyText ? 'replied' : 'pending',
+    replyText: review.replyText ?? undefined,
+    createdAt: review.publishedAt.toISOString(),
+    source: review.source,
     accountHandle: googleAccountHandle,
   }))
-
-  // Apify Google Maps cached review feed
-  const apifyReviewFeed = apifyGoogleReviews.map((r: any, idx: number) => ({
-    id: `apify_${idx}`,
-    platform: 'google_maps',
-    reviewerName: r.reviewerName ?? '匿名顾客',
-    rating: r.rating ?? 3,
-    text: r.text ?? '',
-    replyStatus: r.replyText ? 'replied' : 'pending',
-    replyText: r.replyText,
-    createdAt: r.publishedAt ?? new Date().toISOString(),
-    source: 'apify',
-    accountHandle: googleAccountHandle,
-  }))
-
-  // Merge all review sources, most recent first, cap at 50
-  const reviewFeed = [...dbReviews, ...googleReviewFeed, ...apifyReviewFeed].slice(0, 50)
 
   return NextResponse.json({
     from: from.toISOString(),
     to: to.toISOString(),
+    range: {
+      from: range.fromDate,
+      to: range.toDate,
+      days: range.days,
+      timezone: range.timeZone,
+      previousFrom: previousFrom.toISOString(),
+      previousTo: previousTo.toISOString(),
+      availableFrom: availability.availableFrom ? dateOnlyInTimeZone(availability.availableFrom, range.timeZone) : null,
+      availableTo: availability.availableTo ? dateOnlyInTimeZone(availability.availableTo, range.timeZone) : null,
+    },
+    dataCompleteness: {
+      normalizedHistory: true,
+      historicalMetricsUseAsOfSnapshots: true,
+      earliestRecoverableDate: availability.availableFrom?.toISOString() ?? null,
+      note: availability.availableFrom && from < availability.availableFrom
+        ? 'Selected range begins before the earliest recoverable stored record.'
+        : null,
+    },
     kpis: { totalPosts, totalEngagement, totalImpressions, avgReach, totalLikes, avgEngRate },
     kpiTrends,
     timeSeries,
     topPosts,
     contentTypeBreakdown,
-    accounts,
+    accounts: accountsForRange,
     conversions: {
       total: totalConversions,
       nav_click: navClickCount,
@@ -935,7 +963,7 @@ export async function GET(req: Request, { params }: Params) {
     sentiment: {
       averageRating: ratingOutOfFive,
       totalReviewsAnalyzed: allRatings.length,
-      googleReviewsCount: googleResult.reviews.length,
+      googleReviewsCount: normalizedReviews.filter((review) => review.platform.includes('google')).length,
       positivePct,
       neutralPct,
       negativePct,
@@ -949,7 +977,7 @@ export async function GET(req: Request, { params }: Params) {
     competitorDataAvailable: false,
     hasPostfastData,
     postfastError: pfResult.error ?? null,
-    hasGoogleData: googleResult.reviews.length > 0,
+    hasGoogleData: normalizedReviews.some((review) => review.platform.includes('google')),
     apifySync: {
       hasSyncData: hasApifyData,
       syncedAt: apifySyncedAt,

@@ -224,3 +224,20 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;             /* Chrome, Safari, Opera */
 }
+/* Social insight range calendar */
+.social-insight-calendar .rdp-root {
+  --rdp-accent-color: #10b981;
+  --rdp-accent-background-color: #ecfdf5;
+  --rdp-range_middle-background-color: #ecfdf5;
+  --rdp-range_middle-color: #047857;
+  --rdp-day_button-border-radius: 0.75rem;
+  --rdp-day-height: 2.4rem;
+  --rdp-day-width: 2.4rem;
+  font-size: 0.78rem;
+}
+
+.dark .social-insight-calendar .rdp-root {
+  --rdp-accent-background-color: rgba(16, 185, 129, 0.16);
+  --rdp-range_middle-background-color: rgba(16, 185, 129, 0.14);
+  --rdp-range_middle-color: #6ee7b7;
+}

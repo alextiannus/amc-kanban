@@ -3,6 +3,12 @@ import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 import { recordRemoteCopyScriptOutcome } from '@/lib/amc-content/remoteContentService'
+import {
+  persistInternalPublishedPosts,
+  persistSocialAccountMetrics,
+  persistSocialPosts,
+  postfastHistoryInputs,
+} from '@/lib/socialInsightHistory'
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
@@ -308,7 +314,16 @@ export async function syncBrand(brand: {
       endDate: analyticsTo.toISOString(),
     })
     if (analyticsResult.success && analyticsResult.posts.length > 0) {
-      analyticsPosts = analyticsResult.posts
+      const accountMap = new Map(pfResult.accounts.map((account: any) => [account.id, account]))
+      analyticsPosts = analyticsResult.posts.map((post: any) => {
+        const account = post.socialMediaId ? accountMap.get(post.socialMediaId) as any : null
+        return {
+          ...post,
+          platform: post.platform ?? post.platformId ?? account?.platformId ?? 'unknown',
+          handle: post.handle ?? account?.handle ?? account?.displayName ?? '',
+          postUrl: post.postUrl ?? post.url ?? null,
+        }
+      })
       console.log(`[PostFast Cron] brand ${brand.id}: fetched ${analyticsPosts.length} analytics posts (last ${analyticsWindowDays} days)`)
     } else if (analyticsResult.error) {
       console.warn(`[PostFast Cron] brand ${brand.id}: analytics fetch warning — ${analyticsResult.error}`)
@@ -317,6 +332,18 @@ export async function syncBrand(brand: {
     // Non-fatal: accounts + operationsReport still sync even if analytics fails
     console.error(`[PostFast Cron] brand ${brand.id}: analytics fetch failed (non-fatal):`, e?.message ?? e)
   }
+
+  await Promise.all([
+    persistSocialPosts(brand.id, postfastHistoryInputs(analyticsPosts), analyticsTo),
+    persistSocialAccountMetrics(brand.id, syncedAccounts.map((account: any) => ({
+      platform: account.platformId,
+      handle: account.handle,
+      followerCount: account.followerCount,
+      ratingScore: account.ratingScore,
+      raw: account,
+    })), analyticsTo),
+    persistInternalPublishedPosts(brand.id, analyticsTo),
+  ])
 
   return { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt: analyticsTo.toISOString() }
 }

@@ -17,6 +17,13 @@ import { prisma } from '@/lib/prisma'
 import { writeAuditLog } from '@/lib/audit'
 import type { Prisma } from '@prisma/client'
 import {
+  apifyPostHistoryInputs,
+  persistSocialAccountMetrics,
+  persistSocialPosts,
+  persistSocialReviews,
+  reviewHistoryInputs,
+} from '@/lib/socialInsightHistory'
+import {
   scrapeGoogleMapsReviews,
   scrapeInstagram,
   scrapeTikTok,
@@ -214,6 +221,33 @@ async function syncBrand(brand: {
       metadata: jobResults as unknown as Prisma.InputJsonValue,
     },
   })
+
+  const capturedAt = new Date()
+  await Promise.all([
+    persistSocialPosts(brand.id, apifyPostHistoryInputs([
+      ...instagramPosts,
+      ...tiktokPosts,
+      ...xhsPosts,
+      ...facebookPosts,
+    ] as unknown as Record<string, unknown>[]), capturedAt),
+    persistSocialReviews(
+      brand.id,
+      reviewHistoryInputs(googleReviews as unknown as Record<string, unknown>[], 'apify'),
+      capturedAt,
+    ),
+    persistSocialAccountMetrics(brand.id, [
+      ...instagramProfiles,
+      ...tiktokProfiles,
+      ...facebookProfiles,
+    ].map((profile) => ({
+      platform: profile.platform,
+      handle: profile.handle,
+      followerCount: profile.followerCount,
+      followingCount: profile.followingCount,
+      postCount: profile.postCount,
+      raw: profile,
+    })), capturedAt),
+  ])
 
   // Save new Google reviews as ActionItems
   if (googleResult.reviews.length > 0) {

@@ -14,6 +14,13 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { writeAuditLog } from '@/lib/audit'
 import type { Prisma } from '@prisma/client'
 import {
+  apifyPostHistoryInputs,
+  persistSocialAccountMetrics,
+  persistSocialPosts,
+  persistSocialReviews,
+  reviewHistoryInputs,
+} from '@/lib/socialInsightHistory'
+import {
   scrapeGoogleMapsReviews,
   scrapeInstagram,
   scrapeTikTok,
@@ -262,6 +269,33 @@ export async function POST(req: Request, { params }: Params) {
     },
   })
 
+  const historyCapturedAt = new Date()
+  const [persistedPosts, persistedReviews, persistedAccounts] = await Promise.all([
+    persistSocialPosts(id, apifyPostHistoryInputs([
+      ...instagramPosts,
+      ...tiktokPosts,
+      ...xiaohongshuPosts,
+      ...facebookPosts,
+    ] as unknown as Record<string, unknown>[]), historyCapturedAt),
+    persistSocialReviews(
+      id,
+      reviewHistoryInputs(googleReviews as unknown as Record<string, unknown>[], 'apify'),
+      historyCapturedAt,
+    ),
+    persistSocialAccountMetrics(id, [
+      ...instagramProfiles,
+      ...tiktokProfiles,
+      ...facebookProfiles,
+    ].map((profile: any) => ({
+      platform: profile.platform,
+      handle: profile.handle,
+      followerCount: profile.followerCount,
+      followingCount: profile.followingCount,
+      postCount: profile.postCount,
+      raw: profile,
+    })), historyCapturedAt),
+  ])
+
 
   // ── Also persist scraped reviews as ActionItems (feeds sentiment dashboard) ──
   if (googleResult.reviews.length > 0) {
@@ -361,6 +395,7 @@ export async function POST(req: Request, { params }: Params) {
     syncedAt: logEntry.timestamp,
     logId: logEntry.id,
     summary: jobResults.summary,
+    persisted: { posts: persistedPosts, reviews: persistedReviews, accounts: persistedAccounts },
     errors: errors.length > 0 ? errors : undefined,
   })
 }

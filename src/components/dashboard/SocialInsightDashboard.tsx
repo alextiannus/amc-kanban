@@ -1,13 +1,14 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
-  TrendingUp, ChevronDown, Heart, Eye, Users, 
+  TrendingUp, Heart, Eye, Users,
   BarChart2, MessageCircle, Activity, FileText, X, ShieldAlert,
   DollarSign, Percent, Star, RefreshCw, FileSearch
 } from 'lucide-react'
 import HotTopicsView from './ResearchTopicFeedView'
+import SocialInsightDateRangePicker, { type SocialInsightDateRange } from './SocialInsightDateRangePicker'
 import {
   ResponsiveContainer,
   AreaChart as RechartsAreaChart,
@@ -172,6 +173,22 @@ interface SocialInsightData {
   previousConversions?: { total: number | null; nav_click: number | null; booking_click: number | null; coupon_redemption: number | null }
   apifySync?: { hasSyncData: boolean; syncedAt: string | null; googleReviewCount: number; instagramPostCount: number; tiktokPostCount: number; xiaohongshuPostCount: number }
   hasPostfastData?: boolean
+  range?: { from: string; to: string; days: number; timezone: string; availableFrom: string | null; availableTo: string | null }
+  dataCompleteness?: { normalizedHistory: boolean; earliestRecoverableDate: string | null; note: string | null }
+}
+
+function dateOnlyLocal(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function initialInsightRange(): SocialInsightDateRange {
+  const to = new Date()
+  const from = new Date(to)
+  from.setDate(from.getDate() - 29)
+  return { from: dateOnlyLocal(from), to: dateOnlyLocal(to) }
 }
 const METRIC_OPTIONS: { key: MetricKey; label: string; icon: React.ReactNode; color: string }[] = [
   { key: 'engagement', label: '互动数', icon: <Activity className="w-3.5 h-3.5" />, color: '#c084fc' },
@@ -479,7 +496,8 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<SocialInsightTab>('overview')
   const [activeMetric, setActiveMetric] = useState<MetricKey>('postCount')
-  const [days, setDays] = useState(30)
+  const [dateRange, setDateRange] = useState<SocialInsightDateRange>(initialInsightRange)
+  const [brandTimeZone, setBrandTimeZone] = useState('Asia/Singapore')
   const [showPresets, setShowPresets] = useState(false)
   const [selectedPost, setSelectedPost] = useState<SocialPost | null>(null)
   const [reviewFilter, setReviewFilter] = useState<string | null>(null)
@@ -490,16 +508,16 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
   const [averageCheck, setAverageCheck] = useState<number>(35)
   const [marketingCostPerPost, setMarketingCostPerPost] = useState<number>(10)
 
-  const presetRef = useRef<HTMLDivElement>(null)
-
-  const load = useCallback(async (d: number) => {
+  const load = useCallback(async (range?: SocialInsightDateRange) => {
     setLoading(true); setError(null)
     try {
-      const to = new Date()
-      const from = new Date(to.getTime() - (d - 1) * 24 * 60 * 60 * 1000)
-      const res = await fetch(`/api/brands/${brandId}/social-insight?from=${from.toISOString()}&to=${to.toISOString()}`)
+      const params = range ? new URLSearchParams({ from: range.from, to: range.to }) : null
+      const res = await fetch(`/api/brands/${brandId}/social-insight${params ? `?${params}` : ''}`)
       if (!res.ok) throw new Error('拉取三方分析数据失败')
-      setData(await res.json())
+      const nextData = await res.json() as SocialInsightData
+      setData(nextData)
+      if (nextData.range?.timezone) setBrandTimeZone(nextData.range.timezone)
+      if (nextData.range) setDateRange({ from: nextData.range.from, to: nextData.range.to })
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : '拉取三方分析数据失败')
     } finally {
@@ -509,17 +527,14 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
 
   useEffect(() => {
     void (async () => {
-      await load(days)
+      await load()
     })()
-  }, [load, days])
+  }, [load])
 
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (presetRef.current && !presetRef.current.contains(e.target as Node)) setShowPresets(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  const applyDateRange = (range: SocialInsightDateRange) => {
+    setDateRange(range)
+    void load(range)
+  }
 
   const kpis = data?.kpis ?? {}
   const timeSeries = data?.timeSeries ?? []
@@ -564,7 +579,7 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
       const s = json.summary as Partial<{ googleReviewCount: number; instagramPostCount: number; tiktokPostCount: number }>
       setApifySyncMsg(`✅ 同步完成：${s?.googleReviewCount ?? 0} 条评论, ${s?.instagramPostCount ?? 0} IG 帖子, ${s?.tiktokPostCount ?? 0} TT 帖子`)
       // Reload data to pick up new Apify results
-      await load(days)
+      await load(dateRange)
     } catch (e: unknown) {
       setApifySyncMsg(`❌ ${e instanceof Error ? e.message : '同步失败'}`)
     } finally {
@@ -595,38 +610,16 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Preset Selector */}
-          <div ref={presetRef} className="relative">
-            <button
-              onClick={() => setShowPresets(p => !p)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-350 hover:border-emerald-500 dark:hover:border-emerald-600 transition-all shadow-sm"
-              id="insight-presets"
-            >
-              <span>近 {days} 天分析</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${showPresets ? 'rotate-180' : ''}`} />
-            </button>
-            {showPresets && (
-              <div className="absolute right-0 mt-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl shadow-xl z-50 min-w-[130px] overflow-hidden animate-in fade-in slide-in-from-top-1">
-                {[
-                  { label: '近 7 天', days: 7 },
-                  { label: '近 30 天', days: 30 },
-                  { label: '近 60 天', days: 60 },
-                  { label: '近 90 天', days: 90 },
-                ].map(p => (
-                  <button
-                    key={p.days}
-                    onClick={() => { setDays(p.days); setShowPresets(false) }}
-                    className={`w-full text-left px-4 py-3 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800/80 transition-colors ${days === p.days ? 'text-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20' : 'text-slate-600 dark:text-slate-400'}`}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <SocialInsightDateRangePicker
+            value={dateRange}
+            timeZone={brandTimeZone}
+            open={showPresets}
+            onOpenChange={setShowPresets}
+            onApply={applyDateRange}
+          />
 
           <button
-            onClick={() => load(days)}
+            onClick={() => load(dateRange)}
             className="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-650 hover:text-emerald-500 transition-all hover:rotate-180 duration-500 shadow-sm"
           >
             <RefreshCw className="w-4 h-4" />
@@ -682,6 +675,17 @@ export default function SocialInsightDashboard({ brandId, brandName }: SocialIns
           {apifySync.instagramPostCount > 0 && ` · ${apifySync.instagramPostCount} Instagram 帖子`}
           {apifySync.tiktokPostCount > 0 && ` · ${apifySync.tiktokPostCount} TikTok 帖子`}
           {apifySync.xiaohongshuPostCount > 0 && ` · ${apifySync.xiaohongshuPostCount} 小红书帖子`}
+        </div>
+      )}
+
+      {data?.range && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-slate-400">
+          <span>分析范围：{data.range.from} 至 {data.range.to}</span>
+          <span>品牌时区：{data.range.timezone}</span>
+          {data.range.availableFrom && data.range.availableTo && (
+            <span>历史数据：{data.range.availableFrom} 至 {data.range.availableTo}</span>
+          )}
+          {data.dataCompleteness?.note && <span className="text-amber-500">所选开始日期早于目前可恢复的历史数据</span>}
         </div>
       )}
 

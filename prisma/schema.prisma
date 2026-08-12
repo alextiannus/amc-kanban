@@ -401,6 +401,9 @@ model Brand {
   topicFeeds        TopicFeed[]
   actionItems       ActionItem[]
   conversions       ConversionEvent[]
+  socialInsightPosts          SocialInsightPost[]
+  socialInsightReviews        SocialInsightReview[]
+  socialInsightAccountMetrics SocialInsightAccountMetric[]
   brandAgents       BrandAgent[]
   subscriptions     BrandSubscription[]
   gameConfig        GameConfig?
@@ -687,6 +690,98 @@ model ConversionEvent {
 
   @@index([brandId, occurredAt])
   @@index([brandId, type, source])
+}
+
+model SocialInsightPost {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  source      String
+  sourceKey   String
+  externalId  String?
+  platform    String
+  handle      String?
+  caption     String   @default("")
+  postUrl     String?
+  contentType String?
+  status      String   @default("published")
+  publishedAt DateTime
+  mediaUrls   String[] @default([])
+  raw         Json?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  metrics SocialInsightPostMetric[]
+
+  @@unique([brandId, source, sourceKey])
+  @@index([brandId, publishedAt])
+  @@index([brandId, platform, publishedAt])
+}
+
+model SocialInsightPostMetric {
+  id           String            @id @default(cuid())
+  postId       String
+  post         SocialInsightPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  snapshotDate DateTime          @db.Date
+  capturedAt   DateTime          @default(now())
+  likes        Int               @default(0)
+  comments     Int               @default(0)
+  shares       Int               @default(0)
+  impressions  Int               @default(0)
+  reach        Int               @default(0)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@unique([postId, snapshotDate])
+  @@index([snapshotDate])
+}
+
+model SocialInsightReview {
+  id           String   @id @default(cuid())
+  brandId      String
+  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  source       String
+  sourceKey    String
+  externalId   String?
+  platform     String
+  reviewerName String?
+  rating       Float
+  text         String   @default("")
+  replyText    String?
+  reviewUrl    String?
+  publishedAt  DateTime
+  raw          Json?
+  firstSeenAt  DateTime @default(now())
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([brandId, source, sourceKey])
+  @@index([brandId, publishedAt])
+  @@index([brandId, platform, publishedAt])
+}
+
+model SocialInsightAccountMetric {
+  id             String   @id @default(cuid())
+  brandId        String
+  brand          Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform       String
+  handle         String
+  snapshotDate   DateTime @db.Date
+  capturedAt     DateTime @default(now())
+  followerCount  Int?
+  followingCount Int?
+  postCount      Int?
+  ratingScore    Float?
+  raw            Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([brandId, platform, handle, snapshotDate])
+  @@index([brandId, snapshotDate])
+  @@index([brandId, platform, snapshotDate])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

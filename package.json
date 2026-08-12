@@ -10,6 +10,9 @@
     "build": "next build",
     "growth:backfill-links:dry-run": "node scripts/backfill-growth-brand-links.mjs",
     "growth:backfill-links": "node scripts/backfill-growth-brand-links.mjs --apply",
+    "social-insight:backfill:dry-run": "node scripts/backfill-social-insight-history.mjs",
+    "social-insight:backfill": "node scripts/backfill-social-insight-history.mjs --apply",
+    "test:social-insight-history": "node --experimental-strip-types scripts/test-social-insight-history.mts",
     "start": "next start",
     "start:direct": "node node_modules/next/dist/cli/next-start.js -p 3000",
     "lint": "eslint",
@@ -60,6 +63,7 @@
     "postinstall": "node -e \"if(!process.env.RENDER && !process.env.CI) { require('child_process').execSync('npx prisma generate && npx prisma db push --accept-data-loss', {stdio:'inherit'}) }\""
   },
   "dependencies": {
+    "@daypicker/react": "^10.0.1",
     "@dnd-kit/core": "^6.3.1",
     "@ducanh2912/next-pwa": "^10.2.9",
     "@langchain/core": "^1.2.1",
