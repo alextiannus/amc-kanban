@@ -65,6 +65,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '主理人总览': 'Principal Overview',
   '账号快照': 'Account Snapshot',
   '知识库': 'Knowledge Base',
+  '品牌灵感与推广计划': 'Brand Inspiration & Plans',
   'AI 角色库': 'AI Role Library',
   '爆品素材库': 'Viral Inspiration Library',
   '视频生产': 'Video Production',

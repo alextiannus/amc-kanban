@@ -203,7 +203,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 依据 Postiz 的先进交互理念，AMC 增加以下 4 项 AI 核心优化：
 1. **“玻璃盒”执行日志流 (Glass-Box Streaming Logs)**：将 LangGraph 运行状态转化为直观的前端流式通知，减少商家黑盒焦虑。
-2. **“一键灵感提案”面板 (Free-Form Inspiration Dashboard)**：侧边栏整合灵感入口，支持商家直接输入一句话或复制外部竞品链接，自动触发多智能体协作生成排期草稿。
+2. **“品牌灵感与推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。工作台通过 `Brand.growthBrandKey` 读取 Growth 的品牌专属灵感与 30/60/90 天独立推广计划，承载人工审核、素材需求、素材关联和执行状态；不自动创建排期草稿。
 3. **智能修改快捷胶囊 (Smart Quick Replies)**：在内容审查弹窗下动态显示快捷指令按钮，将复杂的修改主观题转化为一键点击的单选题。
 4. **素材一键变草稿 (Raw Photo to Draft Proposal)**：支持在素材库中多选照片，一键让 AI 生成排期提案并自动落入发布日历。
 5. **多大模型后台热插拔配置与动态路由 (Multi-LLM Configuration & Routing)**：
@@ -1727,18 +1727,29 @@ Admin → AI 模型配置 页面：
 - **AMC MM 是商家交互层/BFF**：运营与订阅请求进入 Kanban；商家资料和知识补充进入 Growth 的候选审核流。MM 不新增第三份商家知识存储。
 - 当前阶段不接 POS。将来接入时仍以外部身份映射和事件接口进入 Growth，不改变上述主数据归属。
 
+### 通用场景、品牌灵感与推广计划
+
+- Growth 维护独立于 Content 爆品素材库的三级通用场景主数据：大场景、小场景和内容方向。Growth 负责模板版本、品牌匹配、品牌专属灵感版本以及 30/60/90 天推广计划内容。
+- Content 仅提供结构化 Content Brief 和拍摄计划生成能力；现有爆品素材、参考视频和脚本库继续保存有来源的帖子/媒体资产，禁止把场景模板写入该素材表。
+- Kanban 提供内部审核执行工作台，并保存 `PlanningReview`、`MaterialRequirement`、`MaterialSubmission`。审核记录通过 Growth 资源 ID 和版本关联主数据，不复制灵感或计划正文。
+- 品牌专属灵感必须由主理人逐条批准后才能进入计划。品牌或模板更新只显示可刷新提示，不自动覆盖旧版本或已进入计划的灵感。
+- 批准后的计划才能生成拍摄清单。第一版由主理人线下收集后统一上传素材；全部必需素材验收通过时执行状态进入 `material_ready`，流程结束，不创建 `ContentDraft`、视频任务、排期或自动发布。
+
 ### 数据与接口约束
 
-- 新建或导入品牌时，Kanban 使用自身品牌 ID 调用 Growth `POST /v1/internal/merchants/upsert`，获得并持久化稳定 `growthBrandKey`；Growth 不可用时允许 Kanban 业务创建成功，并进入可重试的未绑定状态。
+- 新建或导入品牌时，Kanban 在本地事务内创建每品牌唯一的 Growth 同步 Outbox，并使用自身品牌 ID 调用 Growth 来源快照接口，获得并持久化稳定 `growthBrandKey`；Growth 不可用不影响本地创建。仅有品牌名称和城市时创建 `storeId=main`、状态为 `pending_details` 的占位主门店，补齐真实地址后转为 `active`。注册联系人手机号不进入 Growth；只同步品牌设置中的客服电话和门店电话。
 - 商家基础资料读取继续使用 `GET /v1/merchants/:brandKey/profile`，知识读取使用 `GET /v1/merchants/:brandKey/knowledge`；门店级 Google Places 资料、动作链接、来源和新鲜度通过受服务令牌保护的 `GET /v1/internal/merchants/:brandKey/360` 读取，不向公开 profile 暴露 Provider 原始资料。
 - Growth 在人工确认 Google Place 后按 Place ID 完成全量详情采集，按门店返回 Google 商家主页、查看评论、写评价、路线和照片链接。Kanban 不调用 Places API，只在用户主动执行 Growth 同步时将每门店链接复制到 `BrandKnowledge.stores[].googleBusiness`，并把最近观测的有效主门店镜像到 `Brand.googlePlaceId`、`Brand.googleBusinessUrl`、`Brand.googleReviewUrl`；其余链接、来源和有效期保存在 `Brand.googleLinksMeta`。
 - Google 同步值必须带 `observedAt`、`expiresAt` 和来源。已确认且未过期的 Growth 值可以在主动同步时覆盖旧的 Growth 镜像；缺失或过期值不得冒充最新资料，也不得清空无关人工资料。Kanban 的邀评、门店资料和 Agent 上下文优先使用门店级链接，并保持现有主门店字段兼容。
 - 商家或内部人员提交的补充信息使用 `POST /v1/merchants/:brandKey/knowledge-candidates`，默认形成带来源的候选，不直接覆盖已发布事实。
 - Kanban 品牌资料页的“品牌定位与特征”使用统一字段接口：`brand.tone`、`audience.primary`、`brand.unique_selling_points` 读取 Growth 正式版本；运营区域、品牌 Voice、品牌形象、推广重点和发布频次仍属于 Kanban 工作区与内容执行配置。
 - 对该品牌拥有 `WRITE` 权限的 Kanban 用户可在定位区逐行编辑。Growth 所属字段通过受服务令牌保护的内部接口立即发布不可变新版本，旧版本转为 `superseded`；Kanban 所属字段局部更新并写入 `AuditLog`。只读成员只能查看。
-- Kanban 发送 Growth 即时发布请求时必须携带当前 `expected_version` 和可信操作者信息。保存请求先进入按“品牌 + 字段”唯一的可靠写入队列，再立即尝试发布；Growth 不可用时页面显示“已保存，待同步”，该值可在 Kanban 内容执行中立即使用，但不得标记为 Growth 正式版本。后台每 5 分钟重试并在成功后删除待同步记录。
-- Growth 版本冲突不得静默覆盖。Kanban 保留本次待同步值并显示冲突，由品牌写权限用户明确选择“覆盖到 Growth”或“采用 Growth 最新值”；待同步队列是命令缓冲，不构成第二份正式商家主数据。
-- 生产环境必须配置与 Growth 一致的 `AMC_KNOWLEDGE_TOKEN`、正确的 `AMC_GROWTH_API_URL`，并使用 `CRON_SECRET` 每 5 分钟调用 `POST /api/cron/brand-identity-sync`；缺少这些配置不会丢失用户修改，但待同步状态不会自动清除。
+- 品牌基础资料、Logo、经营信息、Markdown 档案、门店以及三个 Growth 身份字段保存成功时，必须在同一事务内合并更新每品牌唯一的 Growth 同步 Outbox，随后立即尝试快照同步。状态保存待同步路径、重试次数、下次重试时间、安全错误码、字段冲突和最后成功时间；退避顺序为 1 分钟、5 分钟、15 分钟、每小时。
+- 门店稳定 ID、名称、地址、时区、坐标、Google Place ID、电话、营业时间、订座和点单链接，以及商家级外卖链接随快照同步。历史门店缺少 `storeId` 时先生成并持久化稳定 ID。Kanban 删除门店不向 Growth 发送删除或停用，Growth 既有门店保持原状态。
+- Growth 冲突不得静默覆盖。非冲突字段继续同步；冲突字段由品牌写权限用户明确选择“覆盖到 Growth”或“采用 Growth 当前值”。采用 Growth 只执行这一次人工字段回填，不建立后台反向同步。覆盖、采用和失败重试都写入审计。
+- 页面显示“Growth 鉴权异常”“商家关联失效，正在重建”“服务暂不可用”“版本冲突”等安全原因及下次重试时间，不展示令牌或 Growth 原始敏感响应；存在待同步项时轮询，成功后自动移除提示。
+- 生产环境必须配置与 Growth 一致的 `AMC_KNOWLEDGE_TOKEN`、正确的 `AMC_GROWTH_API_URL`，并使用 `CRON_SECRET` 每 5 分钟调用统一 `POST /api/cron/growth-sync`。旧 `POST /api/cron/brand-identity-sync` 保留兼容并调用同一处理器。首次上线自动将所有非归档品牌分批入队，只发布 Kanban 非空资料；后续用户明确清空字段才作为清除请求。
+- 品牌 Voice、品牌形象描述、推广重点、发布频次、敏感词、账号凭据和订阅执行状态继续留在 Kanban，不进入 Growth 商家主数据。
 - 下游系统通过 `POST /v1/internal/knowledge/search` 获取受控知识，通过 `POST /v1/internal/knowledge-usage` 回传实际使用记录。
 - Kanban 的订阅等业务变化通过 `POST /v1/internal/merchant-events` 发给 Growth。事件必须包含 `event_id`、`event_type`、`producer`、`brand_key`、`occurred_at` 和 `payload`，并按 `event_id` 幂等。
 

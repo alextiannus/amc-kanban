@@ -355,6 +355,7 @@ model Brand {
 
   // Brand profile (Agent can populate these)
   description       String? // Brand tagline / about text
+  industry          String? // Merchant industry/category synchronized to Growth
   logoUrl           String? // Brand logo image URL
   watermarkUrl      String? // Custom watermark image URL (fallback to logoUrl if null)
   watermarkPosition String  @default("bottom-right") // position: top-left | top-right | bottom-left | bottom-right | center
@@ -364,6 +365,8 @@ model Brand {
   website           String? // Brand website URL
   phone             String? // Contact phone
   address           String? // Full address
+  latitude          Float?
+  longitude         Float?
 
   // Integration credentials (stored encrypted in production)
   postfastApiKey        String?
@@ -419,6 +422,9 @@ model Brand {
   companionSkills   CompanionSkill[]
   notifications     Notification[]
   identityPendingChanges BrandIdentityPendingChange[]
+  growthSyncState   BrandGrowthSyncState?
+  planningReviews   PlanningReview[]
+  materialRequirements MaterialRequirement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -447,6 +453,32 @@ model BrandIdentityPendingChange {
   updatedAt       DateTime @updatedAt
 
   @@unique([brandId, field])
+  @@index([status, nextAttemptAt])
+  @@index([brandId])
+}
+
+model BrandGrowthSyncState {
+  id               String    @id @default(cuid())
+  brandId          String    @unique
+  brand            Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  status           String    @default("PENDING") // PENDING | PROCESSING | CONFLICT | SYNCED
+  mode             String    @default("INCREMENTAL") // INCREMENTAL | BACKFILL
+  dirtyPaths       String[]  @default([])
+  forcePaths       String[]  @default([])
+  attempts         Int       @default(0)
+  nextAttemptAt    DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  conflicts        Json?
+  lastPayloadHash  String?
+  lastSyncedAt     DateTime?
+  actorId          String?
+  actorType        String    @default("SYSTEM")
+  actorName        String?
+  actorRoles       String[]  @default([])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
   @@index([status, nextAttemptAt])
   @@index([brandId])
 }
@@ -638,12 +670,69 @@ model MediaAsset {
 
   contentRefs ContentAssetRef[]
   coverDrafts ContentDraft[]    @relation("DraftCoverAsset")
+  materialSubmissions MaterialSubmission[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([brandId, aiReady])
   @@index([brandId, aiCategory])
+}
+
+model PlanningReview {
+  id              String    @id @default(cuid())
+  brandId         String
+  brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  resourceType    String // inspiration_item | inspiration_library | promotion_plan
+  resourceId      String
+  resourceVersion Int
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  note            String?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([brandId, resourceType, resourceId, resourceVersion])
+  @@index([brandId, status])
+}
+
+model MaterialRequirement {
+  id                String               @id @default(cuid())
+  brandId           String
+  brand             Brand                @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  remotePlanId      String
+  remotePlanVersion Int
+  remotePlanItemId  String
+  requirementKey    String
+  specification     Json
+  required          Boolean              @default(true)
+  status            String               @default("MISSING") // MISSING | SUBMITTED | ACCEPTED | REJECTED
+  dueAt             DateTime?
+  submissions       MaterialSubmission[]
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  @@unique([brandId, remotePlanItemId, requirementKey])
+  @@index([brandId, remotePlanId, status])
+}
+
+model MaterialSubmission {
+  id            String              @id @default(cuid())
+  requirementId String
+  requirement   MaterialRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  assetId       String
+  asset         MediaAsset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  status        String              @default("SUBMITTED") // SUBMITTED | ACCEPTED | REJECTED
+  note          String?
+  submittedBy   String?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  @@unique([requirementId, assetId])
+  @@index([assetId])
 }
 
 model TopicFeed {
