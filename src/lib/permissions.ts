@@ -124,7 +124,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
         { id: 'video-production',   view: 'managementOverview', label: '视频生产', icon: 'Video', href: '/admin/video-production' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
-        { id: 'amc-growth',         view: 'managementOverview', label: '智能规划', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
+        { id: 'amc-growth',         view: 'managementOverview', label: '知识库', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
       ],
     })
   }

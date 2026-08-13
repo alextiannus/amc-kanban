@@ -64,7 +64,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '即将上线': 'Coming Soon',
   '主理人总览': 'Principal Overview',
   '账号快照': 'Account Snapshot',
-  '智能规划': 'Growth Planning',
+  '知识库': 'Knowledge Base',
   'AI 角色库': 'AI Role Library',
   '爆品素材库': 'Viral Inspiration Library',
   '视频生产': 'Video Production',
