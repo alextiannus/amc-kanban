@@ -15,9 +15,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-hanken: var(--font-hanken-next), "Hanken Grotesk", sans-serif;
-  --font-manrope: var(--font-manrope-next), "Manrope", sans-serif;
-  --font-jetbrains: var(--font-jetbrains-next), "JetBrains Mono", monospace;
+  /* Keep production builds independent from Google Fonts availability. */
+  --font-hanken: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --font-manrope: "Segoe UI", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  --font-jetbrains: "Cascadia Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 
   /* Custom Slate Color Scale Extensions (for compatibility with legacy codebase layout tokens) */
   --color-slate-150: #f1f5f9;
