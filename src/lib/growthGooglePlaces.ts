@@ -169,3 +169,24 @@ export function expiredGrowthLegacyClearPatch(meta: unknown, now = new Date()) {
     },
   }
 }
+
+export function adoptedGrowthStoreGooglePlace(store: Record<string, unknown>, value: unknown) {
+  const next = { ...store }
+  const placeId = typeof value === 'string' ? value.trim() : ''
+  next.googlePlaceId = placeId
+  delete next.googleBusiness
+  delete next.googleBusinessUrl
+  delete next.googleReviewUrl
+  delete next.googleLinksMeta
+  return next
+}
+
+export function adoptedGrowthLegacyGooglePatch(value: unknown) {
+  const placeId = typeof value === 'string' ? value.trim() : ''
+  return {
+    googlePlaceId: placeId || null,
+    googleBusinessUrl: null,
+    googleReviewUrl: null,
+    googleLinksMeta: null,
+  }
+}

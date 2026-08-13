@@ -7,6 +7,10 @@ import {
   type GrowthMerchantSnapshotConflict,
   type GrowthMerchantSnapshotResponse,
 } from '@/lib/growthDataCenter'
+import {
+  adoptedGrowthLegacyGooglePatch,
+  adoptedGrowthStoreGooglePlace,
+} from '@/lib/growthGooglePlaces'
 
 export const BRAND_GROWTH_ALL_PATHS = ['*'] as const
 const RETRY_DELAYS_MS = [60_000, 5 * 60_000, 15 * 60_000, 60 * 60_000]
@@ -596,9 +600,20 @@ async function adoptGrowthValue(tx: Prisma.TransactionClient, brandId: string, c
   const stores: Record<string, unknown>[] = Array.isArray(knowledge?.stores)
     ? knowledge.stores.flatMap((item: unknown) => isRecord(item) ? [{ ...item }] : [])
     : []
-  const store = stores.find(item => text(item.storeId) === storeId)
-  if (!store) throw new Error('growth_conflict_store_not_found')
-  store[field] = field === 'businessHours' && isRecord(value) && typeof value.text === 'string' ? value.text : value
+  const storeIndex = stores.findIndex(item => text(item.storeId) === storeId)
+  if (storeIndex < 0) throw new Error('growth_conflict_store_not_found')
+  if (field === 'googlePlaceId') {
+    stores[storeIndex] = adoptedGrowthStoreGooglePlace(stores[storeIndex], value)
+    if (storeId === 'main') {
+      const legacyPatch = adoptedGrowthLegacyGooglePatch(value)
+      await tx.brand.update({
+        where: { id: brandId },
+        data: { ...legacyPatch, googleLinksMeta: Prisma.DbNull },
+      })
+    }
+  } else {
+    stores[storeIndex][field] = field === 'businessHours' && isRecord(value) && typeof value.text === 'string' ? value.text : value
+  }
   await tx.brandKnowledge.update({ where: { brandId }, data: { stores: jsonValue(stores) } })
 }
 

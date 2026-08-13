@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import {
+  adoptedGrowthLegacyGooglePatch,
+  adoptedGrowthStoreGooglePlace,
   expiredGrowthLegacyClearPatch,
   googleWriteReviewUrl,
   isFreshConfirmedGoogle,
@@ -107,6 +109,22 @@ assert.deepEqual(expiredGrowthLegacyClearPatch({
   },
 })
 assert.equal(expiredGrowthLegacyClearPatch({ source: 'manual', expiresAt: '2026-08-06T00:00:00.000Z' }, now), null)
+
+const clearedForeignPlace = adoptedGrowthStoreGooglePlace({
+  storeId: 'main',
+  googlePlaceId: 'foreign-place',
+  googleBusiness: { placeId: 'foreign-place', reviewUrl: 'https://example.com/review' },
+  googleReviewUrl: 'https://example.com/review',
+}, null)
+assert.equal(clearedForeignPlace.googlePlaceId, '')
+assert.equal('googleBusiness' in clearedForeignPlace, false, 'adopting an empty Growth value must remove stale store Google metadata')
+assert.equal('googleReviewUrl' in clearedForeignPlace, false)
+assert.deepEqual(adoptedGrowthLegacyGooglePatch(null), {
+  googlePlaceId: null,
+  googleBusinessUrl: null,
+  googleReviewUrl: null,
+  googleLinksMeta: null,
+})
 
 const partial: GrowthMerchantLocation = {
   status: 'active',
