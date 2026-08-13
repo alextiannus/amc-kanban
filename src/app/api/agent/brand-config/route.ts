@@ -6,6 +6,7 @@ import { authenticateRequest, requireCapability } from '@/lib/auth-v2'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
+import { growthPathsForBrandPatch, queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 type BrandWithCredentials = {
   postfastApiKey: string | null
@@ -135,6 +136,7 @@ export async function POST(request: Request) {
 
   const body = await request.json()
   const { name, location, timezone, address, googlePlaceId } = body
+  const initialStores = Array.isArray(body.stores) ? body.stores : body.store && typeof body.store === 'object' ? [body.store] : []
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -151,10 +153,24 @@ export async function POST(request: Request) {
       },
     })
 
+    await seedInitialBrandStores(b.id, initialStores, tx)
+
     const crew = await createMarketingCrew(b.id, tx)
     await addCrewMember(crew.id, agent.userId, 'PRINCIPAL', tx)
 
+    await queueBrandGrowthSync({
+      brandId: b.id,
+      dirtyPaths: ['*'],
+      mode: 'BACKFILL',
+      actor: { id: agent.userId, email: agent.email, type: agent.actorType, roles: agent.globalRoles || [] },
+      tx,
+    })
+
     return b
+  })
+
+  syncBrandGrowthState(brand.id).catch(error => {
+    console.error('[POST /api/agent/brand-config] Growth snapshot deferred:', error)
   })
 
   try {
@@ -239,16 +255,28 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No writable fields provided' }, { status: 400 })
   }
 
-  const updated = await prisma.brand.update({
-    where: { id: brandId },
-    data: updateData,
-    select: {
+  const hasGrowthChanges = [...AGENT_WRITABLE_PROFILE, 'googlePlaceId'].some(key => fields[key] !== undefined)
+  const updated = await prisma.$transaction(async (tx: any) => {
+    const saved = await tx.brand.update({
+      where: { id: brandId },
+      data: updateData,
+      select: {
       id: true, name: true, description: true, logoUrl: true,
       website: true, phone: true, address: true, location: true,
       postfastApiKey: true, googlePlaceId: true, googleApiKey: true,
       larkAppId: true, larkAppSecret: true, larkParentFolderToken: true, larkDriveFolderId: true,
       googleAccountId: true, googleLocationId: true, googleLocationName: true,
-    },
+      },
+    })
+    if (hasGrowthChanges) {
+      await queueBrandGrowthSync({
+        brandId,
+        dirtyPaths: growthPathsForBrandPatch(fields),
+        actor: { id: agent.userId, email: agent.email, type: agent.actorType, roles: agent.globalRoles || [] },
+        tx,
+      })
+    }
+    return saved
   })
 
   // Auto-create Lark workspace folder is disabled as Lark Drive is decommissioned
@@ -326,6 +354,11 @@ export async function PATCH(request: Request) {
     await refreshBrandProfileMarkdown(brandId)
   } catch {
     // non-fatal — do not block API success on markdown refresh failure
+  }
+  if (hasGrowthChanges) {
+    await syncBrandGrowthState(brandId).catch(error => {
+      console.warn('[PATCH /api/agent/brand-config] Growth snapshot deferred:', error)
+    })
   }
 
   return NextResponse.json({

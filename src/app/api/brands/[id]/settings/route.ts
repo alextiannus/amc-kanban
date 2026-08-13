@@ -7,6 +7,7 @@ import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { assertValidTimeZone } from '@/lib/gameActivityRounds'
 import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 export const maxDuration = 60
 
@@ -126,9 +127,12 @@ export async function PATCH(request: Request, { params }: Params) {
       })()
     : undefined
 
-  const updated = await prisma.brand.update({
-    where: { id },
-    data: {
+  const growthProfileKeys = ['name', 'location', 'timezone', 'description', 'website', 'phone', 'address', 'googlePlaceId']
+  const hasGrowthChanges = growthProfileKeys.some(key => body[key] !== undefined)
+  const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const saved = await tx.brand.update({
+      where: { id },
+      data: {
       ...(body.name !== undefined && { name: body.name.trim() }),
       ...(body.location !== undefined && { location: opt(body.location) }),
       ...(normalizedTimezone !== undefined && { timezone: normalizedTimezone }),
@@ -149,8 +153,22 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.googleReviewUrl !== undefined && { googleReviewUrl: opt(body.googleReviewUrl) }),
       ...(nextGoogleLinksMeta !== undefined && { googleLinksMeta: nextGoogleLinksMeta }),
       ...(body.googlePreferOAuth !== undefined && { googlePreferOAuth: body.googlePreferOAuth }),
-
-    },
+      },
+    })
+    if (hasGrowthChanges) {
+      await queueBrandGrowthSync({
+        brandId: id,
+        dirtyPaths: growthPathsForBrandPatch(body),
+        actor: {
+          id: session.user.id,
+          email: session.user.email,
+          type: session.user.type,
+          roles: session.user.role ? [session.user.role] : [],
+        },
+        tx,
+      })
+    }
+    return saved
   })
 
 
@@ -336,6 +354,9 @@ export async function PATCH(request: Request, { params }: Params) {
       const gameConfig = await prisma.gameConfig.findUnique({ where: { brandId: id }, select: { id: true } })
       if (gameConfig) await requestGameShareDraftPoolRefill(gameConfig.id)
     })
+  }
+  if (hasGrowthChanges) {
+    after(() => syncBrandGrowthState(id).then(() => undefined))
   }
 
   return NextResponse.json({

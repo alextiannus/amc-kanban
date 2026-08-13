@@ -7,6 +7,7 @@ import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
 import { generateInvitationLink } from '@/lib/invitation'
 import { buildBillingActivationData } from '@/lib/subscription/workflow'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
+import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { merchantName, merchantEmail, brandName, planId } = body
+    const initialStores = Array.isArray(body.stores) ? body.stores : body.store && typeof body.store === 'object' ? [body.store] : []
 
     if (!merchantName || !merchantEmail || !brandName || !planId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
@@ -111,7 +113,20 @@ export async function POST(req: NextRequest) {
 
       await provisionPostfastKeyForBrand({ brandId: brand.id, userId: user.id, tx })
 
+      await queueBrandGrowthSync({
+        brandId: brand.id,
+        dirtyPaths: ['*'],
+        mode: 'BACKFILL',
+        actor: { id: session.user.id, email: session.user.email, type: session.user.type, roles },
+        tx,
+      })
+      await seedInitialBrandStores(brand.id, initialStores, tx)
+
       return { user, brand, subscription }
+    })
+
+    syncBrandGrowthState(result.brand.id).catch(error => {
+      console.error('[bd_onboard_api] Growth snapshot deferred:', error)
     })
 
     // 4. Send Welcome Onboarding Email (SMTP)

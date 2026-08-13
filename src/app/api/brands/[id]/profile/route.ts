@@ -1,4 +1,5 @@
 import { after, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canOwnBrand, canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
@@ -10,6 +11,7 @@ import {
   parseEditableBrandContextFromMarkdown,
 } from '@/lib/brandProfileMarkdown'
 import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+import { growthPathsForBrandPatch, growthPathsForKnowledgePatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 export const maxDuration = 60
 
@@ -59,11 +61,18 @@ export async function GET(request: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   const session = await getSession()
   const { id } = await params
+  let syncActor: { id: string; email?: string | null; type: string; roles: string[] }
 
   // Support both cookie session (human owner) and Bearer API key (AI agent)
   if (session?.user) {
     if (!(await canOwnBrand(id, session.user.id))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    syncActor = {
+      id: session.user.id,
+      email: session.user.email,
+      type: session.user.type || 'HUMAN',
+      roles: session.user.role ? [session.user.role] : [],
     }
   } else {
     const apiKey = extractApiKey(request)
@@ -71,6 +80,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const ok = await canSessionAccessBrandProject(id, agent.id, 'AI_AGENT')
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    syncActor = { id: agent.id, type: 'AI_AGENT', roles: ['AI_AGENT'] }
   }
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>))
@@ -107,33 +117,55 @@ export async function PATCH(request: Request, { params }: Params) {
   if (parsedContext.brand.phone !== undefined) brandUpdate.phone = parsedContext.brand.phone
   if (parsedContext.brand.website !== undefined) brandUpdate.website = parsedContext.brand.website
 
-  if (Object.keys(brandUpdate).length > 0) {
-    updatedBrand = await prisma.brand.update({
-      where: { id },
-      data: brandUpdate
-    })
-  }
-
   const knowledgeUpdate: Record<string, unknown> = {}
   const parsedKnowledge = parsedContext.knowledge
   if (parsedKnowledge.businessHours !== undefined) knowledgeUpdate.businessHours = parsedKnowledge.businessHours
   if (parsedKnowledge.reservationUrl !== undefined) knowledgeUpdate.reservationUrl = parsedKnowledge.reservationUrl
   if (parsedKnowledge.orderingUrl !== undefined) knowledgeUpdate.orderingUrl = parsedKnowledge.orderingUrl
   if (parsedKnowledge.stores !== undefined) knowledgeUpdate.stores = parsedKnowledge.stores
+  const growthKnowledgePaths = growthPathsForKnowledgePatch(knowledgeUpdate)
+  const growthDirtyPaths = [...growthPathsForBrandPatch(brandUpdate), ...growthKnowledgePaths]
 
-  if (Object.keys(knowledgeUpdate).length > 0) {
-    await prisma.brandKnowledge.upsert({
-      where: { brandId: id },
-      update: knowledgeUpdate,
-      create: {
-        brandId: id,
-        negPrompts: [],
-        businessHours: knowledgeUpdate.businessHours ?? null,
-        reservationUrl: typeof knowledgeUpdate.reservationUrl === 'string' ? knowledgeUpdate.reservationUrl : '',
-        orderingUrl: typeof knowledgeUpdate.orderingUrl === 'string' ? knowledgeUpdate.orderingUrl : '',
-        stores: Array.isArray(knowledgeUpdate.stores) ? knowledgeUpdate.stores : [],
-      },
+  if (Object.keys(brandUpdate).length > 0 || Object.keys(knowledgeUpdate).length > 0) {
+    updatedBrand = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const savedBrand = Object.keys(brandUpdate).length > 0
+        ? await tx.brand.update({ where: { id }, data: brandUpdate })
+        : null
+      if (Object.keys(knowledgeUpdate).length > 0) {
+        if (Array.isArray(knowledgeUpdate.stores)) {
+          const current = await tx.brandKnowledge.findUnique({ where: { brandId: id }, select: { stores: true } })
+          const existingStores = Array.isArray(current?.stores)
+            ? current.stores.flatMap((item) => item && typeof item === 'object' && !Array.isArray(item)
+                ? [{ ...(item as Record<string, unknown>) }]
+                : [])
+            : []
+          knowledgeUpdate.stores = knowledgeUpdate.stores.map((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return item
+            const store = item as Record<string, unknown>
+            const storeId = typeof store.storeId === 'string' ? store.storeId : ''
+            const existing = existingStores.find(candidate => candidate.storeId === storeId)
+            return existing ? { ...existing, ...store } : store
+          })
+        }
+        await tx.brandKnowledge.upsert({
+          where: { brandId: id },
+          update: knowledgeUpdate,
+          create: {
+            brandId: id,
+            negPrompts: [],
+            businessHours: typeof knowledgeUpdate.businessHours === 'string' ? knowledgeUpdate.businessHours : null,
+            reservationUrl: typeof knowledgeUpdate.reservationUrl === 'string' ? knowledgeUpdate.reservationUrl : '',
+            orderingUrl: typeof knowledgeUpdate.orderingUrl === 'string' ? knowledgeUpdate.orderingUrl : '',
+            stores: Array.isArray(knowledgeUpdate.stores) ? knowledgeUpdate.stores : [],
+          },
+        })
+      }
+      if (growthDirtyPaths.length) {
+        await queueBrandGrowthSync({ brandId: id, dirtyPaths: growthDirtyPaths, actor: syncActor, tx })
+      }
+      return savedBrand
     })
+    if (growthDirtyPaths.length) after(() => syncBrandGrowthState(id).then(() => undefined))
   }
 
   if (brandUpdate.description !== undefined) {

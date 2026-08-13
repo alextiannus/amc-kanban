@@ -4,9 +4,9 @@ import { findOrCreateBrandOwnerAccount } from '@/lib/brandOwnerAccount'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { resolveAssignment } from '@/lib/assignmentPool'
 import {
-  ensureGrowthMerchantForBrand,
   publishGrowthMerchantEvent,
 } from '@/lib/growthDataCenter'
+import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 import { buildBillingActivationData } from '@/lib/subscription/workflow'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
@@ -69,6 +69,7 @@ type CreateBrandForSubscriptionInput = {
   timezone?: string | null
   address?: string | null
   description?: string | null
+  stores?: unknown[] | null
 }
 
 export async function createBrandForActivatedSubscription(input: CreateBrandForSubscriptionInput) {
@@ -145,6 +146,13 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
         where: { id: input.subscriptionId },
         data: { brandId: existingBrand.id },
       })
+      await queueBrandGrowthSync({
+        brandId: existingBrand.id,
+        dirtyPaths: ['*'],
+        mode: 'BACKFILL',
+        actor: { id: input.ownerId, email: input.ownerEmail, type: 'HUMAN', roles: ['BRAND_OWNER'] },
+        tx,
+      })
       return { brand: existingBrand, alreadyCreated: true }
     }
 
@@ -171,13 +179,23 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       data: { brandId: created.id },
     })
 
+    await seedInitialBrandStores(created.id, input.stores, tx)
+
+    await queueBrandGrowthSync({
+      brandId: created.id,
+      dirtyPaths: ['*'],
+      mode: 'BACKFILL',
+      actor: { id: input.ownerId, email: input.ownerEmail, type: 'HUMAN', roles: ['BRAND_OWNER'] },
+      tx,
+    })
+
     return { brand: created, alreadyCreated: false }
   })
   const brand = result.brand
   console.log(`[createBrand] $transaction done, brand.id=${brand.id}, alreadyCreated=${result.alreadyCreated} (${Date.now() - t0}ms)`)
 
-  ensureGrowthMerchantForBrand(brand).catch(error => {
-    console.error('[createBrand] Growth binding failed (non-fatal):', error)
+  syncBrandGrowthState(brand.id).catch(error => {
+    console.error('[createBrand] Growth snapshot deferred:', error)
   })
 
   if (result.alreadyCreated) {

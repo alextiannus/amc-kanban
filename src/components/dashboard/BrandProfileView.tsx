@@ -52,12 +52,30 @@ interface Props {
 }
 
 type StoreInfo = {
+  storeId: string
   name: string
   address: string
+  timezone?: string
+  latitude?: number | null
+  longitude?: number | null
+  googlePlaceId?: string
+  isPrimary?: boolean
+  status?: string
   phone?: string
   businessHours?: string
   reservationUrl?: string
   orderingUrl?: string
+}
+
+type GrowthSyncStatus = {
+  status: 'NOT_QUEUED' | 'PENDING' | 'PROCESSING' | 'CONFLICT' | 'SYNCED'
+  pendingPaths: string[]
+  attempts: number
+  nextRetryAt: string | null
+  errorCode: string | null
+  errorMessage: string | null
+  conflicts: Array<{ path: string; code: string; kanban_value: unknown; growth_value: unknown }>
+  lastSyncedAt: string | null
 }
 
 type IdentityRowProps = {
@@ -152,7 +170,23 @@ function PlanBadge({ plan }: { plan: string }) {
   )
 }
 
-export default function BrandProfileView({
+export default function BrandProfileView(props: Props) {
+  if (!props.brand?.id) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950 text-center">
+        <div className="max-w-sm">
+          <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
+          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
+        </div>
+      </div>
+    )
+  }
+
+  return <BrandProfileContent {...props} brand={props.brand} />
+}
+
+function BrandProfileContent({
   brand,
   onUpdate,
   onClose,
@@ -166,20 +200,7 @@ export default function BrandProfileView({
   onOpenSettings,
   onOpenKnowledge,
   subscriptionHref,
-}: Props) {
-  // Early return if no brand or brand.id is provided, placed at the top to satisfy TypeScript compiler
-  if (!brand || !brand.id) {
-    return (
-      <div className="flex-1 flex items-center justify-center p-8 bg-slate-50 dark:bg-slate-950 text-center">
-        <div className="max-w-sm">
-          <Store className="w-12 h-12 mx-auto text-slate-300 dark:text-slate-700 mb-4" />
-          <p className="text-sm font-bold text-slate-600 dark:text-slate-400">暂无选定品牌</p>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">请先在左上角切换或选择一个品牌进行代运营配置。</p>
-        </div>
-      </div>
-    )
-  }
-
+}: Props & { brand: Brand }) {
   const brandId = brand.id
 
   const [saving, setSaving] = useState(false)
@@ -209,6 +230,8 @@ export default function BrandProfileView({
   const [identitySaving, setIdentitySaving] = useState(false)
   const [identitySyncingField, setIdentitySyncingField] = useState<BrandIdentityFieldKey | null>(null)
   const [identityError, setIdentityError] = useState('')
+  const [growthSyncStatus, setGrowthSyncStatus] = useState<GrowthSyncStatus | null>(null)
+  const [growthSyncAction, setGrowthSyncAction] = useState(false)
 
   // Controlled vs Uncontrolled logic
   const activeBrandTone = brandTone !== undefined ? brandTone : localBrandTone
@@ -327,6 +350,15 @@ export default function BrandProfileView({
     }
   }
 
+  const loadGrowthSyncStatus = async () => {
+    try {
+      const res = await fetch(`/api/brands/${brandId}/growth-sync`, { cache: 'no-store' })
+      if (res.ok) setGrowthSyncStatus(await res.json())
+    } catch (error) {
+      console.error('Failed to load Growth sync status:', error)
+    }
+  }
+
   const loadAllConfig = async () => {
     try {
       // 1. Fetch brand metadata for details (description, location, address, etc.)
@@ -427,6 +459,7 @@ export default function BrandProfileView({
     void loadProfile()
     void loadAllConfig()
     void loadIdentity()
+    void loadGrowthSyncStatus()
     if (brandId) {
       fetch(`/api/brands/${brandId}/accounts`)
         .then(r => r.ok ? r.json() : { accounts: [] })
@@ -434,6 +467,39 @@ export default function BrandProfileView({
         .catch(() => {})
     }
   }, [brandId])
+
+  useEffect(() => {
+    if (!growthSyncStatus || !['PENDING', 'PROCESSING'].includes(growthSyncStatus.status)) return
+    const timer = window.setInterval(() => {
+      void loadGrowthSyncStatus()
+      void loadIdentity()
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [brandId, growthSyncStatus?.status])
+
+  const handleGrowthSyncAction = async (
+    action?: 'overwrite_growth' | 'use_growth',
+    selectedPaths?: string[]
+  ) => {
+    setGrowthSyncAction(true)
+    try {
+      const paths = action ? selectedPaths || [] : undefined
+      const res = await fetch(`/api/brands/${brandId}/growth-sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action ? { action, paths } : {}),
+      })
+      if (!res.ok) throw new Error('sync_action_failed')
+      const data = await res.json()
+      setGrowthSyncStatus(data)
+      await Promise.all([loadIdentity(), loadAllConfig(), loadGrowthSyncStatus()])
+      showToastVal(data.status === 'SYNCED' ? '已同步到 AMC-Growth' : '同步任务已更新', data.status === 'SYNCED' ? 'success' : 'info')
+    } catch {
+      showToastVal('Growth 同步操作失败，请稍后重试', 'error')
+    } finally {
+      setGrowthSyncAction(false)
+    }
+  }
 
   const handleSaveProfile = async (nextMarkdown?: string) => {
     const markdown = (nextMarkdown ?? profileMarkdown).trim()
@@ -459,6 +525,7 @@ export default function BrandProfileView({
         onUpdate(data.brand)
       }
       await loadAllConfig()
+      await loadGrowthSyncStatus()
       setTimeout(() => setProfileSaved(false), 2500)
     } catch (e) {
       console.error(e)
@@ -474,6 +541,7 @@ export default function BrandProfileView({
           .filter((s) => s.name || s.address)
           .map((s, index) => [
             `### ${s.name || `门店 ${index + 1}`}`,
+            s.storeId ? `<!-- AMC:STORE_ID:${s.storeId} -->` : '',
             s.address ? `- 地址：${s.address}` : '',
             s.phone ? `- 电话：${s.phone}` : '',
             s.businessHours ? `- 营业时间：${s.businessHours}` : '',
@@ -697,6 +765,7 @@ ${storeLines}
       const res = await fetch(`/api/brands/${brandId}/logo`, { method: 'POST', body: form })
       if (res.ok) {
         showToastVal('品牌 Logo 已更新', 'success')
+        await loadGrowthSyncStatus()
       } else {
         showToastVal('Logo 上传失败', 'error')
       }
@@ -727,6 +796,7 @@ ${storeLines}
         const data = await res.json()
         setDraftDesc(data.description || '')
         if (onUpdate) onUpdate(data)
+        await loadGrowthSyncStatus()
       } else {
         showToastVal('保存失败，请重试', 'error')
       }
@@ -748,6 +818,7 @@ ${storeLines}
       })
       if (res.ok) {
         showToastVal(successMsg ?? '已保存', 'success')
+        await loadGrowthSyncStatus()
         return true
       } else {
         showToastVal('保存失败，请重试', 'error')
@@ -813,6 +884,7 @@ ${storeLines}
         fields: { ...snapshot.fields, [editingIdentityField]: nextField },
       } : snapshot)
       updateLocalIdentityState(editingIdentityField, nextField.value)
+      await loadGrowthSyncStatus()
       if (data.syncStatus === 'pending_sync') {
         showToastVal(`${IDENTITY_LABELS[editingIdentityField]}已保存并生效，等待同步到 AMC-Growth`, 'info')
       } else if (data.syncStatus === 'sync_conflict') {
@@ -1122,6 +1194,37 @@ ${storeLines}
           </button>
         </div>
       </div>
+
+      {growthSyncStatus && ['PENDING', 'PROCESSING', 'CONFLICT'].includes(growthSyncStatus.status) && (
+        <div className={`mx-5 mt-4 rounded-2xl border px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 ${growthSyncStatus.status === 'CONFLICT' ? 'border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/20' : 'border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/20'}`}>
+          <div>
+            <p className={`text-xs font-black ${growthSyncStatus.status === 'CONFLICT' ? 'text-rose-700 dark:text-rose-300' : 'text-amber-700 dark:text-amber-300'}`}>
+              {growthSyncStatus.status === 'CONFLICT' ? 'AMC-Growth 版本冲突' : '本地修改已保存，正在同步到 AMC-Growth'}
+            </p>
+            <p className="mt-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+              {growthSyncStatus.errorMessage || (growthSyncStatus.status === 'PROCESSING' ? '正在发送商家与门店快照' : '系统将自动重试')}
+              {growthSyncStatus.nextRetryAt ? ` · 下次重试 ${new Date(growthSyncStatus.nextRetryAt).toLocaleString()}` : ''}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {growthSyncStatus.status === 'CONFLICT' ? (
+              <div className="space-y-1.5">
+                {growthSyncStatus.conflicts.map(conflict => (
+                  <div key={conflict.path} className="flex flex-wrap items-center justify-end gap-2">
+                    <span className="max-w-52 truncate text-[10px] font-semibold text-rose-600 dark:text-rose-300" title={conflict.path}>{conflict.path}</span>
+                    <button type="button" disabled={growthSyncAction} onClick={() => void handleGrowthSyncAction('overwrite_growth', [conflict.path])} className="rounded-lg bg-rose-600 px-3 py-1.5 text-[10px] font-bold text-white disabled:opacity-50">覆盖到 Growth</button>
+                    <button type="button" disabled={growthSyncAction} onClick={() => void handleGrowthSyncAction('use_growth', [conflict.path])} className="rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-[10px] font-bold text-rose-700 dark:border-rose-800 dark:bg-transparent dark:text-rose-300 disabled:opacity-50">采用 Growth 当前值</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button type="button" disabled={growthSyncAction} onClick={() => void handleGrowthSyncAction()} className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-white px-3 py-1.5 text-[10px] font-bold text-amber-700 dark:border-amber-800 dark:bg-transparent dark:text-amber-300 disabled:opacity-50">
+                <RefreshCw className={`w-3 h-3 ${growthSyncAction ? 'animate-spin' : ''}`} />立即重试
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Single-page scrolling content ─────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
@@ -1641,7 +1744,7 @@ ${storeLines}
                   try {
                     const r1 = await fetch(`/api/brands/${brandId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: draftAddress, phone: draftPhone, website: draftWebsite }) })
                     const r2 = await fetch(`/api/brands/${brandId}/knowledge`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ businessHours: draftBusinessHours, reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl, deliveryUrls: draftDeliveryUrls, stores: draftStores }) })
-                    if (r1.ok && r2.ok) { showToastVal('经营信息已保存', 'success'); setEditingBiz(false) }
+                    if (r1.ok && r2.ok) { showToastVal('经营信息已保存', 'success'); setEditingBiz(false); await loadGrowthSyncStatus() }
                     else showToastVal('保存失败，请重试', 'error')
                   } catch { showToastVal('网络错误', 'error') }
                   finally { setSaving(false) }
@@ -1754,7 +1857,7 @@ ${storeLines}
                 <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">门店列表</p>
                 <div className="space-y-3">
                   {draftStores.map((store, i) => (
-                    <div key={i} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3 space-y-2">
+                    <div key={store.storeId || i} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3 space-y-2">
                       <div className="flex items-center gap-2">
                         <input value={store.name}
                           onChange={e => { const n = [...draftStores]; n[i] = { ...store, name: e.target.value }; setDraftStores(n) }}
@@ -1788,7 +1891,7 @@ ${storeLines}
                       </div>
                     </div>
                   ))}
-                  <button onClick={() => setDraftStores([...draftStores, { name: '', address: '' }])}
+                  <button onClick={() => setDraftStores([...draftStores, { storeId: `store_${crypto.randomUUID()}`, name: '', address: '' }])}
                     className="flex items-center gap-1.5 text-[11px] text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
                     <Plus size={12} /> 添加门店
                   </button>

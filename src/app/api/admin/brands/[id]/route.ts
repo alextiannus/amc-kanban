@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { calculatePricing, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
 import { addCrewMember } from '@/lib/user-management/crew'
 import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
+import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -45,6 +46,13 @@ export async function PATCH(request: Request, { params }: Params) {
   const subscriptionStatus = normalizeString(body.subscriptionStatus)
   const durationMonths = Number(body.durationMonths || 12)
   const feeWaived = Boolean(body.feeWaived)
+  const growthDirtyPaths = growthPathsForBrandPatch(body as Record<string, unknown>)
+  const growthActor = {
+    id: session.user.id,
+    email: session.user.email,
+    type: 'HUMAN',
+    roles: ['ADMIN'],
+  }
 
   if (name !== undefined && !name) return NextResponse.json({ error: 'Brand name is required' }, { status: 400 })
   if (status !== undefined && !BRAND_STATUSES.includes(status as (typeof BRAND_STATUSES)[number])) {
@@ -203,8 +211,14 @@ export async function PATCH(request: Request, { params }: Params) {
       },
     })
 
+    if (growthDirtyPaths.length) {
+      await queueBrandGrowthSync({ brandId: id, dirtyPaths: growthDirtyPaths, actor: growthActor, tx })
+    }
+
     return brand
   })
+
+  if (growthDirtyPaths.length) await syncBrandGrowthState(id)
 
   if (subscriptionStatus === 'CANCELLED') {
     await reclaimPostfastKeyForBrandIfUnused({

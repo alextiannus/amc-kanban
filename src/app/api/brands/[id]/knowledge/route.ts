@@ -1,8 +1,10 @@
 import { after, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
+import { growthPathsForKnowledgePatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 export const maxDuration = 60
 
@@ -112,6 +114,7 @@ export async function GET(request: Request, { params }: Params) {
 export async function PATCH(request: Request, { params }: Params) {
   const session = await getSession()
   const { id: brandId } = await params
+  let syncActor: { id: string; email?: string | null; type: string; roles: string[] }
 
   if (session?.user) {
     const ok = await canSessionAccessBrandProject(
@@ -123,12 +126,19 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!ok) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+    syncActor = {
+      id: session.user.id,
+      email: session.user.email,
+      type: session.user.type || 'HUMAN',
+      roles: session.user.role ? [session.user.role] : [],
+    }
   } else {
     const apiKey = extractApiKey(request)
     const agent = apiKey ? await getAgentFromApiKey(apiKey) : null
     if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const ok = await canSessionAccessBrandProject(brandId, agent.id, 'AI_AGENT')
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    syncActor = { id: agent.id, type: 'AI_AGENT', roles: ['AI_AGENT'] }
   }
 
   const body = await request.json().catch(() => ({}))
@@ -174,24 +184,32 @@ export async function PATCH(request: Request, { params }: Params) {
   if (competitors !== undefined) updateData.competitors = competitors
   if (menuItems !== undefined) updateData.menuItems = menuItems
 
-  const knowledge = await prisma.brandKnowledge.upsert({
-    where: { brandId },
-    update: updateData,
-    create: {
-      brandId,
-      slangDict: slangDict || {},
-      negPrompts: negPrompts || [],
-      menuItems: menuItems || [],
-      voiceId: voiceId || '',
-      businessHours: businessHours || null,
-      reservationUrl: reservationUrl || '',
-      orderingUrl: orderingUrl || '',
-      deliveryUrls: deliveryUrls || [],
-      stores: stores || [],
-      market: market || '',
-      district: district || '',
-      competitors: competitors || [],
-    },
+  const growthDirtyPaths = growthPathsForKnowledgePatch(body)
+  const hasGrowthChanges = growthDirtyPaths.length > 0
+  const knowledge = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const saved = await tx.brandKnowledge.upsert({
+      where: { brandId },
+      update: updateData,
+      create: {
+        brandId,
+        slangDict: slangDict || {},
+        negPrompts: negPrompts || [],
+        menuItems: menuItems || [],
+        voiceId: voiceId || '',
+        businessHours: businessHours || null,
+        reservationUrl: reservationUrl || '',
+        orderingUrl: orderingUrl || '',
+        deliveryUrls: deliveryUrls || [],
+        stores: stores || [],
+        market: market || '',
+        district: district || '',
+        competitors: competitors || [],
+      },
+    })
+    if (hasGrowthChanges) {
+      await queueBrandGrowthSync({ brandId, dirtyPaths: growthDirtyPaths, actor: syncActor, tx })
+    }
+    return saved
   })
 
   if (menuItems !== undefined) {
@@ -199,6 +217,9 @@ export async function PATCH(request: Request, { params }: Params) {
       const gameConfig = await prisma.gameConfig.findUnique({ where: { brandId }, select: { id: true } })
       if (gameConfig) await requestGameShareDraftPoolRefill(gameConfig.id)
     })
+  }
+  if (hasGrowthChanges) {
+    after(() => syncBrandGrowthState(brandId).then(() => undefined))
   }
 
   return NextResponse.json({ ok: true, ...serializeKnowledge(knowledge) })

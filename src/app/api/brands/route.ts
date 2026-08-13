@@ -9,7 +9,7 @@ import { generateInvitationLink } from '@/lib/invitation'
 import { computeEffectiveUserRoles } from '@/lib/userRoles'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
-import { ensureGrowthMerchantForBrand } from '@/lib/growthDataCenter'
+import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
 // GET /api/brands — list brands for the logged-in user
@@ -135,6 +135,7 @@ export async function POST(request: Request) {
 
   const body = await request.json()
   const { name, description, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng, promoCode } = body
+  const initialStores = Array.isArray(body.stores) ? body.stores : body.store && typeof body.store === 'object' ? [body.store] : []
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })
@@ -153,15 +154,30 @@ export async function POST(request: Request) {
     const owner = ownerResult?.ok ? ownerResult.user : { id: sessionUser.id, email: sessionUser.email || null }
     const ownerCreated = ownerResult?.ok ? ownerResult.created : false
 
-    const brand = await prisma.brand.create({
-      data: {
+    const brand = await prisma.$transaction(async (tx: any) => {
+      const created = await tx.brand.create({
+        data: {
         ownerId: owner.id,
         name: name.trim(),
+        description: description?.trim() || null,
+        industry: typeof industry === 'string' ? industry.trim() || null : null,
         location: location?.trim() || null,
         timezone: timezone || 'Asia/Singapore',
         ...(address ? { address: address.trim() } : {}),
         ...(googlePlaceId ? { googlePlaceId } : {}),
-      },
+        ...(Number.isFinite(Number(lat)) ? { latitude: Number(lat) } : {}),
+        ...(Number.isFinite(Number(lng)) ? { longitude: Number(lng) } : {}),
+        },
+      })
+      await seedInitialBrandStores(created.id, initialStores, tx)
+      await queueBrandGrowthSync({
+        brandId: created.id,
+        dirtyPaths: ['*'],
+        mode: 'BACKFILL',
+        actor: { id: sessionUser.id, email: sessionUser.email, type: sessionUser.type, roles: sessionUser.userRoles || [] },
+        tx,
+      })
+      return created
     })
 
     // 1. Write to new Crew models
@@ -187,8 +203,8 @@ export async function POST(request: Request) {
       console.error('[POST /api/brands] admin workspace init failed:', workspaceError)
     }
 
-    ensureGrowthMerchantForBrand(brand).catch(growthError => {
-      console.error('[POST /api/brands] Growth binding failed (non-fatal):', growthError)
+    syncBrandGrowthState(brand.id).catch(growthError => {
+      console.error('[POST /api/brands] Growth snapshot deferred:', growthError)
     })
 
     resolveAssignment({
@@ -311,12 +327,16 @@ export async function POST(request: Request) {
           ownerId: owner.id,
           name: name.trim(),
           description: description?.trim() || null,
+          industry: typeof industry === 'string' ? industry.trim() || null : null,
           location: location?.trim() || null,
           timezone: timezone || 'Asia/Singapore',
           ...(address ? { address: address.trim() } : {}),
           ...(googlePlaceId ? { googlePlaceId } : {}),
+          ...(Number.isFinite(Number(lat)) ? { latitude: Number(lat) } : {}),
+          ...(Number.isFinite(Number(lng)) ? { longitude: Number(lng) } : {}),
         },
       })
+      await seedInitialBrandStores(brand.id, initialStores, tx)
       await provisionPostfastKeyForBrand({ brandId: brand.id, userId: owner.id, tx })
 
       // Create PENDING subscription — Admin activates after offline payment
@@ -343,11 +363,19 @@ export async function POST(request: Request) {
         })
       }
 
+      await queueBrandGrowthSync({
+        brandId: brand.id,
+        dirtyPaths: ['*'],
+        mode: 'BACKFILL',
+        actor: { id: sessionUser.id, email: sessionUser.email, type: sessionUser.type, roles: sessionUser.userRoles || [] },
+        tx,
+      })
+
       return { brand, subscription }
     })
 
-    ensureGrowthMerchantForBrand(wizardResult.brand).catch(growthError => {
-      console.error('[POST /api/brands] Growth binding failed (non-fatal):', growthError)
+    syncBrandGrowthState(wizardResult.brand.id).catch(growthError => {
+      console.error('[POST /api/brands] Growth snapshot deferred:', growthError)
     })
 
     // Outside transaction: perform secondary setups (non-blocking)
@@ -483,12 +511,16 @@ export async function POST(request: Request) {
         ownerId: sessionUser.id,
         name: name.trim(),
         description: description?.trim() || null,
+        industry: typeof industry === 'string' ? industry.trim() || null : null,
         location: location?.trim() || null,
         timezone: timezone || 'Asia/Singapore',
         ...(address ? { address: address.trim() } : {}),
         ...(googlePlaceId ? { googlePlaceId } : {}),
+        ...(Number.isFinite(Number(lat)) ? { latitude: Number(lat) } : {}),
+        ...(Number.isFinite(Number(lng)) ? { longitude: Number(lng) } : {}),
       },
     })
+    await seedInitialBrandStores(brand.id, initialStores, tx)
     await provisionPostfastKeyForBrand({ brandId: brand.id, userId: sessionUser.id, tx })
 
     // 1. Write to new Crew models inside transaction
@@ -514,6 +546,14 @@ export async function POST(request: Request) {
         data: { brandId: brand.id },
       })
     }
+
+    await queueBrandGrowthSync({
+      brandId: brand.id,
+      dirtyPaths: ['*'],
+      mode: 'BACKFILL',
+      actor: { id: sessionUser.id, email: sessionUser.email, type: sessionUser.type, roles: sessionUser.userRoles || [] },
+      tx,
+    })
 
     return { brand, boundSubscription: subscriptionToBind }
   })
@@ -553,6 +593,10 @@ export async function POST(request: Request) {
     console.log('[POST /api/brands] Background standard assignment succeeded:', result.selectedAgentId)
   }).catch(assignmentError => {
     console.error('[POST /api/brands] Background standard assignment failed:', assignmentError)
+  })
+
+  syncBrandGrowthState(brand.id).catch(growthError => {
+    console.error('[POST /api/brands] Growth snapshot deferred:', growthError)
   })
 
   return NextResponse.json({

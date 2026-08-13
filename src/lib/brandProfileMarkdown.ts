@@ -61,6 +61,7 @@ type RefreshResult = {
 }
 
 type StoreDraft = {
+  storeId?: string
   name?: string
   address?: string
   phone?: string
@@ -478,6 +479,7 @@ function parseStores(section: string): StoreDraft[] {
       const [nameLine = '', ...rest] = block.split('\n')
       const body = rest.join('\n')
       return {
+        storeId: body.match(/<!--\s*AMC:STORE_ID:([^>]+)\s*-->/)?.[1]?.trim() || undefined,
         name: cleanMarkdownValue(nameLine) ?? undefined,
         address: readLabeledLine(body, ['地址']) ?? undefined,
         phone: readLabeledLine(body, ['电话', '联系电话']) ?? undefined,

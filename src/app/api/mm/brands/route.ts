@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { ensureBrandWorkspace } from '@/lib/brandWorkspace'
 import { resolveAssignment } from '@/lib/assignmentPool'
-import { ensureGrowthMerchantForBrand } from '@/lib/growthDataCenter'
+import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 
 export async function POST(request: NextRequest) {
@@ -16,26 +16,39 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { name, description, location, timezone, address, industry, region, referenceCode } = body
+    const initialStores = Array.isArray(body.stores) ? body.stores : body.store && typeof body.store === 'object' ? [body.store] : []
 
     if (!name?.trim()) {
       return NextResponse.json({ error: '品牌名称为必填项' }, { status: 400 })
     }
 
     // 1. Create Brand record
-    const brand = await prisma.brand.create({
-      data: {
+    const brand = await prisma.$transaction(async (tx: any) => {
+      const created = await tx.brand.create({
+        data: {
         ownerId: session.user.id,
         name: name.trim(),
         description: description?.trim() || null,
+        industry: typeof industry === 'string' ? industry.trim() || null : null,
         location: location?.trim() || null,
         timezone: timezone || 'Asia/Singapore',
         address: address?.trim() || null,
         status: 'ACTIVE',
-      },
+        },
+      })
+      await seedInitialBrandStores(created.id, initialStores, tx)
+      await queueBrandGrowthSync({
+        brandId: created.id,
+        dirtyPaths: ['*'],
+        mode: 'BACKFILL',
+        actor: { id: session.user.id, email: session.user.email, type: session.user.type, roles: session.user.role ? [session.user.role] : [] },
+        tx,
+      })
+      return created
     })
 
-    ensureGrowthMerchantForBrand(brand).catch(growthError => {
-      console.error('[MM-API-Brand-Create] Growth binding failed (non-fatal):', growthError)
+    syncBrandGrowthState(brand.id).catch(growthError => {
+      console.error('[MM-API-Brand-Create] Growth snapshot deferred:', growthError)
     })
 
     try {

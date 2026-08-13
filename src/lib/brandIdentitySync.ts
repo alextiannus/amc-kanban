@@ -142,7 +142,7 @@ export async function syncPendingIdentityChange(id: string): Promise<SyncResult>
 
   const value = normalizePendingValue(field, pending.value)
   try {
-    const brandKey = pending.brand.growthBrandKey || await ensureGrowthMerchantForBrand(pending.brand)
+    const brandKey = await ensureGrowthMerchantForBrand(pending.brand)
     const growth = await readGrowthMerchantKnowledge(brandKey)
     const entries = Array.isArray(growth.items) ? growth.items : []
     const current = findGrowthIdentityEntry(entries, field)
@@ -240,7 +240,7 @@ export async function resolveIdentitySyncConflict(input: {
   let expectedVersion = pending.expectedVersion
   if (input.action === 'overwrite') {
     try {
-      const brandKey = pending.brand.growthBrandKey || await ensureGrowthMerchantForBrand(pending.brand)
+      const brandKey = await ensureGrowthMerchantForBrand(pending.brand)
       const growth = await readGrowthMerchantKnowledge(brandKey)
       const current = findGrowthIdentityEntry(Array.isArray(growth.items) ? growth.items : [], input.field)
       expectedVersion = Number(current?.version) || 0
@@ -283,6 +283,20 @@ async function completePendingChange(
     const deleted = await tx.brandIdentityPendingChange.deleteMany({
       where: { id: pending.id, updatedAt: pending.updatedAt },
     })
+    if (deleted.count === 1 && isGrowthIdentityField(pending.field)) {
+      const field = pending.field as GrowthIdentityField
+      const value = normalizePendingValue(field, pending.value)
+      const data = field === 'brandTone'
+        ? { brandTone: value as string }
+        : field === 'targetAudience'
+          ? { audienceAssumptions: value as string }
+          : { productAssumptions: (value as string[]).join('\n') }
+      await tx.brandKnowledge.upsert({
+        where: { brandId: pending.brandId },
+        update: data,
+        create: { brandId: pending.brandId, negPrompts: [], ...data },
+      })
+    }
     await tx.auditLog.create({
       data: auditData(pending, {}, 'BRAND_IDENTITY_FIELD_SYNCED', null, pending.value, {
         publishedVersion,

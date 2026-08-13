@@ -7,6 +7,7 @@ type GrowthLinkedBrand = {
   location?: string | null
   address?: string | null
   description?: string | null
+  industry?: string | null
   growthBrandKey?: string | null
 }
 
@@ -52,6 +53,63 @@ export class GrowthDataCenterError extends Error {
   }
 }
 
+export type GrowthMerchantSnapshotConflict = {
+  path: string
+  code: string
+  kanban_value: unknown
+  growth_value: unknown
+  last_applied_value: unknown
+}
+
+export type GrowthMerchantSnapshotResponse = {
+  ok: boolean
+  status: 'synced' | 'partial' | 'conflict'
+  source_system: string
+  external_id: string
+  brand_key: string
+  source_version: number
+  applied_paths: string[]
+  unchanged_paths: string[]
+  skipped_paths: string[]
+  conflicts: GrowthMerchantSnapshotConflict[]
+  locations: Array<{ store_id: string; location_key: string }>
+}
+
+export async function publishGrowthMerchantSnapshot(input: {
+  brandId: string
+  payload: Record<string, unknown>
+  actor?: {
+    id?: string | null
+    email?: string | null
+    type?: string | null
+    roles?: string[]
+  }
+}) {
+  const response = await growthRequest(
+    `/v1/internal/merchant-snapshots/amc-kanban/${encodeURIComponent(input.brandId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        'x-amc-actor-id': input.actor?.id || '',
+        'x-amc-actor-email': input.actor?.email || '',
+        'x-amc-actor-type': input.actor?.type || 'SYSTEM',
+        'x-amc-actor-roles': (input.actor?.roles || []).join(','),
+      },
+      body: JSON.stringify(input.payload),
+    }
+  )
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>
+  if (!response.ok) {
+    throw new GrowthDataCenterError(
+      response.status,
+      typeof payload.error === 'string'
+        ? payload.error
+        : `growth_snapshot_publish_failed:${response.status}`
+    )
+  }
+  return payload as GrowthMerchantSnapshotResponse
+}
+
 export async function ensureGrowthMerchantForBrand(brand: GrowthLinkedBrand) {
   const response = await growthRequest('/v1/internal/merchants/upsert', {
     method: 'POST',
@@ -60,18 +118,21 @@ export async function ensureGrowthMerchantForBrand(brand: GrowthLinkedBrand) {
       external_id: brand.id,
       canonical_name: brand.name,
       market: brand.location || null,
-      category: brand.description || null,
+      category: brand.industry || null,
       metadata: {
         kanban_brand_id: brand.id,
         address: brand.address || null,
       },
     }),
   })
+  const merchant = await response.json().catch(() => ({})) as { brand_key?: string; error?: string }
   if (!response.ok) {
-    throw new Error(`growth_merchant_upsert_failed:${response.status}`)
+    throw new GrowthDataCenterError(
+      response.status,
+      merchant.error || `growth_merchant_upsert_failed:${response.status}`
+    )
   }
-  const merchant = await response.json() as { brand_key?: string }
-  if (!merchant.brand_key) throw new Error('growth_merchant_upsert_missing_brand_key')
+  if (!merchant.brand_key) throw new GrowthDataCenterError(502, 'growth_merchant_upsert_missing_brand_key')
   if (brand.growthBrandKey !== merchant.brand_key) {
     await prisma.brand.update({
       where: { id: brand.id },
@@ -90,6 +151,7 @@ export async function ensureGrowthMerchantByBrandId(brandId: string) {
       location: true,
       address: true,
       description: true,
+      industry: true,
       growthBrandKey: true,
     },
   })
@@ -111,11 +173,12 @@ export async function publishGrowthMerchantEvent(input: {
       location: true,
       address: true,
       description: true,
+      industry: true,
       growthBrandKey: true,
     },
   })
   if (!brand) throw new Error('brand_not_found')
-  const brandKey = brand.growthBrandKey || await ensureGrowthMerchantForBrand(brand)
+  const brandKey = await ensureGrowthMerchantForBrand(brand)
   const response = await growthRequest('/v1/internal/merchant-events', {
     method: 'POST',
     body: JSON.stringify({

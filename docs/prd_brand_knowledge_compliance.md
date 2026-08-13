@@ -30,6 +30,10 @@ Kanban continues to own content-execution policy, including prohibited words, re
 
 The Kanban brand-identity editor reads `brand.tone`, `audience.primary` and `brand.unique_selling_points` from published Growth knowledge. A brand writer may publish an immediate Growth revision through Kanban's authenticated BFF; the requested change is first persisted as a durable command and remains visibly pending if Growth is unavailable. Pending values are effective for Kanban content execution but are never labeled as published Growth knowledge. Version conflicts require an explicit overwrite-or-discard decision. Growth retains the superseded version and the forwarded actor audit. Kanban-local execution fields such as promotion focus, brand voice/image and publishing frequency remain partial, audited Kanban updates. Markdown profile editing is not an independent write path for these identity fields.
 
+Kanban merchant and store edits use a separate per-brand Growth snapshot Outbox. It publishes merchant name, market, industry, story, logo, website, brand service phone, merchant delivery links, the three Growth identity fields, and stable store records. Store phone, hours, reservation and ordering links are location knowledge. Registration contact numbers, credentials, publishing policy, sensitive words and subscription state remain Kanban-only. A name-and-city registration receives a `pending_details` placeholder main store that is excluded from Growth completeness.
+
+The sync is one-way from Kanban to Growth. Growth compares each incoming field with the last successfully applied source value; concurrent Growth edits become field-level conflicts and require an explicit overwrite or one-time adopt-Growth action. Missing stores are never interpreted as deletion. Initial historical backfill sends non-empty Kanban values only, while later explicit clears are transmitted as intentional changes.
+
 ---
 
 ## 2. Technical Implementation Details

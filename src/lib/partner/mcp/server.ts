@@ -9,6 +9,7 @@
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { Prisma } from '@prisma/client'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { authenticateApiKey, type AuthPrincipal } from '@/lib/auth-v2'
@@ -19,6 +20,7 @@ import { readBrandProfileMarkdown, refreshBrandProfileMarkdown, writeBrandProfil
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
+import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 let lastCheckedTime = Date.now()
 
@@ -291,7 +293,19 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         if (val !== undefined && val !== '') updateData[key] = val
       }
 
-      await prisma.brand.update({ where: { id: brandId }, data: updateData })
+      const growthDirtyPaths = growthPathsForBrandPatch(updateData)
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        await tx.brand.update({ where: { id: brandId }, data: updateData })
+        if (growthDirtyPaths.length) {
+          await queueBrandGrowthSync({
+            brandId,
+            dirtyPaths: growthDirtyPaths,
+            actor: { id: agent.id, email: agent.email, type: 'AI_AGENT', roles: [agent.role] },
+            tx,
+          })
+        }
+      })
+      if (growthDirtyPaths.length) await syncBrandGrowthState(brandId)
 
       if (input.postfastApiKey) {
         try {

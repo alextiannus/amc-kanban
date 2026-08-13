@@ -263,8 +263,22 @@ function withPendingIdentity(
     syncError: pending.lastErrorCode || undefined,
     warning: conflict
       ? '本次修改已保存，但与 AMC-Growth 最新版本冲突，请选择处理方式。'
-      : '本次修改已保存并生效，正在等待同步到 AMC-Growth。',
+      : pendingSyncWarning(pending.lastErrorCode),
   }
+}
+
+function pendingSyncWarning(code: string | null) {
+  if (code === 'service_token_required' || code === 'growth_auth_error') {
+    return '本次修改已保存并生效；Growth 鉴权异常，系统将自动重试。'
+  }
+  if (code === 'merchant_not_found' || code === 'growth_link_rebuilding') {
+    return '本次修改已保存并生效；商家关联失效，正在重建。'
+  }
+  if (code === 'knowledge_revision_conflict' || code === 'growth_version_conflict') {
+    return '本次修改已保存并生效；检测到版本冲突，请选择处理方式。'
+  }
+  if (code) return '本次修改已保存并生效；Growth 服务暂不可用，系统将自动重试。'
+  return '本次修改已保存并生效，正在等待同步到 AMC-Growth。'
 }
 
 function localField(key: BrandIdentityFieldKey, value: BrandIdentityValue, editable: boolean): BrandIdentityField {

@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canWriteBrandProject } from '@/lib/brandAccess'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
+import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -95,7 +96,7 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const body = await request.json()
-  const { name, description, logoUrl, location, timezone, autoPilot, address, phone, website } = body
+  const { name, description, logoUrl, location, timezone, autoPilot, address, phone, website, industry, latitude, longitude, googlePlaceId } = body
 
   const nextDescription = description !== undefined
     ? (typeof description === 'string' ? description.trim() || null : description)
@@ -125,6 +126,14 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(website !== undefined && {
         website: typeof website === 'string' ? website.trim() || null : website,
       }),
+      ...(industry !== undefined && {
+        industry: typeof industry === 'string' ? industry.trim() || null : industry,
+      }),
+      ...(latitude !== undefined && { latitude: latitude === null || latitude === '' ? null : Number(latitude) }),
+      ...(longitude !== undefined && { longitude: longitude === null || longitude === '' ? null : Number(longitude) }),
+      ...(googlePlaceId !== undefined && {
+        googlePlaceId: typeof googlePlaceId === 'string' ? googlePlaceId.trim() || null : googlePlaceId,
+      }),
       ...(timezone !== undefined && { timezone }),
       ...(autoPilot !== undefined && { autoPilot }),
       },
@@ -144,6 +153,17 @@ export async function PATCH(request: Request, { params }: Params) {
         },
       })
     }
+    await queueBrandGrowthSync({
+      brandId: id,
+      dirtyPaths: growthPathsForBrandPatch(body),
+      actor: {
+        id: session.user.id,
+        email: session.user.email,
+        type: session.user.type,
+        roles: session.user.role ? [session.user.role] : [],
+      },
+      tx,
+    })
     return result
   })
 
@@ -159,6 +179,10 @@ export async function PATCH(request: Request, { params }: Params) {
   } catch {
     // non-fatal — brand update should not fail due to profile markdown refresh
   }
+
+  await syncBrandGrowthState(id).catch(error => {
+    console.warn('[PATCH /api/brands/:id] Growth snapshot deferred:', error)
+  })
 
   return NextResponse.json(updated)
 }
