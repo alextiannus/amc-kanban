@@ -203,7 +203,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 依据 Postiz 的先进交互理念，AMC 增加以下 4 项 AI 核心优化：
 1. **“玻璃盒”执行日志流 (Glass-Box Streaming Logs)**：将 LangGraph 运行状态转化为直观的前端流式通知，减少商家黑盒焦虑。
-2. **“品牌灵感与推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。工作台通过 `Brand.growthBrandKey` 读取 Growth 的品牌专属灵感与 30/60/90 天独立推广计划，承载人工审核、素材需求、素材关联和执行状态；不自动创建排期草稿。
+2. **“品牌灵感”与“推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。Kanban 在主理人菜单提供“品牌灵感”与“推广计划”两个独立入口；两页通过同一个 BFF 和 `Brand.growthBrandKey` 读取 Growth 主数据。“品牌灵感”承载资料完整度、灵感生成、逐条审核和版本批准；“推广计划”承载 30/60/90 天独立计划、拍摄清单、素材关联和验收状态，不自动创建排期草稿。
 3. **智能修改快捷胶囊 (Smart Quick Replies)**：在内容审查弹窗下动态显示快捷指令按钮，将复杂的修改主观题转化为一键点击的单选题。
 4. **素材一键变草稿 (Raw Photo to Draft Proposal)**：支持在素材库中多选照片，一键让 AI 生成排期提案并自动落入发布日历。
 5. **多大模型后台热插拔配置与动态路由 (Multi-LLM Configuration & Routing)**：
@@ -1731,8 +1731,10 @@ Admin → AI 模型配置 页面：
 
 - Growth 维护独立于 Content 爆品素材库的三级通用场景主数据：大场景、小场景和内容方向。Growth 负责模板版本、品牌匹配、品牌专属灵感版本以及 30/60/90 天推广计划内容。
 - Content 仅提供结构化 Content Brief 和拍摄计划生成能力；现有爆品素材、参考视频和脚本库继续保存有来源的帖子/媒体资产，禁止把场景模板写入该素材表。
-- Kanban 提供内部审核执行工作台，并保存 `PlanningReview`、`MaterialRequirement`、`MaterialSubmission`。审核记录通过 Growth 资源 ID 和版本关联主数据，不复制灵感或计划正文。
+- Kanban 提供两个内部审核执行入口：`/planning/inspirations` 为“品牌灵感”，展示品牌资料完整度、当前灵感库版本、刷新提示、资料缺口和灵感审核；`/planning/promotion-plans` 为“推广计划”，展示 30/60/90 天计划、拍摄清单、素材绑定和验收进度。旧 `/planning` 路径重定向至 `/planning/inspirations`。
+- 两个入口共享品牌选择、数据加载、错误处理及 `/api/brands/:id/planning` BFF。Kanban 保存 `PlanningReview`、`MaterialRequirement`、`MaterialSubmission`；审核记录通过 Growth 资源 ID 和版本关联主数据，不复制灵感或计划正文。
 - 品牌专属灵感必须由主理人逐条批准后才能进入计划。品牌或模板更新只显示可刷新提示，不自动覆盖旧版本或已进入计划的灵感。
+- 推广计划页在没有已批准品牌灵感库时必须禁用计划生成，并明确引导主理人前往“品牌灵感”完成审核。
 - 批准后的计划才能生成拍摄清单。第一版由主理人线下收集后统一上传素材；全部必需素材验收通过时执行状态进入 `material_ready`，流程结束，不创建 `ContentDraft`、视频任务、排期或自动发布。
 
 ### 数据与接口约束

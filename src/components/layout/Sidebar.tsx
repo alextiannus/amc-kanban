@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Calendar, FileText, Images, Gift,
   BarChart2, Camera, Activity,
@@ -13,6 +13,7 @@ import {
   Lock, Plus,
   BookOpen,
   Video,
+  Lightbulb,
 } from 'lucide-react'
 import { type BoardView, type MenuGroupDef, type AppRole, getMenuGroups } from '@/lib/permissions'
 import { type Brand } from './BrandSwitcher'
@@ -28,6 +29,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   Briefcase, TrendingUp, Sparkles,
   BookOpen,
   Video,
+  Lightbulb,
 }
 
 function NavIcon({ name, size = 16 }: { name: string; size?: number }) {
@@ -65,7 +67,8 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '主理人总览': 'Principal Overview',
   '账号快照': 'Account Snapshot',
   '知识库': 'Knowledge Base',
-  '品牌灵感与推广计划': 'Brand Inspiration & Plans',
+  '品牌灵感': 'Brand Inspiration',
+  '推广计划': 'Promotion Plans',
   'AI 角色库': 'AI Role Library',
   '爆品素材库': 'Viral Inspiration Library',
   '视频生产': 'Video Production',
@@ -227,6 +230,7 @@ export default function Sidebar({
   className = '',
 }: SidebarProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { isEn } = useI18n()
   const [collapsed, setCollapsed] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
@@ -419,7 +423,12 @@ export default function Sidebar({
 
               {/* ── Menu items ──────────────────────────────────────── */}
               {!isGroupCollapsed && group.items.map(item => {
-                const isActive = !item.comingSoon && !item.href && currentView === item.view
+                const localHrefPath = item.href?.startsWith('/') ? item.href.split('?')[0] : undefined
+                const isLocalHrefActive = !!localHrefPath && (
+                  pathname === localHrefPath
+                  || (localHrefPath !== '/admin' && pathname.startsWith(`${localHrefPath}/`))
+                )
+                const isActive = !item.comingSoon && (item.href ? isLocalHrefActive : currentView === item.view)
                 return (
                   <div key={item.id} className="relative group/item px-2">
                     <button
