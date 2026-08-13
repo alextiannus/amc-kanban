@@ -41,6 +41,8 @@ assert(legacyCron.includes("from '../growth-sync/route'"))
 assert(statusRoute.includes("body.action === 'overwrite_growth' || body.action === 'use_growth'"))
 assert(view.includes('本地修改已保存，正在同步到 AMC-Growth'))
 assert(view.includes('下次重试'))
+assert(view.includes('google_place_id_bound_elsewhere'))
+assert(view.includes('仍有冲突：'))
 assert(view.includes('store_${crypto.randomUUID()}'))
 
 console.log('brand Growth sync contract tests passed')

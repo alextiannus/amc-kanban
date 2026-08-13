@@ -78,6 +78,21 @@ type GrowthSyncStatus = {
   lastSyncedAt: string | null
 }
 
+const GROWTH_CONFLICT_MESSAGES: Record<string, string> = {
+  missing_baseline: 'Growth 已有值，但尚未建立 Kanban 同步基线',
+  both_changed: 'Kanban 与 Growth 都修改过这个字段',
+  google_place_id_bound_elsewhere: '该 Google Place ID 已绑定到其他 Growth 商家或门店',
+  location_mapping_brand_conflict: '该门店的 Growth 归属与当前品牌不一致',
+  ambiguous_normalized_address: 'Growth 中有多个相同地址的门店，无法自动确认',
+  store_id_required: '门店缺少稳定 ID，暂时无法同步',
+}
+
+function growthConflictMessage(conflict?: GrowthSyncStatus['conflicts'][number]) {
+  return conflict
+    ? GROWTH_CONFLICT_MESSAGES[conflict.code] || 'Growth 拒绝了本次字段覆盖，请检查两侧数据'
+    : '版本冲突，等待人工处理'
+}
+
 type IdentityRowProps = {
   label: string
   englishLabel: string
@@ -353,10 +368,15 @@ function BrandProfileContent({
   const loadGrowthSyncStatus = async () => {
     try {
       const res = await fetch(`/api/brands/${brandId}/growth-sync`, { cache: 'no-store' })
-      if (res.ok) setGrowthSyncStatus(await res.json())
+      if (res.ok) {
+        const data = await res.json() as GrowthSyncStatus
+        setGrowthSyncStatus(data)
+        return data
+      }
     } catch (error) {
       console.error('Failed to load Growth sync status:', error)
     }
+    return null
   }
 
   const loadAllConfig = async () => {
@@ -492,8 +512,15 @@ function BrandProfileContent({
       if (!res.ok) throw new Error('sync_action_failed')
       const data = await res.json()
       setGrowthSyncStatus(data)
-      await Promise.all([loadIdentity(), loadAllConfig(), loadGrowthSyncStatus()])
-      showToastVal(data.status === 'SYNCED' ? '已同步到 AMC-Growth' : '同步任务已更新', data.status === 'SYNCED' ? 'success' : 'info')
+      const [, , refreshedStatus] = await Promise.all([loadIdentity(), loadAllConfig(), loadGrowthSyncStatus()])
+      const finalStatus = refreshedStatus || data as GrowthSyncStatus
+      if (finalStatus.status === 'SYNCED') {
+        showToastVal('已同步到 AMC-Growth', 'success')
+      } else if (finalStatus.status === 'CONFLICT') {
+        showToastVal(`仍有冲突：${growthConflictMessage(finalStatus.conflicts[0])}`, 'error')
+      } else {
+        showToastVal('同步任务已更新', 'info')
+      }
     } catch {
       showToastVal('Growth 同步操作失败，请稍后重试', 'error')
     } finally {
@@ -1202,7 +1229,9 @@ ${storeLines}
               {growthSyncStatus.status === 'CONFLICT' ? 'AMC-Growth 版本冲突' : '本地修改已保存，正在同步到 AMC-Growth'}
             </p>
             <p className="mt-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-              {growthSyncStatus.errorMessage || (growthSyncStatus.status === 'PROCESSING' ? '正在发送商家与门店快照' : '系统将自动重试')}
+              {growthSyncStatus.status === 'CONFLICT'
+                ? growthConflictMessage(growthSyncStatus.conflicts[0])
+                : growthSyncStatus.errorMessage || (growthSyncStatus.status === 'PROCESSING' ? '正在发送商家与门店快照' : '系统将自动重试')}
               {growthSyncStatus.nextRetryAt ? ` · 下次重试 ${new Date(growthSyncStatus.nextRetryAt).toLocaleString()}` : ''}
             </p>
           </div>
