@@ -203,7 +203,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 依据 Postiz 的先进交互理念，AMC 增加以下 4 项 AI 核心优化：
 1. **“玻璃盒”执行日志流 (Glass-Box Streaming Logs)**：将 LangGraph 运行状态转化为直观的前端流式通知，减少商家黑盒焦虑。
-2. **“品牌灵感”与“推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。两个策略工作台位于 Growth Dashboard，承载资料完整度、灵感生成/逐条审核/版本批准，以及 30/60/90 天计划生成、审批和当前执行计划选择。Kanban 在主理人菜单保留两个同名入口，通过 SSO 在新标签直达当前授权品牌；Kanban 另设“推广执行”承载拍摄清单、素材关联和验收，不自动创建排期草稿。
+2. **“品牌灵感”与“推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。两个策略工作台位于 Growth Dashboard，承载资料完整度、灵感生成/逐条审核/版本批准，以及 30/60/90 天计划生成、审批和当前执行计划选择。Kanban 在一级菜单“知识增长中心”保留两个同名入口，通过 SSO 在新标签直达当前授权品牌；Kanban 另设“推广执行”承载拍摄清单、素材关联和验收，不自动创建排期草稿。
 3. **智能修改快捷胶囊 (Smart Quick Replies)**：在内容审查弹窗下动态显示快捷指令按钮，将复杂的修改主观题转化为一键点击的单选题。
 4. **素材一键变草稿 (Raw Photo to Draft Proposal)**：支持在素材库中多选照片，一键让 AI 生成排期提案并自动落入发布日历。
 5. **多大模型后台热插拔配置与动态路由 (Multi-LLM Configuration & Routing)**：
@@ -804,12 +804,12 @@ model LLMConfig {
 
 | 分组 | 菜单项 | 可见角色 |
 |------|--------|---------|
-| 运营 | 品牌主看板、发布日历、发布内容、素材库、店内活动 | Admin、主理人、品牌主 |
-| 数据 | 数据分析、账号快照*、工作日志 | Admin、主理人、品牌主（*快照仅前两者）|
-| 管理 | 主理人总览（占位）、归档 | Admin、主理人 |
-| AI 工具 | AI 序列 | Admin、主理人、品牌主 |
-| 商务 | BD 工作台、客户汇总、收入总览（Coming Soon）| BD |
-| 系统 | Admin 控制台（跳转 /admin）| Admin |
+| 主理人 | 主理人总览、账号快照、素材执行 | Admin、主理人 |
+| 内容中心 | 爆品素材库、视频生产、爆品脚本、AI 角色库 | Admin、主理人；Researcher 可见除视频生产外的三项 |
+| 知识增长中心 | 品牌灵感、推广计划、知识库 | Admin、主理人 |
+| 品牌主 | 品牌故事、发布日历、发布内容、素材库、店内活动、数据分析 | Admin、主理人、品牌主 |
+| BD 商务 | BD 工作台、客户汇总、收入总览（Coming Soon）| Admin、BD |
+| Admin | 用户管理、工作日志、Admin 控制台 | Admin |
 
 ---
 
@@ -1731,7 +1731,7 @@ Admin → AI 模型配置 页面：
 
 - Growth 维护独立于 Content 爆品素材库的三级通用场景主数据：大场景、小场景和内容方向。Growth 负责模板版本、品牌匹配、品牌专属灵感版本以及 30/60/90 天推广计划内容。
 - Content 仅提供结构化 Content Brief 和拍摄计划生成能力；现有爆品素材、参考视频和脚本库继续保存有来源的帖子/媒体资产，禁止把场景模板写入该素材表。
-- Growth Dashboard 提供 `/dashboard/planning/inspirations` 和 `/dashboard/planning/promotion-plans` 两个工作台，共享受品牌授权范围约束的品牌选择器。Kanban 的“品牌灵感”和“推广计划”菜单在新标签通过 SSO 直达当前品牌；旧 `/planning`、`/planning/inspirations`、`/planning/promotion-plans` 仅作为兼容跳转桥。
+- Growth Dashboard 提供 `/dashboard/planning/inspirations` 和 `/dashboard/planning/promotion-plans` 两个工作台，共享受品牌授权范围约束的品牌选择器。Kanban 将“品牌灵感”“推广计划”和“知识库”统一归入一级菜单“知识增长中心”；其中前两项在新标签通过 SSO 直达当前品牌，旧 `/planning`、`/planning/inspirations`、`/planning/promotion-plans` 仅作为兼容跳转桥。
 - Growth 保存灵感逐条审核、灵感库批准、推广计划批准及当前计划选择。Kanban 不再写入新的 `PlanningReview`，历史记录保留只读；Kanban 的 `/planning/execution` 与 `/api/brands/:id/promotion-execution` 只保存 `MaterialRequirement`、`MaterialSubmission` 并关联本品牌 `MediaAsset`。
 - 品牌专属灵感必须由主理人逐条批准后才能进入计划。品牌或模板更新只显示可刷新提示，不自动覆盖旧版本或已进入计划的灵感。
 - Growth 服务端只允许使用最新已批准灵感库生成计划；批准新灵感库时旧批准版本进入 `superseded`，但历史计划引用保持不变。同一品牌最多一个由主理人明确选择的当前执行计划。

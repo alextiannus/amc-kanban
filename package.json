@@ -43,6 +43,7 @@
     "test:user-management": "DATABASE_URL=\"postgresql://alextian@127.0.0.1:5432/amc_dev\" node --experimental-strip-types scripts/test-user-management-e2e.mts",
     "sync:role-roster": "node --experimental-strip-types scripts/sync-user-role-roster.mts",
     "verify:permissions": "node scripts/verify-permissions.mjs",
+    "test:sidebar-menu-groups": "node --experimental-strip-types scripts/test-sidebar-menu-groups.mts",
     "verify:auth-routes": "node scripts/audit-route-auth.mjs --strict",
     "audit:auth-routes": "node scripts/audit-route-auth.mjs",
     "verify:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs --strict",

@@ -62,6 +62,8 @@ const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
 
 const MENU_TRANSLATIONS: Record<string, string> = {
   '主理人': 'Principal',
+  '内容中心': 'Content Center',
+  '知识增长中心': 'Knowledge Growth Center',
   '品牌主': 'Brand Owner',
   'BD 商务': 'BD',
   'Researcher': 'Researcher',

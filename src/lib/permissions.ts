@@ -87,7 +87,7 @@ export type MenuGroupDef = {
 
 /**
  * Return the ordered sidebar menu groups for the given roles.
- * Order: 主理人 → 品牌主 → BD → Admin
+ * Order: 主理人 → 内容中心 → 知识增长中心 → 品牌主 → BD → Admin
  */
 export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
   const isAdmin     = roles.includes('ADMIN')
@@ -103,7 +103,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
 
   if (isResearcher && !isAdmin && !isPrincipal && !isOwner && !isBD) {
     groups.push({
-      groupLabel: 'Researcher',
+      groupLabel: '内容中心',
       items: [
         { id: 'inspiration-library', view: 'managementOverview', label: '爆品素材库', icon: 'Images', href: '/admin/inspiration-library' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
@@ -120,13 +120,23 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
+        { id: 'promotion-execution',view: 'managementOverview', label: '素材执行', icon: 'Camera', href: '/planning/execution' },
+      ],
+    })
+    groups.push({
+      groupLabel: '内容中心',
+      items: [
         { id: 'inspiration-library',view: 'managementOverview', label: '爆品素材库', icon: 'Images', href: '/admin/inspiration-library' },
         { id: 'video-production',   view: 'managementOverview', label: '视频生产', icon: 'Video', href: '/admin/video-production' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
+      ],
+    })
+    groups.push({
+      groupLabel: '知识增长中心',
+      items: [
         { id: 'brand-inspirations', view: 'managementOverview', label: '品牌灵感', icon: 'Lightbulb', href: '/api/integrations/amc-growth/sso/start?destination=brand-inspirations' },
         { id: 'promotion-plans',    view: 'managementOverview', label: '推广计划', icon: 'Calendar', href: '/api/integrations/amc-growth/sso/start?destination=promotion-plans' },
-        { id: 'promotion-execution',view: 'managementOverview', label: '素材执行', icon: 'Camera', href: '/planning/execution' },
         { id: 'amc-growth',         view: 'managementOverview', label: '知识库', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
       ],
     })
