@@ -276,18 +276,8 @@ function BrandProfileContent({
   const [draftCompetitors, setDraftCompetitors] = useState<string[]>([])
   const [newCompetitor, setNewCompetitor] = useState('')
 
-  // Brand Identity extension: promotion focus and publishing frequency
-  const [promoPlan, setPromoPlan] = useState<{
-    period: string; startDate: string; endDate: string
-    direction: string; copywritingRequirements: string
-    brandVoice: string; brandImage: string
-    keyMessages: string[]; campaigns: Array<{name: string; dates: string; desc: string}>
-  }>({
-    period: 'monthly', startDate: '', endDate: '',
-    direction: '', copywritingRequirements: '',
-    brandVoice: '', brandImage: '',
-    keyMessages: [], campaigns: [],
-  })
+  // Kanban-owned evergreen creative identity (not the Growth promotion plan)
+  const [creativeIdentity, setCreativeIdentity] = useState({ brandVoice: '', brandImage: '', promotionFocus: '' })
   // Per-brand publishing frequency
   const [publishingFreq, setPublishingFreq] = useState<{
     postsPerDay: number
@@ -425,23 +415,11 @@ function BrandProfileContent({
         setDraftMarket(k.market || '')
         setDraftDistrict(k.district || '')
         setDraftCompetitors(Array.isArray(k.competitors) ? k.competitors : [])
-        // Section 4 — promo plan & publishing frequency
-        // Always overwrite — never merge — so empty brand B doesn't inherit brand A's plan.
-        // Merge on top of full defaults so partial/legacy DB objects never crash the UI
-        // (e.g. old promoPlan with no keyMessages would make .map() throw).
-        const PROMO_DEFAULTS = {
-          period: 'monthly', startDate: '', endDate: '',
-          direction: '', copywritingRequirements: '',
-          brandVoice: '', brandImage: '',
-          keyMessages: [] as string[], campaigns: [] as Array<{name:string;dates:string;desc:string}>,
-        }
-        const rawPlan = k.promoPlan && typeof k.promoPlan === 'object' ? k.promoPlan : {}
-        setPromoPlan({
-          ...PROMO_DEFAULTS,
-          ...rawPlan,
-          // Guard every array/object field explicitly
-          keyMessages: Array.isArray(rawPlan.keyMessages) ? rawPlan.keyMessages : [],
-          campaigns: Array.isArray(rawPlan.campaigns) ? rawPlan.campaigns : [],
+        // Section 4 — local creative identity & publishing frequency
+        setCreativeIdentity({
+          brandVoice: k.brandVoice || '',
+          brandImage: k.brandImage || '',
+          promotionFocus: k.promotionFocus || '',
         })
         const rawFreq = k.publishingFreq && typeof k.publishingFreq === 'object' ? k.publishingFreq : {}
         setPublishingFreq({
@@ -456,7 +434,7 @@ function BrandProfileContent({
         setDraftAudience(''); setDraftProduct(''); setDraftNegPrompts([])
         setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftDeliveryUrls([]); setDraftStores([])
         setDraftMarket(''); setDraftDistrict(''); setDraftCompetitors([])
-        setPromoPlan({ period: 'monthly', startDate: '', endDate: '', direction: '', copywritingRequirements: '', brandVoice: '', brandImage: '', keyMessages: [], campaigns: [] })
+        setCreativeIdentity({ brandVoice: '', brandImage: '', promotionFocus: '' })
         setPublishingFreq({ postsPerDay: 1, platforms: {} })
       }
 
@@ -877,9 +855,9 @@ ${storeLines}
     if (field === 'targetAudience' && typeof value === 'string') setDraftAudience(value)
     if (field === 'sellingPoints' && Array.isArray(value)) setDraftProduct(value.join('\n'))
     if (field === 'operatingRegion' && typeof value === 'string') setDraftLocation(value)
-    if (field === 'brandVoice' && typeof value === 'string') setPromoPlan(current => ({ ...current, brandVoice: value }))
-    if (field === 'brandImage' && typeof value === 'string') setPromoPlan(current => ({ ...current, brandImage: value }))
-    if (field === 'promotionFocus' && typeof value === 'string') setPromoPlan(current => ({ ...current, direction: value }))
+    if (field === 'brandVoice' && typeof value === 'string') setCreativeIdentity(current => ({ ...current, brandVoice: value }))
+    if (field === 'brandImage' && typeof value === 'string') setCreativeIdentity(current => ({ ...current, brandImage: value }))
+    if (field === 'promotionFocus' && typeof value === 'string') setCreativeIdentity(current => ({ ...current, promotionFocus: value }))
     if (field === 'publishingFrequency' && typeof value === 'object' && !Array.isArray(value)) {
       setPublishingFreq(value as PublishingFrequencyValue)
     }
@@ -1537,11 +1515,11 @@ ${storeLines}
                   <IdentityRow label="运营区域" englishLabel="Location" icon={<MapPin className="w-3.5 h-3.5 text-slate-500" />} iconClassName="bg-slate-100 dark:bg-slate-800"
                     value={identityText('operatingRegion', draftLocation) || emptyIdentityValue} editable={Boolean(identityField('operatingRegion')?.editable)} warning={identityField('operatingRegion')?.warning} onEdit={() => openIdentityEditor('operatingRegion')} />
                   <IdentityRow label="品牌 Voice" englishLabel="Brand Voice" icon={<Sparkles className="w-3.5 h-3.5 text-rose-500" />} iconClassName="bg-rose-50 dark:bg-rose-950/30"
-                    value={identityText('brandVoice', promoPlan.brandVoice) || emptyIdentityValue} editable={Boolean(identityField('brandVoice')?.editable)} warning={identityField('brandVoice')?.warning} onEdit={() => openIdentityEditor('brandVoice')} />
+                    value={identityText('brandVoice', creativeIdentity.brandVoice) || emptyIdentityValue} editable={Boolean(identityField('brandVoice')?.editable)} warning={identityField('brandVoice')?.warning} onEdit={() => openIdentityEditor('brandVoice')} />
                   <IdentityRow label="品牌形象" englishLabel="Brand Image" icon={<Bookmark className="w-3.5 h-3.5 text-indigo-500" />} iconClassName="bg-indigo-50 dark:bg-indigo-950/30"
-                    value={identityText('brandImage', promoPlan.brandImage) || emptyIdentityValue} editable={Boolean(identityField('brandImage')?.editable)} warning={identityField('brandImage')?.warning} onEdit={() => openIdentityEditor('brandImage')} />
+                    value={identityText('brandImage', creativeIdentity.brandImage) || emptyIdentityValue} editable={Boolean(identityField('brandImage')?.editable)} warning={identityField('brandImage')?.warning} onEdit={() => openIdentityEditor('brandImage')} />
                   <IdentityRow label="推广重点" englishLabel="Promotion Focus" icon={<Target className="w-3.5 h-3.5 text-amber-500" />} iconClassName="bg-amber-50 dark:bg-amber-950/30"
-                    value={identityText('promotionFocus', promoPlan.direction) || emptyIdentityValue} editable={Boolean(identityField('promotionFocus')?.editable)} warning={identityField('promotionFocus')?.warning} onEdit={() => openIdentityEditor('promotionFocus')} />
+                    value={identityText('promotionFocus', creativeIdentity.promotionFocus) || emptyIdentityValue} editable={Boolean(identityField('promotionFocus')?.editable)} warning={identityField('promotionFocus')?.warning} onEdit={() => openIdentityEditor('promotionFocus')} />
                   <IdentityRow label="发布频次" englishLabel="Publishing Frequency" icon={<Zap className="w-3.5 h-3.5 text-amber-500" />} iconClassName="bg-amber-50 dark:bg-amber-950/30"
                     value={<div className="flex flex-wrap gap-1.5">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800">默认 {resolvedPublishingFrequency.postsPerDay} 帖/天</span>

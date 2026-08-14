@@ -51,7 +51,6 @@ export async function POST(request: Request) {
   ])
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-  const promotionPlan = normalizePromotionPlan(brand.knowledge?.promoPlan)
   const mediaProof = media
     .flatMap((item) => [
       item.caption,
@@ -80,16 +79,16 @@ export async function POST(request: Request) {
       slang: normalizeRecord(brand.knowledge?.slangDict),
       menuItems: normalizeMenuItems(brand.knowledge?.menuItems),
       stores: normalizeStores(brand.knowledge?.stores),
-      promotionPlan,
+      promotionPlan: undefined,
     },
     briefDefaults: {
       industryVertical: optionalIndustryVertical(body.industryVertical),
-      theme: stringOrEmpty(body.theme) || task?.title || task?.description || promotionPlan?.direction || brand.description || `${brand.name} local service update`,
+      theme: stringOrEmpty(body.theme) || task?.title || task?.description || brand.description || `${brand.name} local service update`,
       locationFocus: brand.location || brand.address || undefined,
-      mustMention: promotionPlan?.keyMessages ?? [],
+      mustMention: [],
       mustAvoid: brand.knowledge?.negPrompts ?? [],
       localProof: mediaProof,
-      promotionPlan,
+      promotionPlan: undefined,
     },
     media,
   })
@@ -178,34 +177,6 @@ function normalizeStores(value: unknown) {
     .filter((item) => item.name || item.address || item.phone || item.businessHours)
     .slice(0, 10)
   return stores.length ? stores : undefined
-}
-
-function normalizePromotionPlan(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  const raw = value as Record<string, any>
-  const plan = {
-    period: optionalText(raw.period),
-    startDate: optionalText(raw.startDate),
-    endDate: optionalText(raw.endDate),
-    direction: optionalText(raw.direction),
-    copywritingRequirements: optionalText(raw.copywritingRequirements),
-    brandVoice: optionalText(raw.brandVoice),
-    brandImage: optionalText(raw.brandImage),
-    keyMessages: stringArray(raw.keyMessages),
-    campaigns: Array.isArray(raw.campaigns)
-      ? raw.campaigns
-          .filter((campaign) => campaign && typeof campaign === 'object')
-          .map((campaign) => ({
-            name: optionalText(campaign.name),
-            dates: optionalText(campaign.dates),
-            desc: optionalText(campaign.desc),
-          }))
-          .filter((campaign) => campaign.name || campaign.dates || campaign.desc)
-      : undefined,
-  }
-  return Object.values(plan).some((item) => Array.isArray(item) ? item.length > 0 : Boolean(item))
-    ? plan
-    : undefined
 }
 
 function optionalText(value: unknown): string | undefined {

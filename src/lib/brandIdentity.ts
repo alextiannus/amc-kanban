@@ -88,7 +88,9 @@ export async function resolveBrandIdentity(
           brandTone: true,
           audienceAssumptions: true,
           productAssumptions: true,
-          promoPlan: true,
+          brandVoice: true,
+          brandImage: true,
+          promotionFocus: true,
           publishingFreq: true,
         },
       },
@@ -131,7 +133,6 @@ export async function resolveBrandIdentity(
     targetAudience: text(brand.knowledge?.audienceAssumptions),
     sellingPoints: legacyList(brand.knowledge?.productAssumptions),
   }
-  const promoPlan = objectValue(brand.knowledge?.promoPlan)
   const canEdit = Boolean(options.canEdit)
 
   const fields = {
@@ -139,9 +140,9 @@ export async function resolveBrandIdentity(
     targetAudience: withPendingIdentity('targetAudience', growthField('targetAudience', growthEntries, legacyValues.targetAudience, brand.growthBrandKey, growthAvailable, canEdit), pendingByField.get('targetAudience'), canEdit),
     sellingPoints: withPendingIdentity('sellingPoints', growthField('sellingPoints', growthEntries, legacyValues.sellingPoints, brand.growthBrandKey, growthAvailable, canEdit), pendingByField.get('sellingPoints'), canEdit),
     operatingRegion: localField('operatingRegion', text(brand.location), canEdit),
-    brandVoice: localField('brandVoice', text(promoPlan.brandVoice), canEdit),
-    brandImage: localField('brandImage', text(promoPlan.brandImage), canEdit),
-    promotionFocus: localField('promotionFocus', text(promoPlan.direction), canEdit),
+    brandVoice: localField('brandVoice', text(brand.knowledge?.brandVoice), canEdit),
+    brandImage: localField('brandImage', text(brand.knowledge?.brandImage), canEdit),
+    promotionFocus: localField('promotionFocus', text(brand.knowledge?.promotionFocus), canEdit),
     publishingFrequency: localField('publishingFrequency', normalizePublishingFrequency(brand.knowledge?.publishingFreq), canEdit),
   } satisfies Record<BrandIdentityFieldKey, BrandIdentityField>
 

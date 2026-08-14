@@ -124,8 +124,9 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
         { id: 'video-production',   view: 'managementOverview', label: '视频生产', icon: 'Video', href: '/admin/video-production' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
-        { id: 'brand-inspirations', view: 'managementOverview', label: '品牌灵感', icon: 'Lightbulb', href: '/planning/inspirations' },
-        { id: 'promotion-plans',    view: 'managementOverview', label: '推广计划', icon: 'Calendar', href: '/planning/promotion-plans' },
+        { id: 'brand-inspirations', view: 'managementOverview', label: '品牌灵感', icon: 'Lightbulb', href: '/api/integrations/amc-growth/sso/start?destination=brand-inspirations' },
+        { id: 'promotion-plans',    view: 'managementOverview', label: '推广计划', icon: 'Calendar', href: '/api/integrations/amc-growth/sso/start?destination=promotion-plans' },
+        { id: 'promotion-execution',view: 'managementOverview', label: '素材执行', icon: 'Camera', href: '/planning/execution' },
         { id: 'amc-growth',         view: 'managementOverview', label: '知识库', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
       ],
     })

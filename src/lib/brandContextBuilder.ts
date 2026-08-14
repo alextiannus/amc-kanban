@@ -9,23 +9,11 @@
  *   1. Brand Story     — description, audience, sell points, tone, voice
  *   2. Business Info   — address, hours, reservation/order links
  *   3. Knowledge Base  — market, district, competitors, menu, slang, neg-prompts
- *   4. Promo Plan      — current period direction, copy requirements, brand image
+ *   4. Creative Identity — evergreen local voice, visual identity, promotion focus
  */
 
 import { prisma } from './prisma'
 import { resolveBrandIdentity } from './brandIdentity'
-
-export interface PromoPlan {
-  period?: 'monthly' | 'weekly' | 'biannual' | string
-  startDate?: string
-  endDate?: string
-  direction?: string
-  copywritingRequirements?: string
-  brandVoice?: string
-  brandImage?: string
-  keyMessages?: string[]
-  campaigns?: Array<{ name: string; dates?: string; desc?: string }>
-}
 
 export interface PublishingFreq {
   postsPerDay?: number
@@ -38,7 +26,6 @@ export interface PublishingFreq {
 
 export interface BrandContextResult {
   contextText: string
-  promoPlan: PromoPlan | null
   publishingFreq: PublishingFreq | null
   brandTone: string
   audience: string
@@ -65,7 +52,7 @@ export async function buildBrandContext(brandId: string): Promise<BrandContextRe
     resolveBrandIdentity(brandId),
   ])
 
-  if (!brand) return { contextText: '', promoPlan: null, publishingFreq: null, brandTone: '', audience: '', sellingPoints: [], market: '', district: '' }
+  if (!brand) return { contextText: '', publishingFreq: null, brandTone: '', audience: '', sellingPoints: [], market: '', district: '' }
 
   const k = knowledge as any
   const brandTone = String(identity?.fields.brandTone.value || k?.brandTone || '')
@@ -130,29 +117,19 @@ export async function buildBrandContext(brandId: string): Promise<BrandContextRe
     lines.push(...kbLines)
   }
 
-  // ── Section 4: Promotion Plan ─────────────────────────────────────────────
-  const promoPlan = k?.promoPlan as PromoPlan | null ?? null
-  if (promoPlan) {
-    lines.push('\n## Current Promotion Plan')
-    if (promoPlan.period) {
-      const periodLabel = { monthly: '月度', weekly: '周度', biannual: '半年度' }[promoPlan.period] ?? promoPlan.period
-      lines.push(`Period: ${periodLabel}${promoPlan.startDate ? ` (${promoPlan.startDate} ~ ${promoPlan.endDate ?? '?'})` : ''}`)
-    }
-    if (promoPlan.direction) lines.push(`Promotion Direction: ${promoPlan.direction}`)
-    if (promoPlan.copywritingRequirements) lines.push(`Copywriting Requirements: ${promoPlan.copywritingRequirements}`)
-    if (promoPlan.brandVoice) lines.push(`Brand Voice: ${promoPlan.brandVoice}`)
-    if (promoPlan.brandImage) lines.push(`Brand Image: ${promoPlan.brandImage}`)
-    if (promoPlan.keyMessages && promoPlan.keyMessages.length > 0) {
-      lines.push(`Key Messages:\n` + promoPlan.keyMessages.map((m) => `  • ${m}`).join('\n'))
-    }
-    if (promoPlan.campaigns && promoPlan.campaigns.length > 0) {
-      lines.push(`Active Campaigns:\n` + promoPlan.campaigns.map((c) => `  • ${c.name}${c.dates ? ` [${c.dates}]` : ''}: ${c.desc ?? ''}`).join('\n'))
-    }
+  // ── Section 4: Creative Identity ──────────────────────────────────────────
+  const brandVoice = String(identity?.fields.brandVoice.value || k?.brandVoice || '')
+  const brandImage = String(identity?.fields.brandImage.value || k?.brandImage || '')
+  const promotionFocus = String(identity?.fields.promotionFocus.value || k?.promotionFocus || '')
+  if (brandVoice || brandImage || promotionFocus) {
+    lines.push('\n## Creative Identity')
+    if (brandVoice) lines.push(`Brand Voice: ${brandVoice}`)
+    if (brandImage) lines.push(`Brand Image: ${brandImage}`)
+    if (promotionFocus) lines.push(`Evergreen Promotion Focus: ${promotionFocus}`)
   }
 
   return {
     contextText: lines.join('\n'),
-    promoPlan,
     publishingFreq: k?.publishingFreq as PublishingFreq | null ?? null,
     brandTone,
     audience,

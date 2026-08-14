@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { SignJWT } from 'jose'
 import { NextResponse } from 'next/server'
-import { authenticateRequest } from '@/lib/auth-v2'
+import { authenticateRequest, canAccessBrand } from '@/lib/auth-v2'
+import { ensureGrowthMerchantByBrandId } from '@/lib/growthDataCenter'
+import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,11 +12,10 @@ const ALLOWED_ROLES = new Set(['ADMIN', 'AMC_PRINCIPAL'])
 export async function GET(request: Request) {
   const growthUrl = configuredGrowthUrl()
   const requestUrl = new URL(request.url)
-  const returnTo = safeGrowthReturnTo(requestUrl.searchParams.get('returnTo'), growthUrl)
   const principal = await authenticateRequest(request)
 
   if (!principal) {
-    const resumePath = `${requestUrl.pathname}?returnTo=${encodeURIComponent(returnTo)}`
+    const resumePath = `${requestUrl.pathname}${requestUrl.search}`
     const loginUrl = new URL('/', publicKanbanOrigin(request))
     loginUrl.searchParams.set('returnTo', resumePath)
     return NextResponse.redirect(loginUrl)
@@ -29,6 +30,22 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/dashboard/access-denied?reason=role', growthUrl))
   }
 
+  const destination = requestUrl.searchParams.get('destination')
+  const brandId = requestUrl.searchParams.get('brandId')?.trim() || ''
+  let selectedBrandKey = ''
+  if (destination === 'brand-inspirations' || destination === 'promotion-plans') {
+    if (!brandId || !(await canAccessBrand(principal, brandId, 'brand.read'))) {
+      return NextResponse.json({ error: 'brand_not_found' }, { status: 404 })
+    }
+    selectedBrandKey = await ensureGrowthMerchantByBrandId(brandId)
+  }
+  const returnTo = destination === 'brand-inspirations'
+    ? `/dashboard/planning/inspirations?brandKey=${encodeURIComponent(selectedBrandKey)}`
+    : destination === 'promotion-plans'
+      ? `/dashboard/planning/promotion-plans?brandKey=${encodeURIComponent(selectedBrandKey)}`
+      : safeGrowthReturnTo(requestUrl.searchParams.get('returnTo'), growthUrl)
+  const brandKeys = roles.includes('ADMIN') ? ['*'] : await scopedGrowthBrandKeys(principal, selectedBrandKey)
+
   const secret = process.env.AMC_GROWTH_SSO_SECRET?.trim()
   if (!secret) {
     console.error('AMC_GROWTH_SSO_SECRET is not configured')
@@ -38,6 +55,7 @@ export async function GET(request: Request) {
   const ticket = await new SignJWT({
     email: principal.email,
     roles,
+    brandKeys,
     authVersion: principal.authVersion,
     actorType: principal.actorType,
   })
@@ -54,6 +72,23 @@ export async function GET(request: Request) {
   callback.searchParams.set('ticket', ticket)
   callback.searchParams.set('returnTo', returnTo)
   return NextResponse.redirect(callback)
+}
+
+async function scopedGrowthBrandKeys(principal: NonNullable<Awaited<ReturnType<typeof authenticateRequest>>>, selectedBrandKey: string) {
+  const userIds = [principal.userId, principal.linkedHumanUserId || ''].filter(Boolean)
+  const brands: Array<{ id: string; growthBrandKey: string | null }> = await prisma.brand.findMany({
+    where: {
+      OR: [
+        { crew: { members: { some: { active: true, userId: { in: userIds } } } } },
+        { crew: { members: { some: { active: true, user: { organizationMembers: { some: { memberId: { in: userIds } } } } } } } },
+      ],
+    },
+    select: { id: true, growthBrandKey: true },
+  })
+  const keys = await Promise.all(brands.map(async (brand) => (
+    brand.growthBrandKey || await ensureGrowthMerchantByBrandId(brand.id).catch(() => '')
+  )))
+  return [...new Set([selectedBrandKey, ...keys].filter(Boolean))]
 }
 
 function publicKanbanOrigin(request: Request) {

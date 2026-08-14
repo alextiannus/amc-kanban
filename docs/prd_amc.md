@@ -203,7 +203,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 依据 Postiz 的先进交互理念，AMC 增加以下 4 项 AI 核心优化：
 1. **“玻璃盒”执行日志流 (Glass-Box Streaming Logs)**：将 LangGraph 运行状态转化为直观的前端流式通知，减少商家黑盒焦虑。
-2. **“品牌灵感”与“推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。Kanban 在主理人菜单提供“品牌灵感”与“推广计划”两个独立入口；两页通过同一个 BFF 和 `Brand.growthBrandKey` 读取 Growth 主数据。“品牌灵感”承载资料完整度、灵感生成、逐条审核和版本批准；“推广计划”承载 30/60/90 天独立计划、拍摄清单、素材关联和验收状态，不自动创建排期草稿。
+2. **“品牌灵感”与“推广计划”工作台**：第一版仅供 `ADMIN` 和 `AMC_PRINCIPAL` 使用。两个策略工作台位于 Growth Dashboard，承载资料完整度、灵感生成/逐条审核/版本批准，以及 30/60/90 天计划生成、审批和当前执行计划选择。Kanban 在主理人菜单保留两个同名入口，通过 SSO 在新标签直达当前授权品牌；Kanban 另设“推广执行”承载拍摄清单、素材关联和验收，不自动创建排期草稿。
 3. **智能修改快捷胶囊 (Smart Quick Replies)**：在内容审查弹窗下动态显示快捷指令按钮，将复杂的修改主观题转化为一键点击的单选题。
 4. **素材一键变草稿 (Raw Photo to Draft Proposal)**：支持在素材库中多选照片，一键让 AI 生成排期提案并自动落入发布日历。
 5. **多大模型后台热插拔配置与动态路由 (Multi-LLM Configuration & Routing)**：
@@ -1731,11 +1731,13 @@ Admin → AI 模型配置 页面：
 
 - Growth 维护独立于 Content 爆品素材库的三级通用场景主数据：大场景、小场景和内容方向。Growth 负责模板版本、品牌匹配、品牌专属灵感版本以及 30/60/90 天推广计划内容。
 - Content 仅提供结构化 Content Brief 和拍摄计划生成能力；现有爆品素材、参考视频和脚本库继续保存有来源的帖子/媒体资产，禁止把场景模板写入该素材表。
-- Kanban 提供两个内部审核执行入口：`/planning/inspirations` 为“品牌灵感”，展示品牌资料完整度、当前灵感库版本、刷新提示、资料缺口和灵感审核；`/planning/promotion-plans` 为“推广计划”，展示 30/60/90 天计划、拍摄清单、素材绑定和验收进度。旧 `/planning` 路径重定向至 `/planning/inspirations`。
-- 两个入口共享品牌选择、数据加载、错误处理及 `/api/brands/:id/planning` BFF。Kanban 保存 `PlanningReview`、`MaterialRequirement`、`MaterialSubmission`；审核记录通过 Growth 资源 ID 和版本关联主数据，不复制灵感或计划正文。
+- Growth Dashboard 提供 `/dashboard/planning/inspirations` 和 `/dashboard/planning/promotion-plans` 两个工作台，共享受品牌授权范围约束的品牌选择器。Kanban 的“品牌灵感”和“推广计划”菜单在新标签通过 SSO 直达当前品牌；旧 `/planning`、`/planning/inspirations`、`/planning/promotion-plans` 仅作为兼容跳转桥。
+- Growth 保存灵感逐条审核、灵感库批准、推广计划批准及当前计划选择。Kanban 不再写入新的 `PlanningReview`，历史记录保留只读；Kanban 的 `/planning/execution` 与 `/api/brands/:id/promotion-execution` 只保存 `MaterialRequirement`、`MaterialSubmission` 并关联本品牌 `MediaAsset`。
 - 品牌专属灵感必须由主理人逐条批准后才能进入计划。品牌或模板更新只显示可刷新提示，不自动覆盖旧版本或已进入计划的灵感。
-- 推广计划页在没有已批准品牌灵感库时必须禁用计划生成，并明确引导主理人前往“品牌灵感”完成审核。
-- 批准后的计划才能生成拍摄清单。第一版由主理人线下收集后统一上传素材；全部必需素材验收通过时执行状态进入 `material_ready`，流程结束，不创建 `ContentDraft`、视频任务、排期或自动发布。
+- Growth 服务端只允许使用最新已批准灵感库生成计划；批准新灵感库时旧批准版本进入 `superseded`，但历史计划引用保持不变。同一品牌最多一个由主理人明确选择的当前执行计划。
+- 只有当前且已批准的计划才能在 Kanban 生成拍摄清单。第一版由主理人线下收集后统一上传素材；全部必需素材验收通过时执行状态进入 `material_ready`，流程结束，不创建 `ContentDraft`、视频任务、排期或自动发布。
+
+- Content 只通过 `growthBrandKey` 读取 Growth 当前执行计划，不再读取 `BrandKnowledge.promoPlan` 的旧计划内容；无当前计划或 Growth 不可用时省略计划上下文，不回退旧计划，也不阻断普通内容生成。`brandVoice`、`brandImage`、`promotionFocus` 仍是 Kanban 本地执行配置，但迁出旧 `promoPlan` JSON，使用明确字段保存。
 
 ### 数据与接口约束
 

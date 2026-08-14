@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const { brandId, contentType, contentIdea, hookStyle, businessType } = body
 
   // 1. Brand access check — must happen before loading any brand context.
-  // buildBrandContext() exposes private data (address, phone, competitors, promo plan);
+  // buildBrandContext() exposes private data (address, phone, competitors, creative identity);
   // a logged-in user who guesses another brand's ID must not receive that data.
   if (brandId) {
     const allowed = await canSessionAccessBrandProject(

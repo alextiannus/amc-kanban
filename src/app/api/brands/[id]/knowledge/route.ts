@@ -33,7 +33,9 @@ const KNOWLEDGE_SELECT_FIELDS = {
   competitors: true,
   menuItems: true,
   // Section 4: Promotion Plan
-  promoPlan: true,
+  brandVoice: true,
+  brandImage: true,
+  promotionFocus: true,
   publishingFreq: true,
 } as const
 
@@ -59,7 +61,9 @@ function serializeKnowledge(k: any) {
     competitors: k.competitors || [],
     menuItems: k.menuItems || [],
     // Section 4
-    promoPlan: k.promoPlan || null,
+    brandVoice: k.brandVoice || '',
+    brandImage: k.brandImage || '',
+    promotionFocus: k.promotionFocus || '',
     publishingFreq: k.publishingFreq || null,
   }
 }
@@ -81,7 +85,9 @@ const EMPTY_KNOWLEDGE = {
   district: '',
   competitors: [] as string[],
   menuItems: [] as any[],
-  promoPlan: null,
+  brandVoice: '',
+  brandImage: '',
+  promotionFocus: '',
   publishingFreq: null,
 }
 
@@ -148,6 +154,9 @@ export async function PATCH(request: Request, { params }: Params) {
     'audienceAssumptions',
     'productAssumptions',
     'promoPlan',
+    'brandVoice',
+    'brandImage',
+    'promotionFocus',
     'publishingFreq',
   ]
   const attemptedIdentityKeys = identityKeys.filter((key) => Object.prototype.hasOwnProperty.call(body, key))

@@ -97,11 +97,9 @@ export type ParsedEditableBrandContext = {
     reservationUrl?: string
     orderingUrl?: string
     stores?: StoreDraft[]
-    promoPlan?: {
-      direction?: string
-      brandVoice?: string
-      brandImage?: string
-    }
+    brandVoice?: string
+    brandImage?: string
+    promotionFocus?: string
     publishingFreq?: {
       postsPerDay?: number
       platforms?: Record<string, { postsPerDay?: number }>
@@ -520,11 +518,9 @@ export function parseEditableBrandContextFromMarkdown(markdown: string): ParsedE
     if (product !== null) parsed.knowledge.productAssumptions = product
     if (location !== null) parsed.brand.location = location
 
-    const promoPlan: ParsedEditableBrandContext['knowledge']['promoPlan'] = {}
-    if (brandVoice !== null) promoPlan.brandVoice = brandVoice
-    if (brandImage !== null) promoPlan.brandImage = brandImage
-    if (direction !== null) promoPlan.direction = direction
-    if (Object.keys(promoPlan).length > 0) parsed.knowledge.promoPlan = promoPlan
+    if (brandVoice !== null) parsed.knowledge.brandVoice = brandVoice
+    if (brandImage !== null) parsed.knowledge.brandImage = brandImage
+    if (direction !== null) parsed.knowledge.promotionFocus = direction
 
     const platforms: Record<string, { postsPerDay?: number }> = {}
     for (const match of identity.matchAll(/^\s*-\s*(.+?)\s*发布频次\s*[：:]\s*(.+?)\s*$/gm)) {

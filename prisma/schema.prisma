@@ -1285,9 +1285,12 @@ model BrandKnowledge {
   competitors Json? // [String] — list of competitor brand names
 
   // ── Section 4: 推广计划 (Promotion Plan) ─────────────────────────────────
+  brandVoice    String? // Local creative voice guidance (not a campaign plan)
+  brandImage    String? // Local visual identity guidance
+  promotionFocus String? // Local evergreen promotion focus
   // promoPlan: { period, startDate, endDate, direction, copywritingRequirements,
   //              brandVoice, brandImage, keyMessages[], campaigns[] }
-  promoPlan      Json? // Current promotion plan object
+  promoPlan      Json? // Deprecated legacy snapshot; retained for audit/history only
   // publishingFreq: { postsPerDay, platforms: { [platformSlug]: { postsPerDay?, postsPerWeek?, preferredHours? } } }
   publishingFreq Json? // Per-brand publishing frequency (overrides global SystemConfig defaults)
 

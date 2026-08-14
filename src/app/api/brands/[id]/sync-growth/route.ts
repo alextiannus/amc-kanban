@@ -217,17 +217,9 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
     value('market.competitors'),
     value('competitors'),
   ])
-  const promoPlan = normalizePromoPlan(firstRecord([
-    value('promotion.plan'),
-    value('campaign.plan'),
-  ]), {
-    direction: firstText([plan.summary, plan.implementation_scope]),
-    copywritingRequirements: firstText([plan.content_needs]),
-    brandVoice: brandTone,
-    brandImage: firstText([story.positioning, profile.diagnosis]),
-    keyMessages: stringArrayFromText(firstText([story.dining_guide])),
-    campaigns: normalizeCampaigns(plan.phases),
-  })
+  const brandVoice = brandTone
+  const brandImage = firstText([story.positioning, profile.diagnosis])
+  const promotionFocus = firstText([plan.summary, plan.implementation_scope])
   const publishingFreq = normalizePublishingFreq(firstRecord([
     value('publishing.frequency'),
     value('content.publishing_frequency'),
@@ -276,7 +268,6 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
   if (market) knowledgeUpdate.market = market
   if (district) knowledgeUpdate.district = district
   if (competitors.length > 0) knowledgeUpdate.competitors = competitors
-  if (promoPlan) knowledgeUpdate.promoPlan = promoPlan
   if (publishingFreq) knowledgeUpdate.publishingFreq = publishingFreq
 
   await prisma.$transaction([
@@ -303,7 +294,9 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
         market,
         district,
         competitors,
-        promoPlan,
+        brandVoice: brandVoice || null,
+        brandImage: brandImage || null,
+        promotionFocus: promotionFocus || null,
         publishingFreq,
       },
     }),
@@ -478,26 +471,6 @@ function firstBriefField(briefs: any, label: string) {
     if (match?.[1]) return match[1].trim()
   }
   return ''
-}
-
-function normalizePromoPlan(record: Record<string, unknown>, defaults: Record<string, unknown>) {
-  const plan = { ...record }
-  for (const [key, value] of Object.entries(defaults)) {
-    if (value === null || value === undefined) continue
-    if (Array.isArray(value) && value.length === 0) continue
-    if (typeof value === 'string' && !value.trim()) continue
-    if (!(key in plan)) plan[key] = value
-  }
-  return Object.keys(plan).length > 0 ? plan : null
-}
-
-function normalizeCampaigns(phases: unknown) {
-  if (!Array.isArray(phases)) return []
-  return phases.map((phase: any) => ({
-    name: textValue(phase?.name || phase?.key),
-    dates: textValue(phase?.key),
-    desc: textValue(phase?.content),
-  })).filter((item) => item.name || item.desc)
 }
 
 function normalizePublishingFreq(record: Record<string, unknown>) {

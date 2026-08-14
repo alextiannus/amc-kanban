@@ -127,7 +127,7 @@ async function saveKanbanField(
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const brand = await tx.brand.findUnique({
       where: { id: brandId },
-      select: { location: true, knowledge: { select: { promoPlan: true, publishingFreq: true } } },
+      select: { location: true, knowledge: { select: { brandVoice: true, brandImage: true, promotionFocus: true, publishingFreq: true } } },
     })
     if (!brand) throw new IdentityValidationError('品牌不存在')
     let oldValue: unknown
@@ -147,15 +147,13 @@ async function saveKanbanField(
         create: { brandId, negPrompts: [], publishingFreq: normalizedFrequency as Prisma.InputJsonValue },
       })
     } else {
-      const promoKey = field === 'brandVoice' ? 'brandVoice' : field === 'brandImage' ? 'brandImage' : 'direction'
-      const promoPlan = objectValue(brand.knowledge?.promoPlan)
-      oldValue = optionalText(promoPlan[promoKey])
+      const localKey = field === 'brandVoice' ? 'brandVoice' : field === 'brandImage' ? 'brandImage' : 'promotionFocus'
+      oldValue = optionalText(brand.knowledge?.[localKey])
       nextValue = optionalText(rawValue)
-      const nextPlan = { ...promoPlan, [promoKey]: nextValue }
       await tx.brandKnowledge.upsert({
         where: { brandId },
-        update: { promoPlan: nextPlan as Prisma.InputJsonValue },
-        create: { brandId, negPrompts: [], promoPlan: nextPlan as Prisma.InputJsonValue },
+        update: { [localKey]: nextValue || null },
+        create: { brandId, negPrompts: [], [localKey]: nextValue || null },
       })
     }
 

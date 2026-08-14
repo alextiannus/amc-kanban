@@ -56,6 +56,8 @@ const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
   'viral-copy-scripts',
   'amc-content-roles',
   'amc-growth',
+  'brand-inspirations',
+  'promotion-plans',
 ])
 
 const MENU_TRANSLATIONS: Record<string, string> = {
@@ -69,6 +71,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '知识库': 'Knowledge Base',
   '品牌灵感': 'Brand Inspiration',
   '推广计划': 'Promotion Plans',
+  '素材执行': 'Material Execution',
   'AI 角色库': 'AI Role Library',
   '爆品素材库': 'Viral Inspiration Library',
   '视频生产': 'Video Production',
@@ -301,6 +304,13 @@ export default function Sidebar({
       if (item.id === 'video-production' && activeBrand?.id) {
         const separator = targetUrl.includes('?') ? '&' : '?'
         targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
+      }
+      if ((item.id === 'brand-inspirations' || item.id === 'promotion-plans') && activeBrand?.id) {
+        const separator = targetUrl.includes('?') ? '&' : '?'
+        targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
+      }
+      if (item.id === 'promotion-execution' && activeBrand?.id) {
+        targetUrl = `${targetUrl}?brandId=${encodeURIComponent(activeBrand.id)}`
       }
       if (targetUrl.includes('amc-growth.immedi.ai')) {
         const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
