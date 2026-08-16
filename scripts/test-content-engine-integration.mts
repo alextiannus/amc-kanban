@@ -221,6 +221,7 @@ function testViralCopyScriptBridge() {
   assertIncludes(batchTriggerRoute, "status: 'failed'", 'batch trigger records failed platform drafts without fallback')
   assertNotIncludes(batchTriggerRoute, 'callLLM', 'batch trigger must not call a local fallback LLM')
   assertIncludes(postEditDrawer, '/drafts/batch-trigger-copywriter', 'multi-copywriter modal uses batch content generation')
+  assertIncludes(postEditDrawer, 'if (saved.length > 1)', 'multi-copywriter modal must not fan out trigger-copywriter requests')
   assertIncludes(remoteContentService, "'/v1/copy-scripts/experiments/assign'", 'Kanban calls the amc-content experiment assignment API')
   assertIncludes(remoteContentService, "'/v1/copy-scripts/outcomes'", 'Kanban can send observed post outcomes back to amc-content')
   assertIncludes(postfastCron, 'syncViralCopyExperimentOutcomes', 'PostFast analytics automatically flow into viral script experiment outcomes')

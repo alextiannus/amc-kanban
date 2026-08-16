@@ -825,13 +825,14 @@ export default function PostEditDrawer({
         setPreviewOnly(false)
         setPreviewModalOpen(true)
 
-        if (viralScriptExperimentArm === 'automatic') {
+        if (saved.length > 1) {
           const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               draftIds: saved.map((draft: any) => draft.id).filter(Boolean),
               theme: contentIdea || caption || agentNote,
+              experimentArm: viralScriptExperimentArm,
             }),
           })
           const batchJson = await batchRes.json().catch(() => ({}))
