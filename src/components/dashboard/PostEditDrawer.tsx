@@ -790,7 +790,6 @@ export default function PostEditDrawer({
     setError(null)
     try {
       const targetAccountIds = [...selectedAccountIds]
-      const shouldUseBatchGeneration = targetAccountIds.length > 1
       // XHS is always in the default selection; respect user's choice here
       // Save draft first to commit latest edits to contentIdea/attachedMedia
       const saved = await saveDraft(selectedDraft?.status || 'draft', '【AI 正在创作中...】', targetAccountIds)
@@ -830,30 +829,18 @@ export default function PostEditDrawer({
         setPreviewOnly(false)
         setPreviewModalOpen(true)
 
-        if (shouldUseBatchGeneration) {
-          const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              draftIds: saved.map((draft: any) => draft.id).filter(Boolean),
-              theme: contentIdea || caption || agentNote,
-              experimentArm: viralScriptExperimentArm,
-            }),
-          })
-          const batchJson = await batchRes.json().catch(() => ({}))
-          if (!batchRes.ok) {
-            throw new Error(batchJson.error || '批量 AI 创作失败')
-          }
-        } else {
-          await Promise.all(
-            saved.map(draft =>
-              fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ experimentArm: viralScriptExperimentArm }),
-              })
-            )
-          )
+        const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            draftIds: saved.map((draft: any) => draft.id).filter(Boolean),
+            theme: contentIdea || caption || agentNote,
+            experimentArm: viralScriptExperimentArm,
+          }),
+        })
+        const batchJson = await batchRes.json().catch(() => ({}))
+        if (!batchRes.ok) {
+          throw new Error(batchJson.error || 'AI 创作失败')
         }
       }
     } catch (e: any) {
@@ -883,10 +870,14 @@ export default function PostEditDrawer({
     setIsAiGenerating(true)
 
     try {
-      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+      const res = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
+        body: JSON.stringify({
+          draftIds: [draftId],
+          theme: contentIdea || caption || agentNote,
+          ...(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
+        }),
       })
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))

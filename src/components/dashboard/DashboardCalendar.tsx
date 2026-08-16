@@ -841,20 +841,16 @@ ${contentIdea || 'No details provided.'}`
       setDraftStatuses(newStatuses)
       setIsAiGenerating(true)
 
-      if (createdDrafts.length > 1) {
-        const res = await fetch(`/api/brands/${activeBrandId}/drafts/batch-trigger-copywriter`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            draftIds: createdDrafts.map((draft) => draft.id).filter(Boolean),
-            theme: contentIdea || caption || agentNote,
-          }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json.error || '批量 AI 创作失败')
-      } else {
-        await triggerCopywriter(createdDrafts[0].id, true)
-      }
+      const res = await fetch(`/api/brands/${activeBrandId}/drafts/batch-trigger-copywriter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftIds: createdDrafts.map((draft) => draft.id).filter(Boolean),
+          theme: contentIdea || caption || agentNote,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || 'AI 创作失败')
     } catch (e) {
       console.error('Failed to regenerate drafts:', e)
     } finally {

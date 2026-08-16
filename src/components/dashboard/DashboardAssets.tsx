@@ -587,7 +587,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         scheduleSelectedCopywriterIds.includes(copywriter.id),
       )
 
-      await Promise.all(
+      const createdDraftIds = await Promise.all(
         selectedCopywriters.map(async (copywriter) => {
           const accId = draftAccountIdForCopywriter(copywriter, brandAccounts)
           const draftRes = await fetch(`/api/brands/${brandId}/drafts`, {
@@ -604,7 +604,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               agentNote: scheduleAgentNote.trim() || null,
               creativeHooks: scheduleAgentNote.trim() || null,
               agentId: null,
-              createTask: true,
+              createTask: false,
             }),
           })
 
@@ -612,15 +612,31 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           if (!draftRes.ok) {
             throw new Error(draftData.error || '创建 Post 草稿失败')
           }
+          const draftId = draftData.draft?.id
+          if (!draftId) throw new Error('草稿创建成功但没有返回草稿 ID')
+          return draftId as string
         })
       )
+
+      const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          draftIds: createdDraftIds,
+          theme: scheduleAgentNote.trim() || scheduleCaption.trim(),
+        }),
+      })
+      const batchData = await batchRes.json().catch(() => ({}))
+      if (!batchRes.ok) {
+        throw new Error(batchData.error || 'amc-content 文案创作失败')
+      }
 
       // 3. Reset states and notify
       setSelected([])
       setIsBatchSelectMode(false)
       setScheduleModalOpen(false)
       await loadAssets()
-      alert(`已成功生成 Post 草稿并创建了看板任务！\n平台的 AMC Copywriter 将继续完成内容的完整创作和发布。`)
+      alert(`已创建 Post 草稿并完成 AMC Copywriter 创作。\n如有平台失败，请在草稿卡片查看失败步骤与原因。`)
     } catch (err: any) {
       setError(err?.message || '操作失败，请重试')
     } finally {
