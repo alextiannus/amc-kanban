@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
-import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder } from '@/lib/draftCleanup'
-import { assignRemoteCopyScriptExperiment } from '@/lib/amc-content/remoteContentService'
+import { assignRemoteCopyScriptExperiment, RemoteContentServiceError } from '@/lib/amc-content/remoteContentService'
 import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
+import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
+import { COPYWRITER_ROSTER, platformAliases } from '@/lib/copywriters'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -18,12 +19,28 @@ async function getActor(request: Request) {
   return null
 }
 
+function extractInstruction(draft: { caption?: string | null; agentNote?: string | null }) {
+  const note = draft.agentNote || ''
+  const match = note.match(/【AI 生成指令】([\s\S]*?)【\/AI 生成指令】/)
+  if (match?.[1]?.trim()) return match[1].trim()
+  const caption = draft.caption?.trim()
+  if (caption && !caption.includes('【AI 正在创作中')) return caption
+  return ''
+}
+
+function failureStage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/quality gate/i.test(message)) return 'content_quality_gate'
+  if (/provider|LLM|model|timed out|timeout|429|504/i.test(message)) return 'model_provider'
+  if (/service is not configured|Unauthorized|Not found/i.test(message)) return 'amc_content_request'
+  return 'amc_content_generation'
+}
+
 export async function POST(request: Request, { params }: Params) {
   const { id: brandId, draftId } = await params
   const actor = await getActor(request)
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await request.json().catch(() => ({}))
-  let requireAmcContent = body?.requireAmcContent === true
 
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -32,7 +49,8 @@ export async function POST(request: Request, { params }: Params) {
   const draft = await prisma.contentDraft.findFirst({
     where: { id: draftId, brandId },
     include: {
-      account: true
+      account: true,
+      assetRefs: { include: { asset: true } },
     }
   })
   if (!draft) {
@@ -40,53 +58,7 @@ export async function POST(request: Request, { params }: Params) {
   }
   const accountPlatform = draft.account?.platformId || 'instagram'
   const platform = normalizeContentPlatform(accountPlatform)
-  requireAmcContent = requireAmcContent || Boolean(draft.viralCopyScriptId)
-
-  // 2. Find or create an associated Kanban task (WorkUnit)
-  // Look for any existing task that references this draftId in description or materials
-  let task = await prisma.workUnit.findFirst({
-    where: {
-      brandId,
-      status: { in: ['todo', 'in_progress', 'pending'] },
-      OR: [
-        { description: { contains: `Draft ID: ${draftId}` } },
-        { materials: { contains: `Draft ID: ${draftId}` } }
-      ]
-    }
-  })
-
-  // Find the active AI Agent assigned to this brand to set as assignee
-  const brandAgent = await prisma.brandAgent.findFirst({
-    where: { brandId, active: true },
-    select: { agentId: true }
-  })
-  const assigneeId = brandAgent?.agentId || null
-
-  if (!task) {
-    console.log(`No active task found for Draft ${draftId}. Creating a new one...`)
-    
-    // Determine platform name
-    task = await prisma.workUnit.create({
-      data: {
-        title: `AI Copywriting: Complete post creation for draft`,
-        description: `This task is automatically generated to complete content creation.\nDraft ID: ${draftId}\nOriginal Caption: ${draft.caption}`,
-        status: 'todo',
-        brandId,
-        assigneeId,
-        tags: [platform, 'ai_draft_trigger']
-      }
-    })
-  } else {
-    console.log(`Found active task ${task.id} for Draft ${draftId}. Ensuring status is 'todo'.`)
-    // Move to 'todo' status to trigger the agent if it was paused/pending
-    task = await prisma.workUnit.update({
-      where: { id: task.id },
-      data: {
-        status: 'todo',
-        assigneeId: task.assigneeId || assigneeId
-      }
-    })
-  }
+  const copywriter = COPYWRITER_ROSTER.find((item) => platformAliases(item.platform).includes(platform))
 
   let experimentAssignment: Awaited<ReturnType<typeof assignRemoteCopyScriptExperiment>> | null = null
   let effectiveCopyScriptId = draft.viralCopyScriptId || ''
@@ -126,41 +98,33 @@ export async function POST(request: Request, { params }: Params) {
     }
   }
 
-  // 3. Update draft caption in database to indicate AI is writing
+  // 2. Update draft caption in database to indicate AI is writing
   const originalCaption = draft.caption || ''
-  const originalStatus = draft.status || 'draft'
-  const canDeleteOnFailure = isAiDraftPlaceholder(originalCaption) && !draft.platformPostId && !draft.postUrl && !draft.publishedAt
   await prisma.contentDraft.update({
     where: { id: draftId },
     data: { caption: '【AI 正在创作中...】' }
   })
 
-  // 4. Invoke marketingGraph workflow and wait until it writes the draft.
-  // Production runtimes may stop background promises once the response is sent,
-  // so this endpoint must not fire-and-forget the actual copywriting job.
-  // Use a draft-scoped thread_id so each draft gets its own isolated checkpoint.
-  // This prevents stale state (error, status, aiFailed) from previous runs on the
-  // same brand from polluting this draft's copywriting run.
-  const config = { configurable: { thread_id: `draft_${draftId}` } }
-  const { marketingGraph } = await import('@/agents/graph/marketingGraph.ts')
-  let result: any = null
+  const refAssetIds = (draft as any).assetRefs?.map((ref: any) => ref.asset?.id).filter(Boolean) || []
+  const refMediaUrls = (draft as any).assetRefs?.map((ref: any) => ref.asset?.url).filter(Boolean) || []
+  const assetIds = Array.from(new Set([...(draft.assetIds || []), ...refAssetIds].map(String).filter(Boolean)))
+  const mediaUrls = Array.from(new Set([...(draft.mediaUrls || []), ...refMediaUrls].map(String).filter(Boolean)))
+
+  let result: Awaited<ReturnType<typeof generateContentDirect>> | null = null
   try {
-    result = await marketingGraph.invoke({
-      taskId: task.id,
+    console.log(`[trigger-copywriter-direct] brand=${brandId} draft=${draftId} platform=${platform}`)
+    result = await generateContentDirect({
       brandId,
-      draftId,
       platform,
-      caption: originalCaption,
-      copywriteOnly: true,
-      // Explicitly reset fields that could be stale from a previous checkpoint
-      status: 'in_progress',
-      error: '',
-      aiFailed: false,
-      requireAmcContent,
+      theme: extractInstruction(draft),
+      mediaUrls,
+      assetIds,
+      copywriterId: copywriter?.id,
+      copywriterName: copywriter?.name,
+      draftId,
       actorId: actor.id,
       actorType: actor.type,
       actorRole: actor.role,
-      assigneeId,
       copyScriptId: effectiveCopyScriptId,
       copyScriptVersionId: effectiveCopyScriptVersionId,
       scriptSelection: effectiveScriptSelection,
@@ -168,41 +132,47 @@ export async function POST(request: Request, { params }: Params) {
       experimentId: experimentAssignment?.experiment.id || '',
       experimentArm: experimentAssignment?.assignment.arm || '',
       experimentOverridden: experimentAssignment?.assignment.overridden || false,
-    }, config)
-    if (requireAmcContent && result?.contentEngine !== 'amc-content') {
-      throw new Error(`Expected amc-content copywriter, got ${result?.contentEngine || 'unknown engine'}`)
-    }
+    })
+    await prisma.contentDraft.update({
+      where: { id: draftId },
+      data: {
+        caption: result.caption,
+        hashtags: result.hashtags,
+        status: 'draft',
+        agentNote: `amc-content generated via direct trigger. platform=${platform}`,
+      },
+    })
+    console.log(
+      `AI Copywriter generated via direct amc-content trigger: platform=${platform}, quality=${(result.quality as any)?.score ?? 'n/a'}`,
+    )
   } catch (err: any) {
-    console.error(`Background copywriter trigger failed for draft ${draftId}:`, err);
+    const stage = failureStage(err)
+    const status = err instanceof RemoteContentServiceError ? err.status : 500
+    const diagnostics = err instanceof RemoteContentServiceError ? err.diagnostics : undefined
+    const reason = [
+      `amc-content direct generation failed`,
+      `stage=${stage}`,
+      `platform=${platform}`,
+      `status=${status}`,
+      `error=${err.message || String(err)}`,
+      diagnostics ? `diagnostics=${JSON.stringify(diagnostics)}` : '',
+    ].filter(Boolean).join('; ')
+    console.error(`[trigger-copywriter-direct] failed for draft ${draftId}:`, err)
     try {
-      const reason = `AI generation graph error: ${err.message || String(err)}`
-      const cleaned = canDeleteOnFailure
-        ? await cleanupDisposableAiPlaceholderDraft({ brandId, draftId, reason })
-        : false
-      if (!cleaned) {
-        await prisma.contentDraft.update({
-          where: { id: draftId },
-          data: {
-            caption: originalCaption,
-            status: originalStatus,
-            agentNote: reason
-          }
-        });
-      }
+      await prisma.contentDraft.update({
+        where: { id: draftId },
+        data: {
+          caption: originalCaption,
+          status: 'failed',
+          agentNote: reason,
+        }
+      })
     } catch (dbErr) {
-      console.error(`Failed to update draft ${draftId} to failed on error:`, dbErr);
-    }
-    try {
-      await prisma.workUnit.update({
-        where: { id: task.id },
-        data: { status: 'failed', requiredInput: `AI copywriter graph invocation crashed: ${err.message || String(err)}` }
-      });
-    } catch (dbErr) {
-      console.error(`Failed to update task ${task.id} to failed:`, dbErr);
+      console.error(`Failed to update draft ${draftId} to failed on error:`, dbErr)
     }
     return NextResponse.json(
-      { error: err.message || 'AI Copywriter failed', taskId: task.id, cleanedPlaceholderDraft: canDeleteOnFailure },
-      { status: 500 }
+      { error: err.message || 'AI Copywriter failed', stage, status, diagnostics },
+      { status }
     )
   }
 
@@ -233,8 +203,7 @@ export async function POST(request: Request, { params }: Params) {
 
   return NextResponse.json({
     success: true,
-    taskId: task.id,
-    contentEngine: result?.contentEngine || null,
+    contentEngine: result.contentEngine,
     provenance: result?.provenance || null,
     quality: result?.quality || null,
     draft: updatedDraft,
