@@ -4,6 +4,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import { cleanupDisposableAiPlaceholderDraft, isAiDraftPlaceholder } from '@/lib/draftCleanup'
 import { assignRemoteCopyScriptExperiment } from '@/lib/amc-content/remoteContentService'
+import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -37,7 +38,8 @@ export async function POST(request: Request, { params }: Params) {
   if (!draft) {
     return NextResponse.json({ error: 'Draft not found' }, { status: 404 })
   }
-  const platform = draft.account?.platformId || 'instagram'
+  const accountPlatform = draft.account?.platformId || 'instagram'
+  const platform = normalizeContentPlatform(accountPlatform)
   requireAmcContent = requireAmcContent || Boolean(draft.viralCopyScriptId)
 
   // 2. Find or create an associated Kanban task (WorkUnit)

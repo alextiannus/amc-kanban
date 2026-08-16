@@ -825,16 +825,30 @@ export default function PostEditDrawer({
         setPreviewOnly(false)
         setPreviewModalOpen(true)
 
-        // Trigger AI copywriting in parallel
-        await Promise.all(
-          saved.map(draft =>
-            fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
-            })
+        if (viralScriptExperimentArm === 'automatic') {
+          const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              draftIds: saved.map((draft: any) => draft.id).filter(Boolean),
+              theme: contentIdea || caption || agentNote,
+            }),
+          })
+          const batchJson = await batchRes.json().catch(() => ({}))
+          if (!batchRes.ok) {
+            throw new Error(batchJson.error || '批量 AI 创作失败')
+          }
+        } else {
+          await Promise.all(
+            saved.map(draft =>
+              fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ experimentArm: viralScriptExperimentArm }),
+              })
+            )
           )
-        )
+        }
       }
     } catch (e: any) {
       alert(e.message || 'AI 创作失败')

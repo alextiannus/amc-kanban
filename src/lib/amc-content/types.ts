@@ -78,6 +78,13 @@ export type ContentGenerationRequest = {
   experimentOverridden?: boolean
 }
 
+export type MultiPlatformContentGenerationRequest = Omit<ContentGenerationRequest, 'platform' | 'copywriterId' | 'copywriterName'> & {
+  platforms: PlatformType[]
+  copywriterIds?: Partial<Record<PlatformType, string>>
+  copywriterNames?: Partial<Record<PlatformType, string>>
+  continueOnError?: boolean
+}
+
 export type ViralCopyScriptRecommendation = {
   id: string
   name: string
@@ -124,4 +131,24 @@ export type ContentGenerationResult = {
   fallbackReason?: string
   quality?: unknown
   provenance?: unknown
+}
+
+export type MultiPlatformContentGenerationResult = {
+  success: boolean
+  mode?: string
+  requestedPlatforms?: PlatformType[]
+  modelRouting?: unknown
+  results: Array<{
+    platform: PlatformType
+    success: boolean
+    result?: {
+      caption: string
+      hashtags: string[]
+      quality?: unknown
+      provenance?: unknown
+    }
+    error?: string
+    status?: number
+    diagnostics?: unknown
+  }>
 }

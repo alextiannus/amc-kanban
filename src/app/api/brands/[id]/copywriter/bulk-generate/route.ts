@@ -3,8 +3,10 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
-import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
+import { generateMultiPlatformWithRemoteContentService } from '@/lib/amc-content/remoteContentService'
+import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
 import { COPYWRITER_ROSTER, copywritersFromIds, platformAliases } from '@/lib/copywriters'
+import type { PlatformType } from '@/lib/amc-content/types'
 
 // Allow enough time for parallel LLM calls across all platforms
 export const maxDuration = 120
@@ -103,12 +105,10 @@ export async function POST(request: Request, { params }: Params) {
 
     // Ensure placeholders exist for selected copywriter platforms if they are not configured
     for (const platformId of defaultPlatforms) {
+      const aliasesForPlatform = platformAliases(platformId)
       const exists = accounts.some((a: any) => {
         const pId = a.platformId.toLowerCase()
-        if (platformId === 'xiaohongshu') {
-          return ['xiaohongshu', 'rednote', 'red', 'xhs'].includes(pId)
-        }
-        return pId === platformId
+        return aliasesForPlatform.includes(pId)
       })
       if (!exists) {
         const handle = 'unconfigured'
@@ -148,6 +148,7 @@ export async function POST(request: Request, { params }: Params) {
         instagram: ['instagram', 'ins', 'ig'],
         facebook: ['facebook', 'fb'],
         tiktok: ['tiktok', 'tt'],
+        google_business: ['google_business', 'google', 'google_maps', 'google_map', 'google_business_profile', 'gbp', 'gmb'],
       }
       const allowed = aliases[targetPlatform.toLowerCase()] ?? [targetPlatform.toLowerCase()]
       accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
@@ -156,62 +157,88 @@ export async function POST(request: Request, { params }: Params) {
       accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
     }
 
-    // Generate content for all platforms in PARALLEL — reduces total latency from
-    // ~30-48s (serial, 2 LLM calls × N platforms) to ~8-15s (concurrent)
+    const accountPlans = accounts.map((account: any) => {
+      const platform = account.platformId.toLowerCase()
+      const contentPlatform = normalizeContentPlatform(platform)
+      const copywriter = selectedCopywriters.find((item) =>
+        platformAliases(item.platform).includes(platform),
+      ) || COPYWRITER_ROSTER.find((item) => platformAliases(item.platform).includes(platform))
+      return { account, platform, contentPlatform, copywriter }
+    }) as Array<{
+      account: any
+      platform: string
+      contentPlatform: PlatformType
+      copywriter: (typeof COPYWRITER_ROSTER)[number] | undefined
+    }>
+
+    const uniquePlatforms: PlatformType[] = Array.from(new Set(accountPlans.map((plan) => plan.contentPlatform)))
+    const contentCopywriterIds = Object.fromEntries(
+      accountPlans
+        .filter((plan) => plan.copywriter?.id)
+        .map((plan) => [plan.contentPlatform, plan.copywriter!.id]),
+    ) as Partial<Record<PlatformType, string>>
+    const contentCopywriterNames = Object.fromEntries(
+      accountPlans
+        .filter((plan) => plan.copywriter?.name)
+        .map((plan) => [plan.contentPlatform, plan.copywriter!.name]),
+    ) as Partial<Record<PlatformType, string>>
+
+    const multiResult = await generateMultiPlatformWithRemoteContentService({
+      brandId,
+      platforms: uniquePlatforms,
+      theme: idea,
+      mediaUrls: mediaUrls || [],
+      assetIds: assetIds || [],
+      copywriterIds: contentCopywriterIds,
+      copywriterNames: contentCopywriterNames,
+      actorId: actor.id,
+      actorType: actor.type,
+      actorRole: actor.role,
+      continueOnError: true,
+    })
+
+    if (!multiResult) {
+      throw new Error('amc-content service is not configured or did not generate content')
+    }
+
+    const generatedByPlatform = new Map(multiResult.results.map((result) => [result.platform, result]))
+
     const draftResults = await Promise.all(
-      accounts.map(async (account: any) => {
-        const platform = account.platformId.toLowerCase()
-        const copywriter = selectedCopywriters.find((item) =>
-          platformAliases(item.platform).includes(platform),
-        ) || COPYWRITER_ROSTER.find((item) => platformAliases(item.platform).includes(platform))
-        const scheduledAtPromise = getRecommendedTime(brandId, platform)
+      accountPlans.map(async ({ account, platform, contentPlatform, copywriter }) => {
+        const scheduledAtPromise = getRecommendedTime(brandId, contentPlatform)
+        const resultForPlatform = generatedByPlatform.get(contentPlatform)
+        const successResult = resultForPlatform?.success ? resultForPlatform.result : null
+        const caption = successResult?.caption || ''
+        const hashtags = successResult?.hashtags || []
+        const contentEngine = 'amc-content'
+        const generationError = resultForPlatform?.success
+          ? null
+          : [
+              resultForPlatform?.error || 'amc-content generation failed',
+              resultForPlatform?.status ? `HTTP ${resultForPlatform.status}` : '',
+            ].filter(Boolean).join(' · ')
 
-        let caption = ''
-        let hashtags: string[] = []
-        let contentEngine = 'amc-content'
-        let generationError: string | null = null
-
-        try {
-          let targetPlatform = platform
-          if (platform === 'red' || platform === 'xhs') {
-            targetPlatform = 'xiaohongshu'
+        if (successResult?.caption) {
+          const provenance = {
+            ...(successResult.provenance as object || {}),
+            modelRouting: multiResult.modelRouting,
           }
-
-          const cwResult = await generateContentDirect({
+          const promptVersion = (successResult.provenance as any)?.promptVersion || 'amc-content'
+          logCopywriterOutput({
             brandId,
-            platform: targetPlatform,
-            theme: idea,
-            mediaUrls: mediaUrls || [],
-            assetIds: assetIds || [],
-            copywriterId: copywriter?.id,
-            copywriterName: copywriter?.name,
-            actorId: actor.id,
-            actorType: actor.type,
-            actorRole: actor.role,
+            userId: actor.id,
+            systemPrompt: `[via contentService/${contentEngine}] ${JSON.stringify({
+              quality: successResult.quality,
+              provenance,
+            })}`,
+            userInput: idea,
+            rawOutput: JSON.stringify({ caption, hashtags, contentEngine, quality: successResult.quality, provenance }),
+            modelId: (successResult.provenance as any)?.modelId,
+            platform,
           })
-
-          if (cwResult && cwResult.caption) {
-            caption = cwResult.caption
-            hashtags = cwResult.hashtags || []
-            contentEngine = cwResult.contentEngine
-            const promptVersion = (cwResult.provenance as any)?.promptVersion || 'amc-content'
-            logCopywriterOutput({
-              brandId,
-              userId: actor.id,
-              systemPrompt: `[via contentService/${contentEngine}] ${JSON.stringify({
-                quality: cwResult.quality,
-                provenance: cwResult.provenance,
-              })}`,
-              userInput: idea,
-              rawOutput: JSON.stringify({ caption, hashtags, contentEngine, quality: cwResult.quality, provenance: cwResult.provenance }),
-              modelId: (cwResult.provenance as any)?.modelId,
-              platform,
-            })
-            console.log(`[BulkGenerate] Generated ${platform} with engine=${contentEngine}, promptVersion=${promptVersion}`)
-          }
-        } catch (err: unknown) {
-          generationError = err instanceof Error ? err.message : String(err)
-          console.error(`Failed to generate copy via amc-content for ${platform}; no fallback will run:`, err)
+          console.log(`[BulkGenerate] Generated ${platform} with engine=${contentEngine}, promptVersion=${promptVersion}`)
+        } else {
+          console.error(`Failed to generate copy via amc-content for ${platform}; no fallback will run: ${generationError}`)
         }
 
         const scheduledAt = await scheduledAtPromise

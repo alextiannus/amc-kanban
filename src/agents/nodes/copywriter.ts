@@ -5,6 +5,7 @@ import { getJaccardSimilarity } from "../knowledgeBase.ts";
 import { buildBrandContext } from "@/lib/brandContextBuilder.ts";
 import { loadPlatformSkill, formatSkillForPrompt } from "../skills/skillLoader.ts";
 import { tryGenerateWithRemoteContentService } from "../../lib/amc-content/remoteContentService.ts";
+import { normalizeContentPlatform } from "../../lib/amc-content/platforms.ts";
 
 export async function copywriterNode(state: any) {
   console.log("=== CopywriterNode Running (Composition Mode) ===");
@@ -12,8 +13,9 @@ export async function copywriterNode(state: any) {
     return state;
   }
   const { brandId, taskId, platform, researchNotes, marketingStrategy } = state;
-  const platformLower = (platform || "").toLowerCase();
-  const isRednote = platformLower === "xiaohongshu" || platformLower === "red" || platformLower === "xhs";
+  const contentPlatform = normalizeContentPlatform(platform || "instagram");
+  const platformLower: string = contentPlatform;
+  const isRednote = contentPlatform === "xiaohongshu";
 
   // Load platform-specific skill (AIERA v2)
   const platformSkill = await loadPlatformSkill(platformLower)
@@ -209,7 +211,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
     try {
       const amcContentResult = await tryGenerateWithRemoteContentService({
         brandId,
-        platform,
+        platform: contentPlatform,
         theme: userPrompt || task?.title || task?.description || brand.description || `${brand.name} local service update`,
         idea: userPrompt,
         angle: creativeHooks || marketingStrategy,
@@ -232,7 +234,7 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
 
       if (amcContentResult) {
         console.log(
-          `AI Copywriter generated via amc-content: platform=${platform}, quality=${(amcContentResult.quality as any)?.score ?? 'n/a'}`,
+          `AI Copywriter generated via amc-content: platform=${contentPlatform}, quality=${(amcContentResult.quality as any)?.score ?? 'n/a'}`,
         );
         return {
           caption: amcContentResult.caption,
