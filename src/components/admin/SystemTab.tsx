@@ -445,7 +445,7 @@ export default function SystemTab({
             <Settings size={18} className="text-blue-500" /> 系统服务与全局配置
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            在此集中管理大模型多路容灾路由、主 API 秘钥、微软 Azure TTS 语音生成、邮件发送网关，以及监控定时任务与系统审计日志。
+            在此管理 Kanban 自有文本 LLM 路由、邮件发送网关、监控定时任务与系统审计日志。文案、视频与 TTS 模型由 amc-content Content Lab 管理。
           </p>
         </div>
       </div>
@@ -460,17 +460,27 @@ export default function SystemTab({
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
               <Sparkles size={15} className="text-indigo-500" />
-              <span>外部大模型配置与多路容灾路由 (LLM Configs)</span>
+              <span>Kanban 文本大模型配置与多路容灾路由</span>
             </span>
             <span className="text-[10px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/30">
-              已注册 {llmConfigs.length} 路由
+              Kanban 文本 LLM：{llmConfigs.length} 路由
             </span>
           </button>
 
           {activeAccordion === 'llm' && (
             <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-xs text-slate-400 font-bold">配置当首选模型响应超时或遭遇频率限制时，系统按顺序容灾路由调用的备用模型。</span>
+              <div className="flex justify-between items-start gap-4 pt-2">
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-bold">
+                    这里只显示 Kanban 自己调用的文本 LLM。MiniMax TTS、视频生成和 amc-content Copywriter 模型已迁移到 Content Lab。
+                  </p>
+                  <a
+                    href="/admin/content-lab"
+                    className="inline-flex text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
+                  >
+                    打开 amc-content Content Lab 查看模型与 TTS 配置
+                  </a>
+                </div>
                 <button
                   onClick={handleOpenNewLLM}
                   className="inline-flex items-center gap-1 bg-blue-650 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm cursor-pointer"
@@ -575,15 +585,19 @@ export default function SystemTab({
                   AI 模型与 API Key 已迁移至 AI 模型配置
                 </p>
                 <p className="text-[11px] text-indigo-600 dark:text-indigo-400 leading-relaxed">
-                  Gemini、MiniMax TTS 及所有其他 AI 模型的密钥现在统一在 <strong>AI 模型配置</strong> 中管理。
-                  在那里可以配置多个模型、设置优先级、启用/禁用，并为不同场景（语音、文案、多模态）指定专用模型。
+                  Kanban 仅保留自身文本 LLM 路由。MiniMax TTS、amc-content Copywriter、参考视频分析与视频生成模型现在由 <strong>amc-content Content Lab</strong> 管理。
                 </p>
                 <p className="text-[10px] text-indigo-500 dark:text-indigo-500">
-                  MiniMax TTS：provider=minimax，taskTags 含 tts_generation（旧 tts 仍兼容）<br/>
-                  文案生成：taskTags 含 copywriting<br/>
-                  AI 语音伴侣：taskTags 含 companion<br/>
-                  视频生成：provider=seedance / kieai / fal / volcengine，taskTags 含 video_generation 或 image_to_video
+                  MiniMax TTS：Content Lab / 模型与路由 / tts_generation<br/>
+                  Copywriter：Content Lab / 模型与路由 / body_composition 与 quality_rewrite<br/>
+                  视频生成：Content Lab / 模型与路由 / video_generation
                 </p>
+                <a
+                  href="/admin/content-lab"
+                  className="inline-flex text-[11px] font-bold text-indigo-700 dark:text-indigo-300 hover:underline"
+                >
+                  前往 Content Lab
+                </a>
               </div>
             </div>
           )}
