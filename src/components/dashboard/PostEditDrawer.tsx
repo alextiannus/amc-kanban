@@ -600,8 +600,9 @@ export default function PostEditDrawer({
               if (updatedDraft) {
                 if (updatedDraft.status === 'failed') {
                   updatedStatuses[cwKey] = 'failed'
-                  // Clean up failed draft
-                  fetch(`/api/brands/${brandId}/drafts/${draft.id}`, { method: 'DELETE' }).catch(() => {})
+                  const note: string = updatedDraft.agentNote || '生成失败：content engine 未返回具体原因'
+                  setDraftCaptions(prev => ({ ...prev, [cwKey]: note }))
+                  setDraftWarnings(prev => ({ ...prev, [cwKey]: note }))
                 } else if (updatedDraft.caption && updatedDraft.caption !== '【AI 正在创作中...】') {
                   updatedStatuses[cwKey] = 'completed'
                   setDraftCaptions(prev => ({ ...prev, [cwKey]: updatedDraft.caption }))
@@ -715,7 +716,7 @@ export default function PostEditDrawer({
               if (resCreate.ok && jsonCreate.draft) {
                 return jsonCreate.draft
               }
-              return null
+              throw new Error(jsonCreate.error || `创建 ${accId} 平台草稿失败`)
             })
           )
           results.forEach(d => { if (d) savedDrafts.push(d) })
@@ -789,10 +790,14 @@ export default function PostEditDrawer({
     setError(null)
     try {
       const targetAccountIds = [...selectedAccountIds]
+      const shouldUseBatchGeneration = targetAccountIds.length > 1
       // XHS is always in the default selection; respect user's choice here
       // Save draft first to commit latest edits to contentIdea/attachedMedia
       const saved = await saveDraft(selectedDraft?.status || 'draft', '【AI 正在创作中...】', targetAccountIds)
       if (saved && saved.length > 0) {
+        if (saved.length !== targetAccountIds.length) {
+          throw new Error(`草稿保存阶段失败：已选择 ${targetAccountIds.length} 个平台，但只保存成功 ${saved.length} 个草稿`)
+        }
         // Remap: after backend resolves unconfigured_* IDs, use real accountIds from saved drafts
         const newSelectedIds = saved.map(d => d.accountId || '').filter(Boolean)
 
@@ -825,7 +830,7 @@ export default function PostEditDrawer({
         setPreviewOnly(false)
         setPreviewModalOpen(true)
 
-        if (saved.length > 1) {
+        if (shouldUseBatchGeneration) {
           const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

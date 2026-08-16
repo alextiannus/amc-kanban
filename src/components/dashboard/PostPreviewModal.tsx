@@ -248,7 +248,9 @@ export default function PostPreviewModal({
                     ) : isFailed ? (
                       <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
                         <p className="text-[11px] font-bold text-rose-400">生成失败</p>
-                        <p className="text-[9px] text-slate-500">请点击重写</p>
+                        <p className="max-w-[220px] whitespace-pre-wrap break-words text-center text-[9px] leading-relaxed text-slate-500">
+                          {currentCaption || draftWarnings[cwId] || '请点击重写'}
+                        </p>
                       </div>
                     ) : (
                       <PhoneFrame dark={normalizePlatform(copywriter.platform) === 'tiktok'} scale={0.85}>
