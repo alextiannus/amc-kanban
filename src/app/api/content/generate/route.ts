@@ -74,8 +74,6 @@ export async function POST(request: Request) {
       mustAvoid: stringArray(body.mustAvoid),
       mediaUrls: stringArray(body.mediaUrls),
       assetIds: stringArray(body.assetIds),
-      copywriterId: optionalString(body.copywriterId),
-      copywriterName: optionalString(body.copywriterName),
       draftId: optionalString(body.draftId) ?? null,
       taskId: optionalString(body.taskId) ?? null,
       actorId: actor.id,
