@@ -130,7 +130,7 @@ export async function POST(request: Request, { params }: Params) {
       scriptSelection: effectiveScriptSelection,
       experimentAssignmentId: experimentAssignment?.assignment.id || '',
       experimentId: experimentAssignment?.experiment.id || '',
-      experimentArm: experimentAssignment?.assignment.arm || '',
+      experimentArm: experimentAssignment?.assignment.arm,
       experimentOverridden: experimentAssignment?.assignment.overridden || false,
     })
     await prisma.contentDraft.update({
