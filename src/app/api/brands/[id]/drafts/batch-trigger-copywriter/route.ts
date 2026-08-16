@@ -4,7 +4,6 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
 import { generateMultiPlatformWithRemoteContentService } from '@/lib/amc-content/remoteContentService'
-import { COPYWRITER_ROSTER, platformAliases } from '@/lib/copywriters'
 import type { PlatformType } from '@/lib/amc-content/types'
 
 export const maxDuration = 120
@@ -60,21 +59,16 @@ export async function POST(request: Request, { params }: Params) {
   const draftPlans: Array<{
     draft: any
     platform: PlatformType
-    copywriter: (typeof COPYWRITER_ROSTER)[number] | undefined
     instruction: string
     assetIds: string[]
     mediaUrls: string[]
   }> = drafts.map((draft: any) => {
     const platform = normalizeContentPlatform(draft.account?.platformId || 'instagram')
-    const copywriter = COPYWRITER_ROSTER.find((item) =>
-      platformAliases(item.platform).includes(platform),
-    )
     const refAssetIds = (draft as any).assetRefs?.map((ref: any) => ref.asset?.id).filter(Boolean) || []
     const refMediaUrls = (draft as any).assetRefs?.map((ref: any) => ref.asset?.url).filter(Boolean) || []
     return {
       draft,
       platform,
-      copywriter,
       instruction: extractInstruction(draft),
       assetIds: Array.from(new Set([...(draft.assetIds || []), ...refAssetIds].map(String).filter(Boolean))),
       mediaUrls: Array.from(new Set([...(draft.mediaUrls || []), ...refMediaUrls].map(String).filter(Boolean))),
@@ -85,16 +79,6 @@ export async function POST(request: Request, { params }: Params) {
   const theme = String(body?.theme || draftPlans.map((plan) => plan.instruction).find(Boolean) || '品牌内容创作')
   const assetIds: string[] = Array.from(new Set(draftPlans.flatMap((plan) => plan.assetIds)))
   const mediaUrls: string[] = Array.from(new Set(draftPlans.flatMap((plan) => plan.mediaUrls)))
-  const copywriterIds = Object.fromEntries(
-    draftPlans
-      .filter((plan) => plan.copywriter?.id)
-      .map((plan) => [plan.platform, plan.copywriter!.id]),
-  ) as Partial<Record<PlatformType, string>>
-  const copywriterNames = Object.fromEntries(
-    draftPlans
-      .filter((plan) => plan.copywriter?.name)
-      .map((plan) => [plan.platform, plan.copywriter!.name]),
-  ) as Partial<Record<PlatformType, string>>
 
   try {
     console.log(`[batch-trigger-copywriter] brand=${brandId} drafts=${draftPlans.length} platforms=${platforms.join(',')}`)
@@ -104,8 +88,6 @@ export async function POST(request: Request, { params }: Params) {
       theme,
       mediaUrls,
       assetIds,
-      copywriterIds,
-      copywriterNames,
       actorId: actor.id,
       actorType: actor.type,
       actorRole: actor.role,

@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma'
 import { assignRemoteCopyScriptExperiment, RemoteContentServiceError } from '@/lib/amc-content/remoteContentService'
 import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
 import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
-import { COPYWRITER_ROSTER, platformAliases } from '@/lib/copywriters'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -58,7 +57,6 @@ export async function POST(request: Request, { params }: Params) {
   }
   const accountPlatform = draft.account?.platformId || 'instagram'
   const platform = normalizeContentPlatform(accountPlatform)
-  const copywriter = COPYWRITER_ROSTER.find((item) => platformAliases(item.platform).includes(platform))
 
   let experimentAssignment: Awaited<ReturnType<typeof assignRemoteCopyScriptExperiment>> | null = null
   let effectiveCopyScriptId = draft.viralCopyScriptId || ''
@@ -119,8 +117,6 @@ export async function POST(request: Request, { params }: Params) {
       theme: extractInstruction(draft),
       mediaUrls,
       assetIds,
-      copywriterId: copywriter?.id,
-      copywriterName: copywriter?.name,
       draftId,
       actorId: actor.id,
       actorType: actor.type,

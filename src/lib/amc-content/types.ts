@@ -80,8 +80,6 @@ export type ContentGenerationRequest = {
 
 export type MultiPlatformContentGenerationRequest = Omit<ContentGenerationRequest, 'platform' | 'copywriterId' | 'copywriterName'> & {
   platforms: PlatformType[]
-  copywriterIds?: Partial<Record<PlatformType, string>>
-  copywriterNames?: Partial<Record<PlatformType, string>>
   continueOnError?: boolean
 }
 

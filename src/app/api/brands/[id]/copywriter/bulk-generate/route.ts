@@ -172,16 +172,6 @@ export async function POST(request: Request, { params }: Params) {
     }>
 
     const uniquePlatforms: PlatformType[] = Array.from(new Set(accountPlans.map((plan) => plan.contentPlatform)))
-    const contentCopywriterIds = Object.fromEntries(
-      accountPlans
-        .filter((plan) => plan.copywriter?.id)
-        .map((plan) => [plan.contentPlatform, plan.copywriter!.id]),
-    ) as Partial<Record<PlatformType, string>>
-    const contentCopywriterNames = Object.fromEntries(
-      accountPlans
-        .filter((plan) => plan.copywriter?.name)
-        .map((plan) => [plan.contentPlatform, plan.copywriter!.name]),
-    ) as Partial<Record<PlatformType, string>>
 
     const multiResult = await generateMultiPlatformWithRemoteContentService({
       brandId,
@@ -189,8 +179,6 @@ export async function POST(request: Request, { params }: Params) {
       theme: idea,
       mediaUrls: mediaUrls || [],
       assetIds: assetIds || [],
-      copywriterIds: contentCopywriterIds,
-      copywriterNames: contentCopywriterNames,
       actorId: actor.id,
       actorType: actor.type,
       actorRole: actor.role,

@@ -193,8 +193,6 @@ export async function generateMultiPlatformWithRemoteContentService(
       },
       mediaUrls: input.mediaUrls,
       assetIds: input.assetIds,
-      copywriterIds: input.copywriterIds,
-      copywriterNames: input.copywriterNames,
       taskId: input.taskId,
       continueOnError: input.continueOnError ?? true,
     }),
