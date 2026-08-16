@@ -97,6 +97,7 @@ export async function POST(request: Request, { params }: Params) {
   ) as Partial<Record<PlatformType, string>>
 
   try {
+    console.log(`[batch-trigger-copywriter] brand=${brandId} drafts=${draftPlans.length} platforms=${platforms.join(',')}`)
     const multiResult = await generateMultiPlatformWithRemoteContentService({
       brandId,
       platforms,

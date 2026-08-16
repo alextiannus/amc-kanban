@@ -772,7 +772,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         return draftId as string
       }
 
-      const runThread = async (thread: AIBatchThread) => {
+      const prepareThreadDraft = async (thread: AIBatchThread) => {
         try {
           updateThread(thread.id, { status: 'drafting', error: undefined })
           const draftId = await createThreadDraft(thread)
@@ -806,28 +806,66 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
           setAiJobStep(3)
           updateThread(thread.id, { status: 'copywriting' })
-          const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ requireAmcContent: true }),
-          })
-          const triggerData = await triggerRes.json().catch(() => ({}))
-          if (!triggerRes.ok) {
-            throw new Error(triggerData.error || 'amc-content 文案生成失败')
-          }
-          if (triggerData.contentEngine !== 'amc-content') {
-            throw new Error(`未使用 amc-content 创作：${triggerData.contentEngine || 'unknown'}`)
-          }
-          completedCount += 1
-          updateThread(thread.id, { status: 'done' })
+          return { thread, draftId }
         } catch (e: any) {
           failedCount += 1
           console.warn(`AI batch thread ${thread.id} failed:`, e)
           updateThread(thread.id, { status: 'failed', error: e.message || '创作失败' })
+          return null
         }
       }
 
-      await Promise.allSettled(threadPlan.map((thread) => runThread(thread)))
+      const runAssetGroup = async (groupThreads: AIBatchThread[]) => {
+        const prepared = (await Promise.all(groupThreads.map((thread) => prepareThreadDraft(thread))))
+          .filter((item): item is { thread: AIBatchThread; draftId: string } => Boolean(item))
+
+        if (prepared.length === 0) return
+
+        const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            draftIds: prepared.map((item) => item.draftId),
+            theme: aiJobNote.trim() || `基于素材 ${groupThreads[0]?.assetLabel || ''} 创作平台原生内容`,
+          }),
+        })
+        const batchData = await batchRes.json().catch(() => ({}))
+        if (!batchRes.ok) {
+          const message = batchData.error || 'amc-content 批量文案生成失败'
+          failedCount += prepared.length
+          prepared.forEach(({ thread }) => updateThread(thread.id, { status: 'failed', error: message }))
+          return
+        }
+
+        const resultByDraftId = new Map(
+          (Array.isArray(batchData.results) ? batchData.results : [])
+            .map((item: any) => [item.draftId, item]),
+        )
+        prepared.forEach(({ thread, draftId }) => {
+          const result = resultByDraftId.get(draftId) as any
+          if (result?.success) {
+            completedCount += 1
+            updateThread(thread.id, { status: 'done' })
+            return
+          }
+          failedCount += 1
+          updateThread(thread.id, {
+            status: 'failed',
+            error: result?.error || batchData.error || 'amc-content 文案生成失败',
+          })
+        })
+      }
+
+      const threadsByAsset = new Map<string, AIBatchThread[]>()
+      threadPlan.forEach((thread) => {
+        const group = threadsByAsset.get(thread.assetId) || []
+        group.push(thread)
+        threadsByAsset.set(thread.assetId, group)
+      })
+
+      for (const groupThreads of threadsByAsset.values()) {
+        await runAssetGroup(groupThreads)
+      }
 
       if (createdDraftIds.length === 0) {
         throw new Error('草稿创建失败，请检查素材和 Copywriter 配置后重试。')
