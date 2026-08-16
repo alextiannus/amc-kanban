@@ -10,6 +10,18 @@ type RemoteContentResult = {
   }
 }
 
+export class RemoteContentServiceError extends Error {
+  status: number
+  diagnostics?: unknown
+
+  constructor(message: string, status = 502, diagnostics?: unknown) {
+    super(message)
+    this.name = 'RemoteContentServiceError'
+    this.status = status
+    this.diagnostics = diagnostics
+  }
+}
+
 export type RemoteVideoCreatorRequest = {
   brandId: string
   platform?: string
@@ -111,7 +123,11 @@ export async function tryGenerateWithRemoteContentService(
 
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    throw new Error(data?.error || `Remote content service failed with ${response.status}`)
+    throw new RemoteContentServiceError(
+      data?.error || `Remote content service failed with ${response.status}`,
+      response.status,
+      data?.diagnostics,
+    )
   }
 
   const remote = data as RemoteContentResult

@@ -2,11 +2,9 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { callLLM } from '@/lib/llmRouter'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
-import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'
+import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
 import { COPYWRITER_ROSTER, copywritersFromIds, platformAliases } from '@/lib/copywriters'
-import { resolveBrandIdentity } from '@/lib/brandIdentity'
 
 // Allow enough time for parallel LLM calls across all platforms
 export const maxDuration = 120
@@ -158,31 +156,6 @@ export async function POST(request: Request, { params }: Params) {
       accounts = accounts.filter((a: any) => allowed.includes(a.platformId.toLowerCase()))
     }
 
-    const identity = await resolveBrandIdentity(brandId)
-    const identityTone = identity?.fields.brandTone.value
-    const identityAudience = identity?.fields.targetAudience.value
-    const identitySellingPoints = identity?.fields.sellingPoints.value
-    let brandToneText = typeof identityTone === 'string' && identityTone ? `Brand Tone/Voice: ${identityTone}` : ""
-    const identityContextText = [
-      typeof identityAudience === 'string' && identityAudience ? `Target Audience: ${identityAudience}` : '',
-      Array.isArray(identitySellingPoints) && identitySellingPoints.length ? `Unique Selling Points: ${identitySellingPoints.join('; ')}` : '',
-    ].filter(Boolean).join('\n')
-    let menuText = ""
-    let slangText = ""
-    if (brand.knowledge) {
-      const k = brand.knowledge
-      if (k.menuItems) {
-        const menu = k.menuItems as any[]
-        if (menu.length > 0) {
-          menuText = `Menu Items:\n` + menu.map(item => `- ${item.name}: ${item.description || ""}`).join("\n")
-        }
-      }
-      if (k.slangDict) {
-        const slang = k.slangDict as Record<string, string>
-        slangText = `Target local slang/terms:\n` + Object.entries(slang).map(([key, val]) => `- "${key}": ${val}`).join("\n")
-      }
-    }
-
     // Generate content for all platforms in PARALLEL — reduces total latency from
     // ~30-48s (serial, 2 LLM calls × N platforms) to ~8-15s (concurrent)
     const draftResults = await Promise.all(
@@ -193,9 +166,10 @@ export async function POST(request: Request, { params }: Params) {
         ) || COPYWRITER_ROSTER.find((item) => platformAliases(item.platform).includes(platform))
         const scheduledAtPromise = getRecommendedTime(brandId, platform)
 
-        let caption = `【${platform}】美味速递！创意想法：${idea}`
+        let caption = ''
         let hashtags: string[] = []
-        let contentEngine = 'fallback-default'
+        let contentEngine = 'amc-content'
+        let generationError: string | null = null
 
         try {
           let targetPlatform = platform
@@ -203,7 +177,7 @@ export async function POST(request: Request, { params }: Params) {
             targetPlatform = 'xiaohongshu'
           }
 
-          const cwResult = await generateContentWithFallback({
+          const cwResult = await generateContentDirect({
             brandId,
             platform: targetPlatform,
             theme: idea,
@@ -214,14 +188,13 @@ export async function POST(request: Request, { params }: Params) {
             actorId: actor.id,
             actorType: actor.type,
             actorRole: actor.role,
-            fallbackToLegacy: false,
           })
 
           if (cwResult && cwResult.caption) {
             caption = cwResult.caption
             hashtags = cwResult.hashtags || []
             contentEngine = cwResult.contentEngine
-            const promptVersion = (cwResult.provenance as any)?.promptVersion || (contentEngine === 'amc-content' ? 'amc-content' : 'legacy-copywriter')
+            const promptVersion = (cwResult.provenance as any)?.promptVersion || 'amc-content'
             logCopywriterOutput({
               brandId,
               userId: actor.id,
@@ -236,62 +209,9 @@ export async function POST(request: Request, { params }: Params) {
             })
             console.log(`[BulkGenerate] Generated ${platform} with engine=${contentEngine}, promptVersion=${promptVersion}`)
           }
-        } catch (err) {
-          console.error(`Failed to generate copy via copywriterNode for ${platform}:`, err)
-          const prompt = `You are a professional social media manager and copywriter for the brand "${brand.name}".
-Brand Description: ${brand.description || "A premium restaurant/brand."}
-Target Platform: ${platform}
-Language Rule:
-- For Xiaohongshu (小红书/Rednote, platform is "red", "xiaohongshu", or "xhs"): You MUST write the content in Simplified Chinese (中文) by default.
-- For all other platforms (Instagram, Facebook, TikTok): You MUST write the content in English (英文) by default.
-
-User Creative Idea/Theme: "${idea}"
-Number of attached images: ${mediaUrls ? mediaUrls.length : 0}
-${mediaUrls && mediaUrls.length > 0 ? `Attached Image URLs: ${mediaUrls.join(", ")}` : ""}
-
-${brandToneText ? `${brandToneText}\n` : ""}${identityContextText ? `${identityContextText}\n` : ""}
-${menuText ? `${menuText}\n` : ""}
-${slangText ? `${slangText}\n` : ""}
-${brand.location ? `Location: ${brand.location}` : ""}
-${brand.address ? `Address: ${brand.address}` : ""}
-
-Goal: Generate a complete social media post for this platform.
-${(!rawIdea || !rawIdea.trim()) ? `IMPORTANT: No specific theme was provided. You MUST invent a creative, attention-grabbing Hook based on the brand, images, and context. Choose a hook style (e.g., Curiosity Gap, Direct Value, Social Proof, Counter-Narrative, or Pain-Point) that fits the platform.` : ''}
-Requirements:
-1. For Xiaohongshu: MUST start with a powerful 爆款 Hook (e.g., "竟然有这种好地方！""你不知道的XX秘密""去了就后悔没早去"). Followed by emojis, conversational Chinese, bullet points. Ends with "！！". Output hashtags at the end.
-2. For Instagram: MUST start with a catchy opening hook sentence in English. Neat spacing, relevant hashtags at the bottom.
-3. For Facebook: Engaging opening hook, informative, English, address/contact info naturally included, hashtags at the bottom.
-
-Output ONLY a valid JSON object with the following structure:
-{
-  "caption": "Your complete post caption text here (without hashtags)",
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3"]
-}
-Do not include markdown wrappers around the JSON, return the raw JSON object.
-`
-          try {
-            const result = await callLLM("copywriting", prompt, 1000)
-            if (result.text) {
-              const cleanJson = result.text.replace(/```json/g, "").replace(/```/g, "").trim()
-              const parsed = JSON.parse(cleanJson)
-              if (parsed.caption) {
-                caption = parsed.caption
-                hashtags = parsed.hashtags || []
-                contentEngine = 'bulk-generate-fallback-llm'
-                logCopywriterOutput({
-                  brandId,
-                  userId: actor.id,
-                  systemPrompt: prompt,
-                  userInput: idea,
-                  rawOutput: JSON.stringify({ caption, hashtags }),
-                  modelId: result.modelName ?? result.provider ?? undefined,
-                  platform,
-                })
-              }
-            }
-          } catch (fallbackErr) {
-            console.error(`Fallback LLM failed for ${platform}:`, fallbackErr)
-          }
+        } catch (err: unknown) {
+          generationError = err instanceof Error ? err.message : String(err)
+          console.error(`Failed to generate copy via amc-content for ${platform}; no fallback will run:`, err)
         }
 
         const scheduledAt = await scheduledAtPromise
@@ -308,6 +228,8 @@ Do not include markdown wrappers around the JSON, return the raw JSON object.
           mediaUrls: mediaUrls || [],
           hashtags,
           contentEngine,
+          aiFailed: Boolean(generationError),
+          error: generationError,
           scheduledAt,
           assetIds: assetIds || [],
           isConnected: account.handle !== 'unconfigured'

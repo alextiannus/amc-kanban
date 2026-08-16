@@ -76,10 +76,6 @@ export const StateAnnotation = Annotation.Root({
     reducer: (x, y) => y !== undefined ? y : x,
     default: () => false
   }),
-  skipAmcContent: Annotation<boolean>({
-    reducer: (x, y) => y !== undefined ? y : x,
-    default: () => false
-  }),
   actorId: Annotation<string>({
     reducer: (x, y) => y ?? x,
     default: () => ""

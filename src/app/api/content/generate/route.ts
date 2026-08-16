@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import type { IndustryVertical } from '@/lib/amc-content/types'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { generateContentWithFallback } from '@/lib/amc-content/contentGenerationService'
+import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
+import { RemoteContentServiceError } from '@/lib/amc-content/remoteContentService'
 
 export const maxDuration = 120
 
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const startedAt = Date.now()
-    const result = await generateContentWithFallback({
+    const result = await generateContentDirect({
       brandId,
       platform,
       theme,
@@ -77,7 +78,6 @@ export async function POST(request: Request) {
       copywriterName: optionalString(body.copywriterName),
       draftId: optionalString(body.draftId) ?? null,
       taskId: optionalString(body.taskId) ?? null,
-      fallbackToLegacy: body.fallbackToLegacy !== false,
       actorId: actor.id,
       actorType: actor.type,
       actorRole: actor.role,
@@ -91,9 +91,15 @@ export async function POST(request: Request) {
       latencyMs: Date.now() - startedAt,
       ...result,
     })
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[ContentGenerate] failed:', err)
-    return NextResponse.json({ error: err.message || 'Content generation failed' }, { status: 500 })
+    if (err instanceof RemoteContentServiceError) {
+      return NextResponse.json({
+        error: err.message || 'Content generation failed',
+        diagnostics: err.diagnostics,
+      }, { status: err.status || 502 })
+    }
+    return NextResponse.json({ error: err instanceof Error ? err.message : 'Content generation failed' }, { status: 500 })
   }
 }
 

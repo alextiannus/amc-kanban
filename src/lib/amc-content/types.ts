@@ -66,7 +66,6 @@ export type ContentGenerationRequest = {
   copywriterName?: string
   draftId?: string | null
   taskId?: string | null
-  fallbackToLegacy?: boolean
   actorId?: string
   actorType?: string
   actorRole?: string
@@ -120,7 +119,7 @@ export type ViralCopyScriptExperimentAssignment = {
 export type ContentGenerationResult = {
   caption: string
   hashtags: string[]
-  contentEngine: 'amc-content' | 'legacy-copywriter' | 'rule-based-fallback'
+  contentEngine: 'amc-content'
   fallbackUsed: boolean
   fallbackReason?: string
   quality?: unknown
