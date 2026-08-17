@@ -105,7 +105,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     groups.push({
       groupLabel: '内容中心',
       items: [
-        { id: 'inspiration-library', view: 'managementOverview', label: '爆品素材库', icon: 'Images', href: '/admin/inspiration-library' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
         { id: 'amc-content-roles', view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
       ],
@@ -126,7 +125,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     groups.push({
       groupLabel: '内容中心',
       items: [
-        { id: 'inspiration-library',view: 'managementOverview', label: '爆品素材库', icon: 'Images', href: '/admin/inspiration-library' },
         { id: 'video-production',   view: 'managementOverview', label: '视频生产', icon: 'Video', href: '/admin/video-production' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },

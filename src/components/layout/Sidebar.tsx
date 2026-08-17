@@ -75,7 +75,6 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '推广计划': 'Promotion Plans',
   '素材执行': 'Material Execution',
   'AI 角色库': 'AI Role Library',
-  '爆品素材库': 'Viral Inspiration Library',
   '视频生产': 'Video Production',
   '爆品脚本': 'Viral Copy Scripts',
   '品牌故事': 'Brand Story',

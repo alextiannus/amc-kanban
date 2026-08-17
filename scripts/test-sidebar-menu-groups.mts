@@ -5,7 +5,7 @@ import { getMenuGroups as getMenuGroupsUserManagement } from '../src/lib/user-ma
 
 const expectedManagedGroups = [
   ['主理人', ['主理人总览', '账号快照', '素材执行']],
-  ['内容中心', ['爆品素材库', '视频生产', '爆品脚本', 'AI 角色库']],
+  ['内容中心', ['视频生产', '爆品脚本', 'AI 角色库']],
   ['知识增长中心', ['品牌灵感', '推广计划', '知识库']],
 ]
 
@@ -23,8 +23,8 @@ for (const getMenuGroups of [getMenuGroupsMain, getMenuGroupsUserManagement]) {
   assert.deepEqual(researcherGroups.map((group) => group.groupLabel), ['内容中心'])
   assert.deepEqual(
     researcherGroups[0]?.items.map((item) => item.label),
-    ['爆品素材库', '爆品脚本', 'AI 角色库'],
-    'Researcher content access must stay unchanged and must not include video production',
+    ['爆品脚本', 'AI 角色库'],
+    'Researcher content access must not include retired material navigation or video production',
   )
 }
 
