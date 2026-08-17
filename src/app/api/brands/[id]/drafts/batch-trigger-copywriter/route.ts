@@ -109,7 +109,7 @@ export async function POST(request: Request, { params }: Params) {
           },
           select: { id: true, caption: true, hashtags: true, status: true, agentNote: true },
         })
-        return { draftId: draft.id, platform, success: true, draft: updated, provenance: result.result.provenance, quality: result.result.quality }
+        return { draftId: draft.id, platform, success: true, draft: updated, provenance: result.result.provenance }
       }
 
       const error = [

@@ -29,7 +29,6 @@ function extractInstruction(draft: { caption?: string | null; agentNote?: string
 
 function failureStage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error)
-  if (/quality gate/i.test(message)) return 'content_quality_gate'
   if (/provider|LLM|model|timed out|timeout|429|504/i.test(message)) return 'model_provider'
   if (/service is not configured|Unauthorized|Not found/i.test(message)) return 'amc_content_request'
   return 'amc_content_generation'
@@ -138,9 +137,7 @@ export async function POST(request: Request, { params }: Params) {
         agentNote: `amc-content generated via direct trigger. platform=${platform}`,
       },
     })
-    console.log(
-      `AI Copywriter generated via direct amc-content trigger: platform=${platform}, quality=${(result.quality as any)?.score ?? 'n/a'}`,
-    )
+    console.log(`AI Copywriter generated via direct amc-content trigger: platform=${platform}`)
   } catch (err: any) {
     const stage = failureStage(err)
     const status = err instanceof RemoteContentServiceError ? err.status : 500
@@ -201,7 +198,6 @@ export async function POST(request: Request, { params }: Params) {
     success: true,
     contentEngine: result.contentEngine,
     provenance: result?.provenance || null,
-    quality: result?.quality || null,
     draft: updatedDraft,
     message: 'AI Copywriter triggered successfully'
   })

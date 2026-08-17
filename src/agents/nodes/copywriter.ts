@@ -233,14 +233,11 @@ Description: ${asset.aiCaption || "N/A"}`).join("\n") + "\n";
       });
 
       if (amcContentResult) {
-        console.log(
-          `AI Copywriter generated via amc-content: platform=${contentPlatform}, quality=${(amcContentResult.quality as any)?.score ?? 'n/a'}`,
-        );
+        console.log(`AI Copywriter generated via amc-content: platform=${contentPlatform}`);
         return {
           caption: amcContentResult.caption,
           hashtags: amcContentResult.hashtags,
           aiFailed: false,
-          quality: amcContentResult.quality,
           provenance: amcContentResult.provenance,
           contentEngine: 'amc-content',
         };

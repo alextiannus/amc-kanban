@@ -215,12 +215,9 @@ export async function POST(request: Request, { params }: Params) {
           logCopywriterOutput({
             brandId,
             userId: actor.id,
-            systemPrompt: `[via contentService/${contentEngine}] ${JSON.stringify({
-              quality: successResult.quality,
-              provenance,
-            })}`,
+            systemPrompt: `[via contentService/${contentEngine}] ${JSON.stringify({ provenance })}`,
             userInput: idea,
-            rawOutput: JSON.stringify({ caption, hashtags, contentEngine, quality: successResult.quality, provenance }),
+            rawOutput: JSON.stringify({ caption, hashtags, contentEngine, provenance }),
             modelId: (successResult.provenance as any)?.modelId,
             platform,
           })

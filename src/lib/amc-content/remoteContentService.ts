@@ -12,7 +12,6 @@ type RemoteContentResult = {
   result: {
     caption: string
     hashtags: string[]
-    quality?: unknown
     provenance?: unknown
   }
 }
@@ -143,7 +142,6 @@ export async function tryGenerateWithRemoteContentService(
     hashtags: remote.result.hashtags || [],
     contentEngine: 'amc-content',
     fallbackUsed: false,
-    quality: remote.result.quality,
     provenance: remote.result.provenance,
   }
 }

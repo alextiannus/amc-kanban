@@ -127,7 +127,6 @@ export type ContentGenerationResult = {
   contentEngine: 'amc-content'
   fallbackUsed: boolean
   fallbackReason?: string
-  quality?: unknown
   provenance?: unknown
 }
 
@@ -142,7 +141,6 @@ export type MultiPlatformContentGenerationResult = {
     result?: {
       caption: string
       hashtags: string[]
-      quality?: unknown
       provenance?: unknown
     }
     error?: string

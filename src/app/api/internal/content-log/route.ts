@@ -48,7 +48,6 @@ export async function POST(request: Request) {
       userInput: stringifyForLog(body.input ?? {}, 5000),
       rawOutput: stringifyForLog({
         output: body.output ?? {},
-        quality: body.quality,
         provenance,
       }, 20000),
       modelId: optionalString(body.modelId),
