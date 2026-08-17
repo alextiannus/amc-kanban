@@ -829,19 +829,27 @@ export default function PostEditDrawer({
         setPreviewOnly(false)
         setPreviewModalOpen(true)
 
-        const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            draftIds: saved.map((draft: any) => draft.id).filter(Boolean),
-            theme: contentIdea || caption || agentNote,
-            experimentArm: viralScriptExperimentArm,
-          }),
+        saved.forEach((draft: any) => {
+          const cwKey = newDraftCopywriterMap[draft.id] || draft.accountId || ''
+          void fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              theme: contentIdea || caption || agentNote,
+              ...(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const json = await res.json().catch(() => ({}))
+              throw new Error(json.error || '触发 AI 创作失败')
+            }
+          }).catch((error) => {
+            setDraftStatuses(prev => ({ ...prev, [cwKey]: 'failed' }))
+            const message = error instanceof Error ? error.message : '触发 AI 创作失败'
+            setDraftWarnings(prev => ({ ...prev, [cwKey]: message }))
+            setDraftCaptions(prev => ({ ...prev, [cwKey]: message }))
+          })
         })
-        const batchJson = await batchRes.json().catch(() => ({}))
-        if (!batchRes.ok) {
-          throw new Error(batchJson.error || 'AI 创作失败')
-        }
       }
     } catch (e: any) {
       alert(e.message || 'AI 创作失败')
@@ -870,11 +878,10 @@ export default function PostEditDrawer({
     setIsAiGenerating(true)
 
     try {
-      const res = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
+      const res = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          draftIds: [draftId],
           theme: contentIdea || caption || agentNote,
           ...(viralScriptExperimentArm === 'automatic' ? {} : { experimentArm: viralScriptExperimentArm }),
         }),
@@ -889,12 +896,22 @@ export default function PostEditDrawer({
     }
   }
 
+  const completedModalDrafts = () => (createdDrafts || []).filter((d) => {
+    const cwKey = draftCopywriterMap[d.id] || d.accountId || ''
+    const cap = (draftCaptions[cwKey] || '').trim()
+    return draftStatuses[cwKey] === 'completed' && cap && !cap.includes('【AI 正在创作中')
+  })
+
   const handleSaveDraftsFromModal = async () => {
-    if (!createdDrafts) return
+    const draftsToSave = completedModalDrafts()
+    if (draftsToSave.length === 0) {
+      alert('暂无已完成的内容可保存')
+      return
+    }
     setSaving(true)
     try {
       await Promise.all(
-        createdDrafts.map(async (d) => {
+        draftsToSave.map(async (d) => {
           const cwKey = draftCopywriterMap[d.id] || d.accountId || ''
           const cap = draftCaptions[cwKey] || ''
           const hash = draftHashtags[cwKey] || ''
@@ -909,11 +926,15 @@ export default function PostEditDrawer({
           })
         })
       )
-      setPreviewModalOpen(false)
-      setCreatedDrafts(null)
-      onClose()
+      const savedIds = new Set(draftsToSave.map((draft) => draft.id))
+      const remainingDrafts = (createdDrafts || []).filter((draft) => !savedIds.has(draft.id))
+      setCreatedDrafts(remainingDrafts.length > 0 ? remainingDrafts : null)
+      if (remainingDrafts.length === 0) {
+        setPreviewModalOpen(false)
+        onClose()
+      }
       onSuccess()
-      alert('草稿已成功保存')
+      alert(remainingDrafts.length > 0 ? '已保存完成的草稿，其他平台仍在创作中' : '草稿已成功保存')
     } catch (e: any) {
       alert(e.message || '保存失败')
     } finally {
@@ -922,7 +943,11 @@ export default function PostEditDrawer({
   }
 
   const handleScheduleFromModal = async (customTime?: string) => {
-    if (!createdDrafts) return
+    const draftsToSchedule = completedModalDrafts()
+    if (draftsToSchedule.length === 0) {
+      alert('暂无已完成的内容可排期')
+      return
+    }
     setSaving(true)
     try {
       let targetDateISO: string
@@ -948,7 +973,7 @@ export default function PostEditDrawer({
       }
 
       const responses = await Promise.all(
-        createdDrafts.map(async (d) => {
+        draftsToSchedule.map(async (d) => {
           const cwKey = draftCopywriterMap[d.id] || d.accountId || ''
           const cap = draftCaptions[cwKey] || ''
           const hash = draftHashtags[cwKey] || ''
@@ -975,12 +1000,16 @@ export default function PostEditDrawer({
         })
       )
 
-      setPreviewModalOpen(false)
-      setCreatedDrafts(null)
-      onClose()
+      const scheduledIds = new Set(draftsToSchedule.map((draft) => draft.id))
+      const remainingDrafts = (createdDrafts || []).filter((draft) => !scheduledIds.has(draft.id))
+      setCreatedDrafts(remainingDrafts.length > 0 ? remainingDrafts : null)
+      if (remainingDrafts.length === 0) {
+        setPreviewModalOpen(false)
+        onClose()
+      }
       onSuccess()
       const warningText = formatMediaWarnings(responses)
-      alert(`已成功设定时间并提交审核排期！${warningText ? `\n\n${warningText}` : ''}`)
+      alert(`${remainingDrafts.length > 0 ? '已排期完成的平台，其他平台仍在创作中。' : '已成功设定时间并提交审核排期！'}${warningText ? `\n\n${warningText}` : ''}`)
     } catch (e: any) {
       alert(e.message || '排期失败')
     } finally {

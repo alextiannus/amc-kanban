@@ -1455,12 +1455,23 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     await loadDrafts()
   }
 
+  const completedModalDrafts = () => (createdDrafts || []).filter((d) => {
+    const key = d.accountId || ''
+    const cap = (draftCaptions[key] || '').trim()
+    return draftStatuses[key] === 'completed' && cap && !cap.includes('【AI 正在创作中')
+  })
+
   const handleSaveDraftsFromModal = async () => {
-    if (!brandId || !createdDrafts) return
+    if (!brandId) return
+    const draftsToSave = completedModalDrafts()
+    if (draftsToSave.length === 0) {
+      alert('暂无已完成的内容可保存')
+      return
+    }
     setSaving(true)
     try {
       await Promise.all(
-        createdDrafts.map(async (d) => {
+        draftsToSave.map(async (d) => {
           const cap = draftCaptions[d.accountId] || ''
           const hash = draftHashtags[d.accountId] || ''
           await fetch(`/api/brands/${brandId}/drafts/${d.id}`, {
@@ -1474,11 +1485,15 @@ Never include any markdown backticks, conversational preamble, or explanation ou
           })
         })
       )
-      setPreviewModalOpen(false)
-      setCreatedDrafts(null)
-      closeEditor()
+      const savedIds = new Set(draftsToSave.map((draft) => draft.id))
+      const remainingDrafts = (createdDrafts || []).filter((draft) => !savedIds.has(draft.id))
+      setCreatedDrafts(remainingDrafts.length > 0 ? remainingDrafts : null)
+      if (remainingDrafts.length === 0) {
+        setPreviewModalOpen(false)
+        closeEditor()
+      }
       await loadDrafts()
-      alert('草稿已成功保存')
+      alert(remainingDrafts.length > 0 ? '已保存完成的草稿，其他平台仍在创作中' : '草稿已成功保存')
     } catch (e: any) {
       alert(e.message || '保存失败')
     } finally {
@@ -1487,7 +1502,12 @@ Never include any markdown backticks, conversational preamble, or explanation ou
   }
 
   const handleSmartScheduleFromModal = async (customTime?: string) => {
-    if (!brandId || !createdDrafts) return
+    if (!brandId) return
+    const draftsToSchedule = completedModalDrafts()
+    if (draftsToSchedule.length === 0) {
+      alert('暂无已完成的内容可排期')
+      return
+    }
     setSaving(true)
     try {
       let targetDateISO: string
@@ -1517,7 +1537,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       }
 
       const responses = await Promise.all(
-        createdDrafts.map(async (d) => {
+        draftsToSchedule.map(async (d) => {
           const cap = draftCaptions[d.accountId] || ''
           const hash = draftHashtags[d.accountId] || ''
           
@@ -1543,15 +1563,19 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         })
       )
 
-      setPreviewModalOpen(false)
-      setCreatedDrafts(null)
-      closeEditor()
+      const scheduledIds = new Set(draftsToSchedule.map((draft) => draft.id))
+      const remainingDrafts = (createdDrafts || []).filter((draft) => !scheduledIds.has(draft.id))
+      setCreatedDrafts(remainingDrafts.length > 0 ? remainingDrafts : null)
+      if (remainingDrafts.length === 0) {
+        setPreviewModalOpen(false)
+        closeEditor()
+      }
       await loadDrafts()
       const warningText = formatMediaWarnings(responses)
       if (customTime) {
-        alert(`已成功设定发布时间，并提交排期审核！排期时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
+        alert(`${remainingDrafts.length > 0 ? '已排期完成的平台，其他平台仍在创作中。' : '已成功设定发布时间，并提交排期审核！'}排期时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       } else {
-        alert(`已根据用户活跃度为您自动推荐最佳时间，并提交排期审核！推荐时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
+        alert(`${remainingDrafts.length > 0 ? '已排期完成的平台，其他平台仍在创作中。' : '已根据用户活跃度为您自动推荐最佳时间，并提交排期审核！'}推荐时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       }
     } catch (e: any) {
       alert(e.message || (customTime ? '排期发布失败' : '智能排期失败'))
@@ -1580,20 +1604,17 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       setDraftStatuses(newStatuses)
       setIsAiGenerating(true)
 
-      if (createdDrafts.length > 1) {
-        const res = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
+      await Promise.allSettled(createdDrafts.map(async (draft) => {
+        const res = await fetch(`/api/brands/${brandId}/drafts/${draft.id}/trigger-copywriter`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            draftIds: createdDrafts.map((draft) => draft.id).filter(Boolean),
             theme: contentIdea || caption || agentNote,
           }),
         })
         const json = await res.json().catch(() => ({}))
-        if (!res.ok) throw new Error(json.error || '批量 AI 创作失败')
-      } else {
-        await triggerCopywriter(createdDrafts[0].id, true)
-      }
+        if (!res.ok) throw new Error(json.error || 'AI 创作失败')
+      }))
     } catch (e) {
       console.error('Failed to regenerate drafts:', e)
     } finally {

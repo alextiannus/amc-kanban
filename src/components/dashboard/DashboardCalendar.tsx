@@ -841,16 +841,17 @@ ${contentIdea || 'No details provided.'}`
       setDraftStatuses(newStatuses)
       setIsAiGenerating(true)
 
-      const res = await fetch(`/api/brands/${activeBrandId}/drafts/batch-trigger-copywriter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftIds: createdDrafts.map((draft) => draft.id).filter(Boolean),
-          theme: contentIdea || caption || agentNote,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json.error || 'AI 创作失败')
+      await Promise.allSettled(createdDrafts.map(async (draft) => {
+        const res = await fetch(`/api/brands/${activeBrandId}/drafts/${draft.id}/trigger-copywriter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            theme: contentIdea || caption || agentNote,
+          }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(json.error || 'AI 创作失败')
+      }))
     } catch (e) {
       console.error('Failed to regenerate drafts:', e)
     } finally {
@@ -982,13 +983,24 @@ ${contentIdea || 'No details provided.'}`
     }
   }
 
+  const hasPendingGeneratedDrafts = () => Boolean(createdDrafts?.some((d) => draftStatuses[d.accountId] === 'generating'))
+
     const saveOrUpdateDrafts = async (status: string, scheduledAtOverride?: string | null) => {
     if (!activeBrandId) return null
     setSaving(true)
     try {
       if (createdDrafts && createdDrafts.length > 0) {
+        const readyDrafts = createdDrafts.filter((d) => {
+          const key = d.accountId || ''
+          const cap = (draftCaptions[key] || d.caption || '').trim()
+          return draftStatuses[key] === 'completed' && cap && !cap.includes('【AI 正在创作中')
+        })
+        if (readyDrafts.length === 0) {
+          alert('暂无已完成的内容可操作')
+          return []
+        }
         const updated = await Promise.all(
-          createdDrafts.map(async (d) => {
+          readyDrafts.map(async (d) => {
             const currentCaption = draftCaptions[d.accountId] || d.caption || '【AI 正在创作中...】'
             const currentHashtags = draftHashtags[d.accountId] !== undefined
               ? (typeof draftHashtags[d.accountId] === 'string' ? parseTags(draftHashtags[d.accountId]) : draftHashtags[d.accountId])
@@ -1010,6 +1022,9 @@ ${contentIdea || 'No details provided.'}`
             return json.draft
           })
         )
+        const updatedIds = new Set(readyDrafts.map((draft) => draft.id))
+        const remainingDrafts = createdDrafts.filter((draft) => !updatedIds.has(draft.id))
+        setCreatedDrafts(remainingDrafts.length > 0 ? remainingDrafts : null)
         await refreshCalendar()
         return updated
       } else {
@@ -1045,7 +1060,7 @@ ${contentIdea || 'No details provided.'}`
       )
       const warningText = formatMediaWarnings(responses)
       alert(`草稿提交成功！${warningText ? `\n\n${warningText}` : ''}`)
-      setIsCreatingPost(false)
+      if (!hasPendingGeneratedDrafts()) setIsCreatingPost(false)
       await refreshCalendar()
     } catch (e: any) {
       alert(e.message || '提交草稿失败')
@@ -1112,8 +1127,10 @@ ${contentIdea || 'No details provided.'}`
       } else {
         alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。${warningText ? `\n\n${warningText}` : ''}`)
       }
-      setIsCreatingPost(false)
-      setShowPublishOptionModal(false)
+      if (!hasPendingGeneratedDrafts()) {
+        setIsCreatingPost(false)
+        setShowPublishOptionModal(false)
+      }
       await refreshCalendar()
     } catch (e: any) {
       alert(e.message || '排期提交失败')
@@ -1152,8 +1169,10 @@ ${contentIdea || 'No details provided.'}`
 
       const warningText = formatMediaWarnings(responses)
       alert(`立刻发布成功！系统已为您直接发布内容。${warningText ? `\n\n${warningText}` : ''}`)
-      setIsCreatingPost(false)
-      setShowPublishOptionModal(false)
+      if (!hasPendingGeneratedDrafts()) {
+        setIsCreatingPost(false)
+        setShowPublishOptionModal(false)
+      }
       await refreshCalendar()
     } catch (e: any) {
       alert(e.message || '立刻发布失败')

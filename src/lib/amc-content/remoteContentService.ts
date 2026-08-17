@@ -1,8 +1,6 @@
 import type {
   ContentGenerationRequest,
   ContentGenerationResult,
-  MultiPlatformContentGenerationRequest,
-  MultiPlatformContentGenerationResult,
   ViralCopyScriptExperimentAssignment,
   ViralCopyScriptRecommendation,
 } from './types.ts'
@@ -144,69 +142,6 @@ export async function tryGenerateWithRemoteContentService(
     fallbackUsed: false,
     provenance: remote.result.provenance,
   }
-}
-
-export async function generateMultiPlatformWithRemoteContentService(
-  input: MultiPlatformContentGenerationRequest,
-): Promise<MultiPlatformContentGenerationResult | null> {
-  const isLocal = process.env.NODE_ENV !== 'production'
-    || process.env.APP_BASE_URL?.includes('localhost')
-    || process.env.JWT_SECRET?.includes('local')
-    || process.env.JWT_SECRET?.includes('change-in-production')
-
-  const baseUrl = process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/+$/, '')
-    || (isLocal ? 'http://localhost:4010' : undefined)
-  if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') return null
-
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-  }
-  const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
-    || (isLocal ? 'local-service-token' : undefined)
-  if (token) headers.authorization = `Bearer ${token}`
-  if (input.actorId) headers['x-amc-actor-id'] = input.actorId
-  if (input.actorType) headers['x-amc-actor-type'] = input.actorType
-  if (input.actorRole) headers['x-amc-actor-role'] = input.actorRole
-
-  const response = await fetch(`${baseUrl}/v1/content/generate-multi-platform`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      brandId: input.brandId,
-      platforms: input.platforms,
-      theme: input.theme || input.idea,
-      industryVertical: input.industryVertical,
-      brief: {
-        industryVertical: input.industryVertical,
-        theme: input.theme || input.idea,
-        angle: input.angle,
-        customerIntent: input.customerIntent,
-        offerType: input.offerType,
-        targetEmotion: input.targetEmotion,
-        formatHint: input.formatHint,
-        locationFocus: input.locationFocus,
-        localProof: input.localProof,
-        mustMention: input.mustMention,
-        mustAvoid: input.mustAvoid,
-      },
-      mediaUrls: input.mediaUrls,
-      assetIds: input.assetIds,
-      taskId: input.taskId,
-      continueOnError: input.continueOnError ?? true,
-    }),
-    cache: 'no-store',
-  })
-
-  const data = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new RemoteContentServiceError(
-      data?.error || `Remote content service failed with ${response.status}`,
-      response.status,
-      data?.diagnostics,
-    )
-  }
-
-  return data as MultiPlatformContentGenerationResult
 }
 
 export async function recommendRemoteCopyScripts(input: {

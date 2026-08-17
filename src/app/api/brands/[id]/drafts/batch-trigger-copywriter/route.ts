@@ -3,7 +3,8 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
-import { generateMultiPlatformWithRemoteContentService } from '@/lib/amc-content/remoteContentService'
+import { RemoteContentServiceError } from '@/lib/amc-content/remoteContentService'
+import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
 import type { PlatformType } from '@/lib/amc-content/types'
 
 export const maxDuration = 120
@@ -27,6 +28,13 @@ function extractInstruction(draft: { caption?: string | null; agentNote?: string
   const caption = draft.caption?.trim()
   if (caption && !caption.includes('【AI 正在创作中')) return caption
   return ''
+}
+
+function failureStage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/provider|LLM|model|timed out|timeout|429|504/i.test(message)) return 'model_provider'
+  if (/service is not configured|Unauthorized|Not found/i.test(message)) return 'amc_content_request'
+  return 'amc_content_generation'
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -75,61 +83,61 @@ export async function POST(request: Request, { params }: Params) {
     }
   })
 
-  const platforms: PlatformType[] = Array.from(new Set(draftPlans.map((plan) => plan.platform)))
   const theme = String(body?.theme || draftPlans.map((plan) => plan.instruction).find(Boolean) || '品牌内容创作')
-  const assetIds: string[] = Array.from(new Set(draftPlans.flatMap((plan) => plan.assetIds)))
-  const mediaUrls: string[] = Array.from(new Set(draftPlans.flatMap((plan) => plan.mediaUrls)))
 
   try {
-    console.log(`[batch-trigger-copywriter] brand=${brandId} drafts=${draftPlans.length} platforms=${platforms.join(',')}`)
-    const multiResult = await generateMultiPlatformWithRemoteContentService({
-      brandId,
-      platforms,
-      theme,
-      mediaUrls,
-      assetIds,
-      actorId: actor.id,
-      actorType: actor.type,
-      actorRole: actor.role,
-      continueOnError: true,
-    })
-    if (!multiResult) throw new Error('amc-content service is not configured or did not generate content')
-
-    const byPlatform = new Map(multiResult.results.map((result) => [result.platform, result]))
-    const updates = await Promise.all(draftPlans.map(async ({ draft, platform }) => {
-      const result = byPlatform.get(platform)
-      if (result?.success && result.result?.caption) {
+    console.log(`[batch-trigger-copywriter-direct] brand=${brandId} drafts=${draftPlans.length}`)
+    const updates = await Promise.all(draftPlans.map(async ({ draft, platform, instruction, assetIds, mediaUrls }) => {
+      try {
+        const result = await generateContentDirect({
+          brandId,
+          platform,
+          theme: instruction || theme,
+          mediaUrls,
+          assetIds,
+          draftId: draft.id,
+          actorId: actor.id,
+          actorType: actor.type,
+          actorRole: actor.role,
+        })
         const updated = await prisma.contentDraft.update({
           where: { id: draft.id },
           data: {
-            caption: result.result.caption,
-            hashtags: result.result.hashtags || [],
+            caption: result.caption,
+            hashtags: result.hashtags || [],
             status: 'draft',
-            agentNote: `amc-content generated via multi-platform route. platform=${platform}`,
+            agentNote: `amc-content generated via direct batch thread. platform=${platform}`,
           },
           select: { id: true, caption: true, hashtags: true, status: true, agentNote: true },
         })
-        return { draftId: draft.id, platform, success: true, draft: updated, provenance: result.result.provenance }
+        return { draftId: draft.id, platform, success: true, draft: updated, provenance: result.provenance }
+      } catch (error: any) {
+        const stage = failureStage(error)
+        const status = error instanceof RemoteContentServiceError ? error.status : 500
+        const diagnostics = error instanceof RemoteContentServiceError ? error.diagnostics : undefined
+        const message = error?.message || 'amc-content generation failed'
+        const reason = [
+          'amc-content direct batch thread failed',
+          `stage=${stage}`,
+          `platform=${platform}`,
+          `status=${status}`,
+          `error=${message}`,
+          diagnostics ? `diagnostics=${JSON.stringify(diagnostics)}` : '',
+        ].filter(Boolean).join('; ')
+        await prisma.contentDraft.update({
+          where: { id: draft.id },
+          data: {
+            status: 'failed',
+            agentNote: reason,
+          },
+        })
+        return { draftId: draft.id, platform, success: false, error: message, stage, status, diagnostics }
       }
-
-      const error = [
-        result?.error || 'amc-content generation failed',
-        result?.status ? `HTTP ${result.status}` : '',
-      ].filter(Boolean).join(' · ')
-      await prisma.contentDraft.update({
-        where: { id: draft.id },
-        data: {
-          status: 'failed',
-          agentNote: `amc-content generation failed at multi-platform route. platform=${platform}; ${error}`,
-        },
-      })
-      return { draftId: draft.id, platform, success: false, error, diagnostics: result?.diagnostics }
     }))
 
     return NextResponse.json({
       success: updates.every((item) => item.success),
       contentEngine: 'amc-content',
-      modelRouting: multiResult.modelRouting,
       results: updates,
     })
   } catch (error: any) {

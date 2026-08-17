@@ -101,6 +101,10 @@ export default function PostPreviewModal({
   const [editingCopywriterId, setEditingCopywriterId] = useState<string | null>(null)
   const [showScheduleDropdown, setShowScheduleDropdown] = useState(false)
   const [customTime, setCustomTime] = useState('')
+  const completedCopywriterCount = selectedCopywriters.filter((copywriter) => {
+    const caption = (draftCaptions[copywriter.id] || '').trim()
+    return draftStatuses[copywriter.id] === 'completed' && caption && !caption.includes('【AI 正在创作中')
+  }).length
 
   if (!isOpen) return null
 
@@ -223,7 +227,7 @@ export default function PostPreviewModal({
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); onRegenerateSingleCopywriter?.(cwId) }}
-                            disabled={saving || isAiGenerating}
+                            disabled={saving}
                             className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950 hover:bg-indigo-900 border border-indigo-900/50 px-2 py-0.5 rounded-full flex items-center gap-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                             title={`让 ${copywriter.name} 重新撰写文案`}
                           >
@@ -306,7 +310,7 @@ export default function PostPreviewModal({
               </button>
               <button
                 type="button"
-                disabled={saving || isAiGenerating}
+                disabled={saving || completedCopywriterCount === 0}
                 onClick={onSaveDraft}
                 className="px-4 py-2 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition-all bg-transparent flex items-center gap-1.5"
               >
@@ -316,7 +320,7 @@ export default function PostPreviewModal({
               <div className="relative flex items-center bg-emerald-700 rounded-xl shadow-md">
                 <button
                   type="button"
-                  disabled={saving || isAiGenerating}
+                  disabled={saving || completedCopywriterCount === 0}
                   onClick={() => onSchedule()}
                   className="px-4 py-2 text-xs font-bold text-white hover:bg-emerald-600 disabled:opacity-50 rounded-l-xl transition-all flex items-center gap-1.5"
                 >
@@ -325,7 +329,7 @@ export default function PostPreviewModal({
                 </button>
                 <button
                   type="button"
-                  disabled={saving || isAiGenerating}
+                  disabled={saving || completedCopywriterCount === 0}
                   onClick={() => setShowScheduleDropdown(prev => !prev)}
                   className="px-2.5 py-2 hover:bg-emerald-600 disabled:opacity-50 text-white rounded-r-xl transition-all self-stretch flex items-center justify-center border-l border-emerald-600"
                 >

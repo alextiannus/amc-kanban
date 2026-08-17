@@ -618,17 +618,23 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         })
       )
 
-      const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draftIds: createdDraftIds,
-          theme: scheduleAgentNote.trim() || scheduleCaption.trim(),
-        }),
-      })
-      const batchData = await batchRes.json().catch(() => ({}))
-      if (!batchRes.ok) {
-        throw new Error(batchData.error || 'amc-content 文案创作失败')
+      const triggerResults = await Promise.allSettled(createdDraftIds.map(async (draftId) => {
+        const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            theme: scheduleAgentNote.trim() || scheduleCaption.trim(),
+          }),
+        })
+        const triggerData = await triggerRes.json().catch(() => ({}))
+        if (!triggerRes.ok) {
+          throw new Error(triggerData.error || 'amc-content 文案创作失败')
+        }
+        return triggerData
+      }))
+      const failedTriggers = triggerResults.filter((result) => result.status === 'rejected')
+      if (failedTriggers.length === createdDraftIds.length) {
+        throw new Error('所有平台 amc-content 文案创作失败，请在草稿卡片查看失败步骤与原因')
       }
 
       // 3. Reset states and notify
@@ -837,39 +843,29 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
         if (prepared.length === 0) return
 
-        const batchRes = await fetch(`/api/brands/${brandId}/drafts/batch-trigger-copywriter`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            draftIds: prepared.map((item) => item.draftId),
-            theme: aiJobNote.trim() || `基于素材 ${groupThreads[0]?.assetLabel || ''} 创作平台原生内容`,
-          }),
-        })
-        const batchData = await batchRes.json().catch(() => ({}))
-        if (!batchRes.ok) {
-          const message = batchData.error || 'amc-content 批量文案生成失败'
-          failedCount += prepared.length
-          prepared.forEach(({ thread }) => updateThread(thread.id, { status: 'failed', error: message }))
-          return
-        }
-
-        const resultByDraftId = new Map(
-          (Array.isArray(batchData.results) ? batchData.results : [])
-            .map((item: any) => [item.draftId, item]),
-        )
-        prepared.forEach(({ thread, draftId }) => {
-          const result = resultByDraftId.get(draftId) as any
-          if (result?.success) {
+        await Promise.all(prepared.map(async ({ thread, draftId }) => {
+          try {
+            const triggerRes = await fetch(`/api/brands/${brandId}/drafts/${draftId}/trigger-copywriter`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                theme: aiJobNote.trim() || `基于素材 ${thread.assetLabel || ''} 创作平台原生内容`,
+              }),
+            })
+            const triggerData = await triggerRes.json().catch(() => ({}))
+            if (!triggerRes.ok) {
+              throw new Error(triggerData.error || 'amc-content 文案生成失败')
+            }
             completedCount += 1
             updateThread(thread.id, { status: 'done' })
-            return
+          } catch (error: any) {
+            failedCount += 1
+            updateThread(thread.id, {
+              status: 'failed',
+              error: error?.message || 'amc-content 文案生成失败',
+            })
           }
-          failedCount += 1
-          updateThread(thread.id, {
-            status: 'failed',
-            error: result?.error || batchData.error || 'amc-content 文案生成失败',
-          })
-        })
+        }))
       }
 
       const threadsByAsset = new Map<string, AIBatchThread[]>()

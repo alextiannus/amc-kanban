@@ -3,7 +3,8 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
-import { generateMultiPlatformWithRemoteContentService } from '@/lib/amc-content/remoteContentService'
+import { RemoteContentServiceError } from '@/lib/amc-content/remoteContentService'
+import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
 import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
 import { COPYWRITER_ROSTER, copywritersFromIds, platformAliases } from '@/lib/copywriters'
 import type { PlatformType } from '@/lib/amc-content/types'
@@ -64,6 +65,13 @@ async function getActor(request: Request) {
   if (authenticatedAgent) return { id: authenticatedAgent.id, type: authenticatedAgent.type, role: 'USER' }
   if (session?.user) return { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
   return null
+}
+
+function failureStage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/provider|LLM|model|timed out|timeout|429|504/i.test(message)) return 'model_provider'
+  if (/service is not configured|Unauthorized|Not found/i.test(message)) return 'amc_content_request'
+  return 'amc_content_generation'
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -171,58 +179,52 @@ export async function POST(request: Request, { params }: Params) {
       copywriter: (typeof COPYWRITER_ROSTER)[number] | undefined
     }>
 
-    const uniquePlatforms: PlatformType[] = Array.from(new Set(accountPlans.map((plan) => plan.contentPlatform)))
-
-    const multiResult = await generateMultiPlatformWithRemoteContentService({
-      brandId,
-      platforms: uniquePlatforms,
-      theme: idea,
-      mediaUrls: mediaUrls || [],
-      assetIds: assetIds || [],
-      actorId: actor.id,
-      actorType: actor.type,
-      actorRole: actor.role,
-      continueOnError: true,
-    })
-
-    if (!multiResult) {
-      throw new Error('amc-content service is not configured or did not generate content')
-    }
-
-    const generatedByPlatform = new Map(multiResult.results.map((result) => [result.platform, result]))
-
     const draftResults = await Promise.all(
       accountPlans.map(async ({ account, platform, contentPlatform, copywriter }) => {
         const scheduledAtPromise = getRecommendedTime(brandId, contentPlatform)
-        const resultForPlatform = generatedByPlatform.get(contentPlatform)
-        const successResult = resultForPlatform?.success ? resultForPlatform.result : null
-        const caption = successResult?.caption || ''
-        const hashtags = successResult?.hashtags || []
         const contentEngine = 'amc-content'
-        const generationError = resultForPlatform?.success
-          ? null
-          : [
-              resultForPlatform?.error || 'amc-content generation failed',
-              resultForPlatform?.status ? `HTTP ${resultForPlatform.status}` : '',
-            ].filter(Boolean).join(' · ')
+        let caption = ''
+        let hashtags: string[] = []
+        let generationError: string | null = null
+        let provenance: unknown = undefined
 
-        if (successResult?.caption) {
-          const provenance = {
-            ...(successResult.provenance as object || {}),
-            modelRouting: multiResult.modelRouting,
-          }
-          const promptVersion = (successResult.provenance as any)?.promptVersion || 'amc-content'
+        try {
+          const result = await generateContentDirect({
+            brandId,
+            platform: contentPlatform,
+            theme: idea,
+            mediaUrls: mediaUrls || [],
+            assetIds: assetIds || [],
+            actorId: actor.id,
+            actorType: actor.type,
+            actorRole: actor.role,
+          })
+          caption = result.caption || ''
+          hashtags = result.hashtags || []
+          provenance = result.provenance
+          const promptVersion = (result.provenance as any)?.promptVersion || 'amc-content'
           logCopywriterOutput({
             brandId,
             userId: actor.id,
             systemPrompt: `[via contentService/${contentEngine}] ${JSON.stringify({ provenance })}`,
             userInput: idea,
             rawOutput: JSON.stringify({ caption, hashtags, contentEngine, provenance }),
-            modelId: (successResult.provenance as any)?.modelId,
+            modelId: (result.provenance as any)?.modelId,
             platform,
           })
           console.log(`[BulkGenerate] Generated ${platform} with engine=${contentEngine}, promptVersion=${promptVersion}`)
-        } else {
+        } catch (error: any) {
+          const stage = failureStage(error)
+          const status = error instanceof RemoteContentServiceError ? error.status : 500
+          const diagnostics = error instanceof RemoteContentServiceError ? error.diagnostics : undefined
+          generationError = [
+            'amc-content direct generation failed',
+            `stage=${stage}`,
+            `platform=${contentPlatform}`,
+            `status=${status}`,
+            `error=${error?.message || 'amc-content generation failed'}`,
+            diagnostics ? `diagnostics=${JSON.stringify(diagnostics)}` : '',
+          ].filter(Boolean).join('; ')
           console.error(`Failed to generate copy via amc-content for ${platform}; no fallback will run: ${generationError}`)
         }
 
