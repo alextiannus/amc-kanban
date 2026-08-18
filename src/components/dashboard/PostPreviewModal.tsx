@@ -1,37 +1,21 @@
 'use client'
 import React, { useState } from 'react'
-import { COPYWRITER_ROSTER, CopywriterPersona, platformAliases } from '@/lib/copywriters'
+import { CopywriterPersona } from '@/lib/copywriters'
 import {
   PhoneFrame, PlatformPreview, normalizePlatform,
-  type PreviewPost, type PlatformKey,
+  type PlatformKey,
 } from './PhonePreview'
 import {
   X,
   Eye,
-  Heart,
-  MessageCircle,
-  Send,
-  Bookmark,
-  MoreVertical,
-  ChevronLeft,
-  ChevronRight,
-  Image as ImageIcon,
   Loader2,
   Edit3,
   Clock,
   Save,
   Trash2,
-  Video,
   RefreshCw,
   ChevronDown
 } from 'lucide-react'
-
-// Helper function to check video file extensions
-function isVideoUrl(url: string): boolean {
-  if (!url) return false
-  const cleanUrl = url.split('?')[0].split('#')[0]
-  return /\.(mp4|webm|ogg|mov)$/i.test(cleanUrl) || cleanUrl.includes('/video/')
-}
 
 // Helper function to parse hashtags
 function parseTags(value: string | string[]): string[] {
@@ -53,6 +37,67 @@ function normalizePlatformLabel(plat: string): string {
   return p
 }
 
+function getPlatformDisplay(platform: string) {
+  if (platform === 'ig') return {
+    label: 'Instagram',
+    dot: 'bg-gradient-to-tr from-yellow-400 via-pink-400 to-purple-500',
+    border: 'border-pink-500/25',
+    glow: 'shadow-pink-950/30',
+    ring: 'focus-within:ring-pink-500/30',
+  }
+  if (platform === 'xhs') return {
+    label: '小红书',
+    dot: 'bg-red-500',
+    border: 'border-red-500/25',
+    glow: 'shadow-red-950/30',
+    ring: 'focus-within:ring-red-500/30',
+  }
+  if (platform === 'fb') return {
+    label: 'Facebook',
+    dot: 'bg-blue-500',
+    border: 'border-blue-500/25',
+    glow: 'shadow-blue-950/30',
+    ring: 'focus-within:ring-blue-500/30',
+  }
+  if (platform === 'tiktok') return {
+    label: 'TikTok',
+    dot: 'bg-white',
+    border: 'border-slate-500/30',
+    glow: 'shadow-slate-950/40',
+    ring: 'focus-within:ring-slate-400/20',
+  }
+  return {
+    label: 'Google Business',
+    dot: 'bg-amber-500',
+    border: 'border-amber-500/25',
+    glow: 'shadow-amber-950/30',
+    ring: 'focus-within:ring-amber-500/25',
+  }
+}
+
+function getStatusDisplay(status: 'generating' | 'completed' | 'failed') {
+  if (status === 'generating') {
+    return {
+      label: '创作中',
+      className: 'border-indigo-500/30 bg-indigo-950/50 text-indigo-300',
+    }
+  }
+  if (status === 'failed') {
+    return {
+      label: '生成失败',
+      className: 'border-rose-500/35 bg-rose-950/50 text-rose-300',
+    }
+  }
+  return {
+    label: '已生成',
+    className: 'border-emerald-500/25 bg-emerald-950/40 text-emerald-300',
+  }
+}
+
+interface PreviewMedia {
+  url?: string | null
+}
+
 interface PostPreviewModalProps {
   isOpen: boolean
   onClose: () => void
@@ -66,7 +111,7 @@ interface PostPreviewModalProps {
   draftWarnings?: Record<string, string>
   isAiGenerating: boolean
   saving: boolean
-  attachedMedia: any[]
+  attachedMedia: PreviewMedia[]
   onCancel: () => void
   onSaveDraft: () => void
   onSchedule: (customTime?: string) => void
@@ -137,9 +182,8 @@ export default function PostPreviewModal({
 
         {/* Token warning if any */}
         {Object.keys(draftWarnings).length > 0 && (
-          <div className="mx-8 mb-2 flex items-start gap-2 rounded-xl border border-amber-800/40 bg-amber-950/30 px-4 py-2">
-            <span className="text-sm mt-0.5">⚠️</span>
-            <p className="text-[10px] text-amber-400">部分平台 amc-content 创作失败，请点击重写或检查内容服务配置。</p>
+          <div className="mx-8 mt-4 flex items-start gap-2 rounded-xl border border-amber-800/40 bg-amber-950/30 px-4 py-2">
+            <p className="text-[10px] font-bold text-amber-400">部分平台 amc-content 创作失败，请在对应平台卡片中重写或检查内容服务配置。</p>
           </div>
         )}
 
@@ -161,100 +205,79 @@ export default function PostPreviewModal({
               const isFailed = status === 'failed'
               const currentCaption = draftCaptions[cwId] !== undefined ? draftCaptions[cwId] : ''
               const currentHashtagsString = draftHashtags[cwId] !== undefined ? draftHashtags[cwId] : ''
-              const displayAccount = {
-                id: cwId,
-                platformId: copywriter.platform,
-                displayName: copywriter.name,
-                handle: copywriter.handle,
-              }
-
-              const platformLabel = platform === 'ig' ? 'Instagram' : platform === 'xhs' ? '小红书' : platform === 'fb' ? 'Facebook' : platform === 'tiktok' ? 'TikTok' : 'Google Business'
-
-              const mockHandle = brandName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'brand'
+              const platformMeta = getPlatformDisplay(platform)
+              const statusMeta = getStatusDisplay(status)
 
               return (
-                <div key={cwId} className="flex-shrink-0 flex flex-col gap-3 self-start" style={{ width: 270 }}>
-                  {/* Copywriter Control Panel - Displayed above the mockup screenshot */}
-                  <div className="flex flex-col rounded-xl border border-slate-800 bg-slate-900 p-3 space-y-2 shrink-0 shadow-md">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {/* A tiny platform indicator */}
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${
-                          platform === 'ig' ? 'bg-gradient-to-tr from-yellow-400 via-pink-400 to-purple-400'
-                          : platform === 'xhs' ? 'bg-red-500'
-                          : platform === 'fb' ? 'bg-blue-650'
-                          : platform === 'tiktok' ? 'bg-white'
-                          : 'bg-amber-500'
-                        }`} />
-                        <span className="text-[10px] font-black text-slate-200">{platformLabel}</span>
+                <article
+                  key={cwId}
+                  className={`flex-shrink-0 self-start rounded-2xl border ${platformMeta.border} bg-slate-900 p-4 shadow-2xl ${platformMeta.glow} ${platformMeta.ring} focus-within:ring-2`}
+                  style={{ width: 324 }}
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${platformMeta.dot}`} />
+                        <h3 className="truncate text-sm font-black text-slate-100">{platformMeta.label}</h3>
                       </div>
-                      
-                      {/* Close button to skip/cancel draft */}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
-                        className="w-5 h-5 rounded-full text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 flex items-center justify-center transition-all"
-                        title={`取消 ${copywriter.name} 的草稿`}
-                      >
-                        <X className="w-3 w-3" />
-                      </button>
+                      <p className="mt-1 truncate text-[10px] font-bold text-slate-500">{copywriter.name} 负责此平台</p>
                     </div>
-
-                    {/* Copywriter block with specialty & rewrite action */}
-                    <div className="flex items-center justify-between bg-slate-950/60 p-2 rounded-lg border border-slate-800/40">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {/* Copywriter avatar or initial */}
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 font-bold text-xs ${
-                          isGenerating ? 'bg-indigo-950 text-indigo-400 border border-indigo-500/30 animate-pulse' : 'bg-slate-800 text-slate-350'
-                        }`}>
-                          {copywriter.name[0]}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[10px] font-black text-slate-200 truncate">{copywriter.name}</p>
-                          <p className="text-[8px] text-slate-500 truncate" title={copywriter.specialty}>{copywriter.specialty}</p>
-                        </div>
-                      </div>
-
-                      {/* Status / Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        {isGenerating ? (
-                          <span className="flex items-center gap-0.5 text-[8px] text-indigo-400 font-bold bg-indigo-950/60 border border-indigo-900/50 px-1.5 py-0.5 rounded-full">
-                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                            <span>创作中</span>
-                          </span>
-                        ) : (
-                          // Show a rewrite button!
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onRegenerateSingleCopywriter?.(cwId) }}
-                            disabled={saving}
-                            className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-950 hover:bg-indigo-900 border border-indigo-900/50 px-2 py-0.5 rounded-full flex items-center gap-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                            title={`让 ${copywriter.name} 重新撰写文案`}
-                          >
-                            <RefreshCw className="w-2 h-2" />
-                            <span>重写</span>
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onCancelCopywriter(cwId) }}
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-rose-950/40 hover:text-rose-300"
+                      title={`跳过 ${platformMeta.label}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
 
-                  {/* Phone preview — same iPhone frame as QuickPreviewModal */}
+                  <div className="mb-4 flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                      isGenerating ? 'border border-indigo-500/30 bg-indigo-950 text-indigo-300' : 'bg-slate-800 text-slate-300'
+                    }`}>
+                      {copywriter.name[0]}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-black text-slate-100">{copywriter.name}</p>
+                      <p className="truncate text-[9px] text-slate-500" title={copywriter.specialty}>{copywriter.specialty}</p>
+                    </div>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-black ${statusMeta.className}`}>
+                      {isGenerating && <Loader2 className="h-3 w-3 animate-spin" />}
+                      <span>{statusMeta.label}</span>
+                    </span>
+                  </div>
+
                   <div
-                    onClick={() => setEditingCopywriterId(cwId)}
-                    className="cursor-pointer flex justify-center"
+                    onClick={() => !isGenerating && !isFailed && setEditingCopywriterId(cwId)}
+                    className={`flex min-h-[520px] items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/55 p-3 ${
+                      !isGenerating && !isFailed ? 'cursor-pointer hover:border-slate-700' : ''
+                    }`}
                   >
                     {isGenerating ? (
-                      <div className="flex flex-col items-center justify-center gap-3 py-16 text-slate-500">
-                        <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
-                        <p className="text-[11px] font-bold text-indigo-400">创作中...</p>
+                      <div className="flex h-[460px] flex-col items-center justify-center gap-3 text-center text-slate-500">
+                        <Loader2 className="h-7 w-7 animate-spin text-indigo-400" />
+                        <p className="text-xs font-black text-indigo-300">正在为 {platformMeta.label} 创作</p>
+                        <p className="max-w-[220px] text-[10px] leading-relaxed text-slate-500">该平台完成后会单独显示帖文预览，不影响其他平台继续生成。</p>
                       </div>
                     ) : isFailed ? (
-                      <div className="flex flex-col items-center justify-center gap-2 py-12 text-slate-500">
-                        <p className="text-[11px] font-bold text-rose-400">生成失败</p>
-                        <p className="max-w-[220px] whitespace-pre-wrap break-words text-center text-[9px] leading-relaxed text-slate-500">
-                          {currentCaption || draftWarnings[cwId] || '请点击重写'}
+                      <div className="flex h-[460px] flex-col items-center justify-center gap-3 text-center">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-full border border-rose-500/30 bg-rose-950/50 text-rose-300">
+                          <RefreshCw className="h-5 w-5" />
+                        </div>
+                        <p className="text-xs font-black text-rose-300">{platformMeta.label} 生成失败</p>
+                        <p className="max-w-[240px] whitespace-pre-wrap break-words text-[10px] leading-relaxed text-slate-500">
+                          {currentCaption || draftWarnings[cwId] || 'content engine 未返回有效正文，请点击重写。'}
                         </p>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onRegenerateSingleCopywriter?.(cwId) }}
+                          disabled={saving}
+                          className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-950 px-3 py-1.5 text-[10px] font-black text-indigo-300 transition-colors hover:bg-indigo-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          <span>重写这个平台</span>
+                        </button>
                       </div>
                     ) : (
                       <PhoneFrame dark={normalizePlatform(copywriter.platform) === 'tiktok'} scale={0.85}>
@@ -262,7 +285,7 @@ export default function PostPreviewModal({
                           post={{
                             caption: currentCaption,
                             hashtags: parseTags(currentHashtagsString),
-                            mediaUrls: attachedMedia.map((m: any) => m.url).filter(Boolean),
+                            mediaUrls: attachedMedia.map((m) => m.url).filter(Boolean) as string[],
                           }}
                           platform={normalizePlatform(copywriter.platform) as PlatformKey}
                           account={brandName}
@@ -270,7 +293,31 @@ export default function PostPreviewModal({
                       </PhoneFrame>
                     )}
                   </div>
-                </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingCopywriterId(cwId)}
+                      disabled={isGenerating || isFailed}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-slate-700 px-3 py-1.5 text-[10px] font-black text-slate-300 transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <Edit3 className="h-3 w-3" />
+                      <span>编辑帖文</span>
+                    </button>
+                    {!isGenerating && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRegenerateSingleCopywriter?.(cwId) }}
+                        disabled={saving}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/25 bg-indigo-950/70 px-3 py-1.5 text-[10px] font-black text-indigo-300 transition-colors hover:bg-indigo-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        title={`让 ${copywriter.name} 重新撰写 ${platformMeta.label}`}
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        <span>重写</span>
+                      </button>
+                    )}
+                  </div>
+                </article>
               )
 
             })
