@@ -46,7 +46,7 @@ export async function POST(request: Request) {
           select: { title: true, description: true },
         })
       : Promise.resolve(null),
-    resolveMedia(brandId, body),
+    resolveMedia(brandId, body, new URL(request.url).origin),
     buildBrandContext(brandId),
   ])
 
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
   })
 }
 
-async function resolveMedia(brandId: string, body: any): Promise<MediaAssetContext[]> {
+async function resolveMedia(brandId: string, body: any, requestOrigin: string): Promise<MediaAssetContext[]> {
   const mediaUrls = stringArray(body.mediaUrls)
   const assetIds = stringArray(body.assetIds)
   const byUrl = new Map<string, MediaAssetContext>()
@@ -112,7 +112,7 @@ async function resolveMedia(brandId: string, body: any): Promise<MediaAssetConte
     for (const asset of assets) {
       byUrl.set(asset.url, {
         id: asset.id,
-        url: asset.url,
+        url: readableMediaUrl(brandId, asset, requestOrigin),
         mimeType: asset.mimeType,
         tags: asset.aiTags,
         category: asset.aiCategory ?? undefined,
@@ -136,6 +136,18 @@ function stringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map((item) => stringOrEmpty(item)).filter(Boolean)
   if (typeof value === 'string') return value.split('\n').map((item) => item.trim()).filter(Boolean)
   return []
+}
+
+function readableMediaUrl(brandId: string, asset: { url: string; sourceType?: string | null }, requestOrigin: string) {
+  let value = asset.url
+  if (!value.startsWith('http') && !value.startsWith('/') && asset.sourceType === 'postfast') {
+    value = `/api/integrations/postfast/file/${encodeURIComponent(brandId)}/${encodeURIComponent(value)}`
+  }
+  if (value.startsWith('/')) {
+    const base = process.env.APP_BASE_URL?.replace(/\/+$/, '') || requestOrigin
+    return base ? `${base}${value}` : value
+  }
+  return value
 }
 
 function optionalIndustryVertical(value: unknown): IndustryVertical | undefined {

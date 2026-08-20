@@ -1,4 +1,4 @@
-# PRD: AMC-Content 参考视频驱动生产链
+# PRD: AMC-Content 创意直用视频生产链
 
 > 状态：已批准并进入分阶段实施
 > 适用系统：`amc-content`、`amc-kanban`、PostFast
@@ -8,16 +8,17 @@
 
 AMC 视频能力按任务解耦，不绑定任何单一厂商：
 
-- `amc-content` 负责参考视频理解、卖点、文案、分镜、标准提示词、资产版本链、视频生成、TTS、异步任务、媒体回存、后期、创意质量审核和视频生产工作台。
-- `amc-kanban` 只负责工作台入口、身份签名和当前商家上下文；后续发布阶段再负责排期、社交平台授权与 PostFast 调用，不执行视频/TTS供应商任务。
-- Seedance、Volcengine、Kie.ai、FAL 只是可注册到 `video_generation` 的供应商；Seedance 不是分析模型，也不是通用业务类型。
+- `amc-content` 负责创意选择、不可变来源快照、可编辑逐镜脚本、标准提示词、资产版本链、Seedance 生成、TTS、异步任务、媒体回存、后期、创意质量审核和视频生产工作台。
+- `amc-kanban` 负责工作台入口、身份签名、当前商家上下文、品牌素材记录和 OBS 上传；后续发布阶段再负责排期、社交平台授权与 PostFast 调用，不执行视频/TTS 供应商任务。
+- 新项目只允许选择状态为 `ready`、类型为视频且时间轴非空的创意。已有参考视频分析型项目继续可查看和完成，但不再提供该模式的新建入口。
+- 视频生成固定使用 Seedance 2.0 profile，兼容降级范围仅为 Seedance Standard、Fast、Mini；Seedance 不负责生成字幕或口播。
 - AMC-Content 保存并解析视频、TTS和媒体处理供应商配置；AMC-Kanban 只保存社交平台/PostFast密钥，不接触内容生产供应商密钥。
 
 端到端流程为：
 
 ```text
-输入 -> 参考视频分析 -> 卖点 -> 文案 -> 分镜 -> 提示词
-     -> 视频片段生成 -> 后期 -> 审核发布 -> 72h/168h 互动回流
+选择已拆解创意 -> 创意来源快照 -> 可编辑脚本/分镜/Prompt
+              -> 逐镜图片与声音 -> Seedance 片段/TTS -> 后期 -> 审核下载
 ```
 
 每一步必须产出可审核、可复用、可追溯的结构化资产，而不是只返回一条视频文件。
@@ -53,15 +54,37 @@ creative_quality_review
 
 配置变更只影响新任务。历史资产继续绑定原 profile、真实模型名、提示词版本和 fallback 路径。
 
-## 3. 参考视频分析
+## 3. 创意应用与逐镜编辑
 
-### 3.1 输入与权利
+新建项目接收 `creativeId`，并保存创意版本、extraction 版本、analysis 版本以及不可变 `CreativeSourceSnapshot`。创意时间轴必须确定性原样导入，不调用模型改写：`onScreenText` 映射字幕，`voiceover` 映射口播，画面、景别、运镜、动作、声音和叙事作用共同映射分镜及 Seedance Prompt。
+
+所有创意来源类型均允许应用；竞品或“仅竞品分析”来源必须在页面警告并记录操作者，但不会作为生成阻断条件。竞品源视频永远不得传给 Seedance，生成时只允许传当前品牌下由用户选择的图片。
+
+字幕、口播、画面 Prompt 和时长均可逐镜编辑。每次编辑创建该镜新版本并保留旧脚本、音频、视频；不同输入的失效范围为：
+
+- 字幕变化：只使最终成片失效；
+- 口播文字、音色或语音参数变化：只使该镜 TTS 与最终成片失效；
+- Prompt、图片顺序或镜头时长变化：使该镜 Seedance 视频与最终成片失效；镜头时长变化同时使现有 TTS 需要重新校验。
+
+### 3.1 图片素材
+
+每镜必须绑定 1–4 张有序品牌图片，第一张为主参考图。Content 只保存 Kanban 品牌素材 ID、顺序和角色；提交生成前通过内部接口按操作者和品牌权限获取最新可读地址。Content 工作台可列表、搜索、分页并通过 Kanban 预签名上传及确认接口补充素材。
+
+### 3.2 声音
+
+项目提供默认音色，分镜可继承或覆盖；设置包括 `enabled`、`voiceId`、`speed`、`volume`、`pitch`。音色目录来自 MiniMax 系统、克隆和设计音色查询，短时缓存并在失败时回退最近成功缓存。试听仅在用户点击时调用并按音色、文字和参数缓存。本期不提供声音克隆、声音设计或真人样本上传。
+
+TTS 为可选能力。正式逐镜音频保存为 `generated_media(role=tts)` 和版本化 `VoiceoverTrack`。音频短于镜头时补静音；长于镜头时阻止合成并提示缩短文案、加快语速或延长后重新生成镜头，不静默截断。
+
+### 3.3 旧参考视频分析兼容
+
+#### 3.3.1 输入与权利
 
 输入包括参考视频、商家事实、品牌物料和已授权素材。参考资产必须记录：来源、权利状态、允许用途（`analysis`、`generation_reference`、`publish_derivative`）、确认人和有效期。
 
 竞品视频只有经 `ADMIN` 或 `AMC_PRINCIPAL` 确认 `generation_reference` 后，才允许发送给视频生成供应商。
 
-### 3.2 两级分析路径
+#### 3.3.2 两级分析路径
 
 - 原生路径：支持 `video_input + structured_json` 的多模态模型直接分析视频，输出带时间码证据的拆解卡。
 - 预处理路径：FFmpeg 镜头检测和关键帧、ASR 口播转录、OCR 字幕识别，再交给支持 `image_input + structured_json` 的模型综合分析。
@@ -75,8 +98,8 @@ creative_quality_review
 每个项目依次保存：
 
 ```text
-ReferenceVideoAnalysis -> SellingPointPackage -> ScriptPackage
--> Storyboard -> PromptBundle -> VideoGenerationJob -> GeneratedClip
+CreativeSourceSnapshot -> ScriptPackage -> Storyboard -> PromptBundle
+-> MaterialSelection -> VideoGenerationJob -> GeneratedClip/VoiceoverTrack
 -> FinalVideo -> PublishPackage -> PerformanceSnapshot
 ```
 
@@ -111,9 +134,9 @@ VideoGenerationJob
 
 ## 5. 生成、后期、审核和发布
 
-脚本与分镜审核后默认生成三版。第一轮只改变 Hook 与前三秒，USP、主体镜头、活动信息、CTA 和长度保持一致；运营选两版进行 A/B，第三版为候补。单镜头失败可以换兼容模型重试，不重复生成成功镜头。
+新项目一次只生成一个分镜、一个版本，不再默认创建三套全片任务。Prompt、图片顺序或时长变化后使用新的幂等键并使旧费用确认失效；重复点击保持幂等，只有明确点击“重新生成”才创建新版本。生成中的分镜不锁定其他分镜编辑或提交。
 
-视频供应商只生成镜头片段。AMC-Content 独立执行品牌音色或授权 TTS、品牌字幕、授权音乐/环境音/音效、Logo/地址/预约或团购信息、片尾 CTA、媒体拼接/混音/响度归一。主输出为 9:16，并派生 4:5 与 1:1；自动裁剪伤害主体时才生成平台专用镜头。
+视频供应商只生成无文字镜头片段。用户为每镜选择一个成功版本后，AMC-Content 按分镜顺序拼接，将逐镜 TTS 按时间轴混合为口播轨、自动降低背景音乐音量，并根据最终镜头时长重新计算字幕时间码后由 FFmpeg 叠加。输出固定生成 9:16、4:5、1:1 三种成片。
 
 发布前检查关键帧感知哈希、视觉向量、音频指纹、VO/字幕 5-gram、人脸、Logo、商标和业务事实。近重复、参考原音频、文本重合超过 22% 或未授权商标命中时阻断发布。
 
@@ -131,8 +154,13 @@ AMC-Content：
 - `POST /v1/video/jobs/:id/assemble`：在 Content 内完成字幕、配音、音乐、Logo和多比例派生。
 - `POST /v1/tts/generate`：按 Content 的 `tts_generation` 路由生成口播。
 - `/v1/lab/video-projects*`：项目列表、创建、阶段摘要、拆解、反馈重跑、审核、估价确认、生成、单镜头重试、合成和审核后下载。
+- `PATCH /v1/lab/video-projects/:id/shots/:shotId`：编辑单镜 Prompt、时长、字幕、口播和声音覆盖设置。
+- `PUT /v1/lab/video-projects/:id/shots/:shotId/materials`：保存 1–4 张有序品牌图片；第一张标记为主参考图。
+- `POST /v1/lab/video-projects/:id/shots/:shotId/estimate|generate` 与 `PUT .../selected-clip`：逐镜估价、幂等生成和版本选择。
+- `GET /v1/lab/tts/voices` 与 `POST|DELETE .../voiceover`：音色目录、试听、正式 TTS 和移除逐镜音轨。
+- `GET|POST /v1/lab/video-projects/:id/materials*`：通过 Kanban 内部桥接完成品牌图片列表、搜索、预签名上传和确认。
 
-AMC-Content 新增独立“视频生产”工作台，使用现有黄色 Content Center 视觉系统，按“参考素材、拆解卡、卖点与脚本、分镜与 Prompt、视频生成、合成与下载”六步展示。Content Lab 的“模型与路由”对 `ADMIN` 可编辑、对 `AMC_PRINCIPAL` 只读；API Key 仍只存在 AMC-Content 的 Render 环境变量，页面只显示 `secretRef` 和已配置/缺失状态。
+AMC-Content 的“视频生产”工作台使用“选择创意、脚本与分镜、图片与声音、视频生成、合成下载”五步。逐镜卡集中提供图片排序、Prompt、时长、字幕、口播、音色参数、试听、Seedance/TTS 状态、预览与重生成。Content Lab 的“模型与路由”对 `ADMIN` 可编辑、对 `AMC_PRINCIPAL` 只读；API Key 仍只存在 AMC-Content 的服务端配置，页面只显示 `secretRef` 和已配置/缺失状态。
 
 Kanban 左侧“视频生产”仅向 `ADMIN`、`AMC_PRINCIPAL`展示，通过短期签名跳转并传递已授权的当前商家；Kanban 不保存或执行视频/TTS 配置。
 

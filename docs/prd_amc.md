@@ -177,8 +177,8 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 *   **知识库建设**：
     *   **爆品素材、参考视频与脚本库**：`amc-content` 维护按平台隔离的原始爆品素材，并通过人工入池、文本特征提取、参考视频多模态拆解、确定性聚类和 AI 脚本合成生成候选脚本。文本脚本延续“至少 3 条素材、2 个不同商家或来源账号且人工发布”的生产门槛；参考视频则输出带时间码证据的拆解卡，沉淀 Hook、AIDA、镜头、声音、CTA、可迁移结构、不可迁移事实和禁止复制元素。竞品视频只允许人工录入，且发送给生成模型前必须由 `ADMIN` 或 `AMC_PRINCIPAL` 确认 `generation_reference` 权利用途。
     *   **Kanban 脚本选择与版本固定**：文案创作按品牌、平台、市场、行业、品类、语言和主题推荐最多 5 个已发布脚本，运营可手工切换或明确选择“不使用爆品脚本”。草稿保存固定脚本版本，重新生成继续使用该版本；无匹配脚本时回退现有 Copywriter + RAG。品牌事实、合规和平台规则优先于脚本，脚本优先于普通 RAG 灵感。
-    *   **结构化视频资产链**：视频项目依次生成并版本化 `ReferenceVideoAnalysis`、`SellingPointPackage`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`VideoGenerationJob`、`GeneratedClip`、`FinalVideo`、`PublishPackage`、`PerformanceSnapshot`。每个资产记录父资产、输入哈希、模型 profile、真实模型、fallback 路径、提示词版本、审核、成本和错误；上游变化将下游标记为 `stale`。缺少权利确认、业务事实、必要素材或人工审核时不得提交生成或发布。
-    *   **多供应商解耦**：Seedance、Volcengine、Kie.ai、FAL 只作为可选 `video_generation` profile。参考视频分析必须选择支持 `video_input + structured_json` 的模型，或通过 FFmpeg 关键帧 + ASR + OCR 的预处理路径交给支持 `image_input + structured_json` 的模型；不得静默退化为纯文本猜测。完整规范见 [`PRD-AI-Video-Creator.md`](./PRD-AI-Video-Creator.md)。
+    *   **创意直用视频资产链**：新视频项目只选择状态为 `ready`、类型为视频且时间轴非空的已拆解创意，并依次版本化 `CreativeSourceSnapshot`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`MaterialSelection`、`GeneratedClip` / `VoiceoverTrack` 和 `FinalVideo`。创意时间轴确定性原样导入；字幕、口播、Prompt、时长均可逐镜编辑并保留历史版本。旧参考视频分析型项目继续兼容，但不再作为新建入口。
+    *   **Seedance 逐镜生成与独立声音层**：每镜选择 1–4 张有序品牌图片，Content 通过 Kanban 内部接口读取或上传品牌素材，不向 Seedance 发送竞品源视频。每次仅生成一个分镜版本，固定使用 Seedance 2.0 Standard/Fast/Mini 兼容链。字幕由 FFmpeg 叠加；MiniMax TTS 支持项目默认音色、分镜覆盖、试听和语速/音量/音调，文字或声音修改不重新生成 Seedance 画面。完整规范见 [`PRD-AI-Video-Creator.md`](./PRD-AI-Video-Creator.md)。
     *   **通用敏感词与合规词库**：针对各个国家的广告法和平台规则进行内容安全过滤。
 
 ### 2. 管理层 AI (AMC MM & AMC Agent - 功能一致，权限隔离)
