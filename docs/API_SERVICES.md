@@ -710,6 +710,7 @@ Permanent QR contract:
 | GET | `/api/integrations/status` |
 | POST | `/api/integrations/stripe/webhook` |
 | POST | `/api/internal/content-context` |
+| POST | `/api/internal/content-assets` |
 | POST | `/api/internal/content-lab-admin` |
 | POST | `/api/internal/content-log` |
 | POST | `/api/internal/llm-generate` |
