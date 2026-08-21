@@ -1939,12 +1939,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const planId = subscription.planId
       const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId)
       const included_services = plan?.services ?? []
-      const monthly_content_quota = planId === 'starter' ? 30 : planId === 'essential' ? 28 : 38
+      const monthly_content_quota = planId === 'essential' ? 12 : planId === 'booster' ? 24 : 0
       
       let platform_coverage: string[] = []
-      if (planId === 'starter') platform_coverage = ['Instagram', 'Facebook', 'TikTok']
-      else if (planId === 'essential') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping']
-      else if (planId === 'advanced') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping', 'WhatsApp', 'WeChat', 'Ads']
+      if (planId === 'essential') platform_coverage = ['Instagram', 'TikTok', 'Google Business Profile']
+      else if (planId === 'booster') platform_coverage = ['Instagram', 'TikTok', 'Xiaohongshu', 'Google Business Profile']
 
       return {
         content: [{
@@ -1954,9 +1953,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
             included_services,
             monthly_content_quota,
             platform_coverage,
-            reply_sla: planId === 'starter' ? 'none' : '24h',
-            ad_management: planId === 'advanced',
-            kol_management: planId !== 'starter',
+            reply_sla: planId === 'essential' ? 'none' : '24h',
+            ad_management: false,
+            kol_management: planId !== 'essential',
             autopilot_eligible: true,
             contract_start: subscription.contractStartDate?.toISOString() ?? null,
             contract_end: subscription.contractEndDate?.toISOString() ?? null,

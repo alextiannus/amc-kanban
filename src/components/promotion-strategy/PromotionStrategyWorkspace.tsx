@@ -163,9 +163,8 @@ export function PromotionStrategyWorkspace({
               <Field label="月份"><input className="field" type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></Field>
               <Field label="套餐">
                 <select className="field" value={servicePlanId} onChange={(event) => setServicePlanId(event.target.value)}>
-                  <option value="starter">Essential</option>
-                  <option value="essential">Booster</option>
-                  <option value="advanced">Advanced</option>
+                  <option value="essential">Essential</option>
+                  <option value="booster">Booster</option>
                 </select>
               </Field>
             </div>

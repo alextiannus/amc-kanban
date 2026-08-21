@@ -5,7 +5,7 @@ import {
   ensureGrowthMerchantForBrand,
   readGrowthMerchantData,
 } from '@/lib/growthDataCenter'
-import { matchPromotionStrategyCreativeCandidates } from '@/lib/promotion-strategy/clients'
+import { matchPromotionStrategyCreativeBatch } from '@/lib/promotion-strategy/clients'
 import type { PublishingFreq } from '@/lib/brandContextBuilder'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
 import { callLLM } from '@/lib/llmRouter'
@@ -23,6 +23,7 @@ type BrandPlanCalendarItem = {
   status: string
   matchedTags?: string[]
   matchedInspirations?: string[]
+  selectedCreativeCandidateId?: string
   materialRequirements?: string[]
   contentLibraryGap?: string
 }
@@ -95,6 +96,7 @@ type BrandPlanAction =
   | 'generate_annual_plan'
   | 'generate_quarter_plan'
   | 'generate_publishing_calendar'
+  | 'regenerate_calendar_item'
 
 type BrandPlanBrand = NonNullable<Awaited<ReturnType<typeof loadBrandPlanBrand>>>
 
@@ -240,6 +242,39 @@ export async function runBrandPlanAction(input: {
       period: month,
       input: buildMarketingPlanInput(brand, current, latestInterview, input.body),
       output: { month, items: monthItems },
+      researchSnapshotId: current.researchReport?.snapshotId,
+      generationMode: 'AMC_CONTENT_ASSISTED',
+    })
+  } else if (input.action === 'regenerate_calendar_item') {
+    requireQuarterPlan(current)
+    const month = normalizeMonth(input.body?.month)
+    const itemId = text(input.body?.itemId)
+    const existingItems = current.publishingCalendar?.months?.[month] || []
+    const targetItem = existingItems.find((item) => item.id === itemId)
+    if (!targetItem) throw new BrandPlanError('calendar_item_not_found', 404)
+    const replacement = await regeneratePublishingCalendarItem(brand, month, targetItem, latestInterview, current)
+    const monthItems = existingItems.map((item) => item.id === itemId ? replacement : item)
+    next = {
+      ...current,
+      publishingCalendar: {
+        generatedAt: new Date().toISOString(),
+        generationMode: 'AMC_CONTENT_ASSISTED',
+        months: {
+          ...(current.publishingCalendar?.months || {}),
+          [month]: monthItems,
+        },
+      },
+    }
+    await syncCalendarMaterialRequirements(brand.id, month, monthItems)
+    await saveMarketingSolutionVersion({
+      brandId: brand.id,
+      kind: 'CALENDAR',
+      period: month,
+      input: {
+        ...buildMarketingPlanInput(brand, current, latestInterview, input.body),
+        refreshItemId: itemId,
+      },
+      output: { month, refreshedItem: replacement },
       researchSnapshotId: current.researchReport?.snapshotId,
       generationMode: 'AMC_CONTENT_ASSISTED',
     })
@@ -547,66 +582,237 @@ async function buildPublishingMonth(
     subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
     subscriptionStrategy.platformCoverage
   )
-  return Promise.all(schedule.map(async (slot, index) => {
+  const promotionPoints = buildCalendarPromotionPoints({
+    brand,
+    current,
+    month,
+    products,
+    interviewFocus,
+    schedule,
+  })
+  const creativePool = await requestCalendarCreativePool(brand, current, promotionPoints)
+
+  return schedule.map((slot, index) => {
     const product = products[index % Math.max(1, products.length)] || '招牌产品'
-    const item = {
+    const promotionPoint = promotionPoints[index % Math.max(1, promotionPoints.length)]
+    const candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+    return {
       id: `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`,
       date: slot.date,
-      title: `${product} 的到店理由`,
+      title: calendarItemTitle(product, candidate),
       platform: slot.platform.label,
       platformSlug: slot.platform.slug,
-      contentType: index % 2 === 0 ? '短视频' : '图文',
+      contentType: calendarContentType(candidate, index),
       product,
-      planning: `用真实门店画面说明“${product}”为什么值得来试，并加入路线/预订/下单动作。${interviewFocus ? `参考主理人访谈：${interviewFocus}` : ''}`,
-      sampleHit: `标题：附近想吃点稳的，就点这份 ${product}。开头：别只看菜单，先看这份为什么常被点。`,
+      planning: calendarPlanningText(product, candidate, interviewFocus),
+      sampleHit: calendarSampleHit(product, candidate),
       status: '待确认',
+      selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
+      matchedTags: stringList(candidate?.matchedTags),
+      matchedInspirations: stringList(candidate?.matchedInspirations),
+      materialRequirements: calendarMaterialRequirements(product, candidate),
+      contentLibraryGap: calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate),
     }
-    return enrichCalendarItemFromContentLibrary(brand, item, current)
-  }))
+  })
 }
 
-async function enrichCalendarItemFromContentLibrary(
+async function regeneratePublishingCalendarItem(
   brand: BrandPlanBrand,
+  _month: string,
   item: BrandPlanCalendarItem,
+  _interview: BrandPlanMerchantInterview | null,
   current: BrandPlanWorkspaceData
 ): Promise<BrandPlanCalendarItem> {
+  const platform = item.platformSlug || normalizePlatformSlug(item.platform)
+  const point = {
+    id: item.id,
+    goal: current.annualPlan?.goal || current.researchReport?.summary || '提升本地顾客认知和行动',
+    sellingPoint: item.product,
+    customerAction: '收藏、咨询、点击路线、预订或下单',
+    expectedPublishCount: 1,
+    platforms: [platform],
+    targetPublishWindow: { start: item.date, end: item.date },
+  }
+  const pool = await requestCalendarCreativePool(brand, current, [point], item.id)
+  const candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
+  if (!candidate) {
+    return {
+      ...item,
+      selectedCreativeCandidateId: undefined,
+      materialRequirements: [`补充“${item.product}”真实门店画面或顾客场景素材。`],
+      contentLibraryGap: 'amc-content 暂不可用，已保留人工素材要求。',
+    }
+  }
+  return {
+    ...item,
+    title: calendarItemTitle(item.product, candidate),
+    contentType: calendarContentType(candidate, 0),
+    planning: calendarPlanningText(item.product, candidate, ''),
+    sampleHit: calendarSampleHit(item.product, candidate),
+    selectedCreativeCandidateId: text(candidate.creativeCandidateId),
+    matchedTags: stringList(candidate.matchedTags),
+    matchedInspirations: stringList(candidate.matchedInspirations),
+    materialRequirements: calendarMaterialRequirements(item.product, candidate),
+    contentLibraryGap: calendarContentGap(pool.contentLibraryGaps, point.id, candidate),
+  }
+}
+
+type CalendarPromotionPoint = {
+  id: string
+  goal: string
+  sellingPoint: string
+  customerAction: string
+  expectedPublishCount: number
+  platforms: string[]
+  targetPublishWindow: { start: string; end: string }
+}
+
+function buildCalendarPromotionPoints(input: {
+  brand: BrandPlanBrand
+  current: BrandPlanWorkspaceData
+  month: string
+  products: string[]
+  interviewFocus: string
+  schedule: Array<{ date: string; platform: { slug: string; label: string } }>
+}): CalendarPromotionPoint[] {
+  const directions = input.current.quarterlyPlans?.flatMap((plan) => plan.contentDirections || []) || []
+  const sourcePoints = [
+    ...input.products,
+    ...stringList(input.current.researchReport?.growthPoints).map((item) => item.replace(/^围绕“(.+?)”.*$/, '$1')),
+    ...directions.map((item) => item.replace(/^围绕“(.+?)”.*$/, '$1')),
+    input.interviewFocus,
+    text(input.brand.knowledge?.promotionFocus),
+  ]
+    .map((item) => item.replace(/[。.!！]$/, '').trim())
+    .filter(Boolean)
+  const uniquePoints = uniqueStrings(sourcePoints).slice(0, Math.max(3, Math.min(8, input.schedule.length)))
+  const fallback = uniquePoints.length ? uniquePoints : ['招牌产品或核心服务', '到店理由', '真实信任内容']
+  return fallback.map((sellingPoint, index) => {
+    const assignedSlots = input.schedule.filter((_, slotIndex) => slotIndex % fallback.length === index)
+    const dates = assignedSlots.map((slot) => slot.date)
+    return {
+      id: `bp_${input.month.replace('-', '')}_${index + 1}`,
+      goal: index === 0
+        ? input.current.annualPlan?.goal || input.current.researchReport?.summary || '提升本地顾客认知和行动'
+        : `让顾客更具体地理解“${sellingPoint}”并愿意行动`,
+      sellingPoint,
+      customerAction: '收藏、咨询、点击路线、预订或下单',
+      expectedPublishCount: Math.max(1, assignedSlots.length),
+      platforms: uniqueStrings(assignedSlots.map((slot) => slot.platform.slug)),
+      targetPublishWindow: {
+        start: dates[0] || `${input.month}-01`,
+        end: dates[dates.length - 1] || `${input.month}-28`,
+      },
+    }
+  })
+}
+
+async function requestCalendarCreativePool(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  promotionPoints: CalendarPromotionPoint[],
+  refreshPublicationId?: string
+) {
   try {
-    const match = await matchPromotionStrategyCreativeCandidates({
+    return await matchPromotionStrategyCreativeBatch({
       merchantId: brand.id,
       merchantName: brand.name,
       merchantCategory: brand.industry || 'Restaurant / F&B',
       market: text(brand.knowledge?.market || brand.location) || 'Singapore',
       promotionPlanScope: 'marketing_plan_calendar',
-      promotionPointId: item.id,
       promotionGoal: current.annualPlan?.goal || current.researchReport?.summary || '提升本地顾客认知和行动',
-      sellingPoint: item.product,
-      customerAction: '收藏、咨询、点击路线、预订或下单',
-      requestedCandidateCount: 3,
-      targetPublishWindow: { start: item.date, end: item.date },
-      refreshMode: 'full_candidate_pool',
-      platforms: [item.platformSlug],
+      refreshMode: refreshPublicationId ? 'single_day_creative' : 'full_candidate_pool',
+      targetRefreshPublicationId: refreshPublicationId,
+      promotionPoints: promotionPoints.map((point) => ({
+        promotionPointId: point.id,
+        promotionGoal: point.goal,
+        sellingPoint: point.sellingPoint,
+        customerAction: point.customerAction,
+        expectedPublishCount: point.expectedPublishCount,
+        requestedCandidateCount: point.expectedPublishCount + 3,
+        platforms: point.platforms,
+        targetPublishWindow: point.targetPublishWindow,
+      })),
       assetContext: { existingAssets: [] },
-      serviceScope: { source: 'brand_plan' },
+      serviceScope: { source: 'brand_plan', owner: 'amc-kanban' },
     })
-    const candidate = Array.isArray(match.creativeCandidates) ? match.creativeCandidates[0] : null
-    return {
-      ...item,
-      matchedTags: stringList(candidate?.matchedTags),
-      matchedInspirations: stringList(candidate?.matchedInspirations),
-      materialRequirements: stringList(candidate?.assetNeeds).length
-        ? stringList(candidate?.assetNeeds)
-        : [`补充“${item.product}”真实门店画面或顾客场景素材。`],
-      contentLibraryGap: Array.isArray(match.contentLibraryGaps) && match.contentLibraryGaps.length
-        ? 'amc-content 内容库存在缺口，需要补充标签、脚本或素材模板。'
-        : undefined,
-    }
   } catch {
     return {
-      ...item,
-      materialRequirements: [`补充“${item.product}”真实门店画面或顾客场景素材。`],
-      contentLibraryGap: 'amc-content 暂不可用，已保留人工素材要求。',
+      contentMatchRequestId: `failed_${Date.now()}`,
+      libraryVersions: {},
+      matches: [],
+      creativeCandidates: [],
+      contentLibraryGaps: promotionPoints.map((point) => ({
+        promotionPointId: point.id,
+        reason: 'amc_content_unavailable',
+      })),
+      candidateAssetNeeds: [],
+      candidateStoreVisitNeeds: [],
+      candidateMaterialPrintNeeds: [],
     }
   }
+}
+
+function selectCalendarCreativeCandidate(
+  candidates: Array<Record<string, unknown>>,
+  promotionPointId: string,
+  platform: string,
+  index: number
+) {
+  const pointCandidates = candidates.filter((candidate) => text(candidate.promotionPointId) === promotionPointId)
+  const platformCandidates = pointCandidates.filter((candidate) => {
+    const sourcePlatform = text(objectValue(candidate.sourceVideo).platform || objectValue(candidate.sourcePost).platform)
+    return !sourcePlatform || normalizePlatformSlug(sourcePlatform) === normalizePlatformSlug(platform)
+  })
+  const pool = platformCandidates.length ? platformCandidates : pointCandidates
+  if (!pool.length) return null
+  return pool[index % pool.length]
+}
+
+function calendarItemTitle(product: string, candidate: Record<string, unknown> | null) {
+  const script = objectValue(candidate?.scriptContent)
+  return text(script.title) || text(objectValue(candidate?.sourcePost).title) || text(objectValue(candidate?.sourceVideo).title) || `${product} 的到店理由`
+}
+
+function calendarContentType(candidate: Record<string, unknown> | null, index: number) {
+  const format = text(candidate?.contentFormat).toLowerCase()
+  if (format.includes('video')) return '短视频'
+  if (format.includes('carousel') || format.includes('image') || format.includes('post')) return '图文'
+  return index % 2 === 0 ? '短视频' : '图文'
+}
+
+function calendarPlanningText(product: string, candidate: Record<string, unknown> | null, interviewFocus: string) {
+  const script = objectValue(candidate?.scriptContent)
+  const angle = text(candidate?.contentAngle) || text(candidate?.recommendationReason)
+  const cta = text(script.cta) || '引导收藏、咨询、路线点击、预订或下单'
+  return [
+    angle || `用真实门店画面说明“${product}”为什么值得来试。`,
+    cta,
+    interviewFocus ? `参考主理人访谈：${interviewFocus}` : '',
+  ].filter(Boolean).join(' ')
+}
+
+function calendarSampleHit(product: string, candidate: Record<string, unknown> | null) {
+  const script = objectValue(candidate?.scriptContent)
+  const opening = text(script.opening)
+  const title = text(script.title) || text(objectValue(candidate?.sourcePost).title) || `附近想吃点稳的，就点这份 ${product}`
+  return opening ? `标题：${title}。开头：${opening}` : `标题：${title}。开头：别只看菜单，先看这份为什么常被点。`
+}
+
+function calendarMaterialRequirements(product: string, candidate: Record<string, unknown> | null) {
+  const assetNeeds = stringList(candidate?.assetNeeds)
+  return assetNeeds.length ? assetNeeds : [`补充“${product}”真实门店画面或顾客场景素材。`]
+}
+
+function calendarContentGap(
+  gaps: Array<Record<string, unknown>>,
+  promotionPointId: string,
+  candidate: Record<string, unknown> | null
+) {
+  if (!candidate) return 'amc-content 未返回可用候选，需要补充标签、脚本或素材模板。'
+  return gaps.some((gap) => text(gap.promotionPointId) === promotionPointId)
+    ? 'amc-content 内容库存在缺口，当前使用可用候选并保留补库提醒。'
+    : undefined
 }
 
 async function syncCalendarMaterialRequirements(
@@ -916,16 +1122,14 @@ async function buildSubscriptionStrategy(brand: BrandPlanBrand) {
 }
 
 function platformCoverageForPlan(planId: string) {
-  if (planId === 'starter') return ['instagram', 'facebook', 'tiktok', 'google_business']
-  if (planId === 'essential') return ['instagram', 'facebook', 'tiktok', 'xiaohongshu', 'google_business']
-  if (planId === 'advanced') return ['instagram', 'facebook', 'tiktok', 'xiaohongshu', 'google_business', 'ads', 'wechat', 'whatsapp']
+  if (planId === 'essential') return ['instagram', 'tiktok', 'google_business']
+  if (planId === 'booster') return ['instagram', 'tiktok', 'xiaohongshu', 'google_business']
   return []
 }
 
 function monthlyContentQuotaForPlan(planId: string) {
-  if (planId === 'starter') return 30
-  if (planId === 'essential') return 28
-  if (planId === 'advanced') return 38
+  if (planId === 'essential') return 12
+  if (planId === 'booster') return 24
   return 0
 }
 
@@ -1061,6 +1265,10 @@ function clampPostCount(value: number) {
 function stringList(value: unknown) {
   if (Array.isArray(value)) return value.map(text).filter(Boolean)
   return []
+}
+
+function uniqueStrings(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)))
 }
 
 function arrayValue(value: unknown): unknown[] {

@@ -19,6 +19,10 @@ function normalizeTaskTag(tag: unknown): string {
   return String(tag).trim().toLowerCase().replace(/[\s-]+/g, '_')
 }
 
+function normalizeContentGenerationType(value: unknown): string {
+  return String(value).trim().toLowerCase().replace(/[\s-]+/g, '_')
+}
+
 function isVideoModelConfig(provider: unknown, taskTags: unknown): boolean {
   if (VIDEO_MODEL_PROVIDERS.has(String(provider).trim().toLowerCase())) return true
   if (!Array.isArray(taskTags)) return false
@@ -75,6 +79,7 @@ export async function POST(request: Request) {
       isEnabled = true,
       isDefault = false,
       taskTags = [],
+      contentGenerationTypes = [],
       capabilities = [],
       priority = 0,
       timeoutMs = 120000,
@@ -94,6 +99,9 @@ export async function POST(request: Request) {
     }
 
     const cleanTaskTags = Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
+    const cleanContentGenerationTypes = Array.isArray(contentGenerationTypes)
+      ? contentGenerationTypes.map(normalizeContentGenerationType).filter(Boolean)
+      : []
     if (isVideoModelConfig(provider, cleanTaskTags) || cleanTaskTags.some((tag) => tag === 'tts_generation' || tag === 'tts')) {
       return NextResponse.json({ error: 'Video and TTS profiles are owned by AMC-Content. Configure them in Content Lab.' }, { status: 409 })
     }
@@ -159,6 +167,7 @@ export async function POST(request: Request) {
         isEnabled: Boolean(isEnabled),
         isDefault: Boolean(isDefault),
         taskTags: cleanTaskTags,
+        contentGenerationTypes: cleanContentGenerationTypes,
         capabilities: cleanCapabilities,
         priority: Number.isInteger(priority) ? priority : 0,
         timeoutMs: Math.max(1000, Math.min(600000, Number(timeoutMs) || 120000)),

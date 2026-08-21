@@ -1,4 +1,4 @@
-export type PlanId = 'starter' | 'essential' | 'advanced'
+export type PlanId = 'essential' | 'booster'
 
 export interface SubscriptionPlan {
   id: PlanId
@@ -54,7 +54,7 @@ export interface PricingSummary {
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
-    id: 'starter',
+    id: 'essential',
     name: 'Essential · 基础线上经营',
     monthlyUsd: 800,
     description: '基础线上门面 + 稳定内容维护',
@@ -99,7 +99,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     ],
   },
   {
-    id: 'essential',
+    id: 'booster',
     name: 'Booster · 增长战役版',
     monthlyUsd: 3600,
     description: '增长战役 + 素材资产 + 博主扩散',
@@ -107,7 +107,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '已有基础门店，准备冲新品、新店、节日档期、短期声量或线上口碑修复的商家',
     services: [
-      '每月至少 24 次图文 + 12 条精品视频',
+      '每月至少 24 次内容发布（含图文与精品视频）',
       'Instagram + TikTok + 小红书 + Google Business Profile',
       '定制月度增长策划案',
       '专业素材采集与当月素材资产整理',
@@ -138,54 +138,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
       '适合：已有基础门店，准备冲新品、新店、节日档期、短期声量或线上口碑修复的商家',
       '服务内容：',
-      '1. 每月至少 24 次图文 + 12 条精品视频，拆成 4 个内容主题周',
+      '1. 每月至少 24 次内容发布（含图文与精品视频），拆成 4 个内容主题周',
       '2. Instagram / TikTok / 小红书 / Google Map 联动运营',
       '3. 一次专业素材采集，覆盖主视觉、短视频、菜单、门店环境、人物和活动素材',
       '4. 10 位博主探店：6 位 2k+、3 位 4k+、1 位 1w+，分批发布',
       '5. 每周舆情报告和下周调整动作'
-    ],
-  },
-  {
-    id: 'advanced',
-    name: '全域增长版',
-    monthlyUsd: 5800,
-    visible: false,
-    description: '全平台覆盖，私域运营，精准拉新转化',
-    oneLiner: '适合需要投流、私域和全链路增长管理的成熟商家。',
-    teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
-    suitableFor: '已有线上基础，希望通过付费投流快速放大曝光、头部 KOL 精准种草、私域沉淀顾客资产，系统提升全链路转化率的商家',
-    services: [
-      '增长策略与账户搭建（合约期第 1 个月完成）：付费广告策略制定与受众分层、广告账户开设与配置（Facebook Ads / Google Ads / TikTok Ads）、竞品数字广告策略分析、私域社群框架搭建（WhatsApp / 微信群）',
-      '多平台付费广告管理（每月持续）：每月不少于 4 组广告创意制作与投放、受众定向优化与 A/B 测试、每周广告表现监控与预算调配',
-      '头部 KOL 合作管理：每月 2 次头部 KOL 合作（本地 10K+ 粉丝，含费用），从选人、内容创作到发布全程协调，以及内容跨平台扩散',
-      '私域社群运营：社群日常活跃维护与内容推送、每月会员专属活动或优惠设计、老顾客复购唤醒流程',
-      '转化追踪与优化报告：全链路数据追踪（曝光 → 点击 → 到店 → 复购）、月度广告绩效报告（含 ROAS 分析）、转化率优化建议'
-    ],
-    commissionNote: '广告平台消耗费用由商家独立承担；佣金分成比例按合约约定，适用于服务方主导的线上渠道带来的销售额',
-    baseline: '广告稳定投放后线上引流到店量明显提升；私域社群建立后复购率可见增长；高质量 KOL 内容带来精准新客转化；全链路数据每月可查。',
-    explanation: {
-      positioning: '全域增长、投流与私域复购',
-      promise: '把内容、广告、KOL、私域和转化追踪放在同一条增长链路里持续优化。',
-      operations: [
-        '搭建广告账户、受众分层、素材测试和预算调配。',
-        '安排头部 KOL 合作并做跨平台扩散。',
-        '建立 WhatsApp / 微信私域社群框架，推动老客复购。',
-        '每月追踪曝光、点击、到店、复购和广告表现。'
-      ],
-      reporting: '月度广告绩效和全链路转化优化报告。',
-      bestFor: ['已有线上基础', '需要投流放大', '需要私域沉淀', '需要系统提升转化率'],
-    },
-    includes: [
-      '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
-      '适合：已有线上基础，希望通过付费投流快速放大曝光、头部 KOL 精准种草、私域沉淀顾客资产，系统提升全链路转化率的商家',
-      '服务内容：',
-      '1. 增长策略与账户搭建（合约期第 1 个月）：广告策略制定与账户开设，私域社群框架搭建',
-      '2. 多平台付费广告管理：每月不少于 4 组创意制作投放，A/B 测试，监控与预算调配',
-      '3. 头部 KOL 合作管理：每月 2 次头部 KOL 探店合作（10K+ 粉丝，含费用），内容跨平台扩散',
-      '4. 私域社群运营：社群活跃维护与推送，会员活动，老客复购唤醒',
-      '5. 转化追踪与优化：全链路追踪，月度绩效报告，转化率优化建议',
-      '分成形式：$3,600/月 + 销售佣金分成（注：广告平台消耗费由商家自担；分成比例适用于服务方主导的线上销售）',
-      '成果参考：广告引流到店量明显提升；私域社群建立后复购率增长；高质量 KOL 带来精准转化；全链路数据每月可查。'
     ],
   },
 ]
@@ -246,36 +203,32 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     key: 'channels',
     label: '覆盖渠道',
     values: {
-      starter: 'Instagram + TikTok + Google Map / Google Business Profile',
-      essential: 'Instagram + TikTok + 小红书 + Google Map / Google Business Profile',
-      advanced: '中英全平台覆盖 + 付费广告渠道 + 私域顾客社群',
+      essential: 'Instagram + TikTok + Google Map / Google Business Profile',
+      booster: 'Instagram + TikTok + 小红书 + Google Map / Google Business Profile',
     },
   },
   {
     key: 'team',
     label: '团队配置',
     values: {
-      starter: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
-      essential: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
-      advanced: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · AI 私域运营官 · AI 客服 · 品牌主理人',
+      essential: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
+      booster: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     },
   },
   {
     key: 'frequency',
     label: '内容产出',
     values: {
-      starter: '每月不少于 12 次图文发布',
-      essential: '每月至少 24 次图文 + 12 条精品视频',
-      advanced: '付费广告创意投放 + 每月 2 次头部 KOL 合作',
+      essential: '每月不少于 12 次图文发布',
+      booster: '每月至少 24 次内容发布（含图文与精品视频）',
     },
   },
   {
     key: 'metrics',
     label: '核心效果保障',
     values: {
-      starter: '线上资料完整、内容稳定更新、评论有人管理',
-      essential: '月度主题、素材、博主、内容发布和每周复盘一起推进',
-      advanced: '线上引流明显提升；私域复购率增长；精准拉新转化；数据每月可查',
+      essential: '线上资料完整、内容稳定更新、评论有人管理',
+      booster: '月度主题、素材、博主、内容发布和每周复盘一起推进',
     },
   },
 ]

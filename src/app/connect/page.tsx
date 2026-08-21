@@ -268,7 +268,7 @@ export default function ConnectPage() {
   const onboardingPrompt = useMemo(() => {
     const hostFromWindow = typeof window !== 'undefined' ? window.location.origin : 'https://amc-kanban.immedi.ai'
     const mockContext = {
-      subscription: { planId: 'essential', planName: 'Booster · 增长战役版', platforms: 'Xiaohongshu, Instagram' },
+      subscription: { planId: 'booster', planName: 'Booster · 增长战役版', platforms: 'Xiaohongshu, Instagram' },
       user: { id: 'usr_id_here', email: 'owner@example.com', role: 'BRAND_OWNER', nickname: 'Brand Owner', timezone: 'Asia/Singapore' },
       brand: { id: 'brand_id_here', name: 'Example Brand Name', location: 'Singapore', timezone: 'Asia/Singapore', website: 'https://example.com', phone: null, address: null },
       stores: [],

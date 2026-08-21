@@ -489,9 +489,8 @@ export default function BrandsTab({
                         onChange={e => setNewBrand(p => ({ ...p, planId: e.target.value }))}
                         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
-                        <option value="starter">ESSENTIAL（基础线上经营）</option>
-                        <option value="essential">BOOSTER（增长战役）</option>
-                        <option value="advanced">ADVANCED（全域增长）</option>
+                        <option value="essential">ESSENTIAL（基础线上经营）</option>
+                        <option value="booster">BOOSTER（增长战役）</option>
                       </select>
                     </div>
                     <div>
@@ -713,9 +712,8 @@ export default function BrandsTab({
                           onChange={e => onUpdateBrandDraft(editingBrand.id, { planId: e.target.value })} 
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
-                          <option value="starter">ESSENTIAL (基础线上经营)</option>
-                          <option value="essential">BOOSTER (增长战役)</option>
-                          <option value="advanced">ADVANCED (旗舰代运营)</option>
+                          <option value="essential">ESSENTIAL (基础线上经营)</option>
+                          <option value="booster">BOOSTER (增长战役)</option>
                         </select>
                       </label>
                       <label className="space-y-1.5 block">

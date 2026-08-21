@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ valid: false, error: '不能使用自己的邀请码' })
       }
 
-      if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'starter') {
+      if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'essential') {
         return NextResponse.json({
           valid: true,
           codeType: 'USER_INVITE',

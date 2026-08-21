@@ -31,6 +31,7 @@ export interface LLMConfigRecord {
   isEnabled: boolean
   isDefault: boolean
   taskTags: string[]
+  contentGenerationTypes: string[]
   capabilities: string[]
   priority: number
   timeoutMs: number
@@ -247,6 +248,7 @@ export default function SystemTab({
     isEnabled: true,
     isDefault: false,
     taskTagsStr: '',
+    contentGenerationTypesStr: '',
     capabilitiesStr: 'text_input, structured_json',
     priority: 0,
     timeoutMs: 120000,
@@ -267,6 +269,7 @@ export default function SystemTab({
       isEnabled: true,
       isDefault: false,
       taskTagsStr: '',
+      contentGenerationTypesStr: '',
       capabilitiesStr: 'text_input, structured_json',
       priority: 0,
       timeoutMs: 120000,
@@ -290,6 +293,7 @@ export default function SystemTab({
       isEnabled: config.isEnabled,
       isDefault: config.isDefault,
       taskTagsStr: config.taskTags.join(', '),
+      contentGenerationTypesStr: (config.contentGenerationTypes || []).join(', '),
       capabilitiesStr: (config.capabilities || []).join(', '),
       priority: config.priority || 0,
       timeoutMs: config.timeoutMs || 120000,
@@ -320,6 +324,10 @@ export default function SystemTab({
         .split(',')
         .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
         .filter(Boolean)
+      const contentGenerationTypes = llmForm.contentGenerationTypesStr
+        .split(',')
+        .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
+        .filter(Boolean)
       const fallbackProfileIds = llmForm.fallbackProfileIdsStr
         .split(',')
         .map(t => t.trim())
@@ -335,6 +343,7 @@ export default function SystemTab({
         isEnabled: llmForm.isEnabled,
         isDefault: llmForm.isDefault,
         taskTags: tags,
+        contentGenerationTypes,
         capabilities,
         priority: llmForm.priority,
         timeoutMs: llmForm.timeoutMs,
@@ -532,6 +541,11 @@ export default function SystemTab({
                           {config.taskTags.length > 0 && (
                             <p className="flex items-center gap-1 flex-wrap"><span className="text-slate-400">标签:</span> 
                               {config.taskTags.map(t => <span key={t} className="bg-indigo-50/50 text-indigo-600 px-1 rounded text-[8px] border border-indigo-100">{t}</span>)}
+                            </p>
+                          )}
+                          {(config.contentGenerationTypes || []).length > 0 && (
+                            <p className="flex items-center gap-1 flex-wrap"><span className="text-slate-400">内容:</span>
+                              {config.contentGenerationTypes.map(type => <span key={type} className="bg-amber-50/70 text-amber-700 px-1 rounded text-[8px] border border-amber-100">{type}</span>)}
                             </p>
                           )}
                           {(config.capabilities || []).length > 0 && (
@@ -1211,6 +1225,16 @@ export default function SystemTab({
                     value={llmForm.taskTagsStr}
                     onChange={e => setLlmForm(prev => ({ ...prev, taskTagsStr: e.target.value }))}
                     placeholder="英文逗号分隔，例如: copywriting, companion, video_generation, image_to_video"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">适用内容生成类型</span>
+                  <input
+                    value={llmForm.contentGenerationTypesStr}
+                    onChange={e => setLlmForm(prev => ({ ...prev, contentGenerationTypesStr: e.target.value }))}
+                    placeholder="英文逗号分隔，例如: marketing_plan, instagram_content, tiktok_content, google_map_content"
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
                   />
                 </label>

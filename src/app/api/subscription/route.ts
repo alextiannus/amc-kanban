@@ -77,10 +77,9 @@ function extractStoresFromMarkdown(markdown: string): StoreSummary[] {
 }
 
 function toPlanId(value: string | null | undefined): PlanId | null {
-  if (value === 'starter' || value === 'essential' || value === 'advanced') {
+  if (value === 'essential' || value === 'booster') {
     return value
   }
-  if (value === 'premium' || value === 'advantage') return 'advanced'
   return null
 }
 
@@ -491,7 +490,7 @@ export async function POST(request: Request) {
       if (userReferrer && userReferrer.id !== session.user.id) {
         finalReferredById = userReferrer.id
         promoCodeType = 'USER_INVITE'
-        if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'starter') {
+        if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'essential') {
           // Special discount for alextiannus@gmail.com: Essential plan @ $400/month (discount = $200/month)
           promoDiscountAmount = 200 * durationMonths
         } else {

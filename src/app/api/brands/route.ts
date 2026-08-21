@@ -278,7 +278,7 @@ export async function POST(request: Request) {
     const { user: owner, created: ownerCreated } = ownerResult
 
     // Parse plan info from body (wizard supplies planId, planName, durationMonths etc.)
-    const planId   = typeof body.planId   === 'string' ? body.planId.trim()   : 'starter'
+    const planId   = typeof body.planId   === 'string' ? body.planId.trim()   : 'essential'
     const planName = typeof body.planName === 'string' ? body.planName.trim() : 'Essential · 基础线上经营'
     const durationMonths    = typeof body.durationMonths    === 'number' ? body.durationMonths    : 1
     const monthlyBaseUsd    = typeof body.monthlyBaseUsd    === 'number' ? body.monthlyBaseUsd    : 0

@@ -69,7 +69,7 @@ type PromoValidationResponse = {
 
 const PLANS: PlanOption[] = [
   {
-    id: 'starter',
+    id: 'essential',
     name: 'Essential · 基础线上经营',
     monthlyUsd: 800,
     description: '基础线上门面 + 稳定内容维护',
@@ -95,12 +95,12 @@ const PLANS: PlanOption[] = [
     color: 'blue',
   },
   {
-    id: 'essential',
+    id: 'booster',
     name: 'Booster · 增长战役版',
     monthlyUsd: 3600,
     description: '增长战役 + 素材资产 + 博主扩散',
     highlights: [
-      '每月至少 24 图文 + 12 视频',
+      '每月至少 24 次内容发布',
       'Instagram / TikTok / 小红书 / Google Map',
       '定制月度增长策划案',
       '专业素材采集',
@@ -353,8 +353,8 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, validatingPro
       {/* Duration */}
       <div>
         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wide">合同时长</p>
-        <div className={`grid ${state.planId === 'starter' ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
-          {DURATIONS.filter(d => !(state.planId === 'starter' && d.months === 3)).map(d => (
+        <div className={`grid ${state.planId === 'essential' ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
+          {DURATIONS.filter(d => !(state.planId === 'essential' && d.months === 3)).map(d => (
             <button
               key={d.months}
               id={`wizard-duration-${d.months}`}
@@ -485,7 +485,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     ownerEmail: '',
     ownerPhone: '',
     location: '',
-    planId: 'essential',
+    planId: 'booster',
     planName: 'Booster · 增长战役版',
     monthlyBaseUsd: 3600,
     durationMonths: 3,
@@ -568,7 +568,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
 
   function onPlan(planId: string, planName: string, monthlyUsd: number) {
     setState(prev => {
-      const nextDuration = (planId === 'starter' && prev.durationMonths === 3) ? 6 : prev.durationMonths
+      const nextDuration = (planId === 'essential' && prev.durationMonths === 3) ? 6 : prev.durationMonths
       return {
         ...prev,
         planId,

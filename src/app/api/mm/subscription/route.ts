@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
       if (!exists) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    const planId = String(body.planId ?? 'starter')
+    const planId = String(body.planId ?? 'essential')
     const durationMonths = Number(body.durationMonths || 1)
     const promoCode = body.promoCode ? String(body.promoCode).trim().toUpperCase() : undefined
     const addonIds: string[] = Array.isArray(body.addonIds) ? body.addonIds.map((v: unknown) => String(v)) : []
@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
         if (userReferrer && userReferrer.id !== session.user.id) {
           finalReferredById = userReferrer.id
           promoCodeType = 'USER_INVITE'
-          if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'starter') {
+          if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'essential') {
             // Special discount for alextiannus@gmail.com: Essential plan @ $400/month (discount = $200/month)
             promoDiscountAmount = 200 * durationMonths
           } else {

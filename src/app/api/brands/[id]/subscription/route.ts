@@ -39,16 +39,14 @@ function getStoreLimit(planId: string, selectedAddons: unknown) {
 }
 
 function getPlatformCoverage(planId: string) {
-  if (planId === 'starter') return ['instagram', 'facebook', 'tiktok', 'google_business']
-  if (planId === 'essential') return ['instagram', 'facebook', 'tiktok', 'xiaohongshu', 'google_business']
-  if (planId === 'advanced') return ['instagram', 'facebook', 'tiktok', 'xiaohongshu', 'google_business', 'ads', 'wechat', 'whatsapp']
+  if (planId === 'essential') return ['instagram', 'tiktok', 'google_business']
+  if (planId === 'booster') return ['instagram', 'tiktok', 'xiaohongshu', 'google_business']
   return []
 }
 
 function getMonthlyContentQuota(planId: string) {
-  if (planId === 'starter') return 30
-  if (planId === 'essential') return 28
-  if (planId === 'advanced') return 38
+  if (planId === 'essential') return 12
+  if (planId === 'booster') return 24
   return 0
 }
 
@@ -138,9 +136,9 @@ export async function GET(request: Request, { params }: Params) {
     monthly_content_quota,
     platform_coverage,
     operations_strategy,
-    reply_sla: planId === 'starter' ? 'none' : '24h',
-    ad_management: planId === 'advanced',
-    kol_management: planId !== 'starter',
+    reply_sla: planId === 'essential' ? 'none' : '24h',
+    ad_management: false,
+    kol_management: planId !== 'essential',
     autopilot_eligible: true,
     contract_start: subscription.contractStartDate?.toISOString() ?? null,
     contract_end: subscription.contractEndDate?.toISOString() ?? null,
@@ -190,7 +188,7 @@ export async function PATCH(request: Request, { params }: Params) {
     subscription = await prisma.brandSubscription.create({
       data: {
         brandId,
-        planId: 'essential',
+        planId: 'booster',
         planName: 'Booster · 增长战役版',
         durationMonths: 12,
         billedMonths: 1,

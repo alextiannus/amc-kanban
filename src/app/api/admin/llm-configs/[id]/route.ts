@@ -19,6 +19,10 @@ function normalizeTaskTag(tag: unknown): string {
   return String(tag).trim().toLowerCase().replace(/[\s-]+/g, '_')
 }
 
+function normalizeContentGenerationType(value: unknown): string {
+  return String(value).trim().toLowerCase().replace(/[\s-]+/g, '_')
+}
+
 function isVideoModelConfig(provider: unknown, taskTags: unknown): boolean {
   if (VIDEO_MODEL_PROVIDERS.has(String(provider).trim().toLowerCase())) return true
   if (!Array.isArray(taskTags)) return false
@@ -61,6 +65,7 @@ export async function PATCH(request: Request, { params }: Params) {
       isEnabled,
       isDefault,
       taskTags,
+      contentGenerationTypes,
       capabilities,
       priority,
       timeoutMs,
@@ -89,6 +94,9 @@ export async function PATCH(request: Request, { params }: Params) {
     const nextTaskTags = taskTags !== undefined
       ? Array.isArray(taskTags) ? taskTags.map(normalizeTaskTag).filter(Boolean) : []
       : current.taskTags
+    const nextContentGenerationTypes = contentGenerationTypes !== undefined
+      ? Array.isArray(contentGenerationTypes) ? contentGenerationTypes.map(normalizeContentGenerationType).filter(Boolean) : []
+      : current.contentGenerationTypes
     if (isVideoModelConfig(testProvider, nextTaskTags) || nextTaskTags.some((tag: string) => tag === 'tts_generation' || tag === 'tts')) {
       return NextResponse.json({ error: 'Video and TTS profiles are owned by AMC-Content. Configure them in Content Lab.' }, { status: 409 })
     }
@@ -157,6 +165,7 @@ export async function PATCH(request: Request, { params }: Params) {
         ...(isEnabled !== undefined && { isEnabled: Boolean(isEnabled) }),
         isDefault: nextIsDefault,
         ...(taskTags !== undefined && { taskTags: nextTaskTags }),
+        ...(contentGenerationTypes !== undefined && { contentGenerationTypes: nextContentGenerationTypes }),
         ...(capabilities !== undefined && { capabilities: nextCapabilities }),
         ...(priority !== undefined && { priority: Number.isInteger(priority) ? priority : current.priority }),
         ...(timeoutMs !== undefined && { timeoutMs: Math.max(1000, Math.min(600000, Number(timeoutMs) || current.timeoutMs)) }),

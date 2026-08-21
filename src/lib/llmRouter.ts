@@ -396,7 +396,13 @@ export async function callLLMChat(
 ): Promise<LLMChatResult> {
   // 1. Task-tagged configs sorted by priority
   const matchingConfigs = await prisma.lLMConfig.findMany({
-    where: { isEnabled: true, taskTags: { has: taskTag } },
+    where: {
+      isEnabled: true,
+      OR: [
+        { taskTags: { has: taskTag } },
+        { contentGenerationTypes: { has: taskTag } },
+      ],
+    },
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
   const matchingIds = matchingConfigs.map((c: any) => c.id)
@@ -598,7 +604,10 @@ export async function callLLM(
   const matchingConfigs = await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,
-      taskTags: { has: taskTag },
+      OR: [
+        { taskTags: { has: taskTag } },
+        { contentGenerationTypes: { has: taskTag } },
+      ],
     },
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })

@@ -116,6 +116,7 @@ type BrandPlanWorkspaceData = {
       status: string
       matchedTags?: string[]
       matchedInspirations?: string[]
+      selectedCreativeCandidateId?: string
       materialRequirements?: string[]
       contentLibraryGap?: string
     }>>
@@ -282,7 +283,7 @@ function BrandProfileContent({
   const [showResearchReport, setShowResearchReport] = useState(false)
   const [showInterviewReport, setShowInterviewReport] = useState(false)
   const [interviewDraftNotes, setInterviewDraftNotes] = useState('')
-  const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | null>(null)
+  const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date()
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -656,6 +657,17 @@ ${storeLines}
     setPlanGenerating('calendar')
     try {
       await runBrandPlanAction('generate_publishing_calendar', '季度内容发布日历已生成', { month: calendarMonth })
+    } finally {
+      setPlanGenerating(null)
+    }
+  }
+
+  const handleRegenerateCalendarItem = async (itemId?: string) => {
+    if (!itemId) return
+    const loadingKey = `calendar_item:${itemId}`
+    setPlanGenerating(loadingKey)
+    try {
+      await runBrandPlanAction('regenerate_calendar_item', '该条发布创意已重新生成', { month: calendarMonth, itemId })
     } finally {
       setPlanGenerating(null)
     }
@@ -1086,6 +1098,14 @@ ${storeLines}
                   <div className="mt-3 rounded-lg bg-white p-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-300">
                     <span className="font-black text-rose-600">样板爆品：</span>{item.sampleHit}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRegenerateCalendarItem(item.id)}
+                    disabled={Boolean(planGenerating) || !item.id}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                  >
+                    {planGenerating === `calendar_item:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 单独重新生成这条创意
+                  </button>
                 </div>
               )) : (
                 <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">当前月份还没有发布策划。请选择月份后生成内容发布日历。</div>
