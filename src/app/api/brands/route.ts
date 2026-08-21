@@ -279,7 +279,7 @@ export async function POST(request: Request) {
 
     // Parse plan info from body (wizard supplies planId, planName, durationMonths etc.)
     const planId   = typeof body.planId   === 'string' ? body.planId.trim()   : 'starter'
-    const planName = typeof body.planName === 'string' ? body.planName.trim() : 'Starter'
+    const planName = typeof body.planName === 'string' ? body.planName.trim() : 'Essential · 基础线上经营'
     const durationMonths    = typeof body.durationMonths    === 'number' ? body.durationMonths    : 1
     const monthlyBaseUsd    = typeof body.monthlyBaseUsd    === 'number' ? body.monthlyBaseUsd    : 0
     const recurringAddonsUsd = typeof body.recurringAddonsUsd === 'number' ? body.recurringAddonsUsd : 0

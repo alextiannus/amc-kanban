@@ -786,7 +786,7 @@ export async function sendBrandCongratsEmailWithContract(params: {
 }): Promise<EmailResult> {
   const { to, nickname, brandName, planName, mmInviteLink } = params
 
-  const displayPlan = planName || '标准专业代运营套餐 (Starter Plan)'
+  const displayPlan = planName || 'Essential · 基础线上经营'
   const contractText = getSubscriptionTermsMarkdown()
 
   const subject = `【AMC】祝贺！您的品牌 ${brandName} 已成功创建 | Brand Created Successfully`

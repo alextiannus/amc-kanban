@@ -191,7 +191,7 @@ export async function PATCH(request: Request, { params }: Params) {
       data: {
         brandId,
         planId: 'essential',
-        planName: 'Essential Plan',
+        planName: 'Booster · 增长战役版',
         durationMonths: 12,
         billedMonths: 1,
         monthlyBaseUsd: 199,

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   X, ChevronRight, ChevronLeft, Store, Mail, Phone, MapPin,
-  Check, Loader2, Sparkles, Building2, Zap, Crown,
+  Check, Loader2, Sparkles, Building2, Zap, Info,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -14,6 +14,13 @@ interface PlanOption {
   monthlyUsd: number
   description: string
   highlights: string[]
+  explanation: {
+    positioning: string
+    promise: string
+    operations: string[]
+    reporting: string
+    bestFor: string[]
+  }
   icon: React.ReactNode
   color: string
   badge?: string
@@ -45,36 +52,73 @@ interface NewBrandWizardProps {
   onSuccess: (brandId: string, brandName: string) => void
 }
 
+type WizardCurrentUser = {
+  role?: string
+  userRoles?: string[]
+} | null
+
+type PromoValidationResponse = {
+  valid?: boolean
+  discountType?: WizardState['promoDiscountType']
+  discountValue?: number
+  description?: string
+  error?: string
+}
+
 // ─── Plan Data ────────────────────────────────────────────────────────────────
 
 const PLANS: PlanOption[] = [
   {
     id: 'starter',
-    name: '自媒体基础运营',
+    name: 'Essential · 基础线上经营',
     monthlyUsd: 800,
-    description: '消灭宣传真空，建立基础数字存在',
+    description: '基础线上门面 + 稳定内容维护',
     highlights: [
-      '30-36条/月图文内容创作',
-      'Google / FB / IG / TikTok',
-      '评论监控',
-      '每月≥4位博主探店',
-      '账号风格统一化设计',
+      '每月不少于 12 次图文发布',
+      'Instagram / TikTok / Google Map',
+      '评论监控与地图资料维护',
+      '每月 4 位 KOC/微型博主探店',
+      '每月舆情报告',
     ],
+    explanation: {
+      positioning: '基础线上门面 + 稳定内容维护',
+      promise: '让客户在 Instagram / TikTok / Google Map 上找得到、看得懂、愿意来。',
+      operations: [
+        'Instagram：品牌门面和信任留存，呈现招牌产品、环境、套餐和顾客场景。',
+        'TikTok：轻量曝光和兴趣种草，持续推新品、优惠、活动和门店氛围。',
+        'Google Map：最后一公里转化，维护分类、营业时间、菜单、照片、电话、链接和评论回复。',
+      ],
+      reporting: '每月汇总评论、评分变化、热门内容、客户反馈和下月优化建议。',
+      bestFor: ['新店开业', '社媒断更', 'Google Map 信息不完整', '老板没时间稳定发内容'],
+    },
     icon: <Zap className="w-5 h-5" />,
     color: 'blue',
   },
   {
     id: 'essential',
-    name: 'Tier 2 · 品牌建设版',
+    name: 'Booster · 增长战役版',
     monthlyUsd: 3600,
-    description: '全平台覆盖 + 视频内容 + 博主矩阵',
+    description: '增长战役 + 素材资产 + 博主扩散',
     highlights: [
-      '≥20条图文 + 8条短视频/月',
-      '5大平台全覆盖（含小红书）',
-      '评论监控与回复',
-      '每月最多30位博主探店',
-      '月度营销活动策划',
+      '每月至少 24 图文 + 12 视频',
+      'Instagram / TikTok / 小红书 / Google Map',
+      '定制月度增长策划案',
+      '专业素材采集',
+      '10 位博主分批探店',
+      '每周舆情复盘',
     ],
+    explanation: {
+      positioning: '增长战役 + 素材资产 + 博主扩散',
+      promise: '用一个月把品牌内容、活动话题、博主探店和地图口碑一起推起来。',
+      operations: [
+        'Instagram：从门面展示升级为品牌经营，做招牌故事、套餐组合、Reels 和 Story 互动。',
+        'TikTok：主攻爆点内容，围绕价格锚点、反差卖点、制作过程、限时活动和探店视频连续发布。',
+        '小红书：面向中文用户、游客、留学生，做可搜索、可收藏、可照着去的生活方式笔记。',
+        'Google Map：强化评论回复、差评修复、照片更新、菜单和热门产品呈现。',
+      ],
+      reporting: '每周看曝光、互动、评论、收藏、私信、Google 评分、热门内容和下周调整动作。',
+      bestFor: ['新店或新菜单上线', '节日档期推广', '口碑修复', '吸引游客和中文用户', '商圈竞争强'],
+    },
     icon: <Building2 className="w-5 h-5" />,
     color: 'indigo',
     badge: '最受欢迎',
@@ -214,13 +258,12 @@ function Step1({ state, onChange }: {
 
 // ─── Step 2: 套餐选择 ─────────────────────────────────────────────────────────
 
-function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePromo, validatingPromo }: {
+function Step2({ state, onPlan, onDuration, currentUser, onChange, validatingPromo }: {
   state: WizardState
   onPlan: (planId: string, planName: string, monthlyUsd: number) => void
   onDuration: (months: number) => void
-  currentUser: any
+  currentUser: WizardCurrentUser
   onChange: (k: keyof WizardState, v: string) => void
-  onValidatePromo: () => void
   validatingPromo: boolean
 }) {
   const userRoles = currentUser?.userRoles || []
@@ -255,6 +298,27 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, onValidatePro
                       <div className="flex items-center gap-2">
                         <span className={`font-bold text-sm ${selected ? c.text : 'text-slate-800 dark:text-slate-100'}`}>
                           {plan.name}
+                        </span>
+                        <span className="relative inline-flex group/info">
+                          <span
+                            tabIndex={0}
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 outline-none transition hover:text-slate-700 focus:text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:hover:text-slate-200 dark:focus:text-slate-200"
+                            aria-label={`${plan.name} 说明`}
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                          </span>
+                          <span className="pointer-events-none absolute left-0 top-6 z-30 hidden w-[min(420px,calc(100vw-64px))] rounded-xl border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-650 shadow-xl group-hover/info:block group-focus-within/info:block dark:border-slate-700 dark:bg-slate-950 dark:text-slate-250">
+                            <span className="block font-black text-slate-900 dark:text-white">{plan.explanation.positioning}</span>
+                            <span className="mt-1 block text-slate-500 dark:text-slate-400">{plan.explanation.promise}</span>
+                            <span className="mt-3 block font-bold text-slate-800 dark:text-slate-100">运营设计</span>
+                            {plan.explanation.operations.map((item) => (
+                              <span key={item} className="mt-1 block">{item}</span>
+                            ))}
+                            <span className="mt-3 block font-bold text-slate-800 dark:text-slate-100">复盘报告</span>
+                            <span className="mt-1 block">{plan.explanation.reporting}</span>
+                            <span className="mt-3 block font-bold text-slate-800 dark:text-slate-100">适用场景</span>
+                            <span className="mt-1 block">{plan.explanation.bestFor.join(' / ')}</span>
+                          </span>
                         </span>
                         {plan.badge && (
                           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${c.badge}`}>
@@ -413,7 +477,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
   const [step, setStep] = useState(1)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [currentUser, setCurrentUser] = useState<WizardCurrentUser>(null)
   const [validatingPromo, setValidatingPromo] = useState(false)
 
   const [state, setState] = useState<WizardState>({
@@ -422,7 +486,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     ownerPhone: '',
     location: '',
     planId: 'essential',
-    planName: '品牌建设版',
+    planName: 'Booster · 增长战役版',
     monthlyBaseUsd: 3600,
     durationMonths: 3,
     promoCode: '',
@@ -440,31 +504,10 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
       .catch(err => console.error('Fetch profile err:', err))
   }, [])
 
-  // ── Auto-adjust duration for starter plan ──
-  useEffect(() => {
-    if (state.planId === 'starter' && state.durationMonths === 3) {
-      setState(prev => ({ ...prev, durationMonths: 6 }))
-    }
-  }, [state.planId, state.durationMonths])
-
   // ── Auto-validate promo code with 500ms debounce ──
   useEffect(() => {
     const code = state.promoCode.trim();
-    if (!code) {
-      setState(prev => {
-        if (prev.promoValid || prev.promoValidationMsg) {
-          return {
-            ...prev,
-            promoValid: false,
-            promoDiscountType: null,
-            promoDiscountValue: 0,
-            promoValidationMsg: null
-          }
-        }
-        return prev
-      })
-      return;
-    }
+    if (!code) return
 
     const timer = setTimeout(() => {
       (async () => {
@@ -475,13 +518,13 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ code, planId: state.planId })
           })
-          const data = await res.json()
+          const data = await res.json() as PromoValidationResponse
           if (res.ok && data.valid) {
             setState(prev => ({
               ...prev,
               promoValid: true,
-              promoDiscountType: data.discountType,
-              promoDiscountValue: data.discountValue,
+              promoDiscountType: data.discountType || null,
+              promoDiscountValue: data.discountValue || 0,
               promoValidationMsg: `✅ 已应用：${data.description}`
             }))
           } else {
@@ -511,7 +554,16 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
   }, [state.promoCode, state.planId]);
 
   function onChange(k: keyof WizardState, v: string) {
-    setState(prev => ({ ...prev, [k]: v }))
+    setState(prev => ({
+      ...prev,
+      [k]: v,
+      ...(k === 'promoCode' && !v.trim() ? {
+        promoValid: false,
+        promoDiscountType: null,
+        promoDiscountValue: 0,
+        promoValidationMsg: null,
+      } : {}),
+    }))
   }
 
   function onPlan(planId: string, planName: string, monthlyUsd: number) {
@@ -545,56 +597,6 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
 
   const discountedMonthly = Math.max(0, Math.round(baseDiscountedMonthly - promoDiscountVal))
   const totalDue = discountedMonthly * state.durationMonths
-
-  async function handleValidatePromoCode() {
-    if (!state.promoCode.trim()) {
-      setState(prev => ({
-        ...prev,
-        promoValid: false,
-        promoDiscountType: null,
-        promoDiscountValue: 0,
-        promoValidationMsg: '请输入邀请码/优惠码'
-      }))
-      return
-    }
-
-    setValidatingPromo(true)
-    try {
-      const res = await fetch('/api/promo/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: state.promoCode })
-      })
-      const data = await res.json()
-      if (res.ok && data.valid) {
-        setState(prev => ({
-          ...prev,
-          promoValid: true,
-          promoDiscountType: data.discountType,
-          promoDiscountValue: data.discountValue,
-          promoValidationMsg: `✅ 已应用：${data.description}`
-        }))
-      } else {
-        setState(prev => ({
-          ...prev,
-          promoValid: false,
-          promoDiscountType: null,
-          promoDiscountValue: 0,
-          promoValidationMsg: `❌ ${data.error || '验证失败'}`
-        }))
-      }
-    } catch {
-      setState(prev => ({
-        ...prev,
-        promoValid: false,
-        promoDiscountType: null,
-        promoDiscountValue: 0,
-        promoValidationMsg: '❌ 网络错误，请重新验证'
-      }))
-    } finally {
-      setValidatingPromo(false)
-    }
-  }
 
   function validateStep1(): string | null {
     if (!state.brandName.trim()) return '请填写品牌名称'
@@ -692,7 +694,6 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
               onDuration={onDuration} 
               currentUser={currentUser}
               onChange={onChange}
-              onValidatePromo={handleValidatePromoCode}
               validatingPromo={validatingPromo}
             />
           )}
