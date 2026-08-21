@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import {
   ensureGrowthMerchantForBrand,
@@ -7,6 +8,7 @@ import {
 import { matchPromotionStrategyCreativeCandidates } from '@/lib/promotion-strategy/clients'
 import type { PublishingFreq } from '@/lib/brandContextBuilder'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import { callLLM } from '@/lib/llmRouter'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -27,6 +29,7 @@ type BrandPlanCalendarItem = {
 
 export type BrandPlanWorkspaceData = {
   researchReport?: {
+    snapshotId?: string
     generatedAt: string
     summary: string
     dataSources: string[]
@@ -53,6 +56,11 @@ export type BrandPlanWorkspaceData = {
       publishingFreq: PublishingFreq | null
     }
     researchFocus?: string
+    researchSnapshotId?: string
+    generationMode?: 'LLM' | 'RULE_FALLBACK'
+    llmProvider?: string
+    llmModel?: string
+    llmError?: string
   }
   quarterlyPlans?: Array<{
     quarter: string
@@ -60,10 +68,16 @@ export type BrandPlanWorkspaceData = {
     objective: string
     monthlyFocus: Array<{ month: string; focus: string }>
     contentDirections: string[]
+    researchSnapshotId?: string
+    generationMode?: 'LLM' | 'RULE_FALLBACK'
+    llmProvider?: string
+    llmModel?: string
+    llmError?: string
   }>
   publishingCalendar?: {
     generatedAt: string
     months: Record<string, BrandPlanCalendarItem[]>
+    generationMode?: 'AMC_CONTENT_ASSISTED' | 'RULE_FALLBACK'
   }
 }
 
@@ -155,21 +169,36 @@ export async function runBrandPlanAction(input: {
 
   let next = current
   if (input.action === 'generate_research_report') {
-    const researchReport = await buildResearchReport(brand)
+    const researchReport = await saveResearchReport(brand.id, await buildResearchReport(brand))
     next = {
       ...current,
       researchReport,
     }
-    await saveResearchReport(brand.id, researchReport)
   } else if (input.action === 'save_merchant_interview') {
-    const report = current.researchReport || await buildResearchReport(brand)
+    const report = current.researchReport || await saveResearchReport(brand.id, await buildResearchReport(brand))
     latestInterview = await saveMerchantInterview(brand.id, input.body, report)
     next = { ...current, researchReport: report }
   } else if (input.action === 'generate_annual_plan') {
-    next = { ...current, annualPlan: buildAnnualMarketingSolution(brand, current, latestInterview) }
+    const annualPlan = await buildAnnualMarketingSolution(brand, current, latestInterview)
+    next = { ...current, annualPlan }
+    await saveMarketingSolutionVersion({
+      brandId: brand.id,
+      kind: 'ANNUAL',
+      period: String(new Date().getFullYear()),
+      input: {
+        ...buildMarketingPlanInput(brand, current, latestInterview),
+        subscriptionStrategy: annualPlan.subscriptionStrategy,
+      },
+      output: annualPlan,
+      researchSnapshotId: annualPlan.researchSnapshotId || current.researchReport?.snapshotId,
+      generationMode: annualPlan.generationMode || 'LLM',
+      llmProvider: annualPlan.llmProvider,
+      llmModel: annualPlan.llmModel,
+      llmError: annualPlan.llmError,
+    })
   } else if (input.action === 'generate_quarter_plan') {
     requireAnnualPlan(current)
-    const quarterPlan = buildQuarterMarketingSolution(brand, current, latestInterview, input.body)
+    const quarterPlan = await buildQuarterMarketingSolution(brand, current, latestInterview, input.body)
     next = {
       ...current,
       quarterlyPlans: [
@@ -177,6 +206,18 @@ export async function runBrandPlanAction(input: {
         quarterPlan,
       ],
     }
+    await saveMarketingSolutionVersion({
+      brandId: brand.id,
+      kind: 'QUARTERLY',
+      period: quarterPlan.quarter,
+      input: buildMarketingPlanInput(brand, current, latestInterview, input.body),
+      output: quarterPlan,
+      researchSnapshotId: quarterPlan.researchSnapshotId || current.researchReport?.snapshotId,
+      generationMode: quarterPlan.generationMode || 'LLM',
+      llmProvider: quarterPlan.llmProvider,
+      llmModel: quarterPlan.llmModel,
+      llmError: quarterPlan.llmError,
+    })
   } else if (input.action === 'generate_publishing_calendar') {
     requireQuarterPlan(current)
     const month = normalizeMonth(input.body?.month)
@@ -185,6 +226,7 @@ export async function runBrandPlanAction(input: {
       ...current,
       publishingCalendar: {
         generatedAt: new Date().toISOString(),
+        generationMode: 'AMC_CONTENT_ASSISTED',
         months: {
           ...(current.publishingCalendar?.months || {}),
           [month]: monthItems,
@@ -192,6 +234,15 @@ export async function runBrandPlanAction(input: {
       },
     }
     await syncCalendarMaterialRequirements(brand.id, month, monthItems)
+    await saveMarketingSolutionVersion({
+      brandId: brand.id,
+      kind: 'CALENDAR',
+      period: month,
+      input: buildMarketingPlanInput(brand, current, latestInterview, input.body),
+      output: { month, items: monthItems },
+      researchSnapshotId: current.researchReport?.snapshotId,
+      generationMode: 'AMC_CONTENT_ASSISTED',
+    })
   } else {
     throw new BrandPlanError('invalid_brand_plan_action', 400)
   }
@@ -272,12 +323,32 @@ async function buildResearchReport(brand: BrandPlanBrand): Promise<NonNullable<B
 async function saveResearchReport(
   brandId: string,
   report: NonNullable<BrandPlanWorkspaceData['researchReport']>
-) {
+): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
+  const reportForSnapshot = { ...report }
+  delete reportForSnapshot.snapshotId
+  const dataHash = hashJson(reportForSnapshot)
+  const existing = await prisma.brandGrowthResearchSnapshot.findFirst({
+    where: { brandId, dataHash },
+    orderBy: { generatedAt: 'desc' },
+    select: { id: true },
+  })
+  const snapshot = existing || await prisma.brandGrowthResearchSnapshot.create({
+    data: {
+      brandId,
+      source: report.dataSources.includes('AMC-Growth 数据调研') ? 'amc-growth' : 'amc-kanban',
+      sourceVersion: report.generatedAt,
+      report: reportForSnapshot as Prisma.InputJsonValue,
+      dataHash,
+    },
+    select: { id: true },
+  })
+  const persistedReport = { ...reportForSnapshot, snapshotId: snapshot.id }
   await prisma.brandKnowledge.upsert({
     where: { brandId },
-    update: { researchReport: report as Prisma.InputJsonValue },
-    create: { brandId, negPrompts: [], researchReport: report as Prisma.InputJsonValue },
+    update: { researchReport: persistedReport as Prisma.InputJsonValue },
+    create: { brandId, negPrompts: [], researchReport: persistedReport as Prisma.InputJsonValue },
   })
+  return persistedReport
 }
 
 async function saveMerchantInterview(
@@ -356,15 +427,38 @@ function buildBrandClaimFromInterview(interview: BrandPlanMerchantInterview) {
   }
 }
 
-function buildAnnualMarketingSolution(
+async function buildAnnualMarketingSolution(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
   interview: BrandPlanMerchantInterview | null
-): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
+): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
+  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const input = {
+    ...buildMarketingPlanInput(brand, current, interview),
+    subscriptionStrategy: fallback.subscriptionStrategy,
+  }
+  const llm = await callMarketingPlanLLM('annual', input)
+  if (!llm.value) {
+    return {
+      ...fallback,
+      generationMode: 'RULE_FALLBACK',
+      llmProvider: llm.provider,
+      llmModel: llm.modelName,
+      llmError: llm.error,
+    }
+  }
+  return normalizeAnnualMarketingSolution(llm.value, fallback, llm)
+}
+
+async function buildRuleAnnualMarketingSolution(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  interview: BrandPlanMerchantInterview | null
+): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
   const year = new Date().getFullYear()
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
-  const subscriptionStrategy = buildSubscriptionStrategy(brand)
+  const subscriptionStrategy = await buildSubscriptionStrategy(brand)
   const researchFocus = current.researchReport?.growthPoints?.[0] || current.researchReport?.summary || ''
   const theme = text(brand.knowledge?.promotionFocus) || products[0] || interviewFocus || '稳定提升本地顾客认知和到店转化'
   return {
@@ -382,10 +476,32 @@ function buildAnnualMarketingSolution(
     metrics: ['路线点击', '电话/私信咨询', '预订/下单点击', '内容发布完成率', '顾客评价与收藏'],
     subscriptionStrategy,
     ...(researchFocus ? { researchFocus } : {}),
+    ...(current.researchReport?.snapshotId ? { researchSnapshotId: current.researchReport.snapshotId } : {}),
+    generationMode: 'RULE_FALLBACK',
   }
 }
 
-function buildQuarterMarketingSolution(
+async function buildQuarterMarketingSolution(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  interview: BrandPlanMerchantInterview | null,
+  body?: Record<string, unknown>
+): Promise<NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number]> {
+  const fallback = buildRuleQuarterMarketingSolution(brand, current, interview, body)
+  const llm = await callMarketingPlanLLM('quarter', buildMarketingPlanInput(brand, current, interview, body))
+  if (!llm.value) {
+    return {
+      ...fallback,
+      generationMode: 'RULE_FALLBACK',
+      llmProvider: llm.provider,
+      llmModel: llm.modelName,
+      llmError: llm.error,
+    }
+  }
+  return normalizeQuarterMarketingSolution(llm.value, fallback, llm)
+}
+
+function buildRuleQuarterMarketingSolution(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
   interview: BrandPlanMerchantInterview | null,
@@ -412,10 +528,12 @@ function buildQuarterMarketingSolution(
       ...primaryProducts(brand, { available: false }).slice(0, 3).map((item) => `围绕“${item}”做真实场景、卖点解释和顾客行动引导。`),
       interviewMaterialText(interview) ? `结合主理人访谈确认内容：${interviewMaterialText(interview)}` : '',
     ].filter(Boolean),
+    ...(current.researchReport?.snapshotId ? { researchSnapshotId: current.researchReport.snapshotId } : {}),
+    generationMode: 'RULE_FALLBACK',
   }
 }
 
-function buildPublishingMonth(
+async function buildPublishingMonth(
   brand: BrandPlanBrand,
   month: string,
   interview: BrandPlanMerchantInterview | null,
@@ -423,7 +541,7 @@ function buildPublishingMonth(
 ): Promise<NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]> {
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
-  const subscriptionStrategy = current.annualPlan?.subscriptionStrategy || buildSubscriptionStrategy(brand)
+  const subscriptionStrategy = current.annualPlan?.subscriptionStrategy || await buildSubscriptionStrategy(brand)
   const schedule = buildMonthlyPublishingSchedule(
     month,
     subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
@@ -555,6 +673,142 @@ function materialRequirementSpecification(item: BrandPlanCalendarItem) {
   }
 }
 
+function buildMarketingPlanInput(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  interview: BrandPlanMerchantInterview | null,
+  body?: Record<string, unknown>
+) {
+  return {
+    brand: {
+      id: brand.id,
+      name: brand.name,
+      industry: brand.industry,
+      location: brand.location,
+      address: brand.address,
+      description: brand.description,
+    },
+    stores: arrayValue(brand.knowledge?.stores),
+    products: primaryProducts(brand, { available: false }),
+    brandClaim: brand.knowledge?.brandClaim || null,
+    merchantInterview: interview,
+    researchReport: current.researchReport || null,
+    subscriptionStrategy: current.annualPlan?.subscriptionStrategy || null,
+    annualPlan: current.annualPlan || null,
+    request: body || {},
+  }
+}
+
+async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<string, unknown>) {
+  const schemaInstruction = scope === 'annual'
+    ? `返回 JSON 对象，字段必须为：goal(string), theme(string), quarterlyFocus(array，每项含 quarter/focus/campaigns), metrics(array), researchFocus(string)。`
+    : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array)。`
+  const prompt = [
+    '你是 AMC-Kanban 的本地商家营销方案策划师。',
+    '请基于输入里的品牌信息、门店信息、品牌主张、Growth 数据调研、订阅运营策略，生成可执行的营销方案。',
+    '要求：接地气，适合普通餐饮/本地服务老板；不要写空泛品牌大词；必须受订阅平台和发布频次约束；不要虚构不存在的产品或门店。',
+    schemaInstruction,
+    '只输出合法 JSON，不要 Markdown，不要解释。',
+    JSON.stringify(input),
+  ].join('\n\n')
+  const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 2400 : 1800, {
+    temperature: 0.35,
+    jsonMode: true,
+    deadlineMs: 45000,
+    attemptTimeoutMs: [20000, 25000],
+    maxAttempts: 2,
+  })
+  return {
+    provider: result.provider,
+    modelName: result.modelName,
+    error: result.error,
+    value: parseJsonObject(result.text),
+  }
+}
+
+function normalizeAnnualMarketingSolution(
+  value: Record<string, unknown>,
+  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
+  llm: { provider: string; modelName: string; error?: string }
+): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
+  const quarterlyFocus = arrayValue(value.quarterlyFocus)
+    .map((item) => objectValue(item))
+    .map((item) => ({
+      quarter: text(item.quarter) || 'Q1',
+      focus: text(item.focus),
+      campaigns: stringList(item.campaigns),
+    }))
+    .filter((item) => item.focus)
+  return {
+    ...fallback,
+    generatedAt: new Date().toISOString(),
+    goal: text(value.goal) || fallback.goal,
+    theme: text(value.theme) || fallback.theme,
+    quarterlyFocus: quarterlyFocus.length ? quarterlyFocus : fallback.quarterlyFocus,
+    metrics: stringList(value.metrics).length ? stringList(value.metrics) : fallback.metrics,
+    researchFocus: text(value.researchFocus) || fallback.researchFocus,
+    generationMode: 'LLM',
+    llmProvider: llm.provider,
+    llmModel: llm.modelName,
+  }
+}
+
+function normalizeQuarterMarketingSolution(
+  value: Record<string, unknown>,
+  fallback: NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number],
+  llm: { provider: string; modelName: string; error?: string }
+): NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number] {
+  const monthlyFocus = arrayValue(value.monthlyFocus)
+    .map((item) => objectValue(item))
+    .map((item) => ({ month: text(item.month), focus: text(item.focus) }))
+    .filter((item) => item.month && item.focus)
+  return {
+    ...fallback,
+    generatedAt: new Date().toISOString(),
+    quarter: text(value.quarter) || fallback.quarter,
+    objective: text(value.objective) || fallback.objective,
+    monthlyFocus: monthlyFocus.length ? monthlyFocus : fallback.monthlyFocus,
+    contentDirections: stringList(value.contentDirections).length ? stringList(value.contentDirections) : fallback.contentDirections,
+    generationMode: 'LLM',
+    llmProvider: llm.provider,
+    llmModel: llm.modelName,
+  }
+}
+
+async function saveMarketingSolutionVersion(input: {
+  brandId: string
+  kind: 'ANNUAL' | 'QUARTERLY' | 'CALENDAR'
+  period: string
+  input: unknown
+  output: unknown
+  researchSnapshotId?: string
+  generationMode: 'LLM' | 'RULE_FALLBACK' | 'AMC_CONTENT_ASSISTED'
+  llmProvider?: string
+  llmModel?: string
+  llmError?: string
+}) {
+  const previous = await prisma.brandMarketingSolution.findFirst({
+    where: { brandId: input.brandId, kind: input.kind, period: input.period },
+    orderBy: { version: 'desc' },
+    select: { version: true },
+  })
+  return prisma.brandMarketingSolution.create({
+    data: {
+      brandId: input.brandId,
+      kind: input.kind,
+      period: input.period,
+      version: (previous?.version || 0) + 1,
+      input: input.input as Prisma.InputJsonValue,
+      output: input.output as Prisma.InputJsonValue,
+      generationMode: input.generationMode,
+      llmProvider: input.llmProvider,
+      llmModel: input.llmModel,
+      llmError: input.llmError,
+      researchSnapshotId: input.researchSnapshotId,
+    },
+  })
+}
+
 function requireAnnualPlan(current: BrandPlanWorkspaceData) {
   if (!current.annualPlan) throw new BrandPlanError('annual_plan_required', 409)
 }
@@ -638,21 +892,26 @@ function normalizeBrandPlan(value: unknown): BrandPlanWorkspaceData {
   return value as BrandPlanWorkspaceData
 }
 
-function buildSubscriptionStrategy(brand: BrandPlanBrand) {
+async function buildSubscriptionStrategy(brand: BrandPlanBrand) {
   const subscriptions = Array.isArray(brand.subscriptions) ? brand.subscriptions : []
   const active = subscriptions.find((subscription: (typeof subscriptions)[number]) =>
     subscription.status === 'ACTIVE' && (!subscription.contractEndDate || subscription.contractEndDate.getTime() > Date.now())
   ) || subscriptions[0]
   const plan = active ? SUBSCRIPTION_PLANS.find((item) => item.id === active.planId) : null
   const planId = active?.planId || 'none'
-  const platformCoverage = platformCoverageForPlan(planId)
+  const configured = planId !== 'none'
+    ? await prisma.subscriptionOperationsStrategy.findUnique({ where: { planId } })
+    : null
+  const configuredPlatforms = configured ? stringList(configured.platformCoverage) : []
+  const platformCoverage = configuredPlatforms.length ? configuredPlatforms : platformCoverageForPlan(planId)
+  const configuredPublishingFreq = configured ? normalizePublishingFreq(configured.publishingFreq) : null
   return {
     planId,
-    planName: plan?.name || active?.planName || '未激活订阅',
-    includedServices: plan?.services || [],
+    planName: configured?.planName || plan?.name || active?.planName || '未激活订阅',
+    includedServices: configured ? stringList(configured.includedServices) : plan?.services || [],
     platformCoverage,
-    monthlyContentQuota: monthlyContentQuotaForPlan(planId),
-    publishingFreq: normalizePublishingFreq(brand.knowledge?.publishingFreq) || publishingFreqForPlan(planId, platformCoverage),
+    monthlyContentQuota: configured?.monthlyContentQuota || monthlyContentQuotaForPlan(planId),
+    publishingFreq: normalizePublishingFreq(brand.knowledge?.publishingFreq) || configuredPublishingFreq || publishingFreqForPlan(planId, platformCoverage),
   }
 }
 
@@ -810,6 +1069,43 @@ function arrayValue(value: unknown): unknown[] {
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  if (typeof value !== 'string') return null
+  const cleaned = value
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+  try {
+    return objectValue(JSON.parse(cleaned))
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/)
+    if (!match) return null
+    try {
+      return objectValue(JSON.parse(match[0]))
+    } catch {
+      return null
+    }
+  }
+}
+
+function hashJson(value: unknown) {
+  return createHash('sha256').update(stableJson(value)).digest('hex')
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
 }
 
 function text(value: unknown) {

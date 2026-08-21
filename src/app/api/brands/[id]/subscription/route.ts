@@ -52,22 +52,29 @@ function getMonthlyContentQuota(planId: string) {
   return 0
 }
 
-function getOperationsStrategy(planId: string, planServices: string[]) {
-  const platformCoverage = getPlatformCoverage(planId)
-  const monthlyContentQuota = getMonthlyContentQuota(planId)
+async function getOperationsStrategy(planId: string, planServices: string[]) {
+  const configured = await prisma.subscriptionOperationsStrategy.findUnique({ where: { planId } })
+  const platformCoverage = configured ? stringList(configured.platformCoverage) : getPlatformCoverage(planId)
+  const monthlyContentQuota = configured?.monthlyContentQuota ?? getMonthlyContentQuota(planId)
   return {
     platformCoverage,
     monthlyContentQuota,
-    includedServices: planServices,
-    publishingFrequencyPlan: monthlyContentQuota && platformCoverage.length
+    includedServices: configured ? stringList(configured.includedServices) : planServices,
+    publishingFrequencyPlan: configured?.publishingFreq || (monthlyContentQuota && platformCoverage.length
       ? {
           platforms: Object.fromEntries(platformCoverage.map((platform) => [
             platform,
             { postsPerWeek: Math.max(1, Math.round((monthlyContentQuota / platformCoverage.length) * 7 / 30)) },
           ])),
         }
-      : null,
+      : null),
+    storeLimit: configured?.storeLimit ?? 1,
+    strategyNotes: configured?.strategyNotes || null,
   }
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean) : []
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -120,9 +127,9 @@ export async function GET(request: Request, { params }: Params) {
   const planId = subscription.planId
   const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId)
   const included_services = plan?.services ?? []
-  const monthly_content_quota = getMonthlyContentQuota(planId)
-  const platform_coverage = getPlatformCoverage(planId)
-  const operations_strategy = getOperationsStrategy(planId, included_services)
+  const operations_strategy = await getOperationsStrategy(planId, included_services)
+  const monthly_content_quota = operations_strategy.monthlyContentQuota
+  const platform_coverage = operations_strategy.platformCoverage
 
   return NextResponse.json({
     plan_id: planId,

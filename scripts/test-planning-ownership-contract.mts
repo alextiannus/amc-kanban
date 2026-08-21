@@ -2,13 +2,15 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
-const [sso, sidebar, permissions, brandProfile, brandPlanRoute, brandPlanService, planning, execution, contentContext, migration] = await Promise.all([
+const [sso, sidebar, permissions, brandProfile, brandPlanRoute, brandPlanService, subscriptionRoute, schema, planning, execution, contentContext, migration] = await Promise.all([
   read('src/app/api/integrations/amc-growth/sso/start/route.ts'),
   read('src/components/layout/Sidebar.tsx'),
   read('src/lib/permissions.ts'),
   read('src/components/dashboard/BrandProfileView.tsx'),
   read('src/app/api/brands/[id]/brand-plan/route.ts'),
   read('src/lib/brand-plan/service.ts'),
+  read('src/app/api/brands/[id]/subscription/route.ts'),
+  read('prisma/schema.prisma'),
   read('src/app/api/brands/[id]/planning/route.ts'),
   read('src/app/api/brands/[id]/promotion-execution/route.ts'),
   read('src/app/api/internal/content-context/route.ts'),
@@ -32,6 +34,11 @@ assert(brandPlanRoute.includes("runBrandPlanAction"))
 assert(brandPlanService.includes('marketingSolution'))
 assert(brandPlanService.includes('brandClaim'))
 assert(brandPlanService.includes('researchReport'))
+assert(brandPlanService.includes('saveResearchReport'))
+assert(brandPlanService.includes('brandGrowthResearchSnapshot'))
+assert(brandPlanService.includes("callLLM('marketing_plan'"))
+assert(brandPlanService.includes('brandMarketingSolution'))
+assert(brandPlanService.includes('subscriptionOperationsStrategy'))
 assert(brandPlanService.includes("'generate_research_report'"))
 assert(brandPlanService.includes("'save_merchant_interview'"))
 assert(brandPlanService.includes("'generate_annual_plan'"))
@@ -40,6 +47,10 @@ assert(brandPlanService.includes("'generate_publishing_calendar'"))
 assert(brandPlanService.includes('buildAnnualMarketingSolution'))
 assert(brandPlanService.includes('buildQuarterMarketingSolution'))
 assert(!brandPlanService.includes("action === 'update_brand_plan'"))
+assert(subscriptionRoute.includes('subscriptionOperationsStrategy'))
+assert(schema.includes('model BrandGrowthResearchSnapshot'))
+assert(schema.includes('model BrandMarketingSolution'))
+assert(schema.includes('model SubscriptionOperationsStrategy'))
 assert(planning.includes('@/lib/promotion-strategy/route'))
 assert(!planning.includes('matchRemotePromotionPointCreatives'))
 const promotionStrategy = await read('src/lib/promotion-strategy/service.ts')

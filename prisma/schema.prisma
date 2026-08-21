@@ -426,6 +426,8 @@ model Brand {
   planningReviews   PlanningReview[]
   materialRequirements MaterialRequirement[]
   brandPlanInterviews BrandPlanInterview[]
+  growthResearchSnapshots BrandGrowthResearchSnapshot[]
+  marketingSolutions BrandMarketingSolution[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1317,6 +1319,67 @@ model BrandPlanInterview {
   updatedAt   DateTime @updatedAt
 
   @@index([brandId, completedAt])
+}
+
+model BrandGrowthResearchSnapshot {
+  id              String   @id @default(cuid())
+  brandId         String
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  source          String   @default("amc-growth")
+  sourceVersion   String?
+  sourcePayload   Json?
+  report          Json
+  dataHash        String?
+  generatedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  marketingSolutions BrandMarketingSolution[]
+
+  @@index([brandId, generatedAt])
+  @@index([source, sourceVersion])
+}
+
+model BrandMarketingSolution {
+  id                 String   @id @default(cuid())
+  brandId            String
+  brand              Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  kind               String   // ANNUAL | QUARTERLY | CALENDAR
+  period             String
+  status             String   @default("DRAFT")
+  version            Int      @default(1)
+  input              Json
+  output             Json
+  generationMode     String   @default("LLM") // LLM | RULE_FALLBACK | AMC_CONTENT_ASSISTED
+  llmProvider        String?
+  llmModel           String?
+  llmError           String?
+  researchSnapshotId String?
+  researchSnapshot   BrandGrowthResearchSnapshot? @relation(fields: [researchSnapshotId], references: [id], onDelete: SetNull)
+  createdById        String?
+  generatedAt        DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([brandId, kind, period])
+  @@index([researchSnapshotId])
+}
+
+model SubscriptionOperationsStrategy {
+  id                  String   @id @default(cuid())
+  planId              String   @unique
+  planName            String
+  includedServices    Json
+  platformCoverage    Json
+  monthlyContentQuota Int
+  publishingFreq      Json
+  storeLimit          Int      @default(1)
+  strategyNotes       Json?
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 model UserCorrectionFeedback {
