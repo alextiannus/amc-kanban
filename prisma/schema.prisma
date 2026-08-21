@@ -425,6 +425,7 @@ model Brand {
   growthSyncState   BrandGrowthSyncState?
   planningReviews   PlanningReview[]
   materialRequirements MaterialRequirement[]
+  brandPlanInterviews BrandPlanInterview[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -683,7 +684,7 @@ model PlanningReview {
   id              String    @id @default(cuid())
   brandId         String
   brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  resourceType    String // inspiration_item | inspiration_library | promotion_plan
+  resourceType    String // inspiration_item | inspiration_library | marketing_plan
   resourceId      String
   resourceVersion Int
   status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
@@ -1284,7 +1285,7 @@ model BrandKnowledge {
   district    String? // 商圈 e.g. "Orchard", "Bugis", "KLCC"
   competitors Json? // [String] — list of competitor brand names
 
-  // ── Section 4: 推广计划 (Promotion Plan) ─────────────────────────────────
+  // ── Section 4: 品牌主张 / 数据调研 / 营销方案 ─────────────────────────────
   brandVoice    String? // Local creative voice guidance (not a campaign plan)
   brandImage    String? // Local visual identity guidance
   promotionFocus String? // Local evergreen promotion focus
@@ -1293,11 +1294,29 @@ model BrandKnowledge {
   promoPlan      Json? // Deprecated legacy snapshot; retained for audit/history only
   // publishingFreq: { postsPerDay, platforms: { [platformSlug]: { postsPerDay?, postsPerWeek?, preferredHours? } } }
   publishingFreq Json? // Per-brand publishing frequency (overrides global SystemConfig defaults)
+  brandClaim      Json? // Long-lived principal interview synthesis / 商家主张
+  researchReport  Json? // Long-lived AMC-Growth baseline research snapshot / 数据调研
+  marketingSolution Json? // Kanban-owned annual/quarterly marketing solution and content calendar / 营销方案
+  brandPlan      Json? // Deprecated legacy workspace; retained for migration/audit only
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([brandId])
+}
+
+model BrandPlanInterview {
+  id          String   @id @default(cuid())
+  brandId     String
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  rawNotes    String
+  answers     Json?
+  summary     String?
+  completedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([brandId, completedAt])
 }
 
 model UserCorrectionFeedback {

@@ -252,11 +252,11 @@ function buildAutoSection(snapshot: BrandSnapshot, generatedAt: string) {
 - 联系电话: ${snapshot.phone || '未填写'}
 - 官网: ${snapshot.website || '未填写'}
 - 主地址: ${snapshot.address || '未填写'}
-- 自动驾驶（brand.autoPilot）: ${snapshot.autoPilot ? '开启' : '关闭'}
+- 发布审核模式: ${snapshot.autoPilot ? '可自动提交发布' : '发布前人工确认'}
 - 自动生成时间: ${generatedAt}
 
 ## 2. 品牌介绍（来自系统字段 description）
-${snapshot.description || '（暂无，请在人工补充区完善品牌故事、定位、核心卖点与目标客群）'}
+${snapshot.description || '（暂无，请在人工补充区完善品牌计划、定位、核心卖点与目标客群）'}
 
 ## 3. 品牌推广核心语境（建议 AI 预读）
 - 业务类型与定位: 请在人工补充区的“品牌定义与核心主张”维护

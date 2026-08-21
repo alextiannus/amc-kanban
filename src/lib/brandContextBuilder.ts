@@ -6,7 +6,7 @@
  * agent instead of scattered inline context assembly.
  *
  * Sections:
- *   1. Brand Story     — description, audience, sell points, tone, voice
+ *   1. Brand Plan      — description, audience, sell points, tone, voice
  *   2. Business Info   — address, hours, reservation/order links
  *   3. Knowledge Base  — market, district, competitors, menu, slang, neg-prompts
  *   4. Creative Identity — evergreen local voice, visual identity, promotion focus
@@ -62,7 +62,7 @@ export async function buildBrandContext(brandId: string): Promise<BrandContextRe
     : (k?.productAssumptions ? [String(k.productAssumptions)] : [])
   const lines: string[] = []
 
-  // ── Section 1: Brand Story ────────────────────────────────────────────────
+  // ── Section 1: Brand Plan ─────────────────────────────────────────────────
   lines.push(`## Brand: ${brand.name}`)
   if (brand.description) lines.push(`Description: ${brand.description}`)
   if (audience) lines.push(`Target Audience: ${audience}`)

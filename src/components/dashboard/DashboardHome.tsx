@@ -865,7 +865,7 @@ export default function DashboardHome({ brand: propBrand, activeBrandId, onActiv
 
       />
 
-      {/* ── Brand Story Slides ────────────────────────────────────────────── */}
+      {/* ── Brand Plan Slides ─────────────────────────────────────────────── */}
       <BrandStorySlides
         brandName={activeBrand.name}
         brandLocation={activeBrand.location as string | null}

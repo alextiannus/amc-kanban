@@ -47,7 +47,7 @@ const signals: Signal[] = [
   {
     id: 'growth-2',
     kind: 'growth',
-    label: '品牌故事',
+    label: '品牌计划',
     summary: '东北家常菜、分量感和朋友聚会是最稳定记忆点。',
     x: 72,
     y: 18,
@@ -92,7 +92,7 @@ const signals: Signal[] = [
     id: 'content-3',
     kind: 'content',
     label: '内容打法',
-    summary: '本周用品牌故事、招牌菜种草、套餐转化交替推进。',
+    summary: '本周用品牌计划、招牌菜种草、套餐转化交替推进。',
     x: 43,
     y: 14,
     size: 14,
@@ -230,7 +230,7 @@ const resultPosts = [
     day: 'Day 1',
     title: '品牌记忆开场',
     points: '东北家常菜 / 分量感',
-    tactic: '品牌故事型',
+    tactic: '品牌计划型',
   },
   {
     day: 'Day 5',
@@ -313,7 +313,7 @@ export default function PromotionPlanNebulaPage() {
   const centerCopy = useMemo(() => {
     if (phase === 'editing') return '确认推广目标后，星空会开始收束并生成计划'
     if (phase === 'generating') return '正在吸收品牌特征、竞品信号和内容创意'
-    if (phase === 'saved') return '推广计划已保存，可在品牌故事页随时读取'
+    if (phase === 'saved') return '推广计划已保存，可在品牌计划页随时读取'
     if (phase === 'uploaded') return '素材已上传，推广计划已加入发布日历'
     return '30 天推广计划已生成'
   }, [phase])
@@ -414,11 +414,11 @@ export default function PromotionPlanNebulaPage() {
       <header className="topBar">
         <a href="/dashboard" className="backLink">
           <ArrowLeft size={16} />
-          返回品牌故事
+          返回品牌计划
         </a>
         <div className="systemPill">
           <Orbit size={15} />
-          Promotion Plan Nebula
+          Marketing Plan Nebula
         </div>
       </header>
 
@@ -441,7 +441,7 @@ export default function PromotionPlanNebulaPage() {
                   : isSaved
                     ? '计划已保存'
                     : isResult
-                      ? '推广计划结果'
+                      ? '营销方案结果'
                       : '品牌推广目标与卖点'}
               </h2>
             </div>
@@ -482,7 +482,7 @@ export default function PromotionPlanNebulaPage() {
                 <p>
                   {isUploaded
                     ? '素材已完成上传，系统可以将对应发布任务加入发布日历，进入排期和审核流程。'
-                    : '推广计划会保留在品牌故事页面，可随时读取、继续编辑或补充素材后再进入发布日历。'}
+                    : '推广计划会保留在品牌计划页面，可随时读取、继续编辑或补充素材后再进入发布日历。'}
                 </p>
               </div>
               <div className="assetRequirementBox">

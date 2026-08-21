@@ -41,7 +41,7 @@ const GROUPS: GroupDef[] = [
   {
     id: 'owners',
     name: '托管品牌业主组 (Brand Owners)',
-    description: '商户的资产所有者。仅能查看其下辖的品牌故事、审批 AI 生成的推文/活动，以及接收异常提醒。',
+    description: '商户的资产所有者。仅能查看其下辖的品牌计划、审批 AI 生成的推文/活动，以及接收异常提醒。',
     roleType: 'business',
     businessRole: 'BRAND_OWNER'
   },

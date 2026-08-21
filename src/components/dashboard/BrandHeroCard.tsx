@@ -174,7 +174,7 @@ export default function BrandHeroCard({
           </div>
         </div>
 
-        {/* ── Brand Story Text ──────────────────────────────────────── */}
+        {/* ── Brand Plan Text ───────────────────────────────────────── */}
         <div className="mt-7 border-t border-white/10 pt-7">
           {tagline ? (
             <>
@@ -197,7 +197,7 @@ export default function BrandHeroCard({
               </div>
               <div className="text-left">
                 <p className="text-sm font-bold text-white/50 group-hover:text-white/80 transition-colors">
-                  ✏️ 添加品牌故事
+                  ✏️ 添加品牌计划
                 </p>
                 <p className="text-xs text-white/30 mt-0.5">
                   品牌一句话定位、特色介绍、目标客群…

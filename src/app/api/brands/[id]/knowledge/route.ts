@@ -1,5 +1,5 @@
 import { after, NextResponse } from 'next/server'
-import type { Prisma } from '@prisma/client'
+import type { BrandKnowledge, Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
@@ -10,36 +10,7 @@ export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
 
-// ─── Shared field list (all BrandKnowledge fields) ───────────────────────────
-
-const KNOWLEDGE_SELECT_FIELDS = {
-  brandId: true,
-  // Section 1: Brand Story
-  brandTone: true,
-  audienceAssumptions: true,
-  productAssumptions: true,
-  voiceId: true,
-  negPrompts: true,
-  slangDict: true,
-  // Section 2: Business Info
-  businessHours: true,
-  reservationUrl: true,
-  orderingUrl: true,
-  deliveryUrls: true,
-  stores: true,
-  // Section 3: Knowledge Base Config
-  market: true,
-  district: true,
-  competitors: true,
-  menuItems: true,
-  // Section 4: Promotion Plan
-  brandVoice: true,
-  brandImage: true,
-  promotionFocus: true,
-  publishingFreq: true,
-} as const
-
-function serializeKnowledge(k: any) {
+function serializeKnowledge(k: BrandKnowledge) {
   return {
     brandId: k.brandId,
     // Section 1
@@ -65,6 +36,10 @@ function serializeKnowledge(k: any) {
     brandImage: k.brandImage || '',
     promotionFocus: k.promotionFocus || '',
     publishingFreq: k.publishingFreq || null,
+    brandClaim: k.brandClaim || null,
+    researchReport: k.researchReport || null,
+    marketingSolution: k.marketingSolution || k.brandPlan || null,
+    brandPlan: k.brandPlan || null,
   }
 }
 
@@ -79,16 +54,20 @@ const EMPTY_KNOWLEDGE = {
   businessHours: null,
   reservationUrl: '',
   orderingUrl: '',
-  deliveryUrls: [] as any[],
-  stores: [] as any[],
+  deliveryUrls: [] as unknown[],
+  stores: [] as unknown[],
   market: '',
   district: '',
   competitors: [] as string[],
-  menuItems: [] as any[],
+  menuItems: [] as unknown[],
   brandVoice: '',
   brandImage: '',
   promotionFocus: '',
   publishingFreq: null,
+  brandClaim: null,
+  researchReport: null,
+  marketingSolution: null,
+  brandPlan: null,
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -179,7 +158,7 @@ export async function PATCH(request: Request, { params }: Params) {
     market, district, competitors, menuItems,
   } = body
 
-  const updateData: any = {}
+  const updateData: Prisma.BrandKnowledgeUncheckedUpdateInput = {}
   if (slangDict !== undefined) updateData.slangDict = slangDict
   if (negPrompts !== undefined) updateData.negPrompts = negPrompts
   if (voiceId !== undefined) updateData.voiceId = voiceId

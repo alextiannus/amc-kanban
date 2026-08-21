@@ -99,7 +99,7 @@ export function BrandKnowledgePanel({ brandId, open, onClose }: Props) {
         alert(err.error || '从 AMC Growth 同步失败')
         return
       }
-      alert('已成功同步 AMC Growth 品牌故事与上下文！')
+      alert('已成功同步 AMC Growth 品牌计划与上下文！')
       await handleRefreshProfile()
     } catch (e) {
       console.error(e)

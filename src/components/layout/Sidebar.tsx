@@ -57,7 +57,6 @@ const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
   'amc-content-roles',
   'amc-growth',
   'brand-inspirations',
-  'promotion-plans',
 ])
 
 const MENU_TRANSLATIONS: Record<string, string> = {
@@ -72,12 +71,12 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '账号快照': 'Account Snapshot',
   '知识库': 'Knowledge Base',
   '品牌灵感': 'Brand Inspiration',
-  '推广计划': 'Promotion Plans',
+  '推广计划': 'Marketing Plans',
   '素材执行': 'Material Execution',
   'AI 角色库': 'AI Role Library',
   '视频生产': 'Video Production',
   '爆品脚本': 'Viral Copy Scripts',
-  '品牌故事': 'Brand Story',
+  '品牌计划': 'Brand Plan',
   '发布日历': 'Publishing Calendar',
   '发布内容': 'Post Drafts',
   '素材库': 'Asset Library',
@@ -121,7 +120,6 @@ function InlineBrandSwitcher({
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const router = useRouter()
   const { isEn } = useI18n()
 
   useEffect(() => {
@@ -236,17 +234,23 @@ export default function Sidebar({
   const router = useRouter()
   const pathname = usePathname()
   const { isEn } = useI18n()
-  const [collapsed, setCollapsed] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-  const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(true)
-
-  useEffect(() => {
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
     try {
-      const saved = localStorage.getItem(COLLAPSED_KEY)
-      if (saved === 'true') setCollapsed(true)
-      if (saved === 'false') setAutoCollapseEnabled(false)
-    } catch {/* ignore */}
-  }, [])
+      return localStorage.getItem(COLLAPSED_KEY) === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [isHovered, setIsHovered] = useState(false)
+  const [autoCollapseEnabled, setAutoCollapseEnabled] = useState(() => {
+    if (typeof window === 'undefined') return true
+    try {
+      return localStorage.getItem(COLLAPSED_KEY) !== 'false'
+    } catch {
+      return true
+    }
+  })
 
   useEffect(() => {
     // If the page has a secondary menu (currently 'calendar' is the main page with a secondary menu),
@@ -288,8 +292,6 @@ export default function Sidebar({
   const [wizardOpen, setWizardOpen] = useState(false)
   const [wizardSuccess, setWizardSuccess] = useState<{ brandName: string } | null>(null)
 
-  const canCreateBrand = userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL') || userRoles.includes('BD')
-
   function handleWizardSuccess(brandId: string, brandName: string) {
     setWizardOpen(false)
     setWizardSuccess({ brandName })
@@ -306,7 +308,7 @@ export default function Sidebar({
         const separator = targetUrl.includes('?') ? '&' : '?'
         targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
       }
-      if ((item.id === 'brand-inspirations' || item.id === 'promotion-plans') && activeBrand?.id) {
+      if (item.id === 'brand-inspirations' && activeBrand?.id) {
         const separator = targetUrl.includes('?') ? '&' : '?'
         targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
       }
@@ -349,9 +351,9 @@ export default function Sidebar({
       bg-white dark:bg-slate-900
       border-r border-slate-100 dark:border-slate-800
       transition-all duration-300 ease-in-out
-      \${collapsed ? 'w-16' : 'w-56'}
+      ${collapsed ? 'w-16' : 'w-56'}
       overflow-hidden
-      \${className}
+      ${className}
     `}>
 
       {/* ── Logo ──────────────────────────────────────────────────── */}

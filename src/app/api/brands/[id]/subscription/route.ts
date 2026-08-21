@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { authenticateRequest } from '@/lib/auth-v2'
 import { prisma } from '@/lib/prisma'
@@ -8,6 +9,66 @@ import { buildBillingActivationData } from '@/lib/subscription/workflow'
 import { POST as humanPost } from '../../../subscription/route'
 
 type Params = { params: Promise<{ id: string }> }
+
+function getAddonQuantity(selectedAddons: unknown, addonId: string) {
+  if (!selectedAddons) return 0
+
+  if (Array.isArray(selectedAddons)) {
+    const addon = selectedAddons.find((item) =>
+      item && typeof item === 'object' && (item as { id?: unknown }).id === addonId
+    )
+    const quantity = addon && typeof addon === 'object' ? (addon as { quantity?: unknown }).quantity : 0
+    return typeof quantity === 'number' && Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0
+  }
+
+  if (typeof selectedAddons === 'object') {
+    const value = (selectedAddons as Record<string, unknown>)[addonId]
+    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value))
+    if (typeof value === 'boolean') return value ? 1 : 0
+    if (value && typeof value === 'object') {
+      const quantity = (value as { quantity?: unknown }).quantity
+      return typeof quantity === 'number' && Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0
+    }
+  }
+
+  return 0
+}
+
+function getStoreLimit(planId: string, selectedAddons: unknown) {
+  return 1 + getAddonQuantity(selectedAddons, 'multi_store')
+}
+
+function getPlatformCoverage(planId: string) {
+  if (planId === 'starter') return ['instagram', 'facebook', 'tiktok', 'google_business']
+  if (planId === 'essential') return ['instagram', 'facebook', 'tiktok', 'xiaohongshu', 'google_business']
+  if (planId === 'advanced') return ['instagram', 'facebook', 'tiktok', 'xiaohongshu', 'google_business', 'ads', 'wechat', 'whatsapp']
+  return []
+}
+
+function getMonthlyContentQuota(planId: string) {
+  if (planId === 'starter') return 30
+  if (planId === 'essential') return 28
+  if (planId === 'advanced') return 38
+  return 0
+}
+
+function getOperationsStrategy(planId: string, planServices: string[]) {
+  const platformCoverage = getPlatformCoverage(planId)
+  const monthlyContentQuota = getMonthlyContentQuota(planId)
+  return {
+    platformCoverage,
+    monthlyContentQuota,
+    includedServices: planServices,
+    publishingFrequencyPlan: monthlyContentQuota && platformCoverage.length
+      ? {
+          platforms: Object.fromEntries(platformCoverage.map((platform) => [
+            platform,
+            { postsPerWeek: Math.max(1, Math.round((monthlyContentQuota / platformCoverage.length) * 7 / 30)) },
+          ])),
+        }
+      : null,
+  }
+}
 
 export async function GET(request: Request, { params }: Params) {
   const apiKey = extractApiKey(request)
@@ -50,19 +111,18 @@ export async function GET(request: Request, { params }: Params) {
       kol_management: false,
       autopilot_eligible: false,
       status: 'EXPIRED',
-      selectedAddons: {}
+      selectedAddons: {},
+      store_limit: 1,
+      multi_store_addon_quantity: 0,
     })
   }
 
   const planId = subscription.planId
   const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId)
   const included_services = plan?.services ?? []
-  const monthly_content_quota = planId === 'starter' ? 30 : planId === 'essential' ? 28 : 38
-  
-  let platform_coverage: string[] = []
-  if (planId === 'starter') platform_coverage = ['Instagram', 'Facebook', 'TikTok']
-  else if (planId === 'essential') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping']
-  else if (planId === 'advanced') platform_coverage = ['Instagram', 'Facebook', 'TikTok', 'Xiaohongshu', 'Dianping', 'WhatsApp', 'WeChat', 'Ads']
+  const monthly_content_quota = getMonthlyContentQuota(planId)
+  const platform_coverage = getPlatformCoverage(planId)
+  const operations_strategy = getOperationsStrategy(planId, included_services)
 
   return NextResponse.json({
     plan_id: planId,
@@ -70,6 +130,7 @@ export async function GET(request: Request, { params }: Params) {
     included_services,
     monthly_content_quota,
     platform_coverage,
+    operations_strategy,
     reply_sla: planId === 'starter' ? 'none' : '24h',
     ad_management: planId === 'advanced',
     kol_management: planId !== 'starter',
@@ -77,7 +138,9 @@ export async function GET(request: Request, { params }: Params) {
     contract_start: subscription.contractStartDate?.toISOString() ?? null,
     contract_end: subscription.contractEndDate?.toISOString() ?? null,
     status: subscription.status,
-    selectedAddons: subscription.selectedAddons || {}
+    selectedAddons: subscription.selectedAddons || {},
+    store_limit: getStoreLimit(planId, subscription.selectedAddons),
+    multi_store_addon_quantity: getAddonQuantity(subscription.selectedAddons, 'multi_store'),
   })
 }
 
@@ -135,7 +198,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const updatedSub = await prisma.brandSubscription.update({
     where: { id: subscription.id },
     data: {
-      selectedAddons: selectedAddons as any,
+      selectedAddons: selectedAddons as Prisma.InputJsonValue,
     },
   })
 

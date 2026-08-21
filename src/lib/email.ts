@@ -383,7 +383,7 @@ export const DEFAULT_TEMPLATES = {
           </div>
           <div class="step">
             <div class="step-num">2</div>
-            <div class="step-text">完善品牌资料：前往<strong>“品牌故事”</strong>，录入您的特色美食、菜单简介与门店物理地址。</div>
+            <div class="step-text">完善品牌资料：前往<strong>“品牌计划”</strong>，录入您的特色美食、菜单简介与门店物理地址。</div>
           </div>
           <div class="step">
             <div class="step-num">3</div>

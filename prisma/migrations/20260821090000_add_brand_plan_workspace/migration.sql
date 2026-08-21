@@ -1,0 +1,1 @@
+ALTER TABLE "BrandKnowledge" ADD COLUMN IF NOT EXISTS "brandPlan" JSONB;

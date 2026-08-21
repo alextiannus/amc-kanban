@@ -1,0 +1,85 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#F7F8FA"/>
+  <rect x="72" y="64" width="1456" height="772" rx="32" fill="#FFFFFF" stroke="#E6E9EF"/>
+
+  <text x="120" y="138" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="800">推广策略不是临时发帖，而是一整套增长计划</text>
+  <text x="120" y="184" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="22" font-weight="500">从门店现状到全年节奏，再到每月内容、素材、活动和到店转化安排</text>
+
+  <g transform="translate(120 260)">
+    <rect width="294" height="168" rx="18" fill="#FFF7ED" stroke="#FDBA74"/>
+    <circle cx="42" cy="42" r="18" fill="#F97316"/>
+    <text x="36" y="49" fill="white" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800">1</text>
+    <text x="72" y="49" fill="#9A3412" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800">先看清门店现状</text>
+    <text x="28" y="92" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">体检报告 + 品牌访谈</text>
+    <text x="28" y="126" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="17">账号表现、顾客认知、卖点、</text>
+    <text x="28" y="152" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="17">门店信息和经营目标</text>
+  </g>
+
+  <path d="M438 344H522" stroke="#CBD5E1" stroke-width="5" stroke-linecap="round"/>
+  <path d="M522 344L502 332V356L522 344Z" fill="#CBD5E1"/>
+
+  <g transform="translate(542 260)">
+    <rect width="294" height="168" rx="18" fill="#EEF2FF" stroke="#A5B4FC"/>
+    <circle cx="42" cy="42" r="18" fill="#4F46E5"/>
+    <text x="36" y="49" fill="white" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800">2</text>
+    <text x="72" y="49" fill="#3730A3" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800">建立年度节奏</text>
+    <text x="28" y="92" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">全年目标拆解</text>
+    <text x="28" y="126" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="17">结合节庆、淡旺季、活动节点，</text>
+    <text x="28" y="152" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="17">明确每个季度主攻方向</text>
+  </g>
+
+  <path d="M860 344H944" stroke="#CBD5E1" stroke-width="5" stroke-linecap="round"/>
+  <path d="M944 344L924 332V356L944 344Z" fill="#CBD5E1"/>
+
+  <g transform="translate(964 260)">
+    <rect width="294" height="168" rx="18" fill="#ECFDF3" stroke="#86EFAC"/>
+    <circle cx="42" cy="42" r="18" fill="#16A34A"/>
+    <text x="36" y="49" fill="white" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="800">3</text>
+    <text x="72" y="49" fill="#166534" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="800">落到每月行动</text>
+    <text x="28" y="92" fill="#111827" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="800">月度推广计划</text>
+    <text x="28" y="126" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="17">本月目标、主推卖点、优惠套餐、</text>
+    <text x="28" y="152" fill="#667085" font-family="Inter, Arial, sans-serif" font-size="17">活动主题和发布时间表</text>
+  </g>
+
+  <path d="M1278 344H1370" stroke="#CBD5E1" stroke-width="5" stroke-linecap="round"/>
+  <path d="M1370 344L1350 332V356L1370 344Z" fill="#CBD5E1"/>
+
+  <g transform="translate(120 520)">
+    <rect width="1360" height="218" rx="24" fill="#111827"/>
+    <text x="38" y="58" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800">最终交付给商家的，不只是一张排期表</text>
+    <text x="38" y="94" fill="#A7B0C0" font-family="Inter, Arial, sans-serif" font-size="18">每个月都能看到清楚的推广重点，以及团队需要准备什么、拍什么、发什么、配合什么活动。</text>
+
+    <g transform="translate(38 128)">
+      <rect width="238" height="56" rx="14" fill="#1F2937" stroke="#374151"/>
+      <text x="22" y="36" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="750">内容发布计划</text>
+    </g>
+    <g transform="translate(300 128)">
+      <rect width="238" height="56" rx="14" fill="#1F2937" stroke="#374151"/>
+      <text x="22" y="36" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="750">视频 / 图文创意</text>
+    </g>
+    <g transform="translate(562 128)">
+      <rect width="238" height="56" rx="14" fill="#1F2937" stroke="#374151"/>
+      <text x="22" y="36" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="750">素材采集清单</text>
+    </g>
+    <g transform="translate(824 128)">
+      <rect width="238" height="56" rx="14" fill="#1F2937" stroke="#374151"/>
+      <text x="22" y="36" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="750">探店与拍摄安排</text>
+    </g>
+    <g transform="translate(1086 128)">
+      <rect width="238" height="56" rx="14" fill="#1F2937" stroke="#374151"/>
+      <text x="22" y="36" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="750">活动物料需求</text>
+    </g>
+  </g>
+
+  <g transform="translate(1328 245)">
+    <rect width="152" height="198" rx="24" fill="#FFFFFF" stroke="#D0D5DD"/>
+    <rect x="16" y="18" width="120" height="162" rx="16" fill="#F2F4F7"/>
+    <rect x="28" y="34" width="96" height="22" rx="6" fill="#111827"/>
+    <rect x="28" y="70" width="96" height="14" rx="5" fill="#CBD5E1"/>
+    <rect x="28" y="96" width="72" height="14" rx="5" fill="#CBD5E1"/>
+    <rect x="28" y="122" width="96" height="36" rx="8" fill="#16A34A"/>
+    <circle cx="76" cy="188" r="4" fill="#98A2B3"/>
+  </g>
+
+  <text x="120" y="794" fill="#475467" font-family="Inter, Arial, sans-serif" font-size="19" font-weight="650">核心卖点：老板不需要每天临时想发什么，团队按计划持续制造顾客看得懂、愿意来的理由。</text>
+</svg>

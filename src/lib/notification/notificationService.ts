@@ -243,11 +243,11 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
 
       if (!hasDesc || !hasTone || !hasVoice) {
         const missing: string[] = []
-        if (!hasDesc) missing.push('品牌故事简介')
+        if (!hasDesc) missing.push('品牌计划简介')
         if (!hasTone) missing.push('内容风格声调')
         if (!hasVoice) missing.push('AI 语音音色')
         const missingStr = missing.join('、')
-        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往“品牌故事”补充以让您的 AI 助手更贴合品牌形象。`
+        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往“品牌计划”补充，让代运营内容更贴合品牌形象。`
 
         const existing = await prisma.notification.findFirst({
           where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
@@ -259,16 +259,16 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
               userId,
               brandId: brand.id,
               type: 'COMPLETE_CONTEXT',
-              title: '完善品牌故事与声音',
+              title: '完善品牌计划与声音',
               message,
               status: 'UNREAD',
-              actionUrl: '/dashboard?action=brand_story'
+              actionUrl: '/dashboard?action=brand_plan'
             }
           })
         } else if (existing.message !== message || !existing.actionUrl) {
           await prisma.notification.update({
             where: { id: existing.id },
-            data: { message, status: 'UNREAD', actionUrl: '/dashboard?action=brand_story' }
+            data: { message, status: 'UNREAD', actionUrl: '/dashboard?action=brand_plan' }
           })
         }
       } else {

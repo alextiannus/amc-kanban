@@ -134,7 +134,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       groupLabel: '知识增长中心',
       items: [
         { id: 'brand-inspirations', view: 'managementOverview', label: '品牌灵感', icon: 'Lightbulb', href: '/api/integrations/amc-growth/sso/start?destination=brand-inspirations' },
-        { id: 'promotion-plans',    view: 'managementOverview', label: '推广计划', icon: 'Calendar', href: '/api/integrations/amc-growth/sso/start?destination=promotion-plans' },
         { id: 'amc-growth',         view: 'managementOverview', label: '知识库', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
       ],
     })
@@ -143,7 +142,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
   // ── 2. 品牌主 (Brand-level ops — inline brand switcher as header) ─
   if (canBrandOps) {
     const brandItems: MenuItemDef[] = [
-      { id: 'dashboard',    view: 'dashboard',    label: '品牌故事',      icon: 'BookOpen' },
+      { id: 'dashboard',    view: 'dashboard',    label: '品牌计划',      icon: 'BookOpen' },
       { id: 'calendar',     view: 'calendar',     label: '发布日历',        icon: 'Calendar' },
       { id: 'drafts',       view: 'drafts',       label: '发布内容 (Post)', icon: 'FileText' },
       { id: 'assets',       view: 'assets',       label: '素材库',          icon: 'Images' },

@@ -31,7 +31,7 @@ interface MainLayoutProps {
 }
 
 const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
-  dashboard: { zh: '品牌故事', en: 'Brand Story' },
+  dashboard: { zh: '品牌计划', en: 'Brand Plan' },
   calendar: { zh: '发布日历', en: 'Publishing Calendar' },
   drafts: { zh: '发布内容', en: 'Post Drafts' },
   assets: { zh: '素材库', en: 'Asset Library' },
