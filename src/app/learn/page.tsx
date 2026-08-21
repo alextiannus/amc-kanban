@@ -532,7 +532,7 @@ export default function LearnPage() {
                           <tr>
                             <td className="p-3 font-bold">1</td>
                             <td className="p-3 text-indigo-400 font-semibold">商家</td>
-                            <td className="p-3 text-slate-300">自助注册账号，选定 Essential / Growth / Scale 套餐，完成付款。</td>
+                            <td className="p-3 text-slate-300">自助注册账号，选定 Essential 基础线上经营或 Booster 增长战役版，完成付款。</td>
                           </tr>
                           <tr>
                             <td className="p-3 font-bold">2</td>

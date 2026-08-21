@@ -71,7 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       invitationLink: 'https://amc-mm.immedi.ai/invite/mock-token-abc',
       mmInviteLink: 'https://amc-mm.immedi.ai/invite/mock-token-abc',
       brandName: '锦江川菜馆（静安店）',
-      planName: '尊享代运营钻石套餐',
+      planName: 'Booster · 增长战役版',
       adminEmail: 'support@amc.immedi.ai'
     }
 

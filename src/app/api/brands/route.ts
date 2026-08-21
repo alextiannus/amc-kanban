@@ -245,7 +245,7 @@ export async function POST(request: Request) {
           brandName: name.trim(),
           temporaryPassword: finalTempPassword,
           mmInviteLink,
-          planName: typeof body.planName === 'string' ? body.planName.trim() : '标准专业代运营套餐',
+          planName: typeof body.planName === 'string' ? body.planName.trim() : 'Essential · 基础线上经营',
         })
       }
     } catch (emailErr) {

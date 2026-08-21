@@ -9,6 +9,7 @@ import {
   SUBSCRIPTION_ADDONS,
   SUBSCRIPTION_PLANS,
   calculatePricing,
+  getAllowedDurationsForPlan,
   type PlanId,
 } from '@/lib/subscription/catalog'
 import { SUBSCRIPTION_TERMS_FULL_TEXT, SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
@@ -81,6 +82,12 @@ function toPlanId(value: string | null | undefined): PlanId | null {
     return value
   }
   return null
+}
+
+function visiblePlansWithDurations() {
+  return SUBSCRIPTION_PLANS
+    .filter((p) => p.visible !== false)
+    .map((plan) => ({ ...plan, durations: getAllowedDurationsForPlan(plan.id) }))
 }
 
 async function findOwnerBrand(ownerId: string, brandId?: string | null) {
@@ -293,7 +300,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       brand: null,
-      plans: SUBSCRIPTION_PLANS.filter((p) => p.visible !== false),
+      plans: visiblePlansWithDurations(),
       comparisonRows: PLAN_COMPARISON_ROWS,
       addons: SUBSCRIPTION_ADDONS,
       durations: ALLOWED_DURATIONS,
@@ -376,7 +383,7 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     brand: { id: brand.id, name: brand.name },
-    plans: SUBSCRIPTION_PLANS.filter((p) => p.visible !== false),
+    plans: visiblePlansWithDurations(),
     comparisonRows: PLAN_COMPARISON_ROWS,
     addons: SUBSCRIPTION_ADDONS,
     durations: ALLOWED_DURATIONS,
@@ -440,6 +447,9 @@ export async function POST(request: Request) {
 
   const selectedPlan = SUBSCRIPTION_PLANS.find((p) => p.id === planId)
   if (!selectedPlan) return NextResponse.json({ error: 'Invalid planId' }, { status: 400 })
+  if (!getAllowedDurationsForPlan(planId).includes(durationMonths)) {
+    return NextResponse.json({ error: 'Invalid durationMonths for selected plan' }, { status: 400 })
+  }
 
   const invalidAddonIds = uniqueAddonIds.filter((id) => !SUBSCRIPTION_ADDONS.some((a) => a.id === id))
   if (invalidAddonIds.length > 0) {

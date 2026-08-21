@@ -235,6 +235,11 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
 
 export const ALLOWED_DURATIONS = [3, 6, 12] as const
 
+export function getAllowedDurationsForPlan(planId: string): readonly number[] {
+  if (planId === 'essential') return [6, 12]
+  return ALLOWED_DURATIONS
+}
+
 export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.04'
 
 export function calculatePricing(
@@ -247,6 +252,9 @@ export function calculatePricing(
   if (!plan) throw new Error('Invalid plan')
   if (!ALLOWED_DURATIONS.includes(durationMonths as (typeof ALLOWED_DURATIONS)[number])) {
     throw new Error('Invalid contract duration')
+  }
+  if (!getAllowedDurationsForPlan(planId).includes(durationMonths)) {
+    throw new Error('Invalid contract duration for plan')
   }
 
   const uniqueAddonIds = Array.from(new Set(addonIds))

@@ -613,7 +613,7 @@ export async function sendBrandOnboardingWelcomeEmail(params: {
     brandName,
     temporaryPassword,
     mmInviteLink,
-    planName: planName || '标准专业代运营套餐'
+    planName: planName || 'Essential · 基础线上经营'
   }
 
   // Support simple conditional replacement for planName in html/text

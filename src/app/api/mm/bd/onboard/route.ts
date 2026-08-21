@@ -89,15 +89,16 @@ export async function POST(req: NextRequest) {
       })
 
       // C. Create Active Subscription Package
-      const planName = planId === 'premium' ? '尊享代运营钻石套餐' : '标准专业代运营套餐'
-      const price = planId === 'premium' ? 999 : 499
+      const normalizedPlanId = planId === 'booster' ? 'booster' : 'essential'
+      const planName = normalizedPlanId === 'booster' ? 'Booster · 增长战役版' : 'Essential · 基础线上经营'
+      const price = normalizedPlanId === 'booster' ? 3600 : 800
       const contractEndDate = new Date()
       contractEndDate.setMonth(contractEndDate.getMonth() + 1) // default 1 month
       const activationData = buildBillingActivationData(1)
 
       const subscription = await tx.brandSubscription.create({
         data: {
-          planId,
+          planId: normalizedPlanId,
           planName,
           durationMonths: 1,
           billedMonths: 1,
