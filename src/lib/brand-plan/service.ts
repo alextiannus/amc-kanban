@@ -1738,11 +1738,11 @@ async function reviewCalendarCreativeItemsWithLLM(
   items: BrandPlanCalendarItem[]
 ): Promise<BrandPlanCalendarItem[]> {
   if (!items.length) return items
-  const chunkSize = 4
+  const chunkSize = 6
   if (items.length > chunkSize) {
     const chunks: BrandPlanCalendarItem[][] = []
     for (let index = 0; index < items.length; index += chunkSize) chunks.push(items.slice(index, index + chunkSize))
-    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 4, (chunk): Promise<BrandPlanCalendarItem[]> => reviewCalendarCreativeItemsWithLLM(brand, current, chunk))
+    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 1, (chunk): Promise<BrandPlanCalendarItem[]> => reviewCalendarCreativeItemsWithLLM(brand, current, chunk))
     return reviewedChunks.flat()
   }
   const brandName = brandDisplayName(brand)
