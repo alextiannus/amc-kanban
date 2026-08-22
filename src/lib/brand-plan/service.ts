@@ -1791,12 +1791,26 @@ async function reviewCalendarCreativeItemsWithLLM(
       allowAnyFallback: false,
       allowSystemFallback: false,
     })
-    const parsed = parseJsonObject(result.text)
-    const reviewed = arrayValue(parsed?.items).map(objectValue)
-    if (!reviewed.length) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+    const parsed = parseJsonValue(result.text)
+    const reviewed = (Array.isArray(parsed) ? parsed : arrayValue(objectValue(parsed).items)).map(objectValue)
+    if (!reviewed.length) {
+      console.warn('[brand-plan] calendar creative review returned no parsable items', {
+        responseTextCharCount: result.text?.length || 0,
+        snippet: result.text?.slice(0, 1200) || '',
+      })
+      throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+    }
+    if (reviewed.length < items.length) {
+      console.warn('[brand-plan] calendar creative review returned fewer items than requested', {
+        expected: items.length,
+        actual: reviewed.length,
+        snippet: result.text?.slice(0, 1200) || '',
+      })
+      throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+    }
     const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
-    return items.map((item) => {
-      const review = byId.get(item.id)
+    return items.map((item, index) => {
+      const review = byId.get(item.id) || reviewed[index]
       if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
       const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
@@ -3125,6 +3139,12 @@ function objectValue(value: unknown): Record<string, unknown> {
 
 function parseJsonObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  const parsed = parseJsonValue(value)
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+}
+
+function parseJsonValue(value: unknown): unknown | null {
+  if (value && typeof value === 'object') return value
   if (typeof value !== 'string') return null
   const cleaned = value
     .trim()
@@ -3132,7 +3152,7 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
     .replace(/\s*```$/i, '')
     .trim()
   for (const candidate of jsonObjectCandidates(cleaned)) {
-    const parsed = tryParseJsonObject(candidate) || tryParseJsonObject(repairLooseJson(candidate))
+    const parsed = tryParseJsonValue(candidate) ?? tryParseJsonValue(repairLooseJson(candidate))
     if (parsed) return parsed
   }
   return null
@@ -3145,13 +3165,15 @@ function jsonObjectCandidates(value: string) {
   const firstBrace = value.indexOf('{')
   const lastBrace = value.lastIndexOf('}')
   if (firstBrace >= 0 && lastBrace > firstBrace) candidates.push(value.slice(firstBrace, lastBrace + 1))
+  const firstBracket = value.indexOf('[')
+  const lastBracket = value.lastIndexOf(']')
+  if (firstBracket >= 0 && lastBracket > firstBracket) candidates.push(value.slice(firstBracket, lastBracket + 1))
   return uniqueStrings(candidates)
 }
 
-function tryParseJsonObject(value: string) {
+function tryParseJsonValue(value: string) {
   try {
-    const parsed = JSON.parse(value)
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+    return JSON.parse(value)
   } catch {
     return null
   }
