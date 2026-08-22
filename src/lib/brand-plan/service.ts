@@ -1623,37 +1623,29 @@ function calendarCreativeMechanism(input: CalendarCopyContext) {
     stringList(candidate?.matchedInspirations).join(' '),
     text(candidate?.contentFormat),
   ].join(' ').toLowerCase()
-  if (/price|\\$|人均|价格|deal|offer|discount|套餐/.test(textBlob)) {
-    return `用价格和分量先给判断：拍清${product}适合几个人吃、点什么更稳，最后补地址和预订入口。`
-  }
-  if (/menu|choice|rank|top|list|菜单|选择|推荐|排行/.test(textBlob)) {
-    return `做一条点单选择题：先抛“第一次来怎么点”，再用 2-3 个镜头讲清${product}和搭配菜。`
-  }
-  if (/review|ugc|customer|顾客|评价|口碑/.test(textBlob)) {
-    return `用顾客视角写：从入座、上桌、第一口到结账前的真实感受，把${brandName}值得来的理由讲具体。`
-  }
-  if (/location|map|near|route|地址|路线|附近|google/.test(textBlob)) {
-    return `做一条路线内容：先说附近地标或地址，再接${product}上桌画面，让顾客知道怎么来、来了点什么。`
-  }
-  if (/story|owner|chef|behind|老板|主理人|制作|后厨/.test(textBlob)) {
-    return `让人看到出品过程：从备菜、下锅、上桌到老板推荐，把${product}的锅气和细节拍出来。`
-  }
   const platform = normalizePlatformSlug(input.platformSlug)
   const variants = platform === 'xiaohongshu'
     ? [
         `写成本地吃饭收藏笔记：先点明适合谁来，再讲${product}口味、分量、地址和避坑提醒。`,
         `做一条朋友聚餐决策笔记：从人数、口味、预算和拍照画面判断${brandName}适不适合。`,
+        `做口味选择题：把鲜椒、青花椒或配菜差异拍清楚，让第一次来的顾客会点。`,
       ]
     : platform === 'google_business'
       ? [
           `做门店更新：用一张清楚的${product}主图，加营业信息、地址和本周推荐理由。`,
           `做到店前信息补齐：拍门头、菜单、${product}和座位环境，让顾客少问一步。`,
+          `做路线内容：先拍附近地标和门店入口，再接上桌画面，让顾客知道怎么来。`,
         ]
       : [
           `先拍${product}最有食欲的一秒，再切到上桌、夹起、门店环境和行动入口。`,
           `用“今天想吃重口味吗”开场，接${product}出锅、配菜和朋友分食画面。`,
           `做一个到店小故事：从走进${brandName}、点${product}、等上桌到第一口反应。`,
+          `做点单选择题：先抛“第一次来怎么点”，再用 2-3 个镜头讲清${product}和搭配菜。`,
+          `让人看到出品过程：从备菜、下锅、上桌到老板推荐，把${product}的锅气和细节拍出来。`,
         ]
+  if (/price|\\$|人均|价格|套餐/.test(textBlob) && input.index % 3 === 0) {
+    return `用菜单和分量先给判断：拍清${product}适合几个人吃、怎么搭配更稳，价格必须以门店确认为准。`
+  }
   return variants[input.index % variants.length]
 }
 
@@ -1875,13 +1867,10 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-function mergeReviewedCalendarPlanning(planning: string, creativeSummary: string, qualityNote: string, approved: boolean) {
-  const cleanPlanning = cleanReviewedCalendarText(planning, '')
+function mergeReviewedCalendarPlanning(_planning: string, creativeSummary: string, qualityNote: string, _approved: boolean) {
   const sections = [
     creativeSummary ? `创意总结：${creativeSummary}` : '',
-    approved ? '' : '适配提醒：当前灵感只保留结构，具体内容已换成当前品牌可拍方向。',
     qualityNote ? `审核备注：${qualityNote}` : '',
-    cleanPlanning,
   ].filter(Boolean)
   return sections.join('\n')
 }
@@ -1896,6 +1885,9 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
   const cleaned = cleanCalendarText(value, fallback)
     .replace(/\b(Bao Specialty Cafe|Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery)\b/gi, '')
     .replace(/查看原视频链接|查看参考视频|参考内容|样板爆品/g, '')
+    .replace(/\$\s?\d+(?:\.\d+)?/g, '门店确认价')
+    .replace(/到店报暗号[^，。.!！?？]*/g, '到店前先确认活动规则')
+    .replace(/赠送[^，。.!！?？]*/g, '活动权益以门店确认为准')
     .replace(/([\u4e00-\u9fff])\s+的/g, '$1的')
     .replace(/\s+/g, ' ')
     .trim()
