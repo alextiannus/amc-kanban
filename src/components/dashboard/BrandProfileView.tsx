@@ -364,7 +364,7 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'growth_research_still_running') return '品牌摸底报告还在整理，请稍后再看。'
   if (code === 'growth_research_failed') return '品牌摸底报告没有生成成功，请稍后重试。'
   if (code === 'growth_research_create_failed') return '品牌摸底没有启动成功，请稍后重试。'
-  if (code === 'marketing_plan_llm_failed') return '营销计划没有生成成功，请检查模型配置后重试。'
+  if (code.startsWith('marketing_plan_llm_failed')) return '营销计划没有生成成功，请检查模型配置后重试。'
   return code || '操作失败，请重试'
 }
 

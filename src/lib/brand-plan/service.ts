@@ -818,7 +818,7 @@ async function buildAnnualMarketingSolution(
       modelName: llm.modelName,
       error: llm.error || 'llm_returned_invalid_json',
     })
-    throw new BrandPlanError(`marketing_plan_llm_failed:${llm.error || 'llm_returned_invalid_json'}`, 502)
+    throw new BrandPlanError('marketing_plan_llm_failed', 502)
   }
   return normalizeAnnualMarketingSolution(llm.value, fallback, llm)
 }
@@ -1882,7 +1882,13 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
       allowAnyFallback: true,
       allowSystemFallback: true,
     })
-    const value = parseJsonObject(result.text)
+    let value = parseJsonObject(result.text)
+    let repairTrace: Record<string, unknown> | undefined
+    if (!value && result.text) {
+      const repair = await repairMarketingPlanJson(scope, result.text)
+      value = repair.value
+      repairTrace = repair.trace
+    }
     return {
       provider: result.provider,
       modelName: result.modelName,
@@ -1895,7 +1901,8 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
         latencyMs: result.latencyMs,
         timedOut: result.timedOut,
         responseTextCharCount: result.text?.length || 0,
-        parseStatus: value ? 'ok' : 'invalid_json',
+        parseStatus: value ? (repairTrace ? 'ok_after_repair' : 'ok') : 'invalid_json',
+        repairTrace,
       },
     }
   } catch (error) {
@@ -1908,6 +1915,47 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
         ...promptTrace,
         attempts: [],
         parseStatus: 'exception',
+      },
+    }
+  }
+}
+
+async function repairMarketingPlanJson(scope: 'annual' | 'quarter', rawText: string) {
+  const prompt = [
+    '把下面内容整理成严格 JSON 对象。只返回 JSON，不要 Markdown，不要解释。',
+    scope === 'annual'
+      ? '必须保留或补齐字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, quarterlyFocus, quarterlyPlans, metrics, researchFocus。'
+      : '必须保留或补齐字段：quarter, year, startMonth, endMonth, periodLabel, objective, monthlyFocus, contentDirections, promotionPoints。',
+    '如果原文里有中文引号、尾逗号、说明文字或截断内容，请修成可 JSON.parse 的对象。',
+    `原文：${rawText.slice(0, 12000)}`,
+  ].join('\n\n')
+  try {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 2600 : 1600, {
+      temperature: 0,
+      jsonMode: true,
+      deadlineMs: 60000,
+      attemptTimeoutMs: [30000, 30000],
+      maxAttempts: 2,
+      allowDefaultFallback: true,
+      allowAnyFallback: true,
+      allowSystemFallback: true,
+    })
+    return {
+      value: parseJsonObject(result.text),
+      trace: {
+        provider: result.provider,
+        modelName: result.modelName,
+        error: result.error,
+        latencyMs: result.latencyMs,
+        timedOut: result.timedOut,
+        attempts: result.attempts || [],
+      },
+    }
+  } catch (error) {
+    return {
+      value: null,
+      trace: {
+        error: error instanceof Error ? error.message : 'json_repair_exception',
       },
     }
   }
