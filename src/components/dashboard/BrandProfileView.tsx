@@ -1067,8 +1067,15 @@ ${storeLines}
   const handleGenerateAnnualPlan = async () => {
     setPlanGenerating('annual')
     try {
-      await runBrandPlanAction('generate_annual_plan', '营销计划已生成')
+      const strategyResult = await runBrandPlanAction('generate_annual_strategy', '整体策略已生成')
+      if (!strategyResult) return
       await loadBrandPlanWorkspace()
+      for (let index = 0; index < 4; index += 1) {
+        const result = await runBrandPlanAction('generate_next_quarter_plan', `第 ${index + 1} 个季度计划已生成`)
+        if (!result) return
+        await loadBrandPlanWorkspace()
+      }
+      showToastVal('营销计划已生成', 'success')
     } finally {
       setPlanGenerating(null)
     }

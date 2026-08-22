@@ -172,6 +172,8 @@ type BrandPlanAction =
   | 'save_merchant_interview'
   | 'save_workspace_patch'
   | 'generate_annual_plan'
+  | 'generate_annual_strategy'
+  | 'generate_next_quarter_plan'
   | 'generate_publishing_calendar'
   | 'regenerate_calendar_item'
   | 'ensure_presentation_theme'
@@ -298,6 +300,44 @@ export async function runBrandPlanAction(input: {
       input: {
         ...buildMarketingPlanInput(brand, current, latestInterview),
         subscriptionStrategy: annualPlan.subscriptionStrategy,
+      },
+      output: annualPlan,
+      researchSnapshotId: annualPlan.researchSnapshotId || current.researchReport?.snapshotId,
+      generationMode: annualPlan.generationMode || 'LLM',
+      llmProvider: annualPlan.llmProvider,
+      llmModel: annualPlan.llmModel,
+      llmError: annualPlan.llmError,
+    })
+  } else if (input.action === 'generate_annual_strategy') {
+    const annualPlan = await buildAnnualMarketingStrategyOnly(brand, current, latestInterview)
+    next = { ...current, annualPlan }
+    await saveMarketingSolutionVersion({
+      brandId: brand.id,
+      kind: 'ANNUAL',
+      period: marketingPlanPeriod(annualPlan),
+      input: {
+        ...buildMarketingPlanInput(brand, current, latestInterview),
+        subscriptionStrategy: annualPlan.subscriptionStrategy,
+        generationStep: 'annual_strategy',
+      },
+      output: annualPlan,
+      researchSnapshotId: annualPlan.researchSnapshotId || current.researchReport?.snapshotId,
+      generationMode: annualPlan.generationMode || 'LLM',
+      llmProvider: annualPlan.llmProvider,
+      llmModel: annualPlan.llmModel,
+      llmError: annualPlan.llmError,
+    })
+  } else if (input.action === 'generate_next_quarter_plan') {
+    const annualPlan = await buildNextQuarterMarketingPlan(brand, current, latestInterview)
+    next = { ...current, annualPlan }
+    await saveMarketingSolutionVersion({
+      brandId: brand.id,
+      kind: 'ANNUAL',
+      period: marketingPlanPeriod(annualPlan),
+      input: {
+        ...buildMarketingPlanInput(brand, current, latestInterview),
+        subscriptionStrategy: annualPlan.subscriptionStrategy,
+        generationStep: 'quarter',
       },
       output: annualPlan,
       researchSnapshotId: annualPlan.researchSnapshotId || current.researchReport?.snapshotId,
@@ -869,6 +909,158 @@ async function buildAnnualMarketingSolution(
     ...strategyLlm.value,
     quarterlyPlans,
   }, fallback, strategyLlm)
+}
+
+async function buildAnnualMarketingStrategyOnly(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  interview: BrandPlanMerchantInterview | null
+): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
+  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const marketContext = await buildMarketingPlanMarketContext(brand, fallback.quarterlyPlans || [])
+  const input = {
+    ...buildMarketingPlanInput(brand, current, interview),
+    subscriptionStrategy: fallback.subscriptionStrategy,
+    marketCalendar: marketContext.marketCalendar,
+    storeActivities: marketContext.storeActivities,
+    planningWindow: {
+      rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
+      quarters: (fallback.quarterlyPlans || []).map((item) => ({
+        quarter: item.quarter,
+        year: item.year,
+        startMonth: item.startMonth,
+        endMonth: item.endMonth,
+        periodLabel: item.periodLabel,
+        months: item.monthlyFocus.map((month) => month.month),
+        focus: item.focus,
+      })),
+    },
+  }
+  const strategyLlm = await callMarketingPlanLLM('annual_strategy', input)
+  await writeMarketingPlanBusinessLog({
+    brand,
+    scope: 'annual',
+    input,
+    llm: strategyLlm,
+    fallbackUsed: false,
+  })
+  if (!strategyLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  const plan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
+  const quarterPlaceholders = (fallback.quarterlyPlans || []).map((item) => ({
+    quarter: item.quarter,
+    year: item.year,
+    startMonth: item.startMonth,
+    endMonth: item.endMonth,
+    periodLabel: item.periodLabel,
+    focus: '待生成季度计划',
+    campaigns: [],
+  }))
+  return {
+    ...plan,
+    quarterlyFocus: quarterPlaceholders,
+    quarterlyPlans: [],
+  }
+}
+
+async function buildNextQuarterMarketingPlan(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  interview: BrandPlanMerchantInterview | null
+): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
+  if (!current.annualPlan) throw new BrandPlanError('annual_plan_required', 409)
+  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const existingQuarters = current.annualPlan.quarterlyPlans || []
+  const targetQuarter = (fallback.quarterlyPlans || []).find((candidate) =>
+    !existingQuarters.some((existing) => existing.startMonth === candidate.startMonth)
+  )
+  if (!targetQuarter) return current.annualPlan
+  const marketContext = await buildMarketingPlanMarketContext(brand, fallback.quarterlyPlans || [])
+  const baseInput = {
+    ...buildMarketingPlanInput(brand, current, interview),
+    subscriptionStrategy: current.annualPlan.subscriptionStrategy || fallback.subscriptionStrategy,
+    marketCalendar: marketContext.marketCalendar,
+    storeActivities: marketContext.storeActivities,
+    planningWindow: {
+      rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
+      quarters: (fallback.quarterlyPlans || []).map((item) => ({
+        quarter: item.quarter,
+        year: item.year,
+        startMonth: item.startMonth,
+        endMonth: item.endMonth,
+        periodLabel: item.periodLabel,
+        months: item.monthlyFocus.map((month) => month.month),
+        focus: item.focus,
+      })),
+    },
+  }
+  const quarterInput = {
+    ...baseInput,
+    annualStrategy: {
+      goal: current.annualPlan.goal,
+      theme: current.annualPlan.theme,
+      strategyPrinciples: current.annualPlan.strategyPrinciples,
+      platformStrategy: current.annualPlan.platformStrategy,
+      contentPillars: current.annualPlan.contentPillars,
+      metrics: current.annualPlan.metrics,
+      researchFocus: current.annualPlan.researchFocus,
+    },
+    currentQuarter: {
+      quarter: targetQuarter.quarter,
+      year: targetQuarter.year,
+      startMonth: targetQuarter.startMonth,
+      endMonth: targetQuarter.endMonth,
+      periodLabel: targetQuarter.periodLabel,
+      months: targetQuarter.monthlyFocus.map((month) => month.month),
+    },
+    previousQuarterPlans: existingQuarters,
+  }
+  const quarterLlm = await callMarketingPlanLLM('quarter', quarterInput)
+  await writeMarketingPlanBusinessLog({
+    brand,
+    scope: 'quarter',
+    input: quarterInput,
+    llm: quarterLlm,
+    fallbackUsed: false,
+  })
+  if (!quarterLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [targetQuarter])
+  if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  const fallbackOrder = new Map((fallback.quarterlyPlans || []).map((item, index) => [item.startMonth, index]))
+  const quarterlyPlans = [
+    ...existingQuarters.filter((item) => item.startMonth !== quarterPlan.startMonth),
+    quarterPlan,
+  ].sort((a, b) => (fallbackOrder.get(a.startMonth || '') ?? 99) - (fallbackOrder.get(b.startMonth || '') ?? 99))
+  return {
+    ...current.annualPlan,
+    generatedAt: new Date().toISOString(),
+    quarterlyPlans,
+    quarterlyFocus: (fallback.quarterlyPlans || []).map((fallbackQuarter) => {
+      const generated = quarterlyPlans.find((item) => item.startMonth === fallbackQuarter.startMonth)
+      return generated
+        ? {
+            quarter: generated.quarter,
+            year: generated.year,
+            startMonth: generated.startMonth,
+            endMonth: generated.endMonth,
+            periodLabel: generated.periodLabel,
+            focus: generated.focus,
+            campaigns: generated.campaigns,
+          }
+        : {
+            quarter: fallbackQuarter.quarter,
+            year: fallbackQuarter.year,
+            startMonth: fallbackQuarter.startMonth,
+            endMonth: fallbackQuarter.endMonth,
+            periodLabel: fallbackQuarter.periodLabel,
+            focus: '待生成季度计划',
+            campaigns: [],
+          }
+    }),
+    generationMode: 'LLM',
+    llmProvider: quarterLlm.provider || current.annualPlan.llmProvider,
+    llmModel: quarterLlm.modelName || current.annualPlan.llmModel,
+    llmError: undefined,
+  }
 }
 
 async function buildRuleAnnualMarketingSolution(
