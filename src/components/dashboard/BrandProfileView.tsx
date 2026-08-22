@@ -1734,7 +1734,10 @@ ${storeLines}
                 <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 2</p>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">营销计划</h3>
               </div>
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                  {annualPlan?.generatedAt ? `生成时间：${new Date(annualPlan.generatedAt).toLocaleString()}` : '尚未生成'}
+                </span>
                 <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
                   {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {annualPlan ? '重新生成计划' : '生成营销计划'}
                 </button>
