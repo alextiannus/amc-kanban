@@ -1455,6 +1455,14 @@ async function reviewCalendarCreativeItemsWithLLM(
   items: BrandPlanCalendarItem[]
 ) {
   if (!items.length) return items
+  const chunkSize = 6
+  if (items.length > chunkSize) {
+    const reviewed: BrandPlanCalendarItem[] = []
+    for (let index = 0; index < items.length; index += chunkSize) {
+      reviewed.push(...await reviewCalendarCreativeItemsWithLLM(brand, current, items.slice(index, index + chunkSize)))
+    }
+    return reviewed
+  }
   const brandName = brandDisplayName(brand)
   const payload = {
     brand: {
@@ -1475,7 +1483,7 @@ async function reviewCalendarCreativeItemsWithLLM(
       contentType: item.contentType,
       product: item.product,
       draftTitle: item.title,
-      draftPlanning: item.planning,
+      draftPlanning: item.planning.slice(0, 900),
       draftMaterialRequirements: item.materialRequirements || [],
       hasInspirationLink: Boolean(item.sampleVideoUrl || item.sampleOriginalUrl),
       matchedTags: item.matchedTags || [],
@@ -1486,7 +1494,7 @@ async function reviewCalendarCreativeItemsWithLLM(
     '只返回 JSON 对象，不要 Markdown。',
     '返回字段：items。items 每项必须包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
     'title：必须是当前品牌和当前商品/服务量身定制的中文标题，不要照抄灵感来源标题，不要出现文件名、话题串或英文模板感句子。',
-    'creativeSummary：用 2-4 句中文说明这条内容怎么复刻创意结构、拍什么、为什么适合当前品牌。要像给门店运营看的 brief，不要 AI 腔。',
+    'creativeSummary：用 2-3 句中文说明这条内容怎么复刻创意结构、拍什么、为什么适合当前品牌。要像给门店运营看的 brief，不要 AI 腔。',
     'materialRequirements：3-6 条素材需求，必须具体到可采集的画面、信息或门店确认事项。',
     'approved：如果灵感与品牌、商品、平台明显不相关则 false；false 时也要给出可执行的替代创意总结和素材需求。',
     '禁止输出原视频标题、原视频文案、链接、文件名、原品牌名、Bao Specialty、DAILY、breakfast、Afternoon Tea、bakery、mp4、#武冈、破酥包。',
@@ -1494,11 +1502,11 @@ async function reviewCalendarCreativeItemsWithLLM(
     `输入 JSON：${JSON.stringify(payload)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, Math.min(7000, 1200 + items.length * 220), {
+    const result = await callLLM('marketing_plan', prompt, Math.min(2600, 900 + items.length * 260), {
       temperature: 0.28,
       jsonMode: true,
-      deadlineMs: 120000,
-      attemptTimeoutMs: [30000, 45000, 60000],
+      deadlineMs: 90000,
+      attemptTimeoutMs: [30000, 30000, 30000],
       maxAttempts: 3,
       allowDefaultFallback: true,
       allowAnyFallback: true,
@@ -1506,11 +1514,11 @@ async function reviewCalendarCreativeItemsWithLLM(
     })
     const parsed = parseJsonObject(result.text)
     const reviewed = arrayValue(parsed?.items).map(objectValue)
-    if (!reviewed.length) return items
+    if (!reviewed.length) return fallbackReviewedCalendarItems(brand, items)
     const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
     return items.map((item) => {
       const review = byId.get(item.id)
-      if (!review) return item
+      if (!review) return fallbackReviewedCalendarItems(brand, [item])[0]
       const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
       const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
       const materialRequirements = stringList(review.materialRequirements)
@@ -1527,8 +1535,31 @@ async function reviewCalendarCreativeItemsWithLLM(
       }
     })
   } catch {
-    return items
+    return fallbackReviewedCalendarItems(brand, items)
   }
+}
+
+function fallbackReviewedCalendarItems(brand: BrandPlanBrand, items: BrandPlanCalendarItem[]) {
+  const brandName = brandDisplayName(brand)
+  return items.map((item) => {
+    const product = productDisplayName(item.product)
+    return {
+      ...item,
+      planning: mergeReviewedCalendarPlanning(
+        item.planning,
+        `这条内容保留灵感来源的节奏和镜头结构，但画面全部换成${brandName}的${product}。重点拍真实出品、上桌过程和顾客能立刻看懂的到店理由，方便主理人按素材清单安排拍摄。`,
+        '',
+        true
+      ),
+      materialRequirements: item.materialRequirements?.length
+        ? item.materialRequirements.map((line) => cleanReviewedCalendarText(line, '')).filter(Boolean)
+        : [
+            `${product}的上桌近景和夹起特写`,
+            `${brandName}门店环境、桌面和服务过程`,
+            '地址、营业时间、价格或活动规则确认',
+          ],
+    }
+  })
 }
 
 function mergeReviewedCalendarPlanning(planning: string, creativeSummary: string, qualityNote: string, approved: boolean) {
