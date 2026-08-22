@@ -45,6 +45,14 @@ type AnnualPlan = {
   generatedAt: string
   goal: string
   theme: string
+  strategyPrinciples?: string[]
+  platformStrategy?: Array<{
+    platform: string
+    role: string
+    contentApproach: string
+    customerAction: string
+  }>
+  contentPillars?: string[]
   quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[]; year?: number; startMonth?: string; endMonth?: string; periodLabel?: string }>
   quarterlyPlans?: QuarterPlan[]
   metrics: string[]
@@ -212,6 +220,14 @@ export default function BrandMarketingPlanPresentationPage() {
     '--brand-muted': theme.muted,
   } as React.CSSProperties
 
+  const openEditorFromSurface = () => {
+    if (!editing) startEditing()
+  }
+
+  const editableSurfaceClass = editing
+    ? ''
+    : 'cursor-pointer transition hover:ring-2 hover:ring-[var(--brand-primary)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--brand-primary)]/25'
+
   return (
     <MobileLayout>
       <main style={cssVars} className="min-h-screen bg-[var(--brand-bg)] text-[var(--brand-text)]">
@@ -297,7 +313,20 @@ export default function BrandMarketingPlanPresentationPage() {
               </section>
             ) : null}
 
-            <section className="relative overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-8 shadow-sm ring-1 ring-black/5">
+            <section
+              role="button"
+              tabIndex={editing ? -1 : 0}
+              onClick={openEditorFromSurface}
+              onKeyDown={(event) => {
+                if (editing) return
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  startEditing()
+                }
+              }}
+              title="点击编辑并保存品牌营销方案"
+              className={`relative overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-8 shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
+            >
               <div className="absolute inset-x-0 top-0 h-1.5" style={{ background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})` }} />
               <div className="absolute right-0 top-0 h-40 w-40 opacity-10" style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})`, clipPath: 'polygon(35% 0, 100% 0, 100% 100%, 0 65%)' }} />
               <div className="relative grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
@@ -324,18 +353,98 @@ export default function BrandMarketingPlanPresentationPage() {
               </div>
             </section>
 
+            {(arrayOrEmpty(plan.strategyPrinciples).length || arrayOrEmpty(plan.platformStrategy).length || arrayOrEmpty(plan.contentPillars).length) ? (
+              <section
+                role="button"
+                tabIndex={editing ? -1 : 0}
+                onClick={openEditorFromSurface}
+                onKeyDown={(event) => {
+                  if (editing) return
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    startEditing()
+                  }
+                }}
+                title="点击编辑并保存品牌营销方案"
+                className={`mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
+              >
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-[var(--brand-primary)]">AMC Strategy Logic</p>
+                    <h2 className="mt-1 text-2xl font-black">AMC 策略判断</h2>
+                  </div>
+                  <p className="max-w-xl text-xs leading-6 text-[var(--brand-muted)]">这部分是方案的顶层判断：先看品牌状态，再决定平台分工、内容支柱和顾客下一步动作。</p>
+                </div>
+
+                {arrayOrEmpty(plan.strategyPrinciples).length ? (
+                  <div className="mt-5 grid gap-3 md:grid-cols-3">
+                    {arrayOrEmpty(plan.strategyPrinciples).slice(0, 6).map((principle, index) => (
+                      <div key={`${principle}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                        <Target className="mb-3 h-4 w-4 text-[var(--brand-primary)]" />
+                        <p className="text-sm font-black leading-6">{principle}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {arrayOrEmpty(plan.platformStrategy).length ? (
+                  <div className="mt-6 grid gap-3 md:grid-cols-2">
+                    {arrayOrEmpty(plan.platformStrategy).map((item) => (
+                      <div key={item.platform} className="rounded-xl border border-slate-100 p-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[11px] font-black text-white">{item.platform}</span>
+                          <h3 className="text-sm font-black">{item.role}</h3>
+                        </div>
+                        <p className="mt-2 text-xs leading-6 text-[var(--brand-muted)]">{item.contentApproach}</p>
+                        <p className="mt-2 text-xs font-bold text-[var(--brand-secondary)]">顾客动作：{item.customerAction}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {arrayOrEmpty(plan.contentPillars).length ? (
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    {arrayOrEmpty(plan.contentPillars).map((pillar) => (
+                      <span key={pillar} className="rounded-full border border-black/10 bg-slate-50 px-3 py-1.5 text-xs font-bold text-[var(--brand-text)]">{pillar}</span>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+
             <section className="mt-6 grid gap-3 md:grid-cols-3">
               {(plan.metrics || []).slice(0, 6).map(metric => (
-                <div key={metric} className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+                <button
+                  key={metric}
+                  type="button"
+                  onClick={startEditing}
+                  disabled={editing}
+                  title="点击编辑并保存品牌营销方案"
+                  className={`rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-black/5 disabled:cursor-default ${editableSurfaceClass}`}
+                >
                   <TrendingUp className="mb-3 h-4 w-4 text-[var(--brand-secondary)]" />
                   <p className="text-sm font-black">{metric}</p>
-                </div>
+                </button>
               ))}
             </section>
 
             <section className="mt-8 space-y-5">
               {quarterPlans.map((quarter, index) => (
-                <article key={quarter.periodLabel || quarter.quarter} className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
+                <article
+                  key={quarter.periodLabel || quarter.quarter}
+                  role="button"
+                  tabIndex={editing ? -1 : 0}
+                  onClick={openEditorFromSurface}
+                  onKeyDown={(event) => {
+                    if (editing) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      startEditing()
+                    }
+                  }}
+                  title="点击编辑并保存品牌营销方案"
+                  className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
+                >
                   <div className="grid gap-5 border-b border-slate-100 p-6 lg:grid-cols-[0.55fr_1fr]">
                     <div>
                       <p className="text-xs font-black uppercase tracking-widest text-[var(--brand-primary)]">{quarterDisplayLabel(quarter)}</p>

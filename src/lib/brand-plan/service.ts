@@ -4,7 +4,10 @@ import { prisma } from '@/lib/prisma'
 import {
   generateGrowthResearchReportForBrand,
 } from '@/lib/growthDataCenter'
-import { matchPromotionStrategyCreativeBatch } from '@/lib/promotion-strategy/clients'
+import {
+  fetchPromotionStrategyMarketCalendar,
+  matchPromotionStrategyCreativeBatch,
+} from '@/lib/promotion-strategy/clients'
 import type { PublishingFreq } from '@/lib/brandContextBuilder'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
 import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
@@ -64,6 +67,14 @@ export type BrandPlanWorkspaceData = {
     generatedAt: string
     goal: string
     theme: string
+    strategyPrinciples?: string[]
+    platformStrategy?: Array<{
+      platform: string
+      role: string
+      contentApproach: string
+      customerAction: string
+    }>
+    contentPillars?: string[]
     quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[]; year?: number; startMonth?: string; endMonth?: string; periodLabel?: string }>
     quarterlyPlans?: Array<{
       quarter: string
@@ -206,6 +217,28 @@ export async function loadBrandPlanBrand(brandId: string) {
         },
         orderBy: { completedAt: 'desc' },
         take: 1,
+      },
+      gameConfig: {
+        select: {
+          title: true,
+          description: true,
+          templateType: true,
+          taskPhotoEnabled: true,
+          taskReviewEnabled: true,
+          taskGoogleMapsEnabled: true,
+          taskXiaohongshuEnabled: true,
+          taskInstagramEnabled: true,
+          maxSpinsPerUserDay: true,
+          activityRounds: {
+            select: {
+              id: true,
+              startsAt: true,
+              endsAt: true,
+            },
+            orderBy: { startsAt: 'asc' },
+            take: 8,
+          },
+        },
       },
     },
   })
@@ -738,9 +771,12 @@ async function buildAnnualMarketingSolution(
   interview: BrandPlanMerchantInterview | null
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
   const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const marketContext = await buildMarketingPlanMarketContext(brand, fallback.quarterlyPlans || [])
   const input = {
     ...buildMarketingPlanInput(brand, current, interview),
     subscriptionStrategy: fallback.subscriptionStrategy,
+    marketCalendar: marketContext.marketCalendar,
+    storeActivities: marketContext.storeActivities,
     planningWindow: {
       rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
       quarters: (fallback.quarterlyPlans || []).map((item) => ({
@@ -851,6 +887,13 @@ async function buildRuleAnnualMarketingSolution(
       ? `未来四个季度围绕主理人确认的经营重点，结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`
       : `未来四个季度结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`,
     theme,
+    strategyPrinciples: [
+      '让顾客找得到、看得懂、愿意来。',
+      '先用真实资料和门店内容建立信任，再推动收藏、咨询、路线、预约或下单。',
+      '每个平台承担不同任务，不把同一篇内容简单复制到所有平台。',
+    ],
+    platformStrategy: defaultPlatformStrategy(platformCoverage),
+    contentPillars: ['招牌产品', '真实门店/制作过程', '顾客评价/信任证明', '附近到店理由', '菜单/价格/服务解释'],
     quarterlyFocus: quarterlyPlans.map((item) => ({
       quarter: item.quarter,
       year: item.year,
@@ -1302,6 +1345,7 @@ function buildMarketingPlanInput(
       description: brand.description,
     },
     stores: arrayValue(brand.knowledge?.stores),
+    storeActivities: serializeStoreActivities(brand.gameConfig),
     products: primaryProducts(brand, { available: false }),
     brandClaim: brand.knowledge?.brandClaim || null,
     merchantInterview: interview,
@@ -1312,10 +1356,114 @@ function buildMarketingPlanInput(
   }
 }
 
+async function buildMarketingPlanMarketContext(
+  brand: BrandPlanBrand,
+  quarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']
+) {
+  const years = uniqueStrings((quarters || [])
+    .map((quarter) => quarter.year ? String(quarter.year) : text(quarter.startMonth).slice(0, 4))
+    .filter(Boolean))
+  const market = normalizeMarketName(text(brand.location || brand.address || 'Singapore'))
+  const merchantCategory = text(brand.industry || brand.knowledge?.productAssumptions || brand.description || 'Restaurant / F&B')
+  const events: Array<Record<string, unknown>> = []
+  const gaps: Array<Record<string, unknown>> = []
+  for (const year of years.length ? years : [String(new Date().getFullYear())]) {
+    const calendar = await fetchPromotionStrategyMarketCalendar({
+      markets: [market],
+      year,
+      merchantCategory,
+    }, {
+      userId: 'brand-plan-generation',
+      email: null,
+      roles: ['SYSTEM', 'AMC_KANBAN'],
+    }).catch((error: any) => ({
+      ok: false,
+      error: error?.message || 'market_calendar_unavailable',
+      events: [],
+      contentLibraryGaps: [{ reason: 'market_calendar_unavailable', year }],
+    }))
+    events.push(...arrayValue(calendar.events).map((event) => objectValue(event)))
+    gaps.push(...arrayValue(calendar.contentLibraryGaps).map((gap) => objectValue(gap)))
+  }
+  return {
+    marketCalendar: {
+      market,
+      merchantCategory,
+      events: events.slice(0, 80),
+      gaps,
+      usageRule: '节假日只作为可选机会点；必须结合品牌数据、产品适配度、素材和门店承接能力判断是否使用。',
+    },
+    storeActivities: serializeStoreActivities(brand.gameConfig),
+  }
+}
+
+function serializeStoreActivities(gameConfig: BrandPlanBrand['gameConfig']) {
+  if (!gameConfig) {
+    return {
+      configured: false,
+      usageRule: '没有配置店内活动时，不要生成店内活动 campaign；可用常规卖点、产品教育、信任建设或到店转化策略替代。',
+      rounds: [],
+    }
+  }
+  const rounds = arrayValue(gameConfig.activityRounds)
+    .map((round) => objectValue(round))
+    .map((round) => ({
+      id: text(round.id),
+      startsAt: dateText(round.startsAt),
+      endsAt: dateText(round.endsAt),
+    }))
+    .filter((round) => round.startsAt && round.endsAt)
+  return {
+    configured: true,
+    title: text(gameConfig.title),
+    description: text(gameConfig.description),
+    templateType: text(gameConfig.templateType),
+    maxSpinsPerUserDay: positiveNumber(gameConfig.maxSpinsPerUserDay),
+    enabledTasks: {
+      photo: Boolean(gameConfig.taskPhotoEnabled),
+      review: Boolean(gameConfig.taskReviewEnabled),
+      googleMaps: Boolean(gameConfig.taskGoogleMapsEnabled),
+      xiaohongshu: Boolean(gameConfig.taskXiaohongshuEnabled),
+      instagram: Boolean(gameConfig.taskInstagramEnabled),
+    },
+    rounds,
+    usageRule: rounds.length
+      ? '已有有效店内活动轮次时，品牌营销方案和内容发布节奏必须配合活动窗口：提前预热、活动期间解释参与方式和到店理由、活动后复盘口碑/UGC/回访动作。'
+      : '已有店内活动配置但没有有效轮次时，不要强行生成活动 campaign。',
+  }
+}
+
+function normalizeMarketName(value: string) {
+  const lower = value.toLowerCase()
+  if (!lower || lower.includes('singapore') || lower.includes('新加坡') || lower === 'sg') return 'Singapore'
+  if (lower.includes('malaysia') || lower.includes('马来西亚') || lower === 'my') return 'Malaysia'
+  if (lower.includes('indonesia') || lower.includes('印尼') || lower === 'id') return 'Indonesia'
+  return value || 'Singapore'
+}
+
+function dateText(value: unknown) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString()
+  const textValue = text(value)
+  if (!textValue) return ''
+  const date = new Date(textValue)
+  return Number.isNaN(date.getTime()) ? textValue : date.toISOString()
+}
+
 async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<string, unknown>) {
   const schemaInstruction = scope === 'annual'
-    ? `返回 JSON 对象，字段必须为：goal(string), theme(string), quarterlyFocus(array，每项含 quarter, year, startMonth, endMonth, periodLabel, focus, campaigns), quarterlyPlans(array，必须且只能含 planningWindow.quarters 中连续四个有效周期；每项含 quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。`
-    : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), year(number), startMonth(string), endMonth(string), periodLabel(string), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。`
+    ? [
+      '返回 JSON 对象，字段必须为：goal(string), theme(string), strategyPrinciples(array), platformStrategy(array), contentPillars(array), quarterlyFocus(array，每项含 quarter, year, startMonth, endMonth, periodLabel, focus, campaigns), quarterlyPlans(array，必须且只能含 planningWindow.quarters 中连续四个有效周期；每项含 quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。',
+      'strategyPrinciples 必须用 3-5 条中文短句清晰说明本方案的顶层判断，让用户能一眼看到为什么这样规划，例如“让顾客找得到、看得懂、愿意来”“先补足信任，再推动到店动作”。',
+      'platformStrategy 每项必须含 platform, role, contentApproach, customerAction，用来清楚展示每个平台在 AMC 方案里的分工。',
+      'contentPillars 必须列出 4-7 个内容支柱，让用户能看到后续内容创建会围绕什么持续展开。',
+      '字段含义要求：goal/theme/strategy/focus 必须体现 AMC 本地商家逻辑：让顾客找得到、看得懂、愿意来；不要写泛泛品牌口号。',
+      'quarterlyPlans[].promotionPoints 必须把每个平台的角色说清楚：Google Business/Profile 负责搜索可见、营业信息、路线/预约/订单和评价信任；Instagram 负责视觉识别、Reels/Stories/Carousel 展示产品场景；TikTok 负责短视频发现、真实人物/员工/顾客视角和平台原生表达；Facebook 负责社区感、老客触达、本地活动和实用更新；小红书负责中文用户搜索种草、真实体验、场景化笔记和收藏决策。',
+      'quarterlyPlans[].contentThemes 必须包含可执行内容支柱，例如招牌产品、真实门店/制作过程、顾客评价/信任证明、附近到店理由、季节/节日/店内互动、菜单/价格/服务解释；不要一稿多发。',
+      'campaigns 可以为空数组；只有当节假日/店内活动与品牌数据和执行条件匹配时才写入。若 storeActivities 有有效 rounds，monthlyFocus 和 campaigns 必须体现内容发布如何配合活动窗口：提前预热、活动期间解释参与方式和到店理由、活动后复盘口碑/UGC/回访动作。',
+      'metrics 只能使用本地商家可观察指标，例如路线点击、电话/WhatsApp/DM 咨询、预约/订单入口点击、评论数量与质量、收藏/分享、发布完成率、活动参与记录、素材补齐率；不要保证流量、排名、销售额或到店人数。',
+      '所有建议必须受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能写成未来升级方向，不要当作当前订阅交付。',
+    ].join('\n')
+    : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), year(number), startMonth(string), endMonth(string), periodLabel(string), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。`
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
   const prompt = renderPromptTemplate(promptTemplate?.template || '', {
     schemaInstruction,
@@ -1381,6 +1529,9 @@ function normalizeAnnualMarketingSolution(
     generatedAt: new Date().toISOString(),
     goal: text(value.goal) || fallback.goal,
     theme: text(value.theme) || fallback.theme,
+    strategyPrinciples: stringList(value.strategyPrinciples).length ? stringList(value.strategyPrinciples) : fallback.strategyPrinciples,
+    platformStrategy: normalizePlatformStrategy(value.platformStrategy, fallback.platformStrategy),
+    contentPillars: stringList(value.contentPillars).length ? stringList(value.contentPillars) : fallback.contentPillars,
     quarterlyFocus: quarterlyFocus.length ? quarterlyFocus : fallback.quarterlyFocus,
     quarterlyPlans: quarterlyPlans.length ? quarterlyPlans : fallback.quarterlyPlans,
     metrics: stringList(value.metrics).length ? stringList(value.metrics) : fallback.metrics,
@@ -1449,6 +1600,63 @@ function normalizeAnnualQuarterlyPlans(
       monthlyFocus: parsedItem.monthlyFocus.length ? parsedItem.monthlyFocus : fallbackItem.monthlyFocus,
     }
   })
+}
+
+function normalizePlatformStrategy(
+  value: unknown,
+  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>['platformStrategy']
+) {
+  const parsed = arrayValue(value)
+    .map((item) => objectValue(item))
+    .map((item) => ({
+      platform: text(item.platform),
+      role: text(item.role),
+      contentApproach: text(item.contentApproach),
+      customerAction: text(item.customerAction),
+    }))
+    .filter((item) => item.platform && item.role)
+  return parsed.length ? parsed : fallback
+}
+
+function defaultPlatformStrategy(platforms: string[]) {
+  const roleByPlatform: Record<string, { role: string; contentApproach: string; customerAction: string }> = {
+    google_business: {
+      role: '搜索可见和到店决策',
+      contentApproach: '更新营业信息、真实照片、Offer/Event/Update、评价信任和路线/预约/订单入口。',
+      customerAction: '查看路线、预约、下单、致电或查看评价',
+    },
+    instagram: {
+      role: '视觉识别和品牌质感',
+      contentApproach: '用 Reels、Stories、Carousel 展示产品场景、门店氛围、菜单解释和可收藏信息。',
+      customerAction: '收藏、私信咨询、查看地址或转发给朋友',
+    },
+    tiktok: {
+      role: '短视频发现和真实场景种草',
+      contentApproach: '用竖版短视频、强开头、员工/顾客视角、制作过程和真实反应表达卖点。',
+      customerAction: '记住招牌、评论互动、收藏或到店体验',
+    },
+    facebook: {
+      role: '社区触达和老客维护',
+      contentApproach: '发布实用更新、活动提醒、家庭/社区场景、评论互动和老客回访内容。',
+      customerAction: '评论、分享、询问活动或带家人朋友到店',
+    },
+    xiaohongshu: {
+      role: '中文用户搜索种草和收藏决策',
+      contentApproach: '用真实体验、场景化笔记、关键词、价格/菜单/路线信息和收藏价值承接中文用户。',
+      customerAction: '收藏笔记、搜索品牌、私信咨询或按路线到店',
+    },
+  }
+  return platforms
+    .map((platform) => normalizePlatformSlug(platform))
+    .filter(Boolean)
+    .map((platform) => ({
+      platform,
+      ...(roleByPlatform[platform] || {
+        role: '补充触达渠道',
+        contentApproach: '根据该平台用户习惯改写内容，不做一稿多发。',
+        customerAction: '收藏、咨询或进入下一步了解',
+      }),
+    }))
 }
 
 function marketingPlanPeriod(plan: NonNullable<BrandPlanWorkspaceData['annualPlan']>) {
