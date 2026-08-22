@@ -1455,11 +1455,11 @@ async function reviewCalendarCreativeItemsWithLLM(
   items: BrandPlanCalendarItem[]
 ): Promise<BrandPlanCalendarItem[]> {
   if (!items.length) return items
-  const chunkSize = 6
+  const chunkSize = 4
   if (items.length > chunkSize) {
     const chunks: BrandPlanCalendarItem[][] = []
     for (let index = 0; index < items.length; index += chunkSize) chunks.push(items.slice(index, index + chunkSize))
-    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 2, (chunk): Promise<BrandPlanCalendarItem[]> => reviewCalendarCreativeItemsWithLLM(brand, current, chunk))
+    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 4, (chunk): Promise<BrandPlanCalendarItem[]> => reviewCalendarCreativeItemsWithLLM(brand, current, chunk))
     return reviewedChunks.flat()
   }
   const brandName = brandDisplayName(brand)
@@ -1501,15 +1501,15 @@ async function reviewCalendarCreativeItemsWithLLM(
     `输入 JSON：${JSON.stringify(payload)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, Math.min(2600, 900 + items.length * 260), {
+    const result = await callLLM('marketing_plan', prompt, Math.min(1900, 700 + items.length * 230), {
       temperature: 0.28,
       jsonMode: true,
-      deadlineMs: 50000,
-      attemptTimeoutMs: [22000, 22000],
-      maxAttempts: 2,
+      deadlineMs: 18000,
+      attemptTimeoutMs: [16000],
+      maxAttempts: 1,
       allowDefaultFallback: true,
-      allowAnyFallback: true,
-      allowSystemFallback: true,
+      allowAnyFallback: false,
+      allowSystemFallback: false,
     })
     const parsed = parseJsonObject(result.text)
     const reviewed = arrayValue(parsed?.items).map(objectValue)
