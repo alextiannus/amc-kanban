@@ -1784,8 +1784,8 @@ async function reviewCalendarCreativeItemsWithLLM(
     const result = await callLLM('marketing_plan', prompt, Math.min(1900, 700 + items.length * 230), {
       temperature: 0.28,
       jsonMode: true,
-      deadlineMs: 18000,
-      attemptTimeoutMs: [16000],
+      deadlineMs: 65000,
+      attemptTimeoutMs: [60000],
       maxAttempts: 1,
       allowDefaultFallback: true,
       allowAnyFallback: false,
