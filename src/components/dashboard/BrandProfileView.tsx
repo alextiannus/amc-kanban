@@ -186,16 +186,6 @@ type EditableSocialAccount = SocialAccountSummary & {
   loginPassword?: string | null
 }
 
-type GrowthSyncStatus = {
-  status: 'NOT_QUEUED' | 'PENDING' | 'PROCESSING' | 'CONFLICT' | 'SYNCED'
-  pendingPaths: string[]
-  attempts: number
-  nextRetryAt: string | null
-  errorCode: string | null
-  errorMessage: string | null
-  conflicts: Array<{ path: string; code: string; kanban_value: unknown; growth_value: unknown }>
-  lastSyncedAt: string | null
-}
 
 function createStoreId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -325,7 +315,6 @@ function BrandProfileContent({
 
   const [showContextModal, setShowContextModal] = useState(false)
   const [identitySnapshot, setIdentitySnapshot] = useState<BrandIdentitySnapshot | null>(null)
-  const [growthSyncStatus, setGrowthSyncStatus] = useState<GrowthSyncStatus | null>(null)
   const [postfastSyncing, setPostfastSyncing] = useState(false)
   const [showPlanEditor, setShowPlanEditor] = useState(false)
   const [planEditorSaving, setPlanEditorSaving] = useState(false)
@@ -392,8 +381,16 @@ function BrandProfileContent({
   const [editingAiJson, setEditingAiJson] = useState('')
   const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => {
+    // Pick the first month of the next quarter if the current quarter has <30 days left
     const now = new Date()
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const currentMonth = now.getMonth() // 0-indexed
+    const currentQuarterEndMonth = Math.floor(currentMonth / 3) * 3 + 2 // 0-indexed last month of this quarter
+    const quarterEnd = new Date(now.getFullYear(), currentQuarterEndMonth + 1, 0) // last day of the quarter
+    const daysLeft = Math.floor((quarterEnd.getTime() - now.getTime()) / 86400000)
+    const startMonth = daysLeft >= 30
+      ? now
+      : new Date(now.getFullYear(), currentQuarterEndMonth + 1, 1) // first month of next quarter
+    return `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}`
   })
 
   const loadProfile = async () => {
@@ -423,19 +420,6 @@ function BrandProfileContent({
     }
   }
 
-  const loadGrowthSyncStatus = async () => {
-    try {
-      const res = await fetch(`/api/brands/${brandId}/growth-sync`, { cache: 'no-store' })
-      if (res.ok) {
-        const data = await res.json() as GrowthSyncStatus
-        setGrowthSyncStatus(data)
-        return data
-      }
-    } catch (error) {
-      console.error('Failed to load Growth sync status:', error)
-    }
-    return null
-  }
 
   const loadBrandPlanWorkspace = async () => {
     try {
@@ -453,57 +437,53 @@ function BrandProfileContent({
 
   const loadAllConfig = async () => {
     try {
-      // 1. Fetch brand metadata for details (description, location, address, etc.)
-      const resBrand = await fetch(`/api/brands/${brandId}`)
+      // Fire all 3 fetches in parallel
+      const [resBrand, resKnowledge, resSub] = await Promise.all([
+        fetch(`/api/brands/${brandId}`),
+        fetch(`/api/brands/${brandId}/knowledge`),
+        fetch(`/api/brands/${brandId}/subscription`),
+      ])
+
+      // 1. Brand metadata
       if (resBrand.ok) {
         const dataBrand = await resBrand.json()
         setDraftName(dataBrand.name || '')
         setDraftDesc(dataBrand.description || '')
         setDraftLocation(dataBrand.location || '')
         setBrandSettings(dataBrand)
-        // Always reset logo — don't keep brand A's logo if brand B has none
         setLogoPreview(dataBrand.logoUrl || null)
-        // Always reset contact fields — prevents A's address from showing on B
         setDraftAddress(dataBrand.address || '')
         setDraftPhone(dataBrand.phone || '')
         setDraftWebsite(dataBrand.website || '')
       } else {
-        // Fetch failed — ensure all brand meta fields are cleared
         setDraftName(''); setDraftDesc(''); setDraftLocation('')
         setDraftAddress(''); setDraftPhone(''); setDraftWebsite('')
         setLogoPreview(null)
       }
 
-      // 2. Fetch brand knowledge (all sections)
-      const resKnowledge = await fetch(`/api/brands/${brandId}/knowledge`)
+      // 2. Brand knowledge
       if (resKnowledge.ok) {
         const k = await resKnowledge.json()
-        // Section 1 — brand plan / tone
         setLocalBrandTone(k.brandTone || '')
         setDraftAudience(k.audienceAssumptions || '')
         setDraftProduct(k.productAssumptions || '')
-        // Section 2 — business info
-        // Always set (not conditionally): if brand B has no hours, clear the field
         if (typeof k.businessHours === 'string') setDraftBusinessHours(k.businessHours)
         else if (k.businessHours && typeof k.businessHours === 'object') setDraftBusinessHours(JSON.stringify(k.businessHours, null, 2))
         else setDraftBusinessHours('')
         setDraftReservationUrl(k.reservationUrl || '')
         setDraftOrderingUrl(k.orderingUrl || '')
         setDraftStores(Array.isArray(k.stores) ? k.stores : [])
-        // Section 3 — knowledge base
         setDraftMarket(k.market || '')
         setDraftDistrict(k.district || '')
         setDraftMenuItems(Array.isArray(k.menuItems) ? k.menuItems : [])
         setDraftMenuText(Array.isArray(k.menuItems) ? k.menuItems.map((item: Record<string, unknown>) => String(item.name || item.title || '').trim()).filter(Boolean).join('\n') : '')
         setDraftCompetitorsText(Array.isArray(k.competitors) ? k.competitors.join('\n') : '')
-        // Section 4 — local creative identity & publishing frequency
         setCreativeIdentity({
           brandVoice: k.brandVoice || '',
           brandImage: k.brandImage || '',
           promotionFocus: k.promotionFocus || '',
         })
       } else {
-        // No knowledge record for this brand — reset every section to empty defaults
         setLocalBrandTone('')
         setDraftAudience(''); setDraftProduct('')
         setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftStores([])
@@ -514,8 +494,7 @@ function BrandProfileContent({
         setCreativeIdentity({ brandVoice: '', brandImage: '', promotionFocus: '' })
       }
 
-      // 3. Fetch subscription
-      const resSub = await fetch(`/api/brands/${brandId}/subscription`)
+      // 3. Subscription
       if (resSub.ok) {
         const dataSub = await resSub.json()
         setLocalSubscriptionPlan(dataSub.plan_name === 'NONE' ? '未激活订阅' : dataSub.plan_name)
@@ -530,24 +509,15 @@ function BrandProfileContent({
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadProfile()
-    void loadAllConfig()
-    void loadBrandPlanWorkspace()
-    void loadIdentity()
-    void loadGrowthSyncStatus()
+    void Promise.all([
+      loadProfile(),
+      loadAllConfig(),
+      loadBrandPlanWorkspace(),
+      loadIdentity(),
+    ])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId])
 
-  useEffect(() => {
-    if (!growthSyncStatus || !['PENDING', 'PROCESSING'].includes(growthSyncStatus.status)) return
-    const timer = window.setInterval(() => {
-      void loadGrowthSyncStatus()
-      void loadIdentity()
-    }, 5000)
-    return () => window.clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [brandId, growthSyncStatus?.status])
 
   const handleSaveProfile = async (nextMarkdown?: string) => {
     const markdown = (nextMarkdown ?? profileMarkdown).trim()
@@ -572,7 +542,6 @@ function BrandProfileContent({
         onUpdate(data.brand)
       }
       await loadAllConfig()
-      await loadGrowthSyncStatus()
     } catch (e) {
       console.error(e)
       showToastVal('保存品牌 Profile 失败，请检查网络', 'error')
@@ -675,7 +644,6 @@ ${storeLines}
       const res = await fetch(`/api/brands/${brandId}/logo`, { method: 'POST', body: form })
       if (res.ok) {
         showToastVal('品牌 Logo 已更新', 'success')
-        await loadGrowthSyncStatus()
       } else {
         showToastVal('Logo 上传失败', 'error')
       }
@@ -821,7 +789,6 @@ ${storeLines}
       await loadAllConfig()
       await loadIdentity()
       await loadBrandPlanWorkspace()
-      await loadGrowthSyncStatus()
     } catch (error) {
       console.error('Failed to save brand plan editor:', error)
       showToastVal('保存失败，请检查字段后重试', 'error')
@@ -876,10 +843,15 @@ ${storeLines}
       .slice(0, 4)
   }
 
-  const handleGenerateResearchReport = async () => {
+  const handleViewResearchReport = async () => {
+    if (report) {
+      setShowResearchReport(true)
+      return
+    }
+    // No local report — fetch from Growth
     setPlanGenerating('research')
     try {
-      const nextPlan = await runBrandPlanAction('generate_research_report', '品牌摸底报告已生成')
+      const nextPlan = await runBrandPlanAction('generate_research_report', '品牌调研报告已获取')
       if ((nextPlan?.marketingSolution || nextPlan?.brandPlan)?.researchReport) setShowResearchReport(true)
     } finally {
       setPlanGenerating(null)
@@ -987,7 +959,6 @@ ${storeLines}
       }
       showToastVal(`已从 PostFast 同步 ${data.accountCount ?? 0} 个社交媒体账号`, 'success')
       await loadAllConfig()
-      await loadGrowthSyncStatus()
     } catch (error) {
       console.error('Failed to sync PostFast accounts:', error)
       showToastVal('PostFast 账号同步失败，请稍后重试。', 'error')
@@ -1031,7 +1002,7 @@ ${storeLines}
       <div className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌摸底报告</h3>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌调研报告</h3>
             <p className="mt-1 text-xs text-slate-400">{report?.generatedAt ? new Date(report.generatedAt).toLocaleString() : '尚未生成'}</p>
           </div>
           <button type="button" onClick={() => setShowResearchReport(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
@@ -1072,7 +1043,7 @@ ${storeLines}
       <div className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌主张访谈与记录</h3>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌主张访谈</h3>
             <p className="mt-1 text-xs text-slate-400">{interview?.completedAt ? `上次记录：${new Date(interview.completedAt).toLocaleString()}` : '请按指南访谈后保存记录'}</p>
           </div>
           <button type="button" onClick={() => setShowInterviewReport(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
@@ -1100,19 +1071,7 @@ ${storeLines}
               className="w-full resize-y rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-amber-400/30 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />
           </label>
-          {interview?.answers?.length ? (
-            <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-              <p className="text-xs font-black text-slate-900 dark:text-white">已保存访谈产出</p>
-              <div className="mt-3 space-y-3">
-                {interview.answers.map(item => (
-                  <div key={item.question}>
-                    <p className="text-xs font-bold text-slate-500">{item.question}</p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{item.answer}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
+
         </div>
         <div className="border-t border-slate-200 p-4 dark:border-slate-800">
           <button type="button" onClick={handleGenerateInterviewReport} disabled={planGenerating === 'interview'} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-xs font-bold text-white disabled:opacity-60">
@@ -1320,75 +1279,57 @@ ${storeLines}
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">数据调研摸底报告</h3>
-                </div>
-                <FileText className="h-5 w-5 text-blue-500" />
+          <section className="grid gap-3 lg:grid-cols-2">
+            {/* 数据调研报告 — compact row */}
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+              <FileText className="h-4 w-4 shrink-0 text-blue-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black text-slate-900 dark:text-white">数据调研报告</p>
+                <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{report ? report.summary : '尚未获取调研报告'}</p>
               </div>
-              <div className="mt-4 line-clamp-2 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-950 dark:text-slate-300">{report?.summary || '尚未生成摸底报告。'}</div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={handleGenerateResearchReport} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'research' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 生成品牌摸底报告
-                </button>
-                <button type="button" onClick={() => setShowResearchReport(true)} disabled={!report} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">查看摸底报告</button>
-                <button type="button" onClick={() => report && openAiContentEditor({ target: 'research_report', title: '编辑品牌摸底报告', value: report })} disabled={!report} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">编辑</button>
-              </div>
+              <button
+                type="button"
+                onClick={handleViewResearchReport}
+                disabled={Boolean(planGenerating)}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+              >
+                {planGenerating === 'research' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                品牌调研报告
+              </button>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌主张访谈与记录</h3>
-                </div>
-                <HelpCircle className="h-5 w-5 text-amber-500" />
+            {/* 品牌主张访谈 — compact row */}
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+              <HelpCircle className="h-4 w-4 shrink-0 text-amber-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black text-slate-900 dark:text-white">品牌主张访谈</p>
+                <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-slate-500">
+                  {interview?.summary || '未完成访谈，点击右侧按钮开始'}
+                </p>
               </div>
-              <div className="mt-4 line-clamp-2 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-950 dark:text-slate-300">
-                {interview?.summary || (merchantInterviewRequired ? '需要完成品牌主张访谈。系统提供访谈指南；主理人完成访谈后，在这里保存品牌主张。' : '系统提供访谈指南；主理人完成访谈后，在这里保存品牌主张。')}
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button type="button" onClick={openMerchantInterviewPanel} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  <Users className="h-3.5 w-3.5" /> 访谈指南与记录
-                </button>
-                <button type="button" onClick={openMerchantInterviewPanel} disabled={!interview} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">查看访谈产出</button>
-              </div>
+              <button
+                type="button"
+                onClick={openMerchantInterviewPanel}
+                disabled={Boolean(planGenerating)}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300"
+              >
+                <Users className="h-3 w-3" /> 访谈指南与记录
+              </button>
             </div>
           </section>
 
-          <section id="marketing-solution-inputs" className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Section 2</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">营销方案输入</h3>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {[
-                { title: '品牌定位', value: identityText('targetAudience', draftAudience) || parsedBrandPositioning || '待确认目标客群和消费场景。' },
-                { title: '品牌形象', value: identityText('brandImage', creativeIdentity.brandImage) || report?.brandImage || '待整理视觉与内容呈现方向。' },
-                { title: '品牌声音', value: identityText('brandVoice', creativeIdentity.brandVoice) || identityText('brandTone', activeBrandTone) || '亲切、具体、接地气。' },
-                { title: '核心产品/服务', value: primaryProductList().join('、') || '待从菜单/SKU 中确认。' },
-                { title: '目标人群', value: identityText('targetAudience', draftAudience) || '附近上班族、居民、家庭客等需老板确认。' },
-                { title: '推广点', value: identityText('promotionFocus', creativeIdentity.promotionFocus) || report?.growthPoints.join('；') || '招牌、位置、价格、环境、服务和活动。' },
-              ].map(item => (
-                <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
-                  <p className="text-xs font-black text-slate-900 dark:text-white">{item.title}</p>
-                  <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.value}</p>
-                </div>
-              ))}
-            </div>
-          </section>
+          {/* Section 2: 营销方案输入 — 系统逻辑，不在页面展示 */}
+
+
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 3</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 2</p>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">品牌营销方案</h3>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成品牌营销方案
+                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {annualPlan ? '重新生成营销方案' : '生成品牌营销方案'}
                 </button>
                 <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
                   编辑
@@ -1397,71 +1338,66 @@ ${storeLines}
             </div>
             {annualPlan ? (
               <div className="mt-4 space-y-4">
-                <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
-                  <p className="text-sm font-black text-slate-900 dark:text-white">{annualPlan.theme}</p>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{annualPlan.goal}</p>
+                {/* Annual overview */}
+                <div className="rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 p-4 dark:from-purple-950/20 dark:to-slate-950">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-slate-900 dark:text-white">{annualPlan.theme}</p>
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{annualPlan.goal}</p>
+                    </div>
+                    {annualPlan.metrics?.length ? (
+                      <span className="shrink-0 rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                        {annualPlan.metrics.length} 项指标
+                      </span>
+                    ) : null}
+                  </div>
                   {annualPlan.metrics?.length ? (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {annualPlan.metrics.slice(0, 6).map(metric => (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {annualPlan.metrics.map(metric => (
                         <span key={metric} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">{metric}</span>
                       ))}
                     </div>
                   ) : null}
                 </div>
+                {/* Quarter tabs */}
                 {annualQuarterPlans.length ? (
-                  <div className="grid gap-3 xl:grid-cols-2">
-                    {annualQuarterPlans.map(item => (
-                      <div key={item.quarter} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <p className="text-xs font-black text-slate-900 dark:text-white">{item.quarter} · {item.focus}</p>
-                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.strategy}</p>
-                          </div>
-                          {item.campaigns.length ? (
-                            <p className="shrink-0 text-[11px] font-bold text-purple-600">{item.campaigns.slice(0, 2).join(' / ')}</p>
-                          ) : null}
-                        </div>
-                        {item.promotionPoints.length ? (
-                          <div className="mt-3 grid gap-2">
-                            {item.promotionPoints.slice(0, 4).map(point => (
-                              <div key={`${item.quarter}-${point.name}`} className="rounded-lg border border-white bg-white p-2 text-xs dark:border-slate-800 dark:bg-slate-900">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="font-black text-slate-800 dark:text-slate-100">{point.name}</span>
-                                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-200">{point.suggestedMonthlyPosts} 次/月</span>
-                                  {point.platforms.slice(0, 3).map(platform => (
-                                    <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{platform}</span>
-                                  ))}
-                                </div>
-                                <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                        {item.monthlyFocus.length ? (
-                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                            {item.monthlyFocus.map(month => (
-                              <div key={`${item.quarter}-${month.month}`} className="rounded-lg bg-white p-2 dark:bg-slate-900">
-                                <p className="text-[10px] font-black text-purple-600">{month.month}</p>
-                                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{month.focus}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    ))}
-                  </div>
+                  <QuarterPlanTabs
+                    annualQuarterPlans={annualQuarterPlans}
+                    quarterlyPlans={brandPlanData.quarterlyPlans || []}
+                    planGenerating={planGenerating}
+                    onGenerateQuarter={async (quarter) => {
+                      setPlanGenerating('quarter')
+                      try {
+                        await runBrandPlanAction('generate_quarter_plan', `${quarter} 季度营销方案已生成`, { quarter })
+                      } finally {
+                        setPlanGenerating(null)
+                      }
+                    }}
+                    onEditQuarter={(quarterPlan) => openAiContentEditor({ target: 'quarter_plan', title: `${quarterPlan.quarter} 季度营销方案`, value: quarterPlan })}
+                  />
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {annualPlan.quarterlyFocus.map(item => (
                       <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
                         <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter}</p>
                         <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
+                        {item.campaigns.length ? (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {item.campaigns.map(c => <span key={c} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:bg-purple-950 dark:text-purple-200">{c}</span>)}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            ) : <p className="mt-4 text-xs text-slate-500">由 AMC-Kanban 读取五块输入，生成未来四个季度的品牌营销方向、重点推广点和月度发布方向。</p>}
+            ) : (
+              <div className="mt-4 rounded-xl border border-dashed border-purple-200 bg-purple-50/50 p-6 text-center dark:border-purple-900 dark:bg-purple-950/10">
+                <Goal className="mx-auto mb-3 h-8 w-8 text-purple-300" />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">尚未生成品牌营销方案</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-400">通过 LLM 读取品牌信息、调研报告、访谈记录和订阅运营策略，生成包含四个季度推广策略、推广点和月度内容方向的全年计划。</p>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -1743,4 +1679,172 @@ ${storeLines}
     </motion.div>
   )
 
+}
+
+// ─── QuarterPlanTabs ──────────────────────────────────────────────────────────
+
+type AnnualQuarterPlan = {
+  quarter: string
+  strategy: string
+  focus: string
+  promotionPoints: Array<{
+    name: string
+    rationale: string
+    targetAudience?: string
+    customerAction: string
+    platforms: string[]
+    suggestedMonthlyPosts: number
+  }>
+  campaigns: string[]
+  contentThemes: string[]
+  monthlyFocus: Array<{ month: string; focus: string; promotionPoints: string[] }>
+}
+
+type StandaloneQuarterPlan = {
+  quarter: string
+  generatedAt: string
+  objective: string
+  monthlyFocus: Array<{ month: string; focus: string }>
+  contentDirections: string[]
+  promotionPoints?: Array<{
+    name: string
+    rationale: string
+    customerAction: string
+    platforms: string[]
+    suggestedMonthlyPosts: number
+  }>
+}
+
+function QuarterPlanTabs({
+  annualQuarterPlans,
+  quarterlyPlans,
+  planGenerating,
+  onGenerateQuarter,
+  onEditQuarter,
+}: {
+  annualQuarterPlans: AnnualQuarterPlan[]
+  quarterlyPlans: StandaloneQuarterPlan[]
+  planGenerating: string | null
+  onGenerateQuarter: (quarter: string) => Promise<void>
+  onEditQuarter: (plan: StandaloneQuarterPlan) => void
+}) {
+  const [activeQuarter, setActiveQuarter] = useState(annualQuarterPlans[0]?.quarter || 'Q1')
+  const activeAnnual = annualQuarterPlans.find(q => q.quarter === activeQuarter)
+  const activeStandalone = quarterlyPlans.find(q => q.quarter === activeQuarter)
+
+  return (
+    <div>
+      {/* Quarter tab strip */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {annualQuarterPlans.map(q => (
+          <button
+            key={q.quarter}
+            type="button"
+            onClick={() => setActiveQuarter(q.quarter)}
+            className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-black transition-colors ${
+              activeQuarter === q.quarter
+                ? 'bg-purple-600 text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
+            }`}
+          >
+            {q.quarter}
+          </button>
+        ))}
+      </div>
+
+      {activeAnnual && (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+          {/* Quarter header */}
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black text-purple-600">{activeAnnual.quarter}</p>
+              <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{activeAnnual.focus}</p>
+              <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{activeAnnual.strategy}</p>
+            </div>
+            {activeAnnual.campaigns.length ? (
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                {activeAnnual.campaigns.slice(0, 3).map(c => (
+                  <span key={c} className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">{c}</span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Promotion points */}
+          {activeAnnual.promotionPoints.length ? (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">推广点</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {activeAnnual.promotionPoints.map(point => (
+                  <div key={point.name} className="rounded-lg border border-white bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-900">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-black text-slate-800 dark:text-slate-100">{point.name}</span>
+                      <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-200">
+                        {point.suggestedMonthlyPosts} 次/月
+                      </span>
+                      {point.platforms.slice(0, 3).map(platform => (
+                        <span key={platform} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                          {platform}
+                        </span>
+                      ))}
+                    </div>
+                    {point.rationale && (
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
+                    )}
+                    {point.customerAction && (
+                      <p className="mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">目标行动：{point.customerAction}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Monthly focus */}
+          {activeAnnual.monthlyFocus.length ? (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">月度计划</p>
+              <div className="grid gap-1.5 sm:grid-cols-3">
+                {activeAnnual.monthlyFocus.map(month => (
+                  <div key={month.month} className="rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
+                    <p className="text-[10px] font-black text-purple-600">{month.month}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{month.focus}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Standalone quarter plan or generate CTA */}
+          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
+            {activeStandalone ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">独立季度方案</p>
+                  <button
+                    type="button"
+                    onClick={() => onEditQuarter(activeStandalone)}
+                    className="text-[10px] font-bold text-purple-600 hover:text-purple-700"
+                  >
+                    编辑
+                  </button>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{activeStandalone.objective}</p>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onGenerateQuarter(activeAnnual.quarter)}
+                disabled={Boolean(planGenerating)}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-bold text-purple-700 hover:bg-purple-50 disabled:opacity-60 dark:border-purple-900 dark:bg-slate-900 dark:text-purple-300"
+              >
+                {planGenerating === 'quarter' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                深化生成 {activeAnnual.quarter} 季度方案
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
