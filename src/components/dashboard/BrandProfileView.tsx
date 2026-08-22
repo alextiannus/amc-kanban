@@ -301,12 +301,40 @@ function publishingFreqPayload(schedule: PublishingScheduleDraft) {
   }
 }
 
+const CONTENT_PLANNING_LEAD_DAYS = 7
+
+function formatLocalDateValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function formatLocalMonthValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function minimumContentPlanDate() {
+  const today = new Date()
+  const minimum = new Date(today.getFullYear(), today.getMonth(), today.getDate() + CONTENT_PLANNING_LEAD_DAYS)
+  return formatLocalDateValue(minimum)
+}
+
+function minimumContentPlanMonthValue() {
+  return minimumContentPlanDate().slice(0, 7)
+}
+
+function firstSchedulableDateInMonth(month: string) {
+  const minimumDate = minimumContentPlanDate()
+  const monthStart = `${month}-01`
+  return monthStart < minimumDate && month === minimumDate.slice(0, 7) ? minimumDate : monthStart
+}
+
 function firstCompleteNaturalMonthValue(dateValue?: string | null) {
   const source = dateValue ? new Date(dateValue) : new Date()
   const safeDate = Number.isNaN(source.getTime()) ? new Date() : source
   const monthOffset = safeDate.getDate() <= 1 ? 0 : 1
   const start = new Date(safeDate.getFullYear(), safeDate.getMonth() + monthOffset, 1)
-  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`
+  const naturalMonth = formatLocalMonthValue(start)
+  const minimumMonth = minimumContentPlanMonthValue()
+  return naturalMonth < minimumMonth ? minimumMonth : naturalMonth
 }
 
 function isMonthInPlan(month: string, plan: { startMonth?: string; endMonth?: string; quarter?: string }) {
@@ -1048,6 +1076,12 @@ ${storeLines}
       showToastVal('请至少保留 1 条月度发布内容。', 'info')
       return
     }
+    const minimumMonth = minimumContentPlanMonthValue()
+    if (calendarMonth < minimumMonth) {
+      setCalendarMonth(minimumMonth)
+      showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排，已切换到可排期月份。`, 'info')
+      return
+    }
     setPlanGenerating('calendar')
     try {
       await runBrandPlanAction('generate_publishing_calendar', '内容创建和发布计划已生成', {
@@ -1092,12 +1126,18 @@ ${storeLines}
   }
 
   const handleAddCalendarItem = () => {
+    const minimumMonth = minimumContentPlanMonthValue()
+    if (calendarMonth < minimumMonth) {
+      setCalendarMonth(minimumMonth)
+      showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排，已切换到可排期月份。`, 'info')
+      return
+    }
     const platform = activePublishingPlatforms[0] || PUBLISHING_PLATFORM_OPTIONS[0]
     updateCalendarMonthItems((items) => [
       ...items,
       {
         id: `${calendarMonth}-manual-${Date.now()}`,
-        date: `${calendarMonth}-01`,
+        date: firstSchedulableDateInMonth(calendarMonth),
         title: '新增内容策划',
         platform: platform.label,
         platformSlug: platform.slug,
@@ -1219,6 +1259,9 @@ ${storeLines}
       || brandPlanData.quarterlyPlans.find(item => item.quarter === selectedCalendarQuarter)
     : undefined
   const calendarQuarterReady = Boolean(currentQuarterPlan || currentAnnualQuarterPlan)
+  const minimumCalendarDate = minimumContentPlanDate()
+  const minimumCalendarMonth = minimumCalendarDate.slice(0, 7)
+  const canGoPreviousCalendarMonth = addMonths(calendarMonth, -1) >= minimumCalendarMonth
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
   const activePublishingPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) =>
     publishingScheduleDraft[platform.slug] !== undefined ||
@@ -1787,9 +1830,22 @@ ${storeLines}
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">内容创建和发布计划</h3>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, -1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">上个月</button>
-                <input type="month" value={calendarMonth} onChange={event => setCalendarMonth(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700 dark:bg-slate-950" />
-                <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">下个月</button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarMonth(addMonths(calendarMonth, -1))}
+                  disabled={!canGoPreviousCalendarMonth}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:border-slate-800 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
+                >
+                  上个月
+                </button>
+                <input
+                  type="month"
+                  value={calendarMonth}
+                  min={minimumCalendarMonth}
+                  onChange={event => setCalendarMonth(event.target.value < minimumCalendarMonth ? minimumCalendarMonth : event.target.value)}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">下个月</button>
                 <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !calendarQuarterReady} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
                   {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成内容创建和发布计划
                 </button>
@@ -1838,7 +1894,14 @@ ${storeLines}
                     <input
                       type="date"
                       value={item.date}
-                      onChange={(event) => handleUpdateCalendarItem(item.id, index, { date: event.target.value })}
+                      min={minimumCalendarDate}
+                      onChange={(event) => {
+                        const nextDate = event.target.value < minimumCalendarDate ? minimumCalendarDate : event.target.value
+                        if (nextDate !== event.target.value) {
+                          showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排。`, 'info')
+                        }
+                        handleUpdateCalendarItem(item.id, index, { date: nextDate })
+                      }}
                       className="w-32 rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-black text-white outline-none dark:bg-white dark:text-slate-900"
                     />
                     <div className="flex gap-1.5">

@@ -308,7 +308,7 @@ export async function runBrandPlanAction(input: {
     })
   } else if (input.action === 'generate_publishing_calendar') {
     requireQuarterPlan(current)
-    const month = normalizeMonth(input.body?.month)
+    const month = clampSchedulableCalendarMonth(normalizeMonth(input.body?.month))
     const monthItems = await buildPublishingMonth(brand, month, latestInterview, current, input.body?.publishingFreqOverride)
     next = {
       ...current,
@@ -709,8 +709,10 @@ async function saveWorkspacePatch(
   }
 
   if (target === 'calendar_month') {
-    const month = normalizeMonth(body?.month)
-    const items = arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
+    const month = clampSchedulableCalendarMonth(normalizeMonth(body?.month))
+    const items = clampCalendarItemsToMinimumDate(
+      arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
+    )
     const publishingCalendar = {
       generatedAt: new Date().toISOString(),
       generationMode: 'AMC_CONTENT_ASSISTED' as const,
@@ -1005,6 +1007,7 @@ async function regeneratePublishingCalendarItem(
   if (!candidate) {
     return {
       ...item,
+      date: clampCalendarDateToMinimum(item.date),
       selectedCreativeCandidateId: undefined,
       materialRequirements: [`补充“${item.product}”真实门店画面或顾客场景素材。`],
       contentLibraryGap: 'amc-content 暂不可用，已保留人工素材要求。',
@@ -1012,6 +1015,7 @@ async function regeneratePublishingCalendarItem(
   }
   return {
     ...item,
+    date: clampCalendarDateToMinimum(item.date),
     title: calendarItemTitle(item.product, candidate),
     contentType: calendarContentType(candidate, 0),
     planning: calendarPlanningText(item.product, candidate, ''),
@@ -2112,9 +2116,53 @@ const MARKETING_PLAN_PLATFORMS = [
   { slug: 'xiaohongshu', label: 'Xiaohongshu' },
 ]
 
+const CONTENT_PLANNING_LEAD_DAYS = 7
+
+function datePartsInSingapore(date: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day),
+  }
+}
+
+function minimumContentPlanDateValue(base = new Date()) {
+  const parts = datePartsInSingapore(base)
+  const minimum = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + CONTENT_PLANNING_LEAD_DAYS))
+  const next = datePartsInSingapore(minimum)
+  return `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`
+}
+
+function clampSchedulableCalendarMonth(month: string) {
+  const minimumMonth = minimumContentPlanDateValue().slice(0, 7)
+  return month < minimumMonth ? minimumMonth : month
+}
+
+function clampCalendarDateToMinimum(date: string) {
+  const minimumDate = minimumContentPlanDateValue()
+  return date && date >= minimumDate ? date : minimumDate
+}
+
+function clampCalendarItemsToMinimumDate(items: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]) {
+  return items.map((item) => ({
+    ...item,
+    date: clampCalendarDateToMinimum(text(item.date)),
+  }))
+}
+
 function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackPlatforms: string[] = [], monthlyQuota = 0) {
   const [year, monthNumber] = month.split('-').map(Number)
   const daysInMonth = new Date(year, monthNumber, 0).getDate()
+  const minimumDate = minimumContentPlanDateValue()
+  const minimumMonth = minimumDate.slice(0, 7)
+  const minimumDayInMonth = month === minimumMonth ? Number(minimumDate.slice(8, 10)) : 1
   const publishingFreq = normalizePublishingFreq(value)
   const enabledPlatformSlugs = Object.keys(publishingFreq?.platforms || {})
   const platforms = enabledPlatformSlugs.length
@@ -2126,7 +2174,7 @@ function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackP
     ? clampPostCount(monthlyQuota)
     : resolveMonthlyPostCount(publishingFreq, daysInMonth)
   const platformSlots = buildPlatformSlotSequence(platforms, postCount, publishingFreq)
-  const firstDay = Math.min(3, daysInMonth)
+  const firstDay = Math.min(daysInMonth, Math.max(minimumDayInMonth, Math.min(3, daysInMonth)))
   const lastDay = Math.max(firstDay, daysInMonth - 2)
 
   return Array.from({ length: postCount }, (_, index) => {
