@@ -802,7 +802,7 @@ export default function SystemTab({
             <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <div className="flex items-start justify-between gap-4 pt-2">
                 <p className="max-w-3xl text-xs text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
-                  管理 AMC-Kanban 调用 LLM 时使用的 Prompt。品牌营销方案使用 <span className="font-mono text-violet-600">marketing_plan_generation</span>，保存后下一次生成即生效。
+                  管理 AMC-Kanban 调用 LLM 时使用的 Prompt。品牌营销方案使用 <span className="font-mono text-violet-600">marketing_plan_generation</span>，内容计划创意审核使用 <span className="font-mono text-violet-600">calendar_creative_review</span>，保存后下一次生成即生效。
                 </p>
                 <button
                   type="button"

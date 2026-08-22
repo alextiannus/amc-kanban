@@ -106,6 +106,14 @@ type BrandPlanWorkspaceData = {
     generatedAt: string
     goal: string
     theme: string
+    strategyPrinciples?: string[]
+    platformStrategy?: Array<{
+      platform: string
+      role: string
+      contentApproach: string
+      customerAction: string
+    }>
+    contentPillars?: string[]
     quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[]; year?: number; startMonth?: string; endMonth?: string; periodLabel?: string }>
     quarterlyPlans?: Array<{
       quarter: string
@@ -365,6 +373,8 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'growth_research_failed') return '品牌摸底报告没有生成成功，请稍后重试。'
   if (code === 'growth_research_create_failed') return '品牌摸底没有启动成功，请稍后重试。'
   if (code.startsWith('marketing_plan_llm_failed')) return '营销计划没有生成成功，请检查模型配置后重试。'
+  if (code === 'calendar_creative_review_llm_failed') return '内容创意审核没有生成成功，请检查模型配置后重试。'
+  if (code === 'calendar_creative_candidate_missing') return '没有找到可用的内容创意候选，请先补充或重新同步 amc-content。'
   return code || '操作失败，请重试'
 }
 
@@ -896,6 +906,16 @@ ${storeLines}
     }
   }
 
+  const updateEditingAnnualPlan = (
+    updater: (draft: NonNullable<BrandPlanWorkspaceData['annualPlan']>) => NonNullable<BrandPlanWorkspaceData['annualPlan']>
+  ) => {
+    setEditingAiJson(current => {
+      const draft = parseAnnualPlanDraft(current)
+      if (!draft) return current
+      return JSON.stringify(updater(draft), null, 2)
+    })
+  }
+
   const saveIdentityField = async (field: BrandIdentityFieldKey, value: unknown) => {
     const current = identityField(field)
     const res = await fetch(`/api/brands/${brandId}/identity`, {
@@ -1269,6 +1289,7 @@ ${storeLines}
   const growthReportMarkdown = report?.reportMarkdown || report?.reportContent || ''
   const interview = merchantInterview
   const annualPlan = brandPlanData.annualPlan
+  const editingAnnualPlanDraft = editingAiContent?.target === 'annual_plan' ? parseAnnualPlanDraft(editingAiJson) : null
   const brandPlanUpdated = Boolean(brandPlanData.researchReport || merchantInterview)
   const selectedCalendarQuarter = quarterForMonthValue(calendarMonth)
   const annualQuarterPlans = Array.isArray(annualPlan?.quarterlyPlans) ? annualPlan.quarterlyPlans : []
@@ -1796,6 +1817,44 @@ ${storeLines}
                       ))}
                     </div>
                   ) : null}
+                  {safeArray(annualPlan.strategyPrinciples).length || safeArray(annualPlan.contentPillars).length ? (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      {safeArray(annualPlan.strategyPrinciples).length ? (
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">策略原则</p>
+                          <ul className="mt-2 space-y-1.5">
+                            {safeArray(annualPlan.strategyPrinciples).map(item => (
+                              <li key={item} className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {safeArray(annualPlan.contentPillars).length ? (
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">内容支柱</p>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {safeArray(annualPlan.contentPillars).map(item => (
+                              <span key={item} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{item}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {safeArray(annualPlan.platformStrategy).length ? (
+                    <div className="mt-4">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">平台分工</p>
+                      <div className="mt-2 grid gap-2 md:grid-cols-2">
+                        {safeArray(annualPlan.platformStrategy).map(item => (
+                          <div key={`${item.platform}-${item.role}`} className="rounded-lg bg-white p-3 text-xs dark:bg-slate-900">
+                            <p className="font-black text-slate-800 dark:text-slate-100">{item.platform}：{item.role}</p>
+                            <p className="mt-1 leading-relaxed text-slate-500">{item.contentApproach}</p>
+                            {item.customerAction ? <p className="mt-1 font-bold text-emerald-600 dark:text-emerald-400">行动：{item.customerAction}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   {annualPlan.llmError ? (
                     <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-relaxed text-amber-700 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
                       这次没有生成完整计划，已保留一版基础内容。请检查模型配置后重新生成。
@@ -2177,12 +2236,155 @@ ${storeLines}
               <button type="button" onClick={() => setEditingAiContent(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
             </div>
             <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-              <textarea
-                value={editingAiJson}
-                onChange={event => setEditingAiJson(event.target.value)}
-                spellCheck={false}
-                className="min-h-[520px] flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-              />
+              {editingAnnualPlanDraft ? (
+                <div className="space-y-4">
+                  <label className="block">
+                    <span className="text-xs font-black text-slate-500">计划主题</span>
+                    <input
+                      value={editingAnnualPlanDraft.theme || ''}
+                      onChange={event => updateEditingAnnualPlan(draft => ({ ...draft, theme: event.target.value }))}
+                      className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-black text-slate-500">年度目标</span>
+                    <textarea
+                      value={editingAnnualPlanDraft.goal || ''}
+                      onChange={event => updateEditingAnnualPlan(draft => ({ ...draft, goal: event.target.value }))}
+                      rows={3}
+                      className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                  </label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-500">策略原则</span>
+                      <textarea
+                        value={listToLines(editingAnnualPlanDraft.strategyPrinciples)}
+                        onChange={event => updateEditingAnnualPlan(draft => ({ ...draft, strategyPrinciples: linesToList(event.target.value) }))}
+                        rows={5}
+                        className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-500">内容支柱</span>
+                      <textarea
+                        value={listToLines(editingAnnualPlanDraft.contentPillars)}
+                        onChange={event => updateEditingAnnualPlan(draft => ({ ...draft, contentPillars: linesToList(event.target.value) }))}
+                        rows={5}
+                        className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-xs font-black text-slate-500">验收指标</span>
+                    <textarea
+                      value={listToLines(editingAnnualPlanDraft.metrics)}
+                      onChange={event => updateEditingAnnualPlan(draft => ({ ...draft, metrics: linesToList(event.target.value) }))}
+                      rows={4}
+                      className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                  </label>
+                  {safeArray(editingAnnualPlanDraft.platformStrategy).length ? (
+                    <div>
+                      <p className="text-xs font-black text-slate-500">平台分工</p>
+                      <div className="mt-2 space-y-2">
+                        {safeArray(editingAnnualPlanDraft.platformStrategy).map((platform, index) => (
+                          <div key={`${platform.platform}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950">
+                            <div className="grid gap-2 md:grid-cols-2">
+                              <input
+                                value={platform.role || ''}
+                                onChange={event => updateEditingAnnualPlan(draft => {
+                                  const next = safeArray(draft.platformStrategy).map((item, itemIndex) => itemIndex === index ? { ...item, role: event.target.value } : item)
+                                  return { ...draft, platformStrategy: next }
+                                })}
+                                placeholder={`${platform.platform} 角色`}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-900"
+                              />
+                              <input
+                                value={platform.customerAction || ''}
+                                onChange={event => updateEditingAnnualPlan(draft => {
+                                  const next = safeArray(draft.platformStrategy).map((item, itemIndex) => itemIndex === index ? { ...item, customerAction: event.target.value } : item)
+                                  return { ...draft, platformStrategy: next }
+                                })}
+                                placeholder="顾客行动"
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                              />
+                            </div>
+                            <textarea
+                              value={platform.contentApproach || ''}
+                              onChange={event => updateEditingAnnualPlan(draft => {
+                                const next = safeArray(draft.platformStrategy).map((item, itemIndex) => itemIndex === index ? { ...item, contentApproach: event.target.value } : item)
+                                return { ...draft, platformStrategy: next }
+                              })}
+                              rows={2}
+                              placeholder="内容打法"
+                              className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-900"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {safeArray(editingAnnualPlanDraft.quarterlyPlans).length ? (
+                    <div>
+                      <p className="text-xs font-black text-slate-500">季度计划</p>
+                      <div className="mt-2 space-y-3">
+                        {safeArray(editingAnnualPlanDraft.quarterlyPlans).map((quarter, index) => (
+                          <div key={`${quarter.periodLabel || quarter.quarter}-${index}`} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                            <p className="text-xs font-black text-purple-600">{quarterDisplayLabel(quarter)}</p>
+                            <input
+                              value={quarter.focus || ''}
+                              onChange={event => updateEditingAnnualPlan(draft => {
+                                const next = safeArray(draft.quarterlyPlans).map((item, itemIndex) => itemIndex === index ? { ...item, focus: event.target.value } : item)
+                                return { ...draft, quarterlyPlans: next }
+                              })}
+                              className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950"
+                            />
+                            <textarea
+                              value={quarter.strategy || ''}
+                              onChange={event => updateEditingAnnualPlan(draft => {
+                                const next = safeArray(draft.quarterlyPlans).map((item, itemIndex) => itemIndex === index ? { ...item, strategy: event.target.value } : item)
+                                return { ...draft, quarterlyPlans: next }
+                              })}
+                              rows={2}
+                              className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-950"
+                            />
+                            <div className="mt-2 grid gap-2 md:grid-cols-2">
+                              <textarea
+                                value={listToLines(quarter.campaigns)}
+                                onChange={event => updateEditingAnnualPlan(draft => {
+                                  const next = safeArray(draft.quarterlyPlans).map((item, itemIndex) => itemIndex === index ? { ...item, campaigns: linesToList(event.target.value) } : item)
+                                  return { ...draft, quarterlyPlans: next }
+                                })}
+                                rows={3}
+                                placeholder="Campaign，每行一个"
+                                className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                              />
+                              <textarea
+                                value={listToLines(quarter.contentThemes)}
+                                onChange={event => updateEditingAnnualPlan(draft => {
+                                  const next = safeArray(draft.quarterlyPlans).map((item, itemIndex) => itemIndex === index ? { ...item, contentThemes: linesToList(event.target.value) } : item)
+                                  return { ...draft, quarterlyPlans: next }
+                                })}
+                                rows={3}
+                                placeholder="内容主题，每行一个"
+                                className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <textarea
+                  value={editingAiJson}
+                  onChange={event => setEditingAiJson(event.target.value)}
+                  spellCheck={false}
+                  className="min-h-[520px] flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                />
+              )}
               <button
                 type="button"
                 onClick={handleSaveAiContent}
@@ -2286,6 +2488,28 @@ function quarterDisplayLabel(quarter: { quarter: string; periodLabel?: string; s
 
 function safeArray<T>(value: T[] | undefined | null) {
   return Array.isArray(value) ? value : []
+}
+
+function parseAnnualPlanDraft(json: string): NonNullable<BrandPlanWorkspaceData['annualPlan']> | null {
+  try {
+    const value = JSON.parse(json)
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as NonNullable<BrandPlanWorkspaceData['annualPlan']>
+      : null
+  } catch {
+    return null
+  }
+}
+
+function linesToList(value: string) {
+  return value
+    .split('\n')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function listToLines(value: string[] | undefined | null) {
+  return safeArray(value).join('\n')
 }
 
 function QuarterPlanTabs({

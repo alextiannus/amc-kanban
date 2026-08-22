@@ -29,6 +29,7 @@ type BrandPlanCalendarItem = {
   matchedTags?: string[]
   matchedInspirations?: string[]
   selectedCreativeCandidateId?: string
+  creativeMechanism?: string
   sampleVideoUrl?: string
   sampleOriginalUrl?: string
   sampleThumbnailUrl?: string
@@ -1237,6 +1238,7 @@ async function buildPublishingMonth(
       sampleHit: '',
       status: '待确认',
       selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
+      creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate, index }),
       matchedTags: stringList(candidate?.matchedTags),
       matchedInspirations: stringList(candidate?.matchedInspirations),
       sampleVideoUrl: sampleLinks.videoUrl,
@@ -1271,13 +1273,7 @@ async function regeneratePublishingCalendarItem(
   const candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
   const sampleLinks = calendarSampleLinks(candidate)
   if (!candidate) {
-    return {
-      ...item,
-      date: clampCalendarDateToMinimum(item.date),
-      selectedCreativeCandidateId: undefined,
-      materialRequirements: [`补充“${item.product}”真实门店画面或顾客场景素材。`],
-      contentLibraryGap: 'amc-content 暂不可用，已保留人工素材要求。',
-    }
+    throw new BrandPlanError('calendar_creative_candidate_missing', 502)
   }
   const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [{
     ...item,
@@ -1301,6 +1297,7 @@ async function regeneratePublishingCalendarItem(
     }),
     sampleHit: '',
     selectedCreativeCandidateId: text(candidate.creativeCandidateId),
+    creativeMechanism: calendarCreativeMechanism({ brand, product: item.product, promotionPoint: point, platformSlug: platform, candidate, index: 0 }),
     matchedTags: stringList(candidate.matchedTags),
     matchedInspirations: stringList(candidate.matchedInspirations),
     sampleVideoUrl: sampleLinks.videoUrl,
@@ -1602,8 +1599,9 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const shots = calendarReplicationShots(input)
   const voiceover = calendarScriptLines(candidate, 'voiceover').slice(0, 3)
   const subtitles = calendarScriptLines(candidate, 'subtitles').slice(0, 3)
+  const mechanism = calendarCreativeMechanism(input)
   return [
-    `内容创意：保留灵感来源的节奏和镜头逻辑，全部换成${brandName}的${product}真实素材。`,
+    `内容创意：${mechanism}`,
     `开场：${calendarHookText(input)}`,
     shots.length ? `分镜脚本：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
     voiceover.length ? `口播方向：${voiceover.map((line) => adaptCalendarScriptText(line, input)).join(' / ')}` : '',
@@ -1612,6 +1610,51 @@ function calendarPlanningText(input: CalendarCopyContext) {
     input.interviewFocus ? `可带一句主理人原话：${cleanCalendarText(input.interviewFocus, '')}。` : '',
     `收尾：引导顾客${customerAction}。`,
   ].filter(Boolean).join('\n')
+}
+
+function calendarCreativeMechanism(input: CalendarCopyContext) {
+  const product = productDisplayName(input.product)
+  const brandName = brandDisplayName(input.brand)
+  const candidate = input.candidate || null
+  const textBlob = [
+    text(candidate?.contentAngle),
+    text(candidate?.recommendationReason),
+    stringList(candidate?.matchedTags).join(' '),
+    stringList(candidate?.matchedInspirations).join(' '),
+    text(candidate?.contentFormat),
+  ].join(' ').toLowerCase()
+  if (/price|\\$|人均|价格|deal|offer|discount|套餐/.test(textBlob)) {
+    return `用价格和分量先给判断：拍清${product}适合几个人吃、点什么更稳，最后补地址和预订入口。`
+  }
+  if (/menu|choice|rank|top|list|菜单|选择|推荐|排行/.test(textBlob)) {
+    return `做一条点单选择题：先抛“第一次来怎么点”，再用 2-3 个镜头讲清${product}和搭配菜。`
+  }
+  if (/review|ugc|customer|顾客|评价|口碑/.test(textBlob)) {
+    return `用顾客视角写：从入座、上桌、第一口到结账前的真实感受，把${brandName}值得来的理由讲具体。`
+  }
+  if (/location|map|near|route|地址|路线|附近|google/.test(textBlob)) {
+    return `做一条路线内容：先说附近地标或地址，再接${product}上桌画面，让顾客知道怎么来、来了点什么。`
+  }
+  if (/story|owner|chef|behind|老板|主理人|制作|后厨/.test(textBlob)) {
+    return `让人看到出品过程：从备菜、下锅、上桌到老板推荐，把${product}的锅气和细节拍出来。`
+  }
+  const platform = normalizePlatformSlug(input.platformSlug)
+  const variants = platform === 'xiaohongshu'
+    ? [
+        `写成本地吃饭收藏笔记：先点明适合谁来，再讲${product}口味、分量、地址和避坑提醒。`,
+        `做一条朋友聚餐决策笔记：从人数、口味、预算和拍照画面判断${brandName}适不适合。`,
+      ]
+    : platform === 'google_business'
+      ? [
+          `做门店更新：用一张清楚的${product}主图，加营业信息、地址和本周推荐理由。`,
+          `做到店前信息补齐：拍门头、菜单、${product}和座位环境，让顾客少问一步。`,
+        ]
+      : [
+          `先拍${product}最有食欲的一秒，再切到上桌、夹起、门店环境和行动入口。`,
+          `用“今天想吃重口味吗”开场，接${product}出锅、配菜和朋友分食画面。`,
+          `做一个到店小故事：从走进${brandName}、点${product}、等上桌到第一口反应。`,
+        ]
+  return variants[input.index % variants.length]
 }
 
 function calendarReplicationShots(input: CalendarCopyContext) {
@@ -1703,6 +1746,7 @@ async function reviewCalendarCreativeItemsWithLLM(
     return reviewedChunks.flat()
   }
   const brandName = brandDisplayName(brand)
+  const promptTemplate = await getPromptTemplate('calendar_creative_review')
   const payload = {
     brand: {
       name: brandName,
@@ -1726,18 +1770,14 @@ async function reviewCalendarCreativeItemsWithLLM(
       draftMaterialRequirements: item.materialRequirements || [],
       hasInspirationLink: Boolean(item.sampleVideoUrl || item.sampleOriginalUrl),
       matchedTags: item.matchedTags || [],
+      matchedInspirations: item.matchedInspirations || [],
     })),
   }
-  const prompt = [
-    '你是 AMC 的本地商家内容策划总监。请检查 amc-content 返回的灵感是否适合当前品牌，并把可用灵感改写成用户可 review 的内容计划。',
-    '只返回 JSON 对象，不要 Markdown。',
-    '返回字段：items。items 每项必须包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
-    'title：必须是当前品牌和当前商品/服务量身定制的中文标题，不要照抄灵感来源标题，不要出现文件名、话题串或英文模板感句子。',
-    'creativeSummary：用 2-3 句中文说明这条内容怎么复刻创意结构、拍什么、为什么适合当前品牌。要像给门店运营看的 brief，不要 AI 腔。',
-    'materialRequirements：3-6 条素材需求，必须具体到可采集的画面、信息或门店确认事项。',
-    'approved：如果灵感与品牌、商品、平台明显不相关则 false；false 时也要给出可执行的替代创意总结和素材需求。',
-    '禁止输出原视频标题、原视频文案、链接、文件名、原品牌名、Bao Specialty、DAILY、breakfast、Afternoon Tea、bakery、mp4、#武冈、破酥包。',
-    '不要承诺流量、排名、销量或到店人数；只写可执行内容和素材要求。',
+  const prompt = renderPromptTemplate(promptTemplate?.template || '', {
+    inputJson: `输入 JSON：${JSON.stringify(payload)}`,
+  }) || [
+    '你是 AMC 的本地商家内容策划总监。请把输入改成当前品牌能直接执行的内容计划。',
+    '只返回 JSON 对象。items 每项包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
     `输入 JSON：${JSON.stringify(payload)}`,
   ].join('\n\n')
   try {
@@ -1753,11 +1793,11 @@ async function reviewCalendarCreativeItemsWithLLM(
     })
     const parsed = parseJsonObject(result.text)
     const reviewed = arrayValue(parsed?.items).map(objectValue)
-    if (!reviewed.length) return fallbackReviewedCalendarItems(brand, items)
+    if (!reviewed.length) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
     const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
     return items.map((item) => {
       const review = byId.get(item.id)
-      if (!review) return fallbackReviewedCalendarItems(brand, [item])[0]
+      if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
       const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
       const materialRequirements = stringList(review.materialRequirements)
@@ -1773,8 +1813,9 @@ async function reviewCalendarCreativeItemsWithLLM(
         materialRequirements: materialRequirements.length ? materialRequirements : item.materialRequirements,
       }
     })
-  } catch {
-    return fallbackReviewedCalendarItems(brand, items)
+  } catch (error) {
+    if (error instanceof BrandPlanError) throw error
+    throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
   }
 }
 
@@ -1787,7 +1828,7 @@ function fallbackReviewedCalendarItems(brand: BrandPlanBrand, items: BrandPlanCa
       ...item,
       planning: mergeReviewedCalendarPlanning(
         item.planning,
-        `这条内容保留灵感来源的节奏和镜头结构，但画面全部换成${brandName}的${productPhrase}。重点拍真实出品、上桌过程和顾客能立刻看懂的到店理由，方便主理人按素材清单安排拍摄。`,
+        `先拍${productPhrase}上桌和夹起的近景，再补一组门店环境、点单理由和到店信息。画面要能让顾客看清分量、口味和适合什么场景，拍完可以直接给运营排版发布。`,
         '',
         true
       ),
@@ -2157,13 +2198,19 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
   const compactInput = compactMarketingPlanInputForLLM(input, scope)
   const compactInputJson = JSON.stringify(compactInput)
-  const prompt = [
+  const fallbackPrompt = [
     '你是 AMC 的本地商家品牌营销策划负责人。请基于输入生成可执行的滚动营销方案。',
     schemaInstruction,
     '写法要求：中文、短句、具体、像给门店运营团队的计划；避免 AI 腔、空泛口号和无法验证承诺。',
     'JSON 字符串中不要换行，不要使用尾逗号。',
     `输入 JSON：${compactInputJson}`,
   ].join('\n\n')
+  const prompt = promptTemplate?.template
+    ? renderPromptTemplate(promptTemplate.template, {
+        schemaInstruction,
+        inputJson: `输入 JSON：${compactInputJson}`,
+      })
+    : fallbackPrompt
   const promptTrace = {
     taskKey: 'marketing_plan_generation',
     promptTemplateId: promptTemplate?.id || null,
