@@ -1542,11 +1542,12 @@ function fallbackReviewedCalendarItems(brand: BrandPlanBrand, items: BrandPlanCa
   const brandName = brandDisplayName(brand)
   return items.map((item) => {
     const product = productDisplayName(item.product)
+    const productPhrase = brandName.includes(product) ? `这锅招牌${product}` : product
     return {
       ...item,
       planning: mergeReviewedCalendarPlanning(
         item.planning,
-        `这条内容保留灵感来源的节奏和镜头结构，但画面全部换成${brandName}的${product}。重点拍真实出品、上桌过程和顾客能立刻看懂的到店理由，方便主理人按素材清单安排拍摄。`,
+        `这条内容保留灵感来源的节奏和镜头结构，但画面全部换成${brandName}的${productPhrase}。重点拍真实出品、上桌过程和顾客能立刻看懂的到店理由，方便主理人按素材清单安排拍摄。`,
         '',
         true
       ),
@@ -1600,6 +1601,7 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
   const cleaned = cleanCalendarText(value, fallback)
     .replace(/\b(Bao Specialty Cafe|Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery)\b/gi, '')
     .replace(/查看原视频链接|查看参考视频|参考内容|样板爆品/g, '')
+    .replace(/([\u4e00-\u9fff])\s+的/g, '$1的')
     .replace(/\s+/g, ' ')
     .trim()
   return cleaned || fallback
