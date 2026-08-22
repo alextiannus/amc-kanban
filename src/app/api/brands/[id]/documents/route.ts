@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: Params) {
     userRole = session.user.role
   } else {
     userId = authenticatedAgent!.id
-    userType = 'AI_AGENT'
+    userType = authenticatedAgent!.type ?? 'HUMAN'
     userRole = 'USER'
   }
 

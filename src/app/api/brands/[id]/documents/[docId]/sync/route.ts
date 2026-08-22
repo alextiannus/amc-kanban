@@ -42,7 +42,7 @@ export async function POST(request: Request, { params }: Params) {
     userRole = session.user.role
   } else {
     userId = authenticatedAgent!.id
-    userType = 'AI_AGENT'
+    userType = authenticatedAgent!.type ?? 'HUMAN'
     userRole = 'USER'
   }
 
@@ -78,11 +78,13 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Forbidden: Path traversal detected' }, { status: 403 })
     }
 
+    let fileMissing = false
+
     // Check if file exists
     try {
       await fs.access(resolvedPath)
     } catch {
-      return NextResponse.json({ error: 'Document file not found' }, { status: 404 })
+      fileMissing = true
     }
 
     // Verify brand slug matching
@@ -96,11 +98,17 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Forbidden: Document does not belong to this brand' }, { status: 403 })
     }
 
-    const content = await fs.readFile(resolvedPath, 'utf8')
+    const content = fileMissing
+      ? [
+          `Document file was not available on this runtime instance.`,
+          `Document ID: ${docId}`,
+          `Document path: ${decodedRelativePath}`,
+        ].join('\n')
+      : await fs.readFile(resolvedPath, 'utf8')
 
     // Create a 'done' task on Kanban
     const taskTitle = `[Sync] ${docType.toUpperCase().replace('_', ' ')} - ${filename}`
-    const taskDescription = `**Document Synced to Kanban**\n\n**Summary:**\n${summary || 'No summary provided.'}\n\n---\n\n**Document Content:**\n\n${content}`
+    const taskDescription = `**Document Synced to Kanban**\n\n**Summary:**\n${summary || 'No summary provided.'}\n\n${fileMissing ? '**Notice:** The saved Markdown file was not available on this runtime instance, so this task records the document reference and supplied summary.\n\n' : ''}---\n\n**Document Content:**\n\n${content}`
 
     const task = await prisma.workUnit.create({
       data: {
@@ -127,6 +135,7 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({
       success: true,
+      fileMissing,
       taskId: task.id,
       task
     })
