@@ -2191,7 +2191,8 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '字段必须为：quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
       'promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
       'monthlyFocus 每项含 month, focus, promotionPoints。',
-      '数量限制：promotionPoints 2-3 项；campaigns 2-3 条；contentThemes 3-4 条；monthlyFocus 必须刚好 3 项。',
+      '数量限制：promotionPoints 必须刚好 2 项；campaigns 2 条；contentThemes 3 条；monthlyFocus 必须刚好 3 项。',
+      '所有字段都用短句。不要编折扣、赠品、暗号、排队、客流、顾客评价或不存在的活动。',
       '必须参考 annualStrategy 和 previousQuarterPlans，当前季度要承接前面季度，避免重复。',
       '内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。',
     ].join('\n')
@@ -2223,7 +2224,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 950, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 1300, {
       temperature: 0.35,
       jsonMode: true,
       deadlineMs: scope === 'annual_strategy' ? 60000 : 65000,
