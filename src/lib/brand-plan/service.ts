@@ -1369,6 +1369,51 @@ function buildMarketingPlanInput(
   }
 }
 
+function compactMarketingPlanInputForLLM(input: Record<string, unknown>) {
+  const brand = objectValue(input.brand)
+  const researchReport = objectValue(input.researchReport)
+  const subscriptionStrategy = objectValue(input.subscriptionStrategy)
+  const merchantInterview = objectValue(input.merchantInterview)
+  return {
+    brand: {
+      id: text(brand.id),
+      name: text(brand.name),
+      industry: text(brand.industry),
+      location: text(brand.location),
+      address: text(brand.address),
+      description: text(brand.description).slice(0, 420),
+    },
+    stores: arrayValue(input.stores).slice(0, 6),
+    storeActivities: input.storeActivities || null,
+    products: stringList(input.products).slice(0, 8),
+    brandClaim: input.brandClaim || null,
+    merchantInterview: {
+      summary: text(merchantInterview.summary).slice(0, 500),
+      rawNotes: text(merchantInterview.rawNotes).slice(0, 900),
+      answers: arrayValue(merchantInterview.answers).slice(0, 8),
+    },
+    researchReport: {
+      summary: text(researchReport.summary).slice(0, 900),
+      brandImage: text(researchReport.brandImage).slice(0, 500),
+      marketingStatus: text(researchReport.marketingStatus).slice(0, 500),
+      marketAnalysis: text(researchReport.marketAnalysis).slice(0, 700),
+      issues: stringList(researchReport.issues).slice(0, 8),
+      growthPoints: stringList(researchReport.growthPoints).slice(0, 10),
+      missingQuestions: stringList(researchReport.missingQuestions).slice(0, 8),
+      dataSources: stringList(researchReport.dataSources).slice(0, 8),
+    },
+    subscriptionStrategy: {
+      planId: text(subscriptionStrategy.planId),
+      planName: text(subscriptionStrategy.planName),
+      platformCoverage: stringList(subscriptionStrategy.platformCoverage),
+      monthlyContentQuota: subscriptionStrategy.monthlyContentQuota,
+      publishingFreq: subscriptionStrategy.publishingFreq || null,
+      includedServices: stringList(subscriptionStrategy.includedServices).slice(0, 12),
+    },
+    request: input.request || {},
+  }
+}
+
 async function buildMarketingPlanMarketContext(
   brand: BrandPlanBrand,
   quarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']
@@ -1478,10 +1523,12 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     ].join('\n')
     : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), year(number), startMonth(string), endMonth(string), periodLabel(string), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。`
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
+  const compactInput = compactMarketingPlanInputForLLM(input)
   const prompt = renderPromptTemplate(promptTemplate?.template || '', {
     schemaInstruction,
-    inputJson: JSON.stringify(input),
+    inputJson: JSON.stringify(compactInput),
   })
+  const compactInputJson = JSON.stringify(compactInput)
   const promptTrace = {
     taskKey: 'marketing_plan_generation',
     promptTemplateId: promptTemplate?.id || null,
@@ -1491,15 +1538,17 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     promptCharCount: prompt.length,
     schemaInstructionCharCount: schemaInstruction.length,
     inputCharCount: JSON.stringify(input).length,
+    compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 6200 : 2600, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 4200 : 2200, {
       temperature: 0.35,
       jsonMode: true,
-      deadlineMs: scope === 'annual' ? 170000 : 90000,
-      attemptTimeoutMs: scope === 'annual' ? [90000, 70000, 50000, 40000] : [45000, 35000, 25000],
-      maxAttempts: scope === 'annual' ? 4 : 3,
+      deadlineMs: scope === 'annual' ? 220000 : 90000,
+      attemptTimeoutMs: scope === 'annual' ? [45000, 45000, 45000, 45000, 45000, 45000] : [35000, 30000, 25000],
+      maxAttempts: scope === 'annual' ? 6 : 3,
       allowDefaultFallback: true,
+      allowAnyFallback: true,
       allowSystemFallback: true,
     })
     const value = parseJsonObject(result.text)

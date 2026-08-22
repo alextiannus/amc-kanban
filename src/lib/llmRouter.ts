@@ -28,6 +28,7 @@ export interface LLMCallOptions {
   attemptTimeoutMs?: number[]
   maxAttempts?: number
   allowDefaultFallback?: boolean
+  allowAnyFallback?: boolean
   allowSystemFallback?: boolean
 }
 
@@ -38,6 +39,7 @@ export interface LLMRouteDiagnostics {
   deadlineMs?: number
   maxAttempts?: number
   allowDefaultFallback: boolean
+  allowAnyFallback: boolean
   allowSystemFallback: boolean
   configsConsidered: Array<{
     index: number
@@ -650,8 +652,16 @@ export async function callLLM(
     },
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
+  const knownIds = [...matchingConfigs, ...defaultConfigs].map((c: any) => c.id)
+  const anyFallbackConfigs = options.allowAnyFallback ? await prisma.lLMConfig.findMany({
+    where: {
+      isEnabled: true,
+      NOT: { id: { in: knownIds } }
+    },
+    orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+  }) : []
 
-  const configsToTry: LLMRouterConfig[] = [...matchingConfigs, ...defaultConfigs].flatMap((config) => {
+  const configsToTry: LLMRouterConfig[] = [...matchingConfigs, ...defaultConfigs, ...anyFallbackConfigs].flatMap((config) => {
     const attempts = Math.max(1, Math.min(6, 1 + (Number(config.maxRetries) || 0)))
     return Array.from({ length: attempts }, (_item, index) => ({
       provider: config.provider,
@@ -686,6 +696,7 @@ export async function callLLM(
     ...(Number.isFinite(options.deadlineMs) ? { deadlineMs: Number(options.deadlineMs) } : {}),
     ...(Number.isFinite(options.maxAttempts) ? { maxAttempts: Number(options.maxAttempts) } : {}),
     allowDefaultFallback: options.allowDefaultFallback !== false,
+    allowAnyFallback: Boolean(options.allowAnyFallback),
     allowSystemFallback: options.allowSystemFallback !== false,
     configsConsidered: configsToTry.map((config, index) => ({
       index,
