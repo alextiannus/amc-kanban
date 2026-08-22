@@ -226,6 +226,8 @@ export async function getBrandPlan(brandId: string) {
   }
 }
 
+type BrandPlanResearchReport = NonNullable<BrandPlanWorkspaceData['researchReport']>
+
 export async function runBrandPlanAction(input: {
   brandId: string
   action: BrandPlanAction
@@ -534,7 +536,7 @@ function extractGrowthReportTableNames(markdown: string, sectionKeyword: string)
   return uniqueStrings(results).slice(0, 8)
 }
 
-function isGrowthResearchReport(report: BrandPlanWorkspaceData['researchReport']) {
+function isGrowthResearchReport(report: BrandPlanWorkspaceData['researchReport']): report is BrandPlanResearchReport {
   return Boolean(report && (
     report.sourceSystem === 'amc-growth' ||
     report.dataSources?.includes('AMC-Growth 品牌摸底调研') ||
