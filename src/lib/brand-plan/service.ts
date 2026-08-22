@@ -974,12 +974,26 @@ async function buildPublishingMonth(
     return {
       id: `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`,
       date: slot.date,
-      title: calendarItemTitle(product, candidate),
+      title: calendarItemTitle({
+        brand,
+        product,
+        promotionPoint,
+        platformSlug: slot.platform.slug,
+        index,
+      }),
       platform: slot.platform.label,
       platformSlug: slot.platform.slug,
       contentType: calendarContentType(candidate, index),
       product,
-      planning: calendarPlanningText(product, candidate, interviewFocus),
+      planning: calendarPlanningText({
+        brand,
+        product,
+        promotionPoint,
+        platformSlug: slot.platform.slug,
+        candidate,
+        interviewFocus,
+        index,
+      }),
       sampleHit: calendarSampleHit(product, candidate),
       status: '待确认',
       selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
@@ -1027,9 +1041,23 @@ async function regeneratePublishingCalendarItem(
   return {
     ...item,
     date: clampCalendarDateToMinimum(item.date),
-    title: calendarItemTitle(item.product, candidate),
+    title: calendarItemTitle({
+      brand,
+      product: item.product,
+      promotionPoint: point,
+      platformSlug: platform,
+      index: 0,
+    }),
     contentType: calendarContentType(candidate, 0),
-    planning: calendarPlanningText(item.product, candidate, ''),
+    planning: calendarPlanningText({
+      brand,
+      product: item.product,
+      promotionPoint: point,
+      platformSlug: platform,
+      candidate,
+      interviewFocus: '',
+      index: 0,
+    }),
     sampleHit: calendarSampleHit(item.product, candidate),
     selectedCreativeCandidateId: text(candidate.creativeCandidateId),
     matchedTags: stringList(candidate.matchedTags),
@@ -1232,9 +1260,68 @@ function selectCalendarCreativeCandidate(
   return pool[index % pool.length]
 }
 
-function calendarItemTitle(product: string, candidate: Record<string, unknown> | null) {
-  const script = objectValue(candidate?.scriptContent)
-  return text(script.title) || text(objectValue(candidate?.sourcePost).title) || text(objectValue(candidate?.sourceVideo).title) || `${product} 的到店理由`
+type CalendarCopyContext = {
+  brand: BrandPlanBrand
+  product: string
+  promotionPoint: CalendarPromotionPoint
+  platformSlug: string
+  candidate?: Record<string, unknown> | null
+  interviewFocus?: string
+  index: number
+}
+
+function cleanCalendarText(value: string, fallback: string) {
+  const cleaned = value
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[#@][\w\u4e00-\u9fff-]+/g, '')
+    .replace(/\b[\w-]+\.(mp4|mov|jpg|jpeg|png|webp)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .replace(/[|｜]+/g, ' ')
+    .replace(/[。.!！?？]+$/g, '')
+    .trim()
+  return cleaned || fallback
+}
+
+function brandDisplayName(brand: BrandPlanBrand) {
+  return cleanCalendarText(text(brand.name), '本店')
+}
+
+function productDisplayName(product: string) {
+  return cleanCalendarText(product, '招牌产品')
+}
+
+function calendarItemTitle(input: Omit<CalendarCopyContext, 'candidate' | 'interviewFocus'>) {
+  const brandName = brandDisplayName(input.brand)
+  const product = productDisplayName(input.product)
+  const action = cleanCalendarText(input.promotionPoint.customerAction, '收藏或私信咨询')
+  const isRestaurant = text(input.brand.industry).toLowerCase().includes('restaurant') || text(input.brand.industry).toLowerCase().includes('f&b')
+  const titleSets: Record<string, string[]> = {
+    tiktok: [
+      `${brandName}这锅${product}，先看鱼肉`,
+      `想吃重口味，先看${brandName}这锅`,
+      `${product}上桌前，先拍这3个画面`,
+    ],
+    instagram: [
+      `${brandName}的${product}，适合约朋友来吃`,
+      `这组图，把${product}拍得更想点`,
+      `${brandName}今晚主推：${product}`,
+    ],
+    xiaohongshu: [
+      `在新加坡想吃${product}，先收藏这家`,
+      `${brandName}点单笔记：${product}怎么拍`,
+      `朋友聚餐想吃烤鱼，可以看这锅`,
+    ],
+    google_business: [
+      `${brandName}本周推荐：${product}`,
+      `到店前先看这份${product}`,
+      `${product}上桌照，给顾客一个到店理由`,
+    ],
+  }
+  const fallback = isRestaurant
+    ? `${brandName}的${product}，给顾客一个到店理由`
+    : `${brandName}的${product}，引导顾客${action}`
+  const pool = titleSets[normalizePlatformSlug(input.platformSlug)] || [fallback]
+  return cleanCalendarText(pool[input.index % pool.length], fallback).slice(0, 42)
 }
 
 function calendarContentType(candidate: Record<string, unknown> | null, index: number) {
@@ -1244,22 +1331,37 @@ function calendarContentType(candidate: Record<string, unknown> | null, index: n
   return index % 2 === 0 ? '短视频' : '图文'
 }
 
-function calendarPlanningText(product: string, candidate: Record<string, unknown> | null, interviewFocus: string) {
-  const script = objectValue(candidate?.scriptContent)
-  const angle = text(candidate?.contentAngle) || text(candidate?.recommendationReason)
-  const cta = text(script.cta) || '引导收藏、咨询、路线点击、预订或下单'
+function calendarHookText(input: CalendarCopyContext) {
+  const product = productDisplayName(input.product)
+  const platform = normalizePlatformSlug(input.platformSlug)
+  if (platform === 'tiktok') return `前三秒先给热气、鱼肉和夹菜动作，不要先拍门头。`
+  if (platform === 'instagram') return `首图放整锅和夹起鱼肉的近景，让人一眼知道卖点。`
+  if (platform === 'xiaohongshu') return `开头先写适合谁来吃，再讲口味和点单理由。`
+  if (platform === 'google_business') return `第一句直接说本周推荐${product}，配清楚门店图。`
+  return `开头先给${product}的真实画面，再讲为什么值得来试。`
+}
+
+function calendarPlanningText(input: CalendarCopyContext) {
+  const product = productDisplayName(input.product)
+  const candidate = input.candidate || null
+  const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
+  const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
   return [
-    angle || `用真实门店画面说明“${product}”为什么值得来试。`,
-    cta,
-    interviewFocus ? `参考主理人访谈：${interviewFocus}` : '',
+    `Hook：${calendarHookText(input)}`,
+    `内容：围绕${product}拍真实出品、上桌过程和顾客会关心的口味细节。`,
+    angle ? `参考角度：${angle}。` : '',
+    `结尾：引导顾客${customerAction}。`,
+    input.interviewFocus ? `可带一句主理人原话：${cleanCalendarText(input.interviewFocus, '')}。` : '',
   ].filter(Boolean).join(' ')
 }
 
 function calendarSampleHit(product: string, candidate: Record<string, unknown> | null) {
   const script = objectValue(candidate?.scriptContent)
-  const opening = text(script.opening)
-  const title = text(script.title) || text(objectValue(candidate?.sourcePost).title) || `附近想吃点稳的，就点这份 ${product}`
-  return opening ? `标题：${title}。开头：${opening}` : `标题：${title}。开头：别只看菜单，先看这份为什么常被点。`
+  const opening = cleanCalendarText(text(script.opening), '')
+  const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
+  if (opening) return `参考开头：${opening}`
+  if (angle) return `参考角度：${angle}`
+  return `参考角度：用真实画面说明“${productDisplayName(product)}”为什么值得点。`
 }
 
 function calendarSampleLinks(candidate: Record<string, unknown> | null) {
