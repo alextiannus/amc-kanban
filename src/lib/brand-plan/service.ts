@@ -1485,17 +1485,17 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 6200 : 2600, {
       temperature: 0.35,
       jsonMode: true,
-      deadlineMs: 45000,
-      attemptTimeoutMs: [20000, 25000],
+      deadlineMs: 130000,
       maxAttempts: 2,
       allowDefaultFallback: false,
       allowSystemFallback: false,
     })
+    const value = parseJsonObject(result.text)
     return {
       provider: result.provider,
       modelName: result.modelName,
-      error: result.error,
-      value: parseJsonObject(result.text),
+      error: result.error || (value ? undefined : `llm_returned_invalid_json:${String(result.text || '').slice(0, 160)}`),
+      value,
     }
   } catch (error) {
     return {

@@ -30,6 +30,10 @@ export interface LLMCallOptions {
   allowSystemFallback?: boolean
 }
 
+function supportsNativeJsonMode(provider: string) {
+  return provider === 'openai' || provider === 'google' || provider === 'deepseek'
+}
+
 // ============================================================
 // In-memory Circuit Breaker
 // Tracks providers that have recently returned 429 / rate limit
@@ -97,7 +101,7 @@ async function executeSingleLLMCall(
           generationConfig: {
             maxOutputTokens: maxTokens,
             ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
-            ...(options.jsonMode ? { responseMimeType: 'application/json' } : {}),
+            ...(options.jsonMode && supportsNativeJsonMode(provider) ? { responseMimeType: 'application/json' } : {}),
           },
         }),
       })
@@ -138,7 +142,7 @@ async function executeSingleLLMCall(
           messages: [{ role: 'user', content: prompt }],
           max_tokens: maxTokens,
           ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
-          ...(options.jsonMode ? { response_format: { type: 'json_object' } } : {}),
+          ...(options.jsonMode && supportsNativeJsonMode(provider) ? { response_format: { type: 'json_object' } } : {}),
         }),
       })
 
@@ -476,6 +480,8 @@ type LLMRouterConfig = {
   baseUrl: string | null
   apiKey: string | null
   displayName: string
+  timeoutMs?: number | null
+  maxRetries?: number | null
 }
 
 export async function callLLMWithConfigs(
@@ -530,7 +536,7 @@ export async function callLLMWithConfigs(
 
     const configuredAttemptTimeout = options.attemptTimeoutMs?.[
       Math.min(providerCalls, Math.max(0, (options.attemptTimeoutMs?.length ?? 1) - 1))
-    ]
+    ] ?? config.timeoutMs ?? undefined
     const hasFiniteRemaining = Number.isFinite(remainingMs) && remainingMs > 0
     const hasConfiguredTimeout = Number.isFinite(configuredAttemptTimeout) && Number(configuredAttemptTimeout) > 0
     const attemptTimeoutMs = hasConfiguredTimeout
@@ -625,13 +631,18 @@ export async function callLLM(
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   })
 
-  const configsToTry: LLMRouterConfig[] = [...matchingConfigs, ...defaultConfigs].map((config) => ({
-    provider: config.provider,
-    modelName: config.modelName,
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
-    displayName: config.displayName,
-  }))
+  const configsToTry: LLMRouterConfig[] = [...matchingConfigs, ...defaultConfigs].flatMap((config) => {
+    const attempts = Math.max(1, Math.min(6, 1 + (Number(config.maxRetries) || 0)))
+    return Array.from({ length: attempts }, (_item, index) => ({
+      provider: config.provider,
+      modelName: config.modelName,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
+      displayName: index === 0 ? config.displayName : `${config.displayName} retry ${index}`,
+      timeoutMs: config.timeoutMs,
+      maxRetries: config.maxRetries,
+    }))
+  })
 
   // Preserve the legacy system fallback for existing callers. New credentials must
   // still be configured in LLMConfig through Admin.
