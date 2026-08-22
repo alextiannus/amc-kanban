@@ -237,6 +237,8 @@ export type GrowthBrandIntelligenceJob = {
   job_id?: string
   status?: string
   progress?: number
+  market?: string | null
+  category?: string | null
   result?: Record<string, unknown> | null
   report_versions?: Record<string, {
     report_version_id?: string
