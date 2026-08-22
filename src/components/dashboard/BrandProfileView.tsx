@@ -356,16 +356,16 @@ function createStoreId() {
 function brandPlanErrorMessage(error: unknown) {
   const code = typeof error === 'string' ? error : ''
   if (code === 'merchant_interview_required') return '请先填写并保存品牌主张访谈。'
-  if (code === 'brand_plan_update_required') return '请先生成品牌营销方案。'
-  if (code === 'annual_plan_required') return '请先生成品牌营销方案。'
-  if (code === 'quarter_plan_required') return '请先生成包含季度明细的品牌营销方案。'
-  if (code === 'growth_research_report_required') return '请先从 AMC-Growth 生成并读取品牌摸底报告，再保存品牌主张访谈。'
-  if (code === 'growth_research_report_missing') return 'AMC-Growth 已返回任务状态，但没有返回品牌摸底报告正文，请稍后重试或检查 Growth 报告版本。'
-  if (code === 'growth_research_still_running') return 'AMC-Growth 正在生成品牌摸底报告，请稍后再点查看或重新生成。'
-  if (code === 'growth_research_failed') return 'AMC-Growth 调研生成失败，请检查 Growth 服务或稍后重试。'
-  if (code === 'growth_research_create_failed') return '未能触发 AMC-Growth 摸底调研，请检查 Growth 服务。'
-  if (code === 'marketing_plan_llm_failed') return '品牌营销方案生成失败：LLM 没有返回有效方案，请检查 LLM 配置后重试。'
-  return code || '营销方案操作失败，请重试'
+  if (code === 'brand_plan_update_required') return '请先生成营销计划。'
+  if (code === 'annual_plan_required') return '请先生成营销计划。'
+  if (code === 'quarter_plan_required') return '请先补齐季度计划。'
+  if (code === 'growth_research_report_required') return '请先完成品牌摸底报告，再保存访谈记录。'
+  if (code === 'growth_research_report_missing') return '品牌摸底任务已完成，但报告正文没有保存下来，请稍后重试。'
+  if (code === 'growth_research_still_running') return '品牌摸底报告还在整理，请稍后再看。'
+  if (code === 'growth_research_failed') return '品牌摸底报告没有生成成功，请稍后重试。'
+  if (code === 'growth_research_create_failed') return '品牌摸底没有启动成功，请稍后重试。'
+  if (code === 'marketing_plan_llm_failed') return '营销计划没有生成成功，请检查模型配置后重试。'
+  return code || '操作失败，请重试'
 }
 
 function statusDotClass(status: 'ready' | 'warning' | 'pending') {
@@ -1051,7 +1051,7 @@ ${storeLines}
     try {
       const nextPlan = await runBrandPlanAction('save_merchant_interview', '品牌主张访谈已保存', {
         rawNotes: interviewDraftNotes,
-        summary: '主理人已记录商家主张，可用于生成后续营销方案。',
+        summary: '主理人已记录商家主张，可用于后续营销计划。',
       })
       if (nextPlan?.merchantInterview) setShowInterviewReport(true)
     } finally {
@@ -1067,7 +1067,7 @@ ${storeLines}
   const handleGenerateAnnualPlan = async () => {
     setPlanGenerating('annual')
     try {
-      await runBrandPlanAction('generate_annual_plan', '品牌营销方案已生成')
+      await runBrandPlanAction('generate_annual_plan', '营销计划已生成')
       await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
@@ -1093,7 +1093,7 @@ ${storeLines}
     }
     setPlanGenerating('calendar')
     try {
-      await runBrandPlanAction('generate_publishing_calendar', '内容创建和发布计划已生成', {
+      await runBrandPlanAction('generate_publishing_calendar', '内容计划已生成', {
         month: calendarMonth,
         publishingFreqOverride: publishingFreqPayload(publishingScheduleDraft),
       })
@@ -1152,8 +1152,8 @@ ${storeLines}
         platformSlug: platform.slug,
         contentType: '图文',
         product: '待填写推广点',
-        planning: '填写内容策划、素材要求和发布动作。',
-        sampleHit: '待匹配样板爆品',
+        planning: '写清楚拍什么、怎么拍、发布后要引导顾客做什么。',
+        sampleHit: '补充参考内容',
         status: '待确认',
         matchedTags: [],
         matchedInspirations: [],
@@ -1183,7 +1183,7 @@ ${storeLines}
   const handleSaveCalendarMonth = async () => {
     setPlanGenerating('calendar_save')
     try {
-      await runBrandPlanAction('save_workspace_patch', '内容创建和发布计划已保存', {
+      await runBrandPlanAction('save_workspace_patch', '内容计划已保存', {
         target: 'calendar_month',
         month: calendarMonth,
         value: currentCalendarItems,
@@ -1280,12 +1280,12 @@ ${storeLines}
   const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
   const postfastSyncedAt = typeof brandSettings?.postfastSyncedAt === 'string' ? brandSettings.postfastSyncedAt : null
   const sourceStatusItems = [
-    { label: '数据调研', value: report ? '已生成' : '待生成', status: report ? 'ready' : 'pending' },
+    { label: '品牌摸底', value: report ? '已完成' : '待完成', status: report ? 'ready' : 'pending' },
     { label: '社交媒体渠道', value: socialAccounts.length ? `${socialAccounts.length} 个账号` : '待同步', status: socialAccounts.length ? 'ready' : 'pending' },
     { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录', status: merchantInterviewRequired ? 'pending' : 'ready' },
-    { label: '营销方案输入', value: brandPlanUpdated ? '已具备' : '待完善', status: brandPlanUpdated ? 'ready' : 'warning' },
-    { label: '品牌营销方案', value: annualPlan ? (annualQuarterPlans.length ? `已生成 · ${annualQuarterPlans.length}季` : '已生成') : '待生成', status: annualPlan ? 'ready' : 'pending' },
-    { label: '内容创建和发布计划', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成', status: currentCalendarItems.length ? 'ready' : 'pending' },
+    { label: '计划资料', value: brandPlanUpdated ? '可用' : '待补', status: brandPlanUpdated ? 'ready' : 'warning' },
+    { label: '营销计划', value: annualPlan ? (annualQuarterPlans.length ? `${annualQuarterPlans.length}季` : '已完成') : '待生成', status: annualPlan ? 'ready' : 'pending' },
+    { label: '内容计划', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成', status: currentCalendarItems.length ? 'ready' : 'pending' },
   ]
 
   const reportModal = showResearchReport && (
@@ -1374,7 +1374,7 @@ ${storeLines}
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
             <p className="text-xs font-black text-amber-800 dark:text-amber-200">访谈原则</p>
-            <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">不要问品牌大词，只问老板每天能回答的具体生意判断。记录老板原话，后面由系统整理成品牌计划。</p>
+            <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">不要问品牌大词，只问老板每天能回答的具体生意判断。尽量记原话，后面再整理成品牌计划。</p>
           </div>
           <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
             <p className="text-xs font-black text-slate-900 dark:text-white">建议确认的问题</p>
@@ -1462,7 +1462,7 @@ ${storeLines}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Marketing Solution Workspace</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">品牌计划与营销方案</h2>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">品牌计划</h2>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
                 {sourceStatusItems.map(item => (
@@ -1649,7 +1649,7 @@ ${storeLines}
           </section>
 
           <section className="grid gap-3 lg:grid-cols-2">
-            {/* 品牌摸底报告 — compact row */}
+            {/* 品牌摸底报告 compact row */}
             <div
               role="button"
               tabIndex={0}
@@ -1690,7 +1690,7 @@ ${storeLines}
                 </button>
               </div>
             </div>
-            {/* 品牌主张访谈 — compact row */}
+            {/* 品牌主张访谈 compact row */}
             <div
               role="button"
               tabIndex={0}
@@ -1724,7 +1724,7 @@ ${storeLines}
             </div>
           </section>
 
-          {/* Section 2: 营销方案输入 — 系统逻辑，不在页面展示 */}
+          {/* Section 2: plan input, not rendered */}
 
 
 
@@ -1732,17 +1732,17 @@ ${storeLines}
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 2</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">品牌营销方案</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">营销计划</h3>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {annualPlan ? '重新生成营销方案' : '生成品牌营销方案'}
+                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {annualPlan ? '重新生成计划' : '生成营销计划'}
                 </button>
-                <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
                   编辑
                 </button>
                 <a href={`/dashboard/brands/${brandId}/marketing-plan`} target="_blank" rel="noreferrer" aria-disabled={!annualPlan} className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700 ${annualPlan ? 'text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800' : 'pointer-events-none text-slate-300 dark:text-slate-600'}`}>
-                  <ExternalLink className="h-3.5 w-3.5" /> 查看完整方案
+                  <ExternalLink className="h-3.5 w-3.5" /> 查看完整计划
                 </a>
               </div>
             </div>
@@ -1753,16 +1753,16 @@ ${storeLines}
                   role="button"
                   tabIndex={0}
                   onClick={(event) => {
-                    if (!shouldIgnoreEditableSurfaceClick(event.target)) openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })
+                    if (!shouldIgnoreEditableSurfaceClick(event.target)) openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })
                   }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault()
-                      openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })
+                      openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })
                     }
                   }}
                   className="cursor-pointer rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 p-4 transition hover:ring-2 hover:ring-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:from-purple-950/20 dark:to-slate-950 dark:hover:ring-purple-900/60"
-                  title="点击编辑品牌营销方案"
+                  title="编辑营销计划"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -1784,7 +1784,7 @@ ${storeLines}
                   ) : null}
                   {annualPlan.llmError ? (
                     <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-relaxed text-amber-700 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
-                      LLM 未返回有效 JSON，本次已使用规则兜底方案。错误：{annualPlan.llmError}
+                      这次没有生成完整计划，已保留一版基础内容。请检查模型配置后重新生成。
                     </p>
                   ) : null}
                 </div>
@@ -1792,7 +1792,7 @@ ${storeLines}
                 {annualQuarterPlans.length ? (
                   <QuarterPlanTabs
                     annualQuarterPlans={annualQuarterPlans}
-                    onEditQuarter={(quarterPlan) => openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })}
+                    onEditQuarter={(quarterPlan) => openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })}
                   />
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
@@ -1801,15 +1801,15 @@ ${storeLines}
                         key={item.quarter}
                         role="button"
                         tabIndex={0}
-                        onClick={() => openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })}
+                        onClick={() => openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })
+                            openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })
                           }
                         }}
                         className="cursor-pointer rounded-xl bg-slate-50 p-3 transition hover:ring-2 hover:ring-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:bg-slate-950 dark:hover:ring-purple-900/60"
-                        title="点击编辑品牌营销方案"
+                        title="编辑营销计划"
                       >
                         <p className="text-xs font-black text-slate-800 dark:text-slate-100">{quarterDisplayLabel(item)}</p>
                         <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
@@ -1826,8 +1826,8 @@ ${storeLines}
             ) : (
               <div className="mt-4 rounded-xl border border-dashed border-purple-200 bg-purple-50/50 p-6 text-center dark:border-purple-900 dark:bg-purple-950/10">
                 <Goal className="mx-auto mb-3 h-8 w-8 text-purple-300" />
-                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">尚未生成品牌营销方案</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-slate-400">通过 LLM 读取品牌信息、调研报告、访谈记录和订阅运营策略，生成包含四个季度推广策略、推广点和月度内容方向的全年计划。</p>
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">还没有营销计划</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-slate-400">先整理全年方向，再拆到每个季度和每个月。</p>
               </div>
             )}
           </section>
@@ -1836,7 +1836,7 @@ ${storeLines}
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Section 4</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">内容创建和发布计划</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">内容计划</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -1856,7 +1856,7 @@ ${storeLines}
                 />
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">下个月</button>
                 <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !calendarQuarterReady} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成内容创建和发布计划
+                  {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成内容计划
                 </button>
                 <button type="button" onClick={handleAddCalendarItem} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-200">
                   <Plus className="h-3.5 w-3.5" /> 新增
@@ -1864,16 +1864,16 @@ ${storeLines}
                 <button type="button" onClick={handleSaveCalendarMonth} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 disabled:opacity-50 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
                   {planGenerating === 'calendar_save' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} 保存
                 </button>
-                <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 内容创建和发布计划`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
-                  JSON 编辑
+                <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 内容计划`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                  高级编辑
                 </button>
               </div>
             </div>
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-xs font-black text-slate-800 dark:text-slate-100">本月发布节奏</p>
-                  <p className="mt-0.5 text-[11px] text-slate-400">按品牌营销方案里的订阅策略带出，可调整后重新生成。</p>
+                  <p className="text-xs font-black text-slate-800 dark:text-slate-100">发布节奏</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">按当前订阅服务带出，改完后可重新生成。</p>
                 </div>
                 <div className="text-xs font-black text-rose-600">合计 {publishingScheduleCount} 条/月</div>
               </div>
@@ -1958,9 +1958,9 @@ ${storeLines}
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}
-                  <div className="mt-3 rounded-lg bg-white p-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-300">
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
                     <label className="block">
-                      <span className="font-black text-rose-600">样板爆品：</span>
+                      <span className="font-black text-slate-700 dark:text-slate-200">参考内容</span>
                       <textarea
                         value={item.sampleHit}
                         onChange={(event) => handleUpdateCalendarItem(item.id, index, { sampleHit: event.target.value })}
@@ -1973,10 +1973,10 @@ ${storeLines}
                         href={item.sampleVideoUrl || item.sampleOriginalUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-100 bg-rose-50 px-2.5 py-1 text-[11px] font-black text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                       >
                         <ExternalLink className="h-3 w-3" />
-                        {item.sampleVideoUrl ? '查看样板视频' : '查看原视频链接'}
+                        {item.sampleVideoUrl ? '查看参考视频' : '查看原视频'}
                       </a>
                     ) : null}
                   </div>
@@ -1994,21 +1994,21 @@ ${storeLines}
                     type="button"
                     onClick={() => handleRegenerateCalendarItem(item.id)}
                     disabled={Boolean(planGenerating) || !item.id}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
-                    {planGenerating === `calendar_item:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 单独重新生成这条创意
+                    {planGenerating === `calendar_item:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 重做这一条
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDeleteCalendarItem(item.id, index)}
                     disabled={Boolean(planGenerating)}
-                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 disabled:opacity-50 dark:border-rose-900/60 dark:bg-slate-900 dark:text-rose-300"
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
                   >
-                    删除这条
+                    删除
                   </button>
                 </div>
               )) : (
-                <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">当前月份还没有内容创建和发布计划。请选择月份后生成，或手动新增一条。</div>
+                <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">这个月还没有内容计划。可以生成一版，也可以先手动加一条。</div>
               )}
             </div>
           </section>
