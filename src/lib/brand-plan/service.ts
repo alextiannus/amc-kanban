@@ -800,19 +800,12 @@ async function buildAnnualMarketingSolution(
     fallbackUsed: !llm.value,
   })
   if (!llm.value) {
-    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; saving rule fallback instead.', {
+    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; refusing to save a non-LLM marketing plan.', {
       provider: llm.provider,
       modelName: llm.modelName,
       error: llm.error || 'llm_returned_invalid_json',
     })
-    return {
-      ...fallback,
-      generatedAt: new Date().toISOString(),
-      generationMode: 'RULE_FALLBACK',
-      llmProvider: llm.provider || undefined,
-      llmModel: llm.modelName || undefined,
-      llmError: llm.error || 'llm_returned_invalid_json',
-    }
+    throw new BrandPlanError(`marketing_plan_llm_failed:${llm.error || 'llm_returned_invalid_json'}`, 502)
   }
   return normalizeAnnualMarketingSolution(llm.value, fallback, llm)
 }
@@ -1503,10 +1496,11 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 6200 : 2600, {
       temperature: 0.35,
       jsonMode: true,
-      deadlineMs: 130000,
-      maxAttempts: 2,
-      allowDefaultFallback: false,
-      allowSystemFallback: false,
+      deadlineMs: scope === 'annual' ? 170000 : 90000,
+      attemptTimeoutMs: scope === 'annual' ? [90000, 70000, 50000, 40000] : [45000, 35000, 25000],
+      maxAttempts: scope === 'annual' ? 4 : 3,
+      allowDefaultFallback: true,
+      allowSystemFallback: true,
     })
     const value = parseJsonObject(result.text)
     return {
