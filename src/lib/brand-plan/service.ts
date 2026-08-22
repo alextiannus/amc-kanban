@@ -309,9 +309,14 @@ export async function runBrandPlanAction(input: {
   } else if (input.action === 'generate_publishing_calendar') {
     requireQuarterPlan(current)
     const month = clampSchedulableCalendarMonth(normalizeMonth(input.body?.month))
-    const monthItems = await buildPublishingMonth(brand, month, latestInterview, current, input.body?.publishingFreqOverride)
+    const publishingFreqOverride = normalizePublishingFreq(input.body?.publishingFreqOverride)
+    const monthItems = await buildPublishingMonth(brand, month, latestInterview, current, publishingFreqOverride)
+    const annualPlan = publishingFreqOverride
+      ? applyPublishingFrequencyOverride(current.annualPlan, publishingFreqOverride)
+      : current.annualPlan
     next = {
       ...current,
+      annualPlan,
       publishingCalendar: {
         generatedAt: new Date().toISOString(),
         generationMode: 'AMC_CONTENT_ASSISTED',
@@ -374,17 +379,23 @@ export async function runBrandPlanAction(input: {
     throw new BrandPlanError('invalid_brand_plan_action', 400)
   }
 
+  const persistedPublishingFreq = input.action === 'generate_publishing_calendar'
+    ? normalizePublishingFreq(input.body?.publishingFreqOverride)
+    : null
+
   await prisma.brandKnowledge.upsert({
     where: { brandId: brand.id },
     update: {
       marketingSolution: next as Prisma.InputJsonValue,
       researchReport: next.researchReport ? next.researchReport as Prisma.InputJsonValue : undefined,
+      publishingFreq: persistedPublishingFreq ? persistedPublishingFreq as Prisma.InputJsonValue : undefined,
     },
     create: {
       brandId: brand.id,
       negPrompts: [],
       marketingSolution: next as Prisma.InputJsonValue,
       researchReport: next.researchReport ? next.researchReport as Prisma.InputJsonValue : undefined,
+      publishingFreq: persistedPublishingFreq ? persistedPublishingFreq as Prisma.InputJsonValue : undefined,
     },
   })
 
@@ -2080,6 +2091,24 @@ function publishingFreqForPlan(planId: string, platforms: string[]): PublishingF
       platform,
       { postsPerMonth: monthlyByPlan[platform as keyof typeof monthlyByPlan] || 1 },
     ])),
+  }
+}
+
+function applyPublishingFrequencyOverride(
+  annualPlan: BrandPlanWorkspaceData['annualPlan'],
+  publishingFreq: PublishingFreq
+): BrandPlanWorkspaceData['annualPlan'] {
+  if (!annualPlan?.subscriptionStrategy) return annualPlan
+  const platformCoverage = Object.keys(publishingFreq.platforms || {})
+  const monthlyContentQuota = sumMonthlyPosts(publishingFreq)
+  return {
+    ...annualPlan,
+    subscriptionStrategy: {
+      ...annualPlan.subscriptionStrategy,
+      platformCoverage: platformCoverage.length ? platformCoverage : annualPlan.subscriptionStrategy.platformCoverage,
+      monthlyContentQuota: monthlyContentQuota || annualPlan.subscriptionStrategy.monthlyContentQuota,
+      publishingFreq,
+    },
   }
 }
 
