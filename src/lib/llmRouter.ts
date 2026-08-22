@@ -56,6 +56,13 @@ function supportsNativeJsonMode(provider: string) {
   return provider === 'openai' || provider === 'google' || provider === 'deepseek'
 }
 
+function isLikelyTextChatConfig(config: { provider?: string | null; modelName?: string | null; displayName?: string | null }) {
+  const provider = String(config.provider || '').toLowerCase()
+  const label = `${config.modelName || ''} ${config.displayName || ''}`.toLowerCase()
+  if (!['openai', 'google', 'deepseek', 'anthropic', 'custom_shim', 'minimax'].includes(provider)) return false
+  return !/(speech|tts|voice|audio|image|video|embedding|rerank)/i.test(label)
+}
+
 // ============================================================
 // In-memory Circuit Breaker
 // Tracks providers that have recently returned 429 / rate limit
@@ -661,7 +668,10 @@ export async function callLLM(
     orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
   }) : []
 
-  const configsToTry: LLMRouterConfig[] = [...matchingConfigs, ...defaultConfigs, ...anyFallbackConfigs].flatMap((config) => {
+  const selectedConfigs = [...matchingConfigs, ...defaultConfigs, ...anyFallbackConfigs]
+    .filter((config) => taskTag === 'marketing_plan' ? isLikelyTextChatConfig(config) : true)
+
+  const configsToTry: LLMRouterConfig[] = selectedConfigs.flatMap((config) => {
     const attempts = Math.max(1, Math.min(6, 1 + (Number(config.maxRetries) || 0)))
     return Array.from({ length: attempts }, (_item, index) => ({
       provider: config.provider,

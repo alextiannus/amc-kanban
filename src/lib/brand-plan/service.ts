@@ -1510,25 +1510,23 @@ function dateText(value: unknown) {
 async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<string, unknown>) {
   const schemaInstruction = scope === 'annual'
     ? [
-      '返回 JSON 对象，字段必须为：goal(string), theme(string), strategyPrinciples(array), platformStrategy(array), contentPillars(array), quarterlyFocus(array，每项含 quarter, year, startMonth, endMonth, periodLabel, focus, campaigns), quarterlyPlans(array，必须且只能含 planningWindow.quarters 中连续四个有效周期；每项含 quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。',
-      'strategyPrinciples 必须用 3-5 条中文短句清晰说明本方案的顶层判断，让用户能一眼看到为什么这样规划，例如“让顾客找得到、看得懂、愿意来”“先补足信任，再推动到店动作”。',
-      'platformStrategy 每项必须含 platform, role, contentApproach, customerAction，用来清楚展示每个平台在 AMC 方案里的分工。',
-      'contentPillars 必须列出 4-7 个内容支柱，让用户能看到后续内容创建会围绕什么持续展开。',
-      '字段含义要求：goal/theme/strategy/focus 必须体现 AMC 本地商家逻辑：让顾客找得到、看得懂、愿意来；不要写泛泛品牌口号。',
-      'quarterlyPlans[].promotionPoints 必须把每个平台的角色说清楚：Google Business/Profile 负责搜索可见、营业信息、路线/预约/订单和评价信任；Instagram 负责视觉识别、Reels/Stories/Carousel 展示产品场景；TikTok 负责短视频发现、真实人物/员工/顾客视角和平台原生表达；Facebook 负责社区感、老客触达、本地活动和实用更新；小红书负责中文用户搜索种草、真实体验、场景化笔记和收藏决策。',
-      'quarterlyPlans[].contentThemes 必须包含可执行内容支柱，例如招牌产品、真实门店/制作过程、顾客评价/信任证明、附近到店理由、季节/节日/店内互动、菜单/价格/服务解释；不要一稿多发。',
-      'campaigns 可以为空数组；只有当节假日/店内活动与品牌数据和执行条件匹配时才写入。若 storeActivities 有有效 rounds，monthlyFocus 和 campaigns 必须体现内容发布如何配合活动窗口：提前预热、活动期间解释参与方式和到店理由、活动后复盘口碑/UGC/回访动作。',
-      'metrics 只能使用本地商家可观察指标，例如路线点击、电话/WhatsApp/DM 咨询、预约/订单入口点击、评论数量与质量、收藏/分享、发布完成率、活动参与记录、素材补齐率；不要保证流量、排名、销售额或到店人数。',
-      '所有建议必须受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能写成未来升级方向，不要当作当前订阅交付。',
+      '只返回 JSON 对象，不要 Markdown。',
+      '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, quarterlyFocus, quarterlyPlans, metrics, researchFocus。',
+      'quarterlyPlans 必须含连续四个季度；每项含 quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
+      'platformStrategy 每项含 platform, role, contentApproach, customerAction。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
+      '方案必须适合本地商家，围绕“让顾客找得到、看得懂、愿意来”；不得承诺流量、排名、销量或到店人数。',
+      '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
     ].join('\n')
     : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), year(number), startMonth(string), endMonth(string), periodLabel(string), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。`
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
   const compactInput = compactMarketingPlanInputForLLM(input)
-  const prompt = renderPromptTemplate(promptTemplate?.template || '', {
-    schemaInstruction,
-    inputJson: JSON.stringify(compactInput),
-  })
   const compactInputJson = JSON.stringify(compactInput)
+  const prompt = [
+    '你是 AMC 的本地商家品牌营销策划负责人。请基于输入为品牌生成可执行的年度/滚动营销方案。',
+    schemaInstruction,
+    '写法要求：中文、具体、像专业运营方案；避免 AI 腔、空泛口号和无法验证承诺。',
+    `输入 JSON：${compactInputJson}`,
+  ].join('\n\n')
   const promptTrace = {
     taskKey: 'marketing_plan_generation',
     promptTemplateId: promptTemplate?.id || null,
@@ -1541,11 +1539,11 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 4200 : 2200, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 2600 : 1800, {
       temperature: 0.35,
       jsonMode: true,
       deadlineMs: scope === 'annual' ? 220000 : 90000,
-      attemptTimeoutMs: scope === 'annual' ? [45000, 45000, 45000, 45000, 45000, 45000] : [35000, 30000, 25000],
+      attemptTimeoutMs: scope === 'annual' ? [30000, 60000, 90000, 90000, 90000, 90000] : [30000, 30000, 30000],
       maxAttempts: scope === 'annual' ? 6 : 3,
       allowDefaultFallback: true,
       allowAnyFallback: true,
