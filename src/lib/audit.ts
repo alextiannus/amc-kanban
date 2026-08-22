@@ -51,7 +51,7 @@ export function actorFromContext(sessionUser?: ContextUser | null, agent?: Conte
   if (agent) {
     return {
       id: agent.id,
-      type: 'AI_AGENT',
+      type: 'HUMAN',
       name: agent.email,
     }
   }

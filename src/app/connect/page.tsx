@@ -130,15 +130,15 @@ const DRAFT_OPERATIONS: OperationItem[] = [
     action: 'Create/Update Draft',
     actionCn: '保存/更新草稿',
     mcpName: 'board_save_draft',
-    mcpParams: 'brandId, draftId?, caption?, hashtags?, accountId?, scheduledAt?, mediaUrls?, assetIds?, agentNote?, captionLang?',
+    mcpParams: 'brandId, draftId?, caption?, hashtags?, accountId?, mediaUrls?, assetIds?, agentNote?, captionLang?',
     restMethod: 'POST',
     restUrl: '/api/brands/[id]/drafts or PATCH /api/brands/[id]/drafts/[draftId]',
-    restParams: 'caption?, hashtags?, accountId?, scheduledAt?, mediaUrls?, assetIds?, agentNote?, captionLang?',
-    desc: 'Create or update a content draft. Supports partial updates: if draftId is passed, omitted fields are preserved (e.g. to modify only scheduledAt).',
+    restParams: 'caption?, hashtags?, accountId?, mediaUrls?, assetIds?, agentNote?, captionLang?',
+    desc: 'Create or update a content draft. Scheduling should be based on the recommendation tool or the brand publishing calendar.',
     payloadExample: `{
   "brandId": "brand_id_here",
   "draftId": "draft_id_here",
-  "scheduledAt": "2026-06-15T09:00:00Z",
+  "caption": "Publish-ready caption here",
   "agentNote": "Scheduled for Monday morning peak traffic."
 }`
   },
@@ -249,13 +249,72 @@ const CORE_OPERATIONS: OperationItem[] = [
   }
 ]
 
+const PLANNING_OPERATIONS: OperationItem[] = [
+  {
+    id: 'get_brand_marketing_plan',
+    action: 'Read Marketing Plan',
+    actionCn: '读取品牌营销方案',
+    mcpName: 'get_brand_marketing_plan',
+    mcpParams: 'brandId',
+    restMethod: 'GET',
+    restUrl: '/api/brands/[id]/brand-plan',
+    desc: 'Read the current research report, merchant interview, rolling marketing plan, and publishing calendar.',
+    payloadExample: `{
+  "brandId": "brand_id_here"
+}`
+  },
+  {
+    id: 'generate_brand_marketing_plan',
+    action: 'Generate Marketing Plan',
+    actionCn: '生成品牌营销方案',
+    mcpName: 'generate_brand_marketing_plan',
+    mcpParams: 'brandId',
+    restMethod: 'POST',
+    restUrl: '/api/brands/[id]/brand-plan',
+    restParams: 'action=generate_annual_plan',
+    desc: 'Generate the brand marketing plan from the latest research and merchant context.',
+    payloadExample: `{
+  "brandId": "brand_id_here"
+}`
+  },
+  {
+    id: 'generate_brand_publishing_calendar',
+    action: 'Generate Publishing Calendar',
+    actionCn: '生成发布日历',
+    mcpName: 'generate_brand_publishing_calendar',
+    mcpParams: 'brandId, month?',
+    restMethod: 'POST',
+    restUrl: '/api/brands/[id]/content-calendar/generate',
+    restParams: 'month?',
+    desc: 'Generate a concrete month publishing calendar from the current marketing plan.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "month": "2026-09"
+}`
+  },
+  {
+    id: 'run_brand_planning_workflow',
+    action: 'Run Full Planning Workflow',
+    actionCn: '跑通策划到草稿闭环',
+    mcpName: 'run_brand_planning_workflow',
+    mcpParams: 'brandId, month?, refreshResearch?, createDrafts?, maxDrafts?, assetIds?',
+    desc: 'Verify access, generate the marketing plan, generate the publishing calendar, and create publish-ready draft content.',
+    payloadExample: `{
+  "brandId": "brand_id_here",
+  "month": "2026-09",
+  "createDrafts": true,
+  "maxDrafts": 6
+}`
+  }
+]
+
 export default function ConnectPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [allowed, setAllowed] = useState(false)
   const [isPublicOnly, setIsPublicOnly] = useState(false)
   const [copiedMcp, setCopiedMcp] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<'assets' | 'drafts' | 'core'>('assets')
+  const [activeCategory, setActiveCategory] = useState<'assets' | 'drafts' | 'core' | 'planning'>('assets')
   const [expandedOperation, setExpandedOperation] = useState<string | null>(null)
   const [skillTab, setSkillTab] = useState<'onboarding' | 'skill'>('onboarding')
   const [copiedSkill, setCopiedSkill] = useState(false)
@@ -274,7 +333,7 @@ export default function ConnectPage() {
       stores: [],
       socialAccounts: [],
       ownedBrands: [],
-      agent: { id: 'agent_id_here', apiKey: '<YOUR_AGENT_API_KEY>' }
+      agent: { id: null, apiKey: '<YOUR_PERSONAL_API_KEY>' }
     }
     return buildLaunchInstruction({ context: mockContext, apiBaseUrl: `${hostFromWindow}/api` })
   }, [])
@@ -339,7 +398,7 @@ export default function ConnectPage() {
     "amc-kanban": {
       "url": "${baseUrl}/api/mcp",
       "headers": {
-        "Authorization": "Bearer <AGENT_API_KEY>"
+        "Authorization": "Bearer <PERSONAL_API_KEY>"
       }
     }
   }
@@ -397,7 +456,7 @@ export default function ConnectPage() {
           </div>
           <h1 className="mt-4 text-4xl font-bold tracking-tight">{pageTitle}</h1>
           <p className="mt-3 max-w-3xl text-slate-300">
-            For Brand Owners to connect their own AI tools to AMC Kanban with their own Agent API Key.
+            For Brand Owners to connect their own AI tools to AMC Kanban with their own Personal API Key.
             You can use REST API, MCP protocol, and Skill/SOP metadata endpoints.
           </p>
         </header>
@@ -405,9 +464,9 @@ export default function ConnectPage() {
         <section className="mb-8 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-6">
           <h2 className="text-2xl font-semibold">Before You Start</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-200">
-            <li>Create or select your AI agent in AMC dashboard.</li>
-            <li>Use your own Agent API Key (do not share keys across teams).</li>
-            <li>Add the Agent User to each brand Crew before running brand operations.</li>
+            <li>Generate a Personal API Key from your AMC dashboard.</li>
+            <li>Use only your own Personal API Key, and never paste it into public documents or logs.</li>
+            <li>The AI client can operate only brands and actions already allowed for your user account.</li>
           </ol>
         </section>
 
@@ -419,7 +478,7 @@ export default function ConnectPage() {
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700 bg-slate-950 p-4">
             <pre className="text-sm text-slate-200">
 {`curl -X GET "${baseUrl}/api/agent/brand-config" \
-  -H "Authorization: Bearer <AGENT_API_KEY>" \
+  -H "Authorization: Bearer <PERSONAL_API_KEY>" \
   -H "Content-Type: application/json"`}
             </pre>
           </div>
@@ -440,7 +499,7 @@ export default function ConnectPage() {
             >
               {copiedMcp ? 'Copied' : 'Copy MCP Config'}
             </button>
-            <span className="text-xs text-slate-400">Paste into your MCP client config and replace &lt;AGENT_API_KEY&gt;.</span>
+            <span className="text-xs text-slate-400">Paste into your MCP client config and replace &lt;PERSONAL_API_KEY&gt;.</span>
           </div>
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-700 bg-slate-950 p-4">
             <pre className="text-sm text-slate-200">
@@ -480,8 +539,8 @@ export default function ConnectPage() {
           </div>
           <p className="text-sm text-slate-300">
             {skillTab === 'onboarding' 
-              ? '将此指令完整复制并发送给您的 AI Agent，用于引导其配置 KANBAN_BASE_URL 环境变量并初始化 REST/MCP 客户端。'
-              : '将此规范作为 Custom Instruction 或 Skill 提示词导入您的 AI Agent，以规范其与 AMC 看板系统的操作和协作流程。'}
+              ? '将此指令完整复制并发送给您的 AI 客户端，用于引导其配置 KANBAN_BASE_URL 环境变量并初始化 REST/MCP 客户端。'
+              : '将此规范作为 Custom Instruction 或 Skill 提示词导入您的 AI 客户端，以规范其与 AMC 看板系统的操作和协作流程。'}
           </p>
           <div className="mt-4 flex items-center gap-3">
             <button
@@ -491,7 +550,7 @@ export default function ConnectPage() {
               {copiedSkill ? '已复制 (Copied!)' : '一键复制正文 (Copy Prompt)'}
             </button>
             <span className="text-xs text-slate-400">
-              {skillTab === 'onboarding' ? '包含环境配置、API 根端点和初始化任务列表。' : '包含 Agent 核心协作约束、日常工作 SOP 及 MCP 工具定义。'}
+              {skillTab === 'onboarding' ? '包含环境配置、API 根端点和初始化任务列表。' : '包含 Personal MCP 核心协作约束、日常工作 SOP 及 MCP 工具定义。'}
             </span>
           </div>
           <div className="mt-4 max-h-[300px] overflow-y-auto rounded-xl border border-slate-700 bg-slate-950 p-4 font-mono text-xs text-slate-300 leading-relaxed whitespace-pre-wrap select-all">
@@ -539,11 +598,28 @@ export default function ConnectPage() {
               >
                 核心任务与配置 (Core)
               </button>
+              <button
+                onClick={() => { setActiveCategory('planning'); setExpandedOperation(null) }}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                  activeCategory === 'planning'
+                    ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/20 shadow'
+                    : 'text-slate-400 hover:text-slate-200 border border-transparent cursor-pointer'
+                }`}
+              >
+                品牌策划 (Planning)
+              </button>
             </div>
           </div>
 
           <div className="space-y-4">
-            {(activeCategory === 'assets' ? ASSET_OPERATIONS : activeCategory === 'drafts' ? DRAFT_OPERATIONS : CORE_OPERATIONS).map((op) => {
+            {(activeCategory === 'assets'
+              ? ASSET_OPERATIONS
+              : activeCategory === 'drafts'
+                ? DRAFT_OPERATIONS
+                : activeCategory === 'planning'
+                  ? PLANNING_OPERATIONS
+                  : CORE_OPERATIONS
+            ).map((op) => {
               const isExpanded = expandedOperation === op.id
               return (
                 <div

@@ -1,12 +1,12 @@
-# AI Marketing Crew Skill
+# AI Marketing Crew Personal MCP Skill
 
-版本：3.0（2026-07-04）
+版本：4.0（2026-08-22）
 
 ## 身份与权限
 
-- AMC Agent 是正常系统用户，始终使用自己的 Bearer API Key。
-- 禁止 Human Key + `x-agent-id`，禁止模拟人类或其他 Agent。
-- REST、MCP 和网页使用相同的显式角色、Capability 与 Crew 授权。
+- Personal MCP 使用用户本人生成的 Bearer API Key。
+- AI 只以该用户身份操作，不模拟其他用户，不使用 `x-agent-id`。
+- REST、MCP 和网页使用相同的用户角色、Capability 与 Crew 授权。
 - 启动时先调用 `get_brand_config`，只操作返回的品牌；不得猜测 `brandId`。
 - 收到 403 时停止操作，不尝试旧接口或其他身份绕过。
 - 不输出、记录或持久化 API Key、Cookie、平台密码和第三方 Secret。
@@ -20,12 +20,19 @@
 5. 使用 `get_brand_reviews` 和 `board_reply_review` 处理允许自动回复的评论。
 6. 需要人工审核、补素材或决策时使用 `post_action_item` 创建 ActionItem。
 7. 发布成功后保存真实平台 URL；失败时记录原因并创建可执行的 ActionItem。
-8. 每次写操作以 Agent 自己作为 actor 进入统一工作日志。
+8. 每次写操作以 Personal MCP 所属用户作为 actor 进入统一工作日志。
 
 ## 推荐工具
 
 - `get_brand_config`
 - `get_brand_subscription`
+- `get_brand_marketing_plan`
+- `generate_brand_research_report`
+- `save_brand_merchant_interview`
+- `generate_brand_marketing_plan`
+- `generate_brand_publishing_calendar`
+- `create_content_drafts_from_calendar`
+- `run_brand_planning_workflow`
 - `get_brand_profile_markdown` / `update_brand_profile_markdown`
 - `board_list_social_accounts`
 - `list_brand_assets` / `board_upload_asset` / `board_delete_asset`
@@ -54,7 +61,7 @@ MCP：
     "amc-kanban": {
       "url": "https://amc-kanban.immedi.ai/api/mcp",
       "headers": {
-        "Authorization": "Bearer <KANBAN_AGENT_API_KEY>"
+        "Authorization": "Bearer <KANBAN_PERSONAL_API_KEY>"
       }
     }
   }

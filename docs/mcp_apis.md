@@ -1,21 +1,22 @@
 # AI Marketing Crew (AMC) MCP APIs List
 
-This document lists all the MCP tools registered in `src/lib/partner/mcp/server.ts`. These APIs are exposed to AI Agents to perform various platform operations.
+This document lists all the MCP tools registered in `src/lib/partner/mcp/server.ts`. These APIs are exposed through Personal MCP so AI clients can operate only as the connected user and only within that user's permissions.
 
 ---
 
 ## Authentication & Authorization Model (Auth V2)
 
 All MCP tools execute within the context of an authenticated `AuthPrincipal`.
-- **Direct Authorization**: The AI Agent is authenticated using its own `UserApiKey`.
-- **Linked Human User Delegation (Delegated Action)**: When the AI Agent is configured as an avatar linked to a human user (via `User.ownerId`), the authorization system dynamically delegates permissions. The agent inherits the capabilities, global roles, and brand crew memberships (`CrewMember` / Organization inheritance) of its linked human owner.
+- **Personal Authorization**: the bearer token resolves directly to the user who generated it.
+- **Single Permission Model**: MCP, REST and web UI share the same user roles, Capability checks and Crew brand scope.
+- **No Impersonation**: callers must not send `x-agent-id` or try to act as another user.
 
 ---
 
 ## 1. Brand Profile & Configurations
 
 ### `get_brand_config`
-*   **Description**: Get brand config and linked social accounts for brands this agent manages.
+*   **Description**: Get brand config and linked social accounts for brands this user can access.
 *   **Arguments**:
     *   `brandId` (string, optional): Specific brand ID. Omit to list all linked brands.
 *   **Response**: Safe brand details with configured status indicators, or list of linked brands.
@@ -23,18 +24,18 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
 ### `get_brand_profile_markdown`
 *   **Description**: Read brand profile markdown for AI pre-read context. Contains brand basics, positioning, multi-store structure, and social platform config.
 *   **Arguments**:
-    *   `brandId` (string, required): Brand ID linked to this agent.
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
     *   `refresh` (boolean, optional): When true, regenerate the auto snapshot section before reading.
 
 ### `refresh_brand_profile_markdown`
 *   **Description**: Regenerate brand profile markdown auto section from latest system data while preserving manual section.
 *   **Arguments**:
-    *   `brandId` (string, required): Brand ID linked to this agent.
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
 
 ### `update_brand_profile_markdown`
 *   **Description**: Write full brand context markdown for this brand. Use this for long-form brand context.
 *   **Arguments**:
-    *   `brandId` (string, required): Brand ID linked to this agent.
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
     *   `markdown` (string, required): Full markdown content to persist as brand profile context.
 
 ### `update_brand_config`
@@ -51,18 +52,70 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
 ### `get_brand_subscription`
 *   **Description**: Get brand subscription details and included services.
 *   **Arguments**:
-    *   `brandId` (string, required): Brand ID linked to this agent.
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
 
 ---
 
-## 2. Agent Profile & Self-Learning
+## 2. Brand Planning & Calendar
+
+### `get_brand_marketing_plan`
+*   **Description**: Read the current research report, merchant interview, rolling marketing plan, and publishing calendar.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+
+### `generate_brand_research_report`
+*   **Description**: Generate or refresh the research report used as the baseline for planning.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+
+### `save_brand_merchant_interview`
+*   **Description**: Save principal or merchant interview notes before plan generation.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+    *   `rawNotes` (string, required)
+    *   `summary` (string, optional)
+    *   `answers` (array, optional): Q&A pairs.
+
+### `generate_brand_marketing_plan`
+*   **Description**: Generate the rolling marketing plan from latest research and merchant context.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+
+### `generate_brand_publishing_calendar`
+*   **Description**: Generate one month of publishing calendar from the current marketing plan.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+    *   `month` (string, optional): YYYY-MM.
+    *   `publishingFreqOverride` (object, optional)
+
+### `create_content_drafts_from_calendar`
+*   **Description**: Create publish-ready content drafts from existing calendar items. Each platform is generated and written independently.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+    *   `month` (string, required): YYYY-MM.
+    *   `limit` (integer, optional)
+    *   `assetIds` (array, optional)
+
+### `run_brand_planning_workflow`
+*   **Description**: Run the full flow: verify access, optionally refresh research, generate marketing plan, generate publishing calendar, and optionally create content drafts.
+*   **Arguments**:
+    *   `brandId` (string, required): Brand ID inside this user's permission scope.
+    *   `month` (string, optional): YYYY-MM.
+    *   `refreshResearch` (boolean, optional)
+    *   `createDrafts` (boolean, optional)
+    *   `maxDrafts` (integer, optional)
+    *   `assetIds` (array, optional)
+
+---
+
+## 3. User Profile & Self-Learning
 
 ### `get_agent_profile`
-*   **Description**: Get this agent's own profile from AI Marketing Crew (excluding secrets).
+*   **Description**: Get the connected user's profile from AI Marketing Crew (excluding secrets).
 *   **Arguments**: None
 
 ### `update_agent_profile`
-*   **Description**: Update agent nickname, avatar, introduction, themeColor, workflow, or insights.
+*   **Description**: Update user-facing assistant profile nickname, avatar, introduction, themeColor, workflow, or insights.
 *   **Arguments**:
     *   `nickname` (string, optional)
     *   `avatar` (string, optional): Public URL or base64 data URI (data:image/png;base64,...).
@@ -72,16 +125,16 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
     *   `insights` (string, optional)
 
 ### `save_agent_insights`
-*   **Description**: Save agent self-learning insights.
+*   **Description**: Save connected-user AI working insights.
 *   **Arguments**:
     *   `insights` (string, required): The markdown content of the self-learning insights.
 
 ---
 
-## 3. Kanban Tasks & Workflow
+## 4. Kanban Tasks & Workflow
 
 ### `list_tasks`
-*   **Description**: List Kanban work units. Filter by brandId, status, or tasks assigned to this agent.
+*   **Description**: List Kanban work units. Filter by brandId, status, or tasks assigned to this user.
 *   **Arguments**:
     *   `brandId` (string, optional)
     *   `status` (enum: `['todo', 'in_progress', 'pending', 'done', 'archived', 'void']`, optional)
@@ -130,7 +183,7 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
     *   `brandId` (string, nullable, optional)
 
 ### `board_delete_task`
-*   **Description**: Delete a work unit task assigned to this agent.
+*   **Description**: Delete a work unit task assigned to this user.
 *   **Arguments**:
     *   `taskId` (string, required)
 *   **Aliases**:
@@ -138,7 +191,7 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
 
 ---
 
-## 4. Social Account Connections & Management
+## 5. Social Account Connections & Management
 
 ### `update_accounts`
 *   **Description**: Add or update a social media account for a brand.
@@ -525,5 +578,3 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
     *   `industry` (enum: `['fb', 'fitness', 'renovation', 'winery', 'general']`, required)
     *   `platform` (string, required)
     *   `template`, `idea`, `videoScript`, `prompt` (string, optional)
-
-

@@ -21,6 +21,12 @@ import { statSync } from 'node:fs'
 import { join } from 'node:path'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
+import {
+  BrandPlanError,
+  getBrandPlan,
+  runBrandPlanAction,
+  type BrandPlanWorkspaceData,
+} from '@/lib/brand-plan/service'
 
 let lastCheckedTime = Date.now()
 
@@ -40,12 +46,11 @@ function getSkillUpdateNotice(): string | null {
     if (latestMtime > lastCheckedTime) {
       lastCheckedTime = Date.now()
       return `[SYSTEM NOTICE] AMC operating instructions were updated:
-1. Use your own Agent API Key; never use Human Key + x-agent-id.
-1. Use your own Personal User API Key; never use x-agent-id.
+1. 1. Use the connected user's Personal API Key; never send x-agent-id.
 2. Operate only brands returned by get_brand_config (Capability + Crew scope).
 3. Work directly on drafts, assets, reviews, ActionItems and publishing resources.
 4. Request human input with post_action_item; do not create new WorkUnit tasks.
-5. Every write is recorded with the real Agent actor in the shared work log.`
+5. Every write is recorded with the connected user in the shared work log.`
     }
   } catch (e) {
     console.error('Failed to check skill mtime:', e)
@@ -80,6 +85,174 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+function brandPlanErrorResult(error: unknown, fallback: string) {
+  const status = error instanceof BrandPlanError ? error.status : 500
+  const message = error instanceof Error ? error.message : fallback
+  return {
+    content: [{ type: 'text' as const, text: JSON.stringify({ ok: false, status, error: message }) }],
+    isError: true,
+  }
+}
+
+function normalizeCalendarPlatform(platform: string) {
+  const value = platform.toLowerCase().trim()
+  if (['google_business', 'google business', 'google_business_profile', 'google maps', 'gbp', 'gmb'].includes(value)) return 'google'
+  if (['rednote', 'red', 'xhs', 'redbook'].includes(value)) return 'xiaohongshu'
+  return value
+}
+
+function pickCalendarMonth(plan: BrandPlanWorkspaceData, fallback?: string) {
+  if (fallback && /^\d{4}-\d{2}$/.test(fallback)) return fallback
+  const firstMonth = plan.annualPlan?.quarterlyPlans
+    ?.flatMap((quarter) => quarter.monthlyFocus || [])
+    ?.map((item) => item.month)
+    ?.find((month) => /^\d{4}-\d{2}$/.test(month))
+  if (firstMonth) return firstMonth
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function marketingPlanPeriodLabel(plan: NonNullable<BrandPlanWorkspaceData['annualPlan']>) {
+  const quarters = plan.quarterlyPlans || []
+  const first = quarters[0]
+  const last = quarters[quarters.length - 1]
+  if (first?.startMonth && last?.endMonth) return `${first.startMonth}_${last.endMonth}`
+  if (first?.periodLabel && last?.periodLabel) return `${first.periodLabel}_${last.periodLabel}`
+  return plan.theme || plan.goal || 'brand_marketing_plan'
+}
+
+async function ensureCalendarAccount(brandId: string, platform: string) {
+  const platformId = normalizeCalendarPlatform(platform)
+  const account = await prisma.socialAccount.findFirst({
+    where: { brandId, platformId },
+    orderBy: { updatedAt: 'desc' },
+  })
+  if (account) return account
+  return prisma.socialAccount.create({
+    data: {
+      brandId,
+      platformId,
+      handle: 'unconfigured',
+      displayName: platformId === 'xiaohongshu'
+        ? '小红书 / Rednote (未配置)'
+        : `${platformId.charAt(0).toUpperCase()}${platformId.slice(1)} (未配置)`,
+    },
+  })
+}
+
+function calendarItemBrief(item: any, brandName: string) {
+  return [
+    `Brand: ${brandName}`,
+    `Content title: ${item.title}`,
+    `Platform: ${item.platform}`,
+    `Content type: ${item.contentType}`,
+    `Selling point: ${item.product}`,
+    `Planning: ${item.planning}`,
+    `Opening reference: ${item.sampleHit}`,
+    Array.isArray(item.materialRequirements) && item.materialRequirements.length
+      ? `Material requirements: ${item.materialRequirements.join('; ')}`
+      : '',
+    'Write publish-ready social copy. Avoid internal planning labels, AI wording, generic claims, and unverified guarantees.',
+  ].filter(Boolean).join('\n')
+}
+
+async function createDraftsFromCalendarItems(input: {
+  brandId: string
+  actor: { id: string; type?: string | null; role?: string | null }
+  brandName: string
+  items: any[]
+  limit: number
+  assetIds?: string[]
+}) {
+  const { generateContentDirect } = await import('@/lib/amc-content/contentGenerationService')
+  const { normalizeContentPlatform } = await import('@/lib/amc-content/platforms')
+  const selectedItems = input.items.slice(0, input.limit)
+  const results = await Promise.all(selectedItems.map(async (item) => {
+    const platformId = normalizeCalendarPlatform(String(item.platformSlug || item.platform || 'instagram'))
+    const account = await ensureCalendarAccount(input.brandId, platformId)
+    let caption = ''
+    let hashtags: string[] = []
+    let provenance: unknown = null
+    let generationError: string | null = null
+    const contentPlatform = normalizeContentPlatform(platformId)
+
+    try {
+      const generated = await generateContentDirect({
+        brandId: input.brandId,
+        platform: contentPlatform,
+        theme: calendarItemBrief(item, input.brandName),
+        mediaUrls: [],
+        assetIds: input.assetIds || [],
+        actorId: input.actor.id,
+        actorType: input.actor.type || 'HUMAN',
+        actorRole: input.actor.role || 'USER',
+      })
+      caption = generated.caption || ''
+      hashtags = generated.hashtags || []
+      provenance = generated.provenance
+    } catch (error) {
+      generationError = errorMessage(error, 'amc-content generation failed')
+      caption = [
+        item.title,
+        item.planning,
+        item.sampleHit,
+      ].filter(Boolean).join('\n\n')
+    }
+
+    const scheduledAt = item.date ? new Date(item.date) : null
+    const draft = await prisma.contentDraft.create({
+      data: {
+        brandId: input.brandId,
+        accountId: account.id,
+        caption: caption.trim(),
+        captionLang: platformId === 'xiaohongshu' ? 'zh' : 'en',
+        hashtags,
+        scheduledAt: scheduledAt && !Number.isNaN(scheduledAt.getTime()) ? scheduledAt : null,
+        status: generationError ? 'failed' : 'draft',
+        agentId: input.actor.id,
+        agentNote: [
+          `Created from brand publishing calendar item ${item.id || ''}`.trim(),
+          generationError ? `amc-content generation failed: ${generationError}` : 'amc-content direct generation succeeded.',
+        ].join('\n'),
+      },
+      select: {
+        id: true,
+        status: true,
+        scheduledAt: true,
+        accountId: true,
+        caption: true,
+        hashtags: true,
+        agentNote: true,
+      },
+    })
+
+    if (input.assetIds?.length) {
+      const validAssets = await prisma.mediaAsset.findMany({
+        where: { brandId: input.brandId, id: { in: input.assetIds } },
+        select: { id: true },
+      })
+      await Promise.all(validAssets.map((asset: { id: string }, order: number) =>
+        prisma.contentAssetRef.create({ data: { draftId: draft.id, assetId: asset.id, order } }),
+      ))
+    }
+
+    return {
+      calendarItemId: item.id,
+      platform: platformId,
+      accountId: account.id,
+      draft,
+      generation: generationError
+        ? { ok: false, error: generationError }
+        : { ok: true, provenance },
+    }
+  }))
+  return {
+    ok: results.every((item) => item.generation.ok),
+    count: results.length,
+    results,
+  }
+}
+
 // ── Build and return a configured McpServer ────────────────────────────────
 export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken?: string) {
   const server = new McpServer({
@@ -108,7 +281,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   // ── get_brand_config ────────────────────────────────────────────────────
   server.tool(
     'get_brand_config',
-    'Get brand config and linked social accounts for brands this agent manages.',
+    'Get brand config and linked social accounts for brands this personal MCP user can access.',
     {
       brandId: z.string().optional().describe('Specific brand ID. Omit to list all linked brands.'),
     },
@@ -118,7 +291,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
       if (brandId) {
         const link = await requireActiveBrandLink(brandId, agent.id)
-        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
         const brand = await prisma.brand.findUnique({
           where: { id: brandId },
           select: {
@@ -185,7 +358,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'get_brand_profile_markdown',
     'Read brand profile markdown for AI pre-read context. Contains brand basics, positioning, multi-store structure, and social platform config.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       refresh: z.boolean().optional().describe('When true, regenerate the auto snapshot section before reading.'),
     },
     async ({ brandId, refresh }) => {
@@ -193,7 +366,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const profile = await readBrandProfileMarkdown(brandId, { ensureExists: true, refresh: !!refresh })
       if (!profile) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
@@ -207,14 +380,14 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'refresh_brand_profile_markdown',
     'Regenerate brand profile markdown auto section from latest system data while preserving manual section.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
     },
     async ({ brandId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const refreshed = await refreshBrandProfileMarkdown(brandId)
       if (!refreshed) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
@@ -233,7 +406,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'update_brand_profile_markdown',
     'Write full brand context markdown for this brand. Use this for long-form brand context; brand-config does not support brandContext field.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       markdown: z.string().describe('Full markdown content to persist as brand profile context.'),
     },
     async ({ brandId, markdown }) => {
@@ -241,7 +414,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
       if (!markdown.trim()) return { content: [{ type: 'text' as const, text: 'Error: markdown is required' }], isError: true }
 
       const saved = await writeBrandProfileMarkdown(brandId, markdown)
@@ -282,7 +455,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const WRITABLE = ['name', 'description', 'website', 'phone', 'address', 'location', 'timezone',
         'postfastApiKey', 'googlePlaceId', 'googleApiKey'] as const
@@ -300,7 +473,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           await queueBrandGrowthSync({
             brandId,
             dirtyPaths: growthDirtyPaths,
-            actor: { id: agent.id, email: agent.email, type: 'AI_AGENT', roles: [agent.role] },
+            actor: { id: agent.id, email: agent.email, type: 'HUMAN', roles: [agent.role] },
             tx,
           })
         }
@@ -377,7 +550,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   // ── get_agent_profile ───────────────────────────────────────────────────
   server.tool(
     'get_agent_profile',
-    'Get this agent\'s own profile from AI Marketing Crew.',
+    'Get this user\'s own profile from AI Marketing Crew.',
     {},
     async () => {
       const agent = await resolveAgent()
@@ -435,7 +608,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   // ── list_tasks ──────────────────────────────────────────────────────────
   server.tool(
     'list_tasks',
-    'List Kanban work units. Filter by brandId, status, or tasks assigned to this agent.',
+    'List Kanban work units. Filter by brandId, status, or tasks assigned to this user.',
     {
       brandId: z.string().optional(),
       status: z.enum(['todo', 'in_progress', 'pending', 'done', 'archived', 'void']).optional(),
@@ -448,7 +621,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
       if (brandId) {
         const link = await requireActiveBrandLink(brandId, agent.id)
-        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
       }
 
       const where: Record<string, unknown> = {}
@@ -479,7 +652,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       weight: z.number().int().optional().describe('1 = light, 3 = normal, 5 = heavy'),
       requiredInput: z.string().optional().describe('What human input is needed when status is pending.'),
       deadline: z.string().optional().describe('ISO 8601 deadline e.g. 2026-05-21T12:00:00Z'),
-      brandId: z.string().optional().describe('Brand ID. Required when this agent manages multiple brands.'),
+      brandId: z.string().optional().describe('Brand ID. Required when this user can access multiple brands.'),
     },
     async ({ title, description, status, priority, weight, requiredInput, deadline, brandId }) => {
       const agent = await resolveAgent()
@@ -487,11 +660,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
       if (brandId) {
         const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
       } else {
         const linkedBrandCount = await prisma.crewMember.count({ where: { userId: agent.id, active: true } })
         if (linkedBrandCount > 1) {
-          return { content: [{ type: 'text' as const, text: 'Error: brandId is required when this agent manages multiple brands' }], isError: true }
+          return { content: [{ type: 'text' as const, text: 'Error: brandId is required when this user can access multiple brands' }], isError: true }
         }
       }
 
@@ -541,12 +714,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
       const existingTask = await requireOwnedTask(taskId, agent.id)
       if (!existingTask) return { content: [{ type: 'text' as const, text: 'Error: Task not found' }], isError: true }
-      if (existingTask.assigneeId !== agent.id) return { content: [{ type: 'text' as const, text: 'Error: Task not assigned to this agent' }], isError: true }
+      if (existingTask.assigneeId !== agent.id) return { content: [{ type: 'text' as const, text: 'Error: Task not assigned to this user' }], isError: true }
 
       const requestedBrandId = fields.brandId === undefined ? existingTask.brandId : fields.brandId
       if (requestedBrandId) {
         const link = await requireActiveBrandLink(requestedBrandId, agent.id, 'WRITE')
-        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+        if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
       }
 
       const updateData: Record<string, unknown> = {}
@@ -592,7 +765,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const existingTask = await requireOwnedTask(taskId, agent.id)
-    if (!existingTask) return { content: [{ type: 'text' as const, text: 'Error: Task not found or not assigned to this agent' }], isError: true }
+    if (!existingTask) return { content: [{ type: 'text' as const, text: 'Error: Task not found or not assigned to this user' }], isError: true }
 
     await prisma.workUnit.delete({
       where: { id: taskId },
@@ -601,7 +774,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: true, taskId }) }] }
   }
 
-  server.tool('board_delete_task', 'Delete a work unit task assigned to this agent.', deleteTaskSchema, deleteTaskHandler)
+  server.tool('board_delete_task', 'Delete a work unit task assigned to this user.', deleteTaskSchema, deleteTaskHandler)
   server.tool('delete_task', '[Compatibility alias] Use board_delete_task.', deleteTaskSchema, deleteTaskHandler)
 
   // ── update_accounts ─────────────────────────────────────────────────────
@@ -626,7 +799,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const account = await prisma.socialAccount.upsert({
         where: { brandId_platformId_handle: { brandId, platformId, handle } },
@@ -654,7 +827,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const item = await prisma.actionItem.create({
         data: { brandId, type, priority: priority || 'medium', title, description, status: 'pending', agentId: agent.id },
@@ -683,7 +856,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id)
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     const { key } = await getBrandPostfastKey(brandId)
     if (!key) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured. Run update_brand_config first.' }], isError: true }
@@ -709,7 +882,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id)
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     const { key } = await getBrandPostfastKey(brandId)
     if (!key) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured.' }], isError: true }
@@ -732,7 +905,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     const { key } = await getBrandPostfastKey(brandId)
     if (!key) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured.' }], isError: true }
@@ -758,7 +931,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     const { key } = await getBrandPostfastKey(brandId)
     if (!key) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured.' }], isError: true }
@@ -798,7 +971,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     const { key, name } = await getBrandPostfastKey(brandId)
     if (!key) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured.' }], isError: true }
@@ -832,7 +1005,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
@@ -887,7 +1060,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
     const link = await requireBrandAgentLink(brandId, agent.id, 'WRITE')
-    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+    if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
     if (['instagram', 'tiktok', 'xiaohongshu', 'dianping', 'meituan'].includes(platform)) {
       try {
@@ -946,7 +1119,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const brand = await prisma.brand.findUnique({ 
         where: { id: brandId }, 
@@ -1000,7 +1173,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
@@ -1055,7 +1228,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
@@ -1122,7 +1295,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
@@ -1289,7 +1462,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const { listTopicFeeds } = await import('@/lib/topicFeed')
       const topics = await listTopicFeeds({ brandId, q, tag, status, limit })
@@ -1308,7 +1481,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const { getTopicFeed } = await import('@/lib/topicFeed')
       const topic = await getTopicFeed(brandId, topicId)
@@ -1319,7 +1492,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
   server.tool(
     'board_save_topic',
-    'Create or update a Hot Topics markdown research document for a brand. Intended for research AMC Agents.',
+    'Create or update a Hot Topics markdown research document for a brand. Intended for users running research workflows.',
     {
       brandId: z.string(),
       topicId: z.string().optional().describe('Pass to update an existing topic. Omit to create a new topic.'),
@@ -1333,12 +1506,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const { createTopicFeed, updateTopicFeed } = await import('@/lib/topicFeed')
       const result = topicId
         ? await updateTopicFeed({ brandId, topicId, title, markdown, summary, tags, sourceUrl, status: 'active' })
-        : await createTopicFeed({ brandId, title, markdown, summary, tags, sourceUrl, createdById: agent.id, createdByType: 'AI_AGENT' })
+        : await createTopicFeed({ brandId, title, markdown, summary, tags, sourceUrl, createdById: agent.id, createdByType: 'HUMAN' })
 
       if (!result.ok) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, topic: result.topic }, null, 2) }] }
@@ -1356,7 +1529,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const { archiveTopicFeed } = await import('@/lib/topicFeed')
       const result = await archiveTopicFeed(brandId, topicId)
@@ -1379,7 +1552,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const drafts = await prisma.contentDraft.findMany({
         where: {
@@ -1421,7 +1594,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       if (caption !== undefined && (!caption || !caption.trim())) {
         return { content: [{ type: 'text' as const, text: 'Error: caption cannot be empty' }], isError: true }
@@ -1529,7 +1702,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
       const result = await submitDraftForDelivery({ brandId, draftId, actorId: agent.id, note: note || null })
@@ -1557,7 +1730,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const data = await getSchedulingRecommendations({
         brandId,
@@ -1593,7 +1766,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const assets = await prisma.mediaAsset.findMany({
         where: {
@@ -1626,7 +1799,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       if (!fileBase64 && !imageUrl) {
         return { content: [{ type: 'text' as const, text: 'Error: Either fileBase64 or imageUrl must be provided' }], isError: true }
@@ -1738,7 +1911,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const asset = await prisma.mediaAsset.findFirst({
         where: { id: assetId, brandId },
@@ -1765,7 +1938,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const existing = await prisma.mediaAsset.findFirst({
         where: { id: assetId, brandId },
@@ -1800,7 +1973,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const asset = await prisma.mediaAsset.findFirst({
         where: { id: assetId, brandId },
@@ -1839,7 +2012,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const draft = await prisma.contentDraft.findFirst({
         where: { id: draftId, brandId },
@@ -1865,7 +2038,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const draft = await prisma.contentDraft.findFirst({
         where: { id: draftId, brandId },
@@ -1898,14 +2071,14 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'get_brand_subscription',
     'Get brand subscription details and included services.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
     },
     async ({ brandId }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const subscription = await prisma.brandSubscription.findFirst({
         where: {
@@ -1966,6 +2139,240 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
+  // ── Brand planning tools ───────────────────────────────────────────────
+  server.tool(
+    'get_brand_marketing_plan',
+    'Read the current brand marketing plan workspace, including research report, annual plan, publishing calendar, and merchant interview.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+    },
+    async ({ brandId }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id)
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      const data = await getBrandPlan(brandId)
+      if (!data) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, ...data }, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'generate_brand_research_report',
+    'Generate or refresh the brand research report used as the baseline for marketing planning.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+    },
+    async ({ brandId }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id, 'WRITE')
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      try {
+        const data = await runBrandPlanAction({ brandId, action: 'generate_research_report', body: {} })
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+      } catch (error) {
+        return brandPlanErrorResult(error, 'research_report_generation_failed')
+      }
+    }
+  )
+
+  server.tool(
+    'save_brand_merchant_interview',
+    'Save principal or merchant interview notes before plan generation.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+      rawNotes: z.string().describe('Complete interview notes or synthesis in natural business language.'),
+      summary: z.string().optional().describe('Short operator-facing summary.'),
+      answers: z.array(z.object({
+        question: z.string(),
+        answer: z.string(),
+      })).optional().describe('Optional structured Q&A pairs.'),
+    },
+    async ({ brandId, rawNotes, summary, answers }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id, 'WRITE')
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      try {
+        const data = await runBrandPlanAction({
+          brandId,
+          action: 'save_merchant_interview',
+          body: { rawNotes, summary, answers },
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+      } catch (error) {
+        return brandPlanErrorResult(error, 'merchant_interview_save_failed')
+      }
+    }
+  )
+
+  server.tool(
+    'generate_brand_marketing_plan',
+    'Generate the annual/rolling marketing plan for a brand from the latest research and interview context.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+    },
+    async ({ brandId }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id, 'WRITE')
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      try {
+        const data = await runBrandPlanAction({ brandId, action: 'generate_annual_plan', body: {} })
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+      } catch (error) {
+        return brandPlanErrorResult(error, 'marketing_plan_generation_failed')
+      }
+    }
+  )
+
+  server.tool(
+    'generate_brand_publishing_calendar',
+    'Generate a month publishing calendar from the current brand marketing plan.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+      month: z.string().optional().describe('Target month in YYYY-MM. Defaults to the first planned month.'),
+      publishingFreqOverride: z.any().optional().describe('Optional publishing frequency override matching BrandKnowledge.publishingFreq.'),
+    },
+    async ({ brandId, month, publishingFreqOverride }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id, 'WRITE')
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      try {
+        const current = await getBrandPlan(brandId)
+        const targetMonth = pickCalendarMonth(current?.marketingSolution || {}, month)
+        const data = await runBrandPlanAction({
+          brandId,
+          action: 'generate_publishing_calendar',
+          body: { month: targetMonth, publishingFreqOverride },
+        })
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ...data, month: targetMonth }, null, 2) }] }
+      } catch (error) {
+        return brandPlanErrorResult(error, 'publishing_calendar_generation_failed')
+      }
+    }
+  )
+
+  server.tool(
+    'create_content_drafts_from_calendar',
+    'Create publish-ready content drafts from existing publishing calendar items. Each platform is generated and written independently.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+      month: z.string().describe('Calendar month in YYYY-MM.'),
+      limit: z.number().int().min(1).max(12).optional().default(6),
+      assetIds: z.array(z.string()).optional().describe('Optional MediaAsset IDs to attach to every generated draft.'),
+    },
+    async ({ brandId, month, limit, assetIds }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id, 'WRITE')
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      const data = await getBrandPlan(brandId)
+      if (!data) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
+      const items = data?.marketingSolution?.publishingCalendar?.months?.[month] || []
+      if (!items.length) {
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: false, error: 'calendar_month_not_found', month }) }], isError: true }
+      }
+      const result = await createDraftsFromCalendarItems({
+        brandId,
+        actor: { id: user.id, type: 'HUMAN', role: user.role },
+        brandName: data.brand.name,
+        items,
+        limit: limit ?? 6,
+        assetIds,
+      })
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }], isError: !result.ok }
+    }
+  )
+
+  server.tool(
+    'run_brand_planning_workflow',
+    'Run the full brand planning workflow: verify access, optionally refresh research, generate marketing plan, generate publishing calendar, and optionally create content drafts.',
+    {
+      brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
+      month: z.string().optional().describe('Target month in YYYY-MM. Defaults to the first planned month.'),
+      refreshResearch: z.boolean().optional().default(false),
+      createDrafts: z.boolean().optional().default(true),
+      maxDrafts: z.number().int().min(1).max(12).optional().default(6),
+      assetIds: z.array(z.string()).optional().describe('Optional MediaAsset IDs to attach to generated drafts.'),
+    },
+    async ({ brandId, month, refreshResearch, createDrafts, maxDrafts, assetIds }) => {
+      const user = await resolveAgent()
+      if (!user) return { content: [{ type: 'text' as const, text: 'Error: Invalid personal API key' }], isError: true }
+      const link = await requireActiveBrandLink(brandId, user.id, 'WRITE')
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
+
+      const steps: Array<Record<string, unknown>> = []
+      try {
+        const initial = await getBrandPlan(brandId)
+        steps.push({ step: 'read_workspace', ok: Boolean(initial), merchantInterviewRequired: initial?.merchantInterviewRequired })
+
+        if (refreshResearch || !initial?.marketingSolution?.researchReport) {
+          const research = await runBrandPlanAction({ brandId, action: 'generate_research_report', body: {} })
+          steps.push({ step: 'generate_research_report', ok: true, snapshotId: research.marketingSolution.researchReport?.snapshotId })
+        }
+
+        const annual = await runBrandPlanAction({ brandId, action: 'generate_annual_plan', body: {} })
+        steps.push({
+          step: 'generate_marketing_plan',
+          ok: true,
+          generationMode: annual.marketingSolution.annualPlan?.generationMode,
+          period: annual.marketingSolution.annualPlan ? marketingPlanPeriodLabel(annual.marketingSolution.annualPlan) : null,
+        })
+
+        const targetMonth = pickCalendarMonth(annual.marketingSolution, month)
+        const calendar = await runBrandPlanAction({
+          brandId,
+          action: 'generate_publishing_calendar',
+          body: { month: targetMonth },
+        })
+        const calendarItems = calendar.marketingSolution.publishingCalendar?.months?.[targetMonth] || []
+        steps.push({ step: 'generate_publishing_calendar', ok: true, month: targetMonth, itemCount: calendarItems.length })
+
+        let drafts = null
+        if (createDrafts) {
+          drafts = await createDraftsFromCalendarItems({
+            brandId,
+            actor: { id: user.id, type: 'HUMAN', role: user.role },
+            brandName: calendar.brand.name,
+            items: calendarItems,
+            limit: maxDrafts ?? 6,
+            assetIds,
+          })
+          steps.push({ step: 'create_content_drafts', ok: drafts.ok, count: drafts.count })
+        }
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              ok: steps.every((step) => step.ok !== false),
+              brand: calendar.brand,
+              month: targetMonth,
+              steps,
+              marketingSolution: calendar.marketingSolution,
+              drafts,
+            }, null, 2),
+          }],
+          isError: Boolean(drafts && !drafts.ok),
+        }
+      } catch (error) {
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify({ ok: false, steps, error: errorMessage(error, 'brand_planning_workflow_failed') }, null, 2) }],
+          isError: true,
+        }
+      }
+    }
+  )
+
   server.tool(
     'create_tasks',
     'Batch create Kanban tasks.',
@@ -1988,7 +2395,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const createdTasks = []
       for (const t of tasks) {
@@ -2038,7 +2445,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'get_brand_analytics',
     'Get brand historical analytics (likes, comments, engagement, time-series).',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       from: z.string().optional().describe('ISO date string (from)'),
       to: z.string().optional().describe('ISO date string (to)'),
       platform: z.string().optional().describe('Filter platform e.g. instagram, tiktok'),
@@ -2070,7 +2477,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'get_social_insights',
     'Get live brand social insights (sentiment, keywords, conversions, trends, top posts).',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       from: z.string().optional().describe('ISO date string (from)'),
       to: z.string().optional().describe('ISO date string (to)'),
       platform: z.string().optional().describe('Filter platform e.g. instagram, tiktok'),
@@ -2102,7 +2509,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'get_brand_reviews',
     'Fetch the latest Google Maps / GBP reviews for a brand.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       limit: z.number().int().min(1).max(50).optional().default(10),
     },
     async ({ brandId, limit }) => {
@@ -2140,7 +2547,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       const assets = await prisma.mediaAsset.findMany({
         where: {
@@ -2189,7 +2596,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'create_require_input_task',
     'Create a task on Kanban that requires human input or review.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       title: z.string().describe('Concise task title explaining what input/review is needed.'),
       description: z.string().describe('Details or questions for the human. Markdown supported.'),
       priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
@@ -2200,7 +2607,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
-      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand not linked to this agent' }], isError: true }
+      if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
       let reqInputVal = description || title
       if (attachments && attachments.length > 0) {
@@ -2246,7 +2653,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'save_local_document',
     'Save a marketing report or strategy document locally as a Markdown file.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       filename: z.string().describe('File name with extension e.g. "weekly_report_2026-W24.md"'),
       docType: z.enum(['weekly_report', 'monthly_report', 'strategy_plan', 'daily_memory', 'other']).describe('Type of document'),
       content: z.string().describe('Markdown text content of the document.')
@@ -2278,7 +2685,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'sync_to_kanban',
     'Synchronize a local document to the Kanban board as a completed task.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       docId: z.string().describe('Document ID returned by save_local_document.'),
       summary: z.string().optional().describe('Short summary to show in the task details.')
     },
@@ -2309,7 +2716,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'write_daily_memory',
     'Save daily memory markdown file for a brand.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       date: z.string().describe('Date in YYYY-MM-DD format.'),
       content: z.string().describe('Markdown text containing daily records.')
     },
@@ -2340,7 +2747,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     'read_daily_memory',
     'Read daily memory markdown files for a brand.',
     {
-      brandId: z.string().describe('Brand ID linked to this agent.'),
+      brandId: z.string().describe('Brand ID linked to this user.'),
       days: z.number().int().optional().describe('Number of recent days to read. Default 3.'),
       date: z.string().optional().describe('Specific date YYYY-MM-DD to read.'),
     },
