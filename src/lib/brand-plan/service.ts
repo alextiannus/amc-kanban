@@ -1453,15 +1453,14 @@ async function reviewCalendarCreativeItemsWithLLM(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
   items: BrandPlanCalendarItem[]
-) {
+): Promise<BrandPlanCalendarItem[]> {
   if (!items.length) return items
   const chunkSize = 6
   if (items.length > chunkSize) {
-    const reviewed: BrandPlanCalendarItem[] = []
-    for (let index = 0; index < items.length; index += chunkSize) {
-      reviewed.push(...await reviewCalendarCreativeItemsWithLLM(brand, current, items.slice(index, index + chunkSize)))
-    }
-    return reviewed
+    const chunks: BrandPlanCalendarItem[][] = []
+    for (let index = 0; index < items.length; index += chunkSize) chunks.push(items.slice(index, index + chunkSize))
+    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 2, (chunk): Promise<BrandPlanCalendarItem[]> => reviewCalendarCreativeItemsWithLLM(brand, current, chunk))
+    return reviewedChunks.flat()
   }
   const brandName = brandDisplayName(brand)
   const payload = {
@@ -1505,9 +1504,9 @@ async function reviewCalendarCreativeItemsWithLLM(
     const result = await callLLM('marketing_plan', prompt, Math.min(2600, 900 + items.length * 260), {
       temperature: 0.28,
       jsonMode: true,
-      deadlineMs: 90000,
-      attemptTimeoutMs: [30000, 30000, 30000],
-      maxAttempts: 3,
+      deadlineMs: 50000,
+      attemptTimeoutMs: [22000, 22000],
+      maxAttempts: 2,
       allowDefaultFallback: true,
       allowAnyFallback: true,
       allowSystemFallback: true,
@@ -1560,6 +1559,24 @@ function fallbackReviewedCalendarItems(brand: BrandPlanBrand, items: BrandPlanCa
           ],
     }
   })
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  mapper: (value: T, index: number) => Promise<R>
+) {
+  const results: R[] = []
+  let nextIndex = 0
+  async function worker() {
+    while (nextIndex < values.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(values[index], index)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker))
+  return results
 }
 
 function mergeReviewedCalendarPlanning(planning: string, creativeSummary: string, qualityNote: string, approved: boolean) {
