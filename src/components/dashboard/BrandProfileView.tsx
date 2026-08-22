@@ -1269,7 +1269,7 @@ ${storeLines}
     : undefined
   const calendarQuarterReady = Boolean(currentQuarterPlan || currentAnnualQuarterPlan)
   const minimumCalendarDate = minimumContentPlanDate()
-  const minimumCalendarMonth = minimumCalendarDate.slice(0, 7)
+  const minimumCalendarMonth = minimumContentPlanMonthValue()
   const canGoPreviousCalendarMonth = addMonths(calendarMonth, -1) >= minimumCalendarMonth
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
   const activePublishingPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) =>
@@ -1901,17 +1901,21 @@ ${storeLines}
                 <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center justify-between gap-3">
                     <input
-                      type="date"
+                      type="text"
                       value={item.date}
-                      min={minimumCalendarDate}
                       onChange={(event) => {
-                        const nextDate = event.target.value < minimumCalendarDate ? minimumCalendarDate : event.target.value
-                        if (nextDate !== event.target.value) {
-                          showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排。`, 'info')
-                        }
-                        handleUpdateCalendarItem(item.id, index, { date: nextDate })
+                        handleUpdateCalendarItem(item.id, index, { date: event.target.value })
                       }}
-                      className="w-32 rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-black text-white outline-none dark:bg-white dark:text-slate-900"
+                      onBlur={(event) => {
+                        const rawDate = event.target.value.trim()
+                        const nextDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && rawDate >= minimumCalendarDate ? rawDate : minimumCalendarDate
+                        if (nextDate !== rawDate) {
+                          showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排。`, 'info')
+                          handleUpdateCalendarItem(item.id, index, { date: nextDate })
+                        }
+                      }}
+                      placeholder="YYYY-MM-DD"
+                      className="w-36 rounded-lg bg-slate-900 px-2 py-1 text-center text-[11px] font-black text-white outline-none dark:bg-white dark:text-slate-900"
                     />
                     <div className="flex gap-1.5">
                       <select
