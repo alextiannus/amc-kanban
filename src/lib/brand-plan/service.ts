@@ -3,6 +3,7 @@ import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import {
   ensureGrowthMerchantForBrand,
+  generateGrowthResearchReportForBrand,
   readGrowthMerchantData,
 } from '@/lib/growthDataCenter'
 import { matchPromotionStrategyCreativeBatch } from '@/lib/promotion-strategy/clients'
@@ -196,7 +197,7 @@ export async function runBrandPlanAction(input: {
 
   let next = current
   if (input.action === 'generate_research_report') {
-    const researchReport = await saveResearchReport(brand.id, await buildResearchReport(brand))
+    const researchReport = await saveResearchReport(brand.id, await buildGrowthResearchReport(brand))
     next = {
       ...current,
       researchReport,
@@ -379,6 +380,62 @@ async function buildResearchReport(brand: BrandPlanBrand): Promise<NonNullable<B
       '最近三个月最想提升新客、回头客、外卖、预订还是客单价？',
       '哪些话不要说，哪些产品暂时不要主推？',
     ],
+  }
+}
+
+async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
+  const job = await generateGrowthResearchReportForBrand(brand)
+  if (text(job.status) === 'failed') {
+    throw new BrandPlanError('growth_research_failed', 502)
+  }
+  if (!['completed', 'needs_review'].includes(text(job.status))) {
+    throw new BrandPlanError('growth_research_still_running', 409)
+  }
+  const localReport = await buildResearchReport(brand)
+  const result = objectValue(job.result)
+  const sourceCoverage = objectValue(job.source_coverage)
+  const coverageScore = typeof job.coverage_score === 'number'
+    ? job.coverage_score
+    : typeof result.coverage_score === 'number'
+      ? result.coverage_score
+      : null
+  const coverageItems = Object.entries(sourceCoverage)
+    .filter(([, value]) => Boolean(value))
+    .map(([key]) => key)
+  const reportPaths = [
+    text(job.advanced_report_path),
+    text(job.initial_report_path),
+    text(result.advanced_report_path),
+    text(result.report_path),
+  ].filter(Boolean)
+  const growthIssues = [
+    coverageScore !== null && coverageScore < 70 ? `公开资料覆盖度约 ${coverageScore}，建议补齐缺失平台资料。` : '',
+    text(job.status) === 'needs_review' ? 'Growth 调研结果需要主理人复核后再用于重要决策。' : '',
+  ].filter(Boolean)
+
+  return {
+    ...localReport,
+    generatedAt: new Date().toISOString(),
+    summary: [
+      `${brand.name} 的品牌摸底报告已由 AMC-Growth 调研生成，并回写到 AMC-Kanban。`,
+      coverageScore !== null ? `本次公开资料覆盖度：${coverageScore}。` : '',
+      reportPaths.length ? `Growth 报告路径：${reportPaths[0]}` : '',
+    ].filter(Boolean).join(' '),
+    dataSources: uniqueStrings([
+      'AMC-Growth 品牌摸底调研',
+      ...localReport.dataSources,
+      ...coverageItems.map((item) => `Growth ${item}`),
+    ]),
+    marketingStatus: text(result.assessment_status)
+      ? `Growth 调研状态：${text(result.assessment_status)}。${localReport.marketingStatus}`
+      : localReport.marketingStatus,
+    marketAnalysis: localReport.marketAnalysis,
+    issues: uniqueStrings([...growthIssues, ...localReport.issues]),
+    growthPoints: localReport.growthPoints,
+    missingQuestions: uniqueStrings([
+      ...localReport.missingQuestions,
+      reportPaths.length ? '请主理人查看 Growth 报告全文，确认是否有平台资料缺失或竞品判断需要修正。' : '',
+    ]),
   }
 }
 
@@ -1310,7 +1367,9 @@ function requireAnnualPlan(current: BrandPlanWorkspaceData) {
 }
 
 function requireQuarterPlan(current: BrandPlanWorkspaceData) {
-  if (!current.quarterlyPlans?.length) throw new BrandPlanError('quarter_plan_required', 409)
+  if (!current.quarterlyPlans?.length && !current.annualPlan?.quarterlyPlans?.length) {
+    throw new BrandPlanError('quarter_plan_required', 409)
+  }
 }
 
 function serializeMerchantInterview(value: {

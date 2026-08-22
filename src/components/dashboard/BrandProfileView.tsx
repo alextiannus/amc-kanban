@@ -7,7 +7,7 @@ import {
   Settings, BookOpen, Loader2,
   RefreshCw, FileText, Store, Utensils,
   Edit3, Plus,
-  Users, Goal, Target, HelpCircle,
+  Users, Goal, HelpCircle,
   MapPin, Music2
 } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -204,8 +204,17 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'merchant_interview_required') return '请先填写并保存品牌主张访谈。'
   if (code === 'brand_plan_update_required') return '请先生成年度营销方案。'
   if (code === 'annual_plan_required') return '请先生成年度营销方案。'
-  if (code === 'quarter_plan_required') return '请先生成季度营销方案。'
+  if (code === 'quarter_plan_required') return '请先生成包含季度明细的年度营销方案。'
+  if (code === 'growth_research_still_running') return 'AMC-Growth 调研仍在进行中，请稍后再次读取报告。'
+  if (code === 'growth_research_failed') return 'AMC-Growth 调研生成失败，请检查 Growth 服务或稍后重试。'
+  if (code === 'growth_research_create_failed') return '未能触发 AMC-Growth 摸底调研，请检查 Growth 服务。'
   return code || '营销方案操作失败，请重试'
+}
+
+function statusDotClass(status: 'ready' | 'warning' | 'pending') {
+  if (status === 'ready') return 'bg-emerald-500 shadow-emerald-500/30'
+  if (status === 'warning') return 'bg-amber-400 shadow-amber-400/30'
+  return 'bg-rose-500 shadow-rose-500/30'
 }
 
 function socialPlatformLabel(platformId: string) {
@@ -740,15 +749,6 @@ ${storeLines}
     }
   }
 
-  const handleGenerateQuarterPlan = async () => {
-    setPlanGenerating('quarter')
-    try {
-      await runBrandPlanAction('generate_quarter_plan', '季度营销方案已生成')
-    } finally {
-      setPlanGenerating(null)
-    }
-  }
-
   const addMonths = (month: string, offset: number) => {
     const [year, monthNumber] = month.split('-').map(Number)
     const date = new Date(year, monthNumber - 1 + offset, 1)
@@ -829,16 +829,20 @@ ${storeLines}
   const annualPlan = brandPlanData.annualPlan
   const brandPlanUpdated = Boolean(brandPlanData.researchReport || merchantInterview)
   const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`
+  const annualQuarterPlans = annualPlan?.quarterlyPlans || []
+  const currentAnnualQuarterPlan = annualQuarterPlans.find(item => item.quarter === currentQuarter) || annualQuarterPlans[0]
   const currentQuarterPlan = brandPlanData.quarterlyPlans?.find(item => item.quarter === currentQuarter) || brandPlanData.quarterlyPlans?.[0]
+  const calendarQuarterReady = Boolean(currentQuarterPlan || currentAnnualQuarterPlan)
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
   const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
   const postfastSyncedAt = typeof brandSettings?.postfastSyncedAt === 'string' ? brandSettings.postfastSyncedAt : null
   const sourceStatusItems = [
-    { label: '数据调研', value: report ? '已生成' : '待生成' },
-    { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录' },
-    { label: '营销方案输入', value: brandPlanUpdated ? '已具备' : '待完善' },
-    { label: '年度营销方案', value: annualPlan ? '已生成' : '待生成' },
-    { label: '发布日历', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成' },
+    { label: '数据调研', value: report ? '已生成' : '待生成', status: report ? 'ready' : 'pending' },
+    { label: '社交媒体渠道', value: socialAccounts.length ? `${socialAccounts.length} 个账号` : '待同步', status: socialAccounts.length ? 'ready' : 'pending' },
+    { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录', status: merchantInterviewRequired ? 'pending' : 'ready' },
+    { label: '营销方案输入', value: brandPlanUpdated ? '已具备' : '待完善', status: brandPlanUpdated ? 'ready' : 'warning' },
+    { label: '年度营销方案', value: annualPlan ? (annualQuarterPlans.length ? `已生成 · ${annualQuarterPlans.length}季` : '已生成') : '待生成', status: annualPlan ? 'ready' : 'pending' },
+    { label: '发布日历', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成', status: currentCalendarItems.length ? 'ready' : 'pending' },
   ]
 
   const reportModal = showResearchReport && (
@@ -995,10 +999,13 @@ ${storeLines}
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Marketing Solution Workspace</p>
                 <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">品牌计划与营销方案</h2>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
                 {sourceStatusItems.map(item => (
                   <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
-                    <p className="text-[10px] font-bold text-slate-400">{item.label}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`h-2 w-2 rounded-full shadow-sm ${statusDotClass(item.status as 'ready' | 'warning' | 'pending')}`} />
+                      <p className="truncate text-[10px] font-bold text-slate-400">{item.label}</p>
+                    </div>
                     <p className="mt-1 text-xs font-black text-slate-800 dark:text-slate-100">{item.value}</p>
                   </div>
                 ))}
@@ -1192,116 +1199,88 @@ ${storeLines}
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 3</p>
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white">年度营销方案</h3>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                    {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成年度营销方案
-                  </button>
-                  <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑年度营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
-                    编辑
-                  </button>
-                </div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 3</p>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">年度营销方案</h3>
               </div>
-              {annualPlan ? (
-                <div className="mt-4 space-y-3">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{annualPlan.theme}</p>
-                  <p className="line-clamp-2 text-xs text-slate-500">{annualPlan.goal}</p>
-                  {annualPlan.quarterlyPlans?.length ? (
-                    <div className="space-y-3">
-                      {annualPlan.quarterlyPlans.map(item => (
-                        <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
-                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter} · {item.focus}</p>
-                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.strategy}</p>
-                            </div>
-                            {item.campaigns.length ? (
-                              <p className="shrink-0 text-[11px] font-bold text-purple-600">{item.campaigns.slice(0, 2).join(' / ')}</p>
-                            ) : null}
-                          </div>
-                          {item.promotionPoints.length ? (
-                            <div className="mt-3 grid gap-2">
-                              {item.promotionPoints.slice(0, 4).map(point => (
-                                <div key={`${item.quarter}-${point.name}`} className="rounded-lg border border-white bg-white p-2 text-xs dark:border-slate-800 dark:bg-slate-900">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="font-black text-slate-800 dark:text-slate-100">{point.name}</span>
-                                    <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-200">{point.suggestedMonthlyPosts} 次/月</span>
-                                    {point.platforms.slice(0, 3).map(platform => (
-                                      <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{platform}</span>
-                                    ))}
-                                  </div>
-                                  <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {annualPlan.quarterlyFocus.map(item => (
-                        <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
-                          <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter}</p>
-                          <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : <p className="mt-4 text-xs text-slate-500">由 AMC-Kanban 读取五块输入，生成年度市场目标和四个季度重点。</p>}
+              <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
+                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成年度营销方案
+                </button>
+                <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑年度营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                  编辑
+                </button>
+              </div>
             </div>
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Section 3</p>
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white">季度营销方案</h3>
-                </div>
-                <div className="flex flex-wrap justify-end gap-2">
-                  <button type="button" onClick={handleGenerateQuarterPlan} disabled={Boolean(planGenerating) || !annualPlan} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                    {planGenerating === 'quarter' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Target className="h-3.5 w-3.5" />} 生成季度营销方案
-                  </button>
-                  <button type="button" onClick={() => currentQuarterPlan && openAiContentEditor({ target: 'quarter_plan', title: '编辑季度营销方案', value: currentQuarterPlan })} disabled={!currentQuarterPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
-                    编辑
-                  </button>
-                </div>
-              </div>
-              {currentQuarterPlan ? (
-                <div className="mt-4 space-y-3">
-                  <p className="line-clamp-2 text-sm font-bold text-slate-800 dark:text-slate-100">{currentQuarterPlan.quarter} · {currentQuarterPlan.objective}</p>
-                  <div className="space-y-2">
-                    {currentQuarterPlan.monthlyFocus.map(item => (
-                      <div key={item.month} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
-                        <span className="w-16 text-xs font-black text-indigo-600">{item.month}</span>
-                        <span className="text-xs text-slate-600 dark:text-slate-300">{item.focus}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {currentQuarterPlan.promotionPoints?.length ? (
-                    <div className="grid gap-2">
-                      {currentQuarterPlan.promotionPoints.map(point => (
-                        <div key={point.name} className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-xs font-black text-slate-800 dark:text-slate-100">{point.name}</span>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-slate-900 dark:text-indigo-200">{point.suggestedMonthlyPosts} 次/月</span>
-                            {point.platforms.slice(0, 3).map(platform => (
-                              <span key={platform} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">{platform}</span>
-                            ))}
-                          </div>
-                          <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
-                        </div>
+            {annualPlan ? (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-950">
+                  <p className="text-sm font-black text-slate-900 dark:text-white">{annualPlan.theme}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{annualPlan.goal}</p>
+                  {annualPlan.metrics?.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {annualPlan.metrics.slice(0, 6).map(metric => (
+                        <span key={metric} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">{metric}</span>
                       ))}
                     </div>
                   ) : null}
                 </div>
-              ) : <p className="mt-4 text-xs text-slate-500">从年度营销方案拆出当前季度目标、每月重点和内容方向。</p>}
-            </div>
+                {annualQuarterPlans.length ? (
+                  <div className="grid gap-3 xl:grid-cols-2">
+                    {annualQuarterPlans.map(item => (
+                      <div key={item.quarter} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-xs font-black text-slate-900 dark:text-white">{item.quarter} · {item.focus}</p>
+                            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.strategy}</p>
+                          </div>
+                          {item.campaigns.length ? (
+                            <p className="shrink-0 text-[11px] font-bold text-purple-600">{item.campaigns.slice(0, 2).join(' / ')}</p>
+                          ) : null}
+                        </div>
+                        {item.promotionPoints.length ? (
+                          <div className="mt-3 grid gap-2">
+                            {item.promotionPoints.slice(0, 4).map(point => (
+                              <div key={`${item.quarter}-${point.name}`} className="rounded-lg border border-white bg-white p-2 text-xs dark:border-slate-800 dark:bg-slate-900">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-black text-slate-800 dark:text-slate-100">{point.name}</span>
+                                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-200">{point.suggestedMonthlyPosts} 次/月</span>
+                                  {point.platforms.slice(0, 3).map(platform => (
+                                    <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{platform}</span>
+                                  ))}
+                                </div>
+                                <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                        {item.monthlyFocus.length ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                            {item.monthlyFocus.map(month => (
+                              <div key={`${item.quarter}-${month.month}`} className="rounded-lg bg-white p-2 dark:bg-slate-900">
+                                <p className="text-[10px] font-black text-purple-600">{month.month}</p>
+                                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{month.focus}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {annualPlan.quarterlyFocus.map(item => (
+                      <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
+                        <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : <p className="mt-4 text-xs text-slate-500">由 AMC-Kanban 读取五块输入，生成年度目标、四个季度策略、重点推广点和月度发布方向。</p>}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
@@ -1314,7 +1293,7 @@ ${storeLines}
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, -1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">上个月</button>
                 <input type="month" value={calendarMonth} onChange={event => setCalendarMonth(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700 dark:bg-slate-950" />
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">下个月</button>
-                <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !currentQuarterPlan} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
+                <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !calendarQuarterReady} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
                   {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成季度内容发布日历
                 </button>
                 <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 发布日历`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">

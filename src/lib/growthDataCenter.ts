@@ -231,6 +231,95 @@ export async function readGrowthMerchantData(brandKey: string) {
   }
 }
 
+export type GrowthBrandIntelligenceJob = {
+  ok?: boolean
+  accepted?: boolean
+  job_id?: string
+  status?: string
+  progress?: number
+  result?: Record<string, unknown> | null
+  initial_report_path?: string | null
+  advanced_report_path?: string | null
+  coverage_score?: number | null
+  source_coverage?: Record<string, unknown>
+  error?: unknown
+}
+
+export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBrand & {
+  website?: string | null
+  phone?: string | null
+  googleBusinessUrl?: string | null
+  googleReviewUrl?: string | null
+  accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null }>
+}) {
+  const socialProfiles = Object.fromEntries((brand.accounts || [])
+    .map((account) => [normalizeGrowthSocialPlatform(account.platformId), account.profileUrl || account.handle || ''])
+    .filter(([platform, value]) => platform && value))
+  const payload = {
+    brand_name: brand.name,
+    market: brand.location || brand.address || 'Singapore',
+    category: brand.industry || 'Local merchant',
+    website_url: brand.website || '',
+    google_maps_url: brand.googleBusinessUrl || brand.googleReviewUrl || '',
+    instagram_url: socialProfiles.instagram || '',
+    facebook_url: socialProfiles.facebook || '',
+    tiktok_url: socialProfiles.tiktok || '',
+    xiaohongshu_url: socialProfiles.xiaohongshu || '',
+    main_concern: '生成品牌计划前的线上经营摸底调研报告。',
+    report_tier: 'initial',
+    generate_advanced: true,
+    source: 'amc-kanban-brand-plan',
+    force_refresh: true,
+    external_evidence: {
+      schema_version: 'amc.brand_intelligence.evidence.v1',
+      collected_at: new Date().toISOString(),
+      public_sources: [],
+      collection_notes: [
+        `AMC-Kanban brand_id=${brand.id}`,
+        brand.description ? `品牌介绍：${brand.description}` : '',
+        brand.address ? `门店地址：${brand.address}` : '',
+        brand.phone ? `联系电话：${brand.phone}` : '',
+      ].filter(Boolean),
+    },
+  }
+  const createResponse = await growthRequest('/v1/brand-intelligence-intake', {
+    method: 'POST',
+    headers: {
+      'idempotency-key': `amc-kanban-brand-plan:${brand.id}:${Date.now()}`,
+    },
+    body: JSON.stringify(payload),
+  })
+  const created = await createResponse.json().catch(() => ({})) as GrowthBrandIntelligenceJob
+  if (!createResponse.ok) {
+    throw new GrowthDataCenterError(createResponse.status, String((created as Record<string, unknown>).error || 'growth_research_create_failed'))
+  }
+
+  const jobId = created.job_id
+  if (!jobId) throw new GrowthDataCenterError(502, 'growth_research_job_missing')
+
+  let job: GrowthBrandIntelligenceJob = created
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (['completed', 'needs_review', 'failed', 'cancelled'].includes(String(job.status))) break
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    const statusResponse = await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' })
+    const statusPayload = await statusResponse.json().catch(() => ({})) as GrowthBrandIntelligenceJob
+    if (!statusResponse.ok) {
+      throw new GrowthDataCenterError(statusResponse.status, String((statusPayload as Record<string, unknown>).error || 'growth_research_status_failed'))
+    }
+    job = statusPayload
+  }
+  return job
+}
+
+function normalizeGrowthSocialPlatform(platformId: string) {
+  const key = platformId.toLowerCase()
+  if (key.includes('instagram')) return 'instagram'
+  if (key.includes('tiktok')) return 'tiktok'
+  if (key.includes('facebook') || key === 'fb') return 'facebook'
+  if (key.includes('xiaohongshu') || key === 'xhs') return 'xiaohongshu'
+  return ''
+}
+
 export async function readGrowthMerchantKnowledge(brandKey: string) {
   const response = await growthRequest(
     `/v1/merchants/${encodeURIComponent(brandKey)}/knowledge`,
