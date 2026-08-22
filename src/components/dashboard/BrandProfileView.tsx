@@ -181,6 +181,11 @@ type EditableAiContent =
   | { target: 'quarter_plan'; title: string; value: NonNullable<NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number]> }
   | { target: 'calendar_month'; title: string; month: string; value: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string] }
 
+type EditableSocialAccount = SocialAccountSummary & {
+  loginUsername?: string | null
+  loginPassword?: string | null
+}
+
 type GrowthSyncStatus = {
   status: 'NOT_QUEUED' | 'PENDING' | 'PROCESSING' | 'CONFLICT' | 'SYNCED'
   pendingPaths: string[]
@@ -215,6 +220,13 @@ function statusDotClass(status: 'ready' | 'warning' | 'pending') {
   if (status === 'ready') return 'bg-emerald-500 shadow-emerald-500/30'
   if (status === 'warning') return 'bg-amber-400 shadow-amber-400/30'
   return 'bg-rose-500 shadow-rose-500/30'
+}
+
+function textLines(value: string) {
+  return value
+    .split(/\n+/)
+    .map(item => item.replace(/^[-*]\s*/, '').trim())
+    .filter(Boolean)
 }
 
 function socialPlatformLabel(platformId: string) {
@@ -309,6 +321,10 @@ function BrandProfileContent({
   const [identitySnapshot, setIdentitySnapshot] = useState<BrandIdentitySnapshot | null>(null)
   const [growthSyncStatus, setGrowthSyncStatus] = useState<GrowthSyncStatus | null>(null)
   const [postfastSyncing, setPostfastSyncing] = useState(false)
+  const [showPlanEditor, setShowPlanEditor] = useState(false)
+  const [planEditorSaving, setPlanEditorSaving] = useState(false)
+  const [editingSocialAccount, setEditingSocialAccount] = useState<EditableSocialAccount | null>(null)
+  const [socialAccountSaving, setSocialAccountSaving] = useState(false)
 
   // Controlled vs Uncontrolled logic
   const activeBrandTone = brandTone !== undefined ? brandTone : localBrandTone
@@ -328,6 +344,8 @@ function BrandProfileContent({
   const [draftMarket, setDraftMarket] = useState('')
   const [draftDistrict, setDraftDistrict] = useState('')
   const [draftMenuItems, setDraftMenuItems] = useState<Array<Record<string, unknown>>>([])
+  const [draftMenuText, setDraftMenuText] = useState('')
+  const [draftCompetitorsText, setDraftCompetitorsText] = useState('')
 
   // Kanban-owned evergreen creative identity, separate from the marketing solution workspace.
   const [creativeIdentity, setCreativeIdentity] = useState({ brandVoice: '', brandImage: '', promotionFocus: '' })
@@ -470,6 +488,8 @@ function BrandProfileContent({
         setDraftMarket(k.market || '')
         setDraftDistrict(k.district || '')
         setDraftMenuItems(Array.isArray(k.menuItems) ? k.menuItems : [])
+        setDraftMenuText(Array.isArray(k.menuItems) ? k.menuItems.map((item: Record<string, unknown>) => String(item.name || item.title || '').trim()).filter(Boolean).join('\n') : '')
+        setDraftCompetitorsText(Array.isArray(k.competitors) ? k.competitors.join('\n') : '')
         // Section 4 — local creative identity & publishing frequency
         setCreativeIdentity({
           brandVoice: k.brandVoice || '',
@@ -483,6 +503,8 @@ function BrandProfileContent({
         setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftStores([])
         setDraftMarket(''); setDraftDistrict('')
         setDraftMenuItems([])
+        setDraftMenuText('')
+        setDraftCompetitorsText('')
         setCreativeIdentity({ brandVoice: '', brandImage: '', promotionFocus: '' })
       }
 
@@ -591,6 +613,21 @@ ${storeLines}
     setShowContextModal(true)
   }
 
+  const openPlanEditor = () => {
+    if (!draftStores.length && (draftName || draftAddress || draftPhone || draftBusinessHours || draftReservationUrl || draftOrderingUrl)) {
+      setDraftStores([{
+        storeId: 'primary',
+        name: draftName,
+        address: draftAddress,
+        phone: draftPhone,
+        businessHours: draftBusinessHours,
+        reservationUrl: draftReservationUrl,
+        orderingUrl: draftOrderingUrl,
+      }])
+    }
+    setShowPlanEditor(true)
+  }
+
   const extractBlock = (markdownStr: string, startTag: string, endTag: string): string => {
     const startIdx = markdownStr.indexOf(startTag)
     const endIdx = markdownStr.indexOf(endTag)
@@ -696,6 +733,131 @@ ${storeLines}
     }
   }
 
+  const saveIdentityField = async (field: BrandIdentityFieldKey, value: unknown) => {
+    const current = identityField(field)
+    const res = await fetch(`/api/brands/${brandId}/identity`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        field,
+        value,
+        expectedVersion: current?.version ?? 0,
+      }),
+    })
+    if (!res.ok && res.status !== 202) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(typeof data?.error === 'string' ? data.error : `identity_save_failed:${field}`)
+    }
+  }
+
+  const handleSavePlanEditor = async () => {
+    setPlanEditorSaving(true)
+    try {
+      const normalizedStores = draftStores
+        .map(store => ({
+          ...store,
+          name: String(store.name || '').trim(),
+          address: String(store.address || '').trim(),
+          phone: String(store.phone || '').trim(),
+          businessHours: String(store.businessHours || '').trim(),
+          reservationUrl: String(store.reservationUrl || '').trim(),
+          orderingUrl: String(store.orderingUrl || '').trim(),
+        }))
+        .filter(store => store.name || store.address || store.phone || store.businessHours || store.reservationUrl || store.orderingUrl)
+      const menuItems = textLines(draftMenuText).map((name, index) => {
+        const existing = draftMenuItems[index] || {}
+        return { ...existing, name }
+      })
+      const settingsRes = await fetch(`/api/brands/${brandId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: draftName,
+          description: draftDesc,
+          location: draftLocation,
+          address: draftAddress,
+          phone: draftPhone,
+          website: draftWebsite,
+        }),
+      })
+      if (!settingsRes.ok) throw new Error('brand_settings_save_failed')
+
+      const knowledgeRes = await fetch(`/api/brands/${brandId}/knowledge`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessHours: draftBusinessHours,
+          reservationUrl: draftReservationUrl,
+          orderingUrl: draftOrderingUrl,
+          stores: normalizedStores,
+          market: draftMarket,
+          district: draftDistrict,
+          competitors: textLines(draftCompetitorsText),
+          menuItems,
+        }),
+      })
+      if (!knowledgeRes.ok) throw new Error('brand_knowledge_save_failed')
+
+      const sellingPoints = textLines(draftProduct)
+      const identitySaves: Array<Promise<void>> = [
+        saveIdentityField('brandVoice', creativeIdentity.brandVoice),
+        saveIdentityField('brandImage', creativeIdentity.brandImage),
+        saveIdentityField('promotionFocus', creativeIdentity.promotionFocus),
+      ]
+      if (activeBrandTone.trim()) identitySaves.push(saveIdentityField('brandTone', activeBrandTone))
+      if (draftAudience.trim()) identitySaves.push(saveIdentityField('targetAudience', draftAudience))
+      if (sellingPoints.length) identitySaves.push(saveIdentityField('sellingPoints', sellingPoints))
+      await Promise.all(identitySaves)
+
+      showToastVal('品牌计划内容已保存', 'success')
+      setShowPlanEditor(false)
+      await loadProfile()
+      await loadAllConfig()
+      await loadIdentity()
+      await loadBrandPlanWorkspace()
+      await loadGrowthSyncStatus()
+    } catch (error) {
+      console.error('Failed to save brand plan editor:', error)
+      showToastVal('保存失败，请检查字段后重试', 'error')
+    } finally {
+      setPlanEditorSaving(false)
+    }
+  }
+
+  const updateDraftStore = (index: number, patch: Partial<StoreInfo>) => {
+    setDraftStores(current => current.map((store, itemIndex) => itemIndex === index ? { ...store, ...patch } : store))
+  }
+
+  const removeDraftStore = (index: number) => {
+    setDraftStores(current => current.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  const handleSaveSocialAccount = async () => {
+    if (!editingSocialAccount) return
+    setSocialAccountSaving(true)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/accounts/${editingSocialAccount.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handle: editingSocialAccount.handle,
+          displayName: editingSocialAccount.displayName,
+          profileUrl: editingSocialAccount.profileUrl,
+          autoPilot: editingSocialAccount.autoPilot,
+        }),
+      })
+      if (!res.ok) throw new Error('social_account_save_failed')
+      showToastVal('社交媒体账号已保存', 'success')
+      setEditingSocialAccount(null)
+      await loadAllConfig()
+    } catch (error) {
+      console.error('Failed to save social account:', error)
+      showToastVal('社交媒体账号保存失败', 'error')
+    } finally {
+      setSocialAccountSaving(false)
+    }
+  }
+
   const primaryProductList = () => {
     const menuProducts = draftMenuItems.map((item) => String(item?.name || item?.title || '').trim()).filter(Boolean)
     if (menuProducts.length) return menuProducts.slice(0, 4)
@@ -792,7 +954,19 @@ ${storeLines}
       showToastVal(`当前套餐最多支持 ${storeLimit} 家门店。请先购买多门店支持后再添加。`, 'info')
       return
     }
-    setDraftStores([...draftStores, { storeId: createStoreId(), name: '', address: '' }])
+    const currentStores = draftStores.length
+      ? draftStores
+      : [{
+          storeId: 'primary',
+          name: draftName,
+          address: draftAddress,
+          phone: draftPhone,
+          businessHours: draftBusinessHours,
+          reservationUrl: draftReservationUrl,
+          orderingUrl: draftOrderingUrl,
+        }]
+    setDraftStores([...currentStores, { storeId: createStoreId(), name: '', address: '' }])
+    setShowPlanEditor(true)
   }
 
   const handleSyncPostfastAccounts = async () => {
@@ -984,7 +1158,7 @@ ${storeLines}
             <button type="button" onClick={handleOpenSettings} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-extrabold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
               <Settings className="h-3.5 w-3.5" /> 品牌配置
             </button>
-            <button type="button" onClick={openEditableBrandContext} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-extrabold text-white dark:bg-white dark:text-slate-900">
+            <button type="button" onClick={openPlanEditor} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-extrabold text-white dark:bg-white dark:text-slate-900">
               <BookOpen className="h-3.5 w-3.5" /> 编辑品牌计划与门店
             </button>
           </div>
@@ -1019,7 +1193,7 @@ ${storeLines}
                 <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">Section 1</p>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">品牌信息</h3>
               </div>
-              <button type="button" onClick={openEditableBrandContext} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white dark:bg-white dark:text-slate-900">
+              <button type="button" onClick={openPlanEditor} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white dark:bg-white dark:text-slate-900">
                 <Edit3 className="h-3.5 w-3.5" /> 编辑基础资料
               </button>
             </div>
@@ -1126,6 +1300,7 @@ ${storeLines}
                               主页
                             </a>
                           )}
+                          <button type="button" onClick={() => setEditingSocialAccount(account)} className="font-bold text-slate-700 hover:text-blue-600 dark:text-slate-200">编辑</button>
                         </div>
                       </div>
                     )
@@ -1354,6 +1529,124 @@ ${storeLines}
         </div>
       )}
 
+      {showPlanEditor && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowPlanEditor(false)} />
+          <div className="relative z-10 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">编辑品牌计划内容</h3>
+                <p className="mt-1 text-xs text-slate-400">保存后会回写品牌资料、门店信息、SKU 和营销输入材料</p>
+              </div>
+              <button type="button" onClick={() => setShowPlanEditor(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex-1 space-y-5 overflow-y-auto p-5">
+              <section className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">品牌名称</span>
+                  <input value={draftName} onChange={event => setDraftName(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">所在市场 / 区域</span>
+                  <input value={draftLocation} onChange={event => setDraftLocation(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">品牌介绍</span>
+                  <textarea value={draftDesc} onChange={event => setDraftDesc(event.target.value)} rows={3} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">联系电话</span>
+                  <input value={draftPhone} onChange={event => setDraftPhone(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">官网链接</span>
+                  <input value={draftWebsite} onChange={event => setDraftWebsite(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">主地址</span>
+                  <input value={draftAddress} onChange={event => setDraftAddress(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+              </section>
+
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black text-slate-900 dark:text-white">门店信息</h4>
+                  <button type="button" onClick={handleAddStore} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold dark:border-slate-700">添加门店</button>
+                </div>
+                {(draftStores.length ? draftStores : [{ storeId: 'primary', name: draftName, address: draftAddress, phone: draftPhone, businessHours: draftBusinessHours, reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl }]).map((store, index) => (
+                  <div key={store.storeId || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-slate-700 dark:text-slate-200">门店 {index + 1}</p>
+                      {draftStores.length > 1 && <button type="button" onClick={() => removeDraftStore(index)} className="text-xs font-bold text-rose-500">删除</button>}
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <input value={store.name || ''} onChange={event => updateDraftStore(index, { name: event.target.value })} placeholder="店铺名称" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                      <input value={store.phone || ''} onChange={event => updateDraftStore(index, { phone: event.target.value })} placeholder="联系方式" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                      <input value={store.address || ''} onChange={event => updateDraftStore(index, { address: event.target.value })} placeholder="营业地址" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 md:col-span-2" />
+                      <input value={store.businessHours || ''} onChange={event => updateDraftStore(index, { businessHours: event.target.value })} placeholder="营业时间" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                      <input value={store.reservationUrl || ''} onChange={event => updateDraftStore(index, { reservationUrl: event.target.value })} placeholder="预定链接" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900" />
+                      <input value={store.orderingUrl || ''} onChange={event => updateDraftStore(index, { orderingUrl: event.target.value })} placeholder="下单 / 配送链接" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 md:col-span-2" />
+                    </div>
+                  </div>
+                ))}
+              </section>
+
+              <section className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">市场</span>
+                  <input value={draftMarket} onChange={event => setDraftMarket(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">商圈</span>
+                  <input value={draftDistrict} onChange={event => setDraftDistrict(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">SKU / 菜单列表</span>
+                  <textarea value={draftMenuText} onChange={event => setDraftMenuText(event.target.value)} rows={5} placeholder="每行一个产品或服务" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">竞品列表</span>
+                  <textarea value={draftCompetitorsText} onChange={event => setDraftCompetitorsText(event.target.value)} rows={5} placeholder="每行一个竞品" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+              </section>
+
+              <section className="grid gap-3 md:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">目标人群</span>
+                  <textarea value={draftAudience} onChange={event => setDraftAudience(event.target.value)} rows={3} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">核心卖点</span>
+                  <textarea value={draftProduct} onChange={event => setDraftProduct(event.target.value)} rows={3} placeholder="每行一个卖点" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">品牌语气</span>
+                  <textarea value={activeBrandTone} onChange={event => setLocalBrandTone(event.target.value)} rows={3} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">品牌声音</span>
+                  <textarea value={creativeIdentity.brandVoice} onChange={event => setCreativeIdentity(current => ({ ...current, brandVoice: event.target.value }))} rows={3} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">品牌形象</span>
+                  <textarea value={creativeIdentity.brandImage} onChange={event => setCreativeIdentity(current => ({ ...current, brandImage: event.target.value }))} rows={3} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+                <label className="space-y-1.5 md:col-span-2">
+                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">推广点</span>
+                  <textarea value={creativeIdentity.promotionFocus} onChange={event => setCreativeIdentity(current => ({ ...current, promotionFocus: event.target.value }))} rows={3} className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                </label>
+              </section>
+            </div>
+            <div className="flex items-center justify-between gap-3 border-t border-slate-200 p-4 dark:border-slate-800">
+              <button type="button" onClick={() => { setShowPlanEditor(false); openEditableBrandContext() }} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">高级 Markdown 编辑</button>
+              <button type="button" onClick={handleSavePlanEditor} disabled={planEditorSaving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900">
+                {planEditorSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</> : <><Save className="h-3.5 w-3.5" /> 保存全部内容</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {reportModal}
       {interviewModal}
       {editingAiContent && (
@@ -1381,6 +1674,43 @@ ${storeLines}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900"
               >
                 {String(planGenerating).startsWith('edit:') ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</> : <><Save className="h-3.5 w-3.5" /> 保存并回写</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {editingSocialAccount && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setEditingSocialAccount(null)} />
+          <div className="relative z-10 flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">编辑社交媒体账号</h3>
+                <p className="mt-1 text-xs text-slate-400">{socialPlatformLabel(editingSocialAccount.platformId)}</p>
+              </div>
+              <button type="button" onClick={() => setEditingSocialAccount(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              <label className="block space-y-1.5">
+                <span className="text-xs font-black text-slate-600 dark:text-slate-300">账号 handle</span>
+                <input value={editingSocialAccount.handle || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, handle: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-black text-slate-600 dark:text-slate-300">展示名称</span>
+                <input value={editingSocialAccount.displayName || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, displayName: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs font-black text-slate-600 dark:text-slate-300">主页链接</span>
+                <input value={editingSocialAccount.profileUrl || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, profileUrl: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              </label>
+              <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
+                <span className="text-xs font-black text-slate-700 dark:text-slate-200">自动发布</span>
+                <input type="checkbox" checked={Boolean(editingSocialAccount.autoPilot)} onChange={event => setEditingSocialAccount(current => current ? { ...current, autoPilot: event.target.checked } : current)} className="h-4 w-4" />
+              </label>
+            </div>
+            <div className="border-t border-slate-200 p-4 dark:border-slate-800">
+              <button type="button" onClick={handleSaveSocialAccount} disabled={socialAccountSaving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900">
+                {socialAccountSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</> : <><Save className="h-3.5 w-3.5" /> 保存账号</>}
               </button>
             </div>
           </div>
