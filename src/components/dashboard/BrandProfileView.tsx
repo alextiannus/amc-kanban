@@ -92,6 +92,22 @@ type BrandPlanWorkspaceData = {
     goal: string
     theme: string
     quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[] }>
+    quarterlyPlans?: Array<{
+      quarter: string
+      strategy: string
+      focus: string
+      promotionPoints: Array<{
+        name: string
+        rationale: string
+        targetAudience?: string
+        customerAction: string
+        platforms: string[]
+        suggestedMonthlyPosts: number
+      }>
+      campaigns: string[]
+      contentThemes: string[]
+      monthlyFocus: Array<{ month: string; focus: string; promotionPoints: string[] }>
+    }>
     metrics: string[]
   }
   quarterlyPlans?: Array<{
@@ -100,6 +116,13 @@ type BrandPlanWorkspaceData = {
     objective: string
     monthlyFocus: Array<{ month: string; focus: string }>
     contentDirections: string[]
+    promotionPoints?: Array<{
+      name: string
+      rationale: string
+      customerAction: string
+      platforms: string[]
+      suggestedMonthlyPosts: number
+    }>
   }>
   publishingCalendar?: {
     generatedAt: string
@@ -1132,14 +1155,58 @@ ${storeLines}
                 <div className="mt-4 space-y-3">
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{annualPlan.theme}</p>
                   <p className="text-xs text-slate-500">{annualPlan.goal}</p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {annualPlan.quarterlyFocus.map(item => (
-                      <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
-                        <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter}</p>
-                        <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
-                      </div>
-                    ))}
-                  </div>
+                  {annualPlan.quarterlyPlans?.length ? (
+                    <div className="space-y-3">
+                      {annualPlan.quarterlyPlans.map(item => (
+                        <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter} · {item.focus}</p>
+                              <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.strategy}</p>
+                            </div>
+                            {item.campaigns.length ? (
+                              <p className="shrink-0 text-[11px] font-bold text-purple-600">{item.campaigns.slice(0, 2).join(' / ')}</p>
+                            ) : null}
+                          </div>
+                          {item.promotionPoints.length ? (
+                            <div className="mt-3 grid gap-2">
+                              {item.promotionPoints.slice(0, 4).map(point => (
+                                <div key={`${item.quarter}-${point.name}`} className="rounded-lg border border-white bg-white p-2 text-xs dark:border-slate-800 dark:bg-slate-900">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className="font-black text-slate-800 dark:text-slate-100">{point.name}</span>
+                                    <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-200">{point.suggestedMonthlyPosts} 次/月</span>
+                                    {point.platforms.slice(0, 3).map(platform => (
+                                      <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{platform}</span>
+                                    ))}
+                                  </div>
+                                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {item.monthlyFocus.length ? (
+                            <div className="mt-3 space-y-1.5">
+                              {item.monthlyFocus.slice(0, 3).map(month => (
+                                <div key={`${item.quarter}-${month.month}`} className="flex gap-2 text-[11px] text-slate-500">
+                                  <span className="w-14 shrink-0 font-black text-slate-700 dark:text-slate-200">{month.month}</span>
+                                  <span>{month.focus}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {annualPlan.quarterlyFocus.map(item => (
+                        <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
+                          <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter}</p>
+                          <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : <p className="mt-4 text-xs text-slate-500">由 AMC-Kanban 读取五块输入，生成年度市场目标和四个季度重点。</p>}
             </div>
@@ -1164,6 +1231,22 @@ ${storeLines}
                       </div>
                     ))}
                   </div>
+                  {currentQuarterPlan.promotionPoints?.length ? (
+                    <div className="grid gap-2">
+                      {currentQuarterPlan.promotionPoints.map(point => (
+                        <div key={point.name} className="rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-black text-slate-800 dark:text-slate-100">{point.name}</span>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-indigo-700 dark:bg-slate-900 dark:text-indigo-200">{point.suggestedMonthlyPosts} 次/月</span>
+                            {point.platforms.slice(0, 3).map(platform => (
+                              <span key={platform} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">{platform}</span>
+                            ))}
+                          </div>
+                          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ) : <p className="mt-4 text-xs text-slate-500">从年度营销方案拆出当前季度目标、每月重点和内容方向。</p>}
             </div>
