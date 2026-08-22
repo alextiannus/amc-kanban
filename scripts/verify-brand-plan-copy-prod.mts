@@ -16,8 +16,15 @@ const badItems = items.filter((item) => bannedPattern.test([
   item.title,
   item.planning,
   item.sampleHit,
+  ...(item.materialRequirements || []),
 ].join(' ')))
 const badSampleHits = items.filter((item) => String(item.sampleHit || '').trim())
+const incompleteReviews = items.filter((item) =>
+  !String(item.planning || '').includes('创意总结') ||
+  !String(item.planning || '').includes('分镜脚本') ||
+  !Array.isArray(item.materialRequirements) ||
+  item.materialRequirements.length < 3
+)
 
 if (!items.length) throw new Error(`calendar_empty:${month}`)
 if (badItems.length) {
@@ -33,6 +40,13 @@ if (badSampleHits.length) {
     sampleHit: item.sampleHit,
   })))}`)
 }
+if (incompleteReviews.length) {
+  throw new Error(`incomplete_creative_review:${JSON.stringify(incompleteReviews.slice(0, 3).map((item) => ({
+    title: item.title,
+    planning: item.planning,
+    materialRequirements: item.materialRequirements,
+  })))}`)
+}
 
 console.log(JSON.stringify({
   ok: true,
@@ -44,6 +58,7 @@ console.log(JSON.stringify({
     platform: item.platform,
     title: item.title,
     product: item.product,
-    hook: `${item.planning.split('。')[0]}。`,
+    summary: item.planning.split('\n').slice(0, 3),
+    materialRequirements: item.materialRequirements,
   })),
 }, null, 2))

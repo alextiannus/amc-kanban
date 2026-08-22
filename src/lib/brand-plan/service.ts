@@ -966,7 +966,7 @@ async function buildPublishingMonth(
   })
   const creativePool = await requestCalendarCreativePool(brand, current, promotionPoints)
 
-  return schedule.map((slot, index) => {
+  const items = schedule.map((slot, index) => {
     const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, index)
     const product = promotionPoint?.sellingPoint || products[index % Math.max(1, products.length)] || '招牌产品'
     const candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
@@ -1007,6 +1007,7 @@ async function buildPublishingMonth(
       contentLibraryGap: calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate),
     }
   })
+  return await reviewCalendarCreativeItemsWithLLM(brand, current, items)
 }
 
 async function regeneratePublishingCalendarItem(
@@ -1038,7 +1039,7 @@ async function regeneratePublishingCalendarItem(
       contentLibraryGap: 'amc-content 暂不可用，已保留人工素材要求。',
     }
   }
-  return {
+  const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [{
     ...item,
     date: clampCalendarDateToMinimum(item.date),
     title: calendarItemTitle({
@@ -1068,7 +1069,8 @@ async function regeneratePublishingCalendarItem(
     sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(item.product, candidate),
     contentLibraryGap: calendarContentGap(pool.contentLibraryGaps, point.id, candidate),
-  }
+  }])
+  return reviewed
 }
 
 function assignPromotionPointToSlot(
@@ -1445,6 +1447,114 @@ function calendarContentGap(
   return gaps.some((gap) => text(gap.promotionPointId) === promotionPointId)
     ? 'amc-content 内容库存在缺口，当前使用可用候选并保留补库提醒。'
     : undefined
+}
+
+async function reviewCalendarCreativeItemsWithLLM(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  items: BrandPlanCalendarItem[]
+) {
+  if (!items.length) return items
+  const brandName = brandDisplayName(brand)
+  const payload = {
+    brand: {
+      name: brandName,
+      industry: brand.industry || 'Restaurant / F&B',
+      market: text(brand.knowledge?.market || brand.location) || 'Singapore',
+      description: cleanCalendarText(text(brand.description || brand.knowledge?.summary), ''),
+    },
+    strategy: {
+      goal: current.annualPlan?.goal || current.researchReport?.summary || '',
+      platformStrategy: current.annualPlan?.platformStrategy || [],
+      contentPillars: current.annualPlan?.contentPillars || current.quarterlyPlans?.flatMap((plan) => plan.contentDirections || []) || [],
+    },
+    items: items.map((item) => ({
+      id: item.id,
+      date: item.date,
+      platform: item.platform,
+      contentType: item.contentType,
+      product: item.product,
+      draftTitle: item.title,
+      draftPlanning: item.planning,
+      draftMaterialRequirements: item.materialRequirements || [],
+      hasInspirationLink: Boolean(item.sampleVideoUrl || item.sampleOriginalUrl),
+      matchedTags: item.matchedTags || [],
+    })),
+  }
+  const prompt = [
+    '你是 AMC 的本地商家内容策划总监。请检查 amc-content 返回的灵感是否适合当前品牌，并把可用灵感改写成用户可 review 的内容计划。',
+    '只返回 JSON 对象，不要 Markdown。',
+    '返回字段：items。items 每项必须包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
+    'title：必须是当前品牌和当前商品/服务量身定制的中文标题，不要照抄灵感来源标题，不要出现文件名、话题串或英文模板感句子。',
+    'creativeSummary：用 2-4 句中文说明这条内容怎么复刻创意结构、拍什么、为什么适合当前品牌。要像给门店运营看的 brief，不要 AI 腔。',
+    'materialRequirements：3-6 条素材需求，必须具体到可采集的画面、信息或门店确认事项。',
+    'approved：如果灵感与品牌、商品、平台明显不相关则 false；false 时也要给出可执行的替代创意总结和素材需求。',
+    '禁止输出原视频标题、原视频文案、链接、文件名、原品牌名、Bao Specialty、DAILY、breakfast、Afternoon Tea、bakery、mp4、#武冈、破酥包。',
+    '不要承诺流量、排名、销量或到店人数；只写可执行内容和素材要求。',
+    `输入 JSON：${JSON.stringify(payload)}`,
+  ].join('\n\n')
+  try {
+    const result = await callLLM('marketing_plan', prompt, Math.min(7000, 1200 + items.length * 220), {
+      temperature: 0.28,
+      jsonMode: true,
+      deadlineMs: 120000,
+      attemptTimeoutMs: [30000, 45000, 60000],
+      maxAttempts: 3,
+      allowDefaultFallback: true,
+      allowAnyFallback: true,
+      allowSystemFallback: true,
+    })
+    const parsed = parseJsonObject(result.text)
+    const reviewed = arrayValue(parsed?.items).map(objectValue)
+    if (!reviewed.length) return items
+    const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
+    return items.map((item) => {
+      const review = byId.get(item.id)
+      if (!review) return item
+      const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
+      const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
+      const materialRequirements = stringList(review.materialRequirements)
+        .map((line) => cleanReviewedCalendarText(line, ''))
+        .filter(Boolean)
+        .slice(0, 6)
+      const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '')
+      const approved = review.approved !== false
+      return {
+        ...item,
+        title,
+        planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
+        materialRequirements: materialRequirements.length ? materialRequirements : item.materialRequirements,
+      }
+    })
+  } catch {
+    return items
+  }
+}
+
+function mergeReviewedCalendarPlanning(planning: string, creativeSummary: string, qualityNote: string, approved: boolean) {
+  const cleanPlanning = cleanReviewedCalendarText(planning, '')
+  const sections = [
+    creativeSummary ? `创意总结：${creativeSummary}` : '',
+    approved ? '' : '适配提醒：当前灵感只保留结构，具体内容已换成当前品牌可拍方向。',
+    qualityNote ? `审核备注：${qualityNote}` : '',
+    cleanPlanning,
+  ].filter(Boolean)
+  return sections.join('\n')
+}
+
+function cleanReviewedCalendarTitle(value: string, fallback: string, brandName: string) {
+  const cleaned = cleanReviewedCalendarText(value, fallback)
+  const safe = cleaned || fallback || `${brandName}本周内容计划`
+  return safe.slice(0, 34)
+}
+
+function cleanReviewedCalendarText(value: string, fallback: string) {
+  const cleaned = cleanCalendarText(value, fallback)
+    .replace(/\b(Bao Specialty Cafe|Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery)\b/gi, '')
+    .replace(/查看原视频链接|查看参考视频|参考内容|样板爆品/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return cleaned || fallback
 }
 
 async function syncCalendarMaterialRequirements(
