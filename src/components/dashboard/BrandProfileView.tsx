@@ -2252,7 +2252,6 @@ function QuarterPlanTabs({
             }
           }}
           className="mt-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-purple-900"
-          title="点击编辑完整品牌营销方案"
         >
           {/* Quarter header */}
           <div className="flex items-start justify-between gap-3">
@@ -2315,16 +2314,6 @@ function QuarterPlanTabs({
             </div>
           ) : null}
 
-          <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => onEditQuarter(activeAnnual)}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-bold text-purple-700 hover:bg-purple-50 dark:border-purple-900 dark:bg-slate-900 dark:text-purple-300"
-            >
-              <Edit3 className="h-3.5 w-3.5" />
-              编辑完整品牌营销方案
-            </button>
-          </div>
         </div>
       )}
     </div>
