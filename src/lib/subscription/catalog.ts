@@ -283,7 +283,7 @@ export function getAllowedDurationsForPlan(planId: string): readonly number[] {
   return ALLOWED_DURATIONS
 }
 
-export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.06'
+export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.08'
 
 export function calculatePricing(
   planId: string,

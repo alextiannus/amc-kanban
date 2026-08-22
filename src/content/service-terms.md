@@ -33,8 +33,8 @@ This Agreement is entered into on the date stated above between the parties belo
 
 | 选择 | 套餐 Plan | 月费 Monthly Fee | 包含内容 Includes | 签约周期 |
 | --- | --- | --- | --- | --- |
-| ☐ | ESSENTIAL（海外社媒代运营新加坡本地版） | S$800 / 月 | Instagram、TikTok 图文内容发布；Google Map 配置和评论监控、打分优化；中英双语；每月舆情报告；远程交付；至少发布 12 次图文；可安排 4 位博主探店。2026 年 9 月 30 日前签约商家赠送 1 次价值 S$200 素材拍摄采集和 6 条视频。 | 6 / 12 个月 |
-| ☐ | Booster（流量爆发计划） | S$3,600 / 月 | Instagram、TikTok、小红书等自媒体内容策划；流量增长和运营活动策划；Google Map 配置和评论监控、打分优化；中英双语；每周舆情报告；远程交付；定制增长策划案；至少发布 24 次图文和 12 次精品视频；专业素材采集；可安排 10 位博主探店（6 个 2k+ 粉丝，3 个 4k+，1 个 1w+）。 | 3 个月 |
+| ☐ | ESSENTIAL（海外社媒代运营新加坡本地版） | S$800 / 月 | Instagram、TikTok 图文内容发布；Google Map 配置和评论监控、打分优化；中英双语；每月舆情报告；远程交付；至少发布 12 次图文；每月安排 4 位博主 / KOC 探店。 | 6 / 12 个月 |
+| ☐ | Booster（流量爆发计划） | S$3,600 / 月 | Instagram、TikTok、小红书等自媒体内容策划；流量增长和运营活动策划；Google Map 配置和评论监控、打分优化；中英双语；每周舆情报告；远程交付；定制增长策划案；至少发布 24 次图文和 12 次精品视频；专业素材采集；可安排 10 位博主探店（6 个 2k+ 粉丝，3 个 4k+，1 个 1w+）。 | 3 / 6 / 12 个月 |
 
 **合同开始日期 Start Date:** ________________
 **合同到期日 End Date:** ________________
@@ -73,7 +73,7 @@ This Agreement is entered into on the date stated above between the parties belo
 
 ## 3. 服务期限 Term of Agreement
 
-3.1 本协议最短服务期限为三（3）个月，自乙方完成账号接入并首批内容上线之日起计算（服务开始日）。Essential 套餐签约周期为 6 或 12 个月；Booster 套餐签约周期为 3 个月。
+3.1 本协议最短服务期限为三（3）个月，自乙方完成账号接入并首批内容上线之日起计算（服务开始日）。Essential 套餐签约周期为 6 或 12 个月；Booster 套餐签约周期为 3、6 或 12 个月。
 
 3.2 合同期满后，如甲方希望续约，须在到期前十四（14）日内重新签署新合同并完成付款，方可继续享受服务。续约合同可选择当时可售套餐周期。
 
@@ -156,6 +156,8 @@ This Agreement is entered into on the date stated above between the parties belo
 9.4 乙方不对间接损失、利润损失或商誉损失承担赔偿责任。
 
 9.5 AMC 不保证销售额、收入、利润、转化、触达、粉丝、点赞、互动、搜索排名、Google Maps 排名、评分提升或第三方平台表现。
+
+9.6 本服务采用生成式人工智能（Generative AI）辅助生产内容，所有 AI 生成内容均经过人工审核。甲方理解并接受：AI 生成内容可能存在偶发性错误或不一致，乙方对此类情况造成的间接或后续损失不承担责任，但乙方将在发现后及时更正。
 
 ## 10. 合同终止 Termination
 
@@ -245,3 +247,7 @@ By signing below, both parties confirm they have read, understood and agreed to 
 | 凭证发送 Send Receipt | service@deliverychinatown.com |
 
 AMC - Your AI Marketing Crew | Deliverychinatown Pte. Ltd. | amc.immedi.ai | Governed by Singapore Law
+
+---
+
+*合同版本 Contract Version: AMC-SMSA-v1.08 | 生效日期 Effective Date: 2026-08-23*
