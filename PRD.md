@@ -1,6 +1,6 @@
 # AI Marketing Crew 最新产品需求文档 (PRD)
 
-版本日期：2026-06-08
+版本日期：2026-08-22
 
 ## 1. 产品定位
 
@@ -44,7 +44,12 @@ AMC 侧品牌主理人。负责管理多个品牌、绑定或调整 AMC Agent、
 
 ### 4.2 BrandSubscription
 
-每个品牌需要一个订阅套餐。套餐承载品牌运营权益，包括内容运营范围、探店活动、品牌主理人支持和附加服务。品牌创建流程必须由订阅支撑，Agent 不应自行绕过订阅创建品牌。
+每个品牌需要一个订阅套餐。套餐承载品牌运营权益，包括内容运营范围、平台覆盖、月度发布频次、探店活动、品牌主理人支持和附加服务。当前商家套餐以 `Essential` 与 `Booster` 为主：
+
+1. `Essential`：基础线上门面 + 稳定内容维护，覆盖 Instagram、TikTok、Google Business Profile，每月不少于 12 次内容发布。
+2. `Booster`：增长战役 + 素材资产 + 博主扩散，覆盖 Instagram、TikTok、小红书、Google Business Profile，每月至少 24 次内容发布。
+
+品牌创建流程必须由订阅支撑，Agent 不应自行绕过订阅创建品牌。订阅运营策略的系统配置保存在 `SubscriptionOperationsStrategy`，用于约束年度营销方案、季度营销方案和内容发布日历的生成范围。
 
 ### 4.3 BrandAgent
 
@@ -80,11 +85,30 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 
 店内活动模块配置与参与记录，用于扫码抽奖、评论任务、社媒关注任务和门店获客活动。
 
+### 4.11 BrandPlanInterview / BrandClaim
+
+品牌主张来自主理人对商家的访谈整理，长期保存在 Kanban 中，可持续更新。访谈结果不写入 Growth，也不作为 Growth 品牌上下文的主数据；它只作为 Kanban 生成营销方案的输入材料之一。若最新访谈为空，品牌计划页必须持续提示“需要完成品牌主访谈”。
+
+### 4.12 BrandGrowthResearchSnapshot
+
+数据调研由 Kanban 调用 AMC-Growth 的摸底调研服务生成，并在 Kanban DB 中持久化为 `BrandGrowthResearchSnapshot`。它保存 Growth 返回的体检报告、数据洞察、版本信息和原始 payload 摘要，用于保证后续营销方案生成时引用的数据版本可追溯。
+
+### 4.13 BrandMarketingSolution
+
+Kanban 拥有营销方案生成与版本化保存。年度营销方案、季度营销方案和内容发布日历统一保存为 `BrandMarketingSolution`，通过 `kind = ANNUAL | QUARTERLY | CALENDAR` 区分，不再新增并行的旧式 `PromotionPlan` 主数据。该模型记录输入、输出、版本、生成方式、LLM 配置、关联调研快照和生成时间。
+
 ## 5. 信息架构与模块
 
-### 5.1 品牌主看板
+### 5.1 品牌计划
 
-品牌运营首页。展示任务、Agent 运行、摘要指标、近期动态、订阅状态和品牌相关工作入口。
+品牌运营首页已由“品牌故事”升级为“品牌计划”。页面从上到下组织为：
+
+1. **品牌信息和门店信息**：品牌名称、品牌主昵称、联系邮箱、官网链接、门店名称、地址、电话、营业时间、SKU 列表、预订链接、配送链接等。支持多门店配置；添加门店时必须校验当前订阅和多门店支持权益。
+2. **数据调研与商家访谈入口**：在品牌信息与推广策略之间提供“同步/生成数据调研”和“商家主张访谈”入口，并支持查看报告。商家访谈不能在无摸底报告时保存；无访谈时不能更新品牌计划。
+3. **推广策略 / 品牌主张**：整理商家主张、品牌定位、品牌形象、品牌声音、招牌特色、目标人群、核心产品/服务、推广点和增长机会。
+4. **年度营销方案 -> 季度营销方案**：年度方案必须包含四个季度的策略、重点推广点、适用平台、建议发布次数、顾客行动、季度活动方向、内容主题和月度拆解。季度方案从年度方案中继承对应季度策略和推广点。
+5. **发布日历**：可逐月向后查看每日内容策划、平台、样板爆品、创意来源和素材需求。支持整月重新生成，也支持单条发布创意重新生成。
+6. **社交媒体渠道**：展示已同步社媒账号，并提供从 PostFast 同步账号的按钮。
 
 ### 5.2 AI 序列
 
@@ -114,7 +138,7 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 
 ### 5.7 发布日历
 
-展示品牌已排期与已发布内容，作为内容运营计划视图。
+展示品牌已排期与已发布内容，作为内容运营计划视图。品牌计划页生成的内容日历必须读取当前季度营销方案中的推广点、预计发布次数和平台，由 Kanban 调用 AMC-Content 获取更大的候选创意列表，再由 Kanban 生成最终日历。每条日历项保留推广目标、推广点、平台、内容类型、样板爆品、素材需求和生成来源。
 
 ### 5.8 社媒透视
 
@@ -177,21 +201,42 @@ Research 模块的核心对象。每条 TopicFeed 是品牌维度的 Markdown �
 3. 系统按 Huawei OBS、PostFast、Lark、Local 顺序选择可用存储。
 4. 写入 MediaAsset，供草稿引用。
 
-### 6.6 Agent 定期轮询与订阅履约流程
+### 6.6 品牌计划与营销方案生成流程
+
+品牌计划是 Kanban 侧的主流程，不再由 Growth Dashboard 的旧推广计划工作台生成。Growth 只提供客观数据调研；Content 只提供候选创意与素材要求辅助。完整流程如下：
+
+1. **配置品牌信息和门店信息**：用户或主理人填写品牌基础信息和门店信息，保存在 Kanban DB。门店支持多门店，但新增时必须检查当前订阅和多门店 addon 权益。
+2. **生成品牌摸底报告**：Kanban 调用 AMC-Growth 的摸底调研服务，生成品牌形象、推广情况、市场分析、竞品情况、问题发现、增长点发现等客观调研内容，并持久化为 `BrandGrowthResearchSnapshot`。最新调研结果同时镜像到 `BrandKnowledge.researchReport`，便于品牌计划页读取。
+3. **商家主张访谈**：主理人基于摸底报告和接地气的问题清单访谈商家，记录老板能说清楚的内容，例如“店里最希望顾客记住什么”“哪些菜/服务最稳定”“什么客人最适合来”“老板最不希望别人误解什么”。访谈结果保存为 `BrandPlanInterview`，并整理为长期 `brandClaim`。没有摸底报告不能保存访谈；没有访谈不能更新品牌计划。
+4. **更新品牌计划**：Kanban 合并品牌信息、门店信息、品牌主张、数据调研和订阅运营策略，形成综合品牌认知。该品牌计划不把访谈结果同步进 Growth 主数据。
+5. **生成年度营销方案**：Kanban 调用 LLM，读取五块数据生成全年营销方案。年度方案必须比季度方案更完整，包含四个季度的推广策略、重点推广点、平台、建议月发布次数、顾客行动、内容主题、活动方向、月度拆解和衡量指标，并保存为 `BrandMarketingSolution(kind=ANNUAL)`。
+6. **生成季度营销方案**：Kanban 读取年度方案中对应季度的策略和推广点，生成季度目标、三个月重点、内容方向和结构化推广点，并保存为 `BrandMarketingSolution(kind=QUARTERLY)`。
+7. **生成季度/月度发布日历**：Kanban 根据季度营销方案整理推广点、预计发布次数和平台，调用 AMC-Content 生成更大的候选创意列表，再由 Kanban 选择、排布并保存最终发布日历 `BrandMarketingSolution(kind=CALENDAR)`。用户可以整月重新生成，也可以单独重新生成某一次发布创意。
+8. **素材需求同步**：发布日历生成后，Kanban 将每条内容的素材需求写入 `MaterialRequirement`，供素材库、拍摄清单和执行验收使用。
+
+前置条件与可跳步规则：
+
+1. 生成摸底报告与商家访谈可以在页面上跳过入口，不阻塞用户浏览品牌计划页。
+2. 保存访谈必须有摸底报告作为上下文。
+3. 更新品牌计划必须有访谈结果。
+4. 生成季度方案必须已有年度营销方案。
+5. 生成发布日历必须已有季度营销方案。
+
+### 6.7 Agent 定期轮询与订阅履约流程
 
 由于本系统采用被动 REST/MCP API 架构，不包含主动唤醒 Agent 的服务器端定时器，Agent 必须在其所在运行环境配置定期轮询（建议每 30 分钟轮询一次）。在每次轮询被唤醒时，针对所有关联品牌，Agent 需执行以下自动化任务以履行对应的订阅套餐承诺：
 
 1. **评论自动处理流程（口碑承诺）**：
-   - 自动查询未处理评论。比对订阅包权益（Starter 仅监控；Essential/Advanced 需在 24h 内回复）。
+   - 自动查询未处理评论。比对订阅包权益（Essential/Booster 均需监控 Google Business Profile 等公开评论渠道，并按品牌授权策略生成回复建议或执行回复）。
    - 在 `autoPilot = true` 且授权正常时，AI 自动生成符合品牌风格的回复并调用接口回复；若为非自动驾驶状态或收到低星（≤2星）差评，立即创建 `require_input` 挂起任务等待主理人介入。
 2. **内容发布自检流程（发布自检）**：
    - 定期检查待发布任务和内容草稿，若发布时间已到且通过了审核（或处于自动驾驶模式 `autoPilot = true`），调用发布接口执行社媒分发，成功后回填真实 URL 并流转任务状态至 `done`。
 3. **素材及探店承诺保障流程（素材与探店承诺）**：
-   - 获取订阅的详细权益及配额（如 Starter 每月 30 篇发帖、4 次探店；Essential 每季度 24 次探店等）。
+   - 获取订阅的详细权益及配额（如 Essential 每月不少于 12 次内容发布、4 位 KOC/微型博主探店；Booster 每月至少 24 次内容发布、10 位博主分批探店等）。
    - 比对素材库中 ready 状态 of the 素材储备。若素材不足以支撑当月发帖配额，或者本月承诺的博主探店仍未开展时，**主动在看板创建 `require_input` 任务**，标注为 `[订阅承诺] 需要补充素材 / 安排达人探店活动`。
    - 在任务描述中详细列出所需的拍摄画面要求或博主探店策划大纲，督促主理人确认或安排线下配合。
 4. **内容创作与自动排期流程（发帖配额承诺）**：
-   - 在定期轮询中，自检当前自然月内的内容发帖进度。根据订阅计划约定的月度发帖配额（如 Starter 套餐月度 30 条发帖，约每日平均 1 条；Essential 套餐月度 20 条图文 + 8 条短视频），统计本月已发布内容与未来已排期（`scheduled`）草稿的合计总数。
+   - 在定期轮询中，自检当前自然月内的内容发帖进度。根据订阅计划约定的月度发帖配额（Essential 每月不少于 12 次；Booster 每月至少 24 次），统计本月已发布内容与未来已排期（`scheduled`）草稿的合计总数。
    - 若发现已发布与已排期总数落后于当前时间节点的配额进度，或者未来 3 天内没有排期发布的内容，**自动触发内容创作与排期工作流**。
    - 调用 `list_brand_assets` 提取可用素材，结合选题研究库（TopicFeed）生成契合品牌风格的图文或视频内容。
    - 调用 `board_save_draft` 保存草稿，根据受众活跃黄金时间（如当地时间中午 12:00 或晚上 19:30）合理计算并设定发布时间 `scheduledAt`，然后调用 `board_submit_draft` 提交。在 `autoPilot = true` 时，该草稿将直接置为 `scheduled` 状态等待自动分发。
@@ -238,6 +283,26 @@ Lark 相关的通知卡片推送、云盘文件夹创建及文件上传工具接
 
 作为工作流和知识库中心。本系统不把复杂业务编排迁移到 proxy 层；proxy 只做传输、集成和 fallback。
 
+### 8.7 AMC-Growth
+
+AMC-Growth 在品牌计划链路中只负责客观数据调研和外部事实补充，不再负责生成 Kanban 的营销方案。Kanban 通过稳定 `growthBrandKey` 调用 Growth，并将摸底调研报告持久化为 `BrandGrowthResearchSnapshot`。旧的 Growth Dashboard `brand-inspirations` / `promotion-plans` SSO 规划入口已从 Kanban 导航中下线；`/planning/*` 旧页面仅保留为跳回品牌计划页的兼容入口。
+
+### 8.8 AMC-Content
+
+AMC-Content 在品牌计划链路中负责候选创意扩展。Kanban 向 Content 提交推广点、预计发布次数、适用平台和目标窗口，Content 返回大于或等于预期发布次数的创意候选列表、对应平台创意和素材缺口。最终日历排布、版本保存和素材需求写入仍由 Kanban 完成。
+
+### 8.9 品牌计划 API
+
+核心品牌计划 API：
+
+1. `GET /api/brands/:id/brand-plan`：读取品牌计划页所需的品牌信息、门店、调研报告、访谈、年度方案、季度方案和发布日历。
+2. `POST /api/brands/:id/brand-plan`：通过 `action` 执行既有品牌计划动作，包括 `generate_research_report`、`save_merchant_interview`、`generate_annual_plan`、`generate_quarter_plan`、`generate_publishing_calendar`、`regenerate_calendar_item`。
+3. `POST /api/brands/:id/marketing-plan/generate`：显式生成年度或季度营销方案，`scope = annual | quarter`。
+4. `POST /api/brands/:id/content-calendar/generate`：显式生成月度内容发布日历；传 `itemId`、`refreshItemId` 或 `mode=single` 时单条重生成。
+5. `POST /api/marketing-plan/generate` 与 `POST /api/content-calendar/generate`：顶层兼容入口，必须提供 `brandId`，内部仍执行品牌级权限校验。
+
+所有品牌级生成 API 必须校验 `canSessionWriteBrandProject`，未登录返回 `401`，无品牌权限返回 `404`。
+
 ## 9. 非功能需求
 
 1. 可追踪：任务、审批、发布、Research、素材变化应可被审计或复盘。
@@ -259,7 +324,13 @@ Lark 相关的通知卡片推送、云盘文件夹创建及文件上传工具接
 8. Research 模块支持 TopicFeed markdown 写入、读取、搜索和归档。
 9. API metadata 暴露 OpenAPI、SOP (统一由 docs/AGENT_CONNECTIVITY.md 提供) 和 Skill，便于 Agent 唯一接入。
 10. Agent 支持自动化定期轮询（建议每 30 分钟一次），在轮询中自动处理评论回复、检查并执行发布、根据订阅包承诺检查并主动挂起素材与探店 `require_input` 任务。
-11. TypeScript 与生产构建通过。
+11. 品牌计划页替代旧品牌故事页，展示品牌信息、门店信息、社交媒体渠道、数据调研、商家主张访谈、年度营销方案、季度营销方案和发布日历。
+12. 品牌摸底报告由 Growth 生成但长期保存到 Kanban；年度/季度营销方案只能由 Kanban 生成。
+13. 年度营销方案必须包含四个季度的详细策略和结构化推广点，能支撑季度方案和月度发布日历。
+14. 发布日历必须基于季度营销方案向 AMC-Content 请求候选创意，再由 Kanban 生成并保存最终日历；支持整月重生成和单条创意重生成。
+15. `BrandGrowthResearchSnapshot`、`BrandMarketingSolution`、`SubscriptionOperationsStrategy` 三类数据必须在 Prisma schema 和生产数据库中存在；`BrandMarketingSolution.kind` 区分 `ANNUAL`、`QUARTERLY`、`CALENDAR`。
+16. 旧 Growth SSO 规划入口、`PlanningGrowthBridge` 和纯 UI 的 `/dashboard/promotion-plan` 保存逻辑不得作为真实营销方案入口出现。
+17. TypeScript 与生产构建通过。
 
 ## 11. 近期 Roadmap
 
@@ -270,3 +341,5 @@ Lark 相关的通知卡片推送、云盘文件夹创建及文件上传工具接
 5. 增加 API rate limit、Agent 调用配额与滥用保护。
 6. 完善活动模块数据分析与转化归因。
 7. 将 API Services 中高耦合集成抽成独立 service 层，减少 route handler 复杂度。
+8. 清理旧 `promotion-strategy` / `planning` 兼容 API 与历史 `PlanningReview` 只读数据，确认没有外部调用后再移除。
+9. 合并重复的权限配置文件，避免 `src/lib/permissions.ts` 与 `src/lib/user-management/permissions.ts` 菜单事实分叉。
