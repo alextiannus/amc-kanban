@@ -804,23 +804,71 @@ async function buildAnnualMarketingSolution(
       })),
     },
   }
-  const llm = await callMarketingPlanLLM('annual', input)
+  const strategyLlm = await callMarketingPlanLLM('annual_strategy', input)
   await writeMarketingPlanBusinessLog({
     brand,
     scope: 'annual',
     input,
-    llm,
-    fallbackUsed: !llm.value,
+    llm: strategyLlm,
+    fallbackUsed: false,
   })
-  if (!llm.value) {
+  if (!strategyLlm.value) {
     console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; refusing to save a non-LLM marketing plan.', {
-      provider: llm.provider,
-      modelName: llm.modelName,
-      error: llm.error || 'llm_returned_invalid_json',
+      provider: strategyLlm.provider,
+      modelName: strategyLlm.modelName,
+      error: strategyLlm.error || 'llm_returned_invalid_json',
     })
     throw new BrandPlanError('marketing_plan_llm_failed', 502)
   }
-  return normalizeAnnualMarketingSolution(llm.value, fallback, llm)
+  const strategyPlan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
+  const quarterlyPlans: NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']> = []
+  for (const fallbackQuarter of fallback.quarterlyPlans || []) {
+    const quarterInput = {
+      ...input,
+      annualStrategy: {
+        goal: strategyPlan.goal,
+        theme: strategyPlan.theme,
+        strategyPrinciples: strategyPlan.strategyPrinciples,
+        platformStrategy: strategyPlan.platformStrategy,
+        contentPillars: strategyPlan.contentPillars,
+        metrics: strategyPlan.metrics,
+        researchFocus: strategyPlan.researchFocus,
+      },
+      currentQuarter: {
+        quarter: fallbackQuarter.quarter,
+        year: fallbackQuarter.year,
+        startMonth: fallbackQuarter.startMonth,
+        endMonth: fallbackQuarter.endMonth,
+        periodLabel: fallbackQuarter.periodLabel,
+        months: fallbackQuarter.monthlyFocus.map((month) => month.month),
+      },
+      previousQuarterPlans: quarterlyPlans,
+    }
+    const quarterLlm = await callMarketingPlanLLM('quarter', quarterInput)
+    await writeMarketingPlanBusinessLog({
+      brand,
+      scope: 'quarter',
+      input: quarterInput,
+      llm: quarterLlm,
+      fallbackUsed: false,
+    })
+    if (!quarterLlm.value) {
+      console.warn('[brand-plan] quarter marketing_plan LLM returned no valid JSON; refusing to save a partial plan.', {
+        quarter: fallbackQuarter.quarter,
+        provider: quarterLlm.provider,
+        modelName: quarterLlm.modelName,
+        error: quarterLlm.error || 'llm_returned_invalid_json',
+      })
+      throw new BrandPlanError('marketing_plan_llm_failed', 502)
+    }
+    const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [fallbackQuarter])
+    if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+    quarterlyPlans.push(quarterPlan)
+  }
+  return normalizeAnnualMarketingStrategy({
+    ...strategyLlm.value,
+    quarterlyPlans,
+  }, fallback, strategyLlm)
 }
 
 async function buildRuleAnnualMarketingSolution(
@@ -1743,6 +1791,10 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>) {
       publishingFreq: subscriptionStrategy.publishingFreq || null,
       includedServices: stringList(subscriptionStrategy.includedServices).slice(0, 12),
     },
+    planningWindow: input.planningWindow || null,
+    annualStrategy: input.annualStrategy || null,
+    currentQuarter: input.currentQuarter || null,
+    previousQuarterPlans: arrayValue(input.previousQuarterPlans).slice(-4),
     request: input.request || {},
   }
 }
@@ -1840,17 +1892,26 @@ function dateText(value: unknown) {
   return Number.isNaN(date.getTime()) ? textValue : date.toISOString()
 }
 
-async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<string, unknown>) {
-  const schemaInstruction = scope === 'annual'
+type MarketingPlanLLMScope = 'annual_strategy' | 'quarter'
+
+async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<string, unknown>) {
+  const schemaInstruction = scope === 'annual_strategy'
     ? [
       '只返回 JSON 对象，不要 Markdown。',
-      '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, quarterlyFocus, quarterlyPlans, metrics, researchFocus。',
-      'quarterlyPlans 必须含连续四个季度；每项含 quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
-      'platformStrategy 每项含 platform, role, contentApproach, customerAction。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
+      '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, metrics, researchFocus。',
+      'platformStrategy 每项含 platform, role, contentApproach, customerAction。',
+      '不要生成季度详情；季度计划会在后续步骤逐个生成。',
       '方案必须适合本地商家，围绕“让顾客找得到、看得懂、愿意来”；不得承诺流量、排名、销量或到店人数。',
       '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
     ].join('\n')
-    : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), year(number), startMonth(string), endMonth(string), periodLabel(string), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。`
+    : [
+      '只返回 JSON 对象，不要 Markdown。',
+      '字段必须为：quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
+      'promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
+      'monthlyFocus 每项含 month, focus, promotionPoints。',
+      '必须参考 annualStrategy 和 previousQuarterPlans，当前季度要承接前面季度，避免重复。',
+      '内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。',
+    ].join('\n')
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
   const compactInput = compactMarketingPlanInputForLLM(input)
   const compactInputJson = JSON.stringify(compactInput)
@@ -1872,15 +1933,15 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 2600 : 1800, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1300 : 1600, {
       temperature: 0.35,
       jsonMode: true,
-      deadlineMs: scope === 'annual' ? 220000 : 90000,
-      attemptTimeoutMs: scope === 'annual' ? [30000, 60000, 90000, 90000, 90000, 90000] : [30000, 30000, 30000],
-      maxAttempts: scope === 'annual' ? 6 : 3,
+      deadlineMs: scope === 'annual_strategy' ? 70000 : 55000,
+      attemptTimeoutMs: [35000, 35000],
+      maxAttempts: 2,
       allowDefaultFallback: true,
-      allowAnyFallback: true,
-      allowSystemFallback: true,
+      allowAnyFallback: false,
+      allowSystemFallback: false,
     })
     let value = parseJsonObject(result.text)
     let repairTrace: Record<string, unknown> | undefined
@@ -1920,25 +1981,25 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
   }
 }
 
-async function repairMarketingPlanJson(scope: 'annual' | 'quarter', rawText: string) {
+async function repairMarketingPlanJson(scope: MarketingPlanLLMScope, rawText: string) {
   const prompt = [
     '把下面内容整理成严格 JSON 对象。只返回 JSON，不要 Markdown，不要解释。',
-    scope === 'annual'
-      ? '必须保留或补齐字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, quarterlyFocus, quarterlyPlans, metrics, researchFocus。'
-      : '必须保留或补齐字段：quarter, year, startMonth, endMonth, periodLabel, objective, monthlyFocus, contentDirections, promotionPoints。',
+    scope === 'annual_strategy'
+      ? '必须保留或补齐字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, metrics, researchFocus。不要补季度详情。'
+      : '必须保留或补齐字段：quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
     '如果原文里有中文引号、尾逗号、说明文字或截断内容，请修成可 JSON.parse 的对象。',
     `原文：${rawText.slice(0, 12000)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 2600 : 1600, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1300 : 1500, {
       temperature: 0,
       jsonMode: true,
-      deadlineMs: 60000,
-      attemptTimeoutMs: [30000, 30000],
-      maxAttempts: 2,
+      deadlineMs: 35000,
+      attemptTimeoutMs: [30000],
+      maxAttempts: 1,
       allowDefaultFallback: true,
-      allowAnyFallback: true,
-      allowSystemFallback: true,
+      allowAnyFallback: false,
+      allowSystemFallback: false,
     })
     return {
       value: parseJsonObject(result.text),
@@ -2045,6 +2106,14 @@ async function writeMarketingPlanBusinessLog(input: {
       reason,
     },
   })
+}
+
+function normalizeAnnualMarketingStrategy(
+  value: Record<string, unknown>,
+  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
+  llm: { provider: string; modelName: string; error?: string }
+) {
+  return normalizeAnnualMarketingSolution(value, fallback, llm)
 }
 
 function normalizeAnnualMarketingSolution(
