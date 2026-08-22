@@ -2169,8 +2169,18 @@ function minimumContentPlanDateValue(base = new Date()) {
   return `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`
 }
 
+function minimumCompleteCalendarMonthValue(base = new Date()) {
+  const parts = datePartsInSingapore(base)
+  const monthOffset = parts.day <= 1 ? 0 : 1
+  const fullMonthStart = new Date(Date.UTC(parts.year, parts.month - 1 + monthOffset, 1))
+  const fullMonth = datePartsInSingapore(fullMonthStart)
+  const fullMonthValue = `${fullMonth.year}-${String(fullMonth.month).padStart(2, '0')}`
+  const leadMonthValue = minimumContentPlanDateValue(base).slice(0, 7)
+  return fullMonthValue < leadMonthValue ? leadMonthValue : fullMonthValue
+}
+
 function clampSchedulableCalendarMonth(month: string) {
-  const minimumMonth = minimumContentPlanDateValue().slice(0, 7)
+  const minimumMonth = minimumCompleteCalendarMonthValue()
   return month < minimumMonth ? minimumMonth : month
 }
 

@@ -318,7 +318,11 @@ function minimumContentPlanDate() {
 }
 
 function minimumContentPlanMonthValue() {
-  return minimumContentPlanDate().slice(0, 7)
+  const today = new Date()
+  const fullMonthStart = new Date(today.getFullYear(), today.getMonth() + (today.getDate() <= 1 ? 0 : 1), 1)
+  const fullMonth = formatLocalMonthValue(fullMonthStart)
+  const leadMonth = minimumContentPlanDate().slice(0, 7)
+  return fullMonth < leadMonth ? leadMonth : fullMonth
 }
 
 function firstSchedulableDateInMonth(month: string) {
@@ -544,6 +548,11 @@ function BrandProfileContent({
     return firstCompleteNaturalMonthValue()
   })
   const calendarMonthInitializedRef = useRef('')
+
+  useEffect(() => {
+    const minimumMonth = minimumContentPlanMonthValue()
+    if (calendarMonth < minimumMonth) setCalendarMonth(minimumMonth)
+  }, [calendarMonth])
 
   useEffect(() => {
     const fromStrategy = publishingScheduleFromStrategy(brandPlanData.annualPlan?.subscriptionStrategy)
