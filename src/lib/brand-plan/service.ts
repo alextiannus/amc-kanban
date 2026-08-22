@@ -1209,7 +1209,7 @@ async function buildPublishingMonth(
 
   const items = schedule.map((slot, index) => {
     const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, index)
-    const product = promotionPoint?.sellingPoint || products[index % Math.max(1, products.length)] || '招牌产品'
+    const product = products[index % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
     const candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
     const sampleLinks = calendarSampleLinks(candidate)
     return {
@@ -1765,60 +1765,81 @@ async function reviewCalendarCreativeItemsWithLLM(
       matchedInspirations: item.matchedInspirations || [],
     })),
   }
-  const prompt = renderPromptTemplate(promptTemplate?.template || '', {
-    inputJson: `输入 JSON：${JSON.stringify(payload)}`,
-  }) || [
-    '你是 AMC 的本地商家内容策划总监。请把输入改成当前品牌能直接执行的内容计划。',
-    '只返回 JSON 对象。items 每项包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
-    `输入 JSON：${JSON.stringify(payload)}`,
-  ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, Math.min(3600, 900 + items.length * 520), {
-      temperature: 0.28,
-      jsonMode: true,
-      deadlineMs: 90000,
-      attemptTimeoutMs: [85000],
-      maxAttempts: 1,
-      allowDefaultFallback: true,
-      allowAnyFallback: false,
-      allowSystemFallback: false,
-    })
-    const parsed = parseJsonValue(result.text)
-    const reviewed = (Array.isArray(parsed) ? parsed : arrayValue(objectValue(parsed).items)).map(objectValue)
-    if (!reviewed.length) {
-      console.warn('[brand-plan] calendar creative review returned no parsable items', {
-        responseTextCharCount: result.text?.length || 0,
-        snippet: result.text?.slice(0, 1200) || '',
+    let repairNote = ''
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const prompt = renderPromptTemplate(promptTemplate?.template || '', {
+        inputJson: [
+          repairNote ? `返修要求：${repairNote}` : '',
+          `输入 JSON：${JSON.stringify(payload)}`,
+        ].filter(Boolean).join('\n\n'),
+      }) || [
+        '你是 AMC 的本地商家内容策划总监。请把输入改成当前品牌能直接执行的内容计划。',
+        '只返回 JSON 对象。items 每项包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
+        repairNote ? `返修要求：${repairNote}` : '',
+        `输入 JSON：${JSON.stringify(payload)}`,
+      ].filter(Boolean).join('\n\n')
+      const result = await callLLM('marketing_plan', prompt, Math.min(3600, 900 + items.length * 520), {
+        temperature: 0.25,
+        jsonMode: true,
+        deadlineMs: 90000,
+        attemptTimeoutMs: [85000],
+        maxAttempts: 1,
+        allowDefaultFallback: false,
+        allowAnyFallback: false,
+        allowSystemFallback: false,
       })
-      throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-    }
-    if (reviewed.length < items.length) {
-      console.warn('[brand-plan] calendar creative review returned fewer items than requested', {
-        expected: items.length,
-        actual: reviewed.length,
-        snippet: result.text?.slice(0, 1200) || '',
-      })
-      throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-    }
-    const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
-    return items.map((item, index) => {
-      const review = byId.get(item.id) || reviewed[index]
-      if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-      const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
-      const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
-      const materialRequirements = stringList(review.materialRequirements)
-        .map((line) => cleanReviewedCalendarText(line, ''))
-        .filter(Boolean)
-        .slice(0, 6)
-      const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '')
-      const approved = review.approved !== false
-      return {
-        ...item,
-        title,
-        planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
-        materialRequirements: materialRequirements.length ? materialRequirements : item.materialRequirements,
+      const parsed = parseJsonValue(result.text)
+      const reviewed = (Array.isArray(parsed) ? parsed : arrayValue(objectValue(parsed).items)).map(objectValue)
+      if (!reviewed.length) {
+        console.warn('[brand-plan] calendar creative review returned no parsable items', {
+          responseTextCharCount: result.text?.length || 0,
+          snippet: result.text?.slice(0, 1200) || '',
+        })
+        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       }
-    })
+      if (reviewed.length < items.length) {
+        console.warn('[brand-plan] calendar creative review returned fewer items than requested', {
+          expected: items.length,
+          actual: reviewed.length,
+          snippet: result.text?.slice(0, 1200) || '',
+        })
+        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+      }
+      const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
+      const reviewedItems = items.map((item, index) => {
+        const review = byId.get(item.id) || reviewed[index]
+        if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+        const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
+        const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
+        const materialRequirements = stringList(review.materialRequirements)
+          .map((line) => cleanReviewedCalendarText(line, ''))
+          .filter(Boolean)
+          .slice(0, 6)
+        const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '')
+        const approved = review.approved !== false
+        return {
+          ...item,
+          title,
+          planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
+          materialRequirements: materialRequirements.length ? materialRequirements : item.materialRequirements,
+        }
+      })
+      const qualityIssues = calendarCreativeQualityIssues(reviewedItems)
+      if (!qualityIssues.length) return reviewedItems
+      if (attempt === 0) {
+        repairNote = [
+          '上一版内容不合格，请重写命中问题的条目。',
+          `问题：${qualityIssues.join('；')}`,
+          '不要写未确认的价格、优惠、赠品、暗号、出示本条、隐藏福利、套餐价公开、天花板、必吃、流量承诺或来源说明。',
+          '如果价格或活动没有在输入里明确给出，只能写“菜单/活动规则需门店确认”，不要把它作为卖点。',
+        ].join('\n')
+        continue
+      }
+      console.warn('[brand-plan] calendar creative review failed quality gate', { qualityIssues })
+      throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+    }
+    throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
   } catch (error) {
     if (error instanceof BrandPlanError) throw error
     throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
@@ -1891,6 +1912,10 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
     .replace(/门店确认价\+?/g, '门店确认后')
     .replace(/价格数字/g, '菜单信息')
     .replace(/优惠时间/g, '到店信息')
+    .replace(/套餐价公开/g, '点单前先看')
+    .replace(/隐藏福利|必吃|天花板/g, '')
+    .replace(/雨天[^，。.!！?？]*送[^，。.!！?？]*/g, '雨天到店前先确认活动规则')
+    .replace(/送一碗[^，。.!！?？]*/g, '活动规则以门店确认为准')
     .replace(/到店报暗号[^，。.!！?？]*/g, '到店前先确认活动规则')
     .replace(/到店出示[^，。.!！?？]*/g, '到店前先确认活动规则')
     .replace(/赠送[^，。.!！?？]*/g, '活动权益以门店确认为准')
@@ -1900,6 +1925,28 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
     .replace(/\s+/g, ' ')
     .trim()
   return cleaned || fallback
+}
+
+function calendarCreativeQualityIssues(items: BrandPlanCalendarItem[]) {
+  const issues = new Set<string>()
+  const forbidden = [
+    { label: '来源说明', pattern: /保留灵感|当前灵感|适配提醒|原视频|参考内容|样板爆品|复刻目标|mp4/i },
+    { label: '原始品牌或品类残留', pattern: /Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery|#武冈|破酥包/i },
+    { label: '未确认促销', pattern: /优惠|获赠|赠送|出示本条|暗号|隐藏福利|送一碗|雨天.*送/i },
+    { label: '未确认价格', pattern: /门店确认价|套餐价公开|[$]\s?\d/i },
+    { label: '夸张口号', pattern: /天花板|必吃|爆单|刷屏|引爆|全网/i },
+  ]
+  items.forEach((item) => {
+    const body = [
+      item.title,
+      item.planning,
+      ...(item.materialRequirements || []),
+    ].join('\n')
+    forbidden.forEach((rule) => {
+      if (rule.pattern.test(body)) issues.add(rule.label)
+    })
+  })
+  return Array.from(issues)
 }
 
 async function syncCalendarMaterialRequirements(
