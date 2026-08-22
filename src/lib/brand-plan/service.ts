@@ -117,6 +117,7 @@ export type BrandPlanMerchantInterview = {
 type BrandPlanAction =
   | 'generate_research_report'
   | 'save_merchant_interview'
+  | 'save_workspace_patch'
   | 'generate_annual_plan'
   | 'generate_quarter_plan'
   | 'generate_publishing_calendar'
@@ -204,6 +205,8 @@ export async function runBrandPlanAction(input: {
     const report = current.researchReport || await saveResearchReport(brand.id, await buildResearchReport(brand))
     latestInterview = await saveMerchantInterview(brand.id, input.body, report)
     next = { ...current, researchReport: report }
+  } else if (input.action === 'save_workspace_patch') {
+    next = await saveWorkspacePatch(brand.id, current, input.body)
   } else if (input.action === 'generate_annual_plan') {
     const annualPlan = await buildAnnualMarketingSolution(brand, current, latestInterview)
     next = { ...current, annualPlan }
@@ -453,6 +456,87 @@ async function saveMerchantInterview(
     },
   })
   return interview
+}
+
+async function saveWorkspacePatch(
+  brandId: string,
+  current: BrandPlanWorkspaceData,
+  body: Record<string, unknown> | undefined
+): Promise<BrandPlanWorkspaceData> {
+  const target = text(body?.target)
+  const value = body?.value
+  if (!target) throw new BrandPlanError('workspace_patch_target_required', 400)
+
+  if (target === 'research_report') {
+    const report = normalizeResearchReport(value)
+    if (!report) throw new BrandPlanError('invalid_research_report', 400)
+    const savedReport = await saveResearchReport(brandId, {
+      ...report,
+      generatedAt: report.generatedAt || new Date().toISOString(),
+    })
+    return { ...current, researchReport: savedReport }
+  }
+
+  if (target === 'annual_plan') {
+    const annualPlan = objectValue(value) as NonNullable<BrandPlanWorkspaceData['annualPlan']>
+    if (!annualPlan.goal && !annualPlan.theme) throw new BrandPlanError('invalid_annual_plan', 400)
+    await saveMarketingSolutionVersion({
+      brandId,
+      kind: 'ANNUAL',
+      period: String(new Date().getFullYear()),
+      input: { target, editedAt: new Date().toISOString() },
+      output: annualPlan,
+      researchSnapshotId: current.researchReport?.snapshotId,
+      generationMode: 'MANUAL_EDIT',
+    })
+    return { ...current, annualPlan }
+  }
+
+  if (target === 'quarter_plan') {
+    const quarterPlan = objectValue(value) as NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number]
+    if (!/^Q[1-4]$/.test(text(quarterPlan.quarter))) throw new BrandPlanError('invalid_quarter_plan', 400)
+    const quarterlyPlans = [
+      ...(current.quarterlyPlans || []).filter((item) => item.quarter !== quarterPlan.quarter),
+      quarterPlan,
+    ]
+    await saveMarketingSolutionVersion({
+      brandId,
+      kind: 'QUARTERLY',
+      period: quarterPlan.quarter,
+      input: { target, editedAt: new Date().toISOString() },
+      output: quarterPlan,
+      researchSnapshotId: current.researchReport?.snapshotId,
+      generationMode: 'MANUAL_EDIT',
+    })
+    return { ...current, quarterlyPlans }
+  }
+
+  if (target === 'calendar_month') {
+    const month = normalizeMonth(body?.month)
+    const items = arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
+    if (!items.length) throw new BrandPlanError('invalid_calendar_month', 400)
+    const publishingCalendar = {
+      generatedAt: new Date().toISOString(),
+      generationMode: 'AMC_CONTENT_ASSISTED' as const,
+      months: {
+        ...(current.publishingCalendar?.months || {}),
+        [month]: items,
+      },
+    }
+    await syncCalendarMaterialRequirements(brandId, month, items)
+    await saveMarketingSolutionVersion({
+      brandId,
+      kind: 'CALENDAR',
+      period: month,
+      input: { target, month, editedAt: new Date().toISOString() },
+      output: { month, items },
+      researchSnapshotId: current.researchReport?.snapshotId,
+      generationMode: 'MANUAL_EDIT',
+    })
+    return { ...current, publishingCalendar }
+  }
+
+  throw new BrandPlanError('invalid_workspace_patch_target', 400)
 }
 
 function buildMerchantInterviewGuideline(report?: BrandPlanWorkspaceData['researchReport']) {
@@ -1194,7 +1278,7 @@ async function saveMarketingSolutionVersion(input: {
   input: unknown
   output: unknown
   researchSnapshotId?: string
-  generationMode: 'LLM' | 'RULE_FALLBACK' | 'AMC_CONTENT_ASSISTED'
+  generationMode: 'LLM' | 'RULE_FALLBACK' | 'AMC_CONTENT_ASSISTED' | 'MANUAL_EDIT'
   llmProvider?: string
   llmModel?: string
   llmError?: string

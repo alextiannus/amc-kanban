@@ -7,7 +7,8 @@ import {
   Settings, BookOpen, Loader2,
   RefreshCw, FileText, Store, Utensils,
   Edit3, Plus,
-  Users, Goal, Target, HelpCircle
+  Users, Goal, Target, HelpCircle,
+  MapPin, Music2
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type {
@@ -174,6 +175,12 @@ type BrandSettings = Record<string, unknown> & {
 
 type SocialAccountSummary = NonNullable<BrandSettings['accounts']>[number]
 
+type EditableAiContent =
+  | { target: 'research_report'; title: string; value: NonNullable<BrandPlanWorkspaceData['researchReport']> }
+  | { target: 'annual_plan'; title: string; value: NonNullable<BrandPlanWorkspaceData['annualPlan']> }
+  | { target: 'quarter_plan'; title: string; value: NonNullable<NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number]> }
+  | { target: 'calendar_month'; title: string; month: string; value: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string] }
+
 type GrowthSyncStatus = {
   status: 'NOT_QUEUED' | 'PENDING' | 'PROCESSING' | 'CONFLICT' | 'SYNCED'
   pendingPaths: string[]
@@ -217,6 +224,26 @@ function socialPlatformLabel(platformId: string) {
     yelp: 'Yelp',
   }
   return labels[key] || platformId
+}
+
+function socialPlatformLogo(platformId: string) {
+  const key = platformId.toLowerCase()
+  if (key.includes('instagram')) return <span className="text-[11px] font-black leading-none">IG</span>
+  if (key.includes('tiktok')) return <Music2 className="h-4 w-4" />
+  if (key.includes('google')) return <MapPin className="h-4 w-4" />
+  if (key === 'facebook' || key === 'fb') return <span className="text-sm font-black leading-none">f</span>
+  if (key === 'xhs' || key === 'xiaohongshu') return <span className="text-[11px] font-black leading-none">小红书</span>
+  return <span className="text-xs font-black leading-none">{socialPlatformLabel(platformId).slice(0, 2)}</span>
+}
+
+function socialPlatformColor(platformId: string) {
+  const key = platformId.toLowerCase()
+  if (key.includes('instagram')) return 'bg-pink-50 text-pink-600 border-pink-100 dark:bg-pink-950/30 dark:text-pink-200 dark:border-pink-900'
+  if (key.includes('tiktok')) return 'bg-slate-950 text-white border-slate-800 dark:bg-white dark:text-slate-950 dark:border-white'
+  if (key.includes('google')) return 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-200 dark:border-emerald-900'
+  if (key === 'xhs' || key === 'xiaohongshu') return 'bg-red-50 text-red-600 border-red-100 dark:bg-red-950/30 dark:text-red-200 dark:border-red-900'
+  if (key === 'facebook' || key === 'fb') return 'bg-blue-50 text-blue-700 border-blue-100 dark:bg-blue-950/30 dark:text-blue-200 dark:border-blue-900'
+  return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'
 }
 
 // ─── Plan badge helper ────────────────────────────────────────────────────────
@@ -328,6 +355,8 @@ function BrandProfileContent({
   const [showResearchReport, setShowResearchReport] = useState(false)
   const [showInterviewReport, setShowInterviewReport] = useState(false)
   const [interviewDraftNotes, setInterviewDraftNotes] = useState('')
+  const [editingAiContent, setEditingAiContent] = useState<EditableAiContent | null>(null)
+  const [editingAiJson, setEditingAiJson] = useState('')
   const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const now = new Date()
@@ -628,6 +657,34 @@ ${storeLines}
     await loadAllConfig()
     await loadIdentity()
     return data as { brandPlan: BrandPlanWorkspaceData; marketingSolution?: BrandPlanWorkspaceData; merchantInterview?: MerchantInterviewRecord | null }
+  }
+
+  const openAiContentEditor = (content: EditableAiContent) => {
+    setEditingAiContent(content)
+    setEditingAiJson(JSON.stringify(content.value, null, 2))
+  }
+
+  const handleSaveAiContent = async () => {
+    if (!editingAiContent) return
+    let value: unknown
+    try {
+      value = JSON.parse(editingAiJson)
+    } catch {
+      showToastVal('JSON 格式不正确，请检查逗号和引号。', 'error')
+      return
+    }
+    setPlanGenerating(`edit:${editingAiContent.target}`)
+    try {
+      const body: Record<string, unknown> = {
+        target: editingAiContent.target,
+        value,
+      }
+      if (editingAiContent.target === 'calendar_month') body.month = editingAiContent.month
+      const data = await runBrandPlanAction('save_workspace_patch', '已保存并回写当前版本', body)
+      if (data) setEditingAiContent(null)
+    } finally {
+      setPlanGenerating(null)
+    }
   }
 
   const primaryProductList = () => {
@@ -937,7 +994,6 @@ ${storeLines}
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Marketing Solution Workspace</p>
                 <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">品牌计划与营销方案</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-slate-500 dark:text-slate-400">先沉淀品牌信息、门店信息、品牌主张、数据调研和订阅策略，再由 AMC-Kanban 生成年度营销方案、季度营销方案和可执行的发布日历。</p>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {sourceStatusItems.map(item => (
@@ -1020,48 +1076,47 @@ ${storeLines}
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
                   <h4 className="text-sm font-black text-slate-900 dark:text-white">社交媒体渠道</h4>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
-                    展示已经同步到 AMC-Kanban 的社交媒体账号；可手动从 PostFast 拉取最新账号。
-                    {postfastSyncedAt ? ` 上次同步：${new Date(postfastSyncedAt).toLocaleString()}` : ''}
-                  </p>
+                  {postfastSyncedAt ? <span className="text-[10px] font-semibold text-slate-400">{new Date(postfastSyncedAt).toLocaleDateString()}</span> : null}
                 </div>
                 <button
                   type="button"
                   onClick={handleSyncPostfastAccounts}
                   disabled={postfastSyncing}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:border-blue-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
                 >
                   {postfastSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  从 PostFast 同步账号
+                  同步账号
                 </button>
               </div>
 
               {socialAccounts.length ? (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <div className="flex flex-wrap gap-2">
                   {socialAccounts.map((account) => {
                     const displayName = account.displayName || account.handle || socialPlatformLabel(account.platformId)
                     return (
-                      <div key={account.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{socialPlatformLabel(account.platformId)}</p>
-                            <p className="mt-1 truncate text-sm font-black text-slate-900 dark:text-white">{displayName}</p>
-                            <p className="mt-1 truncate text-xs text-slate-500">{account.handle ? `@${account.handle.replace(/^@/, '')}` : '账号名待同步'}</p>
-                          </div>
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${account.autoPilot ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>
-                            {account.autoPilot ? '自动发布' : '手动审核'}
-                          </span>
+                      <div key={account.id} className="flex min-w-[220px] max-w-full flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950 sm:max-w-[320px]">
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${socialPlatformColor(account.platformId)}`}>
+                          {socialPlatformLogo(account.platformId)}
                         </div>
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-xs font-black text-slate-900 dark:text-white">{socialPlatformLabel(account.platformId)}</p>
+                            <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${account.autoPilot ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>
+                              {account.autoPilot ? '自动' : '审核'}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">{account.handle ? `@${account.handle.replace(/^@/, '')}` : displayName}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 text-[10px] font-semibold text-slate-500">
                           {typeof account.followerCount === 'number' && <span>粉丝：{account.followerCount.toLocaleString()}</span>}
                           {typeof account.ratingScore === 'number' && <span>评分：{account.ratingScore.toFixed(1)}</span>}
                           {account.profileUrl && (
                             <a href={account.profileUrl} target="_blank" rel="noreferrer" className="font-bold text-blue-600 hover:text-blue-700">
-                              查看主页
+                              主页
                             </a>
                           )}
                         </div>
@@ -1070,9 +1125,8 @@ ${storeLines}
                   })}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-slate-250 bg-slate-50 p-5 text-center dark:border-slate-800 dark:bg-slate-950">
-                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">尚未同步社交媒体账号</p>
-                  <p className="mt-1 text-xs text-slate-400">配置 PostFast API Key 后，点击同步即可拉取 Instagram、TikTok、Google Business 等账号。</p>
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500 dark:border-slate-800 dark:bg-slate-950">
+                  尚未同步账号
                 </div>
               )}
             </div>
@@ -1083,27 +1137,26 @@ ${storeLines}
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-black text-slate-900 dark:text-white">数据调研摸底报告</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">同步 amc-growth 和现有品牌资料，先生成我们已经知道什么、还缺什么。</p>
                 </div>
                 <FileText className="h-5 w-5 text-blue-500" />
               </div>
-              <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-950 dark:text-slate-300">{report?.summary || '尚未生成摸底报告。'}</div>
+              <div className="mt-4 line-clamp-2 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-950 dark:text-slate-300">{report?.summary || '尚未生成摸底报告。'}</div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" onClick={handleGenerateResearchReport} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
                   {planGenerating === 'research' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 生成品牌摸底报告
                 </button>
                 <button type="button" onClick={() => setShowResearchReport(true)} disabled={!report} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">查看摸底报告</button>
+                <button type="button" onClick={() => report && openAiContentEditor({ target: 'research_report', title: '编辑品牌摸底报告', value: report })} disabled={!report} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">编辑</button>
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌主张访谈与记录</h3>
-                  <p className="mt-1 text-xs leading-relaxed text-slate-500">提供主理人访谈指南；可参考摸底报告，访谈后记录老板原话和关键判断。</p>
                 </div>
                 <HelpCircle className="h-5 w-5 text-amber-500" />
               </div>
-              <div className="mt-4 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-950 dark:text-slate-300">
+              <div className="mt-4 line-clamp-2 rounded-xl bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:bg-slate-950 dark:text-slate-300">
                 {interview?.summary || (merchantInterviewRequired ? '需要完成品牌主张访谈。系统提供访谈指南；主理人完成访谈后，在这里保存品牌主张。' : '系统提供访谈指南；主理人完成访谈后，在这里保存品牌主张。')}
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -1120,10 +1173,9 @@ ${storeLines}
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Section 2</p>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">营销方案输入</h3>
-                <p className="mt-1 text-xs text-slate-500">汇总品牌信息、门店信息、品牌主张、数据调研和订阅策略。</p>
               </div>
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {[
                 { title: '品牌定位', value: identityText('targetAudience', draftAudience) || parsedBrandPositioning || '待确认目标客群和消费场景。' },
                 { title: '品牌形象', value: identityText('brandImage', creativeIdentity.brandImage) || report?.brandImage || '待整理视觉与内容呈现方向。' },
@@ -1132,9 +1184,9 @@ ${storeLines}
                 { title: '目标人群', value: identityText('targetAudience', draftAudience) || '附近上班族、居民、家庭客等需老板确认。' },
                 { title: '推广点', value: identityText('promotionFocus', creativeIdentity.promotionFocus) || report?.growthPoints.join('；') || '招牌、位置、价格、环境、服务和活动。' },
               ].map(item => (
-                <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <div key={item.title} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
                   <p className="text-xs font-black text-slate-900 dark:text-white">{item.title}</p>
-                  <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.value}</p>
+                  <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.value}</p>
                 </div>
               ))}
             </div>
@@ -1147,14 +1199,19 @@ ${storeLines}
                   <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 3</p>
                   <h3 className="text-lg font-black text-slate-900 dark:text-white">年度营销方案</h3>
                 </div>
-                <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成年度营销方案
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
+                    {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成年度营销方案
+                  </button>
+                  <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑年度营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                    编辑
+                  </button>
+                </div>
               </div>
               {annualPlan ? (
                 <div className="mt-4 space-y-3">
                   <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{annualPlan.theme}</p>
-                  <p className="text-xs text-slate-500">{annualPlan.goal}</p>
+                  <p className="line-clamp-2 text-xs text-slate-500">{annualPlan.goal}</p>
                   {annualPlan.quarterlyPlans?.length ? (
                     <div className="space-y-3">
                       {annualPlan.quarterlyPlans.map(item => (
@@ -1162,7 +1219,7 @@ ${storeLines}
                           <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div>
                               <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter} · {item.focus}</p>
-                              <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.strategy}</p>
+                              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500">{item.strategy}</p>
                             </div>
                             {item.campaigns.length ? (
                               <p className="shrink-0 text-[11px] font-bold text-purple-600">{item.campaigns.slice(0, 2).join(' / ')}</p>
@@ -1179,17 +1236,7 @@ ${storeLines}
                                       <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">{platform}</span>
                                     ))}
                                   </div>
-                                  <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          {item.monthlyFocus.length ? (
-                            <div className="mt-3 space-y-1.5">
-                              {item.monthlyFocus.slice(0, 3).map(month => (
-                                <div key={`${item.quarter}-${month.month}`} className="flex gap-2 text-[11px] text-slate-500">
-                                  <span className="w-14 shrink-0 font-black text-slate-700 dark:text-slate-200">{month.month}</span>
-                                  <span>{month.focus}</span>
+                                  <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
                                 </div>
                               ))}
                             </div>
@@ -1216,13 +1263,18 @@ ${storeLines}
                   <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">Section 3</p>
                   <h3 className="text-lg font-black text-slate-900 dark:text-white">季度营销方案</h3>
                 </div>
-                <button type="button" onClick={handleGenerateQuarterPlan} disabled={Boolean(planGenerating) || !annualPlan} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'quarter' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Target className="h-3.5 w-3.5" />} 生成季度营销方案
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button type="button" onClick={handleGenerateQuarterPlan} disabled={Boolean(planGenerating) || !annualPlan} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
+                    {planGenerating === 'quarter' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Target className="h-3.5 w-3.5" />} 生成季度营销方案
+                  </button>
+                  <button type="button" onClick={() => currentQuarterPlan && openAiContentEditor({ target: 'quarter_plan', title: '编辑季度营销方案', value: currentQuarterPlan })} disabled={!currentQuarterPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                    编辑
+                  </button>
+                </div>
               </div>
               {currentQuarterPlan ? (
                 <div className="mt-4 space-y-3">
-                  <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{currentQuarterPlan.quarter} · {currentQuarterPlan.objective}</p>
+                  <p className="line-clamp-2 text-sm font-bold text-slate-800 dark:text-slate-100">{currentQuarterPlan.quarter} · {currentQuarterPlan.objective}</p>
                   <div className="space-y-2">
                     {currentQuarterPlan.monthlyFocus.map(item => (
                       <div key={item.month} className="flex items-center gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
@@ -1242,7 +1294,7 @@ ${storeLines}
                               <span key={platform} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">{platform}</span>
                             ))}
                           </div>
-                          <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
+                          <p className="mt-1 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{point.rationale}</p>
                         </div>
                       ))}
                     </div>
@@ -1257,7 +1309,6 @@ ${storeLines}
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Section 4</p>
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">发布日历</h3>
-                <p className="mt-1 text-xs text-slate-500">逐月向后查看每日内容策划和样板爆品。</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, -1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">上个月</button>
@@ -1265,6 +1316,9 @@ ${storeLines}
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">下个月</button>
                 <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !currentQuarterPlan} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
                   {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成季度内容发布日历
+                </button>
+                <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 发布日历`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                  编辑
                 </button>
               </div>
             </div>
@@ -1276,7 +1330,7 @@ ${storeLines}
                     <span className="text-[10px] font-bold text-slate-400">{item.platform} · {item.contentType}</span>
                   </div>
                   <h4 className="mt-3 text-sm font-black text-slate-900 dark:text-white">{item.title}</h4>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.planning}</p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.planning}</p>
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}
@@ -1323,6 +1377,36 @@ ${storeLines}
 
       {reportModal}
       {interviewModal}
+      {editingAiContent && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setEditingAiContent(null)} />
+          <div className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">{editingAiContent.title}</h3>
+                <p className="mt-1 text-xs text-slate-400">保存后回写当前品牌计划版本</p>
+              </div>
+              <button type="button" onClick={() => setEditingAiContent(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+              <textarea
+                value={editingAiJson}
+                onChange={event => setEditingAiJson(event.target.value)}
+                spellCheck={false}
+                className="min-h-[520px] flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs leading-relaxed text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+              />
+              <button
+                type="button"
+                onClick={handleSaveAiContent}
+                disabled={Boolean(planGenerating)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900"
+              >
+                {String(planGenerating).startsWith('edit:') ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</> : <><Save className="h-3.5 w-3.5" /> 保存并回写</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {toast && (
         <div className={`fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold text-white shadow-lg ${
           toast.type === 'success' ? 'border-emerald-400 bg-emerald-500' : toast.type === 'error' ? 'border-rose-400 bg-rose-500' : 'border-slate-700 bg-slate-800'
