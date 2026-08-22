@@ -9,6 +9,7 @@ export interface LLMCallResult {
   latencyMs?: number
   timedOut?: boolean
   attempts?: LLMCallAttempt[]
+  routeDiagnostics?: LLMRouteDiagnostics
 }
 
 export interface LLMCallAttempt {
@@ -28,6 +29,25 @@ export interface LLMCallOptions {
   maxAttempts?: number
   allowDefaultFallback?: boolean
   allowSystemFallback?: boolean
+}
+
+export interface LLMRouteDiagnostics {
+  taskTag: string
+  maxTokens: number
+  jsonModeRequested: boolean
+  deadlineMs?: number
+  maxAttempts?: number
+  allowDefaultFallback: boolean
+  allowSystemFallback: boolean
+  configsConsidered: Array<{
+    index: number
+    displayName: string
+    provider: string
+    modelName: string
+    timeoutMs?: number | null
+    maxRetries?: number | null
+    nativeJsonMode: boolean
+  }>
 }
 
 function supportsNativeJsonMode(provider: string) {
@@ -659,7 +679,30 @@ export async function callLLM(
     })
   }
 
-  return callLLMWithConfigs(configsToTry, prompt, maxTokens, options)
+  const routeDiagnostics: LLMRouteDiagnostics = {
+    taskTag,
+    maxTokens,
+    jsonModeRequested: Boolean(options.jsonMode),
+    ...(Number.isFinite(options.deadlineMs) ? { deadlineMs: Number(options.deadlineMs) } : {}),
+    ...(Number.isFinite(options.maxAttempts) ? { maxAttempts: Number(options.maxAttempts) } : {}),
+    allowDefaultFallback: options.allowDefaultFallback !== false,
+    allowSystemFallback: options.allowSystemFallback !== false,
+    configsConsidered: configsToTry.map((config, index) => ({
+      index,
+      displayName: config.displayName,
+      provider: config.provider,
+      modelName: config.modelName,
+      timeoutMs: config.timeoutMs,
+      maxRetries: config.maxRetries,
+      nativeJsonMode: supportsNativeJsonMode(config.provider),
+    })),
+  }
+
+  const result = await callLLMWithConfigs(configsToTry, prompt, maxTokens, options)
+  return {
+    ...result,
+    routeDiagnostics,
+  }
 }
 
 /**

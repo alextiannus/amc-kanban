@@ -13,6 +13,7 @@ import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
 import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
 import { callLLM } from '@/lib/llmRouter'
 import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
+import { writeAuditLog } from '@/lib/audit'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -791,6 +792,13 @@ async function buildAnnualMarketingSolution(
     },
   }
   const llm = await callMarketingPlanLLM('annual', input)
+  await writeMarketingPlanBusinessLog({
+    brand,
+    scope: 'annual',
+    input,
+    llm,
+    fallbackUsed: !llm.value,
+  })
   if (!llm.value) {
     console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; saving rule fallback instead.', {
       provider: llm.provider,
@@ -1481,6 +1489,16 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     schemaInstruction,
     inputJson: JSON.stringify(input),
   })
+  const promptTrace = {
+    taskKey: 'marketing_plan_generation',
+    promptTemplateId: promptTemplate?.id || null,
+    promptTemplateUpdatedAt: promptTemplate?.updatedAt instanceof Date
+      ? promptTemplate.updatedAt.toISOString()
+      : promptTemplate?.updatedAt || null,
+    promptCharCount: prompt.length,
+    schemaInstructionCharCount: schemaInstruction.length,
+    inputCharCount: JSON.stringify(input).length,
+  }
   try {
     const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 6200 : 2600, {
       temperature: 0.35,
@@ -1496,6 +1514,15 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
       modelName: result.modelName,
       error: result.error || (value ? undefined : `llm_returned_invalid_json:${String(result.text || '').slice(0, 160)}`),
       value,
+      trace: {
+        ...promptTrace,
+        routeDiagnostics: result.routeDiagnostics,
+        attempts: result.attempts || [],
+        latencyMs: result.latencyMs,
+        timedOut: result.timedOut,
+        responseTextCharCount: result.text?.length || 0,
+        parseStatus: value ? 'ok' : 'invalid_json',
+      },
     }
   } catch (error) {
     return {
@@ -1503,8 +1530,99 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
       modelName: '',
       error: error instanceof Error ? error.message : 'marketing_plan_llm_exception',
       value: null,
+      trace: {
+        ...promptTrace,
+        attempts: [],
+        parseStatus: 'exception',
+      },
     }
   }
+}
+
+async function writeMarketingPlanBusinessLog(input: {
+  brand: BrandPlanBrand
+  scope: 'annual' | 'quarter'
+  input: Record<string, unknown>
+  llm: {
+    provider: string
+    modelName: string
+    error?: string
+    value: Record<string, unknown> | null
+    trace?: Record<string, unknown>
+  }
+  fallbackUsed: boolean
+}) {
+  const routeDiagnostics = objectValue(input.llm.trace?.routeDiagnostics)
+  const attempts = arrayValue(input.llm.trace?.attempts)
+  const planningWindow = objectValue(input.input.planningWindow)
+  const marketCalendar = objectValue(input.input.marketCalendar)
+  const storeActivities = objectValue(input.input.storeActivities)
+  const subscriptionStrategy = objectValue(input.input.subscriptionStrategy)
+  const status = input.llm.value
+    ? 'success'
+    : input.fallbackUsed
+      ? 'rule_fallback'
+      : 'failed'
+  const reason = input.llm.value
+    ? 'llm_returned_valid_json'
+    : input.llm.error || 'llm_returned_no_valid_plan'
+
+  await writeAuditLog({
+    actor: { type: 'SYSTEM', name: 'brand-plan-generator' },
+    action: 'BRAND_MARKETING_PLAN_GENERATION',
+    resourceType: 'BusinessPathLog',
+    resourceId: `brand:${input.brand.id}:marketing_plan:${input.scope}`,
+    newValue: {
+      businessPath: 'brand_plan.marketing_plan.generate',
+      scope: input.scope,
+      stage: 'llm_generation',
+      status,
+      reason,
+      fallbackUsed: input.fallbackUsed,
+      taskTag: text(routeDiagnostics.taskTag) || 'marketing_plan',
+      brand: {
+        id: input.brand.id,
+        name: input.brand.name,
+        industry: input.brand.industry,
+        location: input.brand.location,
+      },
+      llm: {
+        provider: input.llm.provider || 'none',
+        modelName: input.llm.modelName || 'none',
+        error: input.llm.error || null,
+        parseStatus: text(input.llm.trace?.parseStatus),
+        latencyMs: positiveNumber(input.llm.trace?.latencyMs),
+        timedOut: Boolean(input.llm.trace?.timedOut),
+        responseTextCharCount: positiveNumber(input.llm.trace?.responseTextCharCount),
+        routeDiagnostics,
+        attempts,
+      },
+      prompt: {
+        taskKey: text(input.llm.trace?.taskKey) || 'marketing_plan_generation',
+        promptTemplateId: text(input.llm.trace?.promptTemplateId) || null,
+        promptTemplateUpdatedAt: text(input.llm.trace?.promptTemplateUpdatedAt) || null,
+        promptCharCount: positiveNumber(input.llm.trace?.promptCharCount),
+        schemaInstructionCharCount: positiveNumber(input.llm.trace?.schemaInstructionCharCount),
+        inputCharCount: positiveNumber(input.llm.trace?.inputCharCount),
+      },
+      inputSummary: {
+        planningQuarters: arrayValue(planningWindow.quarters).length,
+        marketEvents: arrayValue(marketCalendar.events).length,
+        marketGaps: arrayValue(marketCalendar.gaps).length,
+        storeActivityConfigured: Boolean(storeActivities.configured),
+        storeActivityRounds: arrayValue(storeActivities.rounds).length,
+        subscriptionPlan: text(subscriptionStrategy.planName || subscriptionStrategy.planId),
+        platforms: arrayValue(subscriptionStrategy.platformCoverage)
+          .map((platform) => text(platform))
+          .filter(Boolean),
+      },
+    },
+    metadata: {
+      businessPath: 'brand_plan.marketing_plan.generate',
+      status,
+      reason,
+    },
+  })
 }
 
 function normalizeAnnualMarketingSolution(

@@ -72,6 +72,61 @@ function promptTemplateTooltip(taskKey?: string) {
     : '编辑这个 Prompt 会影响对应 LLM 任务下一次生成结果。请保留必要变量占位符。'
 }
 
+function formatSystemLogDetails(log: SystemLog) {
+  if (log.resourceType === 'BusinessPathLog' && log.newValue) {
+    const value = log.newValue || {}
+    const llm = value.llm || {}
+    const prompt = value.prompt || {}
+    const inputSummary = value.inputSummary || {}
+    const route = llm.routeDiagnostics || {}
+    const attempts = Array.isArray(llm.attempts) ? llm.attempts : []
+    const attemptText = attempts.length
+      ? attempts.map((attempt: any, index: number) => {
+        const label = `${index + 1}.${attempt.provider || 'unknown'}/${attempt.modelName || 'unknown'}`
+        return `${label}:${attempt.status || 'unknown'}${attempt.error ? `(${attempt.error})` : ''}`
+      }).join(' | ')
+      : 'none'
+    return [
+      `path=${value.businessPath || '-'}`,
+      `stage=${value.stage || '-'}`,
+      `status=${value.status || '-'}`,
+      `reason=${value.reason || '-'}`,
+      `provider=${llm.provider || 'none'}/${llm.modelName || 'none'}`,
+      `parse=${llm.parseStatus || '-'}`,
+      `timeout=${llm.timedOut ? 'yes' : 'no'}`,
+      `jsonMode=${route.jsonModeRequested ? 'requested' : 'off'}`,
+      `promptChars=${prompt.promptCharCount || 0}`,
+      `quarters=${inputSummary.planningQuarters || 0}`,
+      `marketEvents=${inputSummary.marketEvents || 0}`,
+      `activityRounds=${inputSummary.storeActivityRounds || 0}`,
+      `attempts=${attemptText}`,
+    ].join(' | ')
+  }
+
+  if (log.oldValue || log.newValue) {
+    try {
+      const changes: string[] = [];
+      const oldObj = log.oldValue || {};
+      const newObj = log.newValue || {};
+      
+      const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
+      for (const key of allKeys) {
+        if (key === 'createdAt' || key === 'updatedAt' || key === 'id' || key === 'passwordHash' || key === 'temporaryPassword') continue;
+        const oldVal = oldObj[key];
+        const newVal = newObj[key];
+        if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+          changes.push(`${key}: ${JSON.stringify(oldVal)} → ${JSON.stringify(newVal)}`);
+        }
+      }
+      return changes.length > 0 ? changes.join(' | ') : '无字段变更';
+    } catch {
+      return '数据解析失败';
+    }
+  }
+
+  return '-'
+}
+
 type ModelTaskRouteRecord = {
   task: string
   executionDomain: 'amc-content' | 'amc-kanban'
@@ -1278,28 +1333,7 @@ export default function SystemTab({
               {systemLogs.map(log => {
                 const displayActor = log.actorName || log.actorId || '系统后台';
                 const displayResource = `${log.resourceType}:${log.resourceId.slice(0, 8)}...`;
-                
-                let details = '-';
-                if (log.oldValue || log.newValue) {
-                  try {
-                    const changes: string[] = [];
-                    const oldObj = log.oldValue || {};
-                    const newObj = log.newValue || {};
-                    
-                    const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
-                    for (const key of allKeys) {
-                      if (key === 'createdAt' || key === 'updatedAt' || key === 'id' || key === 'passwordHash' || key === 'temporaryPassword') continue;
-                      const oldVal = oldObj[key];
-                      const newVal = newObj[key];
-                      if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-                        changes.push(`${key}: ${JSON.stringify(oldVal)} → ${JSON.stringify(newVal)}`);
-                      }
-                    }
-                    details = changes.length > 0 ? changes.join(' | ') : '无字段变更';
-                  } catch {
-                    details = '数据解析失败';
-                  }
-                }
+                const details = formatSystemLogDetails(log);
                 
                 return (
                   <tr key={log.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-colors">
