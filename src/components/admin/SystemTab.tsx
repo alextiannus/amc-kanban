@@ -720,7 +720,7 @@ export default function SystemTab({
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
               <MessageSquare size={15} className="text-violet-500" />
-              <span>Kanban Prompt 管理</span>
+              <span>Prompt Management</span>
             </span>
             <span className="text-[10px] font-bold text-violet-600 bg-violet-50 dark:bg-violet-950/20 px-2.5 py-0.5 rounded-full border border-violet-100 dark:border-violet-900/30">
               {promptTemplates.length} 个 Prompt

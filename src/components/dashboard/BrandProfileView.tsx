@@ -259,6 +259,10 @@ function planIdFromLabel(value?: string) {
   return ''
 }
 
+function shouldIgnoreEditableSurfaceClick(target: EventTarget | null) {
+  return target instanceof Element && Boolean(target.closest('button, a, input, textarea, select, label'))
+}
+
 function publishingScheduleFromStrategy(strategy?: NonNullable<BrandPlanWorkspaceData['annualPlan']>['subscriptionStrategy']): PublishingScheduleDraft {
   const platforms = strategy?.publishingFreq?.platforms || {}
   const fromFreq = Object.fromEntries(
@@ -1429,7 +1433,21 @@ ${storeLines}
               </button>
             </div>
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  if (!shouldIgnoreEditableSurfaceClick(event.target)) openPlanEditor()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    openPlanEditor()
+                  }
+                }}
+                className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
+                title="点击编辑品牌基础资料"
+              >
                 <div className="grid gap-3 text-sm">
                   {[
                     ['品牌名称', draftName || brand.name],
@@ -1445,7 +1463,21 @@ ${storeLines}
                   ))}
                 </div>
               </div>
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={(event) => {
+                  if (!shouldIgnoreEditableSurfaceClick(event.target)) openPlanEditor()
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    openPlanEditor()
+                  }
+                }}
+                className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
+                title="点击编辑门店和 SKU"
+              >
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-black text-slate-900 dark:text-white">门店设置</h4>
@@ -1457,7 +1489,7 @@ ${storeLines}
                 </div>
                 <div className="space-y-3">
                   {(draftStores.length ? draftStores : [{ storeId: 'primary', name: draftName, address: draftAddress, phone: draftPhone, businessHours: draftBusinessHours, reservationUrl: draftReservationUrl, orderingUrl: draftOrderingUrl }]).map((store, index) => (
-                    <div key={store.storeId || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                    <div key={store.storeId || index} className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition group-hover:border-blue-100 dark:border-slate-800 dark:bg-slate-950 dark:group-hover:border-blue-900/60">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-black text-slate-800 dark:text-slate-100">{store.name || `门店 ${index + 1}`}</p>
@@ -1510,7 +1542,22 @@ ${storeLines}
                   {socialAccounts.map((account) => {
                     const displayName = account.displayName || account.handle || socialPlatformLabel(account.platformId)
                     return (
-                      <div key={account.id} className="flex min-w-[220px] max-w-full flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950 sm:max-w-[320px]">
+                      <div
+                        key={account.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          if (!shouldIgnoreEditableSurfaceClick(event.target)) setEditingSocialAccount(account)
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setEditingSocialAccount(account)
+                          }
+                        }}
+                        className="flex cursor-pointer min-w-[220px] max-w-full flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition hover:border-blue-200 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-blue-800 dark:hover:bg-slate-900 sm:max-w-[320px]"
+                        title="点击编辑社交媒体账号"
+                      >
                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${socialPlatformColor(account.platformId)}`}>
                           {socialPlatformLogo(account.platformId)}
                         </div>
@@ -1547,7 +1594,21 @@ ${storeLines}
 
           <section className="grid gap-3 lg:grid-cols-2">
             {/* 品牌摸底报告 — compact row */}
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) openAiContentEditor({ target: 'research_report', title: '编辑品牌摸底报告', value: report })
+              }}
+              onKeyDown={(event) => {
+                if ((event.key === 'Enter' || event.key === ' ') && report) {
+                  event.preventDefault()
+                  openAiContentEditor({ target: 'research_report', title: '编辑品牌摸底报告', value: report })
+                }
+              }}
+              className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
+              title={report ? '点击编辑品牌摸底报告' : '尚未生成品牌摸底报告'}
+            >
               <FileText className="h-4 w-4 shrink-0 text-blue-500" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black text-slate-900 dark:text-white">品牌摸底报告</p>
@@ -1574,7 +1635,21 @@ ${storeLines}
               </div>
             </div>
             {/* 品牌主张访谈 — compact row */}
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                if (!shouldIgnoreEditableSurfaceClick(event.target)) openMerchantInterviewPanel()
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  openMerchantInterviewPanel()
+                }
+              }}
+              className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-amber-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-amber-800"
+              title="点击记录品牌主张访谈"
+            >
               <HelpCircle className="h-4 w-4 shrink-0 text-amber-500" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black text-slate-900 dark:text-white">品牌主张访谈</p>
@@ -1618,7 +1693,21 @@ ${storeLines}
             {annualPlan ? (
               <div className="mt-4 space-y-4">
                 {/* Annual overview */}
-                <div className="rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 p-4 dark:from-purple-950/20 dark:to-slate-950">
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={(event) => {
+                    if (!shouldIgnoreEditableSurfaceClick(event.target)) openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })
+                    }
+                  }}
+                  className="cursor-pointer rounded-xl bg-gradient-to-br from-purple-50 to-slate-50 p-4 transition hover:ring-2 hover:ring-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:from-purple-950/20 dark:to-slate-950 dark:hover:ring-purple-900/60"
+                  title="点击编辑品牌营销方案"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-black text-slate-900 dark:text-white">{annualPlan.theme}</p>
@@ -1647,7 +1736,20 @@ ${storeLines}
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     {(Array.isArray(annualPlan.quarterlyFocus) ? annualPlan.quarterlyFocus : []).map(item => (
-                      <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
+                      <div
+                        key={item.quarter}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })
+                          }
+                        }}
+                        className="cursor-pointer rounded-xl bg-slate-50 p-3 transition hover:ring-2 hover:ring-purple-200 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:bg-slate-950 dark:hover:ring-purple-900/60"
+                        title="点击编辑品牌营销方案"
+                      >
                         <p className="text-xs font-black text-slate-800 dark:text-slate-100">{quarterDisplayLabel(item)}</p>
                         <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
                         {safeArray(item.campaigns).length ? (
@@ -2128,7 +2230,21 @@ function QuarterPlanTabs({
       </div>
 
       {activeAnnual && (
-        <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={(event) => {
+            if (!shouldIgnoreEditableSurfaceClick(event.target)) onEditQuarter(activeAnnual)
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onEditQuarter(activeAnnual)
+            }
+          }}
+          className="mt-3 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-4 transition hover:border-purple-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-purple-900"
+          title="点击编辑完整品牌营销方案"
+        >
           {/* Quarter header */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
