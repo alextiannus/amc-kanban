@@ -74,7 +74,7 @@ const PLANS: PlanOption[] = [
     monthlyUsd: 800,
     description: '基础线上门面 + 稳定内容维护',
     highlights: [
-      '每月不少于 12 次图文发布',
+      '每月 12 IG + 6 TikTok + 2 Google Business',
       'Instagram / TikTok / Google Map',
       '评论监控与地图资料维护',
       '每月 4 位 KOC/微型博主探店',
@@ -87,6 +87,7 @@ const PLANS: PlanOption[] = [
         'Instagram：品牌门面和信任留存，呈现招牌产品、环境、套餐和顾客场景。',
         'TikTok：轻量曝光和兴趣种草，持续推新品、优惠、活动和门店氛围。',
         'Google Map：最后一公里转化，维护分类、营业时间、菜单、照片、电话、链接和评论回复。',
+        '默认发布节奏：每月 12 条 Instagram、6 条 TikTok、2 条 Google Business，可在品牌计划页按月调整。',
       ],
       reporting: '每月汇总评论、评分变化、热门内容、客户反馈和下月优化建议。',
       bestFor: ['新店开业', '社媒断更', 'Google Map 信息不完整', '老板没时间稳定发内容'],
@@ -100,7 +101,7 @@ const PLANS: PlanOption[] = [
     monthlyUsd: 3600,
     description: '增长战役 + 素材资产 + 博主扩散',
     highlights: [
-      '每月至少 24 次内容发布',
+      '每月 12 IG + 12 TikTok + 12 小红书 + 2 Google Business',
       'Instagram / TikTok / 小红书 / Google Map',
       '定制月度增长策划案',
       '专业素材采集',
@@ -115,6 +116,7 @@ const PLANS: PlanOption[] = [
         'TikTok：主攻爆点内容，围绕价格锚点、反差卖点、制作过程、限时活动和探店视频连续发布。',
         '小红书：面向中文用户、游客、留学生，做可搜索、可收藏、可照着去的生活方式笔记。',
         'Google Map：强化评论回复、差评修复、照片更新、菜单和热门产品呈现。',
+        '默认发布节奏：每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business，可在品牌计划页按月调整。',
       ],
       reporting: '每周看曝光、互动、评论、收藏、私信、Google 评分、热门内容和下周调整动作。',
       bestFor: ['新店或新菜单上线', '节日档期推广', '口碑修复', '吸引游客和中文用户', '商圈竞争强'],

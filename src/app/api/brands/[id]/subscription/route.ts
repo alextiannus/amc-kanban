@@ -44,27 +44,35 @@ function getPlatformCoverage(planId: string) {
 }
 
 function getMonthlyContentQuota(planId: string) {
-  if (planId === 'essential') return 12
-  if (planId === 'booster') return 24
+  if (planId === 'essential') return 20
+  if (planId === 'booster') return 38
   return 0
+}
+
+function getPublishingFrequencyPlan(planId: string, platformCoverage: string[]) {
+  const monthlyByPlan = planId === 'booster'
+    ? { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
+    : planId === 'essential'
+      ? { instagram: 12, tiktok: 6, google_business: 2 }
+      : {}
+  const entries = platformCoverage
+    .map((platform) => [platform, monthlyByPlan[platform as keyof typeof monthlyByPlan]] as const)
+    .filter(([, count]) => Number(count) > 0)
+  return entries.length
+    ? { platforms: Object.fromEntries(entries.map(([platform, count]) => [platform, { postsPerMonth: count }])) }
+    : null
 }
 
 async function getOperationsStrategy(planId: string, planServices: string[]) {
   const configured = await prisma.subscriptionOperationsStrategy.findUnique({ where: { planId } })
-  const platformCoverage = configured ? stringList(configured.platformCoverage) : getPlatformCoverage(planId)
-  const monthlyContentQuota = configured?.monthlyContentQuota ?? getMonthlyContentQuota(planId)
+  const defaultCoverage = getPlatformCoverage(planId)
+  const platformCoverage = defaultCoverage.length ? defaultCoverage : configured ? stringList(configured.platformCoverage) : []
+  const monthlyContentQuota = getMonthlyContentQuota(planId) || configured?.monthlyContentQuota || 0
   return {
     platformCoverage,
     monthlyContentQuota,
     includedServices: configured ? stringList(configured.includedServices) : planServices,
-    publishingFrequencyPlan: configured?.publishingFreq || (monthlyContentQuota && platformCoverage.length
-      ? {
-          platforms: Object.fromEntries(platformCoverage.map((platform) => [
-            platform,
-            { postsPerWeek: Math.max(1, Math.round((monthlyContentQuota / platformCoverage.length) * 7 / 30)) },
-          ])),
-        }
-      : null),
+    publishingFrequencyPlan: getPublishingFrequencyPlan(planId, platformCoverage) || configured?.publishingFreq || null,
     storeLimit: configured?.storeLimit ?? 1,
     strategyNotes: configured?.strategyNotes || null,
   }

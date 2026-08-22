@@ -26,6 +26,8 @@ export interface LLMCallOptions {
   deadlineMs?: number
   attemptTimeoutMs?: number[]
   maxAttempts?: number
+  allowDefaultFallback?: boolean
+  allowSystemFallback?: boolean
 }
 
 // ============================================================
@@ -614,7 +616,7 @@ export async function callLLM(
 
   // 2. Fetch default enabled configurations not already matched, sorted by priority DESC
   const matchingIds = matchingConfigs.map((c: any) => c.id)
-  const defaultConfigs = await prisma.lLMConfig.findMany({
+  const defaultConfigs = options.allowDefaultFallback === false ? [] : await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,
       isDefault: true,
@@ -636,7 +638,7 @@ export async function callLLM(
   const sysProvider = process.env.SYSTEM_DEFAULT_LLM_PROVIDER || ''
   const sysModelName = process.env.SYSTEM_DEFAULT_LLM_MODEL || ''
   const sysApiKey = process.env.SYSTEM_DEFAULT_LLM_API_KEY || ''
-  if (sysProvider && sysModelName && sysApiKey) {
+  if (options.allowSystemFallback !== false && sysProvider && sysModelName && sysApiKey) {
     configsToTry.push({
       provider: sysProvider,
       modelName: sysModelName,

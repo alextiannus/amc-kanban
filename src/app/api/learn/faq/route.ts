@@ -78,7 +78,7 @@ const DEFAULT_FAQS = [
   {
     category: 'billing',
     q: 'Essential 和 Booster 的核心区别是什么？',
-    a: 'Essential（基础线上经营）适合先把线上门面做起来：每月不少于 12 次图文发布，覆盖 Instagram、TikTok 和 Google Map / Google Business Profile，包含地图资料维护、评论监控、4 位 KOC/微型博主探店和月度舆情报告。Booster（增长战役版）适合准备集中放大声量的商家：每月至少 24 次内容发布，覆盖 Instagram、TikTok、小红书和 Google Map，包含月度增长策划、专业素材采集、10 位博主分批探店和每周舆情复盘。',
+    a: 'Essential（基础线上经营）适合先把线上门面做起来：每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护，包含地图资料维护、评论监控、4 位 KOC/微型博主探店和月度舆情报告。Booster（增长战役版）适合准备集中放大声量的商家：每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护，包含月度增长策划、专业素材采集、10 位博主分批探店和每周舆情复盘。',
     tag: '订阅与账单'
   },
   {

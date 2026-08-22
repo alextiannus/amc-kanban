@@ -238,6 +238,20 @@ export type GrowthBrandIntelligenceJob = {
   status?: string
   progress?: number
   result?: Record<string, unknown> | null
+  report_versions?: Record<string, {
+    report_version_id?: string
+    tier?: string
+    report_path?: string | null
+    report_content?: string | null
+    result?: Record<string, unknown> | null
+    created_at?: string
+  }>
+  latest_report_tier?: string | null
+  latest_report_path?: string | null
+  latest_report_markdown?: string | null
+  latest_report_content?: string | null
+  latest_report_pdf_path?: string | null
+  latest_report_pdf_download_path?: string | null
   initial_report_path?: string | null
   advanced_report_path?: string | null
   coverage_score?: number | null

@@ -20,13 +20,16 @@ export async function getSubscriptionOperationsPolicy(planId: string): Promise<S
     where: { planId: normalizedPlanId },
   })
   if (configured) {
+    const defaultFreq = defaultPublishingFreq(normalizedPlanId)
+    const defaultQuota = defaultMonthlyContentQuota(normalizedPlanId)
+    const defaultCoverage = defaultPlatforms(normalizedPlanId)
     return {
       planId: configured.planId,
       planName: configured.planName,
       includedServices: asStringArray(configured.includedServices),
-      platformCoverage: asStringArray(configured.platformCoverage),
-      monthlyContentQuota: configured.monthlyContentQuota,
-      publishingFreq: configured.publishingFreq,
+      platformCoverage: defaultCoverage.length ? defaultCoverage : asStringArray(configured.platformCoverage),
+      monthlyContentQuota: defaultQuota || configured.monthlyContentQuota,
+      publishingFreq: defaultFreq || configured.publishingFreq,
       storeLimit: configured.storeLimit,
       strategyNotes: configured.strategyNotes,
     }
@@ -39,8 +42,8 @@ export async function getSubscriptionOperationsPolicy(planId: string): Promise<S
     planName: catalogPlan.name,
     includedServices: catalogPlan.services,
     platformCoverage: defaultPlatforms(catalogPlan.id),
-    monthlyContentQuota: catalogPlan.id === 'booster' ? 24 : 12,
-    publishingFreq: null,
+    monthlyContentQuota: defaultMonthlyContentQuota(catalogPlan.id),
+    publishingFreq: defaultPublishingFreq(catalogPlan.id),
     storeLimit: 1,
     strategyNotes: catalogPlan.explanation,
   }
@@ -54,4 +57,33 @@ function defaultPlatforms(planId: string) {
   if (planId === 'booster') return ['instagram', 'tiktok', 'xiaohongshu', 'google_business']
   if (planId === 'essential') return ['instagram', 'tiktok', 'google_business']
   return []
+}
+
+function defaultMonthlyContentQuota(planId: string) {
+  if (planId === 'booster') return 38
+  if (planId === 'essential') return 20
+  return 0
+}
+
+function defaultPublishingFreq(planId: string) {
+  if (planId === 'booster') {
+    return {
+      platforms: {
+        instagram: { postsPerMonth: 12 },
+        tiktok: { postsPerMonth: 12 },
+        xiaohongshu: { postsPerMonth: 12 },
+        google_business: { postsPerMonth: 2 },
+      },
+    }
+  }
+  if (planId === 'essential') {
+    return {
+      platforms: {
+        instagram: { postsPerMonth: 12 },
+        tiktok: { postsPerMonth: 6 },
+        google_business: { postsPerMonth: 2 },
+      },
+    }
+  }
+  return null
 }

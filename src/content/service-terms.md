@@ -6,7 +6,7 @@ Deliverychinatown Pte. Ltd. | amc.immedi.ai
 
 # Social Media Management Services Agreement
 
-**Contract No.:** _________________  
+**Contract No.:** _________________
 **Date:** _________________
 
 本协议（协议）由以下甲乙双方于上述日期签订，受新加坡法律管辖。双方在充分理解本协议条款的情况下，同意遵守以下规定。
@@ -15,16 +15,16 @@ This Agreement is entered into on the date stated above between the parties belo
 
 ## Party A / 甲方
 
-**Company Name:** __________________________________________________  
-**UEN No.:** ________________________________________________________  
-**Contact:** _________________________________________________________  
+**Company Name:** __________________________________________________
+**UEN No.:** ________________________________________________________
+**Contact:** _________________________________________________________
 **Email:** ___________________________________________________________
 
 ## Party B / 乙方
 
-**公司名称:** Deliverychinatown Pte. Ltd.  
-**UEN No.:** 201835327N  
-**服务品牌:** AMC - Your AI Marketing Crew  
+**公司名称:** Deliverychinatown Pte. Ltd.
+**UEN No.:** 201835327N
+**服务品牌:** AMC - Your AI Marketing Crew
 **联系邮箱:** service@deliverychinatown.com
 
 ## 1. 服务套餐 Selected Service Plan
@@ -36,7 +36,7 @@ This Agreement is entered into on the date stated above between the parties belo
 | ☐ | ESSENTIAL（海外社媒代运营新加坡本地版） | S$800 / 月 | Instagram、TikTok 图文内容发布；Google Map 配置和评论监控、打分优化；中英双语；每月舆情报告；远程交付；至少发布 12 次图文；可安排 4 位博主探店。2026 年 9 月 30 日前签约商家赠送 1 次价值 S$200 素材拍摄采集和 6 条视频。 | 6 / 12 个月 |
 | ☐ | Booster（流量爆发计划） | S$3,600 / 月 | Instagram、TikTok、小红书等自媒体内容策划；流量增长和运营活动策划；Google Map 配置和评论监控、打分优化；中英双语；每周舆情报告；远程交付；定制增长策划案；至少发布 24 次图文和 12 次精品视频；专业素材采集；可安排 10 位博主探店（6 个 2k+ 粉丝，3 个 4k+，1 个 1w+）。 | 3 个月 |
 
-**合同开始日期 Start Date:** ________________  
+**合同开始日期 Start Date:** ________________
 **合同到期日 End Date:** ________________
 
 ### 增值服务加购 Add-on Services

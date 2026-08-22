@@ -20,6 +20,7 @@ export interface PublishingFreq {
   platforms?: Record<string, {
     postsPerDay?: number
     postsPerWeek?: number
+    postsPerMonth?: number
     preferredHours?: number[]
   }>
 }

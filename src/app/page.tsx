@@ -231,7 +231,7 @@ export default function Login() {
       const data = await res.json()
       if (res.ok) {
         const requestedReturn = new URLSearchParams(window.location.search).get('returnTo')
-        const safeReturn = requestedReturn?.startsWith('/api/integrations/amc-growth/sso/start')
+        const safeReturn = requestedReturn?.startsWith('/') && !requestedReturn.startsWith('/api/')
           ? requestedReturn
           : '/board'
         router.push(safeReturn)
@@ -273,7 +273,7 @@ export default function Login() {
       const data = await res.json()
       if (res.ok) {
         const requestedReturn = new URLSearchParams(window.location.search).get('returnTo')
-        const safeReturn = requestedReturn?.startsWith('/api/integrations/amc-growth/sso/start')
+        const safeReturn = requestedReturn?.startsWith('/') && !requestedReturn.startsWith('/api/')
           ? requestedReturn
           : '/board'
         router.push(safeReturn)
