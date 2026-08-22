@@ -136,6 +136,7 @@ type BrandSettings = Record<string, unknown> & {
   phone?: string | null
   website?: string | null
   logoUrl?: string | null
+  postfastSyncedAt?: string | null
   accounts?: Array<{
     id: string
     platformId: string
@@ -147,6 +148,8 @@ type BrandSettings = Record<string, unknown> & {
     autoPilot?: boolean
   }>
 }
+
+type SocialAccountSummary = NonNullable<BrandSettings['accounts']>[number]
 
 type GrowthSyncStatus = {
   status: 'NOT_QUEUED' | 'PENDING' | 'PROCESSING' | 'CONFLICT' | 'SYNCED'
@@ -173,6 +176,24 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'annual_plan_required') return '请先生成年度营销方案。'
   if (code === 'quarter_plan_required') return '请先生成季度营销方案。'
   return code || '营销方案操作失败，请重试'
+}
+
+function socialPlatformLabel(platformId: string) {
+  const key = platformId.toLowerCase()
+  const labels: Record<string, string> = {
+    instagram: 'Instagram',
+    tiktok: 'TikTok',
+    xhs: '小红书',
+    xiaohongshu: '小红书',
+    google: 'Google Map',
+    google_maps: 'Google Map',
+    google_business: 'Google Business',
+    google_business_profile: 'Google Business',
+    facebook: 'Facebook',
+    fb: 'Facebook',
+    yelp: 'Yelp',
+  }
+  return labels[key] || platformId
 }
 
 // ─── Plan badge helper ────────────────────────────────────────────────────────
@@ -228,6 +249,7 @@ function BrandProfileContent({
   const [showContextModal, setShowContextModal] = useState(false)
   const [identitySnapshot, setIdentitySnapshot] = useState<BrandIdentitySnapshot | null>(null)
   const [growthSyncStatus, setGrowthSyncStatus] = useState<GrowthSyncStatus | null>(null)
+  const [postfastSyncing, setPostfastSyncing] = useState(false)
 
   // Controlled vs Uncontrolled logic
   const activeBrandTone = brandTone !== undefined ? brandTone : localBrandTone
@@ -692,6 +714,27 @@ ${storeLines}
     }
     setDraftStores([...draftStores, { storeId: createStoreId(), name: '', address: '' }])
   }
+
+  const handleSyncPostfastAccounts = async () => {
+    if (postfastSyncing) return
+    setPostfastSyncing(true)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/sync-postfast`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        showToastVal(data?.error || 'PostFast 账号同步失败，请检查 API Key 配置。', 'error')
+        return
+      }
+      showToastVal(`已从 PostFast 同步 ${data.accountCount ?? 0} 个社交媒体账号`, 'success')
+      await loadAllConfig()
+      await loadGrowthSyncStatus()
+    } catch (error) {
+      console.error('Failed to sync PostFast accounts:', error)
+      showToastVal('PostFast 账号同步失败，请稍后重试。', 'error')
+    } finally {
+      setPostfastSyncing(false)
+    }
+  }
   const identityField = (field: BrandIdentityFieldKey) => identitySnapshot?.fields[field]
   const identityText = (field: BrandIdentityFieldKey, fallback = '') => {
     const value = identityField(field)?.value
@@ -708,6 +751,8 @@ ${storeLines}
   const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`
   const currentQuarterPlan = brandPlanData.quarterlyPlans?.find(item => item.quarter === currentQuarter) || brandPlanData.quarterlyPlans?.[0]
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
+  const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
+  const postfastSyncedAt = typeof brandSettings?.postfastSyncedAt === 'string' ? brandSettings.postfastSyncedAt : null
   const sourceStatusItems = [
     { label: '数据调研', value: report ? '已生成' : '待生成' },
     { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录' },
@@ -950,6 +995,63 @@ ${storeLines}
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 dark:text-white">社交媒体渠道</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                    展示已经同步到 AMC-Kanban 的社交媒体账号；可手动从 PostFast 拉取最新账号。
+                    {postfastSyncedAt ? ` 上次同步：${new Date(postfastSyncedAt).toLocaleString()}` : ''}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncPostfastAccounts}
+                  disabled={postfastSyncing}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+                >
+                  {postfastSyncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  从 PostFast 同步账号
+                </button>
+              </div>
+
+              {socialAccounts.length ? (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {socialAccounts.map((account) => {
+                    const displayName = account.displayName || account.handle || socialPlatformLabel(account.platformId)
+                    return (
+                      <div key={account.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600">{socialPlatformLabel(account.platformId)}</p>
+                            <p className="mt-1 truncate text-sm font-black text-slate-900 dark:text-white">{displayName}</p>
+                            <p className="mt-1 truncate text-xs text-slate-500">{account.handle ? `@${account.handle.replace(/^@/, '')}` : '账号名待同步'}</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${account.autoPilot ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            {account.autoPilot ? '自动发布' : '手动审核'}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                          {typeof account.followerCount === 'number' && <span>粉丝：{account.followerCount.toLocaleString()}</span>}
+                          {typeof account.ratingScore === 'number' && <span>评分：{account.ratingScore.toFixed(1)}</span>}
+                          {account.profileUrl && (
+                            <a href={account.profileUrl} target="_blank" rel="noreferrer" className="font-bold text-blue-600 hover:text-blue-700">
+                              查看主页
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-250 bg-slate-50 p-5 text-center dark:border-slate-800 dark:bg-slate-950">
+                  <p className="text-sm font-bold text-slate-600 dark:text-slate-300">尚未同步社交媒体账号</p>
+                  <p className="mt-1 text-xs text-slate-400">配置 PostFast API Key 后，点击同步即可拉取 Instagram、TikTok、Google Business 等账号。</p>
+                </div>
+              )}
             </div>
           </section>
 
