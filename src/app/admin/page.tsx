@@ -9,7 +9,7 @@ import {
 // Import Tab Components
 import UsersTab, { type UserRecord } from '@/components/admin/UsersTab'
 import BrandsTab, { type BrandRecord } from '@/components/admin/BrandsTab'
-import SystemTab, { type LLMConfigRecord } from '@/components/admin/SystemTab'
+import SystemTab, { type LLMConfigRecord, type PromptTemplateRecord } from '@/components/admin/SystemTab'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
 import EditUserModal from '@/components/admin/EditUserModal'
 
@@ -84,6 +84,8 @@ function AdminPageInner() {
   // LLM Config state
   const [llmConfigs, setLlmConfigs] = useState<LLMConfigRecord[]>([])
   const [llmConfigsLoading, setLlmConfigsLoading] = useState(false)
+  const [promptTemplates, setPromptTemplates] = useState<PromptTemplateRecord[]>([])
+  const [promptTemplatesLoading, setPromptTemplatesLoading] = useState(false)
 
   // System config & audit logs states
   const [systemConfig, setSystemConfig] = useState<{
@@ -247,6 +249,21 @@ function AdminPageInner() {
     }
   }
 
+  const fetchPromptTemplates = async () => {
+    setPromptTemplatesLoading(true)
+    try {
+      const res = await fetch('/api/admin/prompt-templates')
+      if (res.ok) {
+        const data = await res.json()
+        setPromptTemplates(data.templates || [])
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setPromptTemplatesLoading(false)
+    }
+  }
+
   useEffect(() => {
     queueMicrotask(() => {
       void fetchUsers()
@@ -256,6 +273,7 @@ function AdminPageInner() {
       void fetchSystemConfig()
       void fetchSystemLogs()
       void fetchLLMConfigs()
+      void fetchPromptTemplates()
     })
   }, [])
 
@@ -1006,6 +1024,7 @@ function AdminPageInner() {
                           void fetchSystemConfig()
                           void fetchSystemLogs()
                           void fetchLLMConfigs()
+                          void fetchPromptTemplates()
                         }
                       }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
@@ -1090,6 +1109,9 @@ function AdminPageInner() {
             llmConfigs={llmConfigs}
             llmConfigsLoading={llmConfigsLoading}
             onFetchLLMConfigs={fetchLLMConfigs}
+            promptTemplates={promptTemplates}
+            promptTemplatesLoading={promptTemplatesLoading}
+            onFetchPromptTemplates={fetchPromptTemplates}
           />
         )}
 

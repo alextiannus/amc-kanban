@@ -1260,6 +1260,22 @@ model LLMConfig {
   @@index([priority])
 }
 
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  taskKey     String   @unique
+  name        String
+  description String?
+  template    String   @db.Text
+  variables   String[] @default([])
+  isEnabled   Boolean  @default(true)
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isEnabled])
+  @@index([updatedAt])
+}
+
 model BrandKnowledge {
   id      String @id @default(cuid())
   brandId String @unique

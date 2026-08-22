@@ -8,7 +8,7 @@ import {
   RefreshCw, FileText, Store, Utensils,
   Edit3, Plus,
   Users, Goal, HelpCircle,
-  MapPin, Music2, WalletCards
+  MapPin, Music2, ExternalLink, WalletCards
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type {
@@ -77,9 +77,23 @@ type StoreEntitlements = {
 
 type BrandPlanWorkspaceData = {
   researchReport?: {
+    snapshotId?: string
     generatedAt: string
     summary: string
     dataSources: string[]
+    sourceSystem?: 'amc-growth' | 'amc-kanban'
+    growthJobId?: string
+    growthBrandKey?: string
+    reportTier?: string
+    reportPath?: string
+    reportContent?: string
+    reportMarkdown?: string
+    pdfReportPath?: string
+    pdfDownloadPath?: string
+    pdfDownloadUrl?: string
+    coverageScore?: number | null
+    sourceCoverage?: Record<string, unknown>
+    sourcePayload?: Record<string, unknown>
     brandImage: string
     marketingStatus?: string
     marketAnalysis: string
@@ -92,9 +106,13 @@ type BrandPlanWorkspaceData = {
     generatedAt: string
     goal: string
     theme: string
-    quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[] }>
+    quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[]; year?: number; startMonth?: string; endMonth?: string; periodLabel?: string }>
     quarterlyPlans?: Array<{
       quarter: string
+      year?: number
+      startMonth?: string
+      endMonth?: string
+      periodLabel?: string
       strategy: string
       focus: string
       promotionPoints: Array<{
@@ -110,9 +128,29 @@ type BrandPlanWorkspaceData = {
       monthlyFocus: Array<{ month: string; focus: string; promotionPoints: string[] }>
     }>
     metrics: string[]
+    subscriptionStrategy?: {
+      planId: string
+      planName: string
+      includedServices: string[]
+      platformCoverage: string[]
+      monthlyContentQuota: number
+      publishingFreq: {
+        postsPerDay?: number
+        platforms?: Record<string, {
+          postsPerDay?: number
+          postsPerWeek?: number
+          postsPerMonth?: number
+          preferredHours?: number[]
+        }>
+      } | null
+    }
   }
   quarterlyPlans?: Array<{
     quarter: string
+    year?: number
+    startMonth?: string
+    endMonth?: string
+    periodLabel?: string
     generatedAt: string
     objective: string
     monthlyFocus: Array<{ month: string; focus: string }>
@@ -141,6 +179,10 @@ type BrandPlanWorkspaceData = {
       matchedTags?: string[]
       matchedInspirations?: string[]
       selectedCreativeCandidateId?: string
+      sampleVideoUrl?: string
+      sampleOriginalUrl?: string
+      sampleThumbnailUrl?: string
+      sampleSourcePlatform?: string
       materialRequirements?: string[]
       contentLibraryGap?: string
     }>>
@@ -175,6 +217,15 @@ type BrandSettings = Record<string, unknown> & {
 
 type SocialAccountSummary = NonNullable<BrandSettings['accounts']>[number]
 
+type SubscriptionSummary = {
+  planId?: string
+  planName?: string
+  contractStart?: string | null
+  publishingFrequencyPlan?: {
+    platforms?: Record<string, { postsPerMonth?: number }>
+  } | null
+}
+
 type EditableAiContent =
   | { target: 'research_report'; title: string; value: NonNullable<BrandPlanWorkspaceData['researchReport']> }
   | { target: 'annual_plan'; title: string; value: NonNullable<BrandPlanWorkspaceData['annualPlan']> }
@@ -184,6 +235,74 @@ type EditableAiContent =
 type EditableSocialAccount = SocialAccountSummary & {
   loginUsername?: string | null
   loginPassword?: string | null
+}
+
+type PublishingScheduleDraft = Record<string, number>
+
+const PUBLISHING_PLATFORM_OPTIONS = [
+  { slug: 'instagram', label: 'Instagram' },
+  { slug: 'tiktok', label: 'TikTok' },
+  { slug: 'google_business', label: 'Google Business' },
+  { slug: 'xiaohongshu', label: '小红书' },
+]
+
+function defaultPublishingScheduleForPlan(planId?: string): PublishingScheduleDraft {
+  if (planId === 'booster') return { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
+  if (planId === 'essential') return { instagram: 12, tiktok: 6, google_business: 2 }
+  return {}
+}
+
+function planIdFromLabel(value?: string) {
+  const normalized = String(value || '').toLowerCase()
+  if (normalized.includes('booster')) return 'booster'
+  if (normalized.includes('essential')) return 'essential'
+  return ''
+}
+
+function publishingScheduleFromStrategy(strategy?: NonNullable<BrandPlanWorkspaceData['annualPlan']>['subscriptionStrategy']): PublishingScheduleDraft {
+  const platforms = strategy?.publishingFreq?.platforms || {}
+  const fromFreq = Object.fromEntries(
+    Object.entries(platforms)
+      .map(([platform, cfg]) => [normalizeSchedulePlatform(platform), Math.max(0, Math.floor(Number(cfg.postsPerMonth || 0)))])
+      .filter(([, count]) => Number(count) > 0)
+  ) as PublishingScheduleDraft
+  return Object.keys(fromFreq).length
+    ? fromFreq
+    : defaultPublishingScheduleForPlan(strategy?.planId)
+}
+
+function normalizeSchedulePlatform(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  if (normalized === 'google' || normalized === 'google_business_profile' || normalized === 'google_my_business') return 'google_business'
+  if (normalized === 'xhs' || normalized === 'little_red_book') return 'xiaohongshu'
+  return normalized
+}
+
+function publishingScheduleTotal(schedule: PublishingScheduleDraft) {
+  return Object.values(schedule).reduce((sum, value) => sum + Math.max(0, Math.floor(Number(value || 0))), 0)
+}
+
+function publishingFreqPayload(schedule: PublishingScheduleDraft) {
+  return {
+    platforms: Object.fromEntries(
+      Object.entries(schedule)
+        .map(([platform, count]) => [normalizeSchedulePlatform(platform), Math.max(0, Math.floor(Number(count || 0)))])
+        .filter(([, count]) => Number(count) > 0)
+        .map(([platform, count]) => [platform, { postsPerMonth: count }])
+    ),
+  }
+}
+
+function firstCompleteNaturalMonthValue(dateValue?: string | null) {
+  const source = dateValue ? new Date(dateValue) : new Date()
+  const safeDate = Number.isNaN(source.getTime()) ? new Date() : source
+  const monthOffset = safeDate.getDate() <= 1 ? 0 : 1
+  const start = new Date(safeDate.getFullYear(), safeDate.getMonth() + monthOffset, 1)
+  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`
+}
+
+function isMonthInPlan(month: string, plan: { startMonth?: string; endMonth?: string; quarter?: string }) {
+  return Boolean(plan.startMonth && plan.endMonth && month >= plan.startMonth && month <= plan.endMonth)
 }
 
 
@@ -200,9 +319,12 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'brand_plan_update_required') return '请先生成品牌营销方案。'
   if (code === 'annual_plan_required') return '请先生成品牌营销方案。'
   if (code === 'quarter_plan_required') return '请先生成包含季度明细的品牌营销方案。'
-  if (code === 'growth_research_still_running') return 'AMC-Growth 调研仍在进行中，请稍后再次读取报告。'
+  if (code === 'growth_research_report_required') return '请先从 AMC-Growth 生成并读取品牌摸底报告，再保存品牌主张访谈。'
+  if (code === 'growth_research_report_missing') return 'AMC-Growth 已返回任务状态，但没有返回品牌摸底报告正文，请稍后重试或检查 Growth 报告版本。'
+  if (code === 'growth_research_still_running') return 'AMC-Growth 正在生成品牌摸底报告，请稍后再点查看或重新生成。'
   if (code === 'growth_research_failed') return 'AMC-Growth 调研生成失败，请检查 Growth 服务或稍后重试。'
   if (code === 'growth_research_create_failed') return '未能触发 AMC-Growth 摸底调研，请检查 Growth 服务。'
+  if (code === 'marketing_plan_llm_failed') return '品牌营销方案生成失败：LLM 没有返回有效方案，请检查 LLM 配置后重试。'
   return code || '营销方案操作失败，请重试'
 }
 
@@ -309,6 +431,7 @@ function BrandProfileContent({
   // Local Brand States (fetched on mount/change, used if props are not passed)
   const [localBrandTone, setLocalBrandTone] = useState('')
   const [localSubscriptionPlan, setLocalSubscriptionPlan] = useState('未激活订阅')
+  const [subscriptionSummary, setSubscriptionSummary] = useState<SubscriptionSummary>({})
   const [storeEntitlements, setStoreEntitlements] = useState<StoreEntitlements>({ storeLimit: 1, multiStoreAddonQuantity: 0 })
   const [showSettings, setShowSettings] = useState(false)
   const [brandSettings, setBrandSettings] = useState<BrandSettings | null>(null)
@@ -372,6 +495,7 @@ function BrandProfileContent({
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMarkdown, setProfileMarkdown] = useState('')
   const [brandPlanData, setBrandPlanData] = useState<BrandPlanWorkspaceData>({})
+  const [publishingScheduleDraft, setPublishingScheduleDraft] = useState<PublishingScheduleDraft>({})
   const [merchantInterview, setMerchantInterview] = useState<MerchantInterviewRecord | null>(null)
   const [merchantInterviewRequired, setMerchantInterviewRequired] = useState(true)
   const [showResearchReport, setShowResearchReport] = useState(false)
@@ -381,17 +505,26 @@ function BrandProfileContent({
   const [editingAiJson, setEditingAiJson] = useState('')
   const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => {
-    // Pick the first month of the next quarter if the current quarter has <30 days left
-    const now = new Date()
-    const currentMonth = now.getMonth() // 0-indexed
-    const currentQuarterEndMonth = Math.floor(currentMonth / 3) * 3 + 2 // 0-indexed last month of this quarter
-    const quarterEnd = new Date(now.getFullYear(), currentQuarterEndMonth + 1, 0) // last day of the quarter
-    const daysLeft = Math.floor((quarterEnd.getTime() - now.getTime()) / 86400000)
-    const startMonth = daysLeft >= 30
-      ? now
-      : new Date(now.getFullYear(), currentQuarterEndMonth + 1, 1) // first month of next quarter
-    return `${startMonth.getFullYear()}-${String(startMonth.getMonth() + 1).padStart(2, '0')}`
+    return firstCompleteNaturalMonthValue()
   })
+  const calendarMonthInitializedRef = useRef('')
+
+  useEffect(() => {
+    const fromStrategy = publishingScheduleFromStrategy(brandPlanData.annualPlan?.subscriptionStrategy)
+    const fromSubscription = publishingScheduleFromStrategy({
+      planId: subscriptionSummary.planId || planIdFromLabel(activeSubscriptionPlan),
+      planName: subscriptionSummary.planName || activeSubscriptionPlan,
+      includedServices: [],
+      platformCoverage: Object.keys(subscriptionSummary.publishingFrequencyPlan?.platforms || {}),
+      monthlyContentQuota: 0,
+      publishingFreq: subscriptionSummary.publishingFrequencyPlan || null,
+    })
+    setPublishingScheduleDraft(Object.keys(fromStrategy).length
+      ? fromStrategy
+      : Object.keys(fromSubscription).length
+        ? fromSubscription
+        : defaultPublishingScheduleForPlan(planIdFromLabel(activeSubscriptionPlan)))
+  }, [brandId, brandPlanData.annualPlan?.subscriptionStrategy, activeSubscriptionPlan, subscriptionSummary])
 
   const loadProfile = async () => {
     setProfileLoading(true)
@@ -498,6 +631,16 @@ function BrandProfileContent({
       if (resSub.ok) {
         const dataSub = await resSub.json()
         setLocalSubscriptionPlan(dataSub.plan_name === 'NONE' ? '未激活订阅' : dataSub.plan_name)
+        setSubscriptionSummary({
+          planId: dataSub.plan_id,
+          planName: dataSub.plan_name,
+          contractStart: dataSub.contract_start,
+          publishingFrequencyPlan: dataSub.operations_strategy?.publishingFreq || dataSub.operations_strategy?.publishingFrequencyPlan || null,
+        })
+        if (dataSub.contract_start && calendarMonthInitializedRef.current !== brandId) {
+          setCalendarMonth(firstCompleteNaturalMonthValue(dataSub.contract_start))
+          calendarMonthInitializedRef.current = brandId
+        }
         setStoreEntitlements({
           storeLimit: typeof dataSub.store_limit === 'number' ? Math.max(1, dataSub.store_limit) : 1,
           multiStoreAddonQuantity: typeof dataSub.multi_store_addon_quantity === 'number' ? Math.max(0, dataSub.multi_store_addon_quantity) : 0,
@@ -843,16 +986,12 @@ ${storeLines}
       .slice(0, 4)
   }
 
-  const handleViewResearchReport = async () => {
-    if (report) {
-      setShowResearchReport(true)
-      return
-    }
-    // No local report — fetch from Growth
+  const handleGenerateResearchReport = async () => {
     setPlanGenerating('research')
     try {
-      const nextPlan = await runBrandPlanAction('generate_research_report', '品牌调研报告已获取')
+      const nextPlan = await runBrandPlanAction('generate_research_report', '品牌摸底报告已生成')
       if ((nextPlan?.marketingSolution || nextPlan?.brandPlan)?.researchReport) setShowResearchReport(true)
+      await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
     }
@@ -884,6 +1023,7 @@ ${storeLines}
     setPlanGenerating('annual')
     try {
       await runBrandPlanAction('generate_annual_plan', '品牌营销方案已生成')
+      await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
     }
@@ -896,9 +1036,17 @@ ${storeLines}
   }
 
   const handleGeneratePublishingCalendar = async () => {
+    if (publishingScheduleTotal(publishingScheduleDraft) < 1) {
+      showToastVal('请至少保留 1 条月度发布内容。', 'info')
+      return
+    }
     setPlanGenerating('calendar')
     try {
-      await runBrandPlanAction('generate_publishing_calendar', '季度内容发布日历已生成', { month: calendarMonth })
+      await runBrandPlanAction('generate_publishing_calendar', '内容创建和发布计划已生成', {
+        month: calendarMonth,
+        publishingFreqOverride: publishingFreqPayload(publishingScheduleDraft),
+      })
+      await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
     }
@@ -910,6 +1058,80 @@ ${storeLines}
     setPlanGenerating(loadingKey)
     try {
       await runBrandPlanAction('regenerate_calendar_item', '该条发布创意已重新生成', { month: calendarMonth, itemId })
+      await loadBrandPlanWorkspace()
+    } finally {
+      setPlanGenerating(null)
+    }
+  }
+
+  const updateCalendarMonthItems = (
+    updater: (items: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]) => NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
+  ) => {
+    setBrandPlanData((current) => {
+      const existing = current.publishingCalendar?.months?.[calendarMonth] || []
+      const nextItems = updater(existing)
+      return {
+        ...current,
+        publishingCalendar: {
+          generatedAt: current.publishingCalendar?.generatedAt || new Date().toISOString(),
+          months: {
+            ...(current.publishingCalendar?.months || {}),
+            [calendarMonth]: nextItems,
+          },
+        },
+      }
+    })
+  }
+
+  const handleAddCalendarItem = () => {
+    const platform = activePublishingPlatforms[0] || PUBLISHING_PLATFORM_OPTIONS[0]
+    updateCalendarMonthItems((items) => [
+      ...items,
+      {
+        id: `${calendarMonth}-manual-${Date.now()}`,
+        date: `${calendarMonth}-01`,
+        title: '新增内容策划',
+        platform: platform.label,
+        platformSlug: platform.slug,
+        contentType: '图文',
+        product: '待填写推广点',
+        planning: '填写内容策划、素材要求和发布动作。',
+        sampleHit: '待匹配样板爆品',
+        status: '待确认',
+        matchedTags: [],
+        matchedInspirations: [],
+        materialRequirements: [],
+      },
+    ])
+  }
+
+  const handleUpdateCalendarItem = (
+    itemId: string | undefined,
+    index: number,
+    patch: Record<string, unknown>
+  ) => {
+    updateCalendarMonthItems((items) => items.map((item, itemIndex) =>
+      (item.id && item.id === itemId) || itemIndex === index
+        ? { ...item, ...patch }
+        : item
+    ))
+  }
+
+  const handleDeleteCalendarItem = (itemId: string | undefined, index: number) => {
+    updateCalendarMonthItems((items) => items.filter((item, itemIndex) =>
+      !((item.id && item.id === itemId) || itemIndex === index)
+    ))
+  }
+
+  const handleSaveCalendarMonth = async () => {
+    setPlanGenerating('calendar_save')
+    try {
+      await runBrandPlanAction('save_workspace_patch', '内容创建和发布计划已保存', {
+        target: 'calendar_month',
+        month: calendarMonth,
+        value: currentCalendarItems,
+      })
+      await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
     }
@@ -976,15 +1198,25 @@ ${storeLines}
     return Array.isArray(value) ? value : fallback
   }
   const report = brandPlanData.researchReport
+  const growthReportMarkdown = report?.reportMarkdown || report?.reportContent || ''
   const interview = merchantInterview
   const annualPlan = brandPlanData.annualPlan
   const brandPlanUpdated = Boolean(brandPlanData.researchReport || merchantInterview)
   const selectedCalendarQuarter = quarterForMonthValue(calendarMonth)
-  const annualQuarterPlans = annualPlan?.quarterlyPlans || []
-  const currentAnnualQuarterPlan = annualQuarterPlans.find(item => item.quarter === selectedCalendarQuarter)
-  const currentQuarterPlan = brandPlanData.quarterlyPlans?.find(item => item.quarter === selectedCalendarQuarter)
+  const annualQuarterPlans = Array.isArray(annualPlan?.quarterlyPlans) ? annualPlan.quarterlyPlans : []
+  const currentAnnualQuarterPlan = annualQuarterPlans.find(item => isMonthInPlan(calendarMonth, item))
+    || annualQuarterPlans.find(item => item.quarter === selectedCalendarQuarter)
+  const currentQuarterPlan = Array.isArray(brandPlanData.quarterlyPlans)
+    ? brandPlanData.quarterlyPlans.find(item => isMonthInPlan(calendarMonth, item))
+      || brandPlanData.quarterlyPlans.find(item => item.quarter === selectedCalendarQuarter)
+    : undefined
   const calendarQuarterReady = Boolean(currentQuarterPlan || currentAnnualQuarterPlan)
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
+  const activePublishingPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) =>
+    publishingScheduleDraft[platform.slug] !== undefined ||
+    annualPlan?.subscriptionStrategy?.platformCoverage?.includes(platform.slug)
+  )
+  const publishingScheduleCount = publishingScheduleTotal(publishingScheduleDraft)
   const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
   const postfastSyncedAt = typeof brandSettings?.postfastSyncedAt === 'string' ? brandSettings.postfastSyncedAt : null
   const sourceStatusItems = [
@@ -993,7 +1225,7 @@ ${storeLines}
     { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录', status: merchantInterviewRequired ? 'pending' : 'ready' },
     { label: '营销方案输入', value: brandPlanUpdated ? '已具备' : '待完善', status: brandPlanUpdated ? 'ready' : 'warning' },
     { label: '品牌营销方案', value: annualPlan ? (annualQuarterPlans.length ? `已生成 · ${annualQuarterPlans.length}季` : '已生成') : '待生成', status: annualPlan ? 'ready' : 'pending' },
-    { label: '发布日历', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成', status: currentCalendarItems.length ? 'ready' : 'pending' },
+    { label: '内容创建和发布计划', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成', status: currentCalendarItems.length ? 'ready' : 'pending' },
   ]
 
   const reportModal = showResearchReport && (
@@ -1002,27 +1234,58 @@ ${storeLines}
       <div className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌调研报告</h3>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌摸底报告</h3>
             <p className="mt-1 text-xs text-slate-400">{report?.generatedAt ? new Date(report.generatedAt).toLocaleString() : '尚未生成'}</p>
           </div>
           <button type="button" onClick={() => setShowResearchReport(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-5 text-sm">
-          <p className="rounded-xl bg-slate-50 p-4 text-slate-700 dark:bg-slate-950 dark:text-slate-200">{report?.summary || '暂无报告。'}</p>
-          {[
-            ['数据来源', report?.dataSources || []],
-            ['竞品情况', report?.competitors || []],
-            ['问题发现', report?.issues || []],
-            ['增长点发现', report?.growthPoints || []],
-            ['需要老板确认', report?.missingQuestions || []],
-          ].map(([title, items]) => (
-            <section key={title as string}>
-              <h4 className="mb-2 text-xs font-black text-slate-500">{title as string}</h4>
-              <ul className="space-y-2">
-                {(items as string[]).length ? (items as string[]).map(item => <li key={item} className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-300">{item}</li>) : <li className="text-xs text-slate-400">暂无</li>}
-              </ul>
+          {report?.sourceSystem === 'amc-growth' ? (
+            <section className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
+              <p className="font-black">AMC-Growth 报告</p>
+              <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                <span>Job: {report.growthJobId || '未记录'}</span>
+                <span>Tier: {report.reportTier || '未记录'}</span>
+                <span className="sm:col-span-2">Path: {report.reportPath || '未记录'}</span>
+                <span className="sm:col-span-2">PDF: {report.pdfDownloadPath || report.pdfReportPath || '未记录'}</span>
+                {typeof report.coverageScore === 'number' ? <span>Coverage: {report.coverageScore}</span> : null}
+              </div>
+              {(report.pdfDownloadUrl || report.pdfDownloadPath) ? (
+                <a
+                  href={report.pdfDownloadUrl || report.pdfDownloadPath}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-black text-white"
+                >
+                  下载 PDF
+                </a>
+              ) : null}
             </section>
-          ))}
+          ) : null}
+          {growthReportMarkdown ? (
+            <section>
+              <h4 className="mb-2 text-xs font-black text-slate-500">AMC-Growth Markdown 报告正文</h4>
+              <pre className="max-h-[70vh] whitespace-pre-wrap rounded-xl border border-slate-200 bg-white p-4 text-xs leading-relaxed text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">{growthReportMarkdown}</pre>
+            </section>
+          ) : (
+            <>
+              <p className="rounded-xl bg-slate-50 p-4 text-slate-700 dark:bg-slate-950 dark:text-slate-200">{report?.summary || '暂无报告。'}</p>
+              {[
+                ['数据来源', report?.dataSources || []],
+                ['竞品情况', report?.competitors || []],
+                ['问题发现', report?.issues || []],
+                ['增长点发现', report?.growthPoints || []],
+                ['需要老板确认', report?.missingQuestions || []],
+              ].map(([title, items]) => (
+                <section key={title as string}>
+                  <h4 className="mb-2 text-xs font-black text-slate-500">{title as string}</h4>
+                  <ul className="space-y-2">
+                    {(items as string[]).length ? (items as string[]).map(item => <li key={item} className="rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-300">{item}</li>) : <li className="text-xs text-slate-400">暂无</li>}
+                  </ul>
+                </section>
+              ))}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1283,22 +1546,32 @@ ${storeLines}
           </section>
 
           <section className="grid gap-3 lg:grid-cols-2">
-            {/* 数据调研报告 — compact row */}
+            {/* 品牌摸底报告 — compact row */}
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
               <FileText className="h-4 w-4 shrink-0 text-blue-500" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-black text-slate-900 dark:text-white">数据调研报告</p>
+                <p className="text-xs font-black text-slate-900 dark:text-white">品牌摸底报告</p>
                 <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{report ? report.summary : '尚未获取调研报告'}</p>
               </div>
-              <button
-                type="button"
-                onClick={handleViewResearchReport}
-                disabled={Boolean(planGenerating)}
-                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-60 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
-              >
-                {planGenerating === 'research' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-                品牌调研报告
-              </button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleGenerateResearchReport}
+                  disabled={Boolean(planGenerating)}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-60"
+                >
+                  {planGenerating === 'research' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  {report ? '重新生成' : '生成报告'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowResearchReport(true)}
+                  disabled={!report || Boolean(planGenerating)}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                >
+                  查看
+                </button>
+              </div>
             </div>
             {/* 品牌主张访谈 — compact row */}
             <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
@@ -1337,6 +1610,9 @@ ${storeLines}
                 <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
                   编辑
                 </button>
+                <a href={`/dashboard/brands/${brandId}/marketing-plan`} target="_blank" rel="noreferrer" aria-disabled={!annualPlan} className={`inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700 ${annualPlan ? 'text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800' : 'pointer-events-none text-slate-300 dark:text-slate-600'}`}>
+                  <ExternalLink className="h-3.5 w-3.5" /> 查看完整方案
+                </a>
               </div>
             </div>
             {annualPlan ? (
@@ -1366,27 +1642,17 @@ ${storeLines}
                 {annualQuarterPlans.length ? (
                   <QuarterPlanTabs
                     annualQuarterPlans={annualQuarterPlans}
-                    quarterlyPlans={brandPlanData.quarterlyPlans || []}
-                    planGenerating={planGenerating}
-                    onGenerateQuarter={async (quarter) => {
-                      setPlanGenerating('quarter')
-                      try {
-                        await runBrandPlanAction('generate_quarter_plan', `${quarter} 季度营销方案已生成`, { quarter })
-                      } finally {
-                        setPlanGenerating(null)
-                      }
-                    }}
-                    onEditQuarter={(quarterPlan) => openAiContentEditor({ target: 'quarter_plan', title: `${quarterPlan.quarter} 季度营销方案`, value: quarterPlan })}
+                    onEditQuarter={(quarterPlan) => openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })}
                   />
                 ) : (
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                    {annualPlan.quarterlyFocus.map(item => (
+                    {(Array.isArray(annualPlan.quarterlyFocus) ? annualPlan.quarterlyFocus : []).map(item => (
                       <div key={item.quarter} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-950">
-                        <p className="text-xs font-black text-slate-800 dark:text-slate-100">{item.quarter}</p>
+                        <p className="text-xs font-black text-slate-800 dark:text-slate-100">{quarterDisplayLabel(item)}</p>
                         <p className="mt-1 text-xs text-slate-500">{item.focus}</p>
-                        {item.campaigns.length ? (
+                        {safeArray(item.campaigns).length ? (
                           <div className="mt-2 flex flex-wrap gap-1">
-                            {item.campaigns.map(c => <span key={c} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:bg-purple-950 dark:text-purple-200">{c}</span>)}
+                            {safeArray(item.campaigns).map(c => <span key={c} className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-600 dark:bg-purple-950 dark:text-purple-200">{c}</span>)}
                           </div>
                         ) : null}
                       </div>
@@ -1407,35 +1673,136 @@ ${storeLines}
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Section 4</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">发布日历</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">内容创建和发布计划</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, -1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">上个月</button>
                 <input type="month" value={calendarMonth} onChange={event => setCalendarMonth(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700 dark:bg-slate-950" />
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold dark:border-slate-700">下个月</button>
                 <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !calendarQuarterReady} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成季度内容发布日历
+                  {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成内容创建和发布计划
                 </button>
-                <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 发布日历`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
-                  编辑
+                <button type="button" onClick={handleAddCalendarItem} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-200">
+                  <Plus className="h-3.5 w-3.5" /> 新增
                 </button>
+                <button type="button" onClick={handleSaveCalendarMonth} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 disabled:opacity-50 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
+                  {planGenerating === 'calendar_save' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} 保存
+                </button>
+                <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 内容创建和发布计划`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                  JSON 编辑
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-xs font-black text-slate-800 dark:text-slate-100">本月发布节奏</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">按品牌营销方案里的订阅策略带出，可调整后重新生成。</p>
+                </div>
+                <div className="text-xs font-black text-rose-600">合计 {publishingScheduleCount} 条/月</div>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {(activePublishingPlatforms.length ? activePublishingPlatforms : PUBLISHING_PLATFORM_OPTIONS.slice(0, 3)).map((platform) => (
+                  <label key={platform.slug} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-xs dark:bg-slate-900">
+                    <span className="font-bold text-slate-600 dark:text-slate-300">{platform.label}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      value={publishingScheduleDraft[platform.slug] ?? 0}
+                      onChange={(event) => {
+                        const count = Math.max(0, Math.min(60, Math.floor(Number(event.target.value || 0))))
+                        setPublishingScheduleDraft((current) => ({ ...current, [platform.slug]: count }))
+                      }}
+                      className="h-8 w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 text-right text-xs font-black text-slate-800 focus:border-rose-400 focus:outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                    />
+                  </label>
+                ))}
               </div>
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {currentCalendarItems.length ? currentCalendarItems.map((item, index) => (
                 <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-black text-white dark:bg-white dark:text-slate-900">{item.date.slice(5)}</span>
-                    <span className="text-[10px] font-bold text-slate-400">{item.platform} · {item.contentType}</span>
+                    <input
+                      type="date"
+                      value={item.date}
+                      onChange={(event) => handleUpdateCalendarItem(item.id, index, { date: event.target.value })}
+                      className="w-32 rounded-lg bg-slate-900 px-2 py-1 text-[11px] font-black text-white outline-none dark:bg-white dark:text-slate-900"
+                    />
+                    <div className="flex gap-1.5">
+                      <select
+                        value={item.platformSlug || normalizeSchedulePlatform(item.platform || '')}
+                        onChange={(event) => {
+                          const platform = PUBLISHING_PLATFORM_OPTIONS.find(option => option.slug === event.target.value)
+                          handleUpdateCalendarItem(item.id, index, { platformSlug: event.target.value, platform: platform?.label || event.target.value })
+                        }}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900"
+                      >
+                        {PUBLISHING_PLATFORM_OPTIONS.map(platform => <option key={platform.slug} value={platform.slug}>{platform.label}</option>)}
+                      </select>
+                      <select
+                        value={item.contentType}
+                        onChange={(event) => handleUpdateCalendarItem(item.id, index, { contentType: event.target.value })}
+                        className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-500 dark:border-slate-700 dark:bg-slate-900"
+                      >
+                        <option value="图文">图文</option>
+                        <option value="短视频">短视频</option>
+                        <option value="评论回复">评论回复</option>
+                      </select>
+                    </div>
                   </div>
-                  <h4 className="mt-3 text-sm font-black text-slate-900 dark:text-white">{item.title}</h4>
-                  <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{item.planning}</p>
+                  <input
+                    value={item.title}
+                    onChange={(event) => handleUpdateCalendarItem(item.id, index, { title: event.target.value })}
+                    className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                  />
+                  <input
+                    value={item.product}
+                    onChange={(event) => handleUpdateCalendarItem(item.id, index, { product: event.target.value })}
+                    className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  />
+                  <textarea
+                    value={item.planning}
+                    onChange={(event) => handleUpdateCalendarItem(item.id, index, { planning: event.target.value })}
+                    rows={2}
+                    className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  />
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}
                   <div className="mt-3 rounded-lg bg-white p-3 text-xs leading-relaxed text-slate-500 dark:bg-slate-900 dark:text-slate-300">
-                    <span className="font-black text-rose-600">样板爆品：</span>{item.sampleHit}
+                    <label className="block">
+                      <span className="font-black text-rose-600">样板爆品：</span>
+                      <textarea
+                        value={item.sampleHit}
+                        onChange={(event) => handleUpdateCalendarItem(item.id, index, { sampleHit: event.target.value })}
+                        rows={2}
+                        className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs leading-relaxed text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
+                      />
+                    </label>
+                    {(item.sampleVideoUrl || item.sampleOriginalUrl) ? (
+                      <a
+                        href={item.sampleVideoUrl || item.sampleOriginalUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-rose-100 bg-rose-50 px-2.5 py-1 text-[11px] font-black text-rose-700 hover:bg-rose-100 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-200"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        {item.sampleVideoUrl ? '查看样板视频' : '查看原视频链接'}
+                      </a>
+                    ) : null}
                   </div>
+                  <select
+                    value={item.status}
+                    onChange={(event) => handleUpdateCalendarItem(item.id, index, { status: event.target.value })}
+                    className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                  >
+                    <option value="待确认">待确认</option>
+                    <option value="已确认">已确认</option>
+                    <option value="待补素材">待补素材</option>
+                    <option value="已完成">已完成</option>
+                  </select>
                   <button
                     type="button"
                     onClick={() => handleRegenerateCalendarItem(item.id)}
@@ -1444,9 +1811,17 @@ ${storeLines}
                   >
                     {planGenerating === `calendar_item:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 单独重新生成这条创意
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteCalendarItem(item.id, index)}
+                    disabled={Boolean(planGenerating)}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-600 disabled:opacity-50 dark:border-rose-900/60 dark:bg-slate-900 dark:text-rose-300"
+                  >
+                    删除这条
+                  </button>
                 </div>
               )) : (
-                <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">当前月份还没有发布策划。请选择月份后生成内容发布日历。</div>
+                <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">当前月份还没有内容创建和发布计划。请选择月份后生成，或手动新增一条。</div>
               )}
             </div>
           </section>
@@ -1688,6 +2063,10 @@ ${storeLines}
 
 type AnnualQuarterPlan = {
   quarter: string
+  year?: number
+  startMonth?: string
+  endMonth?: string
+  periodLabel?: string
   strategy: string
   focus: string
   promotionPoints: Array<{
@@ -1703,37 +2082,30 @@ type AnnualQuarterPlan = {
   monthlyFocus: Array<{ month: string; focus: string; promotionPoints: string[] }>
 }
 
-type StandaloneQuarterPlan = {
-  quarter: string
-  generatedAt: string
-  objective: string
-  monthlyFocus: Array<{ month: string; focus: string }>
-  contentDirections: string[]
-  promotionPoints?: Array<{
-    name: string
-    rationale: string
-    customerAction: string
-    platforms: string[]
-    suggestedMonthlyPosts: number
-  }>
+function quarterDisplayLabel(quarter: { quarter: string; periodLabel?: string; startMonth?: string; endMonth?: string }) {
+  if (quarter.periodLabel) return quarter.periodLabel
+  if (quarter.startMonth && quarter.endMonth) return `${quarter.quarter} · ${quarter.startMonth} 至 ${quarter.endMonth}`
+  return quarter.quarter
+}
+
+function safeArray<T>(value: T[] | undefined | null) {
+  return Array.isArray(value) ? value : []
 }
 
 function QuarterPlanTabs({
   annualQuarterPlans,
-  quarterlyPlans,
-  planGenerating,
-  onGenerateQuarter,
   onEditQuarter,
 }: {
   annualQuarterPlans: AnnualQuarterPlan[]
-  quarterlyPlans: StandaloneQuarterPlan[]
-  planGenerating: string | null
-  onGenerateQuarter: (quarter: string) => Promise<void>
-  onEditQuarter: (plan: StandaloneQuarterPlan) => void
+  onEditQuarter: (plan: AnnualQuarterPlan) => void
 }) {
   const [activeQuarter, setActiveQuarter] = useState(annualQuarterPlans[0]?.quarter || 'Q1')
+  const annualQuarterKey = annualQuarterPlans.map(q => `${q.periodLabel || q.quarter}:${q.startMonth || ''}`).join('|')
+  useEffect(() => {
+    if (!annualQuarterPlans.length) return
+    setActiveQuarter(current => annualQuarterPlans.some(q => q.quarter === current) ? current : annualQuarterPlans[0].quarter)
+  }, [annualQuarterKey, annualQuarterPlans])
   const activeAnnual = annualQuarterPlans.find(q => q.quarter === activeQuarter)
-  const activeStandalone = quarterlyPlans.find(q => q.quarter === activeQuarter)
 
   return (
     <div>
@@ -1750,7 +2122,7 @@ function QuarterPlanTabs({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
             }`}
           >
-            {q.quarter}
+            {quarterDisplayLabel(q)}
           </button>
         ))}
       </div>
@@ -1760,13 +2132,13 @@ function QuarterPlanTabs({
           {/* Quarter header */}
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-black text-purple-600">{activeAnnual.quarter}</p>
+              <p className="text-xs font-black text-purple-600">{quarterDisplayLabel(activeAnnual)}</p>
               <p className="mt-1 text-sm font-black text-slate-900 dark:text-white">{activeAnnual.focus}</p>
               <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{activeAnnual.strategy}</p>
             </div>
-            {activeAnnual.campaigns.length ? (
+            {safeArray(activeAnnual.campaigns).length ? (
               <div className="flex shrink-0 flex-col items-end gap-1">
-                {activeAnnual.campaigns.slice(0, 3).map(c => (
+                {safeArray(activeAnnual.campaigns).slice(0, 3).map(c => (
                   <span key={c} className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">{c}</span>
                 ))}
               </div>
@@ -1774,18 +2146,18 @@ function QuarterPlanTabs({
           </div>
 
           {/* Promotion points */}
-          {activeAnnual.promotionPoints.length ? (
+          {safeArray(activeAnnual.promotionPoints).length ? (
             <div className="mt-4">
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">推广点</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                {activeAnnual.promotionPoints.map(point => (
+                {safeArray(activeAnnual.promotionPoints).map(point => (
                   <div key={point.name} className="rounded-lg border border-white bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-900">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="font-black text-slate-800 dark:text-slate-100">{point.name}</span>
                       <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-950 dark:text-purple-200">
                         {point.suggestedMonthlyPosts} 次/月
                       </span>
-                      {point.platforms.slice(0, 3).map(platform => (
+                      {safeArray(point.platforms).slice(0, 3).map(platform => (
                         <span key={platform} className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
                           {platform}
                         </span>
@@ -1804,11 +2176,11 @@ function QuarterPlanTabs({
           ) : null}
 
           {/* Monthly focus */}
-          {activeAnnual.monthlyFocus.length ? (
+          {safeArray(activeAnnual.monthlyFocus).length ? (
             <div className="mt-4">
               <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">月度计划</p>
               <div className="grid gap-1.5 sm:grid-cols-3">
-                {activeAnnual.monthlyFocus.map(month => (
+                {safeArray(activeAnnual.monthlyFocus).map(month => (
                   <div key={month.month} className="rounded-lg bg-white px-3 py-2 dark:bg-slate-900">
                     <p className="text-[10px] font-black text-purple-600">{month.month}</p>
                     <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{month.focus}</p>
@@ -1818,33 +2190,15 @@ function QuarterPlanTabs({
             </div>
           ) : null}
 
-          {/* Standalone quarter plan or generate CTA */}
           <div className="mt-4 border-t border-slate-200 pt-4 dark:border-slate-800">
-            {activeStandalone ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">独立季度方案</p>
-                  <button
-                    type="button"
-                    onClick={() => onEditQuarter(activeStandalone)}
-                    className="text-[10px] font-bold text-purple-600 hover:text-purple-700"
-                  >
-                    编辑
-                  </button>
-                </div>
-                <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">{activeStandalone.objective}</p>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onGenerateQuarter(activeAnnual.quarter)}
-                disabled={Boolean(planGenerating)}
-                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-bold text-purple-700 hover:bg-purple-50 disabled:opacity-60 dark:border-purple-900 dark:bg-slate-900 dark:text-purple-300"
-              >
-                {planGenerating === 'quarter' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                深化生成 {activeAnnual.quarter} 季度方案
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => onEditQuarter(activeAnnual)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-purple-200 bg-white px-3 py-2 text-xs font-bold text-purple-700 hover:bg-purple-50 dark:border-purple-900 dark:bg-slate-900 dark:text-purple-300"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+              编辑完整品牌营销方案
+            </button>
           </div>
         </div>
       )}

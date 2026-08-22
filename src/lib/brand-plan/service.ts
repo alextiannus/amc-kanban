@@ -2,15 +2,14 @@ import type { Prisma } from '@prisma/client'
 import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import {
-  ensureGrowthMerchantForBrand,
   generateGrowthResearchReportForBrand,
-  readGrowthMerchantData,
 } from '@/lib/growthDataCenter'
 import { matchPromotionStrategyCreativeBatch } from '@/lib/promotion-strategy/clients'
 import type { PublishingFreq } from '@/lib/brandContextBuilder'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
 import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
 import { callLLM } from '@/lib/llmRouter'
+import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -26,6 +25,10 @@ type BrandPlanCalendarItem = {
   matchedTags?: string[]
   matchedInspirations?: string[]
   selectedCreativeCandidateId?: string
+  sampleVideoUrl?: string
+  sampleOriginalUrl?: string
+  sampleThumbnailUrl?: string
+  sampleSourcePlatform?: string
   materialRequirements?: string[]
   contentLibraryGap?: string
 }
@@ -36,6 +39,19 @@ export type BrandPlanWorkspaceData = {
     generatedAt: string
     summary: string
     dataSources: string[]
+    sourceSystem?: 'amc-growth' | 'amc-kanban'
+    growthJobId?: string
+    growthBrandKey?: string
+    reportTier?: string
+    reportPath?: string
+    reportMarkdown?: string
+    reportContent?: string
+    pdfReportPath?: string
+    pdfDownloadPath?: string
+    pdfDownloadUrl?: string
+    coverageScore?: number | null
+    sourceCoverage?: Record<string, unknown>
+    sourcePayload?: Record<string, unknown>
     brandImage: string
     marketingStatus: string
     marketAnalysis: string
@@ -48,9 +64,13 @@ export type BrandPlanWorkspaceData = {
     generatedAt: string
     goal: string
     theme: string
-    quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[] }>
+    quarterlyFocus: Array<{ quarter: string; focus: string; campaigns: string[]; year?: number; startMonth?: string; endMonth?: string; periodLabel?: string }>
     quarterlyPlans?: Array<{
       quarter: string
+      year?: number
+      startMonth?: string
+      endMonth?: string
+      periodLabel?: string
       strategy: string
       focus: string
       promotionPoints: Array<{
@@ -83,6 +103,10 @@ export type BrandPlanWorkspaceData = {
   }
   quarterlyPlans?: Array<{
     quarter: string
+    year?: number
+    startMonth?: string
+    endMonth?: string
+    periodLabel?: string
     generatedAt: string
     objective: string
     monthlyFocus: Array<{ month: string; focus: string }>
@@ -105,6 +129,22 @@ export type BrandPlanWorkspaceData = {
     months: Record<string, BrandPlanCalendarItem[]>
     generationMode?: 'AMC_CONTENT_ASSISTED' | 'RULE_FALLBACK'
   }
+  presentationTheme?: BrandMarketingPlanPresentationTheme
+}
+
+export type BrandMarketingPlanPresentationTheme = {
+  generatedAt: string
+  colorSourceKey: string
+  paletteId: string
+  paletteName: string
+  primary: string
+  secondary: string
+  accent: string
+  background: string
+  surface: string
+  text: string
+  muted: string
+  decoration: 'editorial' | 'service' | 'festival' | 'fresh' | 'premium'
 }
 
 export type BrandPlanMerchantInterview = {
@@ -120,9 +160,9 @@ type BrandPlanAction =
   | 'save_merchant_interview'
   | 'save_workspace_patch'
   | 'generate_annual_plan'
-  | 'generate_quarter_plan'
   | 'generate_publishing_calendar'
   | 'regenerate_calendar_item'
+  | 'ensure_presentation_theme'
 
 type BrandPlanBrand = NonNullable<Awaited<ReturnType<typeof loadBrandPlanBrand>>>
 
@@ -137,6 +177,7 @@ export async function loadBrandPlanBrand(brandId: string) {
           planName: true,
           selectedAddons: true,
           status: true,
+          contractStartDate: true,
           contractEndDate: true,
           createdAt: true,
         },
@@ -203,7 +244,10 @@ export async function runBrandPlanAction(input: {
       researchReport,
     }
   } else if (input.action === 'save_merchant_interview') {
-    const report = current.researchReport || await saveResearchReport(brand.id, await buildResearchReport(brand))
+    if (!isGrowthResearchReport(current.researchReport)) {
+      throw new BrandPlanError('growth_research_report_required', 409)
+    }
+    const report = current.researchReport
     latestInterview = await saveMerchantInterview(brand.id, input.body, report)
     next = { ...current, researchReport: report }
   } else if (input.action === 'save_workspace_patch') {
@@ -214,7 +258,7 @@ export async function runBrandPlanAction(input: {
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'ANNUAL',
-      period: String(new Date().getFullYear()),
+      period: marketingPlanPeriod(annualPlan),
       input: {
         ...buildMarketingPlanInput(brand, current, latestInterview),
         subscriptionStrategy: annualPlan.subscriptionStrategy,
@@ -226,32 +270,10 @@ export async function runBrandPlanAction(input: {
       llmModel: annualPlan.llmModel,
       llmError: annualPlan.llmError,
     })
-  } else if (input.action === 'generate_quarter_plan') {
-    requireAnnualPlan(current)
-    const quarterPlan = await buildQuarterMarketingSolution(brand, current, latestInterview, input.body)
-    next = {
-      ...current,
-      quarterlyPlans: [
-        ...(current.quarterlyPlans || []).filter((item) => item.quarter !== quarterPlan.quarter),
-        quarterPlan,
-      ],
-    }
-    await saveMarketingSolutionVersion({
-      brandId: brand.id,
-      kind: 'QUARTERLY',
-      period: quarterPlan.quarter,
-      input: buildMarketingPlanInput(brand, current, latestInterview, input.body),
-      output: quarterPlan,
-      researchSnapshotId: quarterPlan.researchSnapshotId || current.researchReport?.snapshotId,
-      generationMode: quarterPlan.generationMode || 'LLM',
-      llmProvider: quarterPlan.llmProvider,
-      llmModel: quarterPlan.llmModel,
-      llmError: quarterPlan.llmError,
-    })
   } else if (input.action === 'generate_publishing_calendar') {
     requireQuarterPlan(current)
     const month = normalizeMonth(input.body?.month)
-    const monthItems = await buildPublishingMonth(brand, month, latestInterview, current)
+    const monthItems = await buildPublishingMonth(brand, month, latestInterview, current, input.body?.publishingFreqOverride)
     next = {
       ...current,
       publishingCalendar: {
@@ -306,6 +328,12 @@ export async function runBrandPlanAction(input: {
       researchSnapshotId: current.researchReport?.snapshotId,
       generationMode: 'AMC_CONTENT_ASSISTED',
     })
+  } else if (input.action === 'ensure_presentation_theme') {
+    requireAnnualPlan(current)
+    next = {
+      ...current,
+      presentationTheme: ensurePresentationTheme(brand, current),
+    }
   } else {
     throw new BrandPlanError('invalid_brand_plan_action', 400)
   }
@@ -336,53 +364,6 @@ export async function runBrandPlanAction(input: {
   }
 }
 
-async function buildResearchReport(brand: BrandPlanBrand): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
-  const growth = await readGrowthFacts(brand)
-  const products = primaryProducts(brand, growth)
-  const competitors = stringList(brand.knowledge?.competitors)
-  const accounts: Array<{ platformId: string; ratingScore: number | null }> = brand.accounts || []
-  const googleRating = accounts.find((account) => isGooglePlatform(account.platformId))?.ratingScore ?? null
-  const stores = arrayValue(brand.knowledge?.stores)
-  const hasConversionLink = Boolean(brand.knowledge?.reservationUrl || brand.knowledge?.orderingUrl || arrayValue(brand.knowledge?.deliveryUrls).length)
-  const issues = [
-    !brand.knowledge?.businessHours ? '营业时间不完整，影响搜索和到店决策。' : '',
-    !hasConversionLink ? '预订、下单或外卖承接入口还不清楚。' : '',
-    !brand.knowledge?.audienceAssumptions ? '目标客群需要商家确认，避免内容泛泛而谈。' : '',
-    !brand.knowledge?.promotionFocus ? '长期推广重点还没有沉淀成稳定表达。' : '',
-  ].filter(Boolean)
-
-  const growthPoints = [
-    products[0] ? `围绕“${products[0]}”建立稳定主推内容。` : '先明确一个最值得主推的产品或服务。',
-    stores.length > 1 ? '利用多门店覆盖不同商圈和消费场景。' : '强化门店位置、路线和附近消费场景。',
-    googleRating ? `Google 评分 ${googleRating.toFixed(1)} 可作为信任背书。` : '补充顾客评价、真实照片和门店体验作为信任内容。',
-    accounts.length ? '把已有社媒阵地统一到同一套品牌表达。' : '先补齐官方社媒阵地，建立顾客可追踪入口。',
-  ]
-
-  return {
-    generatedAt: new Date().toISOString(),
-    summary: `${brand.name} 当前资料已覆盖基础品牌与门店信息，下一步需要确认主推产品、顾客来店原因和近期经营目标。`,
-    dataSources: [
-      'AMC-Kanban 品牌资料',
-      'BrandKnowledge 门店与推广字段',
-      growth.available ? 'AMC-Growth 数据调研' : '',
-      accounts.length ? '已绑定社媒账号' : '',
-    ].filter(Boolean),
-    brandImage: text(brand.knowledge?.brandImage) || text(growth.positioning) || '待根据数据调研和商家确认整理。',
-    marketingStatus: text(brand.knowledge?.promotionFocus) || text(growth.growthPlan) || '已有基础推广字段，缺少可执行的年度、季度和月度营销方案拆解。',
-    marketAnalysis: [brand.knowledge?.market, brand.knowledge?.district, growth.market].map(text).filter(Boolean).join(' / ') || '待补充市场、商圈和消费场景判断。',
-    competitors,
-    issues: issues.length ? issues : ['资料基础完整，建议重点校准主推产品、客群和内容风格。'],
-    growthPoints,
-    missingQuestions: [
-      '老板最想让顾客记住什么？',
-      '如果只能主推一个产品或服务，应该先推哪个？',
-      '客人一般为什么选择这家店，而不是附近其他店？',
-      '最近三个月最想提升新客、回头客、外卖、预订还是客单价？',
-      '哪些话不要说，哪些产品暂时不要主推？',
-    ],
-  }
-}
-
 async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
   const job = await generateGrowthResearchReportForBrand(brand)
   if (text(job.status) === 'failed') {
@@ -391,8 +372,12 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
   if (!['completed', 'needs_review'].includes(text(job.status))) {
     throw new BrandPlanError('growth_research_still_running', 409)
   }
-  const localReport = await buildResearchReport(brand)
   const result = objectValue(job.result)
+  const reportVersions = objectValue(job.report_versions)
+  const advancedReport = objectValue(reportVersions.advanced)
+  const initialReport = objectValue(reportVersions.initial)
+  const selectedReport = Object.keys(advancedReport).length ? advancedReport : initialReport
+  const selectedReportResult = objectValue(selectedReport.result)
   const sourceCoverage = objectValue(job.source_coverage)
   const coverageScore = typeof job.coverage_score === 'number'
     ? job.coverage_score
@@ -402,41 +387,159 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
   const coverageItems = Object.entries(sourceCoverage)
     .filter(([, value]) => Boolean(value))
     .map(([key]) => key)
+  const reportMarkdown = text(job.latest_report_markdown) || text(job.latest_report_content) || text(selectedReport.report_content)
+  if (!reportMarkdown) {
+    throw new BrandPlanError('growth_research_report_missing', 502)
+  }
+  const pdfReportPath = text(job.latest_report_pdf_path) || text(selectedReport.pdf_report_path) || text(selectedReportResult.pdf_report_path)
+  const pdfDownloadPath = text(job.latest_report_pdf_download_path) || text(selectedReport.pdf_download_path) || text(selectedReportResult.pdf_download_path)
   const reportPaths = [
+    text(job.latest_report_path),
+    text(selectedReport.report_path),
     text(job.advanced_report_path),
     text(job.initial_report_path),
     text(result.advanced_report_path),
     text(result.report_path),
   ].filter(Boolean)
-  const growthIssues = [
+  const reportTier = text(job.latest_report_tier) || text(selectedReport.tier) || (reportPaths[0]?.includes('deep') ? 'advanced' : 'initial')
+  const reportSummary = extractGrowthReportSummary(reportMarkdown, brand.name)
+  const growthIssues = uniqueStrings([
+    ...extractGrowthReportBullets(reportMarkdown, ['数据缺口', '下一步采集计划']),
     coverageScore !== null && coverageScore < 70 ? `公开资料覆盖度约 ${coverageScore}，建议补齐缺失平台资料。` : '',
     text(job.status) === 'needs_review' ? 'Growth 调研结果需要主理人复核后再用于重要决策。' : '',
-  ].filter(Boolean)
+  ].filter(Boolean))
+  const growthPoints = uniqueStrings([
+    ...extractGrowthReportBullets(reportMarkdown, ['提升建议', '立即执行', '30 天提升', '60-90 天提升']),
+    '根据 Growth 品牌摸底报告补齐 Google Maps、官网、社交媒体和本地搜索的关键资料。',
+  ]).slice(0, 10)
+  const missingQuestions = uniqueStrings([
+    ...extractGrowthReportBullets(reportMarkdown, ['数据缺口', '数据来源与缺口']),
+    '请主理人查看 Growth 报告全文，确认是否有平台资料缺失或竞品判断需要修正。',
+  ]).slice(0, 10)
+  const sourcePayload = {
+    jobId: job.job_id,
+    status: job.status,
+    progress: job.progress,
+    brandKey: text(result.brand_key || selectedReportResult.brand_key),
+    reportTier,
+    reportPath: reportPaths[0] || '',
+    reportVersionId: text(selectedReport.report_version_id),
+    pdfReportPath,
+    pdfDownloadPath,
+    result,
+  }
 
   return {
-    ...localReport,
     generatedAt: new Date().toISOString(),
-    summary: [
-      `${brand.name} 的品牌摸底报告已由 AMC-Growth 调研生成，并回写到 AMC-Kanban。`,
-      coverageScore !== null ? `本次公开资料覆盖度：${coverageScore}。` : '',
-      reportPaths.length ? `Growth 报告路径：${reportPaths[0]}` : '',
+    sourceSystem: 'amc-growth',
+    growthJobId: text(job.job_id),
+    growthBrandKey: text(result.brand_key || selectedReportResult.brand_key),
+    reportTier,
+    reportPath: reportPaths[0] || '',
+    reportMarkdown,
+    pdfReportPath,
+    pdfDownloadPath,
+    pdfDownloadUrl: growthDownloadUrl(pdfDownloadPath),
+    coverageScore,
+    sourceCoverage,
+    sourcePayload,
+    summary: reportSummary || [
+      `${brand.name} 的品牌摸底报告已由 AMC-Growth 生成。`,
+      coverageScore !== null ? `公开资料覆盖度：${coverageScore}。` : '',
+      reportPaths.length ? `报告路径：${reportPaths[0]}` : '',
     ].filter(Boolean).join(' '),
     dataSources: uniqueStrings([
       'AMC-Growth 品牌摸底调研',
-      ...localReport.dataSources,
+      reportTier ? `Growth ${reportTier} report` : '',
+      reportPaths[0] ? `Growth report: ${reportPaths[0]}` : '',
       ...coverageItems.map((item) => `Growth ${item}`),
     ]),
+    brandImage: text(result.report_name || selectedReportResult.report_name) || `${brand.name} 的线上品牌摸底报告`,
     marketingStatus: text(result.assessment_status)
-      ? `Growth 调研状态：${text(result.assessment_status)}。${localReport.marketingStatus}`
-      : localReport.marketingStatus,
-    marketAnalysis: localReport.marketAnalysis,
-    issues: uniqueStrings([...growthIssues, ...localReport.issues]),
-    growthPoints: localReport.growthPoints,
-    missingQuestions: uniqueStrings([
-      ...localReport.missingQuestions,
-      reportPaths.length ? '请主理人查看 Growth 报告全文，确认是否有平台资料缺失或竞品判断需要修正。' : '',
-    ]),
+      ? `Growth 调研状态：${text(result.assessment_status)}。`
+      : `Growth 调研状态：${text(job.status) || 'completed'}。`,
+    marketAnalysis: [
+      text(result.market || selectedReportResult.market || job.market),
+      text(result.category || selectedReportResult.category),
+      coverageScore !== null ? `覆盖度 ${coverageScore}` : '',
+    ].filter(Boolean).join(' / ') || '详见 AMC-Growth 品牌摸底报告正文。',
+    competitors: extractGrowthReportTableNames(reportMarkdown, '竞品候选'),
+    issues: growthIssues.length ? growthIssues : ['详见 AMC-Growth 品牌摸底报告的数据缺口与下一步采集计划。'],
+    growthPoints,
+    missingQuestions,
   }
+}
+
+function extractGrowthReportSummary(markdown: string, brandName: string) {
+  if (!markdown) return ''
+  const lines = markdown
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const firstBodyLine = lines.find((line) =>
+    !line.startsWith('---') &&
+    !line.startsWith('#') &&
+    !line.startsWith('|') &&
+    !line.startsWith('- ') &&
+    !line.includes(': ') &&
+    line.length > 12
+  )
+  return firstBodyLine || `${brandName} 的 AMC-Growth 品牌摸底报告已生成。`
+}
+
+function growthDownloadUrl(pathValue: string) {
+  if (!pathValue) return ''
+  if (/^https?:\/\//i.test(pathValue)) return pathValue
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+  const baseUrl = (process.env.AMC_GROWTH_API_URL || (isProd ? 'https://amc-growth.onrender.com' : 'http://localhost:4188')).replace(/\/$/, '')
+  return `${baseUrl}${pathValue.startsWith('/') ? pathValue : `/${pathValue}`}`
+}
+
+function extractGrowthReportBullets(markdown: string, sectionKeywords: string[]) {
+  if (!markdown) return []
+  const lines = markdown.split('\n')
+  const results: string[] = []
+  let active = false
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (/^#{2,4}\s+/.test(line)) {
+      active = sectionKeywords.some((keyword) => line.includes(keyword))
+      continue
+    }
+    if (!active) continue
+    const ordered = line.match(/^\d+\.\s+(.+)/)
+    const unordered = line.match(/^[-*]\s+(.+)/)
+    const value = text(ordered?.[1] || unordered?.[1])
+    if (value && !value.includes('暂无数据')) results.push(value)
+  }
+  return uniqueStrings(results)
+}
+
+function extractGrowthReportTableNames(markdown: string, sectionKeyword: string) {
+  if (!markdown) return []
+  const lines = markdown.split('\n')
+  const results: string[] = []
+  let active = false
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (/^#{2,4}\s+/.test(line)) {
+      active = line.includes(sectionKeyword)
+      continue
+    }
+    if (!active || !line.startsWith('|') || line.includes('---')) continue
+    const cells = line.split('|').map((item) => item.trim()).filter(Boolean)
+    const name = cells[0]
+    if (name && !['竞品候选', '暂无数据'].includes(name)) results.push(name)
+  }
+  return uniqueStrings(results).slice(0, 8)
+}
+
+function isGrowthResearchReport(report: BrandPlanWorkspaceData['researchReport']) {
+  return Boolean(report && (
+    report.sourceSystem === 'amc-growth' ||
+    report.dataSources?.includes('AMC-Growth 品牌摸底调研') ||
+    report.dataSources?.includes('AMC-Growth 数据调研')
+  ))
 }
 
 async function saveResearchReport(
@@ -454,8 +557,9 @@ async function saveResearchReport(
   const snapshot = existing || await prisma.brandGrowthResearchSnapshot.create({
     data: {
       brandId,
-      source: report.dataSources.includes('AMC-Growth 数据调研') ? 'amc-growth' : 'amc-kanban',
+      source: isGrowthResearchReport(report) ? 'amc-growth' : 'amc-kanban',
       sourceVersion: report.generatedAt,
+      sourcePayload: report.sourcePayload ? report.sourcePayload as Prisma.InputJsonValue : undefined,
       report: reportForSnapshot as Prisma.InputJsonValue,
       dataHash,
     },
@@ -540,7 +644,7 @@ async function saveWorkspacePatch(
     await saveMarketingSolutionVersion({
       brandId,
       kind: 'ANNUAL',
-      period: String(new Date().getFullYear()),
+      period: marketingPlanPeriod(annualPlan),
       input: { target, editedAt: new Date().toISOString() },
       output: annualPlan,
       researchSnapshotId: current.researchReport?.snapshotId,
@@ -559,7 +663,7 @@ async function saveWorkspacePatch(
     await saveMarketingSolutionVersion({
       brandId,
       kind: 'QUARTERLY',
-      period: quarterPlan.quarter,
+      period: quarterPlan.periodLabel || quarterPlan.quarter,
       input: { target, editedAt: new Date().toISOString() },
       output: quarterPlan,
       researchSnapshotId: current.researchReport?.snapshotId,
@@ -571,7 +675,6 @@ async function saveWorkspacePatch(
   if (target === 'calendar_month') {
     const month = normalizeMonth(body?.month)
     const items = arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
-    if (!items.length) throw new BrandPlanError('invalid_calendar_month', 400)
     const publishingCalendar = {
       generatedAt: new Date().toISOString(),
       generationMode: 'AMC_CONTENT_ASSISTED' as const,
@@ -637,9 +740,13 @@ async function buildAnnualMarketingSolution(
     ...buildMarketingPlanInput(brand, current, interview),
     subscriptionStrategy: fallback.subscriptionStrategy,
     planningWindow: {
-      rule: '如果当前季度剩余不到一个月，则从下一季度开始；否则从当前季度开始。连续规划未来四个季度。',
+      rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
       quarters: (fallback.quarterlyPlans || []).map((item) => ({
         quarter: item.quarter,
+        year: item.year,
+        startMonth: item.startMonth,
+        endMonth: item.endMonth,
+        periodLabel: item.periodLabel,
         months: item.monthlyFocus.map((month) => month.month),
         focus: item.focus,
       })),
@@ -647,13 +754,7 @@ async function buildAnnualMarketingSolution(
   }
   const llm = await callMarketingPlanLLM('annual', input)
   if (!llm.value) {
-    return {
-      ...fallback,
-      generationMode: 'RULE_FALLBACK',
-      llmProvider: llm.provider,
-      llmModel: llm.modelName,
-      llmError: llm.error,
-    }
+    throw new BrandPlanError('marketing_plan_llm_failed', 502)
   }
   return normalizeAnnualMarketingSolution(llm.value, fallback, llm)
 }
@@ -663,7 +764,7 @@ async function buildRuleAnnualMarketingSolution(
   current: BrandPlanWorkspaceData,
   interview: BrandPlanMerchantInterview | null
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
-  const planningQuarters = planningQuarterSequence()
+  const planningQuarters = planningQuarterSequence(subscriptionPlanningStartDate(brand))
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
   const subscriptionStrategy = await buildSubscriptionStrategy(brand)
@@ -710,8 +811,9 @@ async function buildRuleAnnualMarketingSolution(
   const quarterlyPlans = planningQuarters.map((planningQuarter, sequenceIndex) => {
     const quarterPlan = quarterTemplates[planningQuarter.quarterIndex]
     const quarterProducts = promotionPointNames.slice(0, 4)
+    const [startYear, startMonthNumber] = planningQuarter.startMonth.split('-').map(Number)
     const monthlyFocus = [0, 1, 2].map((offset) => {
-      const date = new Date(planningQuarter.year, planningQuarter.quarterIndex * 3 + offset, 1)
+      const date = new Date(startYear, startMonthNumber - 1 + offset, 1)
       const point = quarterProducts[offset % Math.max(1, quarterProducts.length)]
       return {
         month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
@@ -726,6 +828,10 @@ async function buildRuleAnnualMarketingSolution(
     return {
       ...quarterPlan,
       quarter: planningQuarter.quarter,
+      year: planningQuarter.year,
+      startMonth: planningQuarter.startMonth,
+      endMonth: planningQuarter.endMonth,
+      periodLabel: planningQuarter.periodLabel,
       promotionPoints: quarterProducts.map((point, index) => ({
         name: point,
         rationale: index === 0 && sequenceIndex === 0 ? '优先承接当前阶段最需要讲清楚的核心产品/服务认知。' : '作为季度内容的辅助转化理由。',
@@ -743,7 +849,15 @@ async function buildRuleAnnualMarketingSolution(
       ? `未来四个季度围绕主理人确认的经营重点，结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`
       : `未来四个季度结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`,
     theme,
-    quarterlyFocus: quarterlyPlans.map((item) => ({ quarter: item.quarter, focus: item.focus, campaigns: item.campaigns })),
+    quarterlyFocus: quarterlyPlans.map((item) => ({
+      quarter: item.quarter,
+      year: item.year,
+      startMonth: item.startMonth,
+      endMonth: item.endMonth,
+      periodLabel: item.periodLabel,
+      focus: item.focus,
+      campaigns: item.campaigns,
+    })),
     quarterlyPlans,
     metrics: ['路线点击', '电话/私信咨询', '预订/下单点击', '内容发布完成率', '顾客评价与收藏'],
     subscriptionStrategy,
@@ -753,86 +867,23 @@ async function buildRuleAnnualMarketingSolution(
   }
 }
 
-async function buildQuarterMarketingSolution(
-  brand: BrandPlanBrand,
-  current: BrandPlanWorkspaceData,
-  interview: BrandPlanMerchantInterview | null,
-  body?: Record<string, unknown>
-): Promise<NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number]> {
-  const fallback = buildRuleQuarterMarketingSolution(brand, current, interview, body)
-  const llm = await callMarketingPlanLLM('quarter', buildMarketingPlanInput(brand, current, interview, body))
-  if (!llm.value) {
-    return {
-      ...fallback,
-      generationMode: 'RULE_FALLBACK',
-      llmProvider: llm.provider,
-      llmModel: llm.modelName,
-      llmError: llm.error,
-    }
-  }
-  return normalizeQuarterMarketingSolution(llm.value, fallback, llm)
-}
-
-function buildRuleQuarterMarketingSolution(
-  brand: BrandPlanBrand,
-  current: BrandPlanWorkspaceData,
-  interview: BrandPlanMerchantInterview | null,
-  body?: Record<string, unknown>
-): NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number] {
-  const now = new Date()
-  const requestedQuarter = text(body?.quarter)
-  const quarterIndex = requestedQuarter.match(/^Q[1-4]$/) ? Number(requestedQuarter.slice(1)) - 1 : Math.floor(now.getMonth() / 3)
-  const quarter = `Q${quarterIndex + 1}`
-  const annualQuarterPlan = current.annualPlan?.quarterlyPlans?.find((item) => item.quarter === quarter)
-  const annualQuarterFocus = current.annualPlan?.quarterlyFocus.find((item) => item.quarter === quarter)
-  const monthStart = quarterIndex * 3
-  const monthlyFocus = [0, 1, 2].map((offset) => {
-    const date = new Date(now.getFullYear(), monthStart + offset, 1)
-    const annualMonth = annualQuarterPlan?.monthlyFocus?.[offset]
-    return {
-      month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
-      focus: annualMonth?.focus || (offset === 0 ? '确认主推产品和内容素材' : offset === 1 ? '集中发布活动与场景内容' : '复盘数据并强化转化入口'),
-    }
-  })
-  const annualPromotionDirections = (annualQuarterPlan?.promotionPoints || []).map((point) =>
-    `围绕“${point.name}”做内容：${point.rationale || annualQuarterPlan?.strategy || '讲清楚卖点和顾客行动理由'}；行动目标：${point.customerAction}。`
-  )
-  return {
-    quarter,
-    generatedAt: new Date().toISOString(),
-    objective: annualQuarterPlan?.strategy || annualQuarterFocus?.focus || '把年度方向拆成季度可执行节奏。',
-    monthlyFocus,
-    contentDirections: [
-      ...annualPromotionDirections,
-      ...(annualQuarterPlan?.contentThemes || []).map((item) => `季度内容主题：${item}`),
-      ...primaryProducts(brand, { available: false }).slice(0, 3).map((item) => `围绕“${item}”做真实场景、卖点解释和顾客行动引导。`),
-      interviewMaterialText(interview) ? `结合主理人访谈确认内容：${interviewMaterialText(interview)}` : '',
-    ].filter(Boolean),
-    promotionPoints: annualQuarterPlan?.promotionPoints?.map((point) => ({
-      name: point.name,
-      rationale: point.rationale,
-      customerAction: point.customerAction,
-      platforms: point.platforms,
-      suggestedMonthlyPosts: point.suggestedMonthlyPosts,
-    })),
-    ...(current.researchReport?.snapshotId ? { researchSnapshotId: current.researchReport.snapshotId } : {}),
-    generationMode: 'RULE_FALLBACK',
-  }
-}
-
 async function buildPublishingMonth(
   brand: BrandPlanBrand,
   month: string,
   interview: BrandPlanMerchantInterview | null,
-  current: BrandPlanWorkspaceData
+  current: BrandPlanWorkspaceData,
+  publishingFreqOverride?: unknown
 ): Promise<NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]> {
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
-  const subscriptionStrategy = current.annualPlan?.subscriptionStrategy || await buildSubscriptionStrategy(brand)
+  const subscriptionStrategy = await buildSubscriptionStrategy(brand)
+  const overridePublishingFreq = normalizePublishingFreq(publishingFreqOverride)
+  const overrideMonthlyQuota = sumMonthlyPosts(overridePublishingFreq)
   const schedule = buildMonthlyPublishingSchedule(
     month,
-    subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
-    subscriptionStrategy.platformCoverage
+    overridePublishingFreq || subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
+    subscriptionStrategy.platformCoverage,
+    overrideMonthlyQuota || subscriptionStrategy.monthlyContentQuota
   )
   const promotionPoints = buildCalendarPromotionPoints({
     brand,
@@ -845,9 +896,10 @@ async function buildPublishingMonth(
   const creativePool = await requestCalendarCreativePool(brand, current, promotionPoints)
 
   return schedule.map((slot, index) => {
-    const product = products[index % Math.max(1, products.length)] || '招牌产品'
-    const promotionPoint = promotionPoints[index % Math.max(1, promotionPoints.length)]
+    const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, index)
+    const product = promotionPoint?.sellingPoint || products[index % Math.max(1, products.length)] || '招牌产品'
     const candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+    const sampleLinks = calendarSampleLinks(candidate)
     return {
       id: `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`,
       date: slot.date,
@@ -862,6 +914,10 @@ async function buildPublishingMonth(
       selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
       matchedTags: stringList(candidate?.matchedTags),
       matchedInspirations: stringList(candidate?.matchedInspirations),
+      sampleVideoUrl: sampleLinks.videoUrl,
+      sampleOriginalUrl: sampleLinks.originalUrl,
+      sampleThumbnailUrl: sampleLinks.thumbnailUrl,
+      sampleSourcePlatform: sampleLinks.platform,
       materialRequirements: calendarMaterialRequirements(product, candidate),
       contentLibraryGap: calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate),
     }
@@ -887,6 +943,7 @@ async function regeneratePublishingCalendarItem(
   }
   const pool = await requestCalendarCreativePool(brand, current, [point], item.id)
   const candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
+  const sampleLinks = calendarSampleLinks(candidate)
   if (!candidate) {
     return {
       ...item,
@@ -904,9 +961,37 @@ async function regeneratePublishingCalendarItem(
     selectedCreativeCandidateId: text(candidate.creativeCandidateId),
     matchedTags: stringList(candidate.matchedTags),
     matchedInspirations: stringList(candidate.matchedInspirations),
+    sampleVideoUrl: sampleLinks.videoUrl,
+    sampleOriginalUrl: sampleLinks.originalUrl,
+    sampleThumbnailUrl: sampleLinks.thumbnailUrl,
+    sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(item.product, candidate),
     contentLibraryGap: calendarContentGap(pool.contentLibraryGaps, point.id, candidate),
   }
+}
+
+function assignPromotionPointToSlot(
+  promotionPoints: CalendarPromotionPoint[],
+  slot: { platform: { slug: string } },
+  index: number
+) {
+  const matching = promotionPoints.filter((point) =>
+    !point.platforms.length || point.platforms.map(normalizePlatformSlug).includes(normalizePlatformSlug(slot.platform.slug))
+  )
+  const pool = matching.length ? matching : promotionPoints
+  if (!pool.length) {
+    return {
+      id: `fallback_${index}`,
+      goal: '提升本地顾客认知和行动',
+      sellingPoint: '招牌产品或核心服务',
+      customerAction: '收藏、咨询、点击路线、预订或下单',
+      expectedPublishCount: 1,
+      platforms: [slot.platform.slug],
+      targetPublishWindow: { start: '', end: '' },
+    }
+  }
+  const weighted = pool.flatMap((point) => Array.from({ length: Math.max(1, point.expectedPublishCount) }, () => point))
+  return weighted[index % Math.max(1, weighted.length)]
 }
 
 type CalendarPromotionPoint = {
@@ -928,8 +1013,10 @@ function buildCalendarPromotionPoints(input: {
   schedule: Array<{ date: string; platform: { slug: string; label: string } }>
 }): CalendarPromotionPoint[] {
   const quarter = quarterForMonth(input.month)
-  const quarterPlan = input.current.quarterlyPlans?.find((plan) => plan.quarter === quarter)
-  const annualQuarterPlan = input.current.annualPlan?.quarterlyPlans?.find((plan) => plan.quarter === quarter)
+  const quarterPlan = findPlanForMonth(input.current.quarterlyPlans || [], input.month)
+    || input.current.quarterlyPlans?.find((plan) => plan.quarter === quarter)
+  const annualQuarterPlan = findPlanForMonth(input.current.annualPlan?.quarterlyPlans || [], input.month)
+    || input.current.annualPlan?.quarterlyPlans?.find((plan) => plan.quarter === quarter)
   const structuredPoints = [
     ...(quarterPlan?.promotionPoints || []),
     ...(annualQuarterPlan?.promotionPoints || []).map((point) => ({
@@ -1002,6 +1089,12 @@ function quarterForMonth(month: string) {
   const [, monthNumber] = month.split('-').map(Number)
   const index = Number.isFinite(monthNumber) ? Math.floor((monthNumber - 1) / 3) : Math.floor(new Date().getMonth() / 3)
   return `Q${Math.min(4, Math.max(1, index + 1))}`
+}
+
+function findPlanForMonth<T extends { startMonth?: string; endMonth?: string }>(plans: T[], month: string) {
+  return plans.find((plan) =>
+    plan.startMonth && plan.endMonth && month >= plan.startMonth && month <= plan.endMonth
+  )
 }
 
 async function requestCalendarCreativePool(
@@ -1096,6 +1189,17 @@ function calendarSampleHit(product: string, candidate: Record<string, unknown> |
   return opening ? `标题：${title}。开头：${opening}` : `标题：${title}。开头：别只看菜单，先看这份为什么常被点。`
 }
 
+function calendarSampleLinks(candidate: Record<string, unknown> | null) {
+  const sourceVideo = objectValue(candidate?.sourceVideo)
+  const sourcePost = objectValue(candidate?.sourcePost)
+  return {
+    videoUrl: text(sourceVideo.videoUrl || sourceVideo.mediaUrl || sourceVideo.uploadedVideoUrl),
+    originalUrl: text(sourceVideo.sourceUrl || sourcePost.sourceUrl),
+    thumbnailUrl: text(sourceVideo.thumbnailUrl || sourcePost.coverUrl),
+    platform: text(sourceVideo.platform || sourcePost.platform),
+  }
+}
+
 function calendarMaterialRequirements(product: string, candidate: Record<string, unknown> | null) {
   const assetNeeds = stringList(candidate?.assetNeeds)
   return assetNeeds.length ? assetNeeds : [`补充“${product}”真实门店画面或顾客场景素材。`]
@@ -1170,6 +1274,10 @@ function materialRequirementSpecification(item: BrandPlanCalendarItem) {
     sampleHit: item.sampleHit,
     matchedTags: item.matchedTags || [],
     matchedInspirations: item.matchedInspirations || [],
+    sampleVideoUrl: item.sampleVideoUrl,
+    sampleOriginalUrl: item.sampleOriginalUrl,
+    sampleThumbnailUrl: item.sampleThumbnailUrl,
+    sampleSourcePlatform: item.sampleSourcePlatform,
     source: 'brand_plan_publishing_calendar',
     quantity: 1,
     aspectRatio: item.contentType === '短视频' ? '9:16' : '1:1',
@@ -1204,30 +1312,36 @@ function buildMarketingPlanInput(
 
 async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<string, unknown>) {
   const schemaInstruction = scope === 'annual'
-    ? `返回 JSON 对象，字段必须为：goal(string), theme(string), quarterlyFocus(array，每项含 quarter/focus/campaigns), quarterlyPlans(array，必须含连续四个季度；quarter 取 Q1-Q4；每项含 quarter, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。`
-    : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。`
-  const prompt = [
-    '你是 AMC-Kanban 的本地商家营销方案策划师。',
-    '请基于输入里的品牌信息、门店信息、品牌主张、Growth 数据调研、订阅运营策略，生成可执行的营销方案。',
-    '要求：接地气，适合普通餐饮/本地服务老板；不要写空泛品牌大词；必须受订阅平台和发布频次约束；不要虚构不存在的产品或门店。',
-    '品牌营销方案必须能直接支撑季度方案和月度发布日历：每个季度都要写清楚推广策略、重点推广点、适用平台、建议发布次数、顾客行动和月度拆解。',
-    '如果输入里有 planningWindow.quarters，必须按该顺序和月份生成未来四个季度；不要默认从 Q1 开始。',
+    ? `返回 JSON 对象，字段必须为：goal(string), theme(string), quarterlyFocus(array，每项含 quarter, year, startMonth, endMonth, periodLabel, focus, campaigns), quarterlyPlans(array，必须且只能含 planningWindow.quarters 中连续四个有效周期；每项含 quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。`
+    : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), year(number), startMonth(string), endMonth(string), periodLabel(string), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。`
+  const promptTemplate = await getPromptTemplate('marketing_plan_generation')
+  const prompt = renderPromptTemplate(promptTemplate?.template || '', {
     schemaInstruction,
-    '只输出合法 JSON，不要 Markdown，不要解释。',
-    JSON.stringify(input),
-  ].join('\n\n')
-  const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 4200 : 2200, {
-    temperature: 0.35,
-    jsonMode: true,
-    deadlineMs: 45000,
-    attemptTimeoutMs: [20000, 25000],
-    maxAttempts: 2,
+    inputJson: JSON.stringify(input),
   })
-  return {
-    provider: result.provider,
-    modelName: result.modelName,
-    error: result.error,
-    value: parseJsonObject(result.text),
+  try {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 4200 : 2200, {
+      temperature: 0.35,
+      jsonMode: true,
+      deadlineMs: 45000,
+      attemptTimeoutMs: [20000, 25000],
+      maxAttempts: 2,
+      allowDefaultFallback: false,
+      allowSystemFallback: false,
+    })
+    return {
+      provider: result.provider,
+      modelName: result.modelName,
+      error: result.error,
+      value: parseJsonObject(result.text),
+    }
+  } catch (error) {
+    return {
+      provider: '',
+      modelName: '',
+      error: error instanceof Error ? error.message : 'marketing_plan_llm_exception',
+      value: null,
+    }
   }
 }
 
@@ -1236,15 +1350,30 @@ function normalizeAnnualMarketingSolution(
   fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
   llm: { provider: string; modelName: string; error?: string }
 ): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
-  const quarterlyFocus = arrayValue(value.quarterlyFocus)
+  const rawQuarterlyFocus = arrayValue(value.quarterlyFocus)
     .map((item) => objectValue(item))
     .map((item) => ({
       quarter: text(item.quarter) || 'Q1',
+      year: Number(item.year) || undefined,
+      startMonth: text(item.startMonth) || undefined,
+      endMonth: text(item.endMonth) || undefined,
+      periodLabel: text(item.periodLabel) || undefined,
       focus: text(item.focus),
       campaigns: stringList(item.campaigns),
     }))
     .filter((item) => item.focus)
   const quarterlyPlans = normalizeAnnualQuarterlyPlans(value.quarterlyPlans, fallback.quarterlyPlans || [])
+  const quarterlyFocus = quarterlyPlans.length
+    ? quarterlyPlans.map((item) => ({
+      quarter: item.quarter,
+      year: item.year,
+      startMonth: item.startMonth,
+      endMonth: item.endMonth,
+      periodLabel: item.periodLabel,
+      focus: item.focus,
+      campaigns: item.campaigns,
+    }))
+    : rawQuarterlyFocus
   return {
     ...fallback,
     generatedAt: new Date().toISOString(),
@@ -1291,6 +1420,10 @@ function normalizeAnnualQuarterlyPlans(
         .filter((month) => month.month && month.focus)
       return {
         quarter,
+        year: Number(item.year) || fallbackItem?.year,
+        startMonth: text(item.startMonth) || fallbackItem?.startMonth,
+        endMonth: text(item.endMonth) || fallbackItem?.endMonth,
+        periodLabel: text(item.periodLabel) || fallbackItem?.periodLabel || quarter,
         strategy: text(item.strategy) || fallbackItem?.strategy || '',
         focus: text(item.focus) || fallbackItem?.focus || '',
         promotionPoints: promotionPoints.length ? promotionPoints : fallbackItem?.promotionPoints || [],
@@ -1302,40 +1435,27 @@ function normalizeAnnualQuarterlyPlans(
     .filter((item) => /^Q[1-4]$/.test(item.quarter) && item.focus)
   if (!fallback?.length) return parsed
   const parsedByQuarter = new Map(parsed.map((item) => [item.quarter, item]))
-  return fallback.map((fallbackItem) => parsedByQuarter.get(fallbackItem.quarter) || fallbackItem)
+  return fallback.map((fallbackItem) => {
+    const parsedItem = parsedByQuarter.get(fallbackItem.quarter)
+    if (!parsedItem) return fallbackItem
+    return {
+      ...parsedItem,
+      year: fallbackItem.year,
+      startMonth: fallbackItem.startMonth,
+      endMonth: fallbackItem.endMonth,
+      periodLabel: fallbackItem.periodLabel || parsedItem.periodLabel || parsedItem.quarter,
+      monthlyFocus: parsedItem.monthlyFocus.length ? parsedItem.monthlyFocus : fallbackItem.monthlyFocus,
+    }
+  })
 }
 
-function normalizeQuarterMarketingSolution(
-  value: Record<string, unknown>,
-  fallback: NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number],
-  llm: { provider: string; modelName: string; error?: string }
-): NonNullable<BrandPlanWorkspaceData['quarterlyPlans']>[number] {
-  const monthlyFocus = arrayValue(value.monthlyFocus)
-    .map((item) => objectValue(item))
-    .map((item) => ({ month: text(item.month), focus: text(item.focus) }))
-    .filter((item) => item.month && item.focus)
-  const promotionPoints = arrayValue(value.promotionPoints)
-    .map((item) => objectValue(item))
-    .map((item) => ({
-      name: text(item.name),
-      rationale: text(item.rationale),
-      customerAction: text(item.customerAction) || '收藏、咨询、点击路线、预订或下单',
-      platforms: stringList(item.platforms),
-      suggestedMonthlyPosts: clampPostCount(Number(item.suggestedMonthlyPosts) || 1),
-    }))
-    .filter((item) => item.name)
-  return {
-    ...fallback,
-    generatedAt: new Date().toISOString(),
-    quarter: text(value.quarter) || fallback.quarter,
-    objective: text(value.objective) || fallback.objective,
-    monthlyFocus: monthlyFocus.length ? monthlyFocus : fallback.monthlyFocus,
-    contentDirections: stringList(value.contentDirections).length ? stringList(value.contentDirections) : fallback.contentDirections,
-    promotionPoints: promotionPoints.length ? promotionPoints : fallback.promotionPoints,
-    generationMode: 'LLM',
-    llmProvider: llm.provider,
-    llmModel: llm.modelName,
-  }
+function marketingPlanPeriod(plan: NonNullable<BrandPlanWorkspaceData['annualPlan']>) {
+  const quarters = plan.quarterlyPlans || []
+  const first = quarters[0]
+  const last = quarters[quarters.length - 1]
+  if (first?.startMonth && last?.endMonth) return `${first.startMonth}_${last.endMonth}`
+  if (first?.periodLabel && last?.periodLabel) return `${first.periodLabel}_${last.periodLabel}`
+  return 'brand_marketing_plan'
 }
 
 async function saveMarketingSolutionVersion(input: {
@@ -1411,22 +1531,6 @@ function interviewMaterialText(interview: BrandPlanMerchantInterview | null) {
   return (interview.rawNotes || answerText).replace(/\s+/g, ' ').slice(0, 120)
 }
 
-async function readGrowthFacts(brand: BrandPlanBrand) {
-  try {
-    const growthBrandKey = await ensureGrowthMerchantForBrand(brand)
-    const data = await readGrowthMerchantData(growthBrandKey)
-    return {
-      available: true,
-      market: text(data?.profile?.market || data?.profile?.area),
-      positioning: text(data?.brandStory?.positioning || data?.profile?.diagnosis),
-      growthPlan: text(data?.growthPlan?.summary || data?.growthPlan?.implementation_scope),
-      menuItems: arrayValue(data?.brandStory?.signature_dishes),
-    }
-  } catch {
-    return { available: false }
-  }
-}
-
 function serializeBrandSummary(brand: BrandPlanBrand) {
   return {
     id: brand.id,
@@ -1457,6 +1561,92 @@ function normalizeBrandPlan(value: unknown): BrandPlanWorkspaceData {
   return value as BrandPlanWorkspaceData
 }
 
+function ensurePresentationTheme(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData
+): BrandMarketingPlanPresentationTheme {
+  const colorSource = [
+    text(brand.knowledge?.brandImage),
+    text(current.researchReport?.brandImage),
+    text(current.annualPlan?.theme),
+    text(brand.name),
+  ].filter(Boolean).join('|') || brand.id
+  const colorSourceKey = createHash('sha256').update(colorSource).digest('hex').slice(0, 16)
+  if (current.presentationTheme?.colorSourceKey === colorSourceKey) {
+    return current.presentationTheme
+  }
+
+  const palettes = [
+    {
+      paletteId: 'fresh-local',
+      paletteName: '清爽本地生活',
+      primary: '#047857',
+      secondary: '#0f766e',
+      accent: '#f59e0b',
+      background: '#f8fafc',
+      surface: '#ffffff',
+      text: '#0f172a',
+      muted: '#64748b',
+      decoration: 'fresh' as const,
+    },
+    {
+      paletteId: 'warm-service',
+      paletteName: '温暖服务感',
+      primary: '#b45309',
+      secondary: '#be123c',
+      accent: '#2563eb',
+      background: '#fffaf5',
+      surface: '#ffffff',
+      text: '#1f2937',
+      muted: '#78716c',
+      decoration: 'service' as const,
+    },
+    {
+      paletteId: 'premium-night',
+      paletteName: '精致夜间感',
+      primary: '#312e81',
+      secondary: '#0f766e',
+      accent: '#eab308',
+      background: '#f8fafc',
+      surface: '#ffffff',
+      text: '#111827',
+      muted: '#64748b',
+      decoration: 'premium' as const,
+    },
+    {
+      paletteId: 'festival-campaign',
+      paletteName: '活动推广感',
+      primary: '#dc2626',
+      secondary: '#7c3aed',
+      accent: '#f97316',
+      background: '#fff7ed',
+      surface: '#ffffff',
+      text: '#1e293b',
+      muted: '#64748b',
+      decoration: 'festival' as const,
+    },
+    {
+      paletteId: 'editorial-calm',
+      paletteName: '清晰策划感',
+      primary: '#2563eb',
+      secondary: '#059669',
+      accent: '#d97706',
+      background: '#f8fafc',
+      surface: '#ffffff',
+      text: '#0f172a',
+      muted: '#64748b',
+      decoration: 'editorial' as const,
+    },
+  ]
+  const digest = createHash('sha256').update(colorSourceKey).digest('hex')
+  const index = parseInt(digest.slice(0, 8), 16) % palettes.length
+  return {
+    generatedAt: new Date().toISOString(),
+    colorSourceKey,
+    ...palettes[index],
+  }
+}
+
 async function buildSubscriptionStrategy(brand: BrandPlanBrand) {
   const subscriptions = Array.isArray(brand.subscriptions) ? brand.subscriptions : []
   const active = subscriptions.find((subscription: (typeof subscriptions)[number]) =>
@@ -1484,18 +1674,26 @@ function platformCoverageForPlan(planId: string) {
 }
 
 function monthlyContentQuotaForPlan(planId: string) {
-  if (planId === 'essential') return 12
-  if (planId === 'booster') return 24
+  if (planId === 'essential') return 20
+  if (planId === 'booster') return 38
   return 0
 }
 
 function publishingFreqForPlan(planId: string, platforms: string[]): PublishingFreq | null {
-  const monthlyQuota = monthlyContentQuotaForPlan(planId)
-  if (!monthlyQuota || !platforms.length) return null
+  if (!platforms.length) return null
+  const monthlyByPlan = planId === 'booster'
+    ? { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
+    : planId === 'essential'
+      ? { instagram: 12, tiktok: 6, google_business: 2 }
+      : {}
+  const normalizedPlatforms = platforms.map(normalizePlatformSlug).filter(Boolean)
+  const configuredTotal = normalizedPlatforms.reduce((sum, platform) =>
+    sum + (monthlyByPlan[platform as keyof typeof monthlyByPlan] || 0), 0)
+  if (!configuredTotal) return null
   return {
-    platforms: Object.fromEntries(platforms.map((platform) => [
+    platforms: Object.fromEntries(normalizedPlatforms.map((platform) => [
       platform,
-      { postsPerWeek: Math.max(1, Math.round((monthlyQuota / platforms.length) * 7 / 30)) },
+      { postsPerMonth: monthlyByPlan[platform as keyof typeof monthlyByPlan] || 1 },
     ])),
   }
 }
@@ -1533,7 +1731,7 @@ const MARKETING_PLAN_PLATFORMS = [
   { slug: 'xiaohongshu', label: 'Xiaohongshu' },
 ]
 
-function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackPlatforms: string[] = []) {
+function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackPlatforms: string[] = [], monthlyQuota = 0) {
   const [year, monthNumber] = month.split('-').map(Number)
   const daysInMonth = new Date(year, monthNumber, 0).getDate()
   const publishingFreq = normalizePublishingFreq(value)
@@ -1543,7 +1741,10 @@ function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackP
     : fallbackPlatforms.length
       ? fallbackPlatforms.map((slug) => platformForSlug(slug))
       : MARKETING_PLAN_PLATFORMS
-  const postCount = resolveMonthlyPostCount(publishingFreq, daysInMonth)
+  const postCount = monthlyQuota > 0
+    ? clampPostCount(monthlyQuota)
+    : resolveMonthlyPostCount(publishingFreq, daysInMonth)
+  const platformSlots = buildPlatformSlotSequence(platforms, postCount, publishingFreq)
   const firstDay = Math.min(3, daysInMonth)
   const lastDay = Math.max(firstDay, daysInMonth - 2)
 
@@ -1553,13 +1754,60 @@ function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackP
       : Math.min(daysInMonth, Math.round(firstDay + ((lastDay - firstDay) * index) / (postCount - 1)))
     return {
       date: `${month}-${String(day).padStart(2, '0')}`,
-      platform: platforms[index % platforms.length],
+      platform: platformSlots[index % Math.max(1, platformSlots.length)] || platforms[index % platforms.length],
     }
   })
 }
 
+function buildPlatformSlotSequence(
+  platforms: Array<{ slug: string; label: string }>,
+  postCount: number,
+  publishingFreq: PublishingFreq | null
+) {
+  if (!platforms.length) return MARKETING_PLAN_PLATFORMS.slice(0, 1)
+  const weights = new Map<string, number>()
+  for (const platform of platforms) {
+    const cfg = objectValue(publishingFreq?.platforms?.[platform.slug])
+    const configuredWeight = positiveNumber(cfg.postsPerMonth) || positiveNumber(cfg.postsPerWeek) || positiveNumber(cfg.postsPerDay)
+    if (configuredWeight > 0) weights.set(platform.slug, configuredWeight)
+  }
+  if (!weights.size) {
+    const hasXiaohongshu = platforms.some((platform) => platform.slug === 'xiaohongshu')
+    const defaults = hasXiaohongshu
+      ? { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
+      : { instagram: 12, tiktok: 6, google_business: 2 }
+    for (const platform of platforms) weights.set(platform.slug, defaults[platform.slug as keyof typeof defaults] || 1)
+  }
+  const totalWeight = Array.from(weights.values()).reduce((sum, value) => sum + value, 0) || platforms.length
+  const counts = platforms.map((platform) => ({
+    platform,
+    count: Math.max(0, Math.floor((weights.get(platform.slug) || 1) * postCount / totalWeight)),
+  }))
+  let allocated = counts.reduce((sum, item) => sum + item.count, 0)
+  const ranked = [...counts].sort((a, b) => (weights.get(b.platform.slug) || 1) - (weights.get(a.platform.slug) || 1))
+  for (let index = 0; allocated < postCount; index += 1) {
+    ranked[index % ranked.length].count += 1
+    allocated += 1
+  }
+  const slots: Array<{ slug: string; label: string }> = []
+  let cursor = 0
+  while (slots.length < postCount && counts.some((item) => item.count > 0)) {
+    const item = counts[cursor % counts.length]
+    if (item.count > 0) {
+      slots.push(item.platform)
+      item.count -= 1
+    }
+    cursor += 1
+  }
+  return slots.length ? slots : platforms
+}
+
 function resolveMonthlyPostCount(publishingFreq: PublishingFreq | null, daysInMonth: number) {
   if (!publishingFreq) return 7
+  const platformMonthlyTotal = Object.values(publishingFreq.platforms || {})
+    .reduce((sum, cfg) => sum + positiveNumber(cfg.postsPerMonth), 0)
+  if (platformMonthlyTotal > 0) return clampPostCount(platformMonthlyTotal)
+
   const platformWeeklyTotal = Object.values(publishingFreq.platforms || {})
     .reduce((sum, cfg) => sum + positiveNumber(cfg.postsPerWeek), 0)
   if (platformWeeklyTotal > 0) return clampPostCount(Math.ceil(platformWeeklyTotal * daysInMonth / 7))
@@ -1584,6 +1832,7 @@ function normalizePublishingFreq(value: unknown): PublishingFreq | null {
       .map(({ slug, cfg }) => [slug, {
         postsPerDay: positiveNumber(cfg.postsPerDay) || undefined,
         postsPerWeek: positiveNumber(cfg.postsPerWeek) || undefined,
+        postsPerMonth: positiveNumber(cfg.postsPerMonth) || undefined,
         preferredHours: arrayValue(cfg.preferredHours).map((hour) => Number(hour)).filter((hour) => Number.isFinite(hour)),
       }])
   )
@@ -1615,22 +1864,44 @@ function positiveNumber(value: unknown) {
 }
 
 function clampPostCount(value: number) {
-  return Math.min(31, Math.max(1, value))
+  return Math.min(90, Math.max(1, value))
 }
 
-function planningQuarterSequence(now = new Date()) {
-  const currentQuarterIndex = Math.floor(now.getMonth() / 3)
-  const nextQuarterStart = new Date(now.getFullYear(), (currentQuarterIndex + 1) * 3, 1)
-  const remainingMs = nextQuarterStart.getTime() - now.getTime()
-  const oneMonthMs = 30 * 24 * 60 * 60 * 1000
-  const startOffset = remainingMs < oneMonthMs ? 1 : 0
+function sumMonthlyPosts(publishingFreq: PublishingFreq | null) {
+  if (!publishingFreq) return 0
+  return Object.values(publishingFreq.platforms || {})
+    .reduce((sum, cfg) => sum + positiveNumber(cfg.postsPerMonth), 0)
+}
+
+function subscriptionPlanningStartDate(brand: BrandPlanBrand) {
+  const subscription = Array.isArray(brand.subscriptions) ? brand.subscriptions[0] : null
+  const start = subscription?.contractStartDate || subscription?.createdAt || new Date()
+  return firstCompleteNaturalMonth(start)
+}
+
+function firstCompleteNaturalMonth(date: Date) {
+  const source = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date()
+  const monthOffset = source.getDate() <= 1 ? 0 : 1
+  return new Date(source.getFullYear(), source.getMonth() + monthOffset, 1)
+}
+
+function planningQuarterSequence(startDate = new Date()) {
   return [0, 1, 2, 3].map((offset) => {
-    const absoluteQuarter = currentQuarterIndex + startOffset + offset
-    const quarterIndex = absoluteQuarter % 4
+    const absoluteMonth = startDate.getMonth() + offset * 3
+    const periodStart = new Date(startDate.getFullYear(), absoluteMonth, 1)
+    const periodEnd = new Date(startDate.getFullYear(), absoluteMonth + 2, 1)
+    const quarterIndex = Math.floor(periodStart.getMonth() / 3)
+    const year = periodStart.getFullYear()
+    const startMonth = `${periodStart.getFullYear()}-${String(periodStart.getMonth() + 1).padStart(2, '0')}`
+    const endMonth = `${periodEnd.getFullYear()}-${String(periodEnd.getMonth() + 1).padStart(2, '0')}`
+    const quarter = `Q${quarterIndex + 1}`
     return {
-      quarter: `Q${quarterIndex + 1}`,
+      quarter,
       quarterIndex,
-      year: now.getFullYear() + Math.floor(absoluteQuarter / 4),
+      year,
+      startMonth,
+      endMonth,
+      periodLabel: `${year} ${quarter}`,
     }
   })
 }
@@ -1691,10 +1962,6 @@ function stableJson(value: unknown): string {
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
-}
-
-function isGooglePlatform(platform: string) {
-  return ['google', 'google_maps', 'gbp', 'gmb', 'google_business_profile'].includes(platform.toLowerCase())
 }
 
 export class BrandPlanError extends Error {

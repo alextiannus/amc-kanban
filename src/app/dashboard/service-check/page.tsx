@@ -31,8 +31,8 @@ const CHECK_SECTIONS = [
     title: '内容与报告检查',
     icon: FileText,
     items: [
-      'Essential 每月至少 12 次 Instagram / TikTok 图文内容，并提供月度舆情报告。',
-      'Booster 至少 24 次图文和 12 次精品视频，并提供每周舆情报告。',
+      'Essential 每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护，并提供月度舆情报告。',
+      'Booster 每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护，并提供每周舆情报告。',
       'Google Map 配置、评论监控和打分优化按套餐范围执行。',
       '所有内容需完成事实、价格、活动规则和品牌适配检查后再发布。',
     ],

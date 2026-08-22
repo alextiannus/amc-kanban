@@ -62,7 +62,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
     suitableFor: '刚开始做海外社媒、内容断更、Google Map 信息不完整、评分和评论无人管理的本地生活商家',
     services: [
-      '每月至少 12 次 Instagram / TikTok 图文内容发布',
+      '每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护',
       'Google Map 配置、评论监控与打分优化',
       '中英双语内容与远程交付',
       '可安排 4 位博主探店',
@@ -76,7 +76,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         'Instagram 做品牌展示号：招牌产品、门店环境、套餐、节日活动、顾客场景，并配置 WhatsApp/预约/点餐入口。',
         'TikTok 做轻量曝光号：新品、优惠、门店氛围、活动短内容，持续触达第一次看到你的潜在用户。',
         'Google Map 做最后一公里转化：分类、营业时间、菜单、照片、电话、链接、评论回复持续维护。',
-        '内容建议按 8 条品牌/产品内容 + 4 条活动/场景内容安排。'
+        '内容创建和发布节奏默认按每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 安排，可在品牌计划页按月调整。'
       ],
       reporting: '每月舆情报告：评论、评分变化、热门内容、客户反馈、下月优化建议。',
       bestFor: [
@@ -90,7 +90,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '团队配置：AI 内容创作官 · AI 市场调研官 · 品牌主理人',
       '适合：刚开始做海外社媒、内容断更、Google Map 信息不完整、评分和评论无人管理的商家',
       '服务内容：',
-      '1. 每月至少 12 次 Instagram / TikTok 图文内容发布',
+      '1. 每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护',
       '2. Google Map 配置、评论监控与打分优化',
       '3. 中英双语内容，远程交付',
       '4. 可安排 4 位博主探店',
@@ -110,7 +110,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       'Instagram、TikTok、小红书等自媒体内容策划',
       '流量增长和运营活动策划',
       'Google Map 配置、评论监控与打分优化',
-      '至少 24 次图文和 12 次精品视频',
+      '每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护',
       '专业素材采集',
       '10 位博主探店与每周舆情报告'
     ],
@@ -139,7 +139,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '适合：已有基础门店，准备冲新品、新店、节日档期、短期声量或线上口碑修复的商家',
       '服务内容：',
       '1. 定制增长策划案',
-      '2. 至少 24 次图文和 12 次精品视频',
+      '2. 每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护',
       '3. Instagram / TikTok / 小红书等自媒体内容策划与运营活动策划',
       '4. Google Map 配置、评论监控与打分优化',
       '5. 专业素材采集',
@@ -261,8 +261,8 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     key: 'frequency',
     label: '内容产出',
     values: {
-      essential: '每月不少于 12 次图文发布',
-      booster: '至少 24 次图文和 12 次精品视频',
+      essential: '每月 12 条 Instagram、6 条 TikTok、2 条 Google Business',
+      booster: '每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business',
     },
   },
   {

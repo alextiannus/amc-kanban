@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { BrandPlanError } from '@/lib/brand-plan/service'
-import { generateAnnualMarketingPlan, generateQuarterMarketingPlan } from '@/lib/marketingPlanBuilder'
+import { generateAnnualMarketingPlan } from '@/lib/marketingPlanBuilder'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 
 type Params = { params: Promise<{ id: string }> }
@@ -17,10 +17,11 @@ export async function POST(request: Request, { params }: Params) {
 
   const body = await request.json().catch(() => ({}))
   const scope = body?.scope === 'quarter' ? 'quarter' : 'annual'
+  if (scope === 'quarter') {
+    return NextResponse.json({ error: 'quarter_plan_generation_removed_use_brand_marketing_plan' }, { status: 410 })
+  }
   try {
-    const data = scope === 'quarter'
-      ? await generateQuarterMarketingPlan({ brandId: id, body })
-      : await generateAnnualMarketingPlan({ brandId: id, body })
+    const data = await generateAnnualMarketingPlan({ brandId: id, body })
     return NextResponse.json(data)
   } catch (error) {
     if (error instanceof BrandPlanError) {

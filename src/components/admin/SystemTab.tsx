@@ -43,6 +43,19 @@ export interface LLMConfigRecord {
   updatedAt: string
 }
 
+export interface PromptTemplateRecord {
+  id: string
+  taskKey: string
+  name: string
+  description: string | null
+  template: string
+  variables: string[]
+  isEnabled: boolean
+  updatedById: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 type ModelTaskRouteRecord = {
   task: string
   executionDomain: 'amc-content' | 'amc-kanban'
@@ -109,6 +122,9 @@ interface SystemTabProps {
   llmConfigs: LLMConfigRecord[]
   llmConfigsLoading: boolean
   onFetchLLMConfigs: () => Promise<void>
+  promptTemplates: PromptTemplateRecord[]
+  promptTemplatesLoading: boolean
+  onFetchPromptTemplates: () => Promise<void>
 }
 
 export default function SystemTab({
@@ -121,15 +137,30 @@ export default function SystemTab({
   onFetchSystemLogs,
   llmConfigs,
   llmConfigsLoading,
-  onFetchLLMConfigs
+  onFetchLLMConfigs,
+  promptTemplates,
+  promptTemplatesLoading,
+  onFetchPromptTemplates
 }: SystemTabProps) {
-  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'ai' | 'postfast' | 'smtp' | 'scheduler' | 'templates' | 'direct_oauth' | ''>('llm')
+  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'prompts' | 'ai' | 'postfast' | 'smtp' | 'scheduler' | 'templates' | 'direct_oauth' | ''>('llm')
   
   // LLM Config inner states
   const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
   const [editingLLMConfig, setEditingLLMConfig] = useState<LLMConfigRecord | null>(null)
   const [savingLLMConfig, setSavingLLMConfig] = useState(false)
   const [llmFormError, setLlmFormError] = useState<string | null>(null)
+  const [promptModalOpen, setPromptModalOpen] = useState(false)
+  const [editingPrompt, setEditingPrompt] = useState<PromptTemplateRecord | null>(null)
+  const [savingPrompt, setSavingPrompt] = useState(false)
+  const [promptFormError, setPromptFormError] = useState<string | null>(null)
+  const [promptForm, setPromptForm] = useState({
+    taskKey: '',
+    name: '',
+    description: '',
+    template: '',
+    variablesStr: '',
+    isEnabled: true,
+  })
 
   // MiniMax TTS test
   const [testingTts, setTestingTts] = useState(false)
@@ -381,6 +412,104 @@ export default function SystemTab({
     }
   }
 
+  const handleOpenNewPrompt = () => {
+    setEditingPrompt(null)
+    setPromptForm({
+      taskKey: '',
+      name: '',
+      description: '',
+      template: '',
+      variablesStr: 'schemaInstruction, inputJson',
+      isEnabled: true,
+    })
+    setPromptFormError(null)
+    setPromptModalOpen(true)
+  }
+
+  const handleOpenEditPrompt = (template: PromptTemplateRecord) => {
+    setEditingPrompt(template)
+    setPromptForm({
+      taskKey: template.taskKey,
+      name: template.name,
+      description: template.description || '',
+      template: template.template,
+      variablesStr: (template.variables || []).join(', '),
+      isEnabled: template.isEnabled,
+    })
+    setPromptFormError(null)
+    setPromptModalOpen(true)
+  }
+
+  const handleSavePrompt = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSavingPrompt(true)
+    setPromptFormError(null)
+    try {
+      const variables = promptForm.variablesStr
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean)
+      const body = {
+        taskKey: promptForm.taskKey,
+        name: promptForm.name,
+        description: promptForm.description,
+        template: promptForm.template,
+        variables,
+        isEnabled: promptForm.isEnabled,
+      }
+      const res = await fetch(editingPrompt ? `/api/admin/prompt-templates/${editingPrompt.id}` : '/api/admin/prompt-templates', {
+        method: editingPrompt ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPromptFormError(data.error || 'Prompt 保存失败')
+        return
+      }
+      setPromptModalOpen(false)
+      setEditingPrompt(null)
+      await onFetchPromptTemplates()
+      await onFetchSystemLogs()
+    } catch (error) {
+      console.error(error)
+      setPromptFormError('网络错误，请稍后重试')
+    } finally {
+      setSavingPrompt(false)
+    }
+  }
+
+  const handleTogglePrompt = async (template: PromptTemplateRecord) => {
+    try {
+      const res = await fetch(`/api/admin/prompt-templates/${template.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isEnabled: !template.isEnabled }),
+      })
+      if (res.ok) {
+        await onFetchPromptTemplates()
+        await onFetchSystemLogs()
+      }
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const handleDeletePrompt = async (template: PromptTemplateRecord) => {
+    if (!confirm(`确定删除 Prompt「${template.name}」吗？`)) return
+    try {
+      const res = await fetch(`/api/admin/prompt-templates/${template.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        await onFetchPromptTemplates()
+        await onFetchSystemLogs()
+      } else {
+        alert('删除失败')
+      }
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
   const handleDeleteLLM = async (id: string) => {
     if (!confirm('确定要删除这个大模型配置吗？此操作不可撤销。')) return
     try {
@@ -409,6 +538,9 @@ export default function SystemTab({
         setModelTaskRoutes(Array.isArray(data.items) ? data.items : [])
         setModelTaskServices(data.services || {})
       }).catch(() => undefined)
+    }
+    if (activeAccordion === 'prompts') {
+      void onFetchPromptTemplates()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccordion])
@@ -579,7 +711,87 @@ export default function SystemTab({
           )}
         </div>
 
-        {/* Section 2: AI Keys */}
+        {/* Section 2: Prompt templates */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setActiveAccordion(activeAccordion === 'prompts' ? '' : 'prompts')}
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
+          >
+            <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+              <MessageSquare size={15} className="text-violet-500" />
+              <span>Kanban Prompt 管理</span>
+            </span>
+            <span className="text-[10px] font-bold text-violet-600 bg-violet-50 dark:bg-violet-950/20 px-2.5 py-0.5 rounded-full border border-violet-100 dark:border-violet-900/30">
+              {promptTemplates.length} 个 Prompt
+            </span>
+          </button>
+
+          {activeAccordion === 'prompts' && (
+            <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+              <div className="flex items-start justify-between gap-4 pt-2">
+                <p className="max-w-3xl text-xs text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
+                  管理 AMC-Kanban 调用 LLM 时使用的 Prompt。品牌营销方案使用 <span className="font-mono text-violet-600">marketing_plan_generation</span>，保存后下一次生成即生效。
+                </p>
+                <button
+                  type="button"
+                  onClick={handleOpenNewPrompt}
+                  className="inline-flex items-center gap-1 bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm cursor-pointer"
+                >
+                  <Plus size={12} />
+                  <span>新增 Prompt</span>
+                </button>
+              </div>
+
+              {promptTemplatesLoading ? (
+                <div className="p-8 text-center text-xs text-slate-450">加载 Prompt 中...</div>
+              ) : promptTemplates.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl">
+                  暂无 Prompt 模板。
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {promptTemplates.map((template) => (
+                    <div key={template.id} className={`rounded-xl border p-4 bg-slate-50/60 dark:bg-slate-950/20 ${template.isEnabled ? 'border-slate-200 dark:border-slate-800' : 'border-slate-150 opacity-60 dark:border-slate-850'}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-900 dark:text-white">{template.name}</p>
+                          <p className="mt-0.5 font-mono text-[9px] text-violet-600 truncate">{template.taskKey}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePrompt(template)}
+                          className={`shrink-0 rounded-lg border px-2 py-1 text-[9px] font-black ${template.isEnabled ? 'border-emerald-100 bg-emerald-50 text-emerald-650' : 'border-slate-200 bg-slate-100 text-slate-500'}`}
+                        >
+                          {template.isEnabled ? '启用' : '停用'}
+                        </button>
+                      </div>
+                      {template.description && (
+                        <p className="mt-2 line-clamp-2 text-[11px] font-medium leading-relaxed text-slate-500 dark:text-slate-400">{template.description}</p>
+                      )}
+                      <pre className="mt-3 max-h-28 overflow-hidden whitespace-pre-wrap rounded-lg border border-slate-200 bg-white p-3 text-[10px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+                        {template.template}
+                      </pre>
+                      <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                        <div className="flex flex-wrap gap-1">
+                          {(template.variables || []).map(variable => (
+                            <span key={variable} className="rounded bg-violet-50 px-1.5 py-0.5 font-mono text-[8px] font-bold text-violet-600">{`{{${variable}}}`}</span>
+                          ))}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button type="button" onClick={() => handleOpenEditPrompt(template)} className="p-1 text-slate-400 hover:text-violet-600"><Edit3 size={12} /></button>
+                          <button type="button" onClick={() => handleDeletePrompt(template)} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 size={12} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Section 3: AI Keys */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
             onClick={() => setActiveAccordion(activeAccordion === 'ai' ? '' : 'ai')}
@@ -1084,6 +1296,117 @@ export default function SystemTab({
           </table>
         </div>
       </div>
+
+      {/* Prompt Template Modal Dialog */}
+      {promptModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 scrollbar-thin">
+            <div>
+              <h2 className="text-base font-black text-slate-900 dark:text-white">
+                {editingPrompt ? '编辑 Prompt 模板' : '新增 Prompt 模板'}
+              </h2>
+              <p className="mt-1 text-xs font-medium text-slate-400">
+                可使用变量占位符，例如 <span className="font-mono text-violet-600">{'{{schemaInstruction}}'}</span> 和 <span className="font-mono text-violet-600">{'{{inputJson}}'}</span>。
+              </p>
+            </div>
+
+            <form onSubmit={handleSavePrompt} className="space-y-4">
+              {promptFormError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs leading-relaxed text-rose-600 dark:border-rose-900 dark:bg-rose-950/20 dark:text-rose-400">
+                  {promptFormError}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <label className="space-y-1.5 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">任务 Key</span>
+                  <input
+                    required
+                    value={promptForm.taskKey}
+                    disabled={Boolean(editingPrompt)}
+                    onChange={event => setPromptForm(prev => ({ ...prev, taskKey: event.target.value }))}
+                    placeholder="marketing_plan_generation"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white disabled:bg-slate-100 disabled:text-slate-400"
+                  />
+                </label>
+
+                <label className="space-y-1.5 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">显示名称</span>
+                  <input
+                    required
+                    value={promptForm.name}
+                    onChange={event => setPromptForm(prev => ({ ...prev, name: event.target.value }))}
+                    placeholder="品牌营销方案生成"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">用途说明</span>
+                  <input
+                    value={promptForm.description}
+                    onChange={event => setPromptForm(prev => ({ ...prev, description: event.target.value }))}
+                    placeholder="这个 Prompt 被哪个功能调用，改动会影响什么。"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">变量列表</span>
+                  <input
+                    value={promptForm.variablesStr}
+                    onChange={event => setPromptForm(prev => ({ ...prev, variablesStr: event.target.value }))}
+                    placeholder="schemaInstruction, inputJson"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white font-mono"
+                  />
+                </label>
+
+                <label className="space-y-1.5 md:col-span-2 block">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Prompt 正文</span>
+                  <textarea
+                    required
+                    value={promptForm.template}
+                    onChange={event => setPromptForm(prev => ({ ...prev, template: event.target.value }))}
+                    rows={16}
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-xs leading-6 text-slate-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                  />
+                </label>
+
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={promptForm.isEnabled}
+                    onChange={event => setPromptForm(prev => ({ ...prev, isEnabled: event.target.checked }))}
+                    className="h-4 w-4 rounded border-slate-300 text-violet-600"
+                  />
+                  启用这个 Prompt
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPromptModalOpen(false)
+                    setEditingPrompt(null)
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPrompt}
+                  className="px-5 py-2 rounded-xl text-xs font-black bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {savingPrompt ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{savingPrompt ? '保存中...' : '保存 Prompt'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* LLM Config Modal Dialog */}
       {llmConfigModalOpen && (
