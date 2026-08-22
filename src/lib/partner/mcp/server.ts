@@ -1,7 +1,7 @@
 /**
  * AI Marketing Crew — MCP Server definition
  *
- * All agent-facing REST capabilities exposed as MCP tools.
+ * Personal MCP capabilities exposed as tools for the connected user.
  * Uses WebStandardStreamableHTTPServerTransport (Web Fetch API compatible).
  *
  * NOTE: server.tool() takes a raw ZodRawShape (plain object of zod types),
@@ -138,6 +138,11 @@ async function ensureCalendarAccount(brandId: string, platform: string) {
         : `${platformId.charAt(0).toUpperCase()}${platformId.slice(1)} (未配置)`,
     },
   })
+}
+
+function accountHandleFromExternal(account: any, platformId: string) {
+  const handle = String(account?.handle || account?.username || account?.displayName || '').trim()
+  return handle || `unconfigured-${platformId}`
 }
 
 function calendarItemBrief(item: any, brandName: string) {
@@ -864,7 +869,35 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const { postfastFetchAccounts } = await import('@/lib/integrations/postfast')
     const result = await postfastFetchAccounts(key)
     if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
-    return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: result.accounts.length, accounts: result.accounts }, null, 2) }] }
+
+    const localAccounts = await prisma.socialAccount.findMany({
+      where: { brandId },
+      select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true },
+    })
+    const localByPlatformHandle = new Map<string, (typeof localAccounts)[number]>(localAccounts.map((account: (typeof localAccounts)[number]) => [
+      `${normalizeCalendarPlatform(account.platformId)}:${account.handle.toLowerCase()}`,
+      account,
+    ]))
+
+    const externalAccounts = Array.isArray(result.accounts) ? result.accounts as any[] : []
+    const accounts = externalAccounts.map((account: any) => {
+      const platformId = normalizeCalendarPlatform(String(account.platformId || account.platform || ''))
+      const handle = accountHandleFromExternal(account, platformId)
+      const local = localByPlatformHandle.get(`${platformId}:${handle.toLowerCase()}`)
+      return {
+        ...account,
+        id: local?.id ?? `unconfigured_${platformId}`,
+        localAccountId: local?.id ?? null,
+        externalAccountId: account.id,
+        platformId,
+        handle,
+        displayName: local?.displayName || account.displayName || handle,
+        profileUrl: local?.profileUrl || account.profileUrl || null,
+        followerCount: local?.followerCount ?? account.followerCount,
+        mcpDraftReady: Boolean(local),
+      }
+    })
+    return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: accounts.length, accounts }, null, 2) }] }
   }
 
   server.tool('board_list_social_accounts', 'List all connected social accounts for this brand via the board backend.', listAccountsSchema, listAccountsHandler)
@@ -1603,11 +1636,60 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         return { content: [{ type: 'text' as const, text: 'Error: accountId is required (platform must be determined)' }], isError: true }
       }
 
+      let resolvedAccountId = accountId?.trim()
+      if (resolvedAccountId) {
+        if (resolvedAccountId.startsWith('unconfigured_')) {
+          const platformId = resolvedAccountId.replace('unconfigured_', '')
+          const account = await ensureCalendarAccount(brandId, platformId)
+          resolvedAccountId = account.id
+        } else {
+          const localAccount = await prisma.socialAccount.findFirst({
+            where: { id: resolvedAccountId, brandId },
+            select: { id: true },
+          })
+          if (!localAccount) {
+            const { key } = await getBrandPostfastKey(brandId)
+            if (!key) {
+              return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured. Cannot resolve accountId.' }], isError: true }
+            }
+            const { postfastFetchAccounts } = await import('@/lib/integrations/postfast')
+            const result = await postfastFetchAccounts(key)
+            if (!result.success) {
+              return { content: [{ type: 'text' as const, text: `Error: Cannot resolve accountId: ${result.error}` }], isError: true }
+            }
+            const externalAccount = result.accounts.find((account: any) => account.id === resolvedAccountId)
+            if (!externalAccount) {
+              return { content: [{ type: 'text' as const, text: 'Error: accountId was not found for this brand' }], isError: true }
+            }
+            const platformId = normalizeCalendarPlatform(String(externalAccount.platformId || externalAccount.platform || ''))
+            const handle = accountHandleFromExternal(externalAccount, platformId)
+            const account = await prisma.socialAccount.upsert({
+              where: { brandId_platformId_handle: { brandId, platformId, handle } },
+              create: {
+                brandId,
+                platformId,
+                handle,
+                displayName: externalAccount.displayName || handle,
+                profileUrl: externalAccount.profileUrl || null,
+                followerCount: typeof externalAccount.followerCount === 'number' ? externalAccount.followerCount : null,
+              },
+              update: {
+                displayName: externalAccount.displayName || handle,
+                profileUrl: externalAccount.profileUrl || null,
+                followerCount: typeof externalAccount.followerCount === 'number' ? externalAccount.followerCount : undefined,
+              },
+              select: { id: true },
+            })
+            resolvedAccountId = account.id
+          }
+        }
+      }
+
       if (!draftId) {
         if (!caption || !caption.trim()) {
           return { content: [{ type: 'text' as const, text: 'Error: caption is required when creating a new draft' }], isError: true }
         }
-        if (!accountId) {
+        if (!resolvedAccountId) {
           return { content: [{ type: 'text' as const, text: 'Error: accountId is required when creating a new draft' }], isError: true }
         }
       }
@@ -1637,7 +1719,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           }
           if (caption !== undefined) updateData.caption = caption.trim()
           if (captionLang !== undefined) updateData.captionLang = captionLang
-          if (accountId !== undefined) updateData.accountId = accountId
+          if (accountId !== undefined) updateData.accountId = resolvedAccountId
           // scheduledAt intentionally NOT accepted from agent — use board_get_schedule_recommendation
           if (hashtags !== undefined) updateData.hashtags = hashtags
           if (mediaUrls !== undefined) updateData.mediaUrls = mediaUrls
@@ -1657,7 +1739,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
               brandId,
               caption: caption!.trim(),
               hashtags: hashtags ?? [],
-              accountId: accountId || null,
+              accountId: resolvedAccountId || null,
               scheduledAt: null, // Always null on save — set by board_get_schedule_recommendation
               mediaUrls: mediaUrls ?? [],
               coverAssetId: coverAssetId ?? null,
