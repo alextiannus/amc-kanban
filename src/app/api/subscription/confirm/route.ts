@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { activateSubscriptionByPaymentSession, createBrandForActivatedSubscription } from '@/lib/subscription/service'
+import { triggerErpOnboardingFlow } from '@/lib/integrations/immediErp'
 import Stripe from 'stripe'
 import { sendSubscriptionSuccessEmail } from '@/lib/email'
 
@@ -106,6 +107,29 @@ export async function POST(request: Request) {
     }
   } catch (emailErr) {
     console.error('[confirm_subscription_email] failed to initiate success email:', emailErr)
+  }
+
+  // Trigger ERP onboarding for new activations that didn't go through brand creation
+  // (brand creation already triggers ERP internally; this handles subscription-only flows)
+  if (!activated.alreadyActive && !pendingBrandName) {
+    const activatedSub = activated.subscription
+    if (activatedSub) {
+      triggerErpOnboardingFlow({
+        subscription: {
+          id:             activatedSub.id,
+          planId:         activatedSub.planId,
+          planName:       activatedSub.planName,
+          totalDueUsd:    activatedSub.totalDueUsd ?? 0,
+          durationMonths: activatedSub.durationMonths,
+          selectedAddons: activatedSub.selectedAddons ?? undefined,
+        },
+        brandName: (sub.brandId
+          ? (await prisma.brand.findUnique({ where: { id: sub.brandId }, select: { name: true } }))?.name
+          : null) || '未命名品牌',
+      }).catch((erpErr: unknown) => {
+        console.error('[confirm_subscription] ERP onboarding failed (non-fatal):', erpErr)
+      })
+    }
   }
 
   return NextResponse.json({

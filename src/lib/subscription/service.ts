@@ -9,6 +9,7 @@ import {
 import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 import { buildBillingActivationData } from '@/lib/subscription/workflow'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
+import { triggerErpOnboardingFlow } from '@/lib/integrations/immediErp'
 
 export async function activateSubscriptionByPaymentSession(paymentSessionId: string) {
   const sub = await prisma.brandSubscription.findFirst({
@@ -93,7 +94,7 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       // Note: allow PENDING and ACTIVE — for BILLING mode, brand is created while subscription is still PENDING
       OR: [{ contractEndDate: null }, { contractEndDate: { gt: now } }],
     },
-    select: { id: true, brandId: true, planName: true },
+    select: { id: true, brandId: true, planName: true, planId: true, totalDueUsd: true, durationMonths: true, selectedAddons: true },
   })
   console.log(`[createBrand] findFirst subscription (${Date.now() - t0}ms): found=${!!subscription}`)
 
@@ -298,6 +299,21 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     })
   }).catch((dbErr: any) => {
     console.error('[createBrand] Failed to fetch user nickname for email:', dbErr)
+  })
+
+  // Fire-and-forget ERP onboarding flow (Sales Order + Finance + Follow-up tasks)
+  triggerErpOnboardingFlow({
+    subscription: {
+      id:             subscription.id,
+      planId:         subscription.planId,
+      planName:       subscription.planName,
+      totalDueUsd:    subscription.totalDueUsd ?? 0,
+      durationMonths: subscription.durationMonths,
+      selectedAddons: subscription.selectedAddons ?? undefined,
+    },
+    brandName: brand.name,
+  }).catch((erpErr: unknown) => {
+    console.error('[createBrand] ERP onboarding flow failed (non-fatal):', erpErr)
   })
 
   return { ok: true as const, brand, alreadyCreated: false as const, agentId: null }

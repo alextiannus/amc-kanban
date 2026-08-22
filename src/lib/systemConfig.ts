@@ -184,3 +184,37 @@ export async function getPublishingStandards(): Promise<PublishingStandards> {
     return DEFAULT_PUBLISHING_STANDARDS
   }
 }
+// ── Immedi ERP Integration ─────────────────────────────────────────────────
+
+export interface ImmediErpSystemConfig {
+  apiKey:      string
+  baseUrl:     string
+  enabled:     boolean
+  itemCodeMap: Record<string, string>
+}
+
+/**
+ * Returns Immedi ERP config from SystemConfig.
+ * Returns null if not enabled or apiKey is missing.
+ */
+export async function getImmediErpSystemConfig(): Promise<ImmediErpSystemConfig | null> {
+  try {
+    const config = await ensureSystemConfig()
+    if (!config.immediErpEnabled) return null
+    if (!config.immediErpApiKey)  return null
+    const overrideMap =
+      config.immediErpItemCodeMap &&
+      typeof config.immediErpItemCodeMap === 'object' &&
+      !Array.isArray(config.immediErpItemCodeMap)
+        ? (config.immediErpItemCodeMap as Record<string, string>)
+        : {}
+    return {
+      apiKey:      config.immediErpApiKey,
+      baseUrl:     (config.immediErpBaseUrl || 'https://today.immedi.ai/external/v1').replace(/\/$/, ''),
+      enabled:     true,
+      itemCodeMap: overrideMap,
+    }
+  } catch {
+    return null
+  }
+}

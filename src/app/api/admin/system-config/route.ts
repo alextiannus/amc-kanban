@@ -73,6 +73,12 @@ export async function GET() {
     tiktokClientSecretConfigured: !!config.tiktokClientSecret,
     tiktokRedirectUri: config.tiktokRedirectUri || '',
     useDirectPublishing: config.useDirectPublishing ?? false,
+    // Immedi ERP integration
+    immediErpEnabled: config.immediErpEnabled ?? false,
+    immediErpApiKey: maskKey(config.immediErpApiKey),
+    immediErpApiKeyConfigured: !!config.immediErpApiKey,
+    immediErpBaseUrl: config.immediErpBaseUrl || 'https://today.immedi.ai/external/v1',
+    immediErpItemCodeMap: config.immediErpItemCodeMap ?? null,
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
   })
@@ -113,6 +119,11 @@ export async function PATCH(request: Request) {
   const nextTiktokClientSecret   = resolveField(body, 'tiktokClientSecret', current.tiktokClientSecret)
   const nextTiktokRedirectUri = resolveField(body, 'tiktokRedirectUri', current.tiktokRedirectUri)
   const nextUseDirectPublishing   = resolveBoolField(body, 'useDirectPublishing', current.useDirectPublishing)
+  // Immedi ERP
+  const nextImmediErpEnabled  = resolveBoolField(body, 'immediErpEnabled', current.immediErpEnabled)
+  const nextImmediErpApiKey   = resolveField(body, 'immediErpApiKey', current.immediErpApiKey)
+  const nextImmediErpBaseUrl  = resolveField(body, 'immediErpBaseUrl', current.immediErpBaseUrl)
+  const nextImmediErpItemCodeMap = 'immediErpItemCodeMap' in body ? body.immediErpItemCodeMap : undefined
 
   const updated = await prisma.systemConfig.update({
     where: { id: 'default' },
@@ -134,6 +145,10 @@ export async function PATCH(request: Request) {
       ...(nextTiktokClientSecret   !== undefined && { tiktokClientSecret: nextTiktokClientSecret }),
       ...(nextTiktokRedirectUri !== undefined && { tiktokRedirectUri: nextTiktokRedirectUri }),
       ...(nextUseDirectPublishing   !== undefined && { useDirectPublishing: nextUseDirectPublishing }),
+      ...(nextImmediErpEnabled  !== undefined && { immediErpEnabled:  nextImmediErpEnabled  }),
+      ...(nextImmediErpApiKey   !== undefined && { immediErpApiKey:   nextImmediErpApiKey   }),
+      ...(nextImmediErpBaseUrl  !== undefined && { immediErpBaseUrl:  nextImmediErpBaseUrl  }),
+      ...(nextImmediErpItemCodeMap !== undefined && { immediErpItemCodeMap: nextImmediErpItemCodeMap }),
     },
   })
 
@@ -192,6 +207,12 @@ export async function PATCH(request: Request) {
     tiktokClientSecretConfigured: !!updated.tiktokClientSecret,
     tiktokRedirectUri: updated.tiktokRedirectUri || '',
     useDirectPublishing: updated.useDirectPublishing ?? false,
+    // Immedi ERP
+    immediErpEnabled: updated.immediErpEnabled ?? false,
+    immediErpApiKey: maskKey(updated.immediErpApiKey),
+    immediErpApiKeyConfigured: !!updated.immediErpApiKey,
+    immediErpBaseUrl: updated.immediErpBaseUrl || 'https://today.immedi.ai/external/v1',
+    immediErpItemCodeMap: updated.immediErpItemCodeMap ?? null,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   })

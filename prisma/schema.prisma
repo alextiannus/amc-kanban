@@ -1205,6 +1205,12 @@ model SystemConfig {
   tiktokRedirectUri   String?
   useDirectPublishing Boolean? @default(false)
 
+  // Immedi Today ERP integration
+  immediErpApiKey     String?  // Bearer token (imx_...)
+  immediErpBaseUrl    String?  // e.g. https://today.immedi.ai/external/v1
+  immediErpEnabled    Boolean? @default(false)
+  immediErpItemCodeMap Json?   // { planId: "ERP-ITEM-CODE", ... } override map
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
