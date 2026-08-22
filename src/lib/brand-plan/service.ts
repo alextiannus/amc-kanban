@@ -3124,17 +3124,41 @@ function parseJsonObject(value: unknown): Record<string, unknown> | null {
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '')
     .trim()
-  try {
-    return objectValue(JSON.parse(cleaned))
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/)
-    if (!match) return null
-    try {
-      return objectValue(JSON.parse(match[0]))
-    } catch {
-      return null
-    }
+  for (const candidate of jsonObjectCandidates(cleaned)) {
+    const parsed = tryParseJsonObject(candidate) || tryParseJsonObject(repairLooseJson(candidate))
+    if (parsed) return parsed
   }
+  return null
+}
+
+function jsonObjectCandidates(value: string) {
+  const candidates = [value]
+  const fenced = value.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
+  if (fenced?.[1]) candidates.push(fenced[1].trim())
+  const firstBrace = value.indexOf('{')
+  const lastBrace = value.lastIndexOf('}')
+  if (firstBrace >= 0 && lastBrace > firstBrace) candidates.push(value.slice(firstBrace, lastBrace + 1))
+  return uniqueStrings(candidates)
+}
+
+function tryParseJsonObject(value: string) {
+  try {
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  } catch {
+    return null
+  }
+}
+
+function repairLooseJson(value: string) {
+  return value
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/，(?=\s*["}\]])/g, ',')
+    .replace(/，/g, ',')
+    .replace(/：/g, ':')
+    .replace(/、(?=\s*["}\]])/g, ',')
+    .replace(/,\s*([}\]])/g, '$1')
 }
 
 function hashJson(value: unknown) {
