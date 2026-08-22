@@ -1,5 +1,5 @@
-import { PlanningGrowthBridge } from '@/components/planning/PlanningGrowthBridge'
+import { redirect } from 'next/navigation'
 
-export default function BrandInspirationsBridgePage() {
-  return <PlanningGrowthBridge destination="brand-inspirations" title="品牌灵感" />
+export default function BrandInspirationsPage() {
+  redirect('/dashboard')
 }

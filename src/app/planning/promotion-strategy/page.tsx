@@ -1,7 +1,5 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import { PromotionStrategyWorkspace } from '@/components/promotion-strategy/PromotionStrategyWorkspace'
-
-export default function PromotionPlansPage() {
-  return <PromotionStrategyWorkspace />
+export default function PromotionStrategyPage() {
+  redirect('/dashboard')
 }

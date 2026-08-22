@@ -55,8 +55,6 @@ const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
   'video-production',
   'viral-copy-scripts',
   'amc-content-roles',
-  'amc-growth',
-  'brand-inspirations',
 ])
 
 const MENU_TRANSLATIONS: Record<string, string> = {
@@ -307,13 +305,6 @@ export default function Sidebar({
       if (item.id === 'video-production' && activeBrand?.id) {
         const separator = targetUrl.includes('?') ? '&' : '?'
         targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
-      }
-      if (item.id === 'brand-inspirations' && activeBrand?.id) {
-        const separator = targetUrl.includes('?') ? '&' : '?'
-        targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
-      }
-      if (item.id === 'promotion-execution' && activeBrand?.id) {
-        targetUrl = `${targetUrl}?brandId=${encodeURIComponent(activeBrand.id)}`
       }
       if (targetUrl.includes('amc-growth.immedi.ai')) {
         const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')

@@ -119,7 +119,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
-        { id: 'promotion-execution',view: 'managementOverview', label: '素材执行', icon: 'Camera', href: '/planning/execution' },
+        { id: 'promotion-execution',view: 'assets', label: '素材执行', icon: 'Camera' },
       ],
     })
     groups.push({
@@ -128,13 +128,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
         { id: 'video-production',   view: 'managementOverview', label: '视频生产', icon: 'Video', href: '/admin/video-production' },
         { id: 'viral-copy-scripts', view: 'managementOverview', label: '爆品脚本', icon: 'FileText', href: '/admin/viral-copy-scripts' },
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
-      ],
-    })
-    groups.push({
-      groupLabel: '知识增长中心',
-      items: [
-        { id: 'brand-inspirations', view: 'managementOverview', label: '品牌灵感', icon: 'Lightbulb', href: '/api/integrations/amc-growth/sso/start?destination=brand-inspirations' },
-        { id: 'amc-growth',         view: 'managementOverview', label: '知识库', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard' },
       ],
     })
   }

@@ -8,6 +8,7 @@ import {
 import { matchPromotionStrategyCreativeBatch } from '@/lib/promotion-strategy/clients'
 import type { PublishingFreq } from '@/lib/brandContextBuilder'
 import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
 import { callLLM } from '@/lib/llmRouter'
 
 type BrandPlanCalendarItem = {
@@ -1310,18 +1311,15 @@ async function buildSubscriptionStrategy(brand: BrandPlanBrand) {
   ) || subscriptions[0]
   const plan = active ? SUBSCRIPTION_PLANS.find((item) => item.id === active.planId) : null
   const planId = active?.planId || 'none'
-  const configured = planId !== 'none'
-    ? await prisma.subscriptionOperationsStrategy.findUnique({ where: { planId } })
-    : null
-  const configuredPlatforms = configured ? stringList(configured.platformCoverage) : []
-  const platformCoverage = configuredPlatforms.length ? configuredPlatforms : platformCoverageForPlan(planId)
-  const configuredPublishingFreq = configured ? normalizePublishingFreq(configured.publishingFreq) : null
+  const policy = planId !== 'none' ? await getSubscriptionOperationsPolicy(planId) : null
+  const platformCoverage = policy?.platformCoverage.length ? policy.platformCoverage : platformCoverageForPlan(planId)
+  const configuredPublishingFreq = policy ? normalizePublishingFreq(policy.publishingFreq) : null
   return {
     planId,
-    planName: configured?.planName || plan?.name || active?.planName || '未激活订阅',
-    includedServices: configured ? stringList(configured.includedServices) : plan?.services || [],
+    planName: policy?.planName || plan?.name || active?.planName || '未激活订阅',
+    includedServices: policy?.includedServices.length ? policy.includedServices : plan?.services || [],
     platformCoverage,
-    monthlyContentQuota: configured?.monthlyContentQuota || monthlyContentQuotaForPlan(planId),
+    monthlyContentQuota: policy?.monthlyContentQuota || monthlyContentQuotaForPlan(planId),
     publishingFreq: normalizePublishingFreq(brand.knowledge?.publishingFreq) || configuredPublishingFreq || publishingFreqForPlan(planId, platformCoverage),
   }
 }
