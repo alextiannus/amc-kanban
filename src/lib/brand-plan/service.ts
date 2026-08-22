@@ -1773,11 +1773,11 @@ async function reviewCalendarCreativeItemsWithLLM(
     `输入 JSON：${JSON.stringify(payload)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, Math.min(1900, 700 + items.length * 230), {
+    const result = await callLLM('marketing_plan', prompt, Math.min(3600, 900 + items.length * 520), {
       temperature: 0.28,
       jsonMode: true,
-      deadlineMs: 65000,
-      attemptTimeoutMs: [60000],
+      deadlineMs: 90000,
+      attemptTimeoutMs: [85000],
       maxAttempts: 1,
       allowDefaultFallback: true,
       allowAnyFallback: false,
