@@ -1290,21 +1290,30 @@ function productDisplayName(product: string) {
   return cleanCalendarText(product, '招牌产品')
 }
 
+function productMention(brandName: string, product: string) {
+  if (product !== '招牌产品' && brandName.includes(product)) return '这一锅'
+  return product
+}
+
 function calendarItemTitle(input: Omit<CalendarCopyContext, 'candidate' | 'interviewFocus'>) {
   const brandName = brandDisplayName(input.brand)
-  const product = productDisplayName(input.product)
-  const action = cleanCalendarText(input.promotionPoint.customerAction, '收藏或私信咨询')
+  const product = productMention(brandName, productDisplayName(input.product))
   const isRestaurant = text(input.brand.industry).toLowerCase().includes('restaurant') || text(input.brand.industry).toLowerCase().includes('f&b')
   const titleSets: Record<string, string[]> = {
     tiktok: [
-      `${brandName}这锅${product}，先看鱼肉`,
+      `${brandName}${product}，先看鱼肉`,
       `想吃重口味，先看${brandName}这锅`,
-      `${product}上桌前，先拍这3个画面`,
+      `${brandName}上桌前，先拍这3个画面`,
     ],
     instagram: [
       `${brandName}的${product}，适合约朋友来吃`,
-      `这组图，把${product}拍得更想点`,
+      `这组图，把${brandName}拍得更想点`,
       `${brandName}今晚主推：${product}`,
+    ],
+    facebook: [
+      `${brandName}本周想推这锅`,
+      `约朋友吃烤鱼，可以看这一份`,
+      `${brandName}上新一组到店照`,
     ],
     xiaohongshu: [
       `在新加坡想吃${product}，先收藏这家`,
@@ -1319,9 +1328,9 @@ function calendarItemTitle(input: Omit<CalendarCopyContext, 'candidate' | 'inter
   }
   const fallback = isRestaurant
     ? `${brandName}的${product}，给顾客一个到店理由`
-    : `${brandName}的${product}，引导顾客${action}`
+    : `${brandName}的${product}，给顾客一个选择理由`
   const pool = titleSets[normalizePlatformSlug(input.platformSlug)] || [fallback]
-  return cleanCalendarText(pool[input.index % pool.length], fallback).slice(0, 42)
+  return cleanCalendarText(pool[input.index % pool.length], fallback).slice(0, 30)
 }
 
 function calendarContentType(candidate: Record<string, unknown> | null, index: number) {
@@ -1336,6 +1345,7 @@ function calendarHookText(input: CalendarCopyContext) {
   const platform = normalizePlatformSlug(input.platformSlug)
   if (platform === 'tiktok') return `前三秒先给热气、鱼肉和夹菜动作，不要先拍门头。`
   if (platform === 'instagram') return `首图放整锅和夹起鱼肉的近景，让人一眼知道卖点。`
+  if (platform === 'facebook') return `先写适合几个人来吃，再放一张整锅图。`
   if (platform === 'xiaohongshu') return `开头先写适合谁来吃，再讲口味和点单理由。`
   if (platform === 'google_business') return `第一句直接说本周推荐${product}，配清楚门店图。`
   return `开头先给${product}的真实画面，再讲为什么值得来试。`
@@ -1347,7 +1357,7 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
   const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
   return [
-    `Hook：${calendarHookText(input)}`,
+    `开场：${calendarHookText(input)}`,
     `内容：围绕${product}拍真实出品、上桌过程和顾客会关心的口味细节。`,
     angle ? `参考角度：${angle}。` : '',
     `结尾：引导顾客${customerAction}。`,
