@@ -2226,8 +2226,8 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 950, {
       temperature: 0.35,
       jsonMode: true,
-      deadlineMs: scope === 'annual_strategy' ? 52000 : 38000,
-      attemptTimeoutMs: [scope === 'annual_strategy' ? 48000 : 35000],
+      deadlineMs: scope === 'annual_strategy' ? 60000 : 65000,
+      attemptTimeoutMs: [scope === 'annual_strategy' ? 55000 : 60000],
       maxAttempts: 1,
       allowDefaultFallback: true,
       allowAnyFallback: false,
