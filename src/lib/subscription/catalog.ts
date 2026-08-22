@@ -58,15 +58,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     name: 'Essential · 基础线上经营',
     monthlyUsd: 800,
     description: '基础线上门面 + 稳定内容维护',
-    oneLiner: '适合需要把线上门面做起来的商家。',
+    oneLiner: '适合需要把海外社媒和 Google Map 基础经营跑起来的商家。',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · 品牌主理人',
     suitableFor: '刚开始做海外社媒、内容断更、Google Map 信息不完整、评分和评论无人管理的本地生活商家',
     services: [
-      '每月不少于 12 次图文发布',
-      'Instagram + TikTok + Google Business Profile',
-      'Google Map 资料完善与评论监控',
-      '每月 4 位 KOC/微型博主探店',
-      '每月舆情报告与下月优化建议'
+      '每月至少 12 次 Instagram / TikTok 图文内容发布',
+      'Google Map 配置、评论监控与打分优化',
+      '中英双语内容与远程交付',
+      '可安排 4 位博主探店',
+      '每月舆情报告'
     ],
     baseline: '让客户在 Instagram / TikTok / Google Map 上找得到、看得懂、愿意来。',
     explanation: {
@@ -90,12 +90,12 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '团队配置：AI 内容创作官 · AI 市场调研官 · 品牌主理人',
       '适合：刚开始做海外社媒、内容断更、Google Map 信息不完整、评分和评论无人管理的商家',
       '服务内容：',
-      '1. 每月不少于 12 次图文发布，建议 8 条品牌/产品内容 + 4 条活动/场景内容',
-      '2. Instagram 做品牌门面和信任留存',
-      '3. TikTok 做轻量曝光和兴趣种草',
-      '4. Google Map / Google Business Profile 做最后一公里转化',
-      '5. 每月 4 位 KOC/微型博主探店，沉淀真实第三方内容',
-      '6. 每月舆情报告与下月优化建议'
+      '1. 每月至少 12 次 Instagram / TikTok 图文内容发布',
+      '2. Google Map 配置、评论监控与打分优化',
+      '3. 中英双语内容，远程交付',
+      '4. 可安排 4 位博主探店',
+      '5. 每月舆情报告',
+      '6. 2026 年 9 月 30 日前签约商家赠送 1 次价值 S$200 素材拍摄采集和 6 条视频'
     ],
   },
   {
@@ -103,16 +103,16 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     name: 'Booster · 增长战役版',
     monthlyUsd: 3600,
     description: '增长战役 + 素材资产 + 博主扩散',
-    oneLiner: '适合已经准备好接客流、想在一个月内集中放大声量的商家。',
+    oneLiner: '适合需要用 3 个月集中做流量增长和运营活动的商家。',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
     suitableFor: '已有基础门店，准备冲新品、新店、节日档期、短期声量或线上口碑修复的商家',
     services: [
-      '每月至少 24 次内容发布（含图文与精品视频）',
-      'Instagram + TikTok + 小红书 + Google Business Profile',
-      '定制月度增长策划案',
-      '专业素材采集与当月素材资产整理',
-      '10 位博主分批探店扩散',
-      '每周舆情与运营复盘'
+      'Instagram、TikTok、小红书等自媒体内容策划',
+      '流量增长和运营活动策划',
+      'Google Map 配置、评论监控与打分优化',
+      '至少 24 次图文和 12 次精品视频',
+      '专业素材采集',
+      '10 位博主探店与每周舆情报告'
     ],
     baseline: '用一个月把品牌内容、活动话题、博主探店和地图口碑一起推起来，让更多人看到、收藏、咨询、到店。',
     explanation: {
@@ -138,11 +138,13 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '团队配置：AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
       '适合：已有基础门店，准备冲新品、新店、节日档期、短期声量或线上口碑修复的商家',
       '服务内容：',
-      '1. 每月至少 24 次内容发布（含图文与精品视频），拆成 4 个内容主题周',
-      '2. Instagram / TikTok / 小红书 / Google Map 联动运营',
-      '3. 一次专业素材采集，覆盖主视觉、短视频、菜单、门店环境、人物和活动素材',
-      '4. 10 位博主探店：6 位 2k+、3 位 4k+、1 位 1w+，分批发布',
-      '5. 每周舆情报告和下周调整动作'
+      '1. 定制增长策划案',
+      '2. 至少 24 次图文和 12 次精品视频',
+      '3. Instagram / TikTok / 小红书等自媒体内容策划与运营活动策划',
+      '4. Google Map 配置、评论监控与打分优化',
+      '5. 专业素材采集',
+      '6. 10 位博主探店：6 位 2k+、3 位 4k+、1 位 1w+',
+      '7. 每周舆情报告'
     ],
   },
 ]
@@ -150,51 +152,91 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 export const SUBSCRIPTION_ADDONS: AddonItem[] = [
   {
     id: 'multi_store',
-    name: '多门店支持',
+    name: '新增门店支持',
+    pricing: 'monthly',
+    usd: 300,
+    description: '同一品牌下，每新增一个门店增加 S$300 / 门店 / 月，用于增加一个 Google Map 账号。',
+    details: ['S$300 / 新增门店 / 月', '增加一个 Google Map 账号', '按新增门店数量计费'],
+  },
+  {
+    id: 'xiaohongshu_ops',
+    name: '小红书 Xiaohongshu',
+    pricing: 'monthly',
+    usd: 600,
+    description: '和英文平台同步运营，覆盖中文用户、中国游客、留学生和华语本地消费者。',
+    details: ['S$600 / 月', '同步内容规划、发布与基础互动监控'],
+  },
+  {
+    id: 'meituan_dianping_setup',
+    name: '美团点评 Meituan Dianping 开通服务',
+    pricing: 'one_time',
+    usd: 2200,
+    description: '美团点评开通服务，协助海外华人点评入口搭建。',
+    details: ['S$2,200 / 年', '海外华人点评管理入口开通'],
+  },
+  {
+    id: 'meituan_dianping_ops',
+    name: '美团点评 Meituan Dianping 代运营',
     pricing: 'monthly',
     usd: 200,
-    description: '支持添加多个门店，共享品牌资产与 AI 员工。',
-    details: ['+S$200 / 门店 / 月', '共享素材库与发布排期', '统一看板管理与多店数据监控'],
+    description: '美团点评代运营，协助页面信息、评价与日常运营动作维护。',
+    details: ['S$200 / 月', '海外华人点评管理'],
+  },
+  {
+    id: 'twelveeat_delivery_setup',
+    name: '12Eat 唐人街外卖上线',
+    pricing: 'one_time',
+    usd: 220,
+    description: '12Eat 唐人街外卖上线服务，协助完成外卖平台账号和基础资料上线。',
+    details: ['S$220 / 次', '外卖平台账号上线'],
+  },
+  {
+    id: 'twelveeat_delivery_ops',
+    name: '12Eat 唐人街外卖代运营',
+    pricing: 'monthly',
+    usd: 80,
+    description: '12Eat 外卖平台账号代运营，维护外卖信息、菜单与基础运营配置。',
+    details: ['S$80 / 月', '外卖平台账号管理'],
+  },
+  {
+    id: 'grab_foodpanda_ops',
+    name: 'Grab / Foodpanda',
+    pricing: 'monthly',
+    usd: 300,
+    description: '本地外卖平台管理，协助菜单、活动和页面基础维护。',
+    details: ['S$300 / 月', 'Grab / Foodpanda 账号管理'],
+  },
+  {
+    id: 'youtube_ops',
+    name: 'YouTube',
+    pricing: 'monthly',
+    usd: 800,
+    description: '视频内容制作与发布，帮助商家把门店体验、产品和服务做成可沉淀的视频内容。',
+    details: ['S$800 / 月', '视频内容制作与发布'],
+  },
+  {
+    id: 'short_video_six',
+    name: '视频制作（6 条）',
+    pricing: 'one_time',
+    usd: 600,
+    description: '6 条短视频内容制作，可用于当月社媒发布、活动预热或平台店铺素材。',
+    details: ['S$600 / 次', '交付 6 条短视频'],
   },
   {
     id: 'onsite_photo',
-    name: '专业到店内容拍摄',
+    name: '现场拍摄服务 On-site Photography',
     pricing: 'one_time',
-    usd: 200,
-    description: '半天现场专业素材与新品拍摄等专业服务，交付高清图文与短视频素材包。',
-    details: ['+S$200 / 次 (含后期，包含新品专业拍摄等)'],
-  },
-  {
-    id: 'kol_light',
-    name: 'KOL 达人探店曝光包 Light',
-    pricing: 'one_time',
-    usd: 599,
-    description: '3-5 位本地生活博主探店发布与轻量曝光套餐。',
-    details: ['+S$599 / 次', '适合新品、活动或门店基础曝光'],
+    usd: 300,
+    description: '专业摄影到店采集菜品、环境、服务与门店素材。',
+    details: ['S$300 / 次', '专业摄影，素材采集'],
   },
   {
     id: 'influencer_visit',
-    name: 'KOL 达人分发包 Pro',
+    name: '博主探店服务',
     pricing: 'one_time',
-    usd: 1200,
-    description: '15 位本地生活博主（KOL/KOC）探店发布与种草覆盖整合套餐。',
-    details: ['+S$1,200 / 季 (保曝光)'],
-  },
-  {
-    id: 'dianping_ops',
-    name: '开通大众点评+代运营',
-    pricing: 'one_time',
-    usd: 2300,
-    description: '全方位大众点评门店开通与深度代运营服务，提升品牌曝光与转化。',
-    details: ['+S$2,300 / 年'],
-  },
-  {
-    id: 'ordering_site',
-    name: '订座，外卖和自取独立站服务',
-    pricing: 'monthly',
-    usd: 220,
-    description: '品牌专属独立站，支持在线订座、外卖配送与到店自取，摆脱第三方佣金。',
-    details: ['+S$220 / 月'],
+    usd: 2200,
+    description: '15 个博主探店：8 个 1k+ 粉丝、5 个 5k-1w、3 个 1w+。',
+    details: ['S$2,200 / 次', '包含探店流程对接与发布跟进'],
   },
 ]
 
@@ -204,7 +246,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '覆盖渠道',
     values: {
       essential: 'Instagram + TikTok + Google Map / Google Business Profile',
-      booster: 'Instagram + TikTok + 小红书 + Google Map / Google Business Profile',
+      booster: 'Instagram + TikTok + 小红书等自媒体 + Google Map / Google Business Profile',
     },
   },
   {
@@ -220,7 +262,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '内容产出',
     values: {
       essential: '每月不少于 12 次图文发布',
-      booster: '每月至少 24 次内容发布（含图文与精品视频）',
+      booster: '至少 24 次图文和 12 次精品视频',
     },
   },
   {
@@ -228,7 +270,7 @@ export const PLAN_COMPARISON_ROWS: PlanComparisonRow[] = [
     label: '核心效果保障',
     values: {
       essential: '线上资料完整、内容稳定更新、评论有人管理',
-      booster: '月度主题、素材、博主、内容发布和每周复盘一起推进',
+      booster: '增长策划、素材采集、博主探店、内容发布和每周复盘一起推进',
     },
   },
 ]
@@ -237,10 +279,11 @@ export const ALLOWED_DURATIONS = [3, 6, 12] as const
 
 export function getAllowedDurationsForPlan(planId: string): readonly number[] {
   if (planId === 'essential') return [6, 12]
+  if (planId === 'booster') return [3]
   return ALLOWED_DURATIONS
 }
 
-export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.04'
+export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.06'
 
 export function calculatePricing(
   planId: string,
@@ -263,7 +306,7 @@ export function calculatePricing(
     .map((id) => SUBSCRIPTION_ADDONS.find((a) => a.id === id))
     .filter((v): v is AddonItem => Boolean(v))
 
-  const billedMonths = durationMonths
+  const billedMonths = durationMonths === 12 ? 11 : durationMonths
   const recurringAddonsUsd = selectedAddons
     .filter((a) => a.pricing === 'monthly')
     .reduce((sum, a) => {
@@ -278,11 +321,8 @@ export function calculatePricing(
     }, 0)
   const monthlyBaseUsd = plan.promoMonthlyUsd ?? plan.monthlyUsd
   const recurringSubtotalUsd = (monthlyBaseUsd + recurringAddonsUsd) * durationMonths
-  
-  // Align discounts with wizard: No discounts
-  const discountPercent = 0;
-
-  const recurringAfterDiscountUsd = Math.round(recurringSubtotalUsd * (1 - discountPercent / 100))
+  const recurringAfterDiscountUsd = (monthlyBaseUsd + recurringAddonsUsd) * billedMonths
+  const discountPercent = durationMonths === 12 ? Math.round((1 / 12) * 100) : 0
   const discountUsd = recurringSubtotalUsd - recurringAfterDiscountUsd
 
   return {

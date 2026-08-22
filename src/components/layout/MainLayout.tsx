@@ -32,7 +32,7 @@ interface MainLayoutProps {
 
 const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
   dashboard: { zh: '品牌计划', en: 'Brand Plan' },
-  calendar: { zh: '发布日历', en: 'Publishing Calendar' },
+  calendar: { zh: '内容创建和发布计划', en: 'Content Creation and Publishing Plan' },
   drafts: { zh: '发布内容', en: 'Post Drafts' },
   assets: { zh: '素材库', en: 'Asset Library' },
   game: { zh: '店内活动', en: 'In-store Campaigns' },

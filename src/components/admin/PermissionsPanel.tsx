@@ -164,7 +164,7 @@ export default function PermissionsPanel({
               <tr>
                 <th className="text-left px-4 py-3">用户角色组</th>
                 <th className="text-left px-4 py-3">品牌看板</th>
-                <th className="text-left px-4 py-3">发布日历</th>
+                <th className="text-left px-4 py-3">内容创建和发布计划</th>
                 <th className="text-left px-4 py-3">店内活动 (游戏)</th>
                 <th className="text-left px-4 py-3">数据分析</th>
                 <th className="text-left px-4 py-3">AI 分身/日志</th>

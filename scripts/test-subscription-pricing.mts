@@ -19,27 +19,37 @@ function assertThrows(fn: () => void, label: string) {
 }
 
 function run() {
-  const starter3 = calculatePricing('starter', 3, [])
-  assertEqual(starter3.totalDueUsd, 2400, 'starter 3 months total')
+  const booster3 = calculatePricing('booster', 3, [])
+  assertEqual(booster3.totalDueUsd, 10800, 'booster 3 months total')
 
-  const essential12 = calculatePricing('essential', 12, ['ordering_site', 'onsite_photo'])
-  // (3600 + 220) * 12 + 200 = 46040
-  assertEqual(essential12.totalDueUsd, 46040, 'essential 12 months with add-ons total')
-  assertEqual(essential12.billedMonths, 12, '12 months billed months')
+  const essential12 = calculatePricing('essential', 12, ['xiaohongshu_ops', 'onsite_photo'])
+  // (800 + 600) * 11 + 300 = 15700
+  assertEqual(essential12.totalDueUsd, 15700, 'essential 12 months with add-ons total')
+  assertEqual(essential12.billedMonths, 11, '12 months billed months')
+  assertEqual(essential12.discountUsd, 1400, '12 months gives one recurring month')
 
-  const deduped = calculatePricing('starter', 3, ['ordering_site', 'ordering_site'])
-  // deduped monthly addon only once: (800 + 220) * 3 = 3060
-  assertEqual(deduped.totalDueUsd, 3060, 'duplicate add-ons are deduped')
+  const deduped = calculatePricing('essential', 6, ['twelveeat_delivery_ops', 'twelveeat_delivery_ops'])
+  // deduped monthly addon only once: (800 + 80) * 6 = 5280
+  assertEqual(deduped.totalDueUsd, 5280, 'duplicate add-ons are deduped')
 
-  const starterWithMultiStore = calculatePricing('starter', 3, ['multi_store'], { multi_store: 2 })
-  // (800 + 200 * 2) * 3 = 3600
-  assertEqual(starterWithMultiStore.totalDueUsd, 3600, 'multi-store add-on uses unified price')
+  const monthlyAddons = calculatePricing('essential', 6, ['grab_foodpanda_ops', 'youtube_ops'])
+  // (800 + 300 + 800) * 6 = 11400
+  assertEqual(monthlyAddons.totalDueUsd, 11400, 'monthly add-ons use current prices')
 
-  const kolAddons = calculatePricing('starter', 3, ['kol_light', 'influencer_visit'])
-  // 800 * 3 + 599 + 1200 = 4199
-  assertEqual(kolAddons.totalDueUsd, 4199, 'KOL add-ons use unified prices')
+  const multiStore = calculatePricing('essential', 6, ['multi_store'], { multi_store: 2 })
+  // (800 + 300 * 2) * 6 = 8400
+  assertEqual(multiStore.totalDueUsd, 8400, 'multi-store add-on uses per-store price')
 
-  assertThrows(() => calculatePricing('starter', 2, []), 'invalid duration check')
+  const productionAddons = calculatePricing('booster', 3, ['short_video_six', 'influencer_visit', 'meituan_dianping_setup', 'twelveeat_delivery_setup'])
+  // 3600 * 3 + 600 + 2200 + 2200 + 220 = 16020
+  assertEqual(productionAddons.totalDueUsd, 16020, 'production add-ons use current prices')
+
+  const dianpingOps = calculatePricing('essential', 6, ['meituan_dianping_ops'])
+  // (800 + 200) * 6 = 6000
+  assertEqual(dianpingOps.totalDueUsd, 6000, 'Meituan Dianping operations uses monthly price')
+
+  assertThrows(() => calculatePricing('essential', 3, []), 'essential rejects 3 months')
+  assertThrows(() => calculatePricing('booster', 6, []), 'booster rejects 6 months')
   assertThrows(() => calculatePricing('bad-plan', 3, []), 'invalid plan check')
 
   console.log('[subscription-test] all pricing tests passed')

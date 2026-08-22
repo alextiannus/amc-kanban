@@ -136,7 +136,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
   if (canBrandOps) {
     const brandItems: MenuItemDef[] = [
       { id: 'dashboard',    view: 'dashboard',    label: '品牌计划',      icon: 'BookOpen' },
-      { id: 'calendar',     view: 'calendar',     label: '发布日历',        icon: 'Calendar' },
+      { id: 'calendar',     view: 'calendar',     label: '内容创建和发布计划', icon: 'Calendar' },
       { id: 'drafts',       view: 'drafts',       label: '发布内容 (Post)', icon: 'FileText' },
       { id: 'assets',       view: 'assets',       label: '素材库',          icon: 'Images' },
       { id: 'game',         view: 'game',         label: '店内活动',        icon: 'Gift' },

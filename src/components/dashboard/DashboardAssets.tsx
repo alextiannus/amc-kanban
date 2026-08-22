@@ -2820,7 +2820,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             
             <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />
 
-            {/* 跳转发布日历 — 新建发布 */}
+            {/* 跳转内容创建和发布计划 — 新建发布 */}
             <button
               onClick={() => markForSchedule(selected)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all shadow-sm"

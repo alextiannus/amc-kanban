@@ -75,7 +75,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '视频生产': 'Video Production',
   '爆品脚本': 'Viral Copy Scripts',
   '品牌计划': 'Brand Plan',
-  '发布日历': 'Publishing Calendar',
+  '内容创建和发布计划': 'Content Creation and Publishing Plan',
   '发布内容': 'Post Drafts',
   '素材库': 'Asset Library',
   '店内活动': 'In-store Campaigns',

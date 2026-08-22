@@ -663,7 +663,7 @@ export default function LearnPage() {
                       <ol className="list-decimal pl-5 space-y-2 text-xs text-slate-350 leading-relaxed">
                         <li>向 AI 员工发送你的本月营销需求（如“本月推出新季主推款产品，需要小红书主推”）。</li>
                         <li>AI 自动创建 Brief 行动卡片，并提取相关产品、价格以及要强调的方向。</li>
-                        <li>AMC 在 24 小时内确认并根据此 Brief 自动生成发布日历计划。</li>
+                        <li>AMC 在 24 小时内确认并根据此 Brief 自动生成内容创建和发布计划。</li>
                       </ol>
                     </div>
                   </div>

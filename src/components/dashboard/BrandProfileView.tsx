@@ -8,7 +8,7 @@ import {
   RefreshCw, FileText, Store, Utensils,
   Edit3, Plus,
   Users, Goal, HelpCircle,
-  MapPin, Music2
+  MapPin, Music2, WalletCards
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type {
@@ -1126,6 +1126,9 @@ ${storeLines}
             <button type="button" onClick={openPlanEditor} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-extrabold text-white dark:bg-white dark:text-slate-900">
               <BookOpen className="h-3.5 w-3.5" /> 编辑品牌计划与门店
             </button>
+            <a href="/dashboard/service-check" className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-extrabold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50">
+              <WalletCards className="h-3.5 w-3.5" /> 管理订阅服务
+            </a>
           </div>
         </div>
       </div>
