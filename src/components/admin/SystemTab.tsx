@@ -657,7 +657,7 @@ export default function SystemTab({
             <Settings size={18} className="text-blue-500" /> 系统服务与全局配置
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            在此管理 Kanban 自有文本 LLM 路由、邮件发送网关、监控定时任务与系统审计日志。文案、视频与 TTS 模型由 amc-content Content Lab 管理。
+            在此管理 Kanban 模型路由、邮件发送网关、监控定时任务与系统审计日志。TTS 与视频执行会按任务路由对接 amc-content Content Lab。
           </p>
         </div>
       </div>
@@ -672,10 +672,10 @@ export default function SystemTab({
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
               <Sparkles size={15} className="text-indigo-500" />
-              <span>Kanban 文本大模型配置与多路容灾路由</span>
+              <span>Kanban 模型配置与多路容灾路由</span>
             </span>
             <span className="text-[10px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/30">
-              Kanban 文本 LLM：{llmConfigs.length} 路由
+              Kanban 模型：{llmConfigs.length} 路由
             </span>
           </button>
 
@@ -684,13 +684,13 @@ export default function SystemTab({
               <div className="flex justify-between items-start gap-4 pt-2">
                 <div className="space-y-1">
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-bold">
-                    这里只显示 Kanban 自己调用的文本 LLM。MiniMax TTS、视频生成和 amc-content Copywriter 模型已迁移到 Content Lab。
+                    这里显示 Kanban 的文本 LLM、MiniMax TTS 与视频模型路由；TTS 和视频任务会通过 amc-content Content Lab 执行。
                   </p>
                   <a
                     href="/admin/content-lab"
                     className="inline-flex text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
                   >
-                    打开 amc-content Content Lab 查看模型与 TTS 配置
+                    打开 amc-content Content Lab 查看执行侧模型与 TTS 配置
                   </a>
                 </div>
                 <button
@@ -890,7 +890,7 @@ export default function SystemTab({
                   AI 模型与 API Key 已迁移至 AI 模型配置
                 </p>
                 <p className="text-[11px] text-indigo-600 dark:text-indigo-400 leading-relaxed">
-                  Kanban 仅保留自身文本 LLM 路由。MiniMax TTS、amc-content Copywriter、参考视频分析与视频生成模型现在由 <strong>amc-content Content Lab</strong> 管理。
+                  Kanban 已恢复本地模型路由可见性；MiniMax TTS、amc-content Copywriter、参考视频分析与视频生成的实际执行由 <strong>amc-content Content Lab</strong> 承接。
                 </p>
                 <p className="text-[10px] text-indigo-500 dark:text-indigo-500">
                   MiniMax TTS：Content Lab / 模型与路由 / tts_generation<br/>
@@ -1573,6 +1573,11 @@ export default function SystemTab({
                     <option value="openai">OpenAI compatible</option>
                     <option value="anthropic">Anthropic Claude</option>
                     <option value="deepseek">DeepSeek API</option>
+                    <option value="minimax">MiniMax TTS / Chat</option>
+                    <option value="seedance">Seedance Video</option>
+                    <option value="fal">Fal Video</option>
+                    <option value="kieai">Kie.ai Video</option>
+                    <option value="volcengine">Volcengine Video</option>
                     <option value="custom_shim">自定义格式 (Shim)</option>
                   </select>
                 </label>

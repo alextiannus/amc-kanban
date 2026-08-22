@@ -42,7 +42,6 @@ export async function GET() {
     })
 
     const maskedConfigs = configs
-      .filter((c: any) => !isVideoModelConfig(c.provider, c.taskTags) && !(c.taskTags || []).some((tag: string) => ['tts_generation', 'tts'].includes(normalizeTaskTag(tag))))
       .map((c: any) => ({
         ...c,
         apiKey: maskKey(c.apiKey),
@@ -102,9 +101,6 @@ export async function POST(request: Request) {
     const cleanContentGenerationTypes = Array.isArray(contentGenerationTypes)
       ? contentGenerationTypes.map(normalizeContentGenerationType).filter(Boolean)
       : []
-    if (isVideoModelConfig(provider, cleanTaskTags) || cleanTaskTags.some((tag) => tag === 'tts_generation' || tag === 'tts')) {
-      return NextResponse.json({ error: 'Video and TTS profiles are owned by AMC-Content. Configure them in Content Lab.' }, { status: 409 })
-    }
     const cleanCapabilities = inferExecutionCapabilities(String(provider), cleanTaskTags, normalizeCapabilities(capabilities))
     const unsupported = unsupportedTasks(cleanTaskTags, cleanCapabilities)
     if (unsupported.length) {

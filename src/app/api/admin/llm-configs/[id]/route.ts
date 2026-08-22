@@ -97,9 +97,6 @@ export async function PATCH(request: Request, { params }: Params) {
     const nextContentGenerationTypes = contentGenerationTypes !== undefined
       ? Array.isArray(contentGenerationTypes) ? contentGenerationTypes.map(normalizeContentGenerationType).filter(Boolean) : []
       : current.contentGenerationTypes
-    if (isVideoModelConfig(testProvider, nextTaskTags) || nextTaskTags.some((tag: string) => tag === 'tts_generation' || tag === 'tts')) {
-      return NextResponse.json({ error: 'Video and TTS profiles are owned by AMC-Content. Configure them in Content Lab.' }, { status: 409 })
-    }
     const nextCapabilities = inferExecutionCapabilities(
       testProvider,
       nextTaskTags,

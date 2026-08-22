@@ -7,8 +7,8 @@ export const dynamic = 'force-dynamic'
 const MAX_TEXT_LENGTH = 600
 
 /**
- * Server-side TTS proxy. The execution profile is dynamically selected from
- * LLMConfig taskTags=tts_generation; the legacy tts tag remains compatible.
+ * Server-side TTS proxy. Kanban forwards execution to AMC-Content, where the
+ * active tts_generation model profile is selected.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession()
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'TTS generation failed'
     if (message === 'TTS_MODEL_NOT_CONFIGURED') {
-      return NextResponse.json({ error: 'TTS is not configured. Add an enabled tts_generation model profile.' }, { status: 503 })
+      return NextResponse.json({ error: 'TTS is not configured in AMC-Content. Check the tts_generation model profile in Content Lab.' }, { status: 503 })
     }
     if (message.toLowerCase().includes('timeout')) return NextResponse.json({ error: 'TTS timed out' }, { status: 504 })
     console.error('[TTS Proxy] request failed:', error)
