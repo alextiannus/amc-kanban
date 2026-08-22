@@ -207,9 +207,9 @@ function createStoreId() {
 function brandPlanErrorMessage(error: unknown) {
   const code = typeof error === 'string' ? error : ''
   if (code === 'merchant_interview_required') return '请先填写并保存品牌主张访谈。'
-  if (code === 'brand_plan_update_required') return '请先生成年度营销方案。'
-  if (code === 'annual_plan_required') return '请先生成年度营销方案。'
-  if (code === 'quarter_plan_required') return '请先生成包含季度明细的年度营销方案。'
+  if (code === 'brand_plan_update_required') return '请先生成品牌营销方案。'
+  if (code === 'annual_plan_required') return '请先生成品牌营销方案。'
+  if (code === 'quarter_plan_required') return '请先生成包含季度明细的品牌营销方案。'
   if (code === 'growth_research_still_running') return 'AMC-Growth 调研仍在进行中，请稍后再次读取报告。'
   if (code === 'growth_research_failed') return 'AMC-Growth 调研生成失败，请检查 Growth 服务或稍后重试。'
   if (code === 'growth_research_create_failed') return '未能触发 AMC-Growth 摸底调研，请检查 Growth 服务。'
@@ -227,6 +227,12 @@ function textLines(value: string) {
     .split(/\n+/)
     .map(item => item.replace(/^[-*]\s*/, '').trim())
     .filter(Boolean)
+}
+
+function quarterForMonthValue(month: string) {
+  const monthNumber = Number(month.split('-')[1])
+  if (!Number.isFinite(monthNumber) || monthNumber < 1 || monthNumber > 12) return 'Q1'
+  return `Q${Math.floor((monthNumber - 1) / 3) + 1}`
 }
 
 function socialPlatformLabel(platformId: string) {
@@ -905,7 +911,7 @@ ${storeLines}
   const handleGenerateAnnualPlan = async () => {
     setPlanGenerating('annual')
     try {
-      await runBrandPlanAction('generate_annual_plan', '年度营销方案已生成')
+      await runBrandPlanAction('generate_annual_plan', '品牌营销方案已生成')
     } finally {
       setPlanGenerating(null)
     }
@@ -1002,10 +1008,10 @@ ${storeLines}
   const interview = merchantInterview
   const annualPlan = brandPlanData.annualPlan
   const brandPlanUpdated = Boolean(brandPlanData.researchReport || merchantInterview)
-  const currentQuarter = `Q${Math.floor(new Date().getMonth() / 3) + 1}`
+  const selectedCalendarQuarter = quarterForMonthValue(calendarMonth)
   const annualQuarterPlans = annualPlan?.quarterlyPlans || []
-  const currentAnnualQuarterPlan = annualQuarterPlans.find(item => item.quarter === currentQuarter) || annualQuarterPlans[0]
-  const currentQuarterPlan = brandPlanData.quarterlyPlans?.find(item => item.quarter === currentQuarter) || brandPlanData.quarterlyPlans?.[0]
+  const currentAnnualQuarterPlan = annualQuarterPlans.find(item => item.quarter === selectedCalendarQuarter)
+  const currentQuarterPlan = brandPlanData.quarterlyPlans?.find(item => item.quarter === selectedCalendarQuarter)
   const calendarQuarterReady = Boolean(currentQuarterPlan || currentAnnualQuarterPlan)
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
   const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
@@ -1015,7 +1021,7 @@ ${storeLines}
     { label: '社交媒体渠道', value: socialAccounts.length ? `${socialAccounts.length} 个账号` : '待同步', status: socialAccounts.length ? 'ready' : 'pending' },
     { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录', status: merchantInterviewRequired ? 'pending' : 'ready' },
     { label: '营销方案输入', value: brandPlanUpdated ? '已具备' : '待完善', status: brandPlanUpdated ? 'ready' : 'warning' },
-    { label: '年度营销方案', value: annualPlan ? (annualQuarterPlans.length ? `已生成 · ${annualQuarterPlans.length}季` : '已生成') : '待生成', status: annualPlan ? 'ready' : 'pending' },
+    { label: '品牌营销方案', value: annualPlan ? (annualQuarterPlans.length ? `已生成 · ${annualQuarterPlans.length}季` : '已生成') : '待生成', status: annualPlan ? 'ready' : 'pending' },
     { label: '发布日历', value: currentCalendarItems.length ? `${currentCalendarItems.length} 条` : '待生成', status: currentCalendarItems.length ? 'ready' : 'pending' },
   ]
 
@@ -1378,13 +1384,13 @@ ${storeLines}
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 3</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">年度营销方案</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">品牌营销方案</h3>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成年度营销方案
+                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} 生成品牌营销方案
                 </button>
-                <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑年度营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
+                <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑品牌营销方案', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
                   编辑
                 </button>
               </div>
@@ -1455,7 +1461,7 @@ ${storeLines}
                   </div>
                 )}
               </div>
-            ) : <p className="mt-4 text-xs text-slate-500">由 AMC-Kanban 读取五块输入，生成年度目标、四个季度策略、重点推广点和月度发布方向。</p>}
+            ) : <p className="mt-4 text-xs text-slate-500">由 AMC-Kanban 读取五块输入，生成未来四个季度的品牌营销方向、重点推广点和月度发布方向。</p>}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">

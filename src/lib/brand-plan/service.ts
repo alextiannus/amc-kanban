@@ -636,6 +636,14 @@ async function buildAnnualMarketingSolution(
   const input = {
     ...buildMarketingPlanInput(brand, current, interview),
     subscriptionStrategy: fallback.subscriptionStrategy,
+    planningWindow: {
+      rule: '如果当前季度剩余不到一个月，则从下一季度开始；否则从当前季度开始。连续规划未来四个季度。',
+      quarters: (fallback.quarterlyPlans || []).map((item) => ({
+        quarter: item.quarter,
+        months: item.monthlyFocus.map((month) => month.month),
+        focus: item.focus,
+      })),
+    },
   }
   const llm = await callMarketingPlanLLM('annual', input)
   if (!llm.value) {
@@ -655,7 +663,7 @@ async function buildRuleAnnualMarketingSolution(
   current: BrandPlanWorkspaceData,
   interview: BrandPlanMerchantInterview | null
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
-  const year = new Date().getFullYear()
+  const planningQuarters = planningQuarterSequence()
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
   const subscriptionStrategy = await buildSubscriptionStrategy(brand)
@@ -669,7 +677,7 @@ async function buildRuleAnnualMarketingSolution(
     interviewFocus,
   ]).slice(0, 6)
   const promotionPointNames = basePoints.length ? basePoints : ['招牌产品', '门店位置和便利性', '真实顾客评价', '节日活动']
-  const quarterlyPlans = [
+  const quarterTemplates = [
     {
       quarter: 'Q1',
       strategy: '先把顾客第一次看到品牌时需要判断的信息讲清楚，建立可信线上门面。',
@@ -698,10 +706,12 @@ async function buildRuleAnnualMarketingSolution(
       campaigns: ['节日活动', '年度招牌回顾', '老顾客召回'],
       contentThemes: ['节日聚会', '年度人气产品', '感谢老顾客'],
     },
-  ].map((quarterPlan, quarterIndex) => {
+  ]
+  const quarterlyPlans = planningQuarters.map((planningQuarter, sequenceIndex) => {
+    const quarterPlan = quarterTemplates[planningQuarter.quarterIndex]
     const quarterProducts = promotionPointNames.slice(0, 4)
     const monthlyFocus = [0, 1, 2].map((offset) => {
-      const date = new Date(year, quarterIndex * 3 + offset, 1)
+      const date = new Date(planningQuarter.year, planningQuarter.quarterIndex * 3 + offset, 1)
       const point = quarterProducts[offset % Math.max(1, quarterProducts.length)]
       return {
         month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
@@ -715,9 +725,10 @@ async function buildRuleAnnualMarketingSolution(
     })
     return {
       ...quarterPlan,
+      quarter: planningQuarter.quarter,
       promotionPoints: quarterProducts.map((point, index) => ({
         name: point,
-        rationale: index === 0 ? '优先承接商家的核心产品/服务认知。' : '作为季度内容的辅助转化理由。',
+        rationale: index === 0 && sequenceIndex === 0 ? '优先承接当前阶段最需要讲清楚的核心产品/服务认知。' : '作为季度内容的辅助转化理由。',
         targetAudience: index % 2 === 0 ? '附近本地顾客和回头客' : '第一次看到品牌的新客',
         customerAction: '收藏、咨询、点击路线、预订或下单',
         platforms: platformCoverage,
@@ -729,15 +740,10 @@ async function buildRuleAnnualMarketingSolution(
   return {
     generatedAt: new Date().toISOString(),
     goal: interviewFocus
-      ? `${year} 年围绕主理人确认的经营重点，结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`
-      : `${year} 年结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`,
+      ? `未来四个季度围绕主理人确认的经营重点，结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`
+      : `未来四个季度结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`,
     theme,
-    quarterlyFocus: [
-      { quarter: 'Q1', focus: '整理基础资料、建立招牌认知', campaigns: ['新年/开年主题', '招牌产品教育', '门店位置与营业信息强化'] },
-      { quarter: 'Q2', focus: '放大主推产品和消费场景', campaigns: ['家庭/朋友聚餐', '工作餐或日常复购', '顾客评价内容'] },
-      { quarter: 'Q3', focus: '优化转化入口和复购活动', campaigns: ['套餐/会员', '外卖或预订转化', '商圈合作'] },
-      { quarter: 'Q4', focus: '节日节点和年度口碑沉淀', campaigns: ['节日活动', '年度招牌回顾', '老顾客召回'] },
-    ],
+    quarterlyFocus: quarterlyPlans.map((item) => ({ quarter: item.quarter, focus: item.focus, campaigns: item.campaigns })),
     quarterlyPlans,
     metrics: ['路线点击', '电话/私信咨询', '预订/下单点击', '内容发布完成率', '顾客评价与收藏'],
     subscriptionStrategy,
@@ -1198,13 +1204,14 @@ function buildMarketingPlanInput(
 
 async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<string, unknown>) {
   const schemaInstruction = scope === 'annual'
-    ? `返回 JSON 对象，字段必须为：goal(string), theme(string), quarterlyFocus(array，每项含 quarter/focus/campaigns), quarterlyPlans(array，必须含 Q1-Q4 四项；每项含 quarter, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。`
+    ? `返回 JSON 对象，字段必须为：goal(string), theme(string), quarterlyFocus(array，每项含 quarter/focus/campaigns), quarterlyPlans(array，必须含连续四个季度；quarter 取 Q1-Q4；每项含 quarter, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts；monthlyFocus 每项含 month, focus, promotionPoints), metrics(array), researchFocus(string)。`
     : `返回 JSON 对象，字段必须为：quarter(string, Q1-Q4), objective(string), monthlyFocus(array，每项含 month/focus), contentDirections(array), promotionPoints(array，每项含 name/rationale/customerAction/platforms/suggestedMonthlyPosts)。`
   const prompt = [
     '你是 AMC-Kanban 的本地商家营销方案策划师。',
     '请基于输入里的品牌信息、门店信息、品牌主张、Growth 数据调研、订阅运营策略，生成可执行的营销方案。',
     '要求：接地气，适合普通餐饮/本地服务老板；不要写空泛品牌大词；必须受订阅平台和发布频次约束；不要虚构不存在的产品或门店。',
-    '年度营销方案必须能直接支撑季度方案和月度发布日历：每个季度都要写清楚推广策略、重点推广点、适用平台、建议发布次数、顾客行动和月度拆解。',
+    '品牌营销方案必须能直接支撑季度方案和月度发布日历：每个季度都要写清楚推广策略、重点推广点、适用平台、建议发布次数、顾客行动和月度拆解。',
+    '如果输入里有 planningWindow.quarters，必须按该顺序和月份生成未来四个季度；不要默认从 Q1 开始。',
     schemaInstruction,
     '只输出合法 JSON，不要 Markdown，不要解释。',
     JSON.stringify(input),
@@ -1258,7 +1265,7 @@ function normalizeAnnualQuarterlyPlans(
   fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']
 ): NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']> {
   const fallbackByQuarter = new Map((fallback || []).map((item) => [item.quarter, item]))
-  return arrayValue(value)
+  const parsed = arrayValue(value)
     .map((item) => objectValue(item))
     .map((item) => {
       const quarter = text(item.quarter)
@@ -1293,6 +1300,9 @@ function normalizeAnnualQuarterlyPlans(
       }
     })
     .filter((item) => /^Q[1-4]$/.test(item.quarter) && item.focus)
+  if (!fallback?.length) return parsed
+  const parsedByQuarter = new Map(parsed.map((item) => [item.quarter, item]))
+  return fallback.map((fallbackItem) => parsedByQuarter.get(fallbackItem.quarter) || fallbackItem)
 }
 
 function normalizeQuarterMarketingSolution(
@@ -1606,6 +1616,23 @@ function positiveNumber(value: unknown) {
 
 function clampPostCount(value: number) {
   return Math.min(31, Math.max(1, value))
+}
+
+function planningQuarterSequence(now = new Date()) {
+  const currentQuarterIndex = Math.floor(now.getMonth() / 3)
+  const nextQuarterStart = new Date(now.getFullYear(), (currentQuarterIndex + 1) * 3, 1)
+  const remainingMs = nextQuarterStart.getTime() - now.getTime()
+  const oneMonthMs = 30 * 24 * 60 * 60 * 1000
+  const startOffset = remainingMs < oneMonthMs ? 1 : 0
+  return [0, 1, 2, 3].map((offset) => {
+    const absoluteQuarter = currentQuarterIndex + startOffset + offset
+    const quarterIndex = absoluteQuarter % 4
+    return {
+      quarter: `Q${quarterIndex + 1}`,
+      quarterIndex,
+      year: now.getFullYear() + Math.floor(absoluteQuarter / 4),
+    }
+  })
 }
 
 function stringList(value: unknown) {
