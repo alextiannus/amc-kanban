@@ -2236,6 +2236,12 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     let value = parseJsonObject(result.text)
     let repairTrace: Record<string, unknown> | undefined
     if (!value && result.text) {
+      console.warn('[brand-plan] marketing_plan invalid JSON snippet', {
+        scope,
+        provider: result.provider,
+        modelName: result.modelName,
+        snippet: result.text.slice(0, 1200),
+      })
       const repair = await repairMarketingPlanJson(scope, result.text)
       value = repair.value
       repairTrace = repair.trace
