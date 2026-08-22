@@ -128,6 +128,10 @@ type BrandPlanWorkspaceData = {
       monthlyFocus: Array<{ month: string; focus: string; promotionPoints: string[] }>
     }>
     metrics: string[]
+    generationMode?: string
+    llmProvider?: string
+    llmModel?: string
+    llmError?: string
     subscriptionStrategy?: {
       planId: string
       planName: string
@@ -1725,6 +1729,11 @@ ${storeLines}
                         <span key={metric} className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-900 dark:text-slate-300">{metric}</span>
                       ))}
                     </div>
+                  ) : null}
+                  {annualPlan.llmError ? (
+                    <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-relaxed text-amber-700 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+                      LLM 未返回有效 JSON，本次已使用规则兜底方案。错误：{annualPlan.llmError}
+                    </p>
                   ) : null}
                 </div>
                 {/* Quarter tabs */}

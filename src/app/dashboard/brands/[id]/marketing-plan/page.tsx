@@ -60,6 +60,7 @@ type AnnualPlan = {
   generationMode?: string
   llmProvider?: string
   llmModel?: string
+  llmError?: string
   subscriptionStrategy?: {
     planName: string
     includedServices: string[]
@@ -349,6 +350,11 @@ export default function BrandMarketingPlanPresentationPage() {
                     <div><dt className="text-xs font-bold text-[var(--brand-muted)]">生成模型</dt><dd className="mt-1 font-black">{plan.llmModel || plan.generationMode || '未记录'}</dd></div>
                     <div><dt className="text-xs font-bold text-[var(--brand-muted)]">展示风格</dt><dd className="mt-1 font-black">{decorationLabel(theme.decoration)}</dd></div>
                   </dl>
+                  {plan.llmError ? (
+                    <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-5 text-amber-700">
+                      LLM 未返回有效 JSON，本次已使用规则兜底方案。错误：{plan.llmError}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </section>

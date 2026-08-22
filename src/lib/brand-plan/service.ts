@@ -792,7 +792,19 @@ async function buildAnnualMarketingSolution(
   }
   const llm = await callMarketingPlanLLM('annual', input)
   if (!llm.value) {
-    throw new BrandPlanError('marketing_plan_llm_failed', 502)
+    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; saving rule fallback instead.', {
+      provider: llm.provider,
+      modelName: llm.modelName,
+      error: llm.error || 'llm_returned_invalid_json',
+    })
+    return {
+      ...fallback,
+      generatedAt: new Date().toISOString(),
+      generationMode: 'RULE_FALLBACK',
+      llmProvider: llm.provider || undefined,
+      llmModel: llm.modelName || undefined,
+      llmError: llm.error || 'llm_returned_invalid_json',
+    }
   }
   return normalizeAnnualMarketingSolution(llm.value, fallback, llm)
 }
@@ -1470,7 +1482,7 @@ async function callMarketingPlanLLM(scope: 'annual' | 'quarter', input: Record<s
     inputJson: JSON.stringify(input),
   })
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 4200 : 2200, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual' ? 6200 : 2600, {
       temperature: 0.35,
       jsonMode: true,
       deadlineMs: 45000,
