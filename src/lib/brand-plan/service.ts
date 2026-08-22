@@ -994,7 +994,7 @@ async function buildPublishingMonth(
         interviewFocus,
         index,
       }),
-      sampleHit: calendarSampleHit(product, candidate),
+      sampleHit: '',
       status: '待确认',
       selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
       matchedTags: stringList(candidate?.matchedTags),
@@ -1058,7 +1058,7 @@ async function regeneratePublishingCalendarItem(
       interviewFocus: '',
       index: 0,
     }),
-    sampleHit: calendarSampleHit(item.product, candidate),
+    sampleHit: '',
     selectedCreativeCandidateId: text(candidate.creativeCandidateId),
     matchedTags: stringList(candidate.matchedTags),
     matchedInspirations: stringList(candidate.matchedInspirations),
@@ -1354,24 +1354,70 @@ function calendarHookText(input: CalendarCopyContext) {
 function calendarPlanningText(input: CalendarCopyContext) {
   const product = productDisplayName(input.product)
   const candidate = input.candidate || null
+  const brandName = brandDisplayName(input.brand)
   const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
   const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
+  const shots = calendarReplicationShots(input)
+  const voiceover = calendarScriptLines(candidate, 'voiceover').slice(0, 3)
+  const subtitles = calendarScriptLines(candidate, 'subtitles').slice(0, 3)
   return [
+    `复刻目标：保留原视频的节奏和镜头逻辑，全部换成${brandName}的${product}真实素材。`,
     `开场：${calendarHookText(input)}`,
-    `内容：围绕${product}拍真实出品、上桌过程和顾客会关心的口味细节。`,
-    angle ? `参考角度：${angle}。` : '',
-    `结尾：引导顾客${customerAction}。`,
+    shots.length ? `分镜脚本：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
+    voiceover.length ? `口播方向：${voiceover.map((line) => adaptCalendarScriptText(line, input)).join(' / ')}` : '',
+    subtitles.length ? `字幕方向：${subtitles.map((line) => adaptCalendarScriptText(line, input)).join(' / ')}` : '',
+    angle ? `拍摄重点：${adaptCalendarScriptText(angle, input)}。` : '',
     input.interviewFocus ? `可带一句主理人原话：${cleanCalendarText(input.interviewFocus, '')}。` : '',
-  ].filter(Boolean).join(' ')
+    `收尾：引导顾客${customerAction}。`,
+  ].filter(Boolean).join('\n')
 }
 
-function calendarSampleHit(product: string, candidate: Record<string, unknown> | null) {
+function calendarReplicationShots(input: CalendarCopyContext) {
+  const script = objectValue(input.candidate?.scriptContent)
+  const sourceShots = Array.isArray(script.shots) ? script.shots : []
+  const adapted = sourceShots
+    .map((shot, index) => {
+      const item = objectValue(shot)
+      const label = cleanCalendarText(text(item.label), `镜头 ${index + 1}`)
+      const instruction = adaptCalendarScriptText(text(item.instruction), input)
+      return instruction ? `${label}：${instruction}` : ''
+    })
+    .filter(Boolean)
+  if (adapted.length) return adapted
+  const brandName = brandDisplayName(input.brand)
+  const product = productDisplayName(input.product)
+  const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
+  return [
+    `0-3s：近景拍${product}上桌，先给热气、鱼肉状态和夹菜动作。`,
+    `4-10s：补一组过程镜头，拍汤色、配菜、分量和适合几个人吃。`,
+    `11-18s：带到${brandName}门店环境、桌面氛围和顾客会关心的口味细节。`,
+    `结尾：用地址、预约或收藏动作引导顾客${customerAction}。`,
+  ]
+}
+
+function calendarScriptLines(candidate: Record<string, unknown> | null, key: 'voiceover' | 'subtitles') {
   const script = objectValue(candidate?.scriptContent)
-  const opening = cleanCalendarText(text(script.opening), '')
-  const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
-  if (opening) return `参考开头：${opening}`
-  if (angle) return `参考角度：${angle}`
-  return `参考角度：用真实画面说明“${productDisplayName(product)}”为什么值得点。`
+  return stringList(script[key])
+}
+
+function adaptCalendarScriptText(value: string, input: CalendarCopyContext) {
+  const brandName = brandDisplayName(input.brand)
+  const product = productDisplayName(input.product)
+  const sourceVideo = objectValue(input.candidate?.sourceVideo)
+  const sourcePost = objectValue(input.candidate?.sourcePost)
+  const sourceTitle = cleanCalendarText(text(sourceVideo.title || sourcePost.title), '')
+  let cleaned = cleanCalendarText(value, '')
+  if (sourceTitle) cleaned = cleaned.replace(new RegExp(escapeCalendarRegExp(sourceTitle), 'gi'), brandName)
+  cleaned = cleaned
+    .replace(/\b(Bao Specialty Cafe|Bao Specialty|DAILY|the cafe|this cafe|the store)\b/gi, brandName)
+    .replace(/\b(breakfast|afternoon tea|bakery|pastry|bao|coffee|snack)\b/gi, product)
+    .replace(/原视频|参考视频|参考内容|样板爆品/g, '这条创意')
+    .trim()
+  return cleaned || `围绕${product}拍真实出品、服务过程和顾客会关心的细节`
+}
+
+function escapeCalendarRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function calendarSampleLinks(candidate: Record<string, unknown> | null) {

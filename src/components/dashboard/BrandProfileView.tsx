@@ -1153,7 +1153,7 @@ ${storeLines}
         contentType: '图文',
         product: '待填写推广点',
         planning: '写清楚拍什么、怎么拍、发布后要引导顾客做什么。',
-        sampleHit: '补充参考内容',
+        sampleHit: '',
         status: '待确认',
         matchedTags: [],
         matchedInspirations: [],
@@ -1898,26 +1898,26 @@ ${storeLines}
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {currentCalendarItems.length ? currentCalendarItems.map((item, index) => (
-                <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                  <div className="flex items-center justify-between gap-3">
-                    <input
-                      type="text"
-                      value={item.date}
-                      onChange={(event) => {
-                        handleUpdateCalendarItem(item.id, index, { date: event.target.value })
-                      }}
-                      onBlur={(event) => {
-                        const rawDate = event.target.value.trim()
-                        const nextDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && rawDate >= minimumCalendarDate ? rawDate : minimumCalendarDate
-                        if (nextDate !== rawDate) {
-                          showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排。`, 'info')
-                          handleUpdateCalendarItem(item.id, index, { date: nextDate })
-                        }
-                      }}
-                      placeholder="YYYY-MM-DD"
-                      className="w-36 rounded-lg bg-slate-900 px-2 py-1 text-center text-[11px] font-black text-white outline-none dark:bg-white dark:text-slate-900"
-                    />
-                    <div className="flex gap-1.5">
+                <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={item.date}
+                        onChange={(event) => {
+                          handleUpdateCalendarItem(item.id, index, { date: event.target.value })
+                        }}
+                        onBlur={(event) => {
+                          const rawDate = event.target.value.trim()
+                          const nextDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) && rawDate >= minimumCalendarDate ? rawDate : minimumCalendarDate
+                          if (nextDate !== rawDate) {
+                            showToastVal(`内容计划需至少提前 ${CONTENT_PLANNING_LEAD_DAYS} 天安排。`, 'info')
+                            handleUpdateCalendarItem(item.id, index, { date: nextDate })
+                          }
+                        }}
+                        placeholder="YYYY-MM-DD"
+                        className="w-36 rounded-lg bg-slate-900 px-2 py-1 text-center text-[11px] font-black text-white outline-none dark:bg-white dark:text-slate-900"
+                      />
                       <select
                         value={item.platformSlug || normalizeSchedulePlatform(item.platform || '')}
                         onChange={(event) => {
@@ -1938,6 +1938,28 @@ ${storeLines}
                         <option value="评论回复">评论回复</option>
                       </select>
                     </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleRegenerateCalendarItem(item.id)}
+                        disabled={Boolean(planGenerating) || !item.id}
+                        aria-label="重做这一条"
+                        title="重做这一条"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                      >
+                        {planGenerating === `calendar_item:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCalendarItem(item.id, index)}
+                        disabled={Boolean(planGenerating)}
+                        aria-label="删除这条内容计划"
+                        title="删除"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 hover:border-rose-200 hover:text-rose-600 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:border-rose-900 dark:hover:text-rose-300"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <input
                     value={item.title}
@@ -1952,34 +1974,23 @@ ${storeLines}
                   <textarea
                     value={item.planning}
                     onChange={(event) => handleUpdateCalendarItem(item.id, index, { planning: event.target.value })}
-                    rows={2}
+                    rows={7}
                     className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                   />
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}
-                  <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                    <label className="block">
-                      <span className="font-black text-slate-700 dark:text-slate-200">参考内容</span>
-                      <textarea
-                        value={item.sampleHit}
-                        onChange={(event) => handleUpdateCalendarItem(item.id, index, { sampleHit: event.target.value })}
-                        rows={2}
-                        className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs leading-relaxed text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300"
-                      />
-                    </label>
-                    {(item.sampleVideoUrl || item.sampleOriginalUrl) ? (
-                      <a
-                        href={item.sampleVideoUrl || item.sampleOriginalUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        {item.sampleVideoUrl ? '查看参考视频' : '查看原视频'}
-                      </a>
-                    ) : null}
-                  </div>
+                  {(item.sampleVideoUrl || item.sampleOriginalUrl) ? (
+                    <a
+                      href={item.sampleVideoUrl || item.sampleOriginalUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      灵感来源
+                    </a>
+                  ) : null}
                   <select
                     value={item.status}
                     onChange={(event) => handleUpdateCalendarItem(item.id, index, { status: event.target.value })}
@@ -1990,22 +2001,6 @@ ${storeLines}
                     <option value="待补素材">待补素材</option>
                     <option value="已完成">已完成</option>
                   </select>
-                  <button
-                    type="button"
-                    onClick={() => handleRegenerateCalendarItem(item.id)}
-                    disabled={Boolean(planGenerating) || !item.id}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                  >
-                    {planGenerating === `calendar_item:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} 重做这一条
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteCalendarItem(item.id, index)}
-                    disabled={Boolean(planGenerating)}
-                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-                  >
-                    删除
-                  </button>
                 </div>
               )) : (
                 <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">这个月还没有内容计划。可以生成一版，也可以先手动加一条。</div>
