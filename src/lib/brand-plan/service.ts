@@ -1945,6 +1945,10 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
     .replace(/优惠时间/g, '到店信息')
     .replace(/套餐价公开/g, '点单前先看')
     .replace(/隐藏福利|必吃|必点|天花板/g, '')
+    .replace(/晚上\d+点后到店有惊喜（活动规则需门店确认）。?/g, '想吃热乎这一锅，先收藏地址。')
+    .replace(/有惊喜/g, '有真实反应')
+    .replace(/（惊喜）/g, '（自然反应）')
+    .replace(/惊喜/g, '自然反应')
     .replace(/雨天[^，。.!！?？]*送[^，。.!！?？]*/g, '雨天到店前先确认活动规则')
     .replace(/送一碗[^，。.!！?？]*/g, '活动规则以门店确认为准')
     .replace(/到店报暗号[^，。.!！?？]*/g, '到店前先确认活动规则')
@@ -1967,7 +1971,7 @@ function calendarCreativeQualityIssues(items: BrandPlanCalendarItem[]) {
   const forbidden = [
     { label: '来源说明', pattern: /保留灵感|当前灵感|适配提醒|原视频|参考内容|样板爆品|复刻目标|mp4/i },
     { label: '原始品牌或品类残留', pattern: /Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery|#武冈|破酥包/i },
-    { label: '未确认促销', pattern: /优惠|获赠|赠送|出示本条|暗号|隐藏福利|送一碗|雨天.*送/i },
+    { label: '未确认促销', pattern: /优惠|获赠|赠送|出示本条|暗号|隐藏福利|送一碗|雨天.*送|惊喜/i },
     { label: '未确认价格', pattern: /门店确认价|套餐价公开|[$]\s?\d/i },
     { label: '夸张口号', pattern: /天花板|必吃|必点|爆单|刷屏|引爆|全网/i },
   ]
