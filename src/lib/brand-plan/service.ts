@@ -1730,7 +1730,7 @@ async function reviewCalendarCreativeItemsWithLLM(
   items: BrandPlanCalendarItem[]
 ): Promise<BrandPlanCalendarItem[]> {
   if (!items.length) return items
-  const chunkSize = 6
+  const chunkSize = 4
   if (items.length > chunkSize) {
     const chunks: BrandPlanCalendarItem[][] = []
     for (let index = 0; index < items.length; index += chunkSize) chunks.push(items.slice(index, index + chunkSize))
@@ -1789,13 +1789,40 @@ async function reviewCalendarCreativeItemsWithLLM(
         allowAnyFallback: false,
         allowSystemFallback: false,
       })
-      const parsed = parseJsonValue(result.text)
-      const reviewed = (Array.isArray(parsed) ? parsed : arrayValue(objectValue(parsed).items)).map(objectValue)
+      let reviewed: Array<Record<string, unknown>> = []
+      try {
+        const parsed = parseJsonValue(result.text)
+        reviewed = (Array.isArray(parsed) ? parsed : arrayValue(objectValue(parsed).items)).map(objectValue)
+      } catch (parseError) {
+        if (attempt === 0) {
+          repairNote = [
+            '上一版不是合法 JSON，请只输出可解析 JSON 对象。',
+            'items 必须是数组；每项 id 必须原样使用输入 id；materialRequirements 必须是字符串数组。',
+            '不要输出 Markdown、注释、半截字段或多余文字。',
+          ].join('\n')
+          console.warn('[brand-plan] calendar creative review returned invalid json; retrying', {
+            responseTextCharCount: result.text?.length || 0,
+            snippet: result.text?.slice(0, 800) || '',
+            error: parseError instanceof Error ? parseError.message : String(parseError),
+          })
+          continue
+        }
+        console.warn('[brand-plan] calendar creative review returned invalid json', {
+          responseTextCharCount: result.text?.length || 0,
+          snippet: result.text?.slice(0, 1200) || '',
+          error: parseError instanceof Error ? parseError.message : String(parseError),
+        })
+        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+      }
       if (!reviewed.length) {
         console.warn('[brand-plan] calendar creative review returned no parsable items', {
           responseTextCharCount: result.text?.length || 0,
           snippet: result.text?.slice(0, 1200) || '',
         })
+        if (attempt === 0) {
+          repairNote = '上一版 JSON 没有返回 items 数组。请按输入条目逐条返回，id 必须原样保留。'
+          continue
+        }
         throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       }
       if (reviewed.length < items.length) {
@@ -1804,6 +1831,10 @@ async function reviewCalendarCreativeItemsWithLLM(
           actual: reviewed.length,
           snippet: result.text?.slice(0, 1200) || '',
         })
+        if (attempt === 0) {
+          repairNote = `上一版只返回 ${reviewed.length} 条，输入有 ${items.length} 条。请补齐所有条目，id 必须原样保留。`
+          continue
+        }
         throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       }
       const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
@@ -1831,7 +1862,7 @@ async function reviewCalendarCreativeItemsWithLLM(
         repairNote = [
           '上一版内容不合格，请重写命中问题的条目。',
           `问题：${qualityIssues.join('；')}`,
-          '不要写未确认的价格、优惠、赠品、暗号、出示本条、隐藏福利、套餐价公开、天花板、必吃、流量承诺或来源说明。',
+          '不要写未确认的价格、优惠、赠品、暗号、出示本条、隐藏福利、套餐价公开、天花板、必吃、必点、流量承诺或来源说明。',
           '如果价格或活动没有在输入里明确给出，只能写“菜单/活动规则需门店确认”，不要把它作为卖点。',
         ].join('\n')
         continue
@@ -1913,7 +1944,7 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
     .replace(/价格数字/g, '菜单信息')
     .replace(/优惠时间/g, '到店信息')
     .replace(/套餐价公开/g, '点单前先看')
-    .replace(/隐藏福利|必吃|天花板/g, '')
+    .replace(/隐藏福利|必吃|必点|天花板/g, '')
     .replace(/雨天[^，。.!！?？]*送[^，。.!！?？]*/g, '雨天到店前先确认活动规则')
     .replace(/送一碗[^，。.!！?？]*/g, '活动规则以门店确认为准')
     .replace(/到店报暗号[^，。.!！?？]*/g, '到店前先确认活动规则')
@@ -1934,7 +1965,7 @@ function calendarCreativeQualityIssues(items: BrandPlanCalendarItem[]) {
     { label: '原始品牌或品类残留', pattern: /Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery|#武冈|破酥包/i },
     { label: '未确认促销', pattern: /优惠|获赠|赠送|出示本条|暗号|隐藏福利|送一碗|雨天.*送/i },
     { label: '未确认价格', pattern: /门店确认价|套餐价公开|[$]\s?\d/i },
-    { label: '夸张口号', pattern: /天花板|必吃|爆单|刷屏|引爆|全网/i },
+    { label: '夸张口号', pattern: /天花板|必吃|必点|爆单|刷屏|引爆|全网/i },
   ]
   items.forEach((item) => {
     const body = [
