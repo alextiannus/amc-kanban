@@ -1363,7 +1363,7 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const voiceover = calendarScriptLines(candidate, 'voiceover').slice(0, 3)
   const subtitles = calendarScriptLines(candidate, 'subtitles').slice(0, 3)
   return [
-    `复刻目标：保留原视频的节奏和镜头逻辑，全部换成${brandName}的${product}真实素材。`,
+    `内容创意：保留灵感来源的节奏和镜头逻辑，全部换成${brandName}的${product}真实素材。`,
     `开场：${calendarHookText(input)}`,
     shots.length ? `分镜脚本：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
     voiceover.length ? `口播方向：${voiceover.map((line) => adaptCalendarScriptText(line, input)).join(' / ')}` : '',
