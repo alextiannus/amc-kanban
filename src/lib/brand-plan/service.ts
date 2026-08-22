@@ -1942,11 +1942,40 @@ function buildMarketingPlanInput(
   }
 }
 
-function compactMarketingPlanInputForLLM(input: Record<string, unknown>) {
+function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: MarketingPlanLLMScope) {
   const brand = objectValue(input.brand)
   const researchReport = objectValue(input.researchReport)
   const subscriptionStrategy = objectValue(input.subscriptionStrategy)
   const merchantInterview = objectValue(input.merchantInterview)
+  const currentQuarter = objectValue(input.currentQuarter)
+  const planningWindow = objectValue(input.planningWindow)
+  const planningQuarters = arrayValue(planningWindow.quarters)
+    .map((item) => {
+      const quarter = objectValue(item)
+      return {
+        quarter: text(quarter.quarter),
+        year: Number(quarter.year) || undefined,
+        startMonth: text(quarter.startMonth),
+        endMonth: text(quarter.endMonth),
+        periodLabel: text(quarter.periodLabel),
+        months: arrayValue(quarter.months).map(text).filter(Boolean),
+      }
+    })
+  const annualStrategy = objectValue(input.annualStrategy)
+  const previousQuarterPlans = arrayValue(input.previousQuarterPlans)
+    .map((item) => {
+      const quarter = objectValue(item)
+      return {
+        periodLabel: text(quarter.periodLabel || quarter.quarter),
+        focus: text(quarter.focus).slice(0, 120),
+        campaigns: stringList(quarter.campaigns).slice(0, 3),
+        promotionPoints: arrayValue(quarter.promotionPoints)
+          .map((point) => text(objectValue(point).name))
+          .filter(Boolean)
+          .slice(0, 3),
+      }
+    })
+    .slice(-4)
   return {
     brand: {
       id: text(brand.id),
@@ -1954,26 +1983,26 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>) {
       industry: text(brand.industry),
       location: text(brand.location),
       address: text(brand.address),
-      description: text(brand.description).slice(0, 420),
+      description: text(brand.description).slice(0, scope === 'quarter' ? 260 : 420),
     },
-    stores: arrayValue(input.stores).slice(0, 6),
-    storeActivities: input.storeActivities || null,
+    stores: arrayValue(input.stores).slice(0, scope === 'quarter' ? 3 : 6),
+    storeActivities: scope === 'quarter' ? null : input.storeActivities || null,
     products: stringList(input.products).slice(0, 8),
-    brandClaim: input.brandClaim || null,
+    brandClaim: scope === 'quarter' ? null : input.brandClaim || null,
     merchantInterview: {
-      summary: text(merchantInterview.summary).slice(0, 500),
-      rawNotes: text(merchantInterview.rawNotes).slice(0, 900),
-      answers: arrayValue(merchantInterview.answers).slice(0, 8),
+      summary: text(merchantInterview.summary).slice(0, scope === 'quarter' ? 220 : 500),
+      rawNotes: text(merchantInterview.rawNotes).slice(0, scope === 'quarter' ? 360 : 900),
+      answers: arrayValue(merchantInterview.answers).slice(0, scope === 'quarter' ? 4 : 8),
     },
     researchReport: {
-      summary: text(researchReport.summary).slice(0, 900),
-      brandImage: text(researchReport.brandImage).slice(0, 500),
-      marketingStatus: text(researchReport.marketingStatus).slice(0, 500),
-      marketAnalysis: text(researchReport.marketAnalysis).slice(0, 700),
-      issues: stringList(researchReport.issues).slice(0, 8),
-      growthPoints: stringList(researchReport.growthPoints).slice(0, 10),
-      missingQuestions: stringList(researchReport.missingQuestions).slice(0, 8),
-      dataSources: stringList(researchReport.dataSources).slice(0, 8),
+      summary: text(researchReport.summary).slice(0, scope === 'quarter' ? 420 : 900),
+      brandImage: text(researchReport.brandImage).slice(0, scope === 'quarter' ? 240 : 500),
+      marketingStatus: text(researchReport.marketingStatus).slice(0, scope === 'quarter' ? 220 : 500),
+      marketAnalysis: text(researchReport.marketAnalysis).slice(0, scope === 'quarter' ? 320 : 700),
+      issues: stringList(researchReport.issues).slice(0, scope === 'quarter' ? 4 : 8),
+      growthPoints: stringList(researchReport.growthPoints).slice(0, scope === 'quarter' ? 5 : 10),
+      missingQuestions: stringList(researchReport.missingQuestions).slice(0, scope === 'quarter' ? 4 : 8),
+      dataSources: scope === 'quarter' ? [] : stringList(researchReport.dataSources).slice(0, 8),
     },
     subscriptionStrategy: {
       planId: text(subscriptionStrategy.planId),
@@ -1981,12 +2010,32 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>) {
       platformCoverage: stringList(subscriptionStrategy.platformCoverage),
       monthlyContentQuota: subscriptionStrategy.monthlyContentQuota,
       publishingFreq: subscriptionStrategy.publishingFreq || null,
-      includedServices: stringList(subscriptionStrategy.includedServices).slice(0, 12),
+      includedServices: stringList(subscriptionStrategy.includedServices).slice(0, scope === 'quarter' ? 6 : 12),
     },
-    planningWindow: input.planningWindow || null,
-    annualStrategy: input.annualStrategy || null,
-    currentQuarter: input.currentQuarter || null,
-    previousQuarterPlans: arrayValue(input.previousQuarterPlans).slice(-4),
+    planningWindow: {
+      rule: text(planningWindow.rule),
+      quarters: planningQuarters,
+    },
+    annualStrategy: scope === 'quarter'
+      ? {
+          goal: text(annualStrategy.goal).slice(0, 180),
+          theme: text(annualStrategy.theme).slice(0, 120),
+          strategyPrinciples: stringList(annualStrategy.strategyPrinciples).slice(0, 4),
+          contentPillars: stringList(annualStrategy.contentPillars).slice(0, 5),
+          metrics: stringList(annualStrategy.metrics).slice(0, 5),
+        }
+      : null,
+    currentQuarter: scope === 'quarter'
+      ? {
+          quarter: text(currentQuarter.quarter),
+          year: Number(currentQuarter.year) || undefined,
+          startMonth: text(currentQuarter.startMonth),
+          endMonth: text(currentQuarter.endMonth),
+          periodLabel: text(currentQuarter.periodLabel),
+          months: arrayValue(currentQuarter.months).map(text).filter(Boolean),
+        }
+      : null,
+    previousQuarterPlans,
     request: input.request || {},
   }
 }
@@ -2089,28 +2138,30 @@ type MarketingPlanLLMScope = 'annual_strategy' | 'quarter'
 async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<string, unknown>) {
   const schemaInstruction = scope === 'annual_strategy'
     ? [
-      '只返回 JSON 对象，不要 Markdown。',
+      '只返回一个严格 JSON 对象，不要 Markdown，不要解释。',
       '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, metrics, researchFocus。',
-      'platformStrategy 每项含 platform, role, contentApproach, customerAction。',
-      '不要生成季度详情；季度计划会在后续步骤逐个生成。',
+      '数量限制：strategyPrinciples 3 条；platformStrategy 按订阅平台各 1 条；contentPillars 4 条；metrics 4 条。',
+      '不要生成 quarterlyFocus 或 quarterlyPlans；季度计划会在后续步骤逐个生成。',
       '方案必须适合本地商家，围绕“让顾客找得到、看得懂、愿意来”；不得承诺流量、排名、销量或到店人数。',
       '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
     ].join('\n')
     : [
-      '只返回 JSON 对象，不要 Markdown。',
+      '只返回一个严格 JSON 对象，不要 Markdown，不要解释。',
       '字段必须为：quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
       'promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
       'monthlyFocus 每项含 month, focus, promotionPoints。',
+      '数量限制：promotionPoints 2-3 项；campaigns 2-3 条；contentThemes 3-4 条；monthlyFocus 必须刚好 3 项。',
       '必须参考 annualStrategy 和 previousQuarterPlans，当前季度要承接前面季度，避免重复。',
       '内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。',
     ].join('\n')
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
-  const compactInput = compactMarketingPlanInputForLLM(input)
+  const compactInput = compactMarketingPlanInputForLLM(input, scope)
   const compactInputJson = JSON.stringify(compactInput)
   const prompt = [
-    '你是 AMC 的本地商家品牌营销策划负责人。请基于输入为品牌生成可执行的年度/滚动营销方案。',
+    '你是 AMC 的本地商家品牌营销策划负责人。请基于输入生成可执行的滚动营销方案。',
     schemaInstruction,
-    '写法要求：中文、具体、像专业运营方案；避免 AI 腔、空泛口号和无法验证承诺。',
+    '写法要求：中文、短句、具体、像给门店运营团队的计划；避免 AI 腔、空泛口号和无法验证承诺。',
+    'JSON 字符串中不要换行，不要使用尾逗号。',
     `输入 JSON：${compactInputJson}`,
   ].join('\n\n')
   const promptTrace = {
@@ -2125,11 +2176,11 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1300 : 1600, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 950, {
       temperature: 0.35,
       jsonMode: true,
-      deadlineMs: scope === 'annual_strategy' ? 65000 : 50000,
-      attemptTimeoutMs: [scope === 'annual_strategy' ? 60000 : 45000],
+      deadlineMs: scope === 'annual_strategy' ? 52000 : 38000,
+      attemptTimeoutMs: [scope === 'annual_strategy' ? 48000 : 35000],
       maxAttempts: 1,
       allowDefaultFallback: true,
       allowAnyFallback: false,
@@ -2183,11 +2234,11 @@ async function repairMarketingPlanJson(scope: MarketingPlanLLMScope, rawText: st
     `原文：${rawText.slice(0, 12000)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1300 : 1500, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 950, {
       temperature: 0,
       jsonMode: true,
-      deadlineMs: 30000,
-      attemptTimeoutMs: [25000],
+      deadlineMs: 22000,
+      attemptTimeoutMs: [18000],
       maxAttempts: 1,
       allowDefaultFallback: true,
       allowAnyFallback: false,

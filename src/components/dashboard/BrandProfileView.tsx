@@ -544,6 +544,7 @@ function BrandProfileContent({
   const [editingAiContent, setEditingAiContent] = useState<EditableAiContent | null>(null)
   const [editingAiJson, setEditingAiJson] = useState('')
   const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
+  const [annualGenerationStep, setAnnualGenerationStep] = useState('')
   const [calendarMonth, setCalendarMonth] = useState(() => {
     return firstCompleteNaturalMonthValue()
   })
@@ -1066,11 +1067,13 @@ ${storeLines}
 
   const handleGenerateAnnualPlan = async () => {
     setPlanGenerating('annual')
+    setAnnualGenerationStep('正在生成整体策略')
     try {
       const strategyResult = await runBrandPlanAction('generate_annual_strategy', '整体策略已生成')
       if (!strategyResult) return
       await loadBrandPlanWorkspace()
       for (let index = 0; index < 4; index += 1) {
+        setAnnualGenerationStep(`正在生成第 ${index + 1} 个季度计划`)
         const result = await runBrandPlanAction('generate_next_quarter_plan', `第 ${index + 1} 个季度计划已生成`)
         if (!result) return
         await loadBrandPlanWorkspace()
@@ -1078,6 +1081,7 @@ ${storeLines}
       showToastVal('营销计划已生成', 'success')
     } finally {
       setPlanGenerating(null)
+      setAnnualGenerationStep('')
     }
   }
 
@@ -1746,7 +1750,7 @@ ${storeLines}
                   {annualPlan?.generatedAt ? `生成时间：${new Date(annualPlan.generatedAt).toLocaleString()}` : '尚未生成'}
                 </span>
                 <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {annualPlan ? '重新生成计划' : '生成营销计划'}
+                  {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {planGenerating === 'annual' && annualGenerationStep ? annualGenerationStep : annualPlan ? '重新生成计划' : '生成营销计划'}
                 </button>
                 <button type="button" onClick={() => annualPlan && openAiContentEditor({ target: 'annual_plan', title: '编辑营销计划', value: annualPlan })} disabled={!annualPlan || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
                   编辑
