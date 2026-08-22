@@ -6,6 +6,7 @@ import { hashPassword } from '@/lib/auth-v2'
 import { sendBrandOnboardingWelcomeEmail } from '@/lib/email'
 import { generateInvitationLink } from '@/lib/invitation'
 import { buildBillingActivationData } from '@/lib/subscription/workflow'
+import { SUBSCRIPTION_PLANS, calculatePricing, getAllowedDurationsForPlan } from '@/lib/subscription/catalog'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 
@@ -90,24 +91,30 @@ export async function POST(req: NextRequest) {
 
       // C. Create Active Subscription Package
       const normalizedPlanId = planId === 'booster' ? 'booster' : 'essential'
-      const planName = normalizedPlanId === 'booster' ? 'Booster · 增长战役版' : 'Essential · 基础线上经营'
-      const price = normalizedPlanId === 'booster' ? 3600 : 800
-      const contractEndDate = new Date()
-      contractEndDate.setMonth(contractEndDate.getMonth() + 1) // default 1 month
-      const activationData = buildBillingActivationData(1)
+      const selectedPlan = SUBSCRIPTION_PLANS.find(plan => plan.id === normalizedPlanId)
+      if (!selectedPlan) {
+        throw new Error('Invalid subscription plan')
+      }
+      const requestedDurationMonths = Number(body.durationMonths)
+      const durationMonths = getAllowedDurationsForPlan(normalizedPlanId).includes(requestedDurationMonths)
+        ? requestedDurationMonths
+        : getAllowedDurationsForPlan(normalizedPlanId)[0]
+      const pricing = calculatePricing(normalizedPlanId, durationMonths, [], {})
+      const activationData = buildBillingActivationData(durationMonths)
 
       const subscription = await tx.brandSubscription.create({
         data: {
           planId: normalizedPlanId,
-          planName,
-          durationMonths: 1,
-          billedMonths: 1,
-          monthlyBaseUsd: price,
-          totalDueUsd: price,
+          planName: selectedPlan.name,
+          durationMonths,
+          billedMonths: pricing.billedMonths,
+          monthlyBaseUsd: pricing.monthlyBaseUsd,
+          recurringAddonsUsd: pricing.recurringAddonsUsd,
+          oneTimeAddonsUsd: pricing.oneTimeAddonsUsd,
+          totalDueUsd: pricing.totalDueUsd,
           brandId: brand.id,
           createdById: user.id,
           ...activationData,
-          contractEndDate,
           paidAt: new Date(),
         }
       })

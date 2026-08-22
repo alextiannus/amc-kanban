@@ -11,6 +11,7 @@ import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
+import { SUBSCRIPTION_PLANS, calculatePricing, getAllowedDurationsForPlan } from '@/lib/subscription/catalog'
 
 // GET /api/brands — list brands for the logged-in user
 export async function GET(request: Request) {
@@ -277,14 +278,20 @@ export async function POST(request: Request) {
 
     const { user: owner, created: ownerCreated } = ownerResult
 
-    // Parse plan info from body (wizard supplies planId, planName, durationMonths etc.)
-    const planId   = typeof body.planId   === 'string' ? body.planId.trim()   : 'essential'
-    const planName = typeof body.planName === 'string' ? body.planName.trim() : 'Essential · 基础线上经营'
-    const durationMonths    = typeof body.durationMonths    === 'number' ? body.durationMonths    : 1
-    const monthlyBaseUsd    = typeof body.monthlyBaseUsd    === 'number' ? body.monthlyBaseUsd    : 0
-    const recurringAddonsUsd = typeof body.recurringAddonsUsd === 'number' ? body.recurringAddonsUsd : 0
-    const oneTimeAddonsUsd   = typeof body.oneTimeAddonsUsd   === 'number' ? body.oneTimeAddonsUsd   : 0
-    const totalDueUsd        = typeof body.totalDueUsd        === 'number' ? body.totalDueUsd        : 0
+    const requestedPlanId = typeof body.planId === 'string' ? body.planId.trim() : 'essential'
+    const selectedPlan = SUBSCRIPTION_PLANS.find(plan => plan.id === requestedPlanId && plan.visible !== false)
+    if (!selectedPlan) {
+      return NextResponse.json({ error: '请选择有效的订阅套餐' }, { status: 400 })
+    }
+
+    const durationMonths = Number(body.durationMonths)
+    if (!getAllowedDurationsForPlan(selectedPlan.id).includes(durationMonths)) {
+      return NextResponse.json({ error: '请选择该套餐支持的合同时长' }, { status: 400 })
+    }
+
+    const planId = selectedPlan.id
+    const planName = selectedPlan.name
+    const pricing = calculatePricing(planId, durationMonths, [], {})
 
     // Validate and resolve promoCode/inviteCode attributes
     let finalReferredById: string | null = null
@@ -304,7 +311,7 @@ export async function POST(request: Request) {
         finalReferredById = campaign.ownerId
         promoCodeType = 'CAMPAIGN_PROMO'
         if (campaign.discountType === 'PERCENT') {
-          promoDiscountAmount = totalDueUsd * (campaign.discountValue / 100)
+          promoDiscountAmount = pricing.totalDueUsd * (campaign.discountValue / 100)
         } else {
           promoDiscountAmount = campaign.discountValue * durationMonths
         }
@@ -316,7 +323,7 @@ export async function POST(request: Request) {
         if (userReferrer && userReferrer.id !== owner.id) {
           finalReferredById = userReferrer.id
           promoCodeType = 'USER_INVITE'
-          promoDiscountAmount = totalDueUsd * 0.10
+          promoDiscountAmount = pricing.totalDueUsd * 0.10
         }
       }
     }
@@ -348,10 +355,10 @@ export async function POST(request: Request) {
           planName,
           durationMonths,
           billedMonths: durationMonths,
-          monthlyBaseUsd,
-          recurringAddonsUsd,
-          oneTimeAddonsUsd,
-          totalDueUsd: Math.max(0, Math.round(totalDueUsd - promoDiscountAmount)),
+          monthlyBaseUsd: pricing.monthlyBaseUsd,
+          recurringAddonsUsd: pricing.recurringAddonsUsd,
+          oneTimeAddonsUsd: pricing.oneTimeAddonsUsd,
+          totalDueUsd: Math.max(0, Math.round(pricing.totalDueUsd - promoDiscountAmount)),
           status: 'PENDING',
         },
       })
