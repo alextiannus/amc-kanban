@@ -152,11 +152,11 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 export const SUBSCRIPTION_ADDONS: AddonItem[] = [
   {
     id: 'multi_store',
-    name: '新增门店支持',
+    name: '多门店管理',
     pricing: 'monthly',
     usd: 300,
-    description: '同一品牌下，每新增一个门店增加 S$300 / 门店 / 月，用于增加一个 Google Map 账号。',
-    details: ['S$300 / 新增门店 / 月', '增加一个 Google Map 账号', '按新增门店数量计费'],
+    description: '同一品牌下管理多个门店，每个新增门店增加 S$300 / 门店 / 月，用于增加一个 Google Map 账号。',
+    details: ['S$300 / 门店 / 月', '增加一个 Google Map 账号', '按新增门店数量计费'],
   },
   {
     id: 'xiaohongshu_ops',
@@ -168,11 +168,11 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
   },
   {
     id: 'meituan_dianping_setup',
-    name: '美团点评 Meituan Dianping 开通服务',
+    name: '美团点评开通（商户通，推广通）',
     pricing: 'one_time',
     usd: 2200,
-    description: '美团点评开通服务，协助海外华人点评入口搭建。',
-    details: ['S$2,200 / 年', '海外华人点评管理入口开通'],
+    description: '协助完成美团点评商户通与推广通开通，让门店入口和推广能力先准备好。',
+    details: ['S$2,200 / 年', '商户通开通', '推广通开通'],
   },
   {
     id: 'meituan_dianping_ops',
@@ -306,7 +306,7 @@ export function calculatePricing(
     .map((id) => SUBSCRIPTION_ADDONS.find((a) => a.id === id))
     .filter((v): v is AddonItem => Boolean(v))
 
-  const billedMonths = durationMonths === 12 ? 11 : durationMonths
+  const billedMonths = durationMonths
   const recurringAddonsUsd = selectedAddons
     .filter((a) => a.pricing === 'monthly')
     .reduce((sum, a) => {
@@ -322,8 +322,8 @@ export function calculatePricing(
   const monthlyBaseUsd = plan.promoMonthlyUsd ?? plan.monthlyUsd
   const recurringSubtotalUsd = (monthlyBaseUsd + recurringAddonsUsd) * durationMonths
   const recurringAfterDiscountUsd = (monthlyBaseUsd + recurringAddonsUsd) * billedMonths
-  const discountPercent = durationMonths === 12 ? Math.round((1 / 12) * 100) : 0
-  const discountUsd = recurringSubtotalUsd - recurringAfterDiscountUsd
+  const discountPercent = 0
+  const discountUsd = 0
 
   return {
     durationMonths,

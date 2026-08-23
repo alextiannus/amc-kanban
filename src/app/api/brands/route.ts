@@ -318,12 +318,13 @@ export async function POST(request: Request) {
       } else {
         // 2. Try user inviteCode
         const userReferrer = await prisma.user.findUnique({
-          where: { inviteCode: normalizedCode }
+          where: { inviteCode: normalizedCode },
+          include: { businessRoles: true }
         })
-        if (userReferrer && userReferrer.id !== owner.id) {
+        if (userReferrer && userReferrer.id !== owner.id && userReferrer.businessRoles.some((role: { role: string }) => role.role === 'BD')) {
           finalReferredById = userReferrer.id
           promoCodeType = 'USER_INVITE'
-          promoDiscountAmount = pricing.totalDueUsd * 0.10
+          promoDiscountAmount = 200 * durationMonths
         }
       }
     }

@@ -4,7 +4,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { authenticateRequest } from '@/lib/auth-v2'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
-import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import { calculatePricing, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
 import { POST as humanPost } from '../../../subscription/route'
 
 type Params = { params: Promise<{ id: string }> }
@@ -35,6 +35,52 @@ function getAddonQuantity(selectedAddons: unknown, addonId: string) {
 
 function getStoreLimit(planId: string, selectedAddons: unknown) {
   return 1 + getAddonQuantity(selectedAddons, 'multi_store')
+}
+
+function getSelectedAddonPricingInput(selectedAddons: unknown) {
+  const addonIds: string[] = []
+  const addonQuantities: Record<string, number> = {}
+
+  const add = (id: unknown, quantity: unknown = 1) => {
+    if (typeof id !== 'string') return
+    const addon = SUBSCRIPTION_ADDONS.find((item) => item.id === id)
+    if (!addon) return
+
+    const parsedQuantity = typeof quantity === 'number' && Number.isFinite(quantity)
+      ? Math.max(0, Math.floor(quantity))
+      : Number.isFinite(Number(quantity))
+        ? Math.max(0, Math.floor(Number(quantity)))
+        : 1
+
+    if (parsedQuantity <= 0) return
+    addonIds.push(id)
+    if (id === 'multi_store' || parsedQuantity !== 1) {
+      addonQuantities[id] = parsedQuantity
+    }
+  }
+
+  if (Array.isArray(selectedAddons)) {
+    for (const item of selectedAddons) {
+      if (item && typeof item === 'object') {
+        add((item as { id?: unknown }).id, (item as { quantity?: unknown }).quantity)
+      }
+    }
+  } else if (selectedAddons && typeof selectedAddons === 'object') {
+    for (const [id, value] of Object.entries(selectedAddons as Record<string, unknown>)) {
+      if (typeof value === 'boolean') {
+        if (value) add(id, 1)
+      } else if (typeof value === 'number') {
+        add(id, value)
+      } else if (value && typeof value === 'object') {
+        add(id, (value as { quantity?: unknown }).quantity)
+      }
+    }
+  }
+
+  return {
+    addonIds: Array.from(new Set(addonIds)),
+    addonQuantities,
+  }
 }
 
 function getPlatformCoverage(planId: string) {
@@ -193,9 +239,17 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'No active subscription found for this brand.' }, { status: 402 })
   }
 
+  const pricingInput = getSelectedAddonPricingInput(selectedAddons)
+  const pricing = calculatePricing(subscription.planId, subscription.durationMonths, pricingInput.addonIds, pricingInput.addonQuantities)
+
   const updatedSub = await prisma.brandSubscription.update({
     where: { id: subscription.id },
     data: {
+      billedMonths: pricing.billedMonths,
+      monthlyBaseUsd: pricing.monthlyBaseUsd,
+      recurringAddonsUsd: pricing.recurringAddonsUsd,
+      oneTimeAddonsUsd: pricing.oneTimeAddonsUsd,
+      totalDueUsd: subscription.feeWaived ? 0 : pricing.totalDueUsd,
       selectedAddons: selectedAddons as Prisma.InputJsonValue,
     },
   })
@@ -204,6 +258,9 @@ export async function PATCH(request: Request, { params }: Params) {
     ok: true,
     brandId,
     selectedAddons: updatedSub.selectedAddons || {},
+    recurringAddonsUsd: updatedSub.recurringAddonsUsd,
+    oneTimeAddonsUsd: updatedSub.oneTimeAddonsUsd,
+    totalDueUsd: updatedSub.totalDueUsd,
   })
 }
 

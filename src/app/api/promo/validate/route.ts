@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { code, planId } = await request.json() as { code?: string; planId?: string }
+    const { code } = await request.json() as { code?: string; planId?: string }
     if (!code || typeof code !== 'string') {
       return NextResponse.json({ valid: false, error: '请输入有效的验证码' })
     }
@@ -48,7 +48,8 @@ export async function POST(request: Request) {
 
     // 2. Try to find a User inviteCode
     const userReferrer = await prisma.user.findUnique({
-      where: { inviteCode: normalizedCode }
+      where: { inviteCode: normalizedCode },
+      include: { businessRoles: true }
     })
 
     if (userReferrer) {
@@ -56,24 +57,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ valid: false, error: '不能使用自己的邀请码' })
       }
 
-      if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'essential') {
-        return NextResponse.json({
-          valid: true,
-          codeType: 'USER_INVITE',
-          discountType: 'FIXED_AMOUNT',
-          discountValue: 200,
-          description: `来自用户 ${userReferrer.nickname || userReferrer.email} 的邀请特惠 (Essential 套餐特惠价 $400/月)`,
-          referrerId: userReferrer.id
-        })
+      const isBdInvite = userReferrer.businessRoles.some((role: { role: string }) => role.role === 'BD')
+      if (!isBdInvite) {
+        return NextResponse.json({ valid: false, error: '该邀请码不是有效的 BD 邀请码' })
       }
 
-      // Default referral discount: 10% off
       return NextResponse.json({
         valid: true,
         codeType: 'USER_INVITE',
-        discountType: 'PERCENT',
-        discountValue: 10,
-        description: `来自用户 ${userReferrer.nickname || userReferrer.email} 的邀请特惠 (10% 折扣)`,
+        discountType: 'FIXED_AMOUNT',
+        discountValue: 200,
+        description: `来自 BD ${userReferrer.nickname || userReferrer.email} 的邀请特惠 (SGD 200 优惠)`,
         referrerId: userReferrer.id
       })
     }

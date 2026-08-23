@@ -13,7 +13,7 @@ const CHECK_SECTIONS = [
     items: [
       '确认客户公司名称、UEN、联系人、邮箱和合同编号完整。',
       '确认套餐、周期、开始日期、到期日和总费用已写入订单或协议。',
-      '合同采用一次性预付：3 个月 x 3，6 个月 x 6，12 个月 x 11。',
+      '合同采用一次性预付：3 个月 x 3，6 个月 x 6，12 个月 x 12。',
       '确认付款凭证已收到，并在 1 个工作日内完成内部确认。',
     ],
   },
@@ -86,11 +86,6 @@ export default function ServiceCheckPage() {
                     {months} 个月
                   </span>
                 ))}
-                {getAllowedDurationsForPlan(plan.id).includes(12) && (
-                  <span className="rounded-md bg-amber-50 px-2.5 py-1 text-xs font-black text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
-                    12 个月按 11 个月收费
-                  </span>
-                )}
               </div>
               <ul className="mt-4 space-y-2">
                 {plan.services.map((service) => (

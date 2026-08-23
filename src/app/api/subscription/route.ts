@@ -495,17 +495,13 @@ export async function POST(request: Request) {
     } else {
       // 2. Try user inviteCode
       const userReferrer = await prisma.user.findUnique({
-        where: { inviteCode: promoCode }
+        where: { inviteCode: promoCode },
+        include: { businessRoles: true }
       })
-      if (userReferrer && userReferrer.id !== session.user.id) {
+      if (userReferrer && userReferrer.id !== session.user.id && userReferrer.businessRoles.some((role: { role: string }) => role.role === 'BD')) {
         finalReferredById = userReferrer.id
         promoCodeType = 'USER_INVITE'
-        if (userReferrer.email === 'alextiannus@gmail.com' && planId === 'essential') {
-          // Special discount for alextiannus@gmail.com: Essential plan @ $400/month (discount = $200/month)
-          promoDiscountAmount = 200 * durationMonths
-        } else {
-          promoDiscountAmount = summary.totalDueUsd * 0.10
-        }
+        promoDiscountAmount = 200 * durationMonths
       }
     }
   }
