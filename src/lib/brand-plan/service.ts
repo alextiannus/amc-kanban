@@ -186,6 +186,24 @@ export async function loadBrandPlanBrand(brandId: string) {
     where: { id: brandId },
     include: {
       knowledge: true,
+      owner: {
+        select: {
+          email: true,
+          nickname: true,
+        },
+      },
+      owners: {
+        select: {
+          role: true,
+          user: {
+            select: {
+              email: true,
+              nickname: true,
+            },
+          },
+        },
+        orderBy: [{ role: 'asc' }, { createdAt: 'asc' }],
+      },
       subscriptions: {
         select: {
           planId: true,

@@ -9,6 +9,8 @@ type GrowthLinkedBrand = {
   description?: string | null
   industry?: string | null
   growthBrandKey?: string | null
+  owner?: { email?: string | null; nickname?: string | null } | null
+  owners?: Array<{ role?: string | null; user?: { email?: string | null; nickname?: string | null } | null }>
 }
 
 function growthBaseUrl() {
@@ -28,7 +30,7 @@ function growthHeaders() {
 
 async function growthRequest(path: string, init: RequestInit) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5000)
+  const timeout = setTimeout(() => controller.abort(), 15000)
   try {
     return await fetch(`${growthBaseUrl()}${path}`, {
       ...init,
@@ -268,6 +270,11 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   googleReviewUrl?: string | null
   accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null }>
 }) {
+  const owner = brand.owners?.find((item) => item.role === 'owner' && item.user?.email)?.user
+    || brand.owners?.find((item) => item.user?.email)?.user
+    || brand.owner
+  const contactEmail = owner?.email || process.env.AMC_GROWTH_REPORT_EMAIL || 'contact@immedi.ai'
+  const contactName = owner?.nickname || owner?.email?.split('@')[0] || 'AMC Kanban'
   const socialProfiles = Object.fromEntries((brand.accounts || [])
     .map((account) => [normalizeGrowthSocialPlatform(account.platformId), account.profileUrl || account.handle || ''])
     .filter(([platform, value]) => platform && value))
@@ -275,6 +282,8 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
     brand_name: brand.name,
     market: brand.location || brand.address || 'Singapore',
     category: brand.industry || 'Local merchant',
+    contact_name: contactName,
+    email: contactEmail,
     website_url: brand.website || '',
     google_maps_url: brand.googleBusinessUrl || brand.googleReviewUrl || '',
     instagram_url: socialProfiles.instagram || '',
