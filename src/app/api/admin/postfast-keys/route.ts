@@ -116,8 +116,8 @@ export async function PATCH(request: Request) {
   if (status !== undefined && !isPostfastKeyStatus(status)) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
   }
-  if (current.status === 'ASSIGNED' && status === 'AVAILABLE') {
-    return NextResponse.json({ error: '已分配的 key 不能直接改回可用，请先更换品牌配置。' }, { status: 400 })
+  if (current.status === 'ASSIGNED' && status && status !== current.status) {
+    return NextResponse.json({ error: '已分配的 key 不能直接删除或改状态，请先更换该品牌的 PostFast 配置，或解除占用后再操作。' }, { status: 400 })
   }
 
   const updated = await (prisma as any).postfastApiKeyPool.update({

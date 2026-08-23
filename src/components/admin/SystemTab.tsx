@@ -290,7 +290,14 @@ export default function SystemTab({
 
   const handleRetirePostfastKey = async (key: PostfastKeyRecord) => {
     if (key.status === 'ASSIGNED') {
-      alert('已分配给品牌的 key 不能直接退役，请先更换该品牌配置。')
+      const brandName = key.assignedBrand?.name || key.assignedBrandId || '当前品牌'
+      const message = `不能删除：这个 PostFast key 已分配给「${brandName}」。请先更换该品牌的 PostFast 配置，或解除占用后再退役。`
+      setPostfastMessage({ ok: false, text: message })
+      alert(message)
+      return
+    }
+    if (key.status === 'RETIRED') {
+      setPostfastMessage({ ok: false, text: '这个 PostFast key 已经是 RETIRED 状态。' })
       return
     }
     if (!confirm('确认将这个 PostFast key 标记为 RETIRED？')) return
@@ -1043,9 +1050,9 @@ export default function SystemTab({
                             <button
                               type="button"
                               onClick={() => handleRetirePostfastKey(key)}
-                              disabled={key.status === 'ASSIGNED' || key.status === 'RETIRED'}
+                              disabled={key.status === 'RETIRED'}
                               className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:border-rose-200 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 cursor-pointer"
-                              title={key.status === 'ASSIGNED' ? '已分配 key 不能直接退役' : '标记为退役'}
+                              title={key.status === 'ASSIGNED' ? '不能删除：已分配给品牌，点击查看原因' : key.status === 'RETIRED' ? '已退役' : '标记为退役'}
                             >
                               <Trash2 size={13} />
                             </button>
