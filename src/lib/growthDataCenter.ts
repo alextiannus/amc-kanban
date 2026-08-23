@@ -320,10 +320,13 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   const jobId = created.job_id
   if (!jobId) throw new GrowthDataCenterError(502, 'growth_research_job_missing')
 
+  const maxWaitMs = Math.max(30000, Number(process.env.AMC_GROWTH_REPORT_WAIT_MS || 240000))
+  const pollIntervalMs = Math.max(2000, Number(process.env.AMC_GROWTH_REPORT_POLL_MS || 5000))
+  const deadline = Date.now() + maxWaitMs
   let job: GrowthBrandIntelligenceJob = created
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  while (Date.now() < deadline) {
     if (['completed', 'needs_review', 'failed', 'cancelled'].includes(String(job.status))) break
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     const statusResponse = await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' })
     const statusPayload = await statusResponse.json().catch(() => ({})) as GrowthBrandIntelligenceJob
     if (!statusResponse.ok) {
