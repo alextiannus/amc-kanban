@@ -2398,7 +2398,7 @@ ${storeLines}
                                 const next = safeArray(draft.quarterlyPlans).map((item, itemIndex) => itemIndex === index ? { ...item, focus: event.target.value } : item)
                                 return { ...draft, quarterlyPlans: next }
                               })}
-                              className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold dark:border-slate-700 dark:bg-slate-950"
+                              className="mt-2 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                             />
                             <textarea
                               value={quarter.strategy || ''}
@@ -2407,7 +2407,7 @@ ${storeLines}
                                 return { ...draft, quarterlyPlans: next }
                               })}
                               rows={2}
-                              className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed dark:border-slate-700 dark:bg-slate-950"
+                              className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-relaxed text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                             />
                             <div className="mt-2 grid gap-2 md:grid-cols-2">
                               <textarea
@@ -2418,7 +2418,7 @@ ${storeLines}
                                 })}
                                 rows={3}
                                 placeholder="Campaign，每行一个"
-                                className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                                className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                               />
                               <textarea
                                 value={listToLines(quarter.contentThemes)}
@@ -2428,7 +2428,7 @@ ${storeLines}
                                 })}
                                 rows={3}
                                 placeholder="内容主题，每行一个"
-                                className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                                className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
                               />
                             </div>
                           </div>

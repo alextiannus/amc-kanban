@@ -307,7 +307,7 @@ export default function BrandMarketingPlanPresentationPage() {
                 <textarea
                   value={editingJson}
                   onChange={(event) => setEditingJson(event.target.value)}
-                  className="min-h-[520px] w-full resize-y rounded-xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                  className="min-h-[520px] w-full resize-y rounded-xl border border-slate-200 bg-white dark:bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
                   spellCheck={false}
                 />
                 {saveError && <p className="mt-3 text-xs font-bold text-rose-600">{saveError}</p>}

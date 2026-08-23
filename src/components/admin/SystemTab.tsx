@@ -56,6 +56,51 @@ export interface PromptTemplateRecord {
   updatedAt: string
 }
 
+export type SystemSettingsSection =
+  | 'llm'
+  | 'prompts'
+  | 'postfast'
+  | 'direct_oauth'
+  | 'smtp'
+  | 'scheduler'
+  | 'templates'
+  | 'audit'
+
+const SYSTEM_SECTION_COPY: Record<SystemSettingsSection, { title: string; description: string }> = {
+  llm: {
+    title: '模型路由配置',
+    description: '管理 Kanban 文本 LLM、MiniMax TTS 与视频任务的路由、超时、重试和 fallback 策略。',
+  },
+  prompts: {
+    title: 'Prompt 管理',
+    description: '管理 Kanban 调用 LLM 时使用的业务 Prompt，保存后在下一次生成中生效。',
+  },
+  postfast: {
+    title: 'PostFast Key 池',
+    description: '管理预配置 PostFast API Key 的库存、分配状态和退役操作。',
+  },
+  direct_oauth: {
+    title: '社媒直连配置',
+    description: '管理 Meta、Google 和 TikTok 官方应用授权配置，以及直连发布开关。',
+  },
+  smtp: {
+    title: '邮件网关设置',
+    description: '管理系统通知、邀请和重置密码邮件使用的 SMTP 发送配置。',
+  },
+  scheduler: {
+    title: '定时任务与巡检',
+    description: '查看智能排期、同步任务和后台巡检服务的运行状态。',
+  },
+  templates: {
+    title: '消息模板管理',
+    description: '维护系统通知、邮件和运营消息模板。',
+  },
+  audit: {
+    title: '系统审计日志',
+    description: '查看管理员、系统任务和业务路径产生的操作日志与配置变更。',
+  },
+}
+
 const MARKETING_PLAN_PROMPT_TOOLTIP = [
   '品牌营销方案生成认知：',
   '1. 目标不是泛泛涨粉/曝光，而是让顾客找得到、看得懂、愿意来。',
@@ -154,6 +199,7 @@ interface PostfastKeyRecord {
 }
 
 interface SystemTabProps {
+  section?: SystemSettingsSection
   systemConfig: {
     geminiApiKey: string
     geminiConfigured: boolean
@@ -199,6 +245,7 @@ interface SystemTabProps {
 }
 
 export default function SystemTab({
+  section,
   systemConfig,
   onUpdateSystemConfig,
   onSaveSystemConfig,
@@ -213,7 +260,18 @@ export default function SystemTab({
   promptTemplatesLoading,
   onFetchPromptTemplates
 }: SystemTabProps) {
-  const [activeAccordion, setActiveAccordion] = useState<'llm' | 'prompts' | 'ai' | 'postfast' | 'smtp' | 'scheduler' | 'templates' | 'direct_oauth' | ''>('llm')
+  const [activeAccordion, setActiveAccordion] = useState<SystemSettingsSection | 'ai' | ''>(section === 'audit' ? '' : (section || 'llm'))
+  const singleSectionMode = Boolean(section)
+  const headerCopy = section ? SYSTEM_SECTION_COPY[section] : {
+    title: '系统服务与全局配置',
+    description: '在此管理 Kanban 模型路由、邮件发送网关、监控定时任务与系统审计日志。TTS 与视频执行会按任务路由对接 amc-content Content Lab。',
+  }
+  const showSection = (key: SystemSettingsSection) => !section || section === key
+  const sectionOpen = (key: SystemSettingsSection | 'ai') => singleSectionMode ? section === key : activeAccordion === key
+  const toggleSection = (key: SystemSettingsSection | 'ai') => {
+    if (singleSectionMode) return
+    setActiveAccordion(activeAccordion === key ? '' : key)
+  }
   
   // LLM Config inner states
   const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
@@ -606,6 +664,10 @@ export default function SystemTab({
   }
 
   useEffect(() => {
+    setActiveAccordion(section === 'audit' ? '' : (section || 'llm'))
+  }, [section])
+
+  useEffect(() => {
     if (activeAccordion === 'postfast' && postfastKeys.length === 0 && !postfastKeysLoading) {
       void fetchPostfastKeys()
     }
@@ -661,10 +723,10 @@ export default function SystemTab({
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <Settings size={18} className="text-blue-500" /> 系统服务与全局配置
+            <Settings size={18} className="text-blue-500" /> {headerCopy.title}
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            在此管理 Kanban 模型路由、邮件发送网关、监控定时任务与系统审计日志。TTS 与视频执行会按任务路由对接 amc-content Content Lab。
+            {headerCopy.description}
           </p>
         </div>
       </div>
@@ -672,9 +734,10 @@ export default function SystemTab({
       {/* Accordion Panels */}
       <div className="space-y-4">
         {/* Section 1: LLM configs */}
+        {showSection('llm') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'llm' ? '' : 'llm')}
+            onClick={() => toggleSection('llm')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -686,7 +749,7 @@ export default function SystemTab({
             </span>
           </button>
 
-          {activeAccordion === 'llm' && (
+          {sectionOpen('llm') && (
             <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <div className="flex justify-between items-start gap-4 pt-2">
                 <div className="space-y-1">
@@ -788,12 +851,14 @@ export default function SystemTab({
             </div>
           )}
         </div>
+        )}
 
         {/* Section 2: Prompt templates */}
+        {showSection('prompts') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button
             type="button"
-            onClick={() => setActiveAccordion(activeAccordion === 'prompts' ? '' : 'prompts')}
+            onClick={() => toggleSection('prompts')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -805,7 +870,7 @@ export default function SystemTab({
             </span>
           </button>
 
-          {activeAccordion === 'prompts' && (
+          {sectionOpen('prompts') && (
             <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <div className="flex items-start justify-between gap-4 pt-2">
                 <p className="max-w-3xl text-xs text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
@@ -876,11 +941,13 @@ export default function SystemTab({
             </div>
           )}
         </div>
+        )}
 
         {/* Section 3: AI Keys */}
+        {!singleSectionMode && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'ai' ? '' : 'ai')}
+            onClick={() => toggleSection('ai')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -889,7 +956,7 @@ export default function SystemTab({
             </span>
           </button>
 
-          {activeAccordion === 'ai' && (
+          {sectionOpen('ai') && (
             <div className="px-6 pb-6 pt-1 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <div className="mt-4 rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-indigo-50 dark:bg-indigo-950/20 p-4 space-y-2">
                 <p className="text-sm font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
@@ -914,12 +981,14 @@ export default function SystemTab({
             </div>
           )}
         </div>
+        )}
 
         {/* Section: PostFast API Key Pool */}
+        {showSection('postfast') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button
             type="button"
-            onClick={() => setActiveAccordion(activeAccordion === 'postfast' ? '' : 'postfast')}
+            onClick={() => toggleSection('postfast')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -931,7 +1000,7 @@ export default function SystemTab({
             </span>
           </button>
 
-          {activeAccordion === 'postfast' && (
+          {sectionOpen('postfast') && (
             <div className="px-6 pb-6 pt-1 space-y-5 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <form onSubmit={handleSavePostfastKeys} className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-4 pt-4">
                 <div className="space-y-3">
@@ -1066,12 +1135,14 @@ export default function SystemTab({
             </div>
           )}
         </div>
+        )}
 
         {/* Section: Direct Social Media OAuth Credentials */}
+        {showSection('direct_oauth') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
             type="button"
-            onClick={() => setActiveAccordion(activeAccordion === 'direct_oauth' ? '' : 'direct_oauth')}
+            onClick={() => toggleSection('direct_oauth')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -1083,7 +1154,7 @@ export default function SystemTab({
             )}
           </button>
 
-          {activeAccordion === 'direct_oauth' && (
+          {sectionOpen('direct_oauth') && (
             <div className="px-6 pb-6 pt-1 space-y-6 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               
               {/* Toggle Switch */}
@@ -1242,12 +1313,14 @@ export default function SystemTab({
             </div>
           )}
         </div>
+        )}
 
         {/* Section 3: SMTP */}
+        {showSection('smtp') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
             type="button"
-            onClick={() => setActiveAccordion(activeAccordion === 'smtp' ? '' : 'smtp')}
+            onClick={() => toggleSection('smtp')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -1259,7 +1332,7 @@ export default function SystemTab({
             )}
           </button>
 
-          {activeAccordion === 'smtp' && (
+          {sectionOpen('smtp') && (
             <div className="px-6 pb-6 pt-1 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <EmailConfigPanel
                 config={systemConfig}
@@ -1268,11 +1341,13 @@ export default function SystemTab({
             </div>
           )}
         </div>
+        )}
 
         {/* Section 4: Cron Scheduler */}
+        {showSection('scheduler') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'scheduler' ? '' : 'scheduler')}
+            onClick={() => toggleSection('scheduler')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -1281,17 +1356,19 @@ export default function SystemTab({
             </span>
           </button>
 
-          {activeAccordion === 'scheduler' && (
+          {sectionOpen('scheduler') && (
             <div className="px-6 pb-6 pt-1 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <SchedulerPanel />
             </div>
           )}
         </div>
+        )}
 
         {/* Section 5: Message Templates */}
+        {showSection('templates') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
-            onClick={() => setActiveAccordion(activeAccordion === 'templates' ? '' : 'templates')}
+            onClick={() => toggleSection('templates')}
             className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
           >
             <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
@@ -1300,15 +1377,17 @@ export default function SystemTab({
             </span>
           </button>
 
-          {activeAccordion === 'templates' && (
+          {sectionOpen('templates') && (
             <div className="px-6 pb-6 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <MessageTemplatesPanel />
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* System Audit Trail Logs */}
+      {showSection('audit') && (
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden p-6 space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
           <div className="flex items-center gap-2">
@@ -1361,6 +1440,7 @@ export default function SystemTab({
           </table>
         </div>
       </div>
+      )}
 
       {/* Prompt Template Modal Dialog */}
       {promptModalOpen && (
@@ -1442,7 +1522,7 @@ export default function SystemTab({
                     value={promptForm.template}
                     onChange={event => setPromptForm(prev => ({ ...prev, template: event.target.value }))}
                     rows={16}
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-slate-950 px-3 py-2.5 font-mono text-xs leading-6 text-slate-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
+                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 font-mono text-xs leading-6 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-violet-500"
                   />
                 </label>
 
