@@ -3,17 +3,39 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { 
-  Shield, User, Bot, RefreshCw, Copy, Check, ArrowLeft, Users, Store, CreditCard, Menu, Settings
+  Shield, RefreshCw, Copy, Check, ArrowLeft, Users, Store, Key, Mail, CalendarClock, History,
+  Sparkles, MessageSquare, ShieldCheck
 } from 'lucide-react'
 
 // Import Tab Components
 import UsersTab, { type UserRecord } from '@/components/admin/UsersTab'
 import BrandsTab, { type BrandRecord } from '@/components/admin/BrandsTab'
-import SystemTab, { type LLMConfigRecord, type PromptTemplateRecord } from '@/components/admin/SystemTab'
+import SystemTab, { type LLMConfigRecord, type PromptTemplateRecord, type SystemSettingsSection } from '@/components/admin/SystemTab'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
 import EditUserModal from '@/components/admin/EditUserModal'
 
-type AdminTab = 'users' | 'brands' | 'system'
+type SystemAdminTab = `system-${SystemSettingsSection}`
+type AdminTab = 'users' | 'brands' | SystemAdminTab
+
+const SYSTEM_ADMIN_TABS: SystemAdminTab[] = [
+  'system-llm',
+  'system-prompts',
+  'system-postfast',
+  'system-direct_oauth',
+  'system-smtp',
+  'system-scheduler',
+  'system-templates',
+  'system-audit',
+]
+
+function isAdminTab(value: string | null): value is AdminTab {
+  return value === 'users' || value === 'brands' || SYSTEM_ADMIN_TABS.includes(value as SystemAdminTab)
+}
+
+function systemSectionFromTab(tab: AdminTab): SystemSettingsSection | null {
+  if (!tab.startsWith('system-')) return null
+  return tab.replace('system-', '') as SystemSettingsSection
+}
 
 interface InvitationResult {
   user: { id: string; email: string; type: string }
@@ -41,7 +63,8 @@ function AdminPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = searchParams.get('tab')
-  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>((tabParam as AdminTab) || 'users')
+  const initialAdminTab = tabParam === 'system' ? 'system-llm' : (isAdminTab(tabParam) ? tabParam : 'users')
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>(initialAdminTab)
 
   // ── Role guard: only ADMIN users may access this page ────────────────────
   const [authChecked, setAuthChecked] = useState(false)
@@ -278,8 +301,12 @@ function AdminPageInner() {
   }, [])
 
   useEffect(() => {
-    if (tabParam && ['users', 'brands', 'system'].includes(tabParam)) {
-      setActiveAdminTab(tabParam as AdminTab)
+    if (tabParam === 'system') {
+      setActiveAdminTab('system-llm')
+      return
+    }
+    if (isAdminTab(tabParam)) {
+      setActiveAdminTab(tabParam)
     }
   }, [tabParam])
 
@@ -677,7 +704,14 @@ function AdminPageInner() {
     {
       title: '系统架构配置 (Infrastructure)',
       items: [
-        { id: 'system' as const, label: '系统服务与设置', icon: Settings },
+        { id: 'system-llm' as const, label: '模型路由配置', icon: Sparkles },
+        { id: 'system-prompts' as const, label: 'Prompt 管理', icon: MessageSquare },
+        { id: 'system-postfast' as const, label: 'PostFast Key 池', icon: Key },
+        { id: 'system-direct_oauth' as const, label: '社媒直连配置', icon: ShieldCheck },
+        { id: 'system-smtp' as const, label: '邮件网关设置', icon: Mail },
+        { id: 'system-scheduler' as const, label: '定时任务与巡检', icon: CalendarClock },
+        { id: 'system-templates' as const, label: '消息模板管理', icon: MessageSquare },
+        { id: 'system-audit' as const, label: '系统审计日志', icon: History },
       ]
     }
   ]
@@ -1020,7 +1054,7 @@ function AdminPageInner() {
                       key={item.id}
                       onClick={() => {
                         setActiveAdminTab(item.id)
-                        if (item.id === 'system') {
+                        if (item.id.startsWith('system-')) {
                           void fetchSystemConfig()
                           void fetchSystemLogs()
                           void fetchLLMConfigs()
@@ -1095,8 +1129,9 @@ function AdminPageInner() {
           />
         )}
 
-        {activeAdminTab === 'system' && (
+        {systemSectionFromTab(activeAdminTab) && (
           <SystemTab 
+            section={systemSectionFromTab(activeAdminTab) || undefined}
             systemConfig={systemConfig}
             onUpdateSystemConfig={setSystemConfig}
             onSaveSystemConfig={handleSaveSystemConfig}
