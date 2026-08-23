@@ -435,6 +435,16 @@ function socialPlatformColor(platformId: string) {
   return 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'
 }
 
+function calendarPlatformAccent(platformId: string) {
+  const key = platformId.toLowerCase()
+  if (key.includes('instagram')) return 'border-l-pink-500'
+  if (key.includes('tiktok')) return 'border-l-slate-950 dark:border-l-white'
+  if (key.includes('google')) return 'border-l-emerald-500'
+  if (key === 'xhs' || key === 'xiaohongshu') return 'border-l-red-500'
+  if (key === 'facebook' || key === 'fb') return 'border-l-blue-500'
+  return 'border-l-slate-400'
+}
+
 // ─── Plan badge helper ────────────────────────────────────────────────────────
 
 function PlanBadge({ plan }: { plan: string }) {
@@ -558,6 +568,7 @@ function BrandProfileContent({
   const [calendarMonth, setCalendarMonth] = useState(() => {
     return firstCompleteNaturalMonthValue()
   })
+  const [calendarPlatformFilter, setCalendarPlatformFilter] = useState('all')
   const calendarMonthInitializedRef = useRef('')
 
   useEffect(() => {
@@ -1304,6 +1315,16 @@ ${storeLines}
   const minimumCalendarMonth = minimumContentPlanMonthValue()
   const canGoPreviousCalendarMonth = addMonths(calendarMonth, -1) >= minimumCalendarMonth
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
+  const currentCalendarItemsWithIndex = currentCalendarItems.map((item, index) => ({ item, index }))
+  const calendarPlatformCounts = currentCalendarItems.reduce<Record<string, number>>((acc, item) => {
+    const slug = normalizeSchedulePlatform(item.platformSlug || item.platform || '')
+    acc[slug] = (acc[slug] || 0) + 1
+    return acc
+  }, {})
+  const calendarFilterPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) => calendarPlatformCounts[platform.slug])
+  const filteredCalendarItems = calendarPlatformFilter === 'all'
+    ? currentCalendarItemsWithIndex
+    : currentCalendarItemsWithIndex.filter(({ item }) => normalizeSchedulePlatform(item.platformSlug || item.platform || '') === calendarPlatformFilter)
   const activePublishingPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) =>
     publishingScheduleDraft[platform.slug] !== undefined ||
     annualPlan?.subscriptionStrategy?.platformCoverage?.includes(platform.slug)
@@ -1969,9 +1990,41 @@ ${storeLines}
                 ))}
               </div>
             </div>
+            {currentCalendarItems.length ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalendarPlatformFilter('all')}
+                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-black transition ${
+                    calendarPlatformFilter === 'all'
+                      ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'
+                  }`}
+                >
+                  全部 {currentCalendarItems.length}
+                </button>
+                {calendarFilterPlatforms.map((platform) => (
+                  <button
+                    key={platform.slug}
+                    type="button"
+                    onClick={() => setCalendarPlatformFilter(platform.slug)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black transition ${
+                      calendarPlatformFilter === platform.slug
+                        ? socialPlatformColor(platform.slug)
+                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full border ${socialPlatformColor(platform.slug)}`} />
+                    {platform.label} {calendarPlatformCounts[platform.slug] || 0}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {currentCalendarItems.length ? currentCalendarItems.map((item, index) => (
-                <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950">
+              {filteredCalendarItems.length ? filteredCalendarItems.map(({ item, index }) => {
+                const platformSlug = normalizeSchedulePlatform(item.platformSlug || item.platform || '')
+                return (
+                <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className={`rounded-xl border border-l-4 border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 ${calendarPlatformAccent(platformSlug)}`}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
                       <input
@@ -2001,6 +2054,10 @@ ${storeLines}
                       >
                         {PUBLISHING_PLATFORM_OPTIONS.map(platform => <option key={platform.slug} value={platform.slug}>{platform.label}</option>)}
                       </select>
+                      <span className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] font-black ${socialPlatformColor(platformSlug)}`}>
+                        {socialPlatformLogo(platformSlug)}
+                        {socialPlatformLabel(platformSlug)}
+                      </span>
                       <select
                         value={item.contentType}
                         onChange={(event) => handleUpdateCalendarItem(item.id, index, { contentType: event.target.value })}
@@ -2075,8 +2132,11 @@ ${storeLines}
                     <option value="已完成">已完成</option>
                   </select>
                 </div>
-              )) : (
-                <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">这个月还没有内容计划。可以生成一版，也可以先手动加一条。</div>
+                )
+              }) : (
+                <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700">
+                  {currentCalendarItems.length ? '这个平台暂时没有内容计划。' : '这个月还没有内容计划。可以生成一版，也可以先手动加一条。'}
+                </div>
               )}
             </div>
           </section>
