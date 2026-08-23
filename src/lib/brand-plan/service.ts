@@ -186,12 +186,6 @@ export async function loadBrandPlanBrand(brandId: string) {
     where: { id: brandId },
     include: {
       knowledge: true,
-      owner: {
-        select: {
-          email: true,
-          nickname: true,
-        },
-      },
       owners: {
         select: {
           role: true,

@@ -9,7 +9,6 @@ type GrowthLinkedBrand = {
   description?: string | null
   industry?: string | null
   growthBrandKey?: string | null
-  owner?: { email?: string | null; nickname?: string | null } | null
   owners?: Array<{ role?: string | null; user?: { email?: string | null; nickname?: string | null } | null }>
 }
 
@@ -272,7 +271,6 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
 }) {
   const owner = brand.owners?.find((item) => item.role === 'owner' && item.user?.email)?.user
     || brand.owners?.find((item) => item.user?.email)?.user
-    || brand.owner
   const contactEmail = owner?.email || process.env.AMC_GROWTH_REPORT_EMAIL || 'contact@immedi.ai'
   const contactName = owner?.nickname || owner?.email?.split('@')[0] || 'AMC Kanban'
   const socialProfiles = Object.fromEntries((brand.accounts || [])
