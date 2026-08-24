@@ -216,9 +216,34 @@ function testCopywriterFirstCreativeUi() {
   assertIncludes(postPreviewModal, 'disabled={saving || completedCopywriterCount === 0}', 'preview modal allows completed posts to be saved or scheduled while others are generating')
   assertNotIncludes(postPreviewModal, 'disabled={saving || isAiGenerating}\\n                onClick={onSaveDraft}', 'preview modal must not globally lock save while generation continues')
   assertIncludes(postEditDrawer, 'const completedModalDrafts = () =>', 'post editor only submits completed modal drafts')
+  assertIncludes(postEditDrawer, 'Google 发布门店', 'post editor exposes Google location selection for multi-location accounts')
+  assertIncludes(postEditDrawer, 'gbpLocations.length > 1', 'post editor only renders the Google location selector for multiple locations')
+  assertIncludes(postEditDrawer, 'setSelectedGbpLocationId(locations[0].id)', 'post editor automatically binds a single Google location')
+  assertIncludes(postEditDrawer, 'gbpLocationId: gbpLocationForAccount(accId)', 'multi-platform draft creation only attaches a location to Google drafts')
+  assertIncludes(postEditDrawer, 'googleLocationBlocked', 'Google draft actions remain blocked until the location is ready')
   assertIncludes(draftManagement, 'const completedModalDrafts = () =>', 'draft management only submits completed modal drafts')
   assertIncludes(dashboardCalendar, 'const readyDrafts = createdDrafts.filter', 'calendar only submits completed modal drafts')
   assertIncludes(dashboardCalendar, 'hasPendingGeneratedDrafts', 'calendar keeps the creation surface open when some posts are still generating')
+}
+
+function testGoogleBusinessDraftLocationContract() {
+  const schema = read('prisma/schema.prisma')
+  const draftCollectionRoute = read('src/app/api/brands/[id]/drafts/route.ts')
+  const draftItemRoute = read('src/app/api/brands/[id]/drafts/[draftId]/route.ts')
+  const locationsRoute = read('src/app/api/brands/[id]/accounts/[aid]/gbp-locations/route.ts')
+  const submission = read('src/lib/draftSubmission.ts')
+  const postfast = read('src/lib/integrations/postfast.ts')
+
+  assertIncludes(schema, 'gbpLocationId                   String?', 'draft schema persists the selected Google location')
+  assertIncludes(draftCollectionRoute, 'gbpLocationId: true', 'draft collection returns the selected Google location')
+  assertIncludes(draftItemRoute, "existing.status === 'publishing'", 'publishing drafts lock Google location edits')
+  assertIncludes(locationsRoute, 'canHumanAccessBrandProject', 'Google location endpoint enforces brand access')
+  assertIncludes(locationsRoute, 'postfastGetGBPLocationsForInternalAccount', 'Google location endpoint resolves the internal account safely')
+  assertIncludes(submission, "code: 'GOOGLE_LOCATION_REQUIRED'", 'draft submission blocks a missing Google location')
+  assertIncludes(submission, "code: 'GOOGLE_LOCATION_NOT_FOUND'", 'draft submission blocks a stale Google location')
+  assertIncludes(submission, 'gbpLocationId: draft.gbpLocationId || undefined', 'draft delivery carries the selected location')
+  assertIncludes(postfast, "code: 'GOOGLE_LOCATION_REQUIRED'", 'PostFast publishing never defaults an unspecified Google location')
+  assertIncludes(postfast, "code: 'GOOGLE_LOCATION_NOT_FOUND'", 'PostFast publishing rejects a stale requested location')
 }
 
 function testViralCopyScriptBridge() {
@@ -276,6 +301,7 @@ function main() {
   testLegacyEntrypointsUseFacade()
   testContentLabStandaloneEntry()
   testCopywriterFirstCreativeUi()
+  testGoogleBusinessDraftLocationContract()
   testViralCopyScriptBridge()
   console.log('SUCCESS: content engine integration guards passed')
 }

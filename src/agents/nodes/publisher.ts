@@ -311,7 +311,8 @@ export async function publisherNode(state: any) {
         ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),
         coverImage: buildPostfastCoverImage(draftForPublish?.coverAsset),
         hashtags: cleanHashtags,
-        accountId: socialAccount!.id
+        accountId: socialAccount!.id,
+        gbpLocationId: draftForPublish?.gbpLocationId || undefined,
       });
 
       if (publishRes.success) {

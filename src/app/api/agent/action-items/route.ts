@@ -14,6 +14,12 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
+function isGooglePlatform(platformId: string): boolean {
+  const normalized = platformId.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  return ['google', 'google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb']
+    .includes(normalized)
+}
+
 // Authenticate by Agent apiKey in Authorization header
 async function getAgent(request: Request) {
   const principal = await authenticateRequest(request)
@@ -79,6 +85,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'accountId is required for content approval drafts' }, { status: 400 })
     }
 
+    const draftAccount = await prisma.socialAccount.findFirst({
+      where: { id: accountId, brandId },
+      select: { platformId: true },
+    })
+    if (!draftAccount) {
+      return NextResponse.json({ error: 'Account not found for this brand' }, { status: 404 })
+    }
+    if (
+      draftData.gbpLocationId !== undefined &&
+      draftData.gbpLocationId !== null &&
+      typeof draftData.gbpLocationId !== 'string'
+    ) {
+      return NextResponse.json({ error: 'draftData.gbpLocationId must be a string or null' }, { status: 400 })
+    }
+    const gbpLocationId =
+      isGooglePlatform(draftAccount.platformId) && typeof draftData.gbpLocationId === 'string'
+        ? draftData.gbpLocationId.trim() || null
+        : null
+
     const draft = await prisma.contentDraft.create({
       data: {
         brandId,
@@ -93,6 +118,7 @@ export async function POST(request: Request) {
         agentId: agent.userId,
         agentNote: draftData.agentNote || null,
         creativeHooks: draftData.creativeHooks || null,
+        gbpLocationId,
       },
     })
     draftId = draft.id
@@ -177,6 +203,7 @@ export async function POST(request: Request) {
           hashtags: draft.hashtags,
           scheduledAt: draft.scheduledAt?.toISOString(),
           accountId: accountId ?? undefined,
+          gbpLocationId: draftWithAssets?.gbpLocationId || undefined,
         })
 
         if (!publish.success) {

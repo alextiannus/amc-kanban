@@ -134,6 +134,11 @@ function normalizePlatformLabel(plat?: string): string {
   return p
 }
 
+function isGooglePlatform(plat?: string | null): boolean {
+  return ['google', 'google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb']
+    .includes(String(plat ?? '').toLowerCase().trim())
+}
+
 interface DraftItem {
   id: string
   status: string
@@ -168,6 +173,7 @@ interface DraftItem {
   viralCopyExperimentOverridden?: boolean
   viralCopyExperimentExcluded?: boolean
   accountId?: string | null
+  gbpLocationId?: string | null
   account?: {
     id: string
     platformId: string
@@ -215,6 +221,13 @@ interface SocialAccountOption {
   displayName?: string | null
 }
 
+interface GbpLocationOption {
+  id: string
+  name: string
+  address?: string
+  placeId?: string
+}
+
 interface Comment {
   id: string
   author: string
@@ -253,6 +266,11 @@ export default function PostEditDrawer({
   const [caption, setCaption] = useState('')
   const [hashtags, setHashtags] = useState('')
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([])
+  const [gbpLocations, setGbpLocations] = useState<GbpLocationOption[]>([])
+  const [selectedGbpLocationId, setSelectedGbpLocationId] = useState('')
+  const [gbpLocationsLoading, setGbpLocationsLoading] = useState(false)
+  const [gbpLocationsError, setGbpLocationsError] = useState<string | null>(null)
+  const [gbpLocationsReloadKey, setGbpLocationsReloadKey] = useState(0)
   const [scheduledAt, setScheduledAt] = useState('')
   const [agentNote, setAgentNote] = useState('')
   const [reviewNote, setReviewNote] = useState('')
@@ -323,6 +341,21 @@ export default function PostEditDrawer({
     const raw = account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : '')
     return canonicalScriptPlatform(raw)
   }, [selectedAccountIds, accounts])
+
+  const selectedGoogleAccountId = useMemo(() => {
+    return selectedAccountIds.find((accountId) => {
+      const account = accounts.find((item) => item.id === accountId)
+      const platformId = account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : '')
+      return isGooglePlatform(platformId)
+    }) || ''
+  }, [selectedAccountIds, accounts])
+
+  const googleLocationBlocked = Boolean(selectedGoogleAccountId) && (
+    gbpLocationsLoading ||
+    !!gbpLocationsError ||
+    gbpLocations.length === 0 ||
+    !selectedGbpLocationId
+  )
 
   const filteredAssets = useMemo(() => {
     const sorted = [...brandAssets].sort((a, b) => {
@@ -402,6 +435,63 @@ export default function PostEditDrawer({
   }, [isOpen, brandId])
 
   useEffect(() => {
+    if (!isOpen || !selectedGoogleAccountId) {
+      setGbpLocations([])
+      setSelectedGbpLocationId('')
+      setGbpLocationsLoading(false)
+      setGbpLocationsError(null)
+      return
+    }
+
+    const googleAccount = accounts.find((account) => account.id === selectedGoogleAccountId)
+    if (!googleAccount || selectedGoogleAccountId.startsWith('unconfigured_')) {
+      setGbpLocations([])
+      setSelectedGbpLocationId('')
+      setGbpLocationsLoading(false)
+      setGbpLocationsError('Google Business 账号尚未连接，无法读取发布门店。')
+      return
+    }
+
+    const controller = new AbortController()
+    const loadLocations = async () => {
+      setGbpLocationsLoading(true)
+      setGbpLocationsError(null)
+      try {
+        const response = await fetch(
+          `/api/brands/${brandId}/accounts/${googleAccount.id}/gbp-locations`,
+          { signal: controller.signal },
+        )
+        const data = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(data.error || 'Google Business 门店加载失败。')
+        const locations = Array.isArray(data.locations) ? data.locations as GbpLocationOption[] : []
+        setGbpLocations(locations)
+        if (locations.length === 0) {
+          setSelectedGbpLocationId('')
+          setGbpLocationsError('当前 Google Business 账号没有同步到可用门店。')
+          return
+        }
+        if (locations.length === 1) {
+          setSelectedGbpLocationId(locations[0].id)
+          return
+        }
+        setSelectedGbpLocationId((current) => {
+          const preferred = current || selectedDraft?.gbpLocationId || ''
+          return locations.some((location) => location.id === preferred) ? preferred : ''
+        })
+      } catch (locationError: unknown) {
+        if (controller.signal.aborted) return
+        setGbpLocations([])
+        setSelectedGbpLocationId('')
+        setGbpLocationsError(locationError instanceof Error ? locationError.message : 'Google Business 门店加载失败。')
+      } finally {
+        if (!controller.signal.aborted) setGbpLocationsLoading(false)
+      }
+    }
+    void loadLocations()
+    return () => controller.abort()
+  }, [isOpen, brandId, selectedGoogleAccountId, accounts, selectedDraft?.gbpLocationId, gbpLocationsReloadKey])
+
+  useEffect(() => {
     if (!isOpen || !selectedScriptPlatform) {
       setViralCopyScripts([])
       if (!selectedDraft?.viralCopyScriptId) setSelectedViralCopyScript(null)
@@ -448,6 +538,10 @@ export default function PostEditDrawer({
       setHashtags('')
       // Default: select all configured accounts + XHS (always, via unconfigured_xhs if needed)
       setSelectedAccountIds(buildDefaultAccountIds(accounts))
+      setGbpLocations([])
+      setSelectedGbpLocationId('')
+      setGbpLocationsLoading(false)
+      setGbpLocationsError(null)
       setScheduledAt('')
       setAgentNote('')
       setReviewNote('')
@@ -498,6 +592,7 @@ export default function PostEditDrawer({
         setHashtags(formatTags(draft.hashtags || []))
         const accId = draft.accountId || draft.account?.id || ''
         setSelectedAccountIds(accId ? [accId] : buildDefaultAccountIds(accounts))
+        setSelectedGbpLocationId(draft.gbpLocationId || '')
         setScheduledAt(toDateTimeLocal(draft.scheduledAt))
 
         if (draft.agentNote && draft.agentNote.includes("【AI 生成指令】")) {
@@ -643,6 +738,21 @@ export default function PostEditDrawer({
     }
   }
 
+  const gbpLocationForAccount = (accountId?: string | null) => {
+    if (!accountId) return null
+    const account = accounts.find((item) => item.id === accountId)
+    const platformId = account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : '')
+    return isGooglePlatform(platformId) ? selectedGbpLocationId || null : null
+  }
+
+  const ensureGoogleLocationReady = () => {
+    if (!googleLocationBlocked) return true
+    setError(gbpLocationsLoading
+      ? '正在加载 Google Business 门店，请稍候。'
+      : gbpLocationsError || '请选择 Google Business 发布门店。')
+    return false
+  }
+
   const saveDraft = async (nextStatus?: string, captionOverride?: string, accountIdsOverride?: string[]): Promise<DraftItem[] | null> => {
     let activeCaption = captionOverride !== undefined ? captionOverride : caption
     if (!activeCaption.trim() && contentIdea.trim()) {
@@ -657,6 +767,17 @@ export default function PostEditDrawer({
     const activeAccountIds = accountIdsOverride || selectedAccountIds
     if (activeAccountIds.length === 0) {
       setError('请至少选择一位 Copywriter')
+      return null
+    }
+    const includesGoogle = activeAccountIds.some((accountId) => {
+      const account = accounts.find((item) => item.id === accountId)
+      const platformId = account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : '')
+      return isGooglePlatform(platformId)
+    })
+    if (includesGoogle && googleLocationBlocked) {
+      setError(gbpLocationsLoading
+        ? '正在加载 Google Business 门店，请稍候。'
+        : gbpLocationsError || '请选择 Google Business 发布门店。')
       return null
     }
     setSaving(true)
@@ -676,6 +797,7 @@ export default function PostEditDrawer({
             caption: trimmedCaption,
             hashtags: parseTags(hashtags),
             accountId: activeAccountIds[0],
+            gbpLocationId: gbpLocationForAccount(activeAccountIds[0]),
             scheduledAt: fromDateTimeLocal(scheduledAt),
             agentNote: formattedAgentNote,
             status: nextStatus || selectedDraft.status || 'draft',
@@ -702,6 +824,7 @@ export default function PostEditDrawer({
                   caption: trimmedCaption,
                   hashtags: parseTags(hashtags),
                   accountId: accId,
+                  gbpLocationId: gbpLocationForAccount(accId),
                   scheduledAt: fromDateTimeLocal(scheduledAt),
                   agentNote: formattedAgentNote,
                   status: nextStatus || 'draft',
@@ -732,6 +855,7 @@ export default function PostEditDrawer({
                 caption: trimmedCaption,
                 hashtags: parseTags(hashtags),
                 accountId: accId,
+                gbpLocationId: gbpLocationForAccount(accId),
                 scheduledAt: fromDateTimeLocal(scheduledAt),
                 agentNote: formattedAgentNote,
                 status: nextStatus || 'draft',
@@ -1019,6 +1143,7 @@ export default function PostEditDrawer({
 
   const handleSmartScheduleDirect = async () => {
     if (!selectedDraft) return
+    if (!ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
     try {
@@ -1049,6 +1174,7 @@ export default function PostEditDrawer({
         body: JSON.stringify({
           caption,
           hashtags: parseTags(hashtags),
+          gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           scheduledAt: targetDateISO,
           assetIds: selectedAssetIds,
           coverAssetId,
@@ -1081,6 +1207,7 @@ export default function PostEditDrawer({
 
   const handlePublishNow = async () => {
     if (!selectedDraft) return
+    if (!ensureGoogleLocationReady()) return
     if (!confirm('确定要立即发布此帖文吗？')) return
     setSaving(true)
     setError(null)
@@ -1092,6 +1219,7 @@ export default function PostEditDrawer({
         body: JSON.stringify({
           caption,
           hashtags: parseTags(hashtags),
+          gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           assetIds: selectedAssetIds,
           coverAssetId,
           mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
@@ -1121,6 +1249,7 @@ export default function PostEditDrawer({
 
   const handleReschedule = async () => {
     if (!selectedDraft) return
+    if (!ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
     try {
@@ -1130,6 +1259,7 @@ export default function PostEditDrawer({
         body: JSON.stringify({
           caption,
           hashtags: parseTags(hashtags),
+          gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
           coverAssetId,
@@ -1160,6 +1290,7 @@ export default function PostEditDrawer({
 
   const handleReview = async (action: 'approve' | 'reject') => {
     if (!selectedDraft) return
+    if (action === 'approve' && !ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
     try {
@@ -1170,6 +1301,7 @@ export default function PostEditDrawer({
         body: JSON.stringify({
           caption,
           hashtags: parseTags(hashtags),
+          gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
           coverAssetId,
@@ -1632,6 +1764,48 @@ Return the output strictly in a valid JSON array format, containing:
                   })}
                 </div>
               </div>
+
+              {selectedGoogleAccountId && (gbpLocationsLoading || !!gbpLocationsError || gbpLocations.length > 1) && (
+                <div className="space-y-2 rounded-md border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                      Google 发布门店 {gbpLocations.length > 1 && <span className="text-red-500">*</span>}
+                    </label>
+                    {gbpLocationsLoading && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
+                  </div>
+                  {gbpLocationsLoading ? (
+                    <p className="text-xs text-blue-600 dark:text-blue-300">正在读取 Google Business 门店…</p>
+                  ) : gbpLocationsError ? (
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-xs font-semibold text-rose-600 dark:text-rose-300">{gbpLocationsError}</p>
+                      <button
+                        type="button"
+                        onClick={() => setGbpLocationsReloadKey((value) => value + 1)}
+                        className="shrink-0 rounded border border-rose-200 bg-white px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-900 dark:bg-slate-950"
+                      >
+                        重试
+                      </button>
+                    </div>
+                  ) : gbpLocations.length > 1 ? (
+                    <select
+                      value={selectedGbpLocationId}
+                      disabled={isPublished}
+                      onChange={(event) => {
+                        setSelectedGbpLocationId(event.target.value)
+                        setError(null)
+                      }}
+                      className="h-11 w-full rounded-md border border-blue-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 dark:border-blue-900 dark:bg-slate-950 dark:text-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <option value="">请选择发布门店</option>
+                      {gbpLocations.map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.name || location.id}{location.address ? ` · ${location.address}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : null}
+                </div>
+              )}
 
               {/* Scheduled At — full width row below */}
               <div className="flex flex-col space-y-1.5">
@@ -2191,14 +2365,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating}
+                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating || googleLocationBlocked}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 创作
               </button>
               <button
-                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0}
+                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('draft')
                   if (saved) {
@@ -2213,7 +2387,7 @@ Return the output strictly in a valid JSON array format, containing:
               {selectedDraft && (
                 <button
                   type="button"
-                  disabled={saving}
+                  disabled={saving || googleLocationBlocked}
                   onClick={handleSmartScheduleDirect}
                   className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                 >
@@ -2225,14 +2399,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={saving || isAiGenerating}
+                disabled={saving || isAiGenerating || googleLocationBlocked}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 重新创作
               </button>
               <button
-                disabled={saving}
+                disabled={saving || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('pending_review')
                   if (saved) {
@@ -2253,7 +2427,7 @@ Return the output strictly in a valid JSON array format, containing:
                 <X className="h-4 w-4" /> 驳回
               </button>
               <button
-                disabled={saving}
+                disabled={saving || googleLocationBlocked}
                 onClick={() => handleReview('approve')}
                 className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
@@ -2263,7 +2437,7 @@ Return the output strictly in a valid JSON array format, containing:
           ) : isScheduled ? (
             <>
               <button
-                disabled={saving}
+                disabled={saving || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('scheduled')
                   if (saved) {
@@ -2278,7 +2452,7 @@ Return the output strictly in a valid JSON array format, containing:
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || googleLocationBlocked}
                 onClick={handlePublishNow}
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-755 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
@@ -2286,7 +2460,7 @@ Return the output strictly in a valid JSON array format, containing:
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || googleLocationBlocked}
                 onClick={handleReschedule}
                 className="inline-flex items-center gap-1.5 rounded-md bg-amber-500 hover:bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >

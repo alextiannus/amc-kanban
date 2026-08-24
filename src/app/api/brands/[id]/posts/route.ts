@@ -29,6 +29,7 @@ interface PublishPostRequest {
   hashtags?: string[]       // optional hashtags
   scheduledAt?: string      // ISO 8601 UTC time for scheduling (e.g., "2026-06-01T03:00:00Z")
   accountId?: string        // specific account to post from (optional, uses default if not specified)
+  gbpLocationId?: string    // required for Google Business posts
 }
 
 // POST /api/brands/[id]/posts/publish
@@ -83,7 +84,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const body: PublishPostRequest = await request.json()
-  const { platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId } = body
+  const { platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId } = body
 
   // Validate required fields
   if (!platform || !caption) {
@@ -115,6 +116,7 @@ export async function POST(request: Request, { params }: Params) {
         hashtags,
         scheduledAt,
         accountId,
+        gbpLocationId,
       })
 
       if (!result.success) {
@@ -136,7 +138,7 @@ export async function POST(request: Request, { params }: Params) {
           )
         }
         return NextResponse.json(
-          { error: result.error || 'Failed to publish' },
+          { code: result.code, error: result.error || 'Failed to publish' },
           { status: 400 }
         )
       }

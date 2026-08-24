@@ -130,6 +130,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const publish = await postfastPublish({
     apiKey: brand.postfastApiKey,
     platform: platformName,
+    accountId: draft.accountId || undefined,
+    gbpLocationId: draft.gbpLocationId || undefined,
     caption: draft.caption,
     mediaItems,
     coverImage: buildPostfastCoverImage(draft.coverAsset),

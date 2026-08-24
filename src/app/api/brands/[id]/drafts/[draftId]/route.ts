@@ -11,6 +11,7 @@ const DRAFT_SELECT = {
   id: true,
   brandId: true,
   accountId: true,
+  gbpLocationId: true,
   caption: true,
   captionLang: true,
   mediaUrls: true,
@@ -65,6 +66,11 @@ function normalizeStringArray(value: unknown) {
     : []
 }
 
+function isGooglePlatform(platformId?: string | null) {
+  return ['google', 'google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb']
+    .includes(String(platformId ?? '').toLowerCase().trim())
+}
+
 async function ensureAccess(request: Request, brandId: string) {
   const actor = await getActor(request)
   if (!actor) return null
@@ -116,11 +122,17 @@ export async function PATCH(request: Request, { params }: Params) {
       publishedAt: true,
       scheduledAt: true,   // needed to detect time changes
       coverAssetId: true,
+      accountId: true,
+      gbpLocationId: true,
     },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
+
+  if (existing.status === 'publishing' && Object.prototype.hasOwnProperty.call(body, 'gbpLocationId')) {
+    return NextResponse.json({ error: '发布正在进行中，Google Business 发布门店暂时不能修改。' }, { status: 409 })
+  }
   
   if (body.caption !== undefined) {
     const trimmedCaption = typeof body.caption === 'string' ? body.caption.trim() : ''
@@ -174,6 +186,28 @@ export async function PATCH(request: Request, { params }: Params) {
     }
   }
 
+  if (body.gbpLocationId !== undefined && body.gbpLocationId !== null && typeof body.gbpLocationId !== 'string') {
+    return NextResponse.json({ error: 'gbpLocationId must be a string or null' }, { status: 400 })
+  }
+  const nextAccountId = typeof body.accountId === 'string' ? body.accountId : existing.accountId
+  const nextAccount = nextAccountId
+    ? await prisma.socialAccount.findFirst({
+        where: { id: nextAccountId, brandId },
+        select: { platformId: true },
+      })
+    : null
+  if (!nextAccount) return NextResponse.json({ error: 'accountId is invalid for this brand' }, { status: 400 })
+  const hasGbpLocationUpdate = Object.prototype.hasOwnProperty.call(body, 'gbpLocationId')
+  const accountChanged = typeof body.accountId === 'string' && body.accountId !== existing.accountId
+  const gbpLocationIdUpdate = !isGooglePlatform(nextAccount.platformId)
+    ? null
+    : hasGbpLocationUpdate
+      ? (typeof body.gbpLocationId === 'string' ? body.gbpLocationId.trim() || null : null)
+      : accountChanged
+        ? null
+        : undefined
+  const gbpLocationChanged = gbpLocationIdUpdate !== undefined && gbpLocationIdUpdate !== existing.gbpLocationId
+
   const assetIds = Array.isArray(body.assetIds) ? normalizeStringArray(body.assetIds) : null
   const hasCoverAssetUpdate = Object.prototype.hasOwnProperty.call(body, 'coverAssetId')
   if (hasCoverAssetUpdate && body.coverAssetId !== null && typeof body.coverAssetId !== 'string') {
@@ -204,7 +238,7 @@ export async function PATCH(request: Request, { params }: Params) {
     (!existing.scheduledAt || Math.abs(incomingScheduledAt.getTime() - existing.scheduledAt.getTime()) > 60_000)
 
   let brand: { postfastApiKey: string | null; timezone: string | null } | null = null
-  if (isScheduledOnPostfast && (nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus) || scheduledAtChanged)) {
+  if (isScheduledOnPostfast && (nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus) || scheduledAtChanged || gbpLocationChanged)) {
     brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: { postfastApiKey: true, timezone: true }
@@ -237,6 +271,7 @@ export async function PATCH(request: Request, { params }: Params) {
         caption: typeof body.caption === 'string' ? body.caption.trim() : undefined,
         captionLang: typeof body.captionLang === 'string' ? body.captionLang : undefined,
         accountId: typeof body.accountId === 'string' ? body.accountId : undefined,
+        gbpLocationId: gbpLocationIdUpdate,
         mediaUrls: Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined,
         coverAssetId: coverAssetIdUpdate,
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,
@@ -340,9 +375,9 @@ export async function PATCH(request: Request, { params }: Params) {
     console.error('[PATCH /api/brands/:id/drafts/:draftId] OBS draft snapshot failed:', error)
   })
 
-  // ── Re-submit to PostFast if scheduledAt changed on an already-queued post ──
-  // PostFast has no reschedule API. Strategy: delete (done above) → re-publish with new time.
-  if (scheduledAtChanged && platformPostIdUpdate === null) {
+  // Re-submit when a queued post changes schedule or Google location.
+  // PostFast has no update API for either field. Strategy: delete above, then recreate.
+  if ((scheduledAtChanged || gbpLocationChanged) && platformPostIdUpdate === null) {
     try {
       const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
       const resubmitResult = await submitDraftForDelivery({
@@ -350,7 +385,9 @@ export async function PATCH(request: Request, { params }: Params) {
         draftId,
         actorId: actor.id,
         forcePublish: true,
-        note: `已更新排期时间至 ${incomingScheduledAt!.toLocaleString('zh-CN', { timeZone: brand?.timezone || 'Asia/Singapore' })}`,
+        note: scheduledAtChanged && incomingScheduledAt
+          ? `已更新排期时间至 ${incomingScheduledAt.toLocaleString('zh-CN', { timeZone: brand?.timezone || 'Asia/Singapore' })}`
+          : '已更新 Google Business 发布门店',
       })
       if (resubmitResult.ok) {
         console.log(`[PATCH Draft] Re-submitted to PostFast with new scheduledAt ${incomingScheduledAt?.toISOString()}`)

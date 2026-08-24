@@ -1032,8 +1032,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     hashtags: z.array(z.string()).optional().describe('Hashtags without the # prefix'),
     scheduledAt: z.string().optional().describe('ISO 8601 UTC datetime to schedule (omit = publish immediately)'),
     accountId: z.string().optional().describe('Specific account ID to post from'),
+    gbpLocationId: z.string().optional().describe('Required Google Business location ID when platform is google'),
   }
-  const publishContentHandler = async ({ brandId, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId }: { brandId: string; platform: 'instagram' | 'tiktok' | 'xiaohongshu' | 'facebook' | 'youtube' | 'x' | 'linkedin' | 'threads' | 'bluesky' | 'pinterest' | 'snapchat' | 'telegram' | 'google'; caption: string; mediaStorageKeys?: string[]; mediaUrls?: string[]; hashtags?: string[]; scheduledAt?: string; accountId?: string }) => {
+  const publishContentHandler = async ({ brandId, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId }: { brandId: string; platform: 'instagram' | 'tiktok' | 'xiaohongshu' | 'facebook' | 'youtube' | 'x' | 'linkedin' | 'threads' | 'bluesky' | 'pinterest' | 'snapchat' | 'telegram' | 'google'; caption: string; mediaStorageKeys?: string[]; mediaUrls?: string[]; hashtags?: string[]; scheduledAt?: string; accountId?: string; gbpLocationId?: string }) => {
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -1050,7 +1051,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
     if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
     const { postfastPublish } = await import('@/lib/integrations/postfast')
-    const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId })
+    const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId })
 
     if (!result.success) {
       const payload = result.code
@@ -1596,7 +1597,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         orderBy: { updatedAt: 'desc' },
         take: limit ?? 50,
         select: {
-          id: true, caption: true, hashtags: true, scheduledAt: true, status: true, accountId: true,
+          id: true, caption: true, hashtags: true, scheduledAt: true, status: true, accountId: true, gbpLocationId: true,
           agentNote: true, rejectionNote: true, platformPostId: true, publishedAt: true, updatedAt: true,
           account: { select: { id: true, platformId: true, handle: true, displayName: true } },
           coverAsset: true,
@@ -1616,6 +1617,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       caption: z.string().optional().describe('Caption body. Required when creating a new draft.'),
       hashtags: z.array(z.string()).optional(),
       accountId: z.string().optional().describe('Platform account ID. Required when creating a new draft.'),
+      gbpLocationId: z.string().nullable().optional().describe('Google Business location ID. Required before submitting a Google draft.'),
       mediaUrls: z.array(z.string()).optional(),
       assetIds: z.array(z.string()).optional().describe('MediaAsset IDs to attach to this draft.'),
       coverAssetId: z.string().nullable().optional().describe('Optional JPEG/PNG MediaAsset ID to use as the draft cover. Pass null to clear it.'),
@@ -1623,7 +1625,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       captionLang: z.string().optional().default('en'),
       creativeHooks: z.string().optional(),
     },
-    async ({ brandId, draftId, caption, hashtags, accountId, mediaUrls, assetIds, coverAssetId, agentNote, captionLang, creativeHooks }) => {
+    async ({ brandId, draftId, caption, hashtags, accountId, gbpLocationId, mediaUrls, assetIds, coverAssetId, agentNote, captionLang, creativeHooks }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
@@ -1689,10 +1691,26 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         if (!caption || !caption.trim()) {
           return { content: [{ type: 'text' as const, text: 'Error: caption is required when creating a new draft' }], isError: true }
         }
-        if (!resolvedAccountId) {
+      if (!resolvedAccountId) {
           return { content: [{ type: 'text' as const, text: 'Error: accountId is required when creating a new draft' }], isError: true }
         }
       }
+
+      const accountForLocation = resolvedAccountId
+        ? await prisma.socialAccount.findFirst({
+            where: { id: resolvedAccountId, brandId },
+            select: { platformId: true },
+          })
+        : draftId
+          ? await prisma.contentDraft.findFirst({
+              where: { id: draftId, brandId },
+              select: { account: { select: { platformId: true } } },
+            }).then((draft: { account: { platformId: string } | null } | null) => draft?.account || null)
+          : null
+      const isGoogleDraft = normalizeCalendarPlatform(accountForLocation?.platformId || '') === 'google'
+      const normalizedGbpLocationId = isGoogleDraft && typeof gbpLocationId === 'string'
+        ? gbpLocationId.trim() || null
+        : null
 
       if (coverAssetId) {
         const coverAsset = await prisma.mediaAsset.findFirst({
@@ -1720,6 +1738,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           if (caption !== undefined) updateData.caption = caption.trim()
           if (captionLang !== undefined) updateData.captionLang = captionLang
           if (accountId !== undefined) updateData.accountId = resolvedAccountId
+          if (gbpLocationId !== undefined || accountId !== undefined) updateData.gbpLocationId = normalizedGbpLocationId
           // scheduledAt intentionally NOT accepted from agent — use board_get_schedule_recommendation
           if (hashtags !== undefined) updateData.hashtags = hashtags
           if (mediaUrls !== undefined) updateData.mediaUrls = mediaUrls
@@ -1740,6 +1759,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
               caption: caption!.trim(),
               hashtags: hashtags ?? [],
               accountId: resolvedAccountId || null,
+              gbpLocationId: normalizedGbpLocationId,
               scheduledAt: null, // Always null on save — set by board_get_schedule_recommendation
               mediaUrls: mediaUrls ?? [],
               coverAssetId: coverAssetId ?? null,

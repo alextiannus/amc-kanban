@@ -130,10 +130,10 @@ const DRAFT_OPERATIONS: OperationItem[] = [
     action: 'Create/Update Draft',
     actionCn: '保存/更新草稿',
     mcpName: 'board_save_draft',
-    mcpParams: 'brandId, draftId?, caption?, hashtags?, accountId?, mediaUrls?, assetIds?, agentNote?, captionLang?',
+    mcpParams: 'brandId, draftId?, caption?, hashtags?, accountId?, gbpLocationId?, mediaUrls?, assetIds?, agentNote?, captionLang?',
     restMethod: 'POST',
     restUrl: '/api/brands/[id]/drafts or PATCH /api/brands/[id]/drafts/[draftId]',
-    restParams: 'caption?, hashtags?, accountId?, mediaUrls?, assetIds?, agentNote?, captionLang?',
+    restParams: 'caption?, hashtags?, accountId?, gbpLocationId?, mediaUrls?, assetIds?, agentNote?, captionLang?',
     desc: 'Create or update a content draft. Scheduling should be based on the recommendation tool or the brand publishing calendar.',
     payloadExample: `{
   "brandId": "brand_id_here",

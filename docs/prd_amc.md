@@ -361,6 +361,8 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 ### Step 6：检查发布情况
 
 - **Scheduled Tab 对账**：PostFast 定时发布完成后，系统将 `scheduled` 自动同步为 `published` 或 `failed`；已发布内容不得继续停留在 Scheduled Tab。
+- **Google Business 发布门店**：Google 草稿必须把 PostFast `gbp-locations` 返回的 `gbpLocationId` 固定到 `ContentDraft`。账号只有一个有效门店时自动绑定且不显示选择控件；有多个有效门店时必须由运营在草稿中单选一个；没有门店、门店列表加载失败或已选门店失效时，草稿不得提交审核、排期或发布。
+- **门店一致性**：审核、重新排期、立即发布、失败重试和后台投递任务必须复用草稿固定的同一 `gbpLocationId`。指定门店匹配失败时必须报错，不得静默回退到第一个门店；非 Google 草稿的该字段始终为空。
 - **发布标识契约**：`POST /social-posts` 成功响应使用 `{ postIds: string[] }`，首个 PostFast 托管帖子 ID 必须写入 `ContentDraft.platformPostId`；成功响应缺少 ID 时按失败处理，不得写入不可追踪的排期记录。
 - **历史数据安全修复**：仅对已到发布时间且缺少 `platformPostId` 的旧记录，按 PostFast 账号、规范化文案（含发布时拼接的 Hashtags）和两分钟内的排期时间进行唯一匹配；匹配不唯一时跳过并记录错误。
 - **分页契约**：PostFast 帖子列表请求从 `page=0` 开始，并按 `pageInfo/totalCount` 有界翻页。
@@ -379,6 +381,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 | 字段 | 来源 | 用途 |
 |------|------|------|
 | `scheduledAt` | `/scheduling/recommend` 自动填充 | 决定 Draft 列表排序和发布时机 |
+| `gbpLocationId` | PostFast `GET /social-media/:id/gbp-locations` | Google Business 草稿固定的单一发布门店；其他平台为空 |
 | `platformPostId` | PostFast `postIds[0]` | PostFast 托管帖子 ID，用于取消排期、状态对账和链接解析 |
 | `agentNote` | AIJobModal 用户输入 | 存储用户给 AI 的内容指令 |
 | `assetIds` | DashboardAssets 多选 | 关联创作所用素材 |

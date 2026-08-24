@@ -510,10 +510,30 @@ async function main() {
       apiKey: API_KEY,
       platform: 'google_business',
       caption: 'Google map update',
+      gbpLocationId: 'gbp_location_001',
       scheduledAt,
     })
     assert.equal(googlePublish.success, true)
     assert.equal(googlePublish.postId, 'pf_post_google_001')
+
+    const missingGoogleLocation = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'google_business',
+      caption: 'Missing Google location',
+      scheduledAt,
+    })
+    assert.equal(missingGoogleLocation.success, false)
+    assert.equal(missingGoogleLocation.code, 'GOOGLE_LOCATION_REQUIRED')
+
+    const staleGoogleLocation = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'google_business',
+      caption: 'Stale Google location',
+      gbpLocationId: 'gbp_location_stale',
+      scheduledAt,
+    })
+    assert.equal(staleGoogleLocation.success, false)
+    assert.equal(staleGoogleLocation.code, 'GOOGLE_LOCATION_NOT_FOUND')
 
     const list = await postfast.postfastListPosts(API_KEY, { status: 'scheduled', platform: 'instagram', limit: 10, page: 0 })
     assert.equal(list.success, true)

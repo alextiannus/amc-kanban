@@ -11,6 +11,7 @@ const DRAFT_SELECT = {
   id: true,
   brandId: true,
   accountId: true,
+  gbpLocationId: true,
   caption: true,
   captionLang: true,
   mediaUrls: true,
@@ -75,6 +76,11 @@ function normalizeStringArray(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
     : []
+}
+
+function isGooglePlatform(platformId?: string | null) {
+  return ['google', 'google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb']
+    .includes(String(platformId ?? '').toLowerCase().trim())
 }
 
 async function ensureAccess(request: Request, brandId: string) {
@@ -213,6 +219,18 @@ export async function POST(request: Request, { params }: Params) {
     accountId = placeholderAccount.id
   }
 
+  const draftAccount = await prisma.socialAccount.findFirst({
+    where: { id: accountId, brandId },
+    select: { platformId: true },
+  })
+  if (!draftAccount) return NextResponse.json({ error: 'accountId is invalid for this brand' }, { status: 400 })
+  if (body.gbpLocationId !== undefined && body.gbpLocationId !== null && typeof body.gbpLocationId !== 'string') {
+    return NextResponse.json({ error: 'gbpLocationId must be a string or null' }, { status: 400 })
+  }
+  const gbpLocationId = isGooglePlatform(draftAccount.platformId)
+    ? optionalString(body.gbpLocationId)
+    : null
+
   const assetIds = normalizeStringArray(body.assetIds)
   if (body.coverAssetId !== undefined && body.coverAssetId !== null && typeof body.coverAssetId !== 'string') {
     return NextResponse.json({ error: 'coverAssetId must be a string or null' }, { status: 400 })
@@ -237,6 +255,7 @@ export async function POST(request: Request, { params }: Params) {
       data: {
         brandId,
         accountId,
+        gbpLocationId,
         caption,
         captionLang: typeof body.captionLang === 'string' && body.captionLang ? body.captionLang : 'en',
         mediaUrls: normalizeStringArray(body.mediaUrls),

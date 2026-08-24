@@ -346,6 +346,71 @@ export async function postfastGetGBPLocations(apiKey: string, accountId: string,
 }
 
 /**
+ * Resolve an internal SocialAccount ID to the matching PostFast Google account,
+ * then return its GBP locations. A platform-only fallback is allowed only when
+ * the PostFast workspace contains exactly one Google account.
+ */
+export async function postfastGetGBPLocationsForInternalAccount(
+  apiKey: string,
+  internalAccountId: string,
+  timeoutMs = 15_000,
+): Promise<{
+  success: boolean
+  locations: Array<{ id: string; name: string; address?: string; placeId?: string }>
+  socialMediaId?: string
+  error?: string
+}> {
+  const accountsResult = await postfastFetchAccounts(apiKey, timeoutMs)
+  if (!accountsResult.success) {
+    return { success: false, locations: [], error: accountsResult.error || 'Unable to load PostFast accounts.' }
+  }
+
+  let matchedAccount = accountsResult.accounts.find((account) => account.id === internalAccountId)
+  if (!matchedAccount) {
+    try {
+      const { prisma } = await import('@/lib/prisma')
+      const dbAccount = await prisma.socialAccount.findUnique({
+        where: { id: internalAccountId },
+        select: { platformId: true, handle: true },
+      })
+      if (!dbAccount || normalizePlatform(dbAccount.platformId) !== 'google') {
+        return { success: false, locations: [], error: 'The selected social account is not a Google Business account.' }
+      }
+      const targetHandle = normalizeHandle(dbAccount.handle)
+      matchedAccount = accountsResult.accounts.find((account) =>
+        normalizePlatform(account.platformId) === 'google' &&
+        targetHandle &&
+        normalizeHandle(account.handle) === targetHandle
+      )
+    } catch (error: unknown) {
+      return {
+        success: false,
+        locations: [],
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  if (!matchedAccount) {
+    const googleAccounts = accountsResult.accounts.filter((account) => normalizePlatform(account.platformId) === 'google')
+    if (googleAccounts.length === 1) matchedAccount = googleAccounts[0]
+    else if (googleAccounts.length > 1) {
+      return { success: false, locations: [], error: 'Multiple Google Business accounts are connected and the selected account could not be matched.' }
+    }
+  }
+
+  if (!matchedAccount || normalizePlatform(matchedAccount.platformId) !== 'google') {
+    return { success: false, locations: [], error: 'No matching Google Business account was found in PostFast.' }
+  }
+
+  const locationsResult = await postfastGetGBPLocations(apiKey, matchedAccount.id, timeoutMs)
+  return {
+    ...locationsResult,
+    socialMediaId: matchedAccount.id,
+  }
+}
+
+/**
  * GET /social-posts/analytics
  * Fetch published posts with their latest performance metrics.
  * Only returns posts that have been successfully published (with a platformPostId).
@@ -658,31 +723,58 @@ async function resolveGbpLocationId(input: {
   requestedLocationId?: string
   accountHandle?: string | null
   deadlineAt: number
-}): Promise<{ locationId?: string; error?: string }> {
-  const wanted = input.requestedLocationId || extractGoogleLocationId(input.accountHandle)
+}): Promise<{ locationId?: string; error?: string; code?: string }> {
+  const requested = String(input.requestedLocationId ?? '').trim()
+  const handleLocationId = extractGoogleLocationId(input.accountHandle)
   const locationsResult = await postfastGetGBPLocations(
     input.apiKey,
     input.socialMediaId,
     remainingTimeout(input.deadlineAt, 5_000),
   )
   if (!locationsResult.success) {
-    return { error: `无法获取 PostFast Google Business locations: ${locationsResult.error || 'unknown error'}` }
+    return {
+      code: 'GOOGLE_LOCATION_UNAVAILABLE',
+      error: `无法获取 PostFast Google Business locations: ${locationsResult.error || 'unknown error'}`,
+    }
   }
   if (locationsResult.locations.length === 0) {
-    return { error: 'PostFast Google Business 账号没有同步到任何 location，请在 PostFast 重新连接或同步 GBP locations。' }
+    return {
+      code: 'GOOGLE_LOCATION_UNAVAILABLE',
+      error: 'PostFast Google Business 账号没有同步到任何 location，请在 PostFast 重新连接或同步 GBP locations。',
+    }
   }
 
-  if (wanted) {
-    const wantedNorm = normalizeHandle(wanted)
+  if (requested) {
+    const wantedNorm = normalizeHandle(requested)
+    const matched = locationsResult.locations.find((location) =>
+      normalizeHandle(location.id) === wantedNorm ||
+      normalizeHandle(location.placeId) === wantedNorm
+    )
+    if (matched) return { locationId: matched.id }
+    return {
+      code: 'GOOGLE_LOCATION_NOT_FOUND',
+      error: '草稿选择的 Google Business 门店已不存在或不属于当前账号，请重新选择门店。',
+    }
+  }
+
+  if (handleLocationId) {
+    const wantedNorm = normalizeHandle(handleLocationId)
     const matched = locationsResult.locations.find((location) =>
       normalizeHandle(location.id) === wantedNorm ||
       normalizeHandle(location.placeId) === wantedNorm ||
       normalizeHandle(location.name).includes(wantedNorm)
     )
     if (matched) return { locationId: matched.id }
+    return {
+      code: 'GOOGLE_LOCATION_NOT_FOUND',
+      error: 'Google Business 账号原有的门店绑定已失效，请重新选择门店。',
+    }
   }
 
-  return { locationId: locationsResult.locations[0].id }
+  return {
+    code: 'GOOGLE_LOCATION_REQUIRED',
+    error: '发布 Google Business 内容前必须明确选择一个门店。',
+  }
 }
 
 type PreparedPostFastMedia = PostFastMediaInput & {
@@ -1142,7 +1234,11 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     })
     if (!resolvedLocation.locationId) {
       if (Date.now() >= publishDeadlineAt - 250) return postfastPublishTimeout()
-      return { success: false, error: resolvedLocation.error || '发布失败：Google Business 缺少 gbpLocationId。' }
+      return {
+        success: false,
+        code: resolvedLocation.code,
+        error: resolvedLocation.error || '发布失败：Google Business 缺少 gbpLocationId。',
+      }
     }
     post.gbpLocationId = resolvedLocation.locationId
     requestControls.gbpLocationId = resolvedLocation.locationId

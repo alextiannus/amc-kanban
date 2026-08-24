@@ -1,5 +1,9 @@
 import { prisma } from '@/lib/prisma'
-import { postfastDeletePost, postfastPublish } from '@/lib/integrations/postfast'
+import {
+  postfastDeletePost,
+  postfastGetGBPLocationsForInternalAccount,
+  postfastPublish,
+} from '@/lib/integrations/postfast'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
@@ -31,7 +35,7 @@ function isFuture(value?: Date | null) {
 
 function normalizePublishPlatform(platform?: string | null) {
   const normalized = String(platform ?? '').toLowerCase().trim()
-  if (['google_business', 'google_maps', 'google_map', 'google_business_profile', 'gbp', 'gmb'].includes(normalized)) {
+  if (['google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb'].includes(normalized)) {
     return 'google'
   }
   return normalized
@@ -141,6 +145,47 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   const platformId = normalizePublishPlatform(draft.account.platformId)
+  if (platformId === 'google') {
+    if (!draft.gbpLocationId) {
+      return {
+        ok: false as const,
+        status: 422,
+        code: 'GOOGLE_LOCATION_REQUIRED',
+        error: '请先为 Google Business 草稿选择发布门店。',
+      }
+    }
+    if (!brand.postfastApiKey) {
+      return {
+        ok: false as const,
+        status: 422,
+        code: 'GOOGLE_LOCATION_UNAVAILABLE',
+        error: '品牌尚未配置 PostFast，无法校验 Google Business 门店。',
+      }
+    }
+    const locationsResult = await postfastGetGBPLocationsForInternalAccount(
+      brand.postfastApiKey,
+      draft.accountId || draft.account.id,
+    )
+    if (!locationsResult.success || locationsResult.locations.length === 0) {
+      return {
+        ok: false as const,
+        status: 422,
+        code: 'GOOGLE_LOCATION_UNAVAILABLE',
+        error: locationsResult.error || '当前 Google Business 账号没有可用门店，请检查账号连接和门店同步。',
+      }
+    }
+    const selectedLocationExists = locationsResult.locations.some((location) =>
+      location.id === draft.gbpLocationId || location.placeId === draft.gbpLocationId
+    )
+    if (!selectedLocationExists) {
+      return {
+        ok: false as const,
+        status: 422,
+        code: 'GOOGLE_LOCATION_NOT_FOUND',
+        error: '草稿选择的 Google Business 门店已不存在，请重新选择门店后再提交。',
+      }
+    }
+  }
   const shouldValidateForPublish = shouldValidateMediaForDraftDelivery({
     autoPilot: brand.autoPilot,
     forcePublish: input.forcePublish,
@@ -402,6 +447,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     apiKey: brand.postfastApiKey,
     platform: platformId,
     accountId: draft.accountId || undefined,
+    gbpLocationId: draft.gbpLocationId || undefined,
     caption: draft.caption,
     mediaItems,
     coverImage,

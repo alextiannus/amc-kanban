@@ -191,6 +191,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 - `GET/POST /api/brands/:id/drafts`
 - `GET/PATCH /api/brands/:id/drafts/:draftId`
+- `GET /api/brands/:id/accounts/:accountId/gbp-locations`
 - `PATCH /api/brands/:id/drafts/:draftId/submit`
 - `PATCH /api/brands/:id/drafts/:draftId/approve`
 - `PATCH /api/brands/:id/drafts/:draftId/reject`
@@ -201,7 +202,9 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 2. `Brand.autoPilot = false`：submit 后进入 `pending_review`，生成 ActionItem。
 3. approve 会触发发布或排期。
 4. 已排期草稿更新时，如果已有 `platformPostId` 且未发布，先调用 PostFast 删除旧排期，再重建新排期。
-5. 草稿快照会 best-effort 持久化到 Huawei OBS。
+5. Google Business 草稿通过 `gbpLocationId` 固定一个发布门店：单门店自动绑定，多门店必须人工选择；门店缺失、不可用或已失效时禁止提交，且不得回退到第一个门店。
+6. `gbpLocationId` 随草稿进入审核、重新排期、立即发布和后台发布任务；非 Google 草稿保存为 `null`。
+7. 草稿快照会 best-effort 持久化到 Huawei OBS。
 
 请求体示例：
 
@@ -210,6 +213,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
   "caption": "New brunch menu this weekend.",
   "hashtags": ["brunch", "weekend"],
   "accountId": "social_account_id",
+  "gbpLocationId": "locations/123456789",
   "scheduledAt": "2026-06-10T15:00:00.000Z",
   "agentNote": "Updated based on owner feedback."
 }

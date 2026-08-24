@@ -585,6 +585,7 @@ model ContentDraft {
   brand                           Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
   accountId                       String?
   account                         SocialAccount? @relation(fields: [accountId], references: [id])
+  gbpLocationId                   String?
   caption                         String
   captionLang                     String         @default("en")
   mediaUrls                       String[]       @default([])
