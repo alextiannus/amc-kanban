@@ -244,6 +244,14 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 - `aiReady`
 - `sourceType`
 
+视频生产原片扩展：
+
+- 固定系统目录：`视频原片`，不可删除或重命名；目录内以 `VideoShootBatch` 业务分组，不创建二级目录。
+- Content 通过 `POST /api/internal/content-assets` 调用 `createShootBatch|updateShootBatch|listShootBatches|list|presign|confirm`。
+- `list` 增加 `mediaKind=image|video`（缺省为 `image`）、`assetIds`、`shootBatchId`、`videoProjectId`；返回批次、项目、创意/拆解版本、拍摄日期、原始文件名和权利状态。
+- 视频 `presign/confirm` 要求 `videoProjectId + shootBatchId`，真实媒体校验通过后写入 `aiCategory=视频原片`、`sourceType=video_production_upload`，单文件最大 `250_000_000` 字节。
+- 项目删除不级联删除 `MediaAsset`；素材库永久删除后，Content 项目按失效素材处理并要求重新选择或补拍。
+
 ## 3.10 Research TopicFeed Service
 
 职责：品牌 research topics 的 Markdown 文档读写。

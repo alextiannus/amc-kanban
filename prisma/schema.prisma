@@ -428,6 +428,7 @@ model Brand {
   brandPlanInterviews BrandPlanInterview[]
   growthResearchSnapshots BrandGrowthResearchSnapshot[]
   marketingSolutions BrandMarketingSolution[]
+  videoShootBatches VideoShootBatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -670,6 +671,15 @@ model MediaAsset {
   lastUsedAt        DateTime?
   uploadedBy        String?
   sourceType        String    @default("upload")
+  shootBatchId      String?
+  shootBatch        VideoShootBatch? @relation(fields: [shootBatchId], references: [id], onDelete: SetNull)
+  videoProjectId    String?
+  creativeId        String?
+  creativeVersion  Int?
+  extractionVersion Int?
+  captureDate       DateTime?
+  originalFilename String?
+  rightsStatus      String?
 
   contentRefs ContentAssetRef[]
   coverDrafts ContentDraft[]    @relation("DraftCoverAsset")
@@ -680,6 +690,28 @@ model MediaAsset {
 
   @@index([brandId, aiReady])
   @@index([brandId, aiCategory])
+  @@index([brandId, shootBatchId])
+  @@index([videoProjectId])
+}
+
+model VideoShootBatch {
+  id                String       @id @default(cuid())
+  brandId           String
+  brand             Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name              String
+  captureDate       DateTime
+  videoProjectId    String
+  creativeId        String?
+  creativeVersion   Int?
+  extractionVersion Int?
+  createdBy         String
+  mediaAssets       MediaAsset[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([brandId, name])
+  @@unique([brandId, videoProjectId])
+  @@index([brandId, captureDate])
 }
 
 model PlanningReview {

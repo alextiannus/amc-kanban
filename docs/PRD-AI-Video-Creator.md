@@ -18,7 +18,8 @@ AMC 视频能力按任务解耦，不绑定任何单一厂商：
 
 ```text
 选择已拆解创意 -> 创意来源快照 -> 可编辑脚本/分镜/Prompt
-              -> 逐镜图片与声音 -> Seedance 片段/TTS -> 后期 -> 审核下载
+              -> 图片与声音（图片生成视频） -> Seedance 片段/TTS -> 后期 -> 审核下载
+              -> 拍摄批次/原片分析/分镜匹配（实拍混剪） -> 人工逐镜确认 -> 直接剪辑/视频生视频/图生视频 -> 后期 -> 审核下载
 ```
 
 每一步必须产出可审核、可复用、可追溯的结构化资产，而不是只返回一条视频文件。
@@ -58,7 +59,7 @@ creative_quality_review
 
 新建项目接收 `creativeId`，并保存创意版本、extraction 版本、analysis 版本以及不可变 `CreativeSourceSnapshot`。创意时间轴必须确定性原样导入，不调用模型改写：`onScreenText` 映射字幕，`voiceover` 映射口播，画面、景别、运镜、动作、声音和叙事作用共同映射分镜及 Seedance Prompt。
 
-所有创意来源类型均允许应用；竞品或“仅竞品分析”来源必须在页面警告并记录操作者，但不会作为生成阻断条件。竞品源视频永远不得传给 Seedance，生成时只允许传当前品牌下由用户选择的图片。
+所有创意来源类型均允许应用；竞品或“仅竞品分析”来源必须在页面警告并记录操作者，但不会作为生成阻断条件。爆品/竞品源视频只用于学习脚本结构，永远不得作为成片素材或发送给视频生成模型。生成输入只允许来自当前品牌且由用户明确加入项目并人工确认的图片或摄影原片。
 
 字幕、口播、画面 Prompt 和时长均可逐镜编辑。每次编辑创建该镜新版本并保留旧脚本、音频、视频；不同输入的失效范围为：
 
@@ -66,9 +67,13 @@ creative_quality_review
 - 口播文字、音色或语音参数变化：只使该镜 TTS 与最终成片失效；
 - Prompt、图片顺序或镜头时长变化：使该镜 Seedance 视频与最终成片失效；镜头时长变化同时使现有 TTS 需要重新校验。
 
-### 3.1 图片素材
+### 3.1 图片素材与摄影原片
 
-每镜必须绑定 1–4 张有序品牌图片，第一张为主参考图。Content 只保存 Kanban 品牌素材 ID、顺序和角色；提交生成前通过内部接口按操作者和品牌权限获取最新可读地址。Content 工作台可列表、搜索、分页并通过 Kanban 预签名上传及确认接口补充素材。
+`image_only` 项目每镜必须绑定 1–4 张有序品牌图片，第一张为主参考图。`hybrid_footage` 项目创建拍摄批次，默认命名 `YYYY-MM-DD · 项目标题`，同品牌同名自动追加 `· 02`、`· 03`；名称可改但必须为 1–80 字。新上传原片统一进入 Kanban 系统目录“视频原片”，OBS 键为 `brands/{brandId}/assets/视频原片/{year}/{date}/{projectId}/{uniqueFilename}`，保留 `originalFilename`。已有品牌视频必须人工加入当前项目后才参与匹配；Content 只保存品牌素材 ID、关联、分析和派生片段。
+
+原片后台任务在页面关闭后继续。系统以 FFprobe 校验真实时长、编码和分辨率，以 FFmpeg 场景检测结合多模态分析时间线切分；派生片段只存 Content 项目存储。匹配权重固定为语义 40%、景别/运镜 20%、时长/节奏 15%、画质/方向 15%、连续性 10%，`>=0.75` 为强匹配、`0.55–0.75` 为相似候选、`<0.55` 不推荐，每镜最多显示 3 个候选和理由。相似候选不得自动采用；无候选时输出包含主体、动作、场景、景别、机位、运镜、时长、方向比例和验收要求的补拍清单。
+
+每镜人工确认 `fulfillmentMode=direct_clip|reference_to_video|image_to_video|unresolved`。直接实拍保存 `selectedSourceClipId` 并执行确定性裁切；视频生视频把片段真实作为 `reference_video`；图生视频仍使用 1–4 张品牌图片；`unresolved` 可保存但阻止最终合成。修改脚本、时长、素材或生产方式，只使受影响的匹配、生成结果和最终成片失效。
 
 ### 3.2 声音
 
@@ -134,7 +139,7 @@ VideoGenerationJob
 
 ## 5. 生成、后期、审核和发布
 
-新项目一次只生成一个分镜、一个版本，不再默认创建三套全片任务。Prompt、图片顺序或时长变化后使用新的幂等键并使旧费用确认失效；重复点击保持幂等，只有明确点击“重新生成”才创建新版本。生成中的分镜不锁定其他分镜编辑或提交。
+新项目一次只生成一个分镜、一个版本，不再默认创建三套全片任务。Prompt、图片顺序、视频片段、履约方式或时长变化后使用新的幂等键并使旧费用确认失效；重复点击保持幂等，只有明确点击“重新生成”才创建新版本。`reference_to_video` 仅可路由到同时具备 `video_output + reference_video` 的能力配置；能力不可用时只禁用视频生视频，直接剪辑和图生视频继续可用。
 
 视频供应商只生成无文字镜头片段。用户为每镜选择一个成功版本后，AMC-Content 按分镜顺序拼接，将逐镜 TTS 按时间轴混合为口播轨、自动降低背景音乐音量，并根据最终镜头时长重新计算字幕时间码后由 FFmpeg 叠加。输出固定生成 9:16、4:5、1:1 三种成片。
 
@@ -159,8 +164,11 @@ AMC-Content：
 - `POST /v1/lab/video-projects/:id/shots/:shotId/estimate|generate` 与 `PUT .../selected-clip`：逐镜估价、幂等生成和版本选择。
 - `GET /v1/lab/tts/voices` 与 `POST|DELETE .../voiceover`：音色目录、试听、正式 TTS 和移除逐镜音轨。
 - `GET|POST /v1/lab/video-projects/:id/materials*`：通过 Kanban 内部桥接完成品牌图片列表、搜索、预签名上传和确认。
+- `GET|POST /v1/lab/video-projects/:id/source-videos*`：列出、上传、从“视频原片”关联、分析和失败重试。
+- `POST /v1/lab/video-projects/:id/match-shots` 与 `GET .../shot-matches`：生成并读取限定当前项目素材集的候选与补拍清单。
+- `PUT /v1/lab/video-projects/:id/shots/:shotId/fulfillment`：保存逐镜生产方式、片段/图片选择和人工确认审计字段。
 
-AMC-Content 的“视频生产”工作台使用“选择创意、脚本与分镜、图片与声音、视频生成、合成下载”五步。逐镜卡集中提供图片排序、Prompt、时长、字幕、口播、音色参数、试听、Seedance/TTS 状态、预览与重生成。Content Lab 的“模型与路由”对 `ADMIN` 可编辑、对 `AMC_PRINCIPAL` 只读；API Key 仍只存在 AMC-Content 的服务端配置，页面只显示 `secretRef` 和已配置/缺失状态。
+AMC-Content 的“视频生产”工作台有两个入口。`image_only` 保持“选择创意、脚本与分镜、图片与声音、视频生成、合成下载”五步不变；`hybrid_footage` 使用“选择创意、脚本与分镜、实拍素材与匹配、声音设置、视频生成、合成下载”六步。实拍步骤展示批次、后台分析状态、至多 3 个候选、评分理由、制作方案草稿、人工逐镜确认和补拍清单。Content Lab 的“模型与路由”对 `ADMIN` 可编辑、对 `AMC_PRINCIPAL` 只读；API Key 仍只存在 AMC-Content 的服务端配置。
 
 Kanban 左侧“视频生产”仅向 `ADMIN`、`AMC_PRINCIPAL`展示，通过短期签名跳转并传递已授权的当前商家；Kanban 不保存或执行视频/TTS 配置。
 

@@ -5,7 +5,8 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
-const DEFAULT_FOLDERS = ['产品', '环境', '活动', '封面图']
+const DEFAULT_FOLDERS = ['产品', '环境', '活动', '封面图', '视频原片']
+const RESERVED_FOLDERS = new Set(['素材库', 'raw', '产品', '环境', '活动', '封面图', '视频原片'])
 
 async function checkAuth(request: Request, brandId: string) {
   const session = await getSession()
@@ -84,7 +85,7 @@ export async function POST(request: Request, { params }: Params) {
 
     const folderName = name.trim()
 
-    if (folderName === '素材库' || folderName === 'raw') {
+    if (RESERVED_FOLDERS.has(folderName)) {
       return NextResponse.json({ error: 'Reserved folder name' }, { status: 400 })
     }
 
@@ -142,6 +143,10 @@ export async function DELETE(request: Request, { params }: Params) {
 
     if (!folder) {
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+    }
+
+    if (RESERVED_FOLDERS.has(folder.name)) {
+      return NextResponse.json({ error: 'System folders cannot be deleted' }, { status: 409 })
     }
 
     // 1. Move all assets inside this folder back to root "素材库"

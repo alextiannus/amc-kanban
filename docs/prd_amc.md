@@ -177,8 +177,9 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 *   **知识库建设**：
     *   **爆品素材、参考视频与脚本库**：`amc-content` 维护按平台隔离的原始爆品素材，并通过人工入池、文本特征提取、参考视频多模态拆解、确定性聚类和 AI 脚本合成生成候选脚本。文本脚本延续“至少 3 条素材、2 个不同商家或来源账号且人工发布”的生产门槛；参考视频则输出带时间码证据的拆解卡，沉淀 Hook、AIDA、镜头、声音、CTA、可迁移结构、不可迁移事实和禁止复制元素。竞品视频只允许人工录入，且发送给生成模型前必须由 `ADMIN` 或 `AMC_PRINCIPAL` 确认 `generation_reference` 权利用途。
     *   **Kanban 脚本选择与版本固定**：文案创作按品牌、平台、市场、行业、品类、语言和主题推荐最多 5 个已发布脚本，运营可手工切换或明确选择“不使用爆品脚本”。草稿保存固定脚本版本，重新生成继续使用该版本；无匹配脚本时回退现有 Copywriter + RAG。品牌事实、合规和平台规则优先于脚本，脚本优先于普通 RAG 灵感。
-    *   **创意直用视频资产链**：新视频项目只选择状态为 `ready`、类型为视频且时间轴非空的已拆解创意，并依次版本化 `CreativeSourceSnapshot`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`MaterialSelection`、`GeneratedClip` / `VoiceoverTrack` 和 `FinalVideo`。创意时间轴确定性原样导入；字幕、口播、Prompt、时长均可逐镜编辑并保留历史版本。旧参考视频分析型项目继续兼容，但不再作为新建入口。
-    *   **Seedance 逐镜生成与独立声音层**：每镜选择 1–4 张有序品牌图片，Content 通过 Kanban 内部接口读取或上传品牌素材，不向 Seedance 发送竞品源视频。每次仅生成一个分镜版本，固定使用 Seedance 2.0 Standard/Fast/Mini 兼容链。字幕由 FFmpeg 叠加；MiniMax TTS 支持项目默认音色、分镜覆盖、试听和语速/音量/音调，文字或声音修改不重新生成 Seedance 画面。完整规范见 [`PRD-AI-Video-Creator.md`](./PRD-AI-Video-Creator.md)。
+    *   **爆款脚本驱动的视频资产链**：新视频项目只选择状态为 `ready`、类型为视频且时间轴非空的已拆解创意，支持 `productionMode=image_only|hybrid_footage`。两种模式均依次版本化 `CreativeSourceSnapshot`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`MaterialSelection`、`GeneratedClip` / `VoiceoverTrack` 和 `FinalVideo`；实拍混剪另版本化 `SourceVideoAnalysis`、`SourceClipSet`、`ShotMatchSet`。创意时间轴确定性原样导入；爆品参考视频只学习脚本结构，永不作为新成片素材。
+    *   **实拍混剪与逐镜生产**：Kanban 品牌素材库提供不可删除、不可重命名的系统目录“视频原片”，目录内以拍摄批次分组。新上传原片保留原始文件名并记录 `shootBatchId`、项目/创意/拆解版本、拍摄日期、上传人和权利状态；删除视频项目只解除关联，不删除原片。Content 只匹配当前项目明确加入的原片，后台用 FFprobe、FFmpeg 场景检测和多模态时间线分析切分；按语义 40%、景别运镜 20%、时长节奏 15%、画质方向 15%、连续性 10% 评分，展示至多 3 个候选。每镜必须人工确认 `direct_clip|reference_to_video|image_to_video|unresolved`；未解决镜头生成补拍清单并阻止最终合成。
+    *   **混合合成与独立声音层**：图生视频每镜选择 1–4 张有序品牌图片；视频生视频必须把已确认片段真实作为 `reference_video` 转发到支持能力的 Ark Video，不能静默忽略；直接实拍执行裁切、调速、转码和安全裁幅。三种来源可混合排序，字幕由 FFmpeg 叠加，MiniMax TTS 支持项目默认音色、分镜覆盖、试听和语速/音量/音调，最终固定输出 9:16、4:5、1:1。完整规范见 [`PRD-AI-Video-Creator.md`](./PRD-AI-Video-Creator.md)。
     *   **通用敏感词与合规词库**：针对各个国家的广告法和平台规则进行内容安全过滤。
 
 ### 2. 管理层 AI (AMC MM & AMC Agent - 功能一致，权限隔离)
@@ -291,6 +292,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 - 主理人在素材库（`DashboardAssets`）中多选素材。
 - 素材库提供不可删除的系统默认文件夹「封面图」，用于归档草稿封面候选；现有品牌与新品牌均必须具备该文件夹。
+- 素材库同时提供不可删除、不可重命名的系统默认文件夹「视频原片」。该目录不是项目目录树；页面按拍摄批次折叠展示，并支持项目、拍摄日期、上传人和原始文件名搜索。
 - 视频素材在选中状态下支持缩略图预览，全屏预览支持 `autoPlay` 原生视频播放，配有进度条和音量控制。
 - 素材选完后，底部浮动操作栏出现「**✨ AI 批量创作**」按钮（渐变紫色）。
 

@@ -92,6 +92,12 @@ interface DashboardAsset {
   usedCount: number
   lastUsedAt: string | null
   sourceType: string
+  uploadedBy?: string | null
+  shootBatchId?: string | null
+  shootBatchName?: string | null
+  videoProjectId?: string | null
+  captureDate?: string | null
+  originalFilename?: string | null
   createdAt: string
 }
 
@@ -190,6 +196,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', '已使用'])
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
+  const [collapsedShootBatches, setCollapsedShootBatches] = useState<Set<string>>(() => new Set())
 
   const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
 
@@ -276,7 +283,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       if (res.ok) {
         const data = await res.json()
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        const defaults = ['产品', '环境', '活动', '封面图', '已使用']
+        const defaults = ['产品', '环境', '活动', '封面图', '视频原片', '已使用']
         const customFolders = folderNames.filter((name: string) => !['素材库', ...defaults].includes(name))
         setFolders(['素材库', ...defaults, ...customFolders])
       }
@@ -316,7 +323,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!brandId) return
-    if (['素材库', '产品', '环境', '活动', '封面图', '已使用'].includes(folderName)) {
+    if (['素材库', '产品', '环境', '活动', '封面图', '视频原片', '已使用'].includes(folderName)) {
       alert('系统默认文件夹不可删除')
       return
     }
@@ -1104,12 +1111,16 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
     // 3. Search query
     const query = search.trim().toLowerCase()
-    const label = (a.aiCaption || a.filename || '').toLowerCase()
+    const label = [a.aiCaption, a.filename, a.originalFilename, a.shootBatchName, a.videoProjectId, a.captureDate, a.uploadedBy].filter(Boolean).join(' ').toLowerCase()
     const brandNameLower = a.brandName.toLowerCase()
     const tags = a.aiTags.some(t => t.toLowerCase().includes(query))
     const searchMatch = !query || label.includes(query) || brandNameLower.includes(query) || tags
     return catMatch && searchMatch
   })
+
+  const displayedAssets = selectedFolder === '视频原片'
+    ? [...filtered].sort((left, right) => String(right.shootBatchName || '').localeCompare(String(left.shootBatchName || '')) || new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    : filtered
 
   // Dynamic badge counts
   const countAll = assets.length
@@ -1618,14 +1629,39 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-20"
               style={{ touchAction: isSelectingState ? 'none' : 'auto' }}
             >
-              {filtered.map((asset, i) => {
+              {displayedAssets.map((asset, i) => {
                 const isSelected = selected.includes(asset.id)
                 const isActive = activeAssetId === asset.id
                 const previewable = isPreviewable(asset)
                 const isVideo = isVideoAsset(asset)
+                const shootBatchKey = asset.shootBatchId || 'unassigned'
+                const previousBatchKey = i > 0 ? (displayedAssets[i - 1].shootBatchId || 'unassigned') : ''
+                const showShootBatchHeader = selectedFolder === '视频原片' && shootBatchKey !== previousBatchKey
+                const batchCollapsed = collapsedShootBatches.has(shootBatchKey)
+
+                if (selectedFolder === '视频原片' && batchCollapsed && !showShootBatchHeader) return null
 
                 return (
-                  <div
+                  <React.Fragment key={asset.id}>
+                  {showShootBatchHeader && (
+                    <button
+                      type="button"
+                      className="col-span-full flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setCollapsedShootBatches((current) => {
+                          const next = new Set(current)
+                          if (next.has(shootBatchKey)) next.delete(shootBatchKey)
+                          else next.add(shootBatchKey)
+                          return next
+                        })
+                      }}
+                    >
+                      <span><strong>{asset.shootBatchName || '未分配拍摄批次'}</strong><small className="ml-3 text-slate-400">{displayedAssets.filter((item) => (item.shootBatchId || 'unassigned') === shootBatchKey).length} 个原片</small></span>
+                      <ChevronRight className={`h-4 w-4 transition-transform ${batchCollapsed ? '' : 'rotate-90'}`} />
+                    </button>
+                  )}
+                  {!batchCollapsed && <div
                     key={asset.id}
                     data-asset-id={asset.id}
                     draggable={!isSelectingState}
@@ -1728,7 +1764,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                     </div>
 
 
-                  </div>
+                  </div>}
+                  </React.Fragment>
                 )
               })}
             </div>

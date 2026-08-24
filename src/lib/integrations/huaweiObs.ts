@@ -209,6 +209,20 @@ export function makeBrandAssetKey(input: { brandId: string; folder?: string; fil
   return `brands/${input.brandId}/assets/${folder}/${unique}`
 }
 
+export function makeBrandVideoOriginalKey(input: {
+  brandId: string
+  captureDate: string
+  projectId: string
+  filename: string
+}) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(input.captureDate) ? input.captureDate : new Date().toISOString().slice(0, 10)
+  const year = date.slice(0, 4)
+  const ext = input.filename.includes('.') ? `.${input.filename.split('.').pop()?.toLowerCase()}` : ''
+  const base = input.filename.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'video'
+  const project = input.projectId.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'unassigned'
+  return `brands/${input.brandId}/assets/视频原片/${year}/${date}/${project}/${base}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}${ext}`
+}
+
 export async function persistDraftSnapshotToObs(input: { brandId: string; draftId: string; data: unknown }) {
   return uploadHuaweiObsObject({
     key: `brands/${input.brandId}/drafts/${input.draftId}.json`,

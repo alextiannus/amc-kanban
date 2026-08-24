@@ -349,6 +349,7 @@ export async function GET(request: Request, { params }: Params) {
 
   const url = new URL(request.url)
   const query = (url.searchParams.get('q') || '').trim().toLowerCase()
+  const queryDate = /^\d{4}-\d{2}-\d{2}$/.test(query) ? new Date(`${query}T00:00:00.000Z`) : null
   const folder = (url.searchParams.get('folder') || '').trim()
 
   const assets = await prisma.mediaAsset.findMany({
@@ -358,11 +359,17 @@ export async function GET(request: Request, { params }: Params) {
       ...(query ? {
         OR: [
           { filename: { contains: query, mode: 'insensitive' } },
+          { originalFilename: { contains: query, mode: 'insensitive' } },
+          { uploadedBy: { contains: query, mode: 'insensitive' } },
+          { videoProjectId: { contains: query, mode: 'insensitive' } },
+          { shootBatch: { is: { name: { contains: query, mode: 'insensitive' } } } },
+          ...(queryDate ? [{ captureDate: queryDate }] : []),
           { aiCaption: { contains: query, mode: 'insensitive' } },
           { aiTags: { has: query } },
         ],
       } : {}),
     },
+    include: { shootBatch: true },
     orderBy: { createdAt: 'desc' },
     take: 200,
   })
@@ -377,6 +384,7 @@ export async function GET(request: Request, { params }: Params) {
   const folders = Array.from(new Set(['素材库', ...baseFolders, ...assetFolderNames]))
   const mappedAssets = assets.map((asset: any) => ({
     ...asset,
+    shootBatchName: asset.shootBatch?.name || null,
     url: (() => {
       const url = asset.url || ''
       if (url.startsWith('http') || url.startsWith('/')) {
