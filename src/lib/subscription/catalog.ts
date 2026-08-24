@@ -65,7 +65,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护',
       'Google Map 配置、评论监控与打分优化',
       '中英双语内容与远程交付',
-      '可安排 4 位博主探店',
+      '可安排 2-4 位博主探店',
       '每月舆情报告'
     ],
     baseline: '让客户在 Instagram / TikTok / Google Map 上找得到、看得懂、愿意来。',
@@ -93,15 +93,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '1. 每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护',
       '2. Google Map 配置、评论监控与打分优化',
       '3. 中英双语内容，远程交付',
-      '4. 可安排 4 位博主探店',
+      '4. 可安排 2-4 位博主探店',
       '5. 每月舆情报告',
-      '6. 2026 年 9 月 30 日前签约商家赠送 1 次价值 S$200 素材拍摄采集和 6 条视频'
+      '6. 2026 年 9 月 30 日前签约商家赠送 1 次价值 S$300 素材拍摄采集和 4 条视频'
     ],
   },
   {
     id: 'booster',
     name: 'Booster · 增长战役版',
-    monthlyUsd: 3600,
+    monthlyUsd: 3200,
     description: '增长战役 + 素材资产 + 博主扩散',
     oneLiner: '适合需要用 3 个月集中做流量增长和运营活动的商家。',
     teamConfig: 'AI 内容创作官 · AI 市场调研官 · AI 品牌策略师 · 品牌主理人',
@@ -111,8 +111,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '流量增长和运营活动策划',
       'Google Map 配置、评论监控与打分优化',
       '每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护',
-      '专业素材采集',
-      '10 位博主探店与每周舆情报告'
+      '专业素材采集与视频剪辑',
+      '12 位博主探店与每周舆情报告'
     ],
     baseline: '用一个月把品牌内容、活动话题、博主探店和地图口碑一起推起来，让更多人看到、收藏、咨询、到店。',
     explanation: {
@@ -142,8 +142,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
       '2. 每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护',
       '3. Instagram / TikTok / 小红书等自媒体内容策划与运营活动策划',
       '4. Google Map 配置、评论监控与打分优化',
-      '5. 专业素材采集',
-      '6. 10 位博主探店：6 位 2k+、3 位 4k+、1 位 1w+',
+      '5. 专业素材采集，视频剪辑',
+      '6. 12 位博主探店：6 位 2k+、4 位 4k+、2 位 1w+',
       '7. 每周舆情报告'
     ],
   },
@@ -227,16 +227,16 @@ export const SUBSCRIPTION_ADDONS: AddonItem[] = [
     name: '现场拍摄服务 On-site Photography',
     pricing: 'one_time',
     usd: 300,
-    description: '专业摄影到店采集菜品、环境、服务与门店素材。',
-    details: ['S$300 / 次', '专业摄影，素材采集'],
+    description: '专业摄影到店采集菜品、环境、服务与门店素材，并提供视频剪辑支持。',
+    details: ['S$300 / 次', '专业摄影，素材采集，视频剪辑'],
   },
   {
     id: 'influencer_visit',
     name: '博主探店服务',
     pricing: 'one_time',
-    usd: 2200,
-    description: '15 个博主探店：8 个 1k+ 粉丝、5 个 5k-1w、3 个 1w+。',
-    details: ['S$2,200 / 次', '包含探店流程对接与发布跟进'],
+    usd: 1500,
+    description: '12 个博主探店：6 个 2k+ 粉丝、4 个 4k+、2 个 1w+。',
+    details: ['S$1,500 / 套', '包含探店流程对接与发布跟进'],
   },
 ]
 
@@ -283,7 +283,7 @@ export function getAllowedDurationsForPlan(planId: string): readonly number[] {
   return ALLOWED_DURATIONS
 }
 
-export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.08'
+export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.09'
 
 export function calculatePricing(
   planId: string,

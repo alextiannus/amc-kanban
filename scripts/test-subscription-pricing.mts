@@ -20,7 +20,7 @@ function assertThrows(fn: () => void, label: string) {
 
 function run() {
   const booster3 = calculatePricing('booster', 3, [])
-  assertEqual(booster3.totalDueUsd, 10800, 'booster 3 months total')
+  assertEqual(booster3.totalDueUsd, 9600, 'booster 3 months total')
 
   const essential12 = calculatePricing('essential', 12, ['xiaohongshu_ops', 'onsite_photo'])
   // (800 + 600) * 12 + 300 = 17100
@@ -41,8 +41,8 @@ function run() {
   assertEqual(multiStore.totalDueUsd, 8400, 'multi-store add-on uses per-store price')
 
   const productionAddons = calculatePricing('booster', 3, ['short_video_six', 'influencer_visit', 'meituan_dianping_setup', 'twelveeat_delivery_setup'])
-  // 3600 * 3 + 600 + 2200 + 2200 + 220 = 16020
-  assertEqual(productionAddons.totalDueUsd, 16020, 'production add-ons use current prices')
+  // 3200 * 3 + 600 + 1500 + 2200 + 220 = 14120
+  assertEqual(productionAddons.totalDueUsd, 14120, 'production add-ons use current prices')
 
   const dianpingOps = calculatePricing('essential', 6, ['meituan_dianping_ops'])
   // (800 + 200) * 6 = 6000

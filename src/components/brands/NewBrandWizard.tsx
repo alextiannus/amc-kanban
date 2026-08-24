@@ -77,7 +77,7 @@ const PLANS: PlanOption[] = [
       '每月 12 IG + 6 TikTok + 2 Google Business',
       'Instagram / TikTok / Google Map',
       '评论监控与地图资料维护',
-      '每月 4 位 KOC/微型博主探店',
+      '每月 2-4 位 KOC/微型博主探店',
       '每月舆情报告',
     ],
     explanation: {
@@ -98,14 +98,14 @@ const PLANS: PlanOption[] = [
   {
     id: 'booster',
     name: 'Booster · 增长战役版',
-    monthlyUsd: 3600,
+    monthlyUsd: 3200,
     description: '增长战役 + 素材资产 + 博主扩散',
     highlights: [
       '每月 12 IG + 12 TikTok + 12 小红书 + 2 Google Business',
       'Instagram / TikTok / 小红书 / Google Map',
       '定制月度增长策划案',
-      '专业素材采集',
-      '10 位博主分批探店',
+      '专业素材采集与视频剪辑',
+      '12 位博主分批探店',
       '每周舆情复盘',
     ],
     explanation: {
@@ -489,7 +489,7 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     location: '',
     planId: 'booster',
     planName: 'Booster · 增长战役版',
-    monthlyBaseUsd: 3600,
+    monthlyBaseUsd: 3200,
     durationMonths: 3,
     promoCode: '',
     promoDiscountType: null,

@@ -33,8 +33,10 @@ This Agreement is entered into on the date stated above between the parties belo
 
 | 选择 | 套餐 Plan | 月费 Monthly Fee | 包含内容 Includes | 签约周期 |
 | --- | --- | --- | --- | --- |
-| ☐ | ESSENTIAL（海外社媒代运营新加坡本地版） | S$800 / 月 | Instagram、TikTok 图文内容发布；Google Map 配置和评论监控、打分优化；中英双语；每月舆情报告；远程交付；至少发布 12 次图文；每月安排 4 位博主 / KOC 探店。 | 6 / 12 个月 |
-| ☐ | Booster（流量爆发计划） | S$3,600 / 月 | Instagram、TikTok、小红书等自媒体内容策划；流量增长和运营活动策划；Google Map 配置和评论监控、打分优化；中英双语；每周舆情报告；远程交付；定制增长策划案；至少发布 24 次图文和 12 次精品视频；专业素材采集；可安排 10 位博主探店（6 个 2k+ 粉丝，3 个 4k+，1 个 1w+）。 | 3 / 6 / 12 个月 |
+| ☐ | ESSENTIAL（海外社媒代运营新加坡本地版） | S$800 / 月 | Instagram、TikTok 图文内容发布；Google Map 配置和评论监控、打分优化；中英双语；每月舆情报告；远程交付；营销策划、自媒体运营与私域留存规划；至少发布 12 次图文；可安排 2-4 位博主 / KOC 探店。 | 6 / 12 个月 |
+| ☐ | Booster（流量爆发计划） | S$3,200 / 月 | Instagram、TikTok、小红书等自媒体内容策划；流量增长和运营活动策划；Google Map 配置和评论监控、打分优化；中英双语；每周舆情报告；远程交付；营销策划、定制增长策划与短期快速曝光；至少发布 24 次图文和 12 次精品视频；专业素材采集、视频剪辑；KOL 同步推广，最少安排 12 位博主探店（6 个 2k+ 粉丝，4 个 4k+，2 个 1w+）。 | 3 个月 |
+
+优惠活动：2026 年 9 月 30 日前签约商家赠送 1 次价值 S$300 的素材拍摄采集和 4 条视频，最终服务范围以双方签约确认为准。
 
 **合同开始日期 Start Date:** ________________
 **合同到期日 End Date:** ________________
@@ -46,14 +48,14 @@ This Agreement is entered into on the date stated above between the parties belo
 | ☐ | 小红书 Xiaohongshu | S$600 / 月 | 和英文平台同步运营 |
 | ☐ | 美团点评 Meituan Dianping 开通服务 | S$2,200 / 年 | 海外华人点评管理 |
 | ☐ | 美团点评 Meituan Dianping 代运营 | S$200 / 月 | 海外华人点评管理 |
-| ☐ | 12Eat 唐人街外卖上线 | S$220 / 次 | 外卖平台账号上线 |
+| ☐ | 12Eat 唐人街外卖上线 | S$220 / 次 | 外卖平台账号管理 |
 | ☐ | 12Eat 唐人街外卖代运营 | S$80 / 月 | 外卖平台账号管理 |
 | ☐ | Grab / Foodpanda | S$300 / 月 | 本地外卖平台管理 |
 | ☐ | YouTube | S$800 / 月 | 视频内容制作与发布 |
-| ☐ | 视频制作（6 条） | S$600 / 次 | 短视频内容制作 |
-| ☐ | 现场拍摄服务 On-site Photography | S$300 / 次 | 专业摄影，素材采集 |
-| ☐ | 博主探店服务 | S$2,200 / 套 | 15 个博主探店（8 个 1k+ 粉丝，5 个 5k-1w，3 个 1w+） |
-| ☐ | 同一品牌下新增门店 | S$300 / 门店 / 月 | 增加一个 Google Map 账号 |
+| ☐ | 视频制作（6 条） | S$600 | 短视频内容制作 |
+| ☐ | 现场拍摄服务 On-site Photography | S$300 / 次 | 专业摄影，素材采集，视频剪辑 |
+| ☐ | 博主探店服务 | S$1,500 / 套 | 博主探店（6 个 2k+ 粉丝，4 个 4k+，2 个 1w+） |
+| ☐ | 同一品牌下新增门店 | S$300 / 门店 | 增加一个 Google Map 账号 |
 
 **合同月费合计 Total Monthly Fee (excl. one-time add-ons):** S$___________
 
@@ -73,7 +75,7 @@ This Agreement is entered into on the date stated above between the parties belo
 
 ## 3. 服务期限 Term of Agreement
 
-3.1 本协议最短服务期限为三（3）个月，自乙方完成账号接入并首批内容上线之日起计算（服务开始日）。Essential 套餐签约周期为 6 或 12 个月；Booster 套餐签约周期为 3、6 或 12 个月。
+3.1 本协议最短服务期限为三（3）个月，自乙方完成账号接入并首批内容上线之日起计算（服务开始日）。Essential 套餐签约周期为 6 或 12 个月；Booster 套餐签约周期为 3 个月。
 
 3.2 合同期满后，如甲方希望续约，须在到期前十四（14）日内重新签署新合同并完成付款，方可继续享受服务。续约合同可选择当时可售套餐周期。
 
@@ -250,4 +252,4 @@ AMC - Your AI Marketing Crew | Deliverychinatown Pte. Ltd. | amc.immedi.ai | Gov
 
 ---
 
-*合同版本 Contract Version: AMC-SMSA-v1.08 | 生效日期 Effective Date: 2026-08-23*
+*合同版本 Contract Version: AMC-SMSA-v1.09 | 生效日期 Effective Date: 2026-08-24*
