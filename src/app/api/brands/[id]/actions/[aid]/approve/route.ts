@@ -46,6 +46,27 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // ── Trial expiry gate ──────────────────────────────────────────────────
+  const activeSub = await prisma.brandSubscription.findFirst({
+    where: { brandId, status: { not: 'CANCELLED' } },
+    orderBy: { createdAt: 'desc' },
+    select: { status: true, trialEndsAt: true },
+  })
+  if (
+    activeSub?.status === 'PENDING' &&
+    activeSub.trialEndsAt &&
+    new Date() > activeSub.trialEndsAt
+  ) {
+    return NextResponse.json(
+      {
+        error: 'TRIAL_EXPIRED',
+        message: '试用期已结束，请完成付款后方可继续发布内容。如有疑问请联系您的运营顾问。',
+      },
+      { status: 403 }
+    )
+  }
+  // ── End trial expiry gate ──────────────────────────────────────────────
+
   const brand = await prisma.brand.findFirst({
     where: { id: brandId },
     select: {
