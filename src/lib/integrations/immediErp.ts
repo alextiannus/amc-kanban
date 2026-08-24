@@ -333,11 +333,14 @@ export function buildOrderItems(
 // ── Orchestrator ───────────────────────────────────────────────────────────
 
 export interface ErpOnboardingInput {
-  subscription:  SubscriptionSummary
-  brandName:     string
-  contactName?:  string | null
-  companyName?:  string | null
-  mobileNo?:     string | null
+  subscription:     SubscriptionSummary
+  brandName:        string
+  contactName?:     string | null
+  companyName?:     string | null
+  mobileNo?:        string | null
+  salespersonName?:  string | null
+  salespersonEmail?: string | null
+  trialEndsAt?:     Date | null
 }
 
 /**
@@ -345,11 +348,13 @@ export interface ErpOnboardingInput {
  * 1. Create draft Sales Order in ERP
  * 2. Create Finance Collection Confirmation Task (due 3 days, High)
  * 3. Create Client Follow-up Task (due 7 days, Medium)
+ * 4. Create Sales Payment Follow-up Task for salesperson (due = trial end, High)
  *
  * Never throws — call with .catch(console.error).
  */
 export async function triggerErpOnboardingFlow(input: ErpOnboardingInput): Promise<void> {
   const { subscription, brandName } = input
+  const salesperson = input.salespersonName || input.salespersonEmail || null
 
   const cfg = await getImmediErpConfig()
   if (!cfg) return  // ERP disabled or not configured — silently skip
@@ -362,7 +367,7 @@ export async function triggerErpOnboardingFlow(input: ErpOnboardingInput): Promi
 
   const items = buildOrderItems(subscription, cfg)
 
-  console.log(`[immediErp] Triggering onboarding for sub=${subscription.id}, brand=${brandName}`)
+  console.log(`[immediErp] Triggering onboarding for sub=${subscription.id}, brand=${brandName}, salesperson=${salesperson ?? 'none'}`)
 
   // ── Step 1: Sales Order ────────────────────────────────────────────────
   const orderResult = await createSalesOrder(cfg, {
@@ -391,7 +396,7 @@ export async function triggerErpOnboardingFlow(input: ErpOnboardingInput): Promi
 
   const financeTask = await createErpTask(cfg, {
     subject:       `[AMC] 收款确认 · ${brandName} · ${subscription.planName}${orderRef}`,
-    description:   `订阅 ID: ${subscription.id}\n品牌: ${brandName}\n方案: ${subscription.planName}（${subscription.durationMonths} 个月）\n金额: SGD ${subscription.totalDueUsd.toLocaleString()}\nSales Order: ${orderResult.erpOrderName || '（创建失败，请手动核查）'}\n\n请在 3 个工作日内确认收款并在 ERP 中提交收款记录。`,
+    description:   `订阅 ID: ${subscription.id}\n品牌: ${brandName}\n方案: ${subscription.planName}（${subscription.durationMonths} 个月）\n金额: SGD ${subscription.totalDueUsd.toLocaleString()}\nSales Order: ${orderResult.erpOrderName || '（创建失败，请手动核查）'}${salesperson ? `\n负责销售: ${salesperson}` : ''}\n\n请在 3 个工作日内确认收款并在 ERP 中提交收款记录。`,
     priority:      'High',
     exp_end_date:  financeDateStr,
   })
@@ -404,9 +409,25 @@ export async function triggerErpOnboardingFlow(input: ErpOnboardingInput): Promi
 
   const followUpTask = await createErpTask(cfg, {
     subject:      `[AMC] 客户跟进 · ${brandName} · 已开通 ${subscription.planName}`,
-    description:  `客户 ${brandName} 已成功开通 ${subscription.planName} 方案（${subscription.durationMonths} 个月）。\n\n请在 7 天内完成以下跟进：\n1. 确认客户已收到开通确认邮件\n2. 安排品牌入驻说明会/培训\n3. 确认 AI 团队分配情况\n4. 收集客户初始需求与资料\n\n订阅 ID: ${subscription.id}\nSales Order: ${orderResult.erpOrderName || '待核查'}`,
+    description:  `客户 ${brandName} 已成功开通 ${subscription.planName} 方案（${subscription.durationMonths} 个月）。${salesperson ? `\n负责销售: ${salesperson}` : ''}\n\n请在 7 天内完成以下跟进：\n1. 确认客户已收到开通确认邮件\n2. 安排品牌入驻说明会/培训\n3. 确认 AI 团队分配情况\n4. 收集客户初始需求与资料\n\n订阅 ID: ${subscription.id}\nSales Order: ${orderResult.erpOrderName || '待核查'}`,
     priority:     'Medium',
     exp_end_date: followUpDateStr,
   })
   console.log(`[immediErp] Follow-up task: ok=${followUpTask.ok}, name=${followUpTask.erpTaskName}`)
+
+  // ── Step 4: Sales Payment Follow-up Task (due = trial end = 5 days) ────
+  // Assigned to the salesperson so they can track whether payment has been made
+  // before the trial expires.
+  const paymentDueDate = input.trialEndsAt ?? (() => {
+    const d = new Date(today); d.setDate(d.getDate() + 5); return d
+  })()
+  const paymentDueDateStr = `${paymentDueDate.toISOString().slice(0, 10)} 18:00:00`
+
+  const salesFollowUpTask = await createErpTask(cfg, {
+    subject:      `[AMC] 跟进付款 · ${brandName} · 试用期结束前${salesperson ? ` · 负责: ${salesperson}` : ''}`,
+    description:  `客户 ${brandName} 已进入 5 天免费试用期，请在试用期结束前（${paymentDueDate.toISOString().slice(0, 10)}）确认收款。\n\n方案: ${subscription.planName}（${subscription.durationMonths} 个月）\n金额: SGD ${subscription.totalDueUsd.toLocaleString()}\n${salesperson ? `负责销售: ${salesperson}` : ''}${input.salespersonEmail ? `\n联系邮件: ${input.salespersonEmail}` : ''}\nSales Order: ${orderResult.erpOrderName || '待核查'}\n\n⚠️ 试用期届满后未收款的品牌将暂停发布权限。`,
+    priority:     'High',
+    exp_end_date: paymentDueDateStr,
+  })
+  console.log(`[immediErp] Sales payment follow-up task: ok=${salesFollowUpTask.ok}, name=${salesFollowUpTask.erpTaskName}`)
 }

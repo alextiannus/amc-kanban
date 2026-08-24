@@ -301,6 +301,25 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
     console.error('[createBrand] Failed to fetch user nickname for email:', dbErr)
   })
 
+  // Lookup salesperson (the AMC staff member who referred/invited the brand owner)
+  let salespersonName: string | null = null
+  let salespersonEmail: string | null = null
+  try {
+    const ownerUser = await prisma.user.findUnique({
+      where: { id: input.ownerId },
+      select: {
+        referredById: true,
+        referredBy: { select: { id: true, nickname: true, email: true } },
+      },
+    })
+    if (ownerUser?.referredBy) {
+      salespersonName  = ownerUser.referredBy.nickname || ownerUser.referredBy.email
+      salespersonEmail = ownerUser.referredBy.email
+    }
+  } catch (lookupErr) {
+    console.warn('[createBrand] salesperson lookup failed (non-fatal):', lookupErr)
+  }
+
   // Fire-and-forget ERP onboarding flow (Sales Order + Finance + Follow-up tasks)
   triggerErpOnboardingFlow({
     subscription: {
@@ -311,7 +330,10 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
       durationMonths: subscription.durationMonths,
       selectedAddons: subscription.selectedAddons ?? undefined,
     },
-    brandName: brand.name,
+    brandName:       brand.name,
+    salespersonName,
+    salespersonEmail,
+    trialEndsAt:     subscription.trialEndsAt ?? undefined,
   }).catch((erpErr: unknown) => {
     console.error('[createBrand] ERP onboarding flow failed (non-fatal):', erpErr)
   })

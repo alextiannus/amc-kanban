@@ -23,7 +23,7 @@ function addDays(date: Date, days: number) {
   return next
 }
 
-export const DEFAULT_TRIAL_DAYS = 7
+export const DEFAULT_TRIAL_DAYS = 5
 
 export function buildOfflineInvoiceResponse(params: {
   subscriptionId: string

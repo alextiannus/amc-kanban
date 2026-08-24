@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { submitDraftForDelivery } from '@/lib/draftSubmission'
+import { prisma } from '@/lib/prisma'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -24,6 +25,29 @@ export async function PATCH(request: Request, { params }: Params) {
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+    // ── Trial expiry gate ──────────────────────────────────────────────────
+    // If the brand's subscription is still PENDING and the 5-day trial has
+    // expired, block publishing until payment is confirmed by admin.
+    const subscription = await prisma.brandSubscription.findFirst({
+      where: { brandId, status: { not: 'CANCELLED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, trialEndsAt: true },
+    })
+    if (
+      subscription?.status === 'PENDING' &&
+      subscription.trialEndsAt &&
+      new Date() > subscription.trialEndsAt
+    ) {
+      return NextResponse.json(
+        {
+          error: 'TRIAL_EXPIRED',
+          message: '试用期已结束，请完成付款后方可继续发布内容。如有疑问请联系您的运营顾问。',
+        },
+        { status: 403 }
+      )
+    }
+    // ── End trial expiry gate ──────────────────────────────────────────────
+
     const body = await request.json().catch(() => ({}))
     const result = await submitDraftForDelivery({
       brandId,
@@ -42,3 +66,4 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: `排期通道异常：${message}` }, { status: 500 })
   }
 }
+
