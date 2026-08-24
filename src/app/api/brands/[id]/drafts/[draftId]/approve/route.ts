@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { submitDraftForDelivery } from '@/lib/draftSubmission'
+import { prisma } from '@/lib/prisma'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -13,6 +14,27 @@ async function handleApprove(request: Request, { params }: Params) {
     const { id: brandId, draftId } = await params
     const ok = await canWriteBrandProject(brandId, session.user.id)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // ── Trial expiry gate ──────────────────────────────────────────────────
+    const subscription = await prisma.brandSubscription.findFirst({
+      where: { brandId, status: { not: 'CANCELLED' } },
+      orderBy: { createdAt: 'desc' },
+      select: { status: true, trialEndsAt: true },
+    })
+    if (
+      subscription?.status === 'PENDING' &&
+      subscription.trialEndsAt &&
+      new Date() > subscription.trialEndsAt
+    ) {
+      return NextResponse.json(
+        {
+          error: 'TRIAL_EXPIRED',
+          message: '试用期已结束，请完成付款后方可继续发布内容。如有疑问请联系您的运营顾问。',
+        },
+        { status: 403 }
+      )
+    }
+    // ── End trial expiry gate ──────────────────────────────────────────────
 
     const body = await request.json().catch(() => ({}))
     const result = await submitDraftForDelivery({
@@ -36,3 +58,4 @@ async function handleApprove(request: Request, { params }: Params) {
 
 export const POST = handleApprove
 export const PATCH = handleApprove
+

@@ -82,6 +82,9 @@ export async function GET() {
           }
         },
         businessRoles: { select: { role: true } },
+        referredBy: {
+          select: { id: true, nickname: true, inviteCode: true, email: true }
+        },
       }
     })
 
