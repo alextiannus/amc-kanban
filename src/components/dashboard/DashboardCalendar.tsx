@@ -1122,7 +1122,10 @@ ${contentIdea || 'No details provided.'}`
         month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
       })
       const warningText = formatMediaWarnings(responses)
-      if (customTime) {
+      const queuedCount = responses.filter((response: any) => response?.queued).length
+      if (queuedCount > 0) {
+        alert(`${queuedCount} 个大视频已进入后台发布队列，页面会自动更新发布状态。${warningText ? `\n\n${warningText}` : ''}`)
+      } else if (customTime) {
         alert(`排期成功！系统已为您安排在 ${timeStr} 发布。${warningText ? `\n\n${warningText}` : ''}`)
       } else {
         alert(`智能排期成功！系统已为您安排在 ${timeStr} 发布。${warningText ? `\n\n${warningText}` : ''}`)
@@ -1168,7 +1171,10 @@ ${contentIdea || 'No details provided.'}`
       )
 
       const warningText = formatMediaWarnings(responses)
-      alert(`立刻发布成功！系统已为您直接发布内容。${warningText ? `\n\n${warningText}` : ''}`)
+      const queuedCount = responses.filter((response: any) => response?.queued).length
+      alert(queuedCount > 0
+        ? `${queuedCount} 个大视频已进入后台发布队列，页面会自动更新发布状态。${warningText ? `\n\n${warningText}` : ''}`
+        : `立刻发布成功！系统已为您直接发布内容。${warningText ? `\n\n${warningText}` : ''}`)
       if (!hasPendingGeneratedDrafts()) {
         setIsCreatingPost(false)
         setShowPublishOptionModal(false)

@@ -48,7 +48,7 @@ async function handleApprove(request: Request, { params }: Params) {
     })
 
     if (!result.ok) return NextResponse.json(result, { status: result.status })
-    return NextResponse.json(result)
+    return NextResponse.json(result, { status: result.mode === 'queued' ? 202 : 200 })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '排期通道发生未预期错误'
     console.error('[draft approve] submitDraftForDelivery failed:', error)

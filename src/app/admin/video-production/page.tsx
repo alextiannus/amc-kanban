@@ -45,7 +45,7 @@ export default async function VideoProductionEntryPage({ searchParams }: VideoPr
       email: principal.email,
       role,
       brandId,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
     }, secret)
     const query = brandId ? `?brandId=${encodeURIComponent(brandId)}` : ''
     redirect(`${contentUrl}/admin/video-production${query}#labToken=${encodeURIComponent(token)}`)

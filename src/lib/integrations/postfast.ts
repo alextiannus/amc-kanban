@@ -535,7 +535,7 @@ export async function postfastGetSignedUploadUrls(apiKey: string, files: Array<{
       count: files.length,
       contentType: firstMime,
     }),
-  })
+  }, timeoutMs)
   if (!r.ok) return { success: false, slots: [], error: r.error }
 
   // Response may be array directly or nested under urls/files/data key
@@ -578,6 +578,104 @@ export async function postfastUploadFile(
     return { success: true }
   } catch (e: unknown) {
     return { success: false, error: e instanceof Error ? e.message : 'Publish failed' }
+  }
+}
+
+export type PostFastStreamUploadResult = {
+  success: boolean
+  storageKey?: string
+  error?: string
+  code?: string
+  retryable?: boolean
+}
+
+/**
+ * Stream a public media URL directly into a PostFast signed upload URL.
+ * This path is used by durable large-video jobs and intentionally never
+ * materializes the full source in a Buffer/ArrayBuffer.
+ */
+export async function postfastUploadPublicUrlStream(input: {
+  apiKey: string
+  url: string
+  filename?: string
+  mimeType: string
+  sizeBytes: number
+  timeoutMs?: number
+}): Promise<PostFastStreamUploadResult> {
+  if (!/^https?:\/\//i.test(input.url)) {
+    return {
+      success: false,
+      code: 'POSTFAST_SOURCE_URL_INVALID',
+      error: 'Large-video background delivery requires a public HTTP(S) source URL.',
+      retryable: false,
+    }
+  }
+
+  const filename = input.filename || input.url.split('?')[0].split('/').pop() || 'video.mp4'
+  const timeoutMs = Math.max(1, input.timeoutMs ?? 210_000)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(new Error('POSTFAST_TRANSFER_TIMEOUT')), timeoutMs)
+
+  try {
+    const signedResult = await postfastGetSignedUploadUrls(input.apiKey, [{
+      filename,
+      mimeType: input.mimeType,
+      sizeBytes: input.sizeBytes,
+    }], Math.min(15_000, timeoutMs))
+    if (!signedResult.success || signedResult.slots.length === 0) {
+      return {
+        success: false,
+        code: 'POSTFAST_SIGNED_URL_FAILED',
+        error: signedResult.error || 'Failed to get PostFast upload URL.',
+        retryable: true,
+      }
+    }
+
+    const source = await fetch(input.url, { signal: controller.signal })
+    if (!source.ok || !source.body) {
+      return {
+        success: false,
+        code: 'POSTFAST_SOURCE_UNAVAILABLE',
+        error: `Source download HTTP ${source.status}`,
+        retryable: source.status === 408 || source.status === 429 || source.status >= 500,
+      }
+    }
+
+    const contentLength = source.headers.get('content-length') || (input.sizeBytes > 0 ? String(input.sizeBytes) : '')
+    const headers: Record<string, string> = { 'Content-Type': input.mimeType }
+    if (contentLength) headers['Content-Length'] = contentLength
+
+    const slot = signedResult.slots[0]
+    const requestInit = {
+      method: 'PUT',
+      headers,
+      body: source.body,
+      signal: controller.signal,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' }
+    const uploaded = await fetch(slot.uploadUrl, requestInit)
+    if (!uploaded.ok) {
+      const signedUrlExpired = uploaded.status === 401 || uploaded.status === 403
+      return {
+        success: false,
+        code: signedUrlExpired ? 'POSTFAST_SIGNED_URL_EXPIRED' : 'POSTFAST_STREAM_UPLOAD_FAILED',
+        error: `Upload HTTP ${uploaded.status}`,
+        retryable: signedUrlExpired || uploaded.status === 408 || uploaded.status === 429 || uploaded.status >= 500,
+      }
+    }
+
+    return { success: true, storageKey: slot.storageKey }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    const timedOut = controller.signal.aborted || /timeout|aborted/i.test(message)
+    return {
+      success: false,
+      code: timedOut ? 'POSTFAST_TRANSFER_TIMEOUT' : 'POSTFAST_TRANSFER_FAILED',
+      error: timedOut ? 'Large-video transfer timed out.' : message,
+      retryable: true,
+    }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -1277,6 +1375,14 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }, remainingTimeout(publishDeadlineAt, 6_000))
   console.log(`[postfastPublish] RESPONSE ok=${r.ok} status=${r.status} data=${JSON.stringify(r.data).slice(0, 300)}`)
   if (!r.ok) {
+    if (r.status === 0) {
+      return {
+        success: false,
+        code: 'POSTFAST_RESULT_UNKNOWN',
+        error: `PostFast post creation result is unknown: ${r.error || 'transport error'}`,
+        warnings: mediaWarnings,
+      }
+    }
     if (Date.now() >= publishDeadlineAt - 250) return postfastPublishTimeout()
     return { success: false, error: r.error }
   }
@@ -1296,7 +1402,7 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   if (!postId) {
     return {
       success: false,
-      code: 'POSTFAST_INVALID_RESPONSE',
+      code: 'POSTFAST_RESULT_UNKNOWN',
       error: 'PostFast accepted the publish request but did not return a post ID.',
       warnings: mediaWarnings,
     }

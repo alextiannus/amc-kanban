@@ -202,9 +202,11 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 2. `Brand.autoPilot = false`：submit 后进入 `pending_review`，生成 ActionItem。
 3. approve 会触发发布或排期。
 4. 已排期草稿更新时，如果已有 `platformPostId` 且未发布，先调用 PostFast 删除旧排期，再重建新排期。
-5. Google Business 草稿通过 `gbpLocationId` 固定一个发布门店：单门店自动绑定，多门店必须人工选择；门店缺失、不可用或已失效时禁止提交，且不得回退到第一个门店。
-6. `gbpLocationId` 随草稿进入审核、重新排期、立即发布和后台发布任务；非 Google 草稿保存为 `null`。
-7. 草稿快照会 best-effort 持久化到 Huawei OBS。
+5. 带有至少一个 50,000,000 字节以上视频的 approve/submit 返回 HTTP 202 和 `{ queued: true, jobId, status, draft }`；图片和较小视频保持现有同步响应。
+6. 活动的大视频任务锁定正文、账号、媒体、封面和排期字段；重复审批返回同一个任务，不创建重复帖子。
+7. Google Business 草稿通过 `gbpLocationId` 固定一个发布门店：单门店自动绑定，多门店必须人工选择；门店缺失、不可用或已失效时禁止提交，且不得回退到第一个门店。
+8. `gbpLocationId` 随草稿进入审核、重新排期、立即发布和后台发布任务；非 Google 草稿保存为 `null`。
+9. 草稿快照会 best-effort 持久化到 Huawei OBS。
 
 请求体示例：
 

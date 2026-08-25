@@ -46,6 +46,20 @@ const DRAFT_SELECT = {
     orderBy: { order: 'asc' as const },
     include: { asset: true },
   },
+  postfastDeliveryJobs: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+    select: {
+      id: true,
+      status: true,
+      attempts: true,
+      nextAttemptAt: true,
+      lastErrorCode: true,
+      lastErrorMessage: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
 } as const
 
 const DRAFT_STATUSES = new Set([

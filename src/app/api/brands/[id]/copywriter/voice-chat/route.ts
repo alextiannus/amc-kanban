@@ -195,6 +195,16 @@ async function executeTool(
           }
         }
         const mode = (result as any).mode
+        if (mode === 'queued') {
+          return {
+            resultText: isEnglish
+              ? `Draft ${draftId} was approved and queued for large-video delivery.`
+              : `草稿 ${draftId} 已批准并进入大视频后台发布队列。`,
+            actionReply: isEnglish
+              ? 'Done. The large video is transferring in the background and the board will update automatically.'
+              : '已完成审批。大视频正在后台传输，发布状态会自动更新。',
+          }
+        }
         const isScheduled = mode === 'scheduled' || mode === undefined && (result as any).draft?.status === 'scheduled'
         return {
           resultText: isEnglish 

@@ -36,7 +36,7 @@ export default async function InspirationLibraryEntryPage() {
       sub: session.user.id,
       email: session.user.email,
       role,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
     }, secret)
     redirect(`${contentUrl}/admin/inspiration-library#labToken=${encodeURIComponent(token)}`)
   }

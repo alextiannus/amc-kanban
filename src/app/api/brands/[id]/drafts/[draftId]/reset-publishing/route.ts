@@ -16,6 +16,7 @@ import {
   POSTFAST_RESULT_UNKNOWN,
   syncBrandDraftStatuses,
 } from '@/lib/syncDraftStatuses'
+import { findActivePostfastDeliveryJob } from '@/lib/postfastDelivery'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -39,6 +40,14 @@ export async function POST(_request: Request, { params }: Params) {
     return NextResponse.json(
       { error: 'Draft not found or no longer publishing.' },
       { status: 404 },
+    )
+  }
+
+  const activeJob = await findActivePostfastDeliveryJob(draftId)
+  if (activeJob) {
+    return NextResponse.json(
+      { error: '大视频后台发布任务仍在运行，请等待队列自动完成或失败。', jobId: activeJob.id, status: activeJob.status },
+      { status: 409 },
     )
   }
 

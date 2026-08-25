@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 import { recordRemoteCopyScriptOutcome } from '@/lib/amc-content/remoteContentService'
+import { processPostfastDeliveryQueue } from '@/lib/postfastDelivery'
 import {
   persistInternalPublishedPosts,
   persistSocialAccountMetrics,
@@ -21,8 +22,9 @@ export const GOOGLE_PLATFORM_ALIASES = [
 /**
  * POST /api/cron/postfast-sync-all
  *
- * Render Cron Job entry point. Syncs PostFast data for ALL active brands
- * that have a postfastApiKey configured. Results are saved to:
+ * Render Cron Job entry point. Processes durable PostFast delivery jobs first,
+ * then performs the heavier account/post/analytics sync at most once per day.
+ * Results are saved to:
  *   - brand.postfastSnapshot  (accounts + operationsReport JSON)
  *   - brand.postfastSyncedAt  (sync timestamp)
  *   - SocialAccount table     (upserted per account)
@@ -30,7 +32,7 @@ export const GOOGLE_PLATFORM_ALIASES = [
  * Protected by CRON_SECRET env var — set the same value in Render Cron headers.
  *
  * Render Cron setup:
- *   Schedule: every 15 minutes (cron expression: 0,15,30,45 * * * *)
+ *   Schedule: every 5 minutes (minute field uses step value 5)
  *   Command:  curl -X POST https://amc-kanban.onrender.com/api/cron/postfast-sync-all
  *             -H "x-cron-secret: <CRON_SECRET>"
  */
@@ -48,20 +50,56 @@ export async function POST(req: NextRequest) {
   const startedAt = new Date()
   console.log(`[PostFast Cron] Starting batch sync at ${startedAt.toISOString()}`)
 
-  // Fetch all active brands that have PostFast configured
-  const brands = await prisma.brand.findMany({
-    where: {
-      status: 'ACTIVE',
-      postfastApiKey: { not: null },
-    },
+  const deliveryQueue = await processPostfastDeliveryQueue({ maxRuntimeMs: 230_000 })
+  const queueElapsedMs = Date.now() - startedAt.getTime()
+  const fullSyncDeferred = deliveryQueue.processed > 0 && queueElapsedMs >= 45_000
+
+  if (fullSyncDeferred) {
+    console.log(`[PostFast Cron] Delivery queue used ${queueElapsedMs}ms; deferring daily full sync to a later run`)
+    return NextResponse.json({
+      ok: true,
+      startedAt,
+      deliveryQueue,
+      fullSyncDeferred: true,
+      succeeded: 0,
+      failed: 0,
+      results: [],
+    })
+  }
+
+  // Draft status reconciliation stays lightweight and continues on the 5-minute cadence.
+  const configuredBrands = await prisma.brand.findMany({
+    where: { status: 'ACTIVE', postfastApiKey: { not: null } },
     select: {
       id: true,
       postfastApiKey: true,
+      postfastSyncedAt: true,
       googlePreferOAuth: true,
       googleRefreshToken: true,
       googleLocationId: true,
     },
-  })
+  }) as Array<{
+    id: string
+    postfastApiKey: string | null
+    postfastSyncedAt: Date | null
+    googlePreferOAuth: boolean
+    googleRefreshToken: string | null
+    googleLocationId: string | null
+  }>
+  const draftStatusResults: Array<{ brandId: string; checked?: number; updated?: number; error?: string }> = []
+  for (const brand of configuredBrands) {
+    if (!brand.postfastApiKey || Date.now() - startedAt.getTime() >= 270_000) break
+    try {
+      const syncResult = await syncBrandDraftStatuses(brand.id, brand.postfastApiKey)
+      draftStatusResults.push({ brandId: brand.id, checked: syncResult.checked, updated: syncResult.updated })
+    } catch (error: unknown) {
+      draftStatusResults.push({ brandId: brand.id, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  // Heavy account/post/analytics sync is due at most once every 24 hours.
+  const dailySyncCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const brands = configuredBrands.filter((brand) => !brand.postfastSyncedAt || brand.postfastSyncedAt <= dailySyncCutoff)
 
   console.log(`[PostFast Cron] Found ${brands.length} brands to sync`)
 
@@ -111,25 +149,6 @@ export async function POST(req: NextRequest) {
         console.warn(`[PostFast Cron] ⚠️ brand ${brand.id}: experiment outcome sync failed (non-fatal):`, outcomeError?.message ?? outcomeError)
       }
 
-      // Phase 4: Sync scheduled→published draft statuses
-      try {
-        const syncResult = await syncBrandDraftStatuses(brand.id, brand.postfastApiKey!)
-        brandResult.draftSync = {
-          checked: syncResult.checked,
-          updated: syncResult.updated,
-          published: syncResult.published,
-          failed: syncResult.failed,
-          waiting: syncResult.waiting,
-          unresolved: syncResult.unresolved,
-          skipped: syncResult.skipped,
-          providerErrors: syncResult.providerErrors,
-        }
-        if (syncResult.updated > 0) {
-          console.log(`[PostFast Cron] 📬 brand ${brand.id}: synced ${syncResult.updated}/${syncResult.checked} scheduled drafts to published/failed`)
-        }
-      } catch (syncErr: any) {
-        console.warn(`[PostFast Cron] ⚠️ brand ${brand.id}: draft status sync failed (non-fatal):`, syncErr?.message ?? syncErr)
-      }
     } catch (e: any) {
       results.push({ brandId: brand.id, ok: false, error: e?.message ?? String(e) })
       console.error(`[PostFast Cron] ❌ brand ${brand.id} failed:`, e)
@@ -140,7 +159,7 @@ export async function POST(req: NextRequest) {
   const failed = results.filter(r => !r.ok).length
   console.log(`[PostFast Cron] Done — ${succeeded} succeeded, ${failed} failed in ${Date.now() - startedAt.getTime()}ms`)
 
-  return NextResponse.json({ ok: true, startedAt, succeeded, failed, results })
+  return NextResponse.json({ ok: true, startedAt, deliveryQueue, draftStatusResults, fullSyncDeferred: false, succeeded, failed, results })
 }
 
 export async function syncViralCopyExperimentOutcomes(brandId: string, analyticsPosts: any[]) {

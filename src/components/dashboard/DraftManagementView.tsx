@@ -98,6 +98,16 @@ type DraftItem = {
       mimeType: string
     }
   }>
+  postfastDeliveryJobs?: Array<{
+    id: string
+    status: string
+    attempts: number
+    nextAttemptAt?: string | null
+    lastErrorCode?: string | null
+    lastErrorMessage?: string | null
+    createdAt: string
+    updatedAt: string
+  }>
 }
 
 type DraftMediaItem = {
@@ -133,6 +143,19 @@ const STATUS_CLASSES: Record<string, string> = {
   published: 'bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-900/60',
   rejected: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900/60',
   failed: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-900/60',
+}
+
+function draftDeliveryStatusLabel(draft: DraftItem) {
+  const jobStatus = draft.postfastDeliveryJobs?.[0]?.status
+  if (draft.status === 'publishing') {
+    if (jobStatus === 'QUEUED') return '等待后台发布'
+    if (jobStatus === 'TRANSFERRING') return '正在传输'
+    if (jobStatus === 'CREATING_POST') return '正在创建帖子'
+    if (jobStatus === 'RESULT_UNKNOWN') return '正在核对结果'
+  }
+  if (jobStatus === 'SUCCEEDED' && ['scheduled', 'published'].includes(draft.status)) return '发布成功'
+  if (jobStatus === 'FAILED' && draft.status === 'failed') return '发布失败'
+  return STATUS_LABELS[draft.status] || draft.status
 }
 
 const TAB_CONFIG = [
@@ -858,6 +881,13 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     void loadDrafts()
   }, [brandId, activeTab])
 
+  const hasPublishingDrafts = drafts.some((draft) => draft.status === 'publishing')
+  useEffect(() => {
+    if (!hasPublishingDrafts || !brandId) return
+    const interval = window.setInterval(() => void loadDrafts(), 5_000)
+    return () => window.clearInterval(interval)
+  }, [hasPublishingDrafts, brandId, activeTab])
+
   useEffect(() => {
     void loadBrandAssets()
   }, [brandId])
@@ -1241,9 +1271,11 @@ Never include any markdown backticks, conversational preamble, or explanation ou
     const json = await res.json().catch(() => ({}))
     if (!res.ok) throw new Error(mediaValidationErrorMessage(json, '批准失败'))
     await loadDrafts()
-    setActiveTab('scheduled')
+    setActiveTab(json.queued ? 'publishing' : 'scheduled')
     const warningText = formatMediaWarnings(json)
-    if (warningText) alert(warningText)
+    if (json.queued) {
+      alert(`大视频已进入后台发布队列，页面会自动更新传输和发布状态。${warningText ? `\n\n${warningText}` : ''}`)
+    } else if (warningText) alert(warningText)
   }
 
   const handleQuickRegenerate = async (draftId: string) => {
@@ -1355,7 +1387,9 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       if (!submitRes.ok) throw new Error(mediaValidationErrorMessage(submitJson, '提交排期发布通道失败'))
 
       const warningText = formatMediaWarnings(submitJson)
-      alert(`已成功通过通道排期发布！推荐时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
+      alert(submitJson.queued
+        ? `大视频已进入后台发布队列，原排期为：${new Date(targetDateISO).toLocaleString()}。${warningText ? `\n\n${warningText}` : ''}`
+        : `已成功通过通道排期发布！推荐时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       await loadDrafts()
       closeEditor()
     } catch (e: any) {
@@ -2019,7 +2053,7 @@ function DraftCard({
       <div className="space-y-3 p-3">
         <div className="flex flex-wrap gap-2">
           <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${platformBadgeClass(platform)}`}>{platformLabel(platform)}</span>
-          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${STATUS_CLASSES[draft.status] || STATUS_CLASSES.draft}`}>{STATUS_LABELS[draft.status] || draft.status}</span>
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black ${STATUS_CLASSES[draft.status] || STATUS_CLASSES.draft}`}>{draftDeliveryStatusLabel(draft)}</span>
         </div>
         <p className={`${compact ? 'line-clamp-2' : 'line-clamp-3'} text-sm font-semibold leading-6 text-slate-700 dark:text-slate-200`}>{draft.caption || '无标题草稿'}</p>
         <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-400">
@@ -2037,7 +2071,7 @@ function DraftCard({
                 <Sparkles className="h-3 w-3" /> {draft.deliveryFailureCode === 'POSTFAST_RESULT_UNKNOWN' ? '确认后重排' : '智能排期'}
               </button>
             )}
-            {draft.status === 'publishing' && !selectMode && onResetPublishing && (
+            {draft.status === 'publishing' && !draft.postfastDeliveryJobs?.some((job) => ['QUEUED', 'TRANSFERRING', 'CREATING_POST', 'RESULT_UNKNOWN'].includes(job.status)) && !selectMode && onResetPublishing && (
               <button
                 type="button"
                 onClick={(e) => {

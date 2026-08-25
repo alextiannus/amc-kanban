@@ -35,6 +35,7 @@ export function findUniqueLegacyPostMatch(input: {
   claimedProviderIds: ReadonlySet<string>
   now?: number
   toleranceMs?: number
+  allowFuture?: boolean
 }): {
   post?: PostFastPost
   ambiguousCount: number
@@ -43,7 +44,7 @@ export function findUniqueLegacyPostMatch(input: {
 } {
   const now = input.now ?? Date.now()
   const toleranceMs = input.toleranceMs ?? LEGACY_POST_TIME_TOLERANCE_MS
-  if (!input.scheduledAt || input.scheduledAt.getTime() > now) {
+  if (!input.scheduledAt || (!input.allowFuture && input.scheduledAt.getTime() > now)) {
     return { ambiguousCount: 0, equivalentDuplicateCount: 0, matchedPostIds: [] }
   }
 

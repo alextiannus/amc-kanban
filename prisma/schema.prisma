@@ -428,6 +428,7 @@ model Brand {
   brandPlanInterviews BrandPlanInterview[]
   growthResearchSnapshots BrandGrowthResearchSnapshot[]
   marketingSolutions BrandMarketingSolution[]
+  postfastDeliveryJobs PostfastDeliveryJob[]
   videoShootBatches VideoShootBatch[]
 
   createdAt DateTime @default(now())
@@ -617,6 +618,7 @@ model ContentDraft {
 
   actionItem ActionItem?
   assetRefs  ContentAssetRef[]
+  postfastDeliveryJobs PostfastDeliveryJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -625,6 +627,34 @@ model ContentDraft {
   @@index([coverAssetId])
   @@index([viralCopyScriptId])
   @@index([viralCopyExperimentAssignmentId])
+}
+
+model PostfastDeliveryJob {
+  id               String       @id @default(cuid())
+  brandId          String
+  brand            Brand        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  draftId          String
+  draft            ContentDraft @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  submissionKey    String       @unique
+  status           String       @default("QUEUED") // QUEUED | TRANSFERRING | CREATING_POST | SUCCEEDED | FAILED | RESULT_UNKNOWN
+  payload          Json
+  mediaState       Json?
+  warnings         Json?
+  attempts         Int          @default(0)
+  nextAttemptAt    DateTime?    @default(now())
+  leaseToken       String?
+  leaseUntil       DateTime?
+  lastErrorCode    String?
+  lastErrorMessage String?
+  postfastPostId   String?
+  postUrl          String?
+  completedAt      DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([status, nextAttemptAt])
+  @@index([draftId, createdAt])
+  @@index([brandId, status])
 }
 
 model ActionItem {

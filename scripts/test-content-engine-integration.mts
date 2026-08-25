@@ -159,6 +159,13 @@ function testLegacyEntrypointsUseFacade() {
 function testContentLabStandaloneEntry() {
   const page = read('src/app/admin/content-lab/page.tsx')
   const legacyAiRolesPage = read('src/app/admin/ai-roles/page.tsx')
+  const contentEntryPages = [
+    page,
+    legacyAiRolesPage,
+    read('src/app/admin/inspiration-library/page.tsx'),
+    read('src/app/admin/viral-copy-scripts/page.tsx'),
+    read('src/app/admin/video-production/page.tsx'),
+  ]
   const internalAdmin = read('src/app/api/internal/content-lab-admin/route.ts')
   const permissions = read('src/lib/permissions.ts')
   const userManagementPermissions = read('src/lib/user-management/permissions.ts')
@@ -168,6 +175,9 @@ function testContentLabStandaloneEntry() {
   assertIncludes(page, "role: 'ADMIN'", 'lab token is admin-scoped')
   assertIncludes(page, 'redirect(`${contentUrl}/admin/content-lab#labToken=', 'entry uses URL fragment to avoid token in request logs')
   assertIncludes(page, "roles.includes('AMC_PRINCIPAL')", 'principal users can open the Content Lab handoff')
+  for (const entryPage of contentEntryPages) {
+    assertIncludes(entryPage, 'exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24', 'content lab handoff token lasts 24 hours')
+  }
   assertIncludes(legacyAiRolesPage, 'redirect(`${contentUrl}/admin/content-lab#labToken=', 'legacy AI roles entry opens latest amc-content home')
   assertNotIncludes(legacyAiRolesPage, '/admin/ai-roles#labToken=', 'legacy AI roles entry must not open the old editor')
   assertIncludes(permissions, "label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab'", 'AI role menu opens latest amc-content home')
@@ -233,17 +243,20 @@ function testGoogleBusinessDraftLocationContract() {
   const locationsRoute = read('src/app/api/brands/[id]/accounts/[aid]/gbp-locations/route.ts')
   const submission = read('src/lib/draftSubmission.ts')
   const postfast = read('src/lib/integrations/postfast.ts')
+  const delivery = read('src/lib/postfastDelivery.ts')
 
   assertIncludes(schema, 'gbpLocationId                   String?', 'draft schema persists the selected Google location')
   assertIncludes(draftCollectionRoute, 'gbpLocationId: true', 'draft collection returns the selected Google location')
-  assertIncludes(draftItemRoute, "existing.status === 'publishing'", 'publishing drafts lock Google location edits')
+  assertIncludes(draftItemRoute, "existing.status === 'publishing'", 'publishing drafts always lock Google location edits')
+  assertIncludes(draftItemRoute, "'hashtags', 'scheduledAt', 'status', 'gbpLocationId'", 'publishing jobs lock Google location edits')
   assertIncludes(locationsRoute, 'canHumanAccessBrandProject', 'Google location endpoint enforces brand access')
   assertIncludes(locationsRoute, 'postfastGetGBPLocationsForInternalAccount', 'Google location endpoint resolves the internal account safely')
   assertIncludes(submission, "code: 'GOOGLE_LOCATION_REQUIRED'", 'draft submission blocks a missing Google location')
   assertIncludes(submission, "code: 'GOOGLE_LOCATION_NOT_FOUND'", 'draft submission blocks a stale Google location')
-  assertIncludes(submission, 'gbpLocationId: draft.gbpLocationId || undefined', 'draft delivery carries the selected location')
+  assertIncludes(submission, 'gbpLocationId: draft.gbpLocationId || undefined', 'direct and queued draft delivery carry the selected location')
   assertIncludes(postfast, "code: 'GOOGLE_LOCATION_REQUIRED'", 'PostFast publishing never defaults an unspecified Google location')
   assertIncludes(postfast, "code: 'GOOGLE_LOCATION_NOT_FOUND'", 'PostFast publishing rejects a stale requested location')
+  assertIncludes(delivery, '...payload.publish', 'background delivery preserves the queued Google location payload')
 }
 
 function testViralCopyScriptBridge() {

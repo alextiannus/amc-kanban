@@ -428,7 +428,7 @@ async function main() {
       scheduledAt,
     })
     assert.equal(missingProviderId.success, false)
-    assert.equal(missingProviderId.code, 'POSTFAST_INVALID_RESPONSE')
+    assert.equal(missingProviderId.code, 'POSTFAST_RESULT_UNKNOWN')
 
     const relaxedVideoPublish = await postfast.postfastPublish({
       apiKey: API_KEY,

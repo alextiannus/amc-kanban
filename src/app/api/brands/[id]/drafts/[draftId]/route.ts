@@ -6,6 +6,7 @@ import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
+import { findActivePostfastDeliveryJob } from '@/lib/postfastDelivery'
 
 const DRAFT_SELECT = {
   id: true,
@@ -45,6 +46,20 @@ const DRAFT_SELECT = {
   assetRefs: {
     orderBy: { order: 'asc' as const },
     include: { asset: true },
+  },
+  postfastDeliveryJobs: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+    select: {
+      id: true,
+      status: true,
+      attempts: true,
+      nextAttemptAt: true,
+      lastErrorCode: true,
+      lastErrorMessage: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   },
 } as const
 
@@ -132,6 +147,20 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (existing.status === 'publishing' && Object.prototype.hasOwnProperty.call(body, 'gbpLocationId')) {
     return NextResponse.json({ error: '发布正在进行中，Google Business 发布门店暂时不能修改。' }, { status: 409 })
+  }
+
+  const publishCriticalFields = [
+    'caption', 'captionLang', 'accountId', 'mediaUrls', 'assetIds', 'coverAssetId',
+    'hashtags', 'scheduledAt', 'status', 'gbpLocationId',
+  ]
+  if (existing.status === 'publishing' && publishCriticalFields.some((field) => Object.prototype.hasOwnProperty.call(body, field))) {
+    const activeJob = await findActivePostfastDeliveryJob(draftId)
+    if (activeJob) {
+      return NextResponse.json(
+        { error: '大视频正在后台发布，正文、账号、媒体和排期暂时不能修改。', jobId: activeJob.id, status: activeJob.status },
+        { status: 409 },
+      )
+    }
   }
   
   if (body.caption !== undefined) {
@@ -391,7 +420,10 @@ export async function PATCH(request: Request, { params }: Params) {
       })
       if (resubmitResult.ok) {
         console.log(`[PATCH Draft] Re-submitted to PostFast with new scheduledAt ${incomingScheduledAt?.toISOString()}`)
-        return NextResponse.json({ ok: true, draft: resubmitResult.draft, rescheduled: true })
+        return NextResponse.json(
+          { ok: true, draft: resubmitResult.draft, rescheduled: true, ...(resubmitResult.mode === 'queued' ? { queued: true, jobId: resubmitResult.jobId, status: resubmitResult.status } : {}) },
+          { status: resubmitResult.mode === 'queued' ? 202 : 200 },
+        )
       } else {
         console.warn(`[PATCH Draft] Re-submit to PostFast failed after reschedule: ${resubmitResult.error}`)
         // Return the DB-updated draft even if PostFast re-submission failed
@@ -417,6 +449,14 @@ export async function DELETE(request: Request, { params }: Params) {
 
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId } })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const activeJob = await findActivePostfastDeliveryJob(draftId)
+  if (activeJob) {
+    return NextResponse.json(
+      { error: '大视频后台发布任务仍在进行，当前不能删除草稿。', jobId: activeJob.id, status: activeJob.status },
+      { status: 409 },
+    )
+  }
 
   // If scheduled on PostFast, attempt to cancel first (non-blocking)
   // A failed cancel (e.g. post in processing/publishing state) should NOT block

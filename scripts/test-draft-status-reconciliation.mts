@@ -62,6 +62,25 @@ const futureDraft = findUniqueLegacyPostMatch({
 assert.equal(futureDraft.post, undefined)
 assert.equal(futureDraft.ambiguousCount, 0)
 
+const futureUnknownResult = findUniqueLegacyPostMatch({
+  caption: 'Future unknown campaign',
+  scheduledAt: new Date('2026-07-31T08:00:00.000Z'),
+  providerAccountId: 'account-instagram',
+  providerPosts: [{
+    id: 'pf-future-unknown',
+    socialMediaId: 'account-instagram',
+    platform: '',
+    platformId: '',
+    caption: 'Future unknown campaign',
+    status: 'scheduled' as const,
+    scheduledAt: '2026-07-31T08:00:00.000Z',
+  }],
+  claimedProviderIds: new Set(),
+  now: Date.parse('2026-07-31T07:00:00.000Z'),
+  allowFuture: true,
+})
+assert.equal(futureUnknownResult.post?.id, 'pf-future-unknown')
+
 const claimed = findUniqueLegacyPostMatch({
   caption: 'Same campaign caption',
   scheduledAt,

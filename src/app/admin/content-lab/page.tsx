@@ -35,7 +35,7 @@ export default async function ContentLabEntryPage() {
       sub: session.user.id,
       email: session.user.email,
       role,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60,
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
     }, secret)
     redirect(`${contentUrl}/admin/content-lab#labToken=${encodeURIComponent(token)}`)
   }

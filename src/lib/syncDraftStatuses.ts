@@ -56,6 +56,7 @@ type ReconciliationDraft = {
   platformPostId: string | null
   scheduledAt: Date | null
   updatedAt: Date
+  deliveryFailureCode: string | null
   caption: string
   hashtags: string[]
   account: {
@@ -138,6 +139,7 @@ export async function syncBrandDraftStatuses(
       platformPostId: true,
       scheduledAt: true,
       updatedAt: true,
+      deliveryFailureCode: true,
       caption: true,
       hashtags: true,
       account: {
@@ -159,7 +161,10 @@ export async function syncBrandDraftStatuses(
       .filter((postId): postId is string => Boolean(postId)),
   )
   const hasLegacyDrafts = drafts.some(
-    (draft) => !draft.platformPostId && reconciliationAnchor(draft).getTime() <= now.getTime(),
+    (draft) => !draft.platformPostId && (
+      draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN
+      || reconciliationAnchor(draft).getTime() <= now.getTime()
+    ),
   )
 
   const providerPosts: PostFastPost[] = []
@@ -255,7 +260,10 @@ export async function syncBrandDraftStatuses(
     if (draft.platformPostId) {
       providerPost = providerPostsById.get(draft.platformPostId)
       if (providerPost) matchedProviderIds = [providerPost.id]
-    } else if (reconciliationAnchor(draft).getTime() <= now.getTime()) {
+    } else if (
+      draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN
+      || reconciliationAnchor(draft).getTime() <= now.getTime()
+    ) {
       const accountKey = draft.account
         ? `${normalizeIdentity(draft.account.platformId)}:${normalizeIdentity(
             draft.account.handle || draft.account.displayName,
@@ -270,6 +278,7 @@ export async function syncBrandDraftStatuses(
         providerPosts,
         claimedProviderIds,
         now: now.getTime(),
+        allowFuture: draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN,
       })
       providerPost = match.post
       matchedProviderIds = match.matchedPostIds

@@ -16,6 +16,11 @@ import {
 } from '@/lib/mediaValidation'
 import { writeAuditLog } from '@/lib/audit'
 import { POSTFAST_RESULT_UNKNOWN } from '@/lib/syncDraftStatuses'
+import {
+  enqueuePostfastDelivery,
+  findActivePostfastDeliveryJob,
+} from '@/lib/postfastDelivery'
+import { shouldQueuePostfastDelivery } from '@/lib/postfastDeliveryPolicy'
 
 type SubmitDraftInput = {
   brandId: string
@@ -262,32 +267,9 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     }
   }
 
-  // ── 原子互斥锁：防止并发重复发布 ──────────────────────────────────────────
-  // 用 updateMany + WHERE status != 'publishing' 代替 findFirst+check 的 TOCTOU 模式。
-  // 只有成功把状态从「非 publishing」改成「publishing」的那一个请求才能继续，
-  // 其余并发请求 count=0 直接返回 409，与人工点击"审批"完全等效。
-  //
-  // 例外：autoPilot=false 且非 forcePublish 时走 pending_review 路径，无需抢锁。
+  // Approval-only submissions do not need a publish lock. Delivery submissions
+  // acquire it later, atomically with durable-job creation for large videos.
   const needsPublishingLock = brand.autoPilot || input.forcePublish
-  if (needsPublishingLock) {
-    const lockResult = await prisma.contentDraft.updateMany({
-      where: {
-        id: input.draftId,
-        brandId: input.brandId,
-        status: { not: 'publishing' },
-      },
-      data: {
-        status: 'publishing',
-        deliveryFailureCode: null,
-        deliveryFailureAt: null,
-      },
-    })
-    if (lockResult.count === 0) {
-      console.warn(`[submitDraftForDelivery] Draft ${input.draftId} already locked (status=publishing), rejecting concurrent request`)
-      return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
-    }
-    console.log(`[submitDraftForDelivery] Lock acquired for draft ${input.draftId}`)
-  }
 
   if (!brand.autoPilot && !input.forcePublish) {
     const updated = await prisma.$transaction(async (tx: any) => {
@@ -442,6 +424,89 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   })
   const coverImage = buildPostfastCoverImage(draft.coverAsset)
 
+  if (shouldQueuePostfastDelivery(mediaItems)) {
+    const latestDraft = await prisma.contentDraft.findUniqueOrThrow({ where: { id: draft.id } })
+    let job
+    try {
+      job = await enqueuePostfastDelivery({
+        brandId: input.brandId,
+        draftId: draft.id,
+        actorId: input.actorId,
+        note: input.note,
+        immediatePublish,
+        scheduled,
+        draftUpdatedAt: latestDraft.updatedAt,
+        publish: {
+          platform: platformId,
+          accountId: draft.accountId || undefined,
+          gbpLocationId: draft.gbpLocationId || undefined,
+          caption: draft.caption,
+          mediaItems,
+          coverImage,
+          hashtags: draft.hashtags,
+          scheduledAt: resolvedScheduledAt?.toISOString(),
+        },
+        warnings: validationWarnings,
+      })
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.includes('already publishing')) {
+        return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
+      }
+      throw error
+    }
+    const queuedDraft = await prisma.contentDraft.findUniqueOrThrow({
+      where: { id: draft.id },
+      include: {
+        account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+        assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
+        coverAsset: true,
+      },
+    })
+    void persistDraftSnapshotToObs({ brandId: input.brandId, draftId: draft.id, data: queuedDraft }).catch((error) => {
+      console.error('[submitDraftForDelivery] OBS queued snapshot failed:', error)
+    })
+    return {
+      ok: true as const,
+      mode: 'queued' as const,
+      queued: true as const,
+      jobId: job.id,
+      status: job.status,
+      draft: queuedDraft,
+      warnings: validationWarnings,
+    }
+  }
+
+  if (needsPublishingLock) {
+    const lockResult = await prisma.contentDraft.updateMany({
+      where: {
+        id: input.draftId,
+        brandId: input.brandId,
+        status: { not: 'publishing' },
+      },
+      data: {
+        status: 'publishing',
+        deliveryFailureCode: null,
+        deliveryFailureAt: null,
+      },
+    })
+    if (lockResult.count === 0) {
+      const activeJob = await findActivePostfastDeliveryJob(input.draftId)
+      if (activeJob) {
+        const currentDraft = await prisma.contentDraft.findUnique({ where: { id: input.draftId } })
+        return {
+          ok: true as const,
+          mode: 'queued' as const,
+          queued: true as const,
+          jobId: activeJob.id,
+          status: activeJob.status,
+          draft: currentDraft,
+          warnings: validationWarnings,
+        }
+      }
+      return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
+    }
+  }
+
   console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
   const result = await postfastPublish({
     apiKey: brand.postfastApiKey,
@@ -470,15 +535,16 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         }
       : result.code === 'MEDIA_VALIDATION_FAILED' ||
         result.code === 'MEDIA_INSPECTION_UNAVAILABLE' ||
-        result.code === 'POSTFAST_PUBLISH_TIMEOUT'
+        result.code === 'POSTFAST_PUBLISH_TIMEOUT' ||
+        result.code === POSTFAST_RESULT_UNKNOWN
       ? {
-          status: result.code === 'POSTFAST_PUBLISH_TIMEOUT' ? 'publishing' : draft.status,
-          deliveryFailureCode: result.code === 'POSTFAST_PUBLISH_TIMEOUT'
-            ? 'POSTFAST_PUBLISH_TIMEOUT'
+          status: result.code === 'POSTFAST_PUBLISH_TIMEOUT' || result.code === POSTFAST_RESULT_UNKNOWN ? 'publishing' : draft.status,
+          deliveryFailureCode: result.code === 'POSTFAST_PUBLISH_TIMEOUT' || result.code === POSTFAST_RESULT_UNKNOWN
+            ? result.code
             : null,
-          deliveryFailureAt: result.code === 'POSTFAST_PUBLISH_TIMEOUT' ? new Date() : null,
-          ...(result.code === 'POSTFAST_PUBLISH_TIMEOUT'
-            ? { agentNote: 'PostFast 发布请求超时，系统将在30分钟内自动核对最终结果。' }
+          deliveryFailureAt: result.code === 'POSTFAST_PUBLISH_TIMEOUT' || result.code === POSTFAST_RESULT_UNKNOWN ? new Date() : null,
+          ...(result.code === 'POSTFAST_PUBLISH_TIMEOUT' || result.code === POSTFAST_RESULT_UNKNOWN
+            ? { agentNote: 'PostFast 建帖结果暂时无法确认，系统正在自动核对，不会盲目重复创建帖子。' }
             : {}),
         }
       : {
@@ -534,6 +600,8 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
             ? 503
             : result.code === 'POSTFAST_PUBLISH_TIMEOUT'
               ? 504
+              : result.code === POSTFAST_RESULT_UNKNOWN
+                ? 504
               : 400,
         code: result.code,
         issues: result.issues,

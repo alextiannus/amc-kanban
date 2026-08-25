@@ -2,7 +2,7 @@
 
 ## 运行规则
 
-- Render 定时任务每15分钟调用 `POST /api/cron/postfast-sync-all`，推荐 cron 表达式为 `0,15,30,45 * * * *`。
+- Render 定时任务每5分钟调用 `POST /api/cron/postfast-sync-all`，推荐 cron 表达式为 `*/5 * * * *`。每次先处理持久化大视频发布任务；完整账号、帖子和分析同步按品牌最多每日执行一次。
 - 发布内容页进入品牌时额外执行一次 `POST /api/brands/:id/drafts/sync-statuses`。
 - 核对范围为本地 `scheduled`、`publishing`，供应商范围为 `scheduled`、`published`、`failed`。
 - platformPostId 精确匹配优先。旧记录使用账号、NFKC/零宽字符标准化后的完整文案及两分钟时间窗口。

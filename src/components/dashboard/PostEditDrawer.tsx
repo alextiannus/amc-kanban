@@ -1195,7 +1195,9 @@ export default function PostEditDrawer({
       }
 
       const warningText = formatMediaWarnings(submitJson)
-      alert(`已成功排期发布！排期时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
+      alert(submitJson.queued
+        ? `大视频已进入后台发布队列，原排期为：${new Date(targetDateISO).toLocaleString()}。${warningText ? `\n\n${warningText}` : ''}`
+        : `已成功排期发布！排期时间：${new Date(targetDateISO).toLocaleString()}${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (e: any) {
@@ -1237,7 +1239,9 @@ export default function PostEditDrawer({
         throw new Error(mediaValidationErrorMessage(json, '发布失败'))
       }
       const warningText = formatMediaWarnings(json)
-      alert(`已成功发送立即发布指令！${warningText ? `\n\n${warningText}` : ''}`)
+      alert(json.queued
+        ? `大视频已进入后台发布队列，页面将自动更新发布状态。${warningText ? `\n\n${warningText}` : ''}`
+        : `已成功发送立即发布指令！${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (err: any) {
@@ -1278,7 +1282,9 @@ export default function PostEditDrawer({
         throw new Error(mediaValidationErrorMessage(json, '重新排期失败'))
       }
       const warningText = formatMediaWarnings(json)
-      alert(`已重新计算并成功提交排期！${warningText ? `\n\n${warningText}` : ''}`)
+      alert(json.queued
+        ? `大视频已进入后台发布队列，页面将自动更新发布状态。${warningText ? `\n\n${warningText}` : ''}`
+        : `已重新计算并成功提交排期！${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
     } catch (err: any) {
@@ -1320,7 +1326,9 @@ export default function PostEditDrawer({
         throw new Error(mediaValidationErrorMessage(json, '操作失败'))
       }
       const warningText = formatMediaWarnings(json)
-      const successMessage = action === 'approve' ? '审核批准成功！' : '内容已被驳回。'
+      const successMessage = action === 'approve' && json.queued
+        ? '审核已通过，大视频已进入后台发布队列。'
+        : action === 'approve' ? '审核批准成功！' : '内容已被驳回。'
       alert(`${successMessage}${warningText ? `\n\n${warningText}` : ''}`)
       onClose()
       onSuccess()
