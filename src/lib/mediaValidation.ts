@@ -117,10 +117,10 @@ function imageMime(format?: string) {
   return ''
 }
 
-function normalizeVideoCodec(value?: string) {
+export function normalizeVideoCodec(value?: string) {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (normalized.includes('avc') || normalized === 'h.264' || normalized === 'h264') return 'h264'
-  if (normalized.includes('hevc') || normalized === 'h.265' || normalized === 'h265') return 'hevc'
+  if (normalized.includes('hevc') || ['h.265', 'h265', 'hvc1', 'hev1'].includes(normalized)) return 'hevc'
   if (normalized.includes('vp8')) return 'vp8'
   if (normalized.includes('vp9')) return 'vp9'
   return normalized || undefined

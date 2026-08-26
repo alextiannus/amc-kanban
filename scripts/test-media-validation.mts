@@ -5,6 +5,7 @@ import {
   mediaValidationWarnings,
   MediaInspectionUnavailableError,
   MediaValidationError,
+  normalizeVideoCodec,
   type MediaTechnicalMetadata,
   validatePlatformMedia,
   validateUploadMedia,
@@ -14,6 +15,10 @@ import {
   mediaValidationErrorMessage,
 } from '../src/lib/mediaValidationClient.ts'
 import { shouldValidateMediaForDraftDelivery } from '../src/lib/mediaPublishPolicy.ts'
+
+assert.equal(normalizeVideoCodec('hvc1'), 'hevc')
+assert.equal(normalizeVideoCodec('hev1'), 'hevc')
+assert.equal(normalizeVideoCodec('HVC1'), 'hevc')
 
 const failingCashmereImage: MediaTechnicalMetadata = {
   kind: 'image',
