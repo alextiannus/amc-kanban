@@ -15,6 +15,15 @@ import type {
   BrandIdentityFieldKey,
   BrandIdentitySnapshot,
 } from '@/lib/brandIdentity'
+import {
+  createSkuId,
+  formatSkuPrice,
+  normalizeSkuLibrary,
+  serializeSkuLibraryItem,
+  skuBadges,
+  sortSkuLibrary,
+  type SkuLibraryItem,
+} from '@/lib/sku-library/service'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,6 +78,8 @@ type StoreInfo = {
   reservationUrl?: string
   orderingUrl?: string
 }
+
+type ProductServiceItem = SkuLibraryItem
 
 type StoreEntitlements = {
   storeLimit: number
@@ -521,7 +532,7 @@ function BrandProfileContent({
   // Section 3: Knowledge Base
   const [draftMarket, setDraftMarket] = useState('')
   const [draftDistrict, setDraftDistrict] = useState('')
-  const [draftMenuItems, setDraftMenuItems] = useState<Array<Record<string, unknown>>>([])
+  const [draftMenuItems, setDraftMenuItems] = useState<ProductServiceItem[]>([])
   const [draftMenuText, setDraftMenuText] = useState('')
   const [draftCompetitorsText, setDraftCompetitorsText] = useState('')
 
@@ -638,10 +649,11 @@ function BrandProfileContent({
   const loadAllConfig = async () => {
     try {
       // Fire all 3 fetches in parallel
-      const [resBrand, resKnowledge, resSub] = await Promise.all([
+      const [resBrand, resKnowledge, resSub, resSku] = await Promise.all([
         fetch(`/api/brands/${brandId}`),
         fetch(`/api/brands/${brandId}/knowledge`),
         fetch(`/api/brands/${brandId}/subscription`),
+        fetch(`/api/brands/${brandId}/sku-library`),
       ])
 
       // 1. Brand metadata
@@ -675,8 +687,6 @@ function BrandProfileContent({
         setDraftStores(Array.isArray(k.stores) ? k.stores : [])
         setDraftMarket(k.market || '')
         setDraftDistrict(k.district || '')
-        setDraftMenuItems(Array.isArray(k.menuItems) ? k.menuItems : [])
-        setDraftMenuText(Array.isArray(k.menuItems) ? k.menuItems.map((item: Record<string, unknown>) => String(item.name || item.title || '').trim()).filter(Boolean).join('\n') : '')
         setDraftCompetitorsText(Array.isArray(k.competitors) ? k.competitors.join('\n') : '')
         setCreativeIdentity({
           brandVoice: k.brandVoice || '',
@@ -692,6 +702,16 @@ function BrandProfileContent({
         setDraftMenuText('')
         setDraftCompetitorsText('')
         setCreativeIdentity({ brandVoice: '', brandImage: '', promotionFocus: '' })
+      }
+
+      if (resSku.ok) {
+        const sku = await resSku.json()
+        const catalog = normalizeSkuLibrary(sku.items)
+        setDraftMenuItems(catalog)
+        setDraftMenuText(catalog.map(item => item.name).filter(Boolean).join('\n'))
+      } else {
+        setDraftMenuItems([])
+        setDraftMenuText('')
       }
 
       // 3. Subscription
@@ -958,10 +978,9 @@ ${storeLines}
           orderingUrl: String(store.orderingUrl || '').trim(),
         }))
         .filter(store => store.name || store.address || store.phone || store.businessHours || store.reservationUrl || store.orderingUrl)
-      const menuItems = textLines(draftMenuText).map((name, index) => {
-        const existing = draftMenuItems[index] || {}
-        return { ...existing, name }
-      })
+      const menuItems = draftMenuItems.length
+        ? draftMenuItems.map(serializeSkuLibraryItem).filter(item => item.name)
+        : textLines(draftMenuText).map(name => serializeSkuLibraryItem({ id: createSkuId(), type: 'single', name }))
       const settingsRes = await fetch(`/api/brands/${brandId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -987,10 +1006,16 @@ ${storeLines}
           market: draftMarket,
           district: draftDistrict,
           competitors: textLines(draftCompetitorsText),
-          menuItems,
         }),
       })
       if (!knowledgeRes.ok) throw new Error('brand_knowledge_save_failed')
+
+      const skuRes = await fetch(`/api/brands/${brandId}/sku-library`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: menuItems }),
+      })
+      if (!skuRes.ok) throw new Error('sku_library_save_failed')
 
       const sellingPoints = textLines(draftProduct)
       const identitySaves: Array<Promise<void>> = [
@@ -1025,6 +1050,29 @@ ${storeLines}
     setDraftStores(current => current.filter((_, itemIndex) => itemIndex !== index))
   }
 
+  const addProductServiceItem = (type: ProductServiceItem['type'] = 'single') => {
+    setDraftMenuItems(current => [
+      ...current,
+      {
+        id: createSkuId(),
+        type,
+        name: '',
+        currency: 'S$',
+        price: '',
+        description: '',
+        tags: [],
+      },
+    ])
+  }
+
+  const updateProductServiceItem = (index: number, patch: Partial<ProductServiceItem>) => {
+    setDraftMenuItems(current => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item))
+  }
+
+  const removeProductServiceItem = (index: number) => {
+    setDraftMenuItems(current => current.filter((_, itemIndex) => itemIndex !== index))
+  }
+
   const handleSaveSocialAccount = async () => {
     if (!editingSocialAccount) return
     setSocialAccountSaving(true)
@@ -1052,7 +1100,7 @@ ${storeLines}
   }
 
   const primaryProductList = () => {
-    const menuProducts = draftMenuItems.map((item) => String(item?.name || item?.title || '').trim()).filter(Boolean)
+    const menuProducts = priorityMenuItems.map((item) => String(item?.name || '').trim()).filter(Boolean)
     if (menuProducts.length) return menuProducts.slice(0, 4)
     const sellingPoints = identityList('sellingPoints', [])
     if (sellingPoints.length) return sellingPoints.slice(0, 4)
@@ -1248,6 +1296,7 @@ ${storeLines}
   const configuredStoreCount = Math.max(draftStores.filter((store) => store.name || store.address).length, draftAddress.trim() ? 1 : 0)
   const storeLimit = storeEntitlements.storeLimit
   const storeLimitText = `${configuredStoreCount}/${storeLimit}`
+  const priorityMenuItems = sortSkuLibrary(draftMenuItems)
   const handleAddStore = () => {
     if (storeSlotCount >= storeLimit) {
       showToastVal(`当前套餐最多支持 ${storeLimit} 家门店。请先购买多门店支持后再添加。`, 'info')
@@ -1616,13 +1665,30 @@ ${storeLines}
                 </div>
                 {draftMenuItems.length > 0 && (
                   <div className="mt-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-                    <p className="mb-2 text-xs font-black text-slate-500">SKU / 菜单列表</p>
-                    <div className="flex flex-wrap gap-2">
-                      {draftMenuItems.slice(0, 12).map((item, index) => (
-                        <span key={`${String(item.name || item.title || 'sku')}-${index}`} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                          {String(item.name || item.title || `SKU ${index + 1}`)}
-                        </span>
-                      ))}
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-black text-slate-500">商品和服务库</p>
+                      <span className="text-[10px] font-bold text-slate-400">{draftMenuItems.length} 项</span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {priorityMenuItems.slice(0, 8).map((item, index) => {
+                        const badges = skuBadges(item)
+                        const price = formatSkuPrice(item)
+                        return (
+                          <div key={`${item.id || item.name}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="min-w-0 text-[11px] font-black text-slate-700 dark:text-slate-200">{item.name || `SKU ${index + 1}`}</p>
+                              {price ? <span className="shrink-0 text-[11px] font-black text-emerald-600">{price}</span> : null}
+                            </div>
+                            {badges.length ? (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {badges.slice(0, 3).map(badge => (
+                                  <span key={badge} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">{badge}</span>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
@@ -2236,13 +2302,62 @@ ${storeLines}
                   <input value={draftDistrict} onChange={event => setDraftDistrict(event.target.value)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
                 </label>
                 <label className="space-y-1.5">
-                  <span className="text-xs font-black text-slate-600 dark:text-slate-300">SKU / 菜单列表</span>
-                  <textarea value={draftMenuText} onChange={event => setDraftMenuText(event.target.value)} rows={5} placeholder="每行一个产品或服务" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
-                </label>
-                <label className="space-y-1.5">
                   <span className="text-xs font-black text-slate-600 dark:text-slate-300">竞品列表</span>
                   <textarea value={draftCompetitorsText} onChange={event => setDraftCompetitorsText(event.target.value)} rows={5} placeholder="每行一个竞品" className="w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
                 </label>
+              </section>
+
+              <section className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900 dark:text-white">商品和服务库</h4>
+                    <p className="mt-1 text-xs text-slate-400">用于营销方案和内容创作调用价格、套餐、招牌、热销、高复购和商家主推判断。</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={() => addProductServiceItem('single')} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">添加单品</button>
+                    <button type="button" onClick={() => addProductServiceItem('bundle')} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">添加套餐</button>
+                    <button type="button" onClick={() => addProductServiceItem('service')} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold dark:border-slate-700 dark:bg-slate-900">添加服务</button>
+                  </div>
+                </div>
+                {draftMenuItems.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center text-xs font-bold text-slate-400 dark:border-slate-700 dark:bg-slate-900">
+                    还没有商品或服务。先添加招牌菜、套餐或主推服务，AI 才能写出具体价格和点单引导。
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {draftMenuItems.map((item, index) => (
+                      <div key={item.id || index} className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <p className="text-xs font-black text-slate-700 dark:text-slate-200">SKU {index + 1}</p>
+                          <button type="button" onClick={() => removeProductServiceItem(index)} className="text-xs font-bold text-rose-500">删除</button>
+                        </div>
+                        <div className="grid gap-2 md:grid-cols-[120px_1fr_120px_120px]">
+                          <select
+                            value={item.type || 'single'}
+                            onChange={event => updateProductServiceItem(index, { type: event.target.value as ProductServiceItem['type'] })}
+                            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                          >
+                            <option value="single">单品</option>
+                            <option value="bundle">套餐</option>
+                            <option value="service">服务</option>
+                          </select>
+                          <input value={item.name} onChange={event => updateProductServiceItem(index, { name: event.target.value })} placeholder="名称，例如 铁锅炖大鹅" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                          <input value={item.price || ''} onChange={event => updateProductServiceItem(index, { price: event.target.value })} placeholder="价格，例如 38 / 200" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                          <input value={item.serves || ''} onChange={event => updateProductServiceItem(index, { serves: event.target.value })} placeholder="适合人数" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                          <input value={item.bundleItems || ''} onChange={event => updateProductServiceItem(index, { bundleItems: event.target.value })} placeholder="套餐内容 / 搭配建议" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-2" />
+                          <input value={item.imageUrl || ''} onChange={event => updateProductServiceItem(index, { imageUrl: event.target.value })} placeholder="图片 URL" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-2" />
+                          <textarea value={item.description || ''} onChange={event => updateProductServiceItem(index, { description: event.target.value })} rows={2} placeholder="卖点、分量、适合场景，例如 $200 够几个人吃、$30/人能吃到什么" className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-4" />
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-slate-600 dark:text-slate-300">
+                          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isHotSeller)} onChange={event => updateProductServiceItem(index, { isHotSeller: event.target.checked })} /> 热销品</label>
+                          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isHighRepeat)} onChange={event => updateProductServiceItem(index, { isHighRepeat: event.target.checked })} /> 高复购品</label>
+                          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isMerchantPick)} onChange={event => updateProductServiceItem(index, { isMerchantPick: event.target.checked })} /> 商家主推 / 有潜力</label>
+                          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isSignature)} onChange={event => updateProductServiceItem(index, { isSignature: event.target.checked })} /> 招牌</label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
               <section className="grid gap-3 md:grid-cols-2">

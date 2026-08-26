@@ -14,6 +14,7 @@ import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
 import { callLLM } from '@/lib/llmRouter'
 import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
 import { writeAuditLog } from '@/lib/audit'
+import { skuLibraryForLLM } from '@/lib/sku-library/service'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -2074,6 +2075,7 @@ function buildMarketingPlanInput(
   interview: BrandPlanMerchantInterview | null,
   body?: Record<string, unknown>
 ) {
+  const productCatalog = skuLibraryForLLM(brand.knowledge?.menuItems, 30)
   return {
     brand: {
       id: brand.id,
@@ -2086,6 +2088,7 @@ function buildMarketingPlanInput(
     stores: arrayValue(brand.knowledge?.stores),
     storeActivities: serializeStoreActivities(brand.gameConfig),
     products: primaryProducts(brand, { available: false }),
+    productCatalog,
     brandClaim: brand.knowledge?.brandClaim || null,
     merchantInterview: interview,
     researchReport: current.researchReport || null,
@@ -2141,6 +2144,7 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
     stores: arrayValue(input.stores).slice(0, scope === 'quarter' ? 3 : 6),
     storeActivities: scope === 'quarter' ? null : input.storeActivities || null,
     products: stringList(input.products).slice(0, 8),
+    productCatalog: arrayValue(input.productCatalog).slice(0, scope === 'quarter' ? 12 : 24),
     brandClaim: scope === 'quarter' ? null : input.brandClaim || null,
     merchantInterview: {
       summary: text(merchantInterview.summary).slice(0, scope === 'quarter' ? 220 : 500),
@@ -2296,6 +2300,8 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '数量限制：strategyPrinciples 3 条；platformStrategy 按订阅平台各 1 条；contentPillars 4 条；metrics 4 条。',
       '不要生成 quarterlyFocus 或 quarterlyPlans；季度计划会在后续步骤逐个生成。',
       '方案必须适合本地商家，围绕“让顾客找得到、看得懂、愿意来”；不得承诺流量、排名、销量或到店人数。',
+      '必须读取 productCatalog：把商品/服务/套餐按热销品、高复购品、商家当下主推/主理人判断有潜力、招牌、套餐等标签归类，允许一个 SKU 同时属于多类；多类重合的 SKU 应作为品牌推广重点。',
+      '如果 productCatalog 提供明确价格、适合人数、套餐内容或搭配建议，可以用于策略判断和价格感知内容方向，例如人均、几个人吃、套餐怎么点；如果没有明确价格，不得编价格。',
       '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
     ].join('\n')
     : [
@@ -2306,6 +2312,8 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '数量限制：promotionPoints 必须刚好 2 项；campaigns 2 条；contentThemes 3 条；monthlyFocus 必须刚好 3 项。',
       '所有字段都用短句。不要编折扣、赠品、暗号、排队、客流、顾客评价或不存在的活动。',
       '必须参考 annualStrategy 和 previousQuarterPlans，当前季度要承接前面季度，避免重复。',
+      '必须参考 productCatalog 选择具体 SKU 或套餐进入 promotionPoints/contentThemes/monthlyFocus；优先使用同时命中热销、高复购、商家主推、招牌或套餐的项目。',
+      '如果 productCatalog 提供真实价格、适合人数或套餐内容，可以写入价格引导和点单判断；如果没有提供，不得写任何具体价格。',
       '内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。',
     ].join('\n')
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
@@ -2501,6 +2509,7 @@ async function writeMarketingPlanBusinessLog(input: {
         planningQuarters: arrayValue(planningWindow.quarters).length,
         marketEvents: arrayValue(marketCalendar.events).length,
         marketGaps: arrayValue(marketCalendar.gaps).length,
+        productCatalogItems: arrayValue(input.input.productCatalog).length,
         storeActivityConfigured: Boolean(storeActivities.configured),
         storeActivityRounds: arrayValue(storeActivities.rounds).length,
         subscriptionPlan: text(subscriptionStrategy.planName || subscriptionStrategy.planId),
@@ -2957,11 +2966,11 @@ function applyPublishingFrequencyOverride(
 }
 
 function primaryProducts(brand: BrandPlanBrand, growth: { available: boolean; menuItems?: unknown[] }) {
-  const menuProducts = arrayValue(brand.knowledge?.menuItems)
-    .map((item) => objectValue(item))
-    .map((item) => text(item.name || item.title))
+  const catalogProducts = skuLibraryForLLM(brand.knowledge?.menuItems, 30)
+    .sort((left, right) => Number(right.priorityScore) - Number(left.priorityScore))
+    .map((item) => item.name)
     .filter(Boolean)
-  if (menuProducts.length) return menuProducts.slice(0, 4)
+  if (catalogProducts.length) return catalogProducts.slice(0, 4)
 
   const growthProducts = arrayValue(growth.menuItems)
     .map((item) => typeof item === 'string' ? item : text(objectValue(item).name || objectValue(item).title))

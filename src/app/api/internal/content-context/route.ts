@@ -3,6 +3,7 @@ import type { IndustryVertical, MediaAssetContext } from '@/lib/amc-content/type
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { buildBrandContext } from '@/lib/brandContextBuilder'
 import { prisma } from '@/lib/prisma'
+import { normalizeSkuLibrary } from '@/lib/sku-library/service'
 
 export const maxDuration = 30
 
@@ -161,16 +162,7 @@ function normalizeRecord(value: unknown): Record<string, string> | undefined {
 }
 
 function normalizeMenuItems(value: unknown) {
-  if (!Array.isArray(value)) return undefined
-  const items = value
-    .filter((item) => item && typeof item === 'object')
-    .map((item: any) => ({
-      name: optionalText(item.name),
-      price: optionalText(item.price),
-      description: optionalText(item.description),
-    }))
-    .filter((item) => item.name || item.description)
-    .slice(0, 20)
+  const items = normalizeSkuLibrary(value).slice(0, 20)
   return items.length ? items : undefined
 }
 

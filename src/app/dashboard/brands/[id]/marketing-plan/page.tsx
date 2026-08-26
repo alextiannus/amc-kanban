@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, CalendarDays, Edit3, Loader2, Megaphone, Save, Target, TrendingUp, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Loader2, Megaphone, Save, Target, TrendingUp, X } from 'lucide-react'
 import MobileLayout from '@/components/dashboard/MobileLayout'
 
 type PresentationTheme = {
@@ -120,6 +120,39 @@ function arrayOrEmpty<T>(value: T[] | undefined | null) {
   return Array.isArray(value) ? value : []
 }
 
+function clonePlan(plan: AnnualPlan): AnnualPlan {
+  return JSON.parse(JSON.stringify(plan)) as AnnualPlan
+}
+
+function joinLines(values?: string[]) {
+  return arrayOrEmpty(values).join('\n')
+}
+
+function splitLines(value: string) {
+  return value.split('\n').map(item => item.trim()).filter(Boolean)
+}
+
+function splitTags(value: string) {
+  return value.split(/[\n,，]/).map(item => item.trim()).filter(Boolean)
+}
+
+function withSyncedQuarterlyFocus(plan: AnnualPlan): AnnualPlan {
+  const quarterlyPlans = arrayOrEmpty(plan.quarterlyPlans)
+  if (!quarterlyPlans.length) return plan
+  return {
+    ...plan,
+    quarterlyFocus: quarterlyPlans.map(quarter => ({
+      quarter: quarter.quarter,
+      year: quarter.year,
+      startMonth: quarter.startMonth,
+      endMonth: quarter.endMonth,
+      periodLabel: quarter.periodLabel,
+      focus: quarter.focus,
+      campaigns: quarter.campaigns,
+    })),
+  }
+}
+
 export default function BrandMarketingPlanPresentationPage() {
   const params = useParams<{ id: string }>()
   const brandId = params?.id
@@ -127,7 +160,8 @@ export default function BrandMarketingPlanPresentationPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [editing, setEditing] = useState(false)
-  const [editingJson, setEditingJson] = useState('')
+  const [draftPlan, setDraftPlan] = useState<AnnualPlan | null>(null)
+  const [pendingFocusTarget, setPendingFocusTarget] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
@@ -164,7 +198,8 @@ export default function BrandMarketingPlanPresentationPage() {
     }
   }, [brandId])
 
-  const plan = data?.marketingSolution?.annualPlan
+  const sourcePlan = data?.marketingSolution?.annualPlan
+  const plan = editing && draftPlan ? draftPlan : sourcePlan
   const theme = data?.marketingSolution?.presentationTheme || fallbackTheme
   const quarterPlans = plan?.quarterlyPlans?.length ? plan.quarterlyPlans : []
   const platforms = useMemo(() => {
@@ -173,42 +208,104 @@ export default function BrandMarketingPlanPresentationPage() {
     return uniqueList([...fromSubscription, ...fromPlan])
   }, [plan?.subscriptionStrategy?.platformCoverage, quarterPlans])
 
-  const startEditing = () => {
-    if (!plan) return
-    setEditingJson(JSON.stringify(plan, null, 2))
+  useEffect(() => {
+    if (!editing || !pendingFocusTarget) return
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(`[data-edit-target="${pendingFocusTarget}"]`)
+      target?.focus()
+      setPendingFocusTarget('')
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [editing, pendingFocusTarget])
+
+  const startEditing = (focusTarget = 'theme') => {
+    if (!sourcePlan) return
+    setDraftPlan(clonePlan(sourcePlan))
+    setPendingFocusTarget(focusTarget)
     setSaveError('')
     setEditing(true)
   }
 
   const cancelEditing = () => {
     setEditing(false)
+    setDraftPlan(null)
+    setPendingFocusTarget('')
     setSaveError('')
   }
 
   const savePlan = async () => {
-    if (!brandId) return
+    if (!brandId || !draftPlan) return
     setSaving(true)
     setSaveError('')
     try {
-      const parsed = JSON.parse(editingJson)
+      const nextPlan = withSyncedQuarterlyFocus(draftPlan)
       const response = await fetch(`/api/brands/${brandId}/brand-plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'save_workspace_patch',
           target: 'annual_plan',
-          value: parsed,
+          value: nextPlan,
         }),
       })
       const nextData = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(nextData?.error || 'brand_plan_save_failed')
       setData(nextData as BrandPlanResponse)
       setEditing(false)
+      setDraftPlan(null)
     } catch (err) {
-      setSaveError(err instanceof SyntaxError ? 'JSON 格式不正确，请检查括号、逗号和引号。' : err instanceof Error ? err.message : 'brand_plan_save_failed')
+      setSaveError(err instanceof Error ? err.message : 'brand_plan_save_failed')
     } finally {
       setSaving(false)
     }
+  }
+
+  const updateDraftPlan = (updater: (current: AnnualPlan) => AnnualPlan) => {
+    setDraftPlan(current => (current ? updater(current) : current))
+  }
+
+  const updateRootField = (field: keyof AnnualPlan, value: string | string[]) => {
+    updateDraftPlan(current => ({ ...current, [field]: value }))
+  }
+
+  const updatePlatformStrategy = (itemIndex: number, patch: Partial<NonNullable<AnnualPlan['platformStrategy']>[number]>) => {
+    updateDraftPlan(current => ({
+      ...current,
+      platformStrategy: arrayOrEmpty(current.platformStrategy).map((item, index) => (index === itemIndex ? { ...item, ...patch } : item)),
+    }))
+  }
+
+  const updateQuarter = (quarterIndex: number, patch: Partial<QuarterPlan>) => {
+    updateDraftPlan(current => ({
+      ...current,
+      quarterlyPlans: arrayOrEmpty(current.quarterlyPlans).map((quarter, index) => (index === quarterIndex ? { ...quarter, ...patch } : quarter)),
+    }))
+  }
+
+  const updatePromotionPoint = (quarterIndex: number, pointIndex: number, patch: Partial<PromotionPoint>) => {
+    updateDraftPlan(current => ({
+      ...current,
+      quarterlyPlans: arrayOrEmpty(current.quarterlyPlans).map((quarter, index) => {
+        if (index !== quarterIndex) return quarter
+        return {
+          ...quarter,
+          promotionPoints: arrayOrEmpty(quarter.promotionPoints).map((point, nestedIndex) => (nestedIndex === pointIndex ? { ...point, ...patch } : point)),
+        }
+      }),
+    }))
+  }
+
+  const updateMonthlyFocus = (quarterIndex: number, monthIndex: number, patch: Partial<QuarterPlan['monthlyFocus'][number]>) => {
+    updateDraftPlan(current => ({
+      ...current,
+      quarterlyPlans: arrayOrEmpty(current.quarterlyPlans).map((quarter, index) => {
+        if (index !== quarterIndex) return quarter
+        return {
+          ...quarter,
+          monthlyFocus: arrayOrEmpty(quarter.monthlyFocus).map((month, nestedIndex) => (nestedIndex === monthIndex ? { ...month, ...patch } : month)),
+        }
+      }),
+    }))
   }
 
   const cssVars = {
@@ -221,8 +318,20 @@ export default function BrandMarketingPlanPresentationPage() {
     '--brand-muted': theme.muted,
   } as React.CSSProperties
 
-  const openEditorFromSurface = () => {
-    if (!editing) startEditing()
+  const editableSurfaceProps = (focusTarget: string) => {
+    if (editing) return {}
+    return {
+      role: 'button' as const,
+      tabIndex: 0,
+      title: '点击编辑并保存品牌营销方案',
+      onClick: () => startEditing(focusTarget),
+      onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          startEditing(focusTarget)
+        }
+      },
+    }
   }
 
   const editableSurfaceClass = editing
@@ -264,68 +373,31 @@ export default function BrandMarketingPlanPresentationPage() {
           </div>
         ) : (
           <div className="mx-auto max-w-6xl px-5 py-8">
-            <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-              {editing ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={cancelEditing}
-                    disabled={saving}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    <X className="h-3.5 w-3.5" /> 取消
-                  </button>
-                  <button
-                    type="button"
-                    onClick={savePlan}
-                    disabled={saving}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-black text-white shadow-sm disabled:opacity-60"
-                  >
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} 保存方案
-                  </button>
-                </>
-              ) : (
+            {editing ? (
+              <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={startEditing}
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-50"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 disabled:opacity-60"
                 >
-                  <Edit3 className="h-3.5 w-3.5" /> 编辑完整方案
+                  <X className="h-3.5 w-3.5" /> 取消
                 </button>
-              )}
-            </div>
-
-            {editing ? (
-              <section className="mb-6 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-black/5">
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-black uppercase tracking-widest text-[var(--brand-primary)]">Editable Source</p>
-                    <h2 className="mt-1 text-lg font-black">品牌营销方案详细内容</h2>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">保存后立即回写</span>
-                </div>
-                <textarea
-                  value={editingJson}
-                  onChange={(event) => setEditingJson(event.target.value)}
-                  className="min-h-[520px] w-full resize-y rounded-xl border border-slate-200 bg-white dark:bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-900 dark:text-slate-100 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
-                  spellCheck={false}
-                />
-                {saveError && <p className="mt-3 text-xs font-bold text-rose-600">{saveError}</p>}
-              </section>
+                <button
+                  type="button"
+                  onClick={savePlan}
+                  disabled={saving || !draftPlan}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-primary)] px-3 py-2 text-xs font-black text-white shadow-sm disabled:opacity-60"
+                >
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} 保存方案
+                </button>
+              </div>
             ) : null}
 
+            {saveError && <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600">{saveError}</p>}
+
             <section
-              role="button"
-              tabIndex={editing ? -1 : 0}
-              onClick={openEditorFromSurface}
-              onKeyDown={(event) => {
-                if (editing) return
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  startEditing()
-                }
-              }}
-              title="点击编辑并保存品牌营销方案"
+              {...editableSurfaceProps('theme')}
               className={`relative overflow-hidden rounded-2xl bg-[var(--brand-surface)] p-8 shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
             >
               <div className="absolute inset-x-0 top-0 h-1.5" style={{ background: `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})` }} />
@@ -333,8 +405,26 @@ export default function BrandMarketingPlanPresentationPage() {
               <div className="relative grid gap-8 lg:grid-cols-[1.4fr_0.8fr]">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--brand-primary)]">{data?.brand?.name || '品牌'}</p>
-                  <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight tracking-normal md:text-5xl">{plan.theme}</h1>
-                  <p className="mt-5 max-w-3xl text-sm leading-7 text-[var(--brand-muted)]">{plan.goal}</p>
+                  {editing ? (
+                    <textarea
+                      data-edit-target="theme"
+                      value={plan.theme}
+                      onChange={(event) => updateRootField('theme', event.target.value)}
+                      className="mt-4 min-h-[118px] w-full max-w-3xl resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-4xl font-black leading-tight tracking-normal text-[var(--brand-text)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20 md:text-5xl"
+                    />
+                  ) : (
+                    <h1 className="mt-4 max-w-3xl text-4xl font-black leading-tight tracking-normal md:text-5xl">{plan.theme}</h1>
+                  )}
+                  {editing ? (
+                    <textarea
+                      data-edit-target="goal"
+                      value={plan.goal}
+                      onChange={(event) => updateRootField('goal', event.target.value)}
+                      className="mt-5 min-h-[120px] w-full max-w-3xl resize-y rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-[var(--brand-muted)] outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                    />
+                  ) : (
+                    <p className="mt-5 max-w-3xl text-sm leading-7 text-[var(--brand-muted)]">{plan.goal}</p>
+                  )}
                   <div className="mt-6 flex flex-wrap gap-2">
                     {platforms.map(platform => (
                       <span key={platform} className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs font-bold text-[var(--brand-text)]">{platform}</span>
@@ -352,26 +442,16 @@ export default function BrandMarketingPlanPresentationPage() {
                   </dl>
                   {plan.llmError ? (
                     <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-bold leading-5 text-amber-700">
-                      LLM 未返回有效 JSON，本次已使用规则兜底方案。错误：{plan.llmError}
+                      LLM 未返回有效方案结构，本次已使用规则兜底方案。错误：{plan.llmError}
                     </p>
                   ) : null}
                 </div>
               </div>
             </section>
 
-            {(arrayOrEmpty(plan.strategyPrinciples).length || arrayOrEmpty(plan.platformStrategy).length || arrayOrEmpty(plan.contentPillars).length) ? (
+            {(editing || arrayOrEmpty(plan.strategyPrinciples).length || arrayOrEmpty(plan.platformStrategy).length || arrayOrEmpty(plan.contentPillars).length) ? (
               <section
-                role="button"
-                tabIndex={editing ? -1 : 0}
-                onClick={openEditorFromSurface}
-                onKeyDown={(event) => {
-                  if (editing) return
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    startEditing()
-                  }
-                }}
-                title="点击编辑并保存品牌营销方案"
+                {...editableSurfaceProps('strategy-principles')}
                 className={`mt-6 rounded-2xl bg-white p-6 shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -382,7 +462,17 @@ export default function BrandMarketingPlanPresentationPage() {
                   <p className="max-w-xl text-xs leading-6 text-[var(--brand-muted)]">这部分是方案的顶层判断：先看品牌状态，再决定平台分工、内容支柱和顾客下一步动作。</p>
                 </div>
 
-                {arrayOrEmpty(plan.strategyPrinciples).length ? (
+                {editing ? (
+                  <div className="mt-5 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <label className="text-xs font-black uppercase tracking-widest text-[var(--brand-muted)]">策略原则</label>
+                    <textarea
+                      data-edit-target="strategy-principles"
+                      value={joinLines(plan.strategyPrinciples)}
+                      onChange={(event) => updateRootField('strategyPrinciples', splitLines(event.target.value))}
+                      className="mt-2 min-h-[140px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                    />
+                  </div>
+                ) : arrayOrEmpty(plan.strategyPrinciples).length ? (
                   <div className="mt-5 grid gap-3 md:grid-cols-3">
                     {arrayOrEmpty(plan.strategyPrinciples).slice(0, 6).map((principle, index) => (
                       <div key={`${principle}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -395,20 +485,62 @@ export default function BrandMarketingPlanPresentationPage() {
 
                 {arrayOrEmpty(plan.platformStrategy).length ? (
                   <div className="mt-6 grid gap-3 md:grid-cols-2">
-                    {arrayOrEmpty(plan.platformStrategy).map((item) => (
-                      <div key={item.platform} className="rounded-xl border border-slate-100 p-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[11px] font-black text-white">{item.platform}</span>
-                          <h3 className="text-sm font-black">{item.role}</h3>
-                        </div>
-                        <p className="mt-2 text-xs leading-6 text-[var(--brand-muted)]">{item.contentApproach}</p>
-                        <p className="mt-2 text-xs font-bold text-[var(--brand-secondary)]">顾客动作：{item.customerAction}</p>
+                    {arrayOrEmpty(plan.platformStrategy).map((item, itemIndex) => (
+                      <div key={`platform-strategy-${itemIndex}`} className="rounded-xl border border-slate-100 p-4">
+                        {editing ? (
+                          <div className="space-y-3">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <input
+                                value={item.platform}
+                                onChange={(event) => updatePlatformStrategy(itemIndex, { platform: event.target.value })}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                placeholder="平台"
+                              />
+                              <input
+                                value={item.role}
+                                onChange={(event) => updatePlatformStrategy(itemIndex, { role: event.target.value })}
+                                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                placeholder="平台角色"
+                              />
+                            </div>
+                            <textarea
+                              value={item.contentApproach}
+                              onChange={(event) => updatePlatformStrategy(itemIndex, { contentApproach: event.target.value })}
+                              className="min-h-[88px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                              placeholder="内容做法"
+                            />
+                            <input
+                              value={item.customerAction}
+                              onChange={(event) => updatePlatformStrategy(itemIndex, { customerAction: event.target.value })}
+                              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                              placeholder="顾客动作"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-[var(--brand-primary)] px-2.5 py-1 text-[11px] font-black text-white">{item.platform}</span>
+                              <h3 className="text-sm font-black">{item.role}</h3>
+                            </div>
+                            <p className="mt-2 text-xs leading-6 text-[var(--brand-muted)]">{item.contentApproach}</p>
+                            <p className="mt-2 text-xs font-bold text-[var(--brand-secondary)]">顾客动作：{item.customerAction}</p>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
                 ) : null}
 
-                {arrayOrEmpty(plan.contentPillars).length ? (
+                {editing ? (
+                  <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50 p-4">
+                    <label className="text-xs font-black uppercase tracking-widest text-[var(--brand-muted)]">内容支柱</label>
+                    <textarea
+                      value={joinLines(plan.contentPillars)}
+                      onChange={(event) => updateRootField('contentPillars', splitLines(event.target.value))}
+                      className="mt-2 min-h-[120px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                    />
+                  </div>
+                ) : arrayOrEmpty(plan.contentPillars).length ? (
                   <div className="mt-6 flex flex-wrap gap-2">
                     {arrayOrEmpty(plan.contentPillars).map((pillar) => (
                       <span key={pillar} className="rounded-full border border-black/10 bg-slate-50 px-3 py-1.5 text-xs font-bold text-[var(--brand-text)]">{pillar}</span>
@@ -419,69 +551,141 @@ export default function BrandMarketingPlanPresentationPage() {
             ) : null}
 
             <section className="mt-6 grid gap-3 md:grid-cols-3">
-              {(plan.metrics || []).slice(0, 6).map(metric => (
-                <button
-                  key={metric}
-                  type="button"
-                  onClick={startEditing}
-                  disabled={editing}
-                  title="点击编辑并保存品牌营销方案"
-                  className={`rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-black/5 disabled:cursor-default ${editableSurfaceClass}`}
-                >
-                  <TrendingUp className="mb-3 h-4 w-4 text-[var(--brand-secondary)]" />
-                  <p className="text-sm font-black">{metric}</p>
-                </button>
-              ))}
+              {editing ? (
+                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-black/5 md:col-span-3">
+                  <label className="text-xs font-black uppercase tracking-widest text-[var(--brand-muted)]">衡量指标</label>
+                  <textarea
+                    data-edit-target="metrics"
+                    value={joinLines(plan.metrics)}
+                    onChange={(event) => updateRootField('metrics', splitLines(event.target.value))}
+                    className="mt-2 min-h-[120px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                  />
+                </div>
+              ) : (
+                (plan.metrics || []).slice(0, 6).map(metric => (
+                  <button
+                    key={metric}
+                    type="button"
+                    onClick={() => startEditing('metrics')}
+                    title="点击编辑并保存品牌营销方案"
+                    className={`rounded-xl bg-white p-4 text-left shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
+                  >
+                    <TrendingUp className="mb-3 h-4 w-4 text-[var(--brand-secondary)]" />
+                    <p className="text-sm font-black">{metric}</p>
+                  </button>
+                ))
+              )}
             </section>
 
             <section className="mt-8 space-y-5">
               {quarterPlans.map((quarter, index) => (
                 <article
                   key={quarter.periodLabel || quarter.quarter}
-                  role="button"
-                  tabIndex={editing ? -1 : 0}
-                  onClick={openEditorFromSurface}
-                  onKeyDown={(event) => {
-                    if (editing) return
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      startEditing()
-                    }
-                  }}
-                  title="点击编辑并保存品牌营销方案"
+                  {...editableSurfaceProps(`quarter-focus-${index}`)}
                   className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-black/5 ${editableSurfaceClass}`}
                 >
                   <div className="grid gap-5 border-b border-slate-100 p-6 lg:grid-cols-[0.55fr_1fr]">
                     <div>
                       <p className="text-xs font-black uppercase tracking-widest text-[var(--brand-primary)]">{quarterDisplayLabel(quarter)}</p>
-                      <h2 className="mt-2 text-2xl font-black">{quarter.focus}</h2>
-                      <p className="mt-3 text-sm leading-6 text-[var(--brand-muted)]">{quarter.strategy}</p>
+                      {editing ? (
+                        <>
+                          <input
+                            data-edit-target={`quarter-focus-${index}`}
+                            value={quarter.focus}
+                            onChange={(event) => updateQuarter(index, { focus: event.target.value })}
+                            className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-2xl font-black text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                          />
+                          <textarea
+                            value={quarter.strategy}
+                            onChange={(event) => updateQuarter(index, { strategy: event.target.value })}
+                            className="mt-3 min-h-[120px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <h2 className="mt-2 text-2xl font-black">{quarter.focus}</h2>
+                          <p className="mt-3 text-sm leading-6 text-[var(--brand-muted)]">{quarter.strategy}</p>
+                        </>
+                      )}
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {arrayOrEmpty(quarter.campaigns).map(campaign => (
-                        <div key={campaign} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                          <Megaphone className="mb-2 h-4 w-4" style={{ color: index % 2 ? theme.secondary : theme.accent }} />
-                          <p className="text-sm font-black">{campaign}</p>
-                        </div>
-                      ))}
-                    </div>
+                    {editing ? (
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                        <label className="text-xs font-black uppercase tracking-widest text-[var(--brand-muted)]">季度活动</label>
+                        <textarea
+                          data-edit-target={`quarter-campaigns-${index}`}
+                          value={joinLines(quarter.campaigns)}
+                          onChange={(event) => updateQuarter(index, { campaigns: splitLines(event.target.value) })}
+                          className="mt-2 min-h-[160px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {arrayOrEmpty(quarter.campaigns).map(campaign => (
+                          <div key={campaign} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                            <Megaphone className="mb-2 h-4 w-4" style={{ color: index % 2 ? theme.secondary : theme.accent }} />
+                            <p className="text-sm font-black">{campaign}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid gap-5 p-6 lg:grid-cols-[1fr_0.85fr]">
                     <div>
                       <p className="mb-3 text-xs font-black uppercase tracking-widest text-[var(--brand-muted)]">重点推广点</p>
                       <div className="grid gap-3">
-                        {arrayOrEmpty(quarter.promotionPoints).map(point => (
-                          <div key={`${quarter.quarter}-${point.name}`} className="rounded-xl border border-slate-100 p-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <h3 className="text-base font-black">{point.name}</h3>
-                              <span className="rounded-full px-2 py-0.5 text-[11px] font-black text-white" style={{ backgroundColor: theme.primary }}>{point.suggestedMonthlyPosts} 次/月</span>
-                              {arrayOrEmpty(point.platforms).map(platform => (
-                                <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{platform}</span>
-                              ))}
-                            </div>
-                            <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{point.rationale}</p>
-                            <p className="mt-2 text-xs font-bold text-[var(--brand-secondary)]">目标行动：{point.customerAction}</p>
+                        {arrayOrEmpty(quarter.promotionPoints).map((point, pointIndex) => (
+                          <div key={`promotion-${index}-${pointIndex}`} className="rounded-xl border border-slate-100 p-4">
+                            {editing ? (
+                              <div className="space-y-3">
+                                <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                                  <input
+                                    value={point.name}
+                                    onChange={(event) => updatePromotionPoint(index, pointIndex, { name: event.target.value })}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                    placeholder="推广点"
+                                  />
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    value={point.suggestedMonthlyPosts}
+                                    onChange={(event) => updatePromotionPoint(index, pointIndex, { suggestedMonthlyPosts: Number(event.target.value) || 0 })}
+                                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                    placeholder="次数/月"
+                                  />
+                                </div>
+                                <input
+                                  value={arrayOrEmpty(point.platforms).join(', ')}
+                                  onChange={(event) => updatePromotionPoint(index, pointIndex, { platforms: splitTags(event.target.value) })}
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                  placeholder="平台，用逗号分隔"
+                                />
+                                <textarea
+                                  value={point.rationale}
+                                  onChange={(event) => updatePromotionPoint(index, pointIndex, { rationale: event.target.value })}
+                                  className="min-h-[90px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                  placeholder="推广理由"
+                                />
+                                <input
+                                  value={point.customerAction}
+                                  onChange={(event) => updatePromotionPoint(index, pointIndex, { customerAction: event.target.value })}
+                                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                  placeholder="目标行动"
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-base font-black">{point.name}</h3>
+                                  <span className="rounded-full px-2 py-0.5 text-[11px] font-black text-white" style={{ backgroundColor: theme.primary }}>{point.suggestedMonthlyPosts} 次/月</span>
+                                  {arrayOrEmpty(point.platforms).map(platform => (
+                                    <span key={platform} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">{platform}</span>
+                                  ))}
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{point.rationale}</p>
+                                <p className="mt-2 text-xs font-bold text-[var(--brand-secondary)]">目标行动：{point.customerAction}</p>
+                              </>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -490,18 +694,45 @@ export default function BrandMarketingPlanPresentationPage() {
                     <div>
                       <p className="mb-3 text-xs font-black uppercase tracking-widest text-[var(--brand-muted)]">月度拆解</p>
                       <div className="space-y-3">
-                        {arrayOrEmpty(quarter.monthlyFocus).map(month => (
-                          <div key={`${quarter.quarter}-${month.month}`} className="rounded-xl bg-slate-50 p-4">
-                            <div className="flex items-center gap-2">
-                              <CalendarDays className="h-4 w-4 text-[var(--brand-primary)]" />
-                              <p className="text-sm font-black">{month.month}</p>
-                            </div>
-                            <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{month.focus}</p>
-                            <div className="mt-3 flex flex-wrap gap-1.5">
-                              {arrayOrEmpty(month.promotionPoints).map(point => (
-                                <span key={point} className="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-slate-500">{point}</span>
-                              ))}
-                            </div>
+                        {arrayOrEmpty(quarter.monthlyFocus).map((month, monthIndex) => (
+                          <div key={`month-${index}-${monthIndex}`} className="rounded-xl bg-slate-50 p-4">
+                            {editing ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                  <CalendarDays className="h-4 w-4 text-[var(--brand-primary)]" />
+                                  <input
+                                    value={month.month}
+                                    onChange={(event) => updateMonthlyFocus(index, monthIndex, { month: event.target.value })}
+                                    className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                  />
+                                </div>
+                                <textarea
+                                  value={month.focus}
+                                  onChange={(event) => updateMonthlyFocus(index, monthIndex, { focus: event.target.value })}
+                                  className="min-h-[90px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                  placeholder="月度重点"
+                                />
+                                <textarea
+                                  value={joinLines(month.promotionPoints)}
+                                  onChange={(event) => updateMonthlyFocus(index, monthIndex, { promotionPoints: splitLines(event.target.value) })}
+                                  className="min-h-[90px] w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold leading-6 text-slate-900 outline-none focus:border-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-primary)]/20"
+                                  placeholder="推广点，每行一个"
+                                />
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <CalendarDays className="h-4 w-4 text-[var(--brand-primary)]" />
+                                  <p className="text-sm font-black">{month.month}</p>
+                                </div>
+                                <p className="mt-2 text-sm leading-6 text-[var(--brand-muted)]">{month.focus}</p>
+                                <div className="mt-3 flex flex-wrap gap-1.5">
+                                  {arrayOrEmpty(month.promotionPoints).map(point => (
+                                    <span key={point} className="rounded-full bg-white px-2 py-1 text-[11px] font-bold text-slate-500">{point}</span>
+                                  ))}
+                                </div>
+                              </>
+                            )}
                           </div>
                         ))}
                       </div>

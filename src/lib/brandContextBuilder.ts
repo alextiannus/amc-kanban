@@ -14,6 +14,7 @@
 
 import { prisma } from './prisma'
 import { resolveBrandIdentity } from './brandIdentity'
+import { skuContextLines } from './sku-library/service'
 
 export interface PublishingFreq {
   postsPerDay?: number
@@ -101,10 +102,7 @@ export async function buildBrandContext(brandId: string): Promise<BrandContextRe
     kbLines.push(`Competitors: ${k.competitors.join(', ')}`)
   }
   if (k?.menuItems && Array.isArray(k.menuItems) && k.menuItems.length > 0) {
-    const menuText = k.menuItems
-      .slice(0, 15) // cap at 15 items to avoid prompt bloat
-      .map((item: any) => `  - ${item.name}${item.price ? ` ($${item.price})` : ''}${item.description ? `: ${item.description}` : ''}`)
-      .join('\n')
+    const menuText = skuContextLines(k.menuItems, 15).join('\n')
     kbLines.push(`Menu Highlights:\n${menuText}`)
   }
   if (k?.slangDict && Object.keys(k.slangDict).length > 0) {

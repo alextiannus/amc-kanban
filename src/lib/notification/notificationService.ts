@@ -239,7 +239,8 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
     if (hasSubscription && hasAnyAccount) {
       const hasDesc = !!brand.description?.trim()
       const hasTone = !!brand.knowledge?.brandTone?.trim()
-      const hasVoice = !!brand.knowledge?.voiceId?.trim()
+      // hasVoice: true if either the TTS voice ID or the brand voice text description is set
+      const hasVoice = !!brand.knowledge?.voiceId?.trim() || !!brand.knowledge?.brandVoice?.trim()
 
       if (!hasDesc || !hasTone || !hasVoice) {
         const missing: string[] = []
@@ -247,7 +248,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
         if (!hasTone) missing.push('内容风格声调')
         if (!hasVoice) missing.push('AI 语音音色')
         const missingStr = missing.join('、')
-        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往“品牌计划”补充，让代运营内容更贴合品牌形象。`
+        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往"品牌计划"补充，让代运营内容更贴合品牌形象。`
 
         const existing = await prisma.notification.findFirst({
           where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
