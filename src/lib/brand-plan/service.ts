@@ -15,6 +15,11 @@ import { callLLM } from '@/lib/llmRouter'
 import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
 import { writeAuditLog } from '@/lib/audit'
 import { skuLibraryForLLM } from '@/lib/sku-library/service'
+import {
+  inspectCalendarInspirationIdentity,
+  minimumCompleteCalendarMonthValue,
+} from '@/lib/brand-plan/calendarRecovery'
+import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -1264,7 +1269,9 @@ async function buildPublishingMonth(
       contentLibraryGap: calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate),
     }
   })
-  return await reviewCalendarCreativeItemsWithLLM(brand, current, items)
+  const reviewedItems = await reviewCalendarCreativeItemsWithLLM(brand, current, items)
+  requireValidCalendarInspirationIdentity(reviewedItems)
+  return reviewedItems
 }
 
 async function regeneratePublishingCalendarItem(
@@ -1323,6 +1330,7 @@ async function regeneratePublishingCalendarItem(
     materialRequirements: calendarMaterialRequirements(item.product, candidate),
     contentLibraryGap: calendarContentGap(pool.contentLibraryGaps, point.id, candidate),
   }])
+  requireValidCalendarInspirationIdentity([reviewed])
   return reviewed
 }
 
@@ -1725,10 +1733,26 @@ function calendarSampleLinks(candidate: Record<string, unknown> | null) {
 }
 
 function calendarInspirationCreativeId(candidate: Record<string, unknown> | null) {
+  const sampleLinks = calendarSampleLinks(candidate)
+  const mediaCreativeId = resolveInspirationCreativeId({
+    sampleVideoUrl: sampleLinks.videoUrl,
+    sampleThumbnailUrl: sampleLinks.thumbnailUrl,
+  })
+  if (mediaCreativeId) return mediaCreativeId
   const creativeId = stringList(candidate?.matchedCreatives).find((value) => value.startsWith('cre_'))
   if (creativeId) return creativeId
   const inspirationId = stringList(candidate?.matchedInspirations).find((value) => value.startsWith('ins_'))
   return inspirationId ? `cre_${inspirationId}` : undefined
+}
+
+function requireValidCalendarInspirationIdentity(items: BrandPlanCalendarItem[]) {
+  const inspection = inspectCalendarInspirationIdentity(items)
+  if (!inspection.issues.length) return
+  console.warn('[brand-plan] calendar inspiration identity validation failed', {
+    itemCount: inspection.itemCount,
+    issues: inspection.issues,
+  })
+  throw new BrandPlanError('calendar_inspiration_identity_invalid', 502)
 }
 
 function calendarMaterialRequirements(product: string, candidate: Record<string, unknown> | null) {
@@ -3053,16 +3077,6 @@ function minimumContentPlanDateValue(base = new Date()) {
   const minimum = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + CONTENT_PLANNING_LEAD_DAYS))
   const next = datePartsInSingapore(minimum)
   return `${next.year}-${String(next.month).padStart(2, '0')}-${String(next.day).padStart(2, '0')}`
-}
-
-function minimumCompleteCalendarMonthValue(base = new Date()) {
-  const parts = datePartsInSingapore(base)
-  const monthOffset = parts.day <= 1 ? 0 : 1
-  const fullMonthStart = new Date(Date.UTC(parts.year, parts.month - 1 + monthOffset, 1))
-  const fullMonth = datePartsInSingapore(fullMonthStart)
-  const fullMonthValue = `${fullMonth.year}-${String(fullMonth.month).padStart(2, '0')}`
-  const leadMonthValue = minimumContentPlanDateValue(base).slice(0, 7)
-  return fullMonthValue < leadMonthValue ? leadMonthValue : fullMonthValue
 }
 
 function clampSchedulableCalendarMonth(month: string) {
