@@ -10,7 +10,9 @@ const [brandProfile, brandPlanService, creativeEntry] = await Promise.all([
 ])
 
 assert(brandPlanService.includes('inspirationCreativeId: calendarInspirationCreativeId(candidate)'))
+assert(brandPlanService.includes('const explicitCreativeId = text(candidate?.inspirationCreativeId)'))
 assert(brandPlanService.includes("stringList(candidate?.matchedCreatives).find((value) => value.startsWith('cre_'))"))
+assert(!brandPlanService.includes('return inspirationId ? `cre_${inspirationId}` : undefined'))
 assert(brandPlanService.includes('calendar creative review returned mismatched item ids'))
 assert(!brandPlanService.includes('byId.get(item.id) || reviewed[index]'))
 assert(brandProfile.includes('resolveInspirationCreativeId(item)'))

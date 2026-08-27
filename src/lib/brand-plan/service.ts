@@ -1467,8 +1467,9 @@ async function requestCalendarCreativePool(
   promotionPoints: CalendarPromotionPoint[],
   refreshPublicationId?: string
 ) {
+  let result: Awaited<ReturnType<typeof matchPromotionStrategyCreativeBatch>>
   try {
-    return await matchPromotionStrategyCreativeBatch({
+    result = await matchPromotionStrategyCreativeBatch({
       merchantId: brand.id,
       merchantName: brand.name,
       merchantCategory: brand.industry || 'Restaurant / F&B',
@@ -1489,22 +1490,33 @@ async function requestCalendarCreativePool(
       })),
       assetContext: { existingAssets: [] },
       serviceScope: { source: 'brand_plan', owner: 'amc-kanban' },
+      requirePersistedCreative: true,
     })
-  } catch {
-    return {
-      contentMatchRequestId: `failed_${Date.now()}`,
-      libraryVersions: {},
-      matches: [],
-      creativeCandidates: [],
-      contentLibraryGaps: promotionPoints.map((point) => ({
-        promotionPointId: point.id,
-        reason: 'amc_content_unavailable',
-      })),
-      candidateAssetNeeds: [],
-      candidateStoreVisitNeeds: [],
-      candidateMaterialPrintNeeds: [],
-    }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    console.error('[brand-plan] Content creative matching failed', {
+      brandId: brand.id,
+      promotionPointIds: promotionPoints.map((point) => point.id),
+      reason,
+    })
+    throw new BrandPlanError(`calendar_content_creative_match_failed:${reason}`, 502)
   }
+
+  const creativeCandidates = (Array.isArray(result.creativeCandidates) ? result.creativeCandidates : [])
+    .filter((candidate) => Boolean(calendarInspirationCreativeId(candidate)))
+  const missingPromotionPointIds = promotionPoints
+    .filter((point) => !creativeCandidates.some((candidate) => text(candidate.promotionPointId) === point.id))
+    .map((point) => point.id)
+  if (missingPromotionPointIds.length) {
+    const gapReasons = (Array.isArray(result.contentLibraryGaps) ? result.contentLibraryGaps : [])
+      .map((gap) => text(gap.reason))
+      .filter(Boolean)
+    throw new BrandPlanError(
+      `calendar_content_creative_missing:${JSON.stringify({ missingPromotionPointIds, gapReasons: uniqueStrings(gapReasons) })}`,
+      502
+    )
+  }
+  return { ...result, creativeCandidates }
 }
 
 function selectCalendarCreativeCandidate(
@@ -1733,6 +1745,8 @@ function calendarSampleLinks(candidate: Record<string, unknown> | null) {
 }
 
 function calendarInspirationCreativeId(candidate: Record<string, unknown> | null) {
+  const explicitCreativeId = text(candidate?.inspirationCreativeId)
+  if (/^cre_[A-Za-z0-9_-]+$/.test(explicitCreativeId)) return explicitCreativeId
   const sampleLinks = calendarSampleLinks(candidate)
   const mediaCreativeId = resolveInspirationCreativeId({
     sampleVideoUrl: sampleLinks.videoUrl,
@@ -1741,8 +1755,7 @@ function calendarInspirationCreativeId(candidate: Record<string, unknown> | null
   if (mediaCreativeId) return mediaCreativeId
   const creativeId = stringList(candidate?.matchedCreatives).find((value) => value.startsWith('cre_'))
   if (creativeId) return creativeId
-  const inspirationId = stringList(candidate?.matchedInspirations).find((value) => value.startsWith('ins_'))
-  return inspirationId ? `cre_${inspirationId}` : undefined
+  return undefined
 }
 
 function requireValidCalendarInspirationIdentity(items: BrandPlanCalendarItem[]) {
