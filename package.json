@@ -56,8 +56,8 @@
     "test:planning-ownership": "node --experimental-strip-types scripts/test-planning-ownership-contract.mts",
     "test:brand-plan-inspiration-link": "node --experimental-strip-types scripts/test-brand-plan-inspiration-link.mts",
     "test:brand-plan-calendar-recovery": "node --experimental-strip-types scripts/test-brand-plan-calendar-recovery.mts",
-    "brand-plan:recover-calendars:dry-run": "node --experimental-strip-types --loader ./scripts/ts-path-loader.mjs scripts/recover-brand-plan-calendars.mts --dry-run",
-    "brand-plan:recover-calendars": "node --experimental-strip-types --loader ./scripts/ts-path-loader.mjs scripts/recover-brand-plan-calendars.mts --apply",
+    "brand-plan:recover-calendars:dry-run": "tsx scripts/recover-brand-plan-calendars.mts --dry-run",
+    "brand-plan:recover-calendars": "tsx scripts/recover-brand-plan-calendars.mts --apply",
     "test:growth-google-sync": "node --experimental-strip-types scripts/test-growth-google-sync.mts",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
@@ -98,6 +98,7 @@
     "remark-gfm": "^4.0.1",
     "sharp": "^0.33.5",
     "stripe": "^22.2.0",
+    "tsx": "^4.23.12",
     "undici": "^8.7.0",
     "zod": "^4.4.3"
   },

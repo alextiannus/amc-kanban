@@ -122,9 +122,10 @@ await assert.rejects(executeCalendarRecoveryTargets({
 assert.equal(failedCheckpoints[0].status, 'failed')
 assert.equal(failedCheckpoints[0].attempts, 2)
 
-const [serviceSource, recoveryScriptSource] = await Promise.all([
+const [serviceSource, recoveryScriptSource, packageSource] = await Promise.all([
   readFile(new URL('../src/lib/brand-plan/service.ts', import.meta.url), 'utf8'),
   readFile(new URL('./recover-brand-plan-calendars.mts', import.meta.url), 'utf8'),
+  readFile(new URL('../package.json', import.meta.url), 'utf8'),
 ])
 assert(serviceSource.includes('requireValidCalendarInspirationIdentity(reviewedItems)'))
 assert(serviceSource.includes('calendar creative review returned mismatched item ids'))
@@ -134,5 +135,8 @@ assert(recoveryScriptSource.indexOf('await saveRecoveryBackup(target)') < recove
 assert(recoveryScriptSource.includes("generationMode: 'MANUAL_EDIT'"))
 assert(recoveryScriptSource.includes("snapshotType: 'BEFORE_REGENERATION'"))
 assert(recoveryScriptSource.includes('--apply requires --checkpoint=<durable-json-path>.'))
+const packageJson = JSON.parse(packageSource)
+assert.equal(packageJson.scripts['brand-plan:recover-calendars:dry-run'], 'tsx scripts/recover-brand-plan-calendars.mts --dry-run')
+assert.equal(packageJson.dependencies.tsx, '^4.23.12')
 
 console.log('Brand plan calendar recovery tests passed')
