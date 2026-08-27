@@ -54,6 +54,7 @@
     "test:brand-identity": "node --experimental-strip-types scripts/test-brand-identity-contract.mts",
     "test:brand-growth-sync": "node --experimental-strip-types scripts/test-brand-growth-sync-contract.mts",
     "test:planning-ownership": "node --experimental-strip-types scripts/test-planning-ownership-contract.mts",
+    "test:brand-plan-inspiration-link": "node --experimental-strip-types scripts/test-brand-plan-inspiration-link.mts",
     "test:growth-google-sync": "node --experimental-strip-types scripts/test-growth-google-sync.mts",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",

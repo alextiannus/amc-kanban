@@ -30,6 +30,7 @@ type BrandPlanCalendarItem = {
   matchedTags?: string[]
   matchedInspirations?: string[]
   selectedCreativeCandidateId?: string
+  inspirationCreativeId?: string
   creativeMechanism?: string
   sampleVideoUrl?: string
   sampleOriginalUrl?: string
@@ -1254,6 +1255,7 @@ async function buildPublishingMonth(
       creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate, index }),
       matchedTags: stringList(candidate?.matchedTags),
       matchedInspirations: stringList(candidate?.matchedInspirations),
+      inspirationCreativeId: calendarInspirationCreativeId(candidate),
       sampleVideoUrl: sampleLinks.videoUrl,
       sampleOriginalUrl: sampleLinks.originalUrl,
       sampleThumbnailUrl: sampleLinks.thumbnailUrl,
@@ -1313,6 +1315,7 @@ async function regeneratePublishingCalendarItem(
     creativeMechanism: calendarCreativeMechanism({ brand, product: item.product, promotionPoint: point, platformSlug: platform, candidate, index: 0 }),
     matchedTags: stringList(candidate.matchedTags),
     matchedInspirations: stringList(candidate.matchedInspirations),
+    inspirationCreativeId: calendarInspirationCreativeId(candidate),
     sampleVideoUrl: sampleLinks.videoUrl,
     sampleOriginalUrl: sampleLinks.originalUrl,
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
@@ -1719,6 +1722,13 @@ function calendarSampleLinks(candidate: Record<string, unknown> | null) {
     thumbnailUrl: text(sourceVideo.thumbnailUrl || sourcePost.coverUrl),
     platform: text(sourceVideo.platform || sourcePost.platform),
   }
+}
+
+function calendarInspirationCreativeId(candidate: Record<string, unknown> | null) {
+  const creativeId = stringList(candidate?.matchedCreatives).find((value) => value.startsWith('cre_'))
+  if (creativeId) return creativeId
+  const inspirationId = stringList(candidate?.matchedInspirations).find((value) => value.startsWith('ins_'))
+  return inspirationId ? `cre_${inspirationId}` : undefined
 }
 
 function calendarMaterialRequirements(product: string, candidate: Record<string, unknown> | null) {

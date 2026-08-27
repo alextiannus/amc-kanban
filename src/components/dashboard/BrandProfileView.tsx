@@ -202,6 +202,7 @@ type BrandPlanWorkspaceData = {
       matchedTags?: string[]
       matchedInspirations?: string[]
       selectedCreativeCandidateId?: string
+      inspirationCreativeId?: string
       sampleVideoUrl?: string
       sampleOriginalUrl?: string
       sampleThumbnailUrl?: string
@@ -2089,6 +2090,13 @@ ${storeLines}
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredCalendarItems.length ? filteredCalendarItems.map(({ item, index }) => {
                 const platformSlug = normalizeSchedulePlatform(item.platformSlug || item.platform || '')
+                const matchedInspirationId = item.matchedInspirations
+                  ?.map((value) => value.trim())
+                  .find((value) => value.startsWith('cre_') || value.startsWith('ins_'))
+                const inspirationCreativeId = item.inspirationCreativeId?.trim()
+                  || (matchedInspirationId?.startsWith('cre_')
+                    ? matchedInspirationId
+                    : matchedInspirationId ? `cre_${matchedInspirationId}` : '')
                 return (
                 <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className={`rounded-xl border border-l-4 border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 ${calendarPlatformAccent(platformSlug)}`}>
                   <div className="flex items-start justify-between gap-2">
@@ -2176,7 +2184,18 @@ ${storeLines}
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}
-                  {(item.sampleVideoUrl || item.sampleOriginalUrl) ? (
+                  {inspirationCreativeId ? (
+                    <a
+                      href={`/admin/inspiration-creatives/${encodeURIComponent(inspirationCreativeId)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      灵感来源
+                    </a>
+                  ) : null}
+                  {!inspirationCreativeId && (item.sampleVideoUrl || item.sampleOriginalUrl) ? (
                     <a
                       href={item.sampleVideoUrl || item.sampleOriginalUrl}
                       target="_blank"
@@ -2184,7 +2203,7 @@ ${storeLines}
                       className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                     >
                       <ExternalLink className="h-3 w-3" />
-                      灵感来源
+                      原始来源
                     </a>
                   ) : null}
                   <select

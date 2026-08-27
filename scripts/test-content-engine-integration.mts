@@ -163,6 +163,7 @@ function testContentLabStandaloneEntry() {
     page,
     legacyAiRolesPage,
     read('src/app/admin/inspiration-library/page.tsx'),
+    read('src/app/admin/inspiration-creatives/[id]/page.tsx'),
     read('src/app/admin/viral-copy-scripts/page.tsx'),
     read('src/app/admin/video-production/page.tsx'),
   ]
@@ -179,6 +180,9 @@ function testContentLabStandaloneEntry() {
     assertIncludes(entryPage, 'exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24', 'content lab handoff token lasts 24 hours')
   }
   assertIncludes(legacyAiRolesPage, 'redirect(`${contentUrl}/admin/content-lab#labToken=', 'legacy AI roles entry opens latest amc-content home')
+  const inspirationCreativeEntry = read('src/app/admin/inspiration-creatives/[id]/page.tsx')
+  assertIncludes(inspirationCreativeEntry, 'redirect(`${contentUrl}/admin/inspiration-creatives/${encodeURIComponent(id)}#labToken=', 'creative detail entry preserves the selected Content creative id')
+  assertIncludes(inspirationCreativeEntry, "if (!/^cre_[A-Za-z0-9_-]+$/.test(id))", 'creative detail entry rejects invalid ids')
   assertNotIncludes(legacyAiRolesPage, '/admin/ai-roles#labToken=', 'legacy AI roles entry must not open the old editor')
   assertIncludes(permissions, "label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab'", 'AI role menu opens latest amc-content home')
   assertIncludes(userManagementPermissions, "label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab'", 'user-management menu opens latest amc-content home')
