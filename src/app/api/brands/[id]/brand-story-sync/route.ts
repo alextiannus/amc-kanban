@@ -144,7 +144,7 @@ export async function GET(request: Request, { params }: Params) {
   })
 
   const notifTitle = '🔬 AMC 为您的品牌补充了新调研资料'
-  const notifMessage = `AMC 团队更新了【${brand.name}】的品牌资料，包含市场调研与品牌定位建议。请前往「品牌计划」查看并决定是否采纳。`
+  const notifMessage = `AMC 团队更新了【${brand.name}】的品牌资料，包含市场调研与品牌定位建议。请前往「品牌策划」查看并决定是否采纳。`
   const actionUrl = `/dashboard?action=review_growth_sync&brandId=${brandId}`
 
   const existingNotif = await prisma.notification.findFirst({

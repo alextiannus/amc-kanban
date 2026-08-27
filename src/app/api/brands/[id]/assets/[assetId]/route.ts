@@ -3,6 +3,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { triggerDesignerAutoTag } from '@/lib/designer'
+import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calendarSync'
 
 type Params = { params: Promise<{ id: string; assetId: string }> }
 
@@ -36,8 +37,18 @@ export async function PATCH(request: Request, { params }: Params) {
       aiCaption: typeof body.aiCaption === 'string' ? body.aiCaption.trim() || null : undefined,
       aiTags: Array.isArray(body.aiTags) ? body.aiTags.filter((tag: unknown) => typeof tag === 'string').map((tag: string) => tag.trim()).filter(Boolean) : undefined,
       aiReady: typeof body.aiReady === 'boolean' ? body.aiReady : undefined,
+      creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : undefined,
     },
   })
+
+  if (typeof body.creativeId === 'string' && body.creativeId.trim()) {
+    await submitAssetToCalendarCreativeRequirement({
+      brandId,
+      assetId: asset.id,
+      creativeId: body.creativeId,
+      submittedBy: actor.id,
+    })
+  }
 
   // Trigger platform Designer auto-tagging in the background
   if (body.triggerAiTagging === true && asset.mimeType.startsWith('image/')) {

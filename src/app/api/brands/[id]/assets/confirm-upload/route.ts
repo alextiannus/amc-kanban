@@ -14,6 +14,7 @@ import {
   MediaValidationError,
 } from '@/lib/mediaValidation'
 import { prisma } from '@/lib/prisma'
+import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calendarSync'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -29,6 +30,7 @@ interface ConfirmUploadRequest {
   folder?: string
   aiTags?: string[]
   aiCaption?: string
+  creativeId?: string
   userId?: string
 }
 
@@ -132,11 +134,20 @@ async function createConfirmedAsset(input: {
         aiTags: Array.isArray(aiTags) ? aiTags : [],
         aiCategory: folder || '素材库',
         aiCaption: aiCaption || null,
+        creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
         aiReady: true,
         uploadedBy,
         sourceType: 'huawei_obs',
       },
     })
+    if (body.creativeId) {
+      await submitAssetToCalendarCreativeRequirement({
+        brandId,
+        assetId: asset.id,
+        creativeId: body.creativeId,
+        submittedBy: uploadedBy,
+      })
+    }
 
     if (asset.mimeType.startsWith('image/')) {
       void triggerDesignerAutoTag(asset.id).catch((error) => {

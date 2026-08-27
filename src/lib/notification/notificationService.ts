@@ -244,11 +244,11 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
 
       if (!hasDesc || !hasTone || !hasVoice) {
         const missing: string[] = []
-        if (!hasDesc) missing.push('品牌计划简介')
+        if (!hasDesc) missing.push('品牌策划简介')
         if (!hasTone) missing.push('内容风格声调')
         if (!hasVoice) missing.push('AI 语音音色')
         const missingStr = missing.join('、')
-        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往"品牌计划"补充，让代运营内容更贴合品牌形象。`
+        const message = `您的品牌【${brand.name}】尚未完善 ${missingStr}。请前往"品牌策划"补充，让代运营内容更贴合品牌形象。`
 
         const existing = await prisma.notification.findFirst({
           where: { userId, brandId: brand.id, type: 'COMPLETE_CONTEXT' }
@@ -260,7 +260,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
               userId,
               brandId: brand.id,
               type: 'COMPLETE_CONTEXT',
-              title: '完善品牌计划与声音',
+              title: '完善品牌策划与声音',
               message,
               status: 'UNREAD',
               actionUrl: '/dashboard?action=brand_plan'

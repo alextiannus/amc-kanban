@@ -8,7 +8,7 @@ import {
   RefreshCw, FileText, Store, Utensils,
   Edit3, Plus,
   Users, Goal, HelpCircle,
-  MapPin, Music2, ExternalLink, WalletCards
+  MapPin, Music2, ExternalLink, WalletCards, Download
 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import type {
@@ -1030,7 +1030,7 @@ ${storeLines}
       if (sellingPoints.length) identitySaves.push(saveIdentityField('sellingPoints', sellingPoints))
       await Promise.all(identitySaves)
 
-      showToastVal('品牌计划内容已保存', 'success')
+      showToastVal('品牌策划内容已保存', 'success')
       setShowPlanEditor(false)
       await loadProfile()
       await loadAllConfig()
@@ -1286,6 +1286,68 @@ ${storeLines}
     }
   }
 
+  const handleDownloadMaterialRequirements = () => {
+    const escapeHtml = (value: unknown) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+    const rows = currentCalendarItems
+      .slice()
+      .sort((left, right) => String(left.date || '').localeCompare(String(right.date || '')))
+      .map((item, index) => {
+        const requirements = item.materialRequirements?.length
+          ? item.materialRequirements.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
+          : `<li>${escapeHtml(item.planning || '请按创意说明采集可用于发布的图片或视频素材。')}</li>`
+        return `
+          <section class="creative">
+            <div class="meta">#${index + 1} · ${escapeHtml(item.date)} · ${escapeHtml(item.platform || item.platformSlug)} · ${escapeHtml(item.contentType)}</div>
+            <h2>${escapeHtml(item.title || '内容创意')}</h2>
+            <p><strong>主题：</strong>${escapeHtml(item.product || '待填写')}</p>
+            <p><strong>创意说明：</strong>${escapeHtml(item.planning || '待填写')}</p>
+            <p><strong>素材需求：</strong></p>
+            <ul>${requirements}</ul>
+          </section>
+        `
+      }).join('')
+    const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(calendarMonth)} 素材采集需求</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #111827; line-height: 1.55; }
+    header { border-bottom: 2px solid #111827; margin-bottom: 20px; padding-bottom: 12px; }
+    h1 { font-size: 24px; margin: 0 0 6px; }
+    .sub { color: #475569; font-size: 13px; }
+    .creative { break-inside: avoid; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 0 0 14px; }
+    .meta { color: #be123c; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+    h2 { font-size: 18px; margin: 0 0 10px; }
+    p { margin: 6px 0; }
+    ul { margin: 6px 0 0 20px; padding: 0; }
+    li { margin: 4px 0; }
+    @media print { body { margin: 18mm; } .creative { page-break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>${escapeHtml(brand?.name || '品牌')} ${escapeHtml(calendarMonth)} 素材采集需求</h1>
+    <div class="sub">按内容创意整理，共 ${currentCalendarItems.length} 条。采集完成后可在素材库选择对应创意上传。</div>
+  </header>
+  ${rows || '<p>这个月份暂无内容创意。</p>'}
+</body>
+</html>`
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${brand?.name || 'brand'}-${calendarMonth}-素材采集需求.html`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
   const handleOpenSettings = () => {
     if (onOpenSettings) {
       onOpenSettings()
@@ -1478,7 +1540,7 @@ ${storeLines}
         <div className="flex-1 space-y-4 overflow-y-auto p-5">
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/20">
             <p className="text-xs font-black text-amber-800 dark:text-amber-200">访谈原则</p>
-            <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">不要问品牌大词，只问老板每天能回答的具体生意判断。尽量记原话，后面再整理成品牌计划。</p>
+            <p className="mt-2 text-xs leading-relaxed text-amber-700 dark:text-amber-300">不要问品牌大词，只问老板每天能回答的具体生意判断。尽量记原话，后面再整理成品牌策划。</p>
           </div>
           <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
             <p className="text-xs font-black text-slate-900 dark:text-white">建议确认的问题</p>
@@ -1543,7 +1605,7 @@ ${storeLines}
                 <h1 className="truncate text-sm font-black text-slate-900 dark:text-white">{draftName || brand.name}</h1>
                 <PlanBadge plan={activeSubscriptionPlan} />
               </div>
-              <p className="truncate text-[11px] font-semibold text-slate-400">{draftLocation || draftMarket || '品牌计划工作台'}</p>
+              <p className="truncate text-[11px] font-semibold text-slate-400">{draftLocation || draftMarket || '品牌策划工作台'}</p>
             </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
@@ -1551,7 +1613,7 @@ ${storeLines}
               <Settings className="h-3.5 w-3.5" /> 品牌配置
             </button>
             <button type="button" onClick={openPlanEditor} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-1.5 text-[11px] font-extrabold text-white dark:bg-white dark:text-slate-900">
-              <BookOpen className="h-3.5 w-3.5" /> 编辑品牌计划与门店
+              <BookOpen className="h-3.5 w-3.5" /> 编辑品牌策划与门店
             </button>
             <a href="/dashboard/service-check" className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-extrabold text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50">
               <WalletCards className="h-3.5 w-3.5" /> 管理订阅服务
@@ -1566,7 +1628,7 @@ ${storeLines}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Marketing Solution Workspace</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">品牌计划</h2>
+                <h2 className="mt-1 text-2xl font-black text-slate-900 dark:text-white">品牌策划</h2>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
                 {sourceStatusItems.map(item => (
@@ -2026,6 +2088,9 @@ ${storeLines}
                 <button type="button" onClick={handleSaveCalendarMonth} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 disabled:opacity-50 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200">
                   {planGenerating === 'calendar_save' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />} 保存
                 </button>
+                <button type="button" onClick={handleDownloadMaterialRequirements} disabled={!currentCalendarItems.length} className="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 disabled:opacity-50 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+                  <Download className="h-3.5 w-3.5" /> 下载素材采集需求
+                </button>
                 <button type="button" onClick={() => openAiContentEditor({ target: 'calendar_month', title: `${calendarMonth} 内容计划`, month: calendarMonth, value: currentCalendarItems })} disabled={!currentCalendarItems.length || Boolean(planGenerating)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-40 dark:border-slate-700 dark:text-slate-200">
                   高级编辑
                 </button>
@@ -2250,7 +2315,7 @@ ${storeLines}
           <div className="relative z-10 flex h-full w-full max-w-3xl flex-col bg-white shadow-2xl dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <div>
-                <h3 className="text-sm font-black text-slate-900 dark:text-white">编辑品牌计划内容</h3>
+                <h3 className="text-sm font-black text-slate-900 dark:text-white">编辑品牌策划内容</h3>
                 <p className="mt-1 text-xs text-slate-400">保存后会回写品牌资料、门店信息、SKU 和营销输入材料</p>
               </div>
               <button type="button" onClick={() => setShowPlanEditor(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
@@ -2420,7 +2485,7 @@ ${storeLines}
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <div>
                 <h3 className="text-sm font-black text-slate-900 dark:text-white">{editingAiContent.title}</h3>
-                <p className="mt-1 text-xs text-slate-400">保存后回写当前品牌计划版本</p>
+                <p className="mt-1 text-xs text-slate-400">保存后回写当前品牌策划版本</p>
               </div>
               <button type="button" onClick={() => setEditingAiContent(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
             </div>

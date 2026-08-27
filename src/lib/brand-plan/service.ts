@@ -20,6 +20,7 @@ import {
   minimumCompleteCalendarMonthValue,
 } from '@/lib/brand-plan/calendarRecovery'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
+import { syncConfirmedCalendarItemsToDrafts } from '@/lib/brand-plan/calendarSync'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -793,6 +794,7 @@ async function saveWorkspacePatch(
       },
     }
     await syncCalendarMaterialRequirements(brandId, month, items)
+    await syncConfirmedCalendarItemsToDrafts(brandId, month, items)
     await saveMarketingSolutionVersion({
       brandId,
       kind: 'CALENDAR',

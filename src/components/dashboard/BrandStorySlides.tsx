@@ -278,7 +278,7 @@ export default function BrandStorySlides({
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <Sparkles className="w-3.5 h-3.5" />
-          品牌计划
+          品牌策划
         </h3>
         <div className="flex items-center gap-1.5">
           <button

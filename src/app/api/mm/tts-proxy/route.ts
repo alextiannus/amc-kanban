@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { generateTtsAudio } from '@/lib/ttsGeneration'
 
 export const dynamic = 'force-dynamic'
+export const maxDuration = 60
 
 const MAX_TEXT_LENGTH = 600
 

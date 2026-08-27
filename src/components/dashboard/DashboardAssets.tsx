@@ -101,6 +101,21 @@ interface DashboardAsset {
   createdAt: string
 }
 
+interface CalendarCreativeOption {
+  id: string
+  date: string
+  title: string
+  platform: string
+  platformSlug: string
+  contentType: string
+  product: string
+  planning: string
+  materialRequirements: string[]
+  suggestedFolder: string
+  aiTags: string[]
+  aiCaption: string
+}
+
 type AIBatchThreadStatus = 'waiting' | 'drafting' | 'scheduling' | 'copywriting' | 'done' | 'failed'
 
 interface AIBatchThread {
@@ -193,6 +208,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
   const [targetFolder, setTargetFolder] = useState('素材库')
+  const [calendarCreatives, setCalendarCreatives] = useState<CalendarCreativeOption[]>([])
+  const [selectedCreativeId, setSelectedCreativeId] = useState('')
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', '已使用'])
   const [selectedFolder, setSelectedFolder] = useState<string>('all')
@@ -254,6 +271,30 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const brandName = useMemo(() => {
     return assets[0]?.brandName || 'Your Brand'
   }, [assets])
+
+  const selectedCreative = useMemo(
+    () => calendarCreatives.find((creative) => creative.id === selectedCreativeId) || null,
+    [calendarCreatives, selectedCreativeId],
+  )
+
+  const selectedCreativeUploadPayload = useCallback(() => {
+    if (!selectedCreative) {
+      return {
+        folder: targetFolder,
+        aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
+        aiTags: [targetFolder, '待确认'],
+        aiCaption: undefined as string | undefined,
+        creativeId: undefined as string | undefined,
+      }
+    }
+    return {
+      folder: selectedCreative.suggestedFolder,
+      aiCategory: selectedCreative.suggestedFolder,
+      aiTags: selectedCreative.aiTags,
+      aiCaption: selectedCreative.aiCaption,
+      creativeId: selectedCreative.id,
+    }
+  }, [selectedCreative, targetFolder])
 
   const activeAccount = useMemo(() => {
     const selectedCopywriter = COPYWRITER_ROSTER.find((copywriter) => scheduleSelectedCopywriterIds.includes(copywriter.id))
@@ -530,6 +571,30 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       clearTimeout(timer)
     }
   }, [loadAssets])
+
+  useEffect(() => {
+    if (!brandId) {
+      setCalendarCreatives([])
+      setSelectedCreativeId('')
+      return
+    }
+    let cancelled = false
+    const month = new Date().toISOString().slice(0, 7)
+    fetch(`/api/brands/${brandId}/content-creatives?month=${encodeURIComponent(month)}`)
+      .then((res) => res.ok ? res.json() : Promise.reject(new Error('load creatives failed')))
+      .then((json) => {
+        if (cancelled) return
+        const creatives = Array.isArray(json.creatives) ? json.creatives : []
+        setCalendarCreatives(creatives)
+        setSelectedCreativeId((current) => creatives.some((item: CalendarCreativeOption) => item.id === current) ? current : '')
+      })
+      .catch(() => {
+        if (!cancelled) setCalendarCreatives([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [brandId])
 
 
 
@@ -1170,10 +1235,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         if (file.size > sizeLimit) {
           throw new Error(`${isImage ? '图片' : '视频'}不能超过 ${sizeLimit / 1_000_000} MB`)
         }
+        const creativePayload = selectedCreativeUploadPayload()
 
         // 1. Request presigned upload URL from backend
         const presignRes = await fetch(
-          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&sizeBytes=${file.size}&folder=${encodeURIComponent(targetFolder)}`
+          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&sizeBytes=${file.size}&folder=${encodeURIComponent(creativePayload.folder)}`
         )
         const presignData = await presignRes.json().catch(() => ({}))
         
@@ -1212,8 +1278,10 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 sizeBytes: file.size,
                 url: presignData.assetUrl,
                 key: presignData.key,
-                folder: targetFolder,
-                aiTags: [targetFolder, '待确认'],
+                folder: creativePayload.folder,
+                aiTags: creativePayload.aiTags,
+                aiCaption: creativePayload.aiCaption,
+                creativeId: creativePayload.creativeId,
               }),
             })
             const confirmData = await confirmRes.json().catch(() => ({}))
@@ -1257,9 +1325,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               filename: file.name,
               mimeType,
               fileBase64,
-              folder: targetFolder,
-              aiCategory: targetFolder === '素材库' ? 'raw' : targetFolder,
-              aiTags: [targetFolder, '待确认'],
+              folder: creativePayload.folder,
+              aiCategory: creativePayload.aiCategory,
+              aiTags: creativePayload.aiTags,
+              aiCaption: creativePayload.aiCaption,
+              creativeId: creativePayload.creativeId,
             }),
           })
           const json = await res.json().catch(() => ({}))
@@ -1344,6 +1414,27 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     setAssets(prev => prev.map(a => selected.includes(a.id) ? { ...a, aiCategory: floatingFolderSelect } : a))
     setFloatingFolderSelect('')
     setShowFloatingFolder(false)
+    await loadAssets()
+  }
+
+  const handleAssignSelectedToCreative = async () => {
+    if (!selectedCreative || selected.length === 0 || !brandId) return
+    const payload = selectedCreativeUploadPayload()
+    await fetch(`/api/brands/${brandId}/assets`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assetIds: selected,
+        appendTags: payload.aiTags,
+        folder: payload.folder,
+        aiCategory: payload.aiCategory,
+        aiCaption: payload.aiCaption,
+        creativeId: payload.creativeId,
+        aiReady: true,
+      }),
+    })
+    setSelected([])
+    setIsBatchSelectMode(false)
     await loadAssets()
   }
 
@@ -1564,6 +1655,23 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               ))}
             </select>
             <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
+          </div>
+
+          <div className="relative min-w-[220px] shrink-0">
+            <select
+              value={selectedCreativeId}
+              onChange={e => setSelectedCreativeId(e.target.value)}
+              className="w-full appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 outline-none cursor-pointer hover:border-amber-400 transition-all"
+              title="上传时归档到对应内容创意"
+            >
+              <option value="">不选择创意</option>
+              {calendarCreatives.map((creative) => (
+                <option key={creative.id} value={creative.id}>
+                  {creative.date} · {creative.platform} · {creative.title}
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-amber-500 rotate-90" />
           </div>
 
           {/* Search */}
@@ -2899,6 +3007,16 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             >
               <FolderOpen className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">转移文件夹</span>
+            </button>
+
+            <button
+              onClick={() => void handleAssignSelectedToCreative()}
+              disabled={!selectedCreative}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              title={selectedCreative ? `归档到：${selectedCreative.title}` : '请先在顶部选择对应创意'}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">归档到创意</span>
             </button>
 
             <div className="w-px h-4 bg-slate-200 dark:bg-slate-800 shrink-0" />

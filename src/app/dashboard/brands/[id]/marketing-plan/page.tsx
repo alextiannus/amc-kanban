@@ -368,7 +368,7 @@ export default function BrandMarketingPlanPresentationPage() {
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
               <Target className="mx-auto mb-3 h-8 w-8 text-slate-300" />
               <p className="text-sm font-black text-slate-700">尚未生成品牌营销方案</p>
-              <p className="mt-2 text-xs text-slate-500">请先回到品牌计划页生成方案，再打开 presentation view。</p>
+              <p className="mt-2 text-xs text-slate-500">请先回到品牌策划页生成方案，再打开 presentation view。</p>
             </div>
           </div>
         ) : (

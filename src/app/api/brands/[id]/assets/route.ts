@@ -27,6 +27,7 @@ import {
   mediaValidationResponse,
   mediaValidationStatus,
 } from '@/lib/mediaValidation'
+import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calendarSync'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -39,6 +40,7 @@ interface UploadAssetRequest {
   aiCategory?: string
   aiTags?: string[]
   aiCaption?: string
+  creativeId?: string
 }
 
 function sanitizeFilename(filename: string) {
@@ -172,11 +174,20 @@ export async function POST(request: Request, { params }: Params) {
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
           aiCaption: body.aiCaption || null,
+          creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
           aiReady: true,
           uploadedBy: user.id,
           sourceType: 'huawei_obs',
         },
       })
+      if (body.creativeId) {
+        await submitAssetToCalendarCreativeRequirement({
+          brandId,
+          assetId: asset.id,
+          creativeId: body.creativeId,
+          submittedBy: user.id,
+        })
+      }
 
       return NextResponse.json({
         ok: true,
@@ -244,11 +255,20 @@ export async function POST(request: Request, { params }: Params) {
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
           aiCategory: body.folder || body.aiCategory || '素材库',
           aiCaption: body.aiCaption || null,
+          creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
           aiReady: true,
           uploadedBy: user.id,
           sourceType: 'postfast',
         },
       })
+      if (body.creativeId) {
+        await submitAssetToCalendarCreativeRequirement({
+          brandId,
+          assetId: asset.id,
+          creativeId: body.creativeId,
+          submittedBy: user.id,
+        })
+      }
 
       return NextResponse.json({
         ok: true,
@@ -285,11 +305,20 @@ export async function POST(request: Request, { params }: Params) {
         aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
         aiCategory: body.folder || body.aiCategory || '素材库',
         aiCaption: body.aiCaption || null,
+        creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
         aiReady: true,
         uploadedBy: user.id,
         sourceType: 'local',
       },
     })
+    if (body.creativeId) {
+      await submitAssetToCalendarCreativeRequirement({
+        brandId,
+        assetId: asset.id,
+        creativeId: body.creativeId,
+        submittedBy: user.id,
+      })
+    }
 
     return NextResponse.json({
       ok: true,
@@ -438,16 +467,24 @@ export async function PATCH(request: Request, { params }: Params) {
   const aiTags = body.aiTags
   const appendTags = body.appendTags
   const aiReady = body.aiReady
+  const folder = typeof body.folder === 'string' ? body.folder.trim() : ''
+  const aiCategory = typeof body.aiCategory === 'string' ? body.aiCategory.trim() : ''
+  const aiCaption = typeof body.aiCaption === 'string' ? body.aiCaption.trim() : ''
+  const creativeId = typeof body.creativeId === 'string' ? body.creativeId.trim() : ''
 
   if (!Array.isArray(assetIds) || assetIds.length === 0) {
     return NextResponse.json({ error: 'assetIds must be a non-empty array' }, { status: 400 })
   }
+
+  let updatedCount = 0
+  let validAssets: Array<{ id: string }> = []
 
   if (Array.isArray(appendTags) && appendTags.length > 0) {
     const assets = await prisma.mediaAsset.findMany({
       where: { id: { in: assetIds }, brandId },
       select: { id: true, aiTags: true }
     })
+    validAssets = assets.map((asset) => ({ id: asset.id }))
     
     // Process sequentially to avoid deadlocks under high concurrency
     await prisma.$transaction(
@@ -457,24 +494,47 @@ export async function PATCH(request: Request, { params }: Params) {
           where: { id: asset.id },
           data: {
             aiTags: merged,
-            ...(aiReady !== undefined ? { aiReady } : {})
+            ...(aiReady !== undefined ? { aiReady } : {}),
+            ...(folder || aiCategory ? { aiCategory: folder || aiCategory || '素材库' } : {}),
+            ...(aiCaption ? { aiCaption } : {}),
+            ...(creativeId ? { creativeId } : {}),
           }
         })
       })
     )
+    updatedCount = assets.length
   } else {
     const dataToUpdate: any = {}
     if (aiTags !== undefined) dataToUpdate.aiTags = aiTags
     if (aiReady !== undefined) dataToUpdate.aiReady = aiReady
+    if (folder || aiCategory) dataToUpdate.aiCategory = folder || aiCategory || '素材库'
+    if (aiCaption) dataToUpdate.aiCaption = aiCaption
+    if (creativeId) dataToUpdate.creativeId = creativeId
 
-    await prisma.mediaAsset.updateMany({
+    const result = await prisma.mediaAsset.updateMany({
       where: {
         id: { in: assetIds },
         brandId,
       },
       data: dataToUpdate,
     })
+    updatedCount = result.count
   }
 
-  return NextResponse.json({ ok: true, updatedCount: assetIds.length })
+  if (creativeId) {
+    if (!validAssets.length) {
+      validAssets = await prisma.mediaAsset.findMany({
+        where: { id: { in: assetIds }, brandId },
+        select: { id: true },
+      })
+    }
+    await Promise.all(validAssets.map((asset: { id: string }) => submitAssetToCalendarCreativeRequirement({
+      brandId,
+      assetId: asset.id,
+      creativeId,
+      submittedBy: user.id,
+    })))
+  }
+
+  return NextResponse.json({ ok: true, updatedCount })
 }

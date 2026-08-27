@@ -76,7 +76,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         'Instagram 做品牌展示号：招牌产品、门店环境、套餐、节日活动、顾客场景，并配置 WhatsApp/预约/点餐入口。',
         'TikTok 做轻量曝光号：新品、优惠、门店氛围、活动短内容，持续触达第一次看到你的潜在用户。',
         'Google Map 做最后一公里转化：分类、营业时间、菜单、照片、电话、链接、评论回复持续维护。',
-        '内容创建和发布节奏默认按每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 安排，可在品牌计划页按月调整。'
+        '内容创建和发布节奏默认按每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 安排，可在品牌策划页按月调整。'
       ],
       reporting: '每月舆情报告：评论、评分变化、热门内容、客户反馈、下月优化建议。',
       bestFor: [

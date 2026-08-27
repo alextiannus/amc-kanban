@@ -74,7 +74,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   'AI 角色库': 'AI Role Library',
   '视频生产': 'Video Production',
   '爆品脚本': 'Viral Copy Scripts',
-  '品牌计划': 'Brand Plan',
+  '品牌策划': 'Brand Planning',
   '内容创建和发布计划': 'Content Creation and Publishing Plan',
   '发布内容': 'Post Drafts',
   '素材库': 'Asset Library',
