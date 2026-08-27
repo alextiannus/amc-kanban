@@ -16,6 +16,7 @@ import type {
   BrandIdentitySnapshot,
 } from '@/lib/brandIdentity'
 import { brandPlanEditorIdentityValues } from '@/lib/brandPlanEditorIdentity'
+import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import {
   createSkuId,
   formatSkuPrice,
@@ -2090,13 +2091,7 @@ ${storeLines}
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {filteredCalendarItems.length ? filteredCalendarItems.map(({ item, index }) => {
                 const platformSlug = normalizeSchedulePlatform(item.platformSlug || item.platform || '')
-                const matchedInspirationId = item.matchedInspirations
-                  ?.map((value) => value.trim())
-                  .find((value) => value.startsWith('cre_') || value.startsWith('ins_'))
-                const inspirationCreativeId = item.inspirationCreativeId?.trim()
-                  || (matchedInspirationId?.startsWith('cre_')
-                    ? matchedInspirationId
-                    : matchedInspirationId ? `cre_${matchedInspirationId}` : '')
+                const inspirationCreativeId = resolveInspirationCreativeId(item)
                 return (
                 <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className={`rounded-xl border border-l-4 border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 ${calendarPlatformAccent(platformSlug)}`}>
                   <div className="flex items-start justify-between gap-2">

@@ -1860,9 +1860,32 @@ async function reviewCalendarCreativeItemsWithLLM(
         }
         throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       }
+      const expectedIds = new Set(items.map((item) => item.id))
+      const reviewedIds = reviewed.map((entry) => text(entry.id))
+      const returnedIdCounts = new Map<string, number>()
+      for (const id of reviewedIds) returnedIdCounts.set(id, (returnedIdCounts.get(id) || 0) + 1)
+      const invalidReturnedIds = reviewedIds.filter((id) => !expectedIds.has(id))
+      const duplicateReturnedIds = [...returnedIdCounts.entries()].filter(([, count]) => count > 1).map(([id]) => id)
+      const missingReturnedIds = items.map((item) => item.id).filter((id) => !returnedIdCounts.has(id))
+      if (invalidReturnedIds.length || duplicateReturnedIds.length || missingReturnedIds.length) {
+        console.warn('[brand-plan] calendar creative review returned mismatched item ids', {
+          invalidReturnedIds,
+          duplicateReturnedIds,
+          missingReturnedIds,
+        })
+        if (attempt === 0) {
+          repairNote = [
+            '上一版返回的条目 id 与输入不一致。',
+            `必须且只能逐条返回这些 id：${items.map((item) => item.id).join('、')}。`,
+            '不得省略、改写、重复或新增 id。',
+          ].join('\n')
+          continue
+        }
+        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+      }
       const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
-      const reviewedItems = items.map((item, index) => {
-        const review = byId.get(item.id) || reviewed[index]
+      const reviewedItems = items.map((item) => {
+        const review = byId.get(item.id)
         if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
         const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
         const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
