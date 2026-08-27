@@ -1382,7 +1382,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
                     )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-bold">{prize.name}</p>
-                      <p className="text-[11px] font-bold text-slate-400">{t.chance(String(Number((prize.probability * 100).toFixed(1))))}</p>
                     </div>
                   </div>
                   <span className="shrink-0 text-xs font-bold text-slate-400">{inventoryLabel(prize, locale)}</span>
