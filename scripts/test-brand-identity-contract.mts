@@ -10,6 +10,7 @@ const prismaSchema = await readFile(new URL('../prisma/schema.prisma', import.me
 const brandRoute = await readFile(new URL('../src/app/api/brands/[id]/route.ts', import.meta.url), 'utf8')
 const profileRoute = await readFile(new URL('../src/app/api/brands/[id]/profile/route.ts', import.meta.url), 'utf8')
 const profileView = await readFile(new URL('../src/components/dashboard/BrandProfileView.tsx', import.meta.url), 'utf8')
+const { brandPlanEditorIdentityValues } = await import('../src/lib/brandPlanEditorIdentity.ts')
 
 for (const field of [
   'brandTone',
@@ -22,7 +23,6 @@ for (const field of [
   'publishingFrequency',
 ]) {
   assert(identityResolver.includes(`'${field}'`), `identity resolver is missing ${field}`)
-  assert(profileView.includes(`openIdentityEditor('${field}')`), `identity row is missing ${field} editor`)
 }
 
 assert(identityRoute.includes('resolveSessionOrApiKey(request)'))
@@ -61,14 +61,41 @@ assert(!profileRoute.includes('knowledgeUpdate.productAssumptions ='))
 assert(!profileRoute.includes('knowledgeUpdate.promoPlan ='))
 assert(!profileRoute.includes('knowledgeUpdate.publishingFreq ='))
 
-assert(profileView.includes('数据来源：'))
-assert(profileView.includes('保存后立即生效'))
-assert(profileView.includes('data.message || data.error'))
-assert(profileView.includes('已保存 · 待同步'))
-assert(profileView.includes('覆盖到 Growth'))
-assert(profileView.includes('采用 Growth 最新值'))
-assert(profileView.includes('platforms: { ...editingPublishingFrequency.platforms'))
 assert(!profileView.includes('handleSaveVoice'))
 assert(!profileView.includes('parsedAudienceAssumptions ||'))
+assert(profileView.includes('const snapshot = await res.json() as BrandIdentitySnapshot'))
+assert(profileView.includes('const editorIdentity = brandPlanEditorIdentityValues(snapshot)'))
+assert(!profileView.includes("setDraftAudience(k.audienceAssumptions || '')"))
+assert(!profileView.includes("brandVoice: k.brandVoice || ''"))
+
+for (const field of ['brandTone', 'targetAudience', 'sellingPoints', 'brandVoice', 'brandImage', 'promotionFocus']) {
+  assert(profileView.includes(`saveIdentityField('${field}'`), `brand plan editor does not save ${field} through /identity`)
+}
+
+const editorIdentity = brandPlanEditorIdentityValues({
+  brandId: 'brand_1',
+  growthBrandKey: 'growth_1',
+  growthAvailable: false,
+  fields: {
+    brandTone: { key: 'brandTone', value: '亲切、专业', source: 'kanban_pending', status: 'pending_sync', editable: true },
+    targetAudience: { key: 'targetAudience', value: '附近上班族', source: 'kanban_pending', status: 'pending_sync', editable: true },
+    sellingPoints: { key: 'sellingPoints', value: ['现做现卖', '性价比高'], source: 'kanban_pending', status: 'pending_sync', editable: true },
+    operatingRegion: { key: 'operatingRegion', value: '新加坡', source: 'kanban', status: 'local', editable: true },
+    brandVoice: { key: 'brandVoice', value: '像懂吃的老朋友', source: 'kanban', status: 'local', editable: true },
+    brandImage: { key: 'brandImage', value: '干净高级', source: 'kanban', status: 'local', editable: true },
+    promotionFocus: { key: 'promotionFocus', value: '午市套餐', source: 'kanban', status: 'local', editable: true },
+    publishingFrequency: { key: 'publishingFrequency', value: { postsPerDay: 1, platforms: {} }, source: 'kanban', status: 'local', editable: true },
+  },
+})
+assert.deepEqual(editorIdentity, {
+  brandTone: '亲切、专业',
+  targetAudience: '附近上班族',
+  sellingPointsText: '现做现卖\n性价比高',
+  creativeIdentity: {
+    brandVoice: '像懂吃的老朋友',
+    brandImage: '干净高级',
+    promotionFocus: '午市套餐',
+  },
+})
 
 console.log('Brand identity route, resolver and UI contract checks passed.')

@@ -15,6 +15,7 @@ import type {
   BrandIdentityFieldKey,
   BrandIdentitySnapshot,
 } from '@/lib/brandIdentity'
+import { brandPlanEditorIdentityValues } from '@/lib/brandPlanEditorIdentity'
 import {
   createSkuId,
   formatSkuPrice,
@@ -624,7 +625,17 @@ function BrandProfileContent({
     try {
       const res = await fetch(`/api/brands/${brandId}/identity`)
       if (!res.ok) throw new Error('无法读取品牌定位')
-      setIdentitySnapshot(await res.json())
+      const snapshot = await res.json() as BrandIdentitySnapshot
+      setIdentitySnapshot(snapshot)
+
+      // These fields are owned by /identity. In particular, Growth-backed edits may
+      // live in the pending overlay before the legacy BrandKnowledge columns catch up.
+      // Hydrating the editor from /knowledge made a successful save look empty again.
+      const editorIdentity = brandPlanEditorIdentityValues(snapshot)
+      setLocalBrandTone(editorIdentity.brandTone)
+      setDraftAudience(editorIdentity.targetAudience)
+      setDraftProduct(editorIdentity.sellingPointsText)
+      setCreativeIdentity(editorIdentity.creativeIdentity)
     } catch (error) {
       console.error('Failed to load brand identity:', error)
       setIdentitySnapshot(null)
@@ -677,9 +688,6 @@ function BrandProfileContent({
       // 2. Brand knowledge
       if (resKnowledge.ok) {
         const k = await resKnowledge.json()
-        setLocalBrandTone(k.brandTone || '')
-        setDraftAudience(k.audienceAssumptions || '')
-        setDraftProduct(k.productAssumptions || '')
         if (typeof k.businessHours === 'string') setDraftBusinessHours(k.businessHours)
         else if (k.businessHours && typeof k.businessHours === 'object') setDraftBusinessHours(JSON.stringify(k.businessHours, null, 2))
         else setDraftBusinessHours('')
@@ -689,20 +697,12 @@ function BrandProfileContent({
         setDraftMarket(k.market || '')
         setDraftDistrict(k.district || '')
         setDraftCompetitorsText(Array.isArray(k.competitors) ? k.competitors.join('\n') : '')
-        setCreativeIdentity({
-          brandVoice: k.brandVoice || '',
-          brandImage: k.brandImage || '',
-          promotionFocus: k.promotionFocus || '',
-        })
       } else {
-        setLocalBrandTone('')
-        setDraftAudience(''); setDraftProduct('')
         setDraftBusinessHours(''); setDraftReservationUrl(''); setDraftOrderingUrl(''); setDraftStores([])
         setDraftMarket(''); setDraftDistrict('')
         setDraftMenuItems([])
         setDraftMenuText('')
         setDraftCompetitorsText('')
-        setCreativeIdentity({ brandVoice: '', brandImage: '', promotionFocus: '' })
       }
 
       if (resSku.ok) {
