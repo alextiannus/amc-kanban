@@ -21,7 +21,15 @@ const targets = selectCalendarRecoveryTargets({
         generatedAt: '2026-08-20T00:00:00.000Z',
         months: {
           '2026-08': [{ id: 'past', inspirationCreativeId: 'cre_ins_past' }],
-          '2026-09': [{ id: 'future', inspirationCreativeId: 'cre_ins_wrong', sampleVideoUrl: 'https://obs.example/content-library/SG/fb/ins_right/original/video.mp4' }],
+          '2026-09': [{
+            id: 'future',
+            title: '现烤鱼皮特写',
+            planning: '灵感主题：现烤鱼皮特写\n灵感核心：鱼皮在炉中滋滋冒油',
+            inspirationCreativeId: 'cre_ins_wrong',
+            inspirationSourceTitle: '现烤鱼皮特写',
+            inspirationSourceSummary: '鱼皮在炉中滋滋冒油',
+            sampleVideoUrl: 'https://obs.example/content-library/SG/fb/ins_right/original/video.mp4',
+          }],
         },
       },
     },
@@ -42,13 +50,30 @@ assert.deepEqual(invalidInspection.issues.map((issue) => issue.code), [
   'duplicate_item_id',
 ])
 
+const sourceMismatchInspection = inspectCalendarInspirationIdentity([{
+  id: 'source-mismatch',
+  title: '通用模板标题',
+  planning: '通用策划内容',
+  inspirationCreativeId: 'cre_ins_right',
+  inspirationSourceTitle: '现烤鱼皮特写',
+  inspirationSourceSummary: '鱼皮在炉中滋滋冒油',
+}])
+assert.deepEqual(sourceMismatchInspection.issues.map((issue) => issue.code), [
+  'source_title_mismatch',
+  'source_planning_mismatch',
+])
+
 const operationOrder: string[] = []
 const checkpoints: CalendarRecoveryCheckpointEntry[] = []
 let generationAttempts = 0
 const validItems = [{
   id: 'future',
   status: '待确认',
+  title: '现烤鱼皮特写',
+  planning: '灵感主题：现烤鱼皮特写\n灵感核心：鱼皮在炉中滋滋冒油',
   inspirationCreativeId: 'cre_ins_right',
+  inspirationSourceTitle: '现烤鱼皮特写',
+  inspirationSourceSummary: '鱼皮在炉中滋滋冒油',
   sampleVideoUrl: 'https://obs.example/content-library/SG/fb/ins_right/original/video.mp4',
 }]
 
@@ -135,6 +160,10 @@ assert(serviceSource.includes('calendar_content_creative_match_failed:'))
 assert(serviceSource.includes('calendar_content_creative_missing:'))
 assert(serviceSource.includes('const explicitCreativeId = text(candidate?.inspirationCreativeId)'))
 assert(!serviceSource.includes('return inspirationId ? `cre_${inspirationId}` : undefined'))
+assert(serviceSource.includes('inspirationSourceTitle: inspirationSource.title'))
+assert(serviceSource.includes('title: item.title'))
+assert(serviceSource.includes('planning: item.planning'))
+assert(serviceSource.includes('materialRequirements: item.materialRequirements'))
 assert(serviceSource.indexOf('const mediaCreativeId = resolveInspirationCreativeId') < serviceSource.indexOf("stringList(candidate?.matchedCreatives).find"))
 assert(recoveryScriptSource.indexOf('await saveRecoveryBackup(target)') < recoveryScriptSource.indexOf("action: 'generate_publishing_calendar'"))
 assert(recoveryScriptSource.includes("generationMode: 'MANUAL_EDIT'"))

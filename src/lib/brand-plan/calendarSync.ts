@@ -156,7 +156,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
 
   if (!confirmed.length) return { syncedCount: 0 }
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     let syncedCount = 0
     for (const item of confirmed) {
       const marker = calendarSyncMarker(item.id)
@@ -236,7 +236,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
     select: { id: true, agentNote: true, status: true },
   })
   const generated = new Map<string, string>()
-  drafts.forEach((draft) => {
+  drafts.forEach((draft: { id: string; agentNote: string | null; status: string }) => {
     markers.forEach((marker) => {
       if (draft.agentNote?.includes(marker)) generated.set(marker, draft.id)
     })

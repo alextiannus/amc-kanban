@@ -5,6 +5,10 @@ export type CalendarRecoveryItem = {
   date?: string
   status?: string
   inspirationCreativeId?: string
+  inspirationSourceTitle?: string
+  inspirationSourceSummary?: string
+  title?: string
+  planning?: string
   sampleVideoUrl?: string
   sampleThumbnailUrl?: string
   [key: string]: unknown
@@ -35,7 +39,7 @@ export type CalendarRecoveryTarget = {
 }
 
 export type CalendarRecoveryIssue = {
-  code: 'missing_item_id' | 'duplicate_item_id' | 'missing_creative_id' | 'invalid_creative_id' | 'media_creative_mismatch'
+  code: 'missing_item_id' | 'duplicate_item_id' | 'missing_creative_id' | 'invalid_creative_id' | 'media_creative_mismatch' | 'missing_source_anchor' | 'source_title_mismatch' | 'source_planning_mismatch'
   itemId: string
   expectedCreativeId?: string
   actualCreativeId?: string
@@ -130,6 +134,22 @@ export function inspectCalendarInspirationIdentity(items: CalendarRecoveryItem[]
         expectedCreativeId,
         actualCreativeId,
       })
+    }
+
+    const sourceTitle = String(item.inspirationSourceTitle || '').trim()
+    const sourceSummary = String(item.inspirationSourceSummary || '').trim()
+    const sourceAnchor = sourceTitle || sourceSummary
+    if (!sourceAnchor) {
+      issues.push({ code: 'missing_source_anchor', itemId })
+      continue
+    }
+    const expectedTitle = sourceAnchor.slice(0, 30)
+    if (String(item.title || '').trim() !== expectedTitle) {
+      issues.push({ code: 'source_title_mismatch', itemId })
+    }
+    const planning = String(item.planning || '')
+    if ((sourceTitle && !planning.includes(sourceTitle)) || (sourceSummary && !planning.includes(sourceSummary))) {
+      issues.push({ code: 'source_planning_mismatch', itemId })
     }
   }
 

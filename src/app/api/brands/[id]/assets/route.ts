@@ -484,7 +484,7 @@ export async function PATCH(request: Request, { params }: Params) {
       where: { id: { in: assetIds }, brandId },
       select: { id: true, aiTags: true }
     })
-    validAssets = assets.map((asset) => ({ id: asset.id }))
+    validAssets = assets.map((asset: { id: string }) => ({ id: asset.id }))
     
     // Process sequentially to avoid deadlocks under high concurrency
     await prisma.$transaction(

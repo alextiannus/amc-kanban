@@ -37,6 +37,8 @@ type BrandPlanCalendarItem = {
   matchedInspirations?: string[]
   selectedCreativeCandidateId?: string
   inspirationCreativeId?: string
+  inspirationSourceTitle?: string
+  inspirationSourceSummary?: string
   creativeMechanism?: string
   sampleVideoUrl?: string
   sampleOriginalUrl?: string
@@ -1233,6 +1235,7 @@ async function buildPublishingMonth(
     const product = products[index % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
     const candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
     const sampleLinks = calendarSampleLinks(candidate)
+    const inspirationSource = calendarInspirationSource(candidate)
     return {
       id: `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`,
       date: slot.date,
@@ -1241,6 +1244,7 @@ async function buildPublishingMonth(
         product,
         promotionPoint,
         platformSlug: slot.platform.slug,
+        candidate,
         index,
       }),
       platform: slot.platform.label,
@@ -1263,6 +1267,8 @@ async function buildPublishingMonth(
       matchedTags: stringList(candidate?.matchedTags),
       matchedInspirations: stringList(candidate?.matchedInspirations),
       inspirationCreativeId: calendarInspirationCreativeId(candidate),
+      inspirationSourceTitle: inspirationSource.title,
+      inspirationSourceSummary: inspirationSource.summary,
       sampleVideoUrl: sampleLinks.videoUrl,
       sampleOriginalUrl: sampleLinks.originalUrl,
       sampleThumbnailUrl: sampleLinks.thumbnailUrl,
@@ -1299,6 +1305,7 @@ async function regeneratePublishingCalendarItem(
   if (!candidate) {
     throw new BrandPlanError('calendar_creative_candidate_missing', 502)
   }
+  const inspirationSource = calendarInspirationSource(candidate)
   const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [{
     ...item,
     date: clampCalendarDateToMinimum(item.date),
@@ -1307,6 +1314,7 @@ async function regeneratePublishingCalendarItem(
       product: item.product,
       promotionPoint: point,
       platformSlug: platform,
+      candidate,
       index: 0,
     }),
     contentType: calendarContentType(candidate, 0),
@@ -1325,6 +1333,8 @@ async function regeneratePublishingCalendarItem(
     matchedTags: stringList(candidate.matchedTags),
     matchedInspirations: stringList(candidate.matchedInspirations),
     inspirationCreativeId: calendarInspirationCreativeId(candidate),
+    inspirationSourceTitle: inspirationSource.title,
+    inspirationSourceSummary: inspirationSource.summary,
     sampleVideoUrl: sampleLinks.videoUrl,
     sampleOriginalUrl: sampleLinks.originalUrl,
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
@@ -1572,9 +1582,12 @@ function productMention(brandName: string, product: string) {
   return product
 }
 
-function calendarItemTitle(input: Omit<CalendarCopyContext, 'candidate' | 'interviewFocus'>) {
+function calendarItemTitle(input: Omit<CalendarCopyContext, 'interviewFocus'>) {
   const brandName = brandDisplayName(input.brand)
   const product = productMention(brandName, productDisplayName(input.product))
+  const inspirationSource = calendarInspirationSource(input.candidate || null)
+  const sourceTitle = cleanCalendarText(inspirationSource.title || inspirationSource.summary, '')
+  if (sourceTitle) return sourceTitle.slice(0, 30)
   const isRestaurant = text(input.brand.industry).toLowerCase().includes('restaurant') || text(input.brand.industry).toLowerCase().includes('f&b')
   const titleSets: Record<string, string[]> = {
     tiktok: [
@@ -1638,7 +1651,10 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const voiceover = calendarScriptLines(candidate, 'voiceover').slice(0, 3)
   const subtitles = calendarScriptLines(candidate, 'subtitles').slice(0, 3)
   const mechanism = calendarCreativeMechanism(input)
+  const inspirationSource = calendarInspirationSource(candidate)
   return [
+    inspirationSource.title ? `灵感主题：${inspirationSource.title}` : '',
+    inspirationSource.summary ? `灵感核心：${inspirationSource.summary}` : '',
     `内容创意：${mechanism}`,
     `开场：${calendarHookText(input)}`,
     shots.length ? `分镜脚本：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
@@ -1746,6 +1762,16 @@ function calendarSampleLinks(candidate: Record<string, unknown> | null) {
   }
 }
 
+function calendarInspirationSource(candidate: Record<string, unknown> | null) {
+  const sourceVideo = objectValue(candidate?.sourceVideo)
+  const sourcePost = objectValue(candidate?.sourcePost)
+  const script = objectValue(candidate?.scriptContent)
+  return {
+    title: cleanCalendarText(text(sourceVideo.title || sourcePost.title || script.title), ''),
+    summary: cleanCalendarText(text(candidate?.contentAngle || script.opening || script.body || candidate?.recommendationReason), ''),
+  }
+}
+
 function calendarInspirationCreativeId(candidate: Record<string, unknown> | null) {
   const explicitCreativeId = text(candidate?.inspirationCreativeId)
   if (/^cre_[A-Za-z0-9_-]+$/.test(explicitCreativeId)) return explicitCreativeId
@@ -1823,6 +1849,9 @@ async function reviewCalendarCreativeItemsWithLLM(
       draftPlanning: item.planning.slice(0, 900),
       draftMaterialRequirements: item.materialRequirements || [],
       hasInspirationLink: Boolean(item.sampleVideoUrl || item.sampleOriginalUrl),
+      inspirationCreativeId: item.inspirationCreativeId,
+      inspirationSourceTitle: item.inspirationSourceTitle,
+      inspirationSourceSummary: item.inspirationSourceSummary,
       matchedTags: item.matchedTags || [],
       matchedInspirations: item.matchedInspirations || [],
     })),
@@ -1922,23 +1951,22 @@ async function reviewCalendarCreativeItemsWithLLM(
         }
         throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
       }
+      const rejectedItemIds = reviewed
+        .filter((entry) => entry.approved === false)
+        .map((entry) => text(entry.id))
+      if (rejectedItemIds.length) {
+        console.warn('[brand-plan] calendar creative review rejected source-anchored items', { rejectedItemIds })
+        throw new BrandPlanError(`calendar_creative_review_rejected:${JSON.stringify(rejectedItemIds)}`, 502)
+      }
       const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
       const reviewedItems = items.map((item) => {
         const review = byId.get(item.id)
         if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-        const title = cleanReviewedCalendarTitle(text(review.title), item.title, brandName)
-        const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), '')
-        const materialRequirements = stringList(review.materialRequirements)
-          .map((line) => cleanReviewedCalendarText(line, ''))
-          .filter(Boolean)
-          .slice(0, 6)
-        const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '')
-        const approved = review.approved !== false
         return {
           ...item,
-          title,
-          planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
-          materialRequirements: materialRequirements.length ? materialRequirements : item.materialRequirements,
+          title: item.title,
+          planning: item.planning,
+          materialRequirements: item.materialRequirements,
         }
       })
       const qualityIssues = calendarCreativeQualityIssues(reviewedItems)
@@ -2131,6 +2159,9 @@ function materialRequirementSpecification(item: BrandPlanCalendarItem) {
     sampleHit: item.sampleHit,
     matchedTags: item.matchedTags || [],
     matchedInspirations: item.matchedInspirations || [],
+    inspirationCreativeId: item.inspirationCreativeId,
+    inspirationSourceTitle: item.inspirationSourceTitle,
+    inspirationSourceSummary: item.inspirationSourceSummary,
     sampleVideoUrl: item.sampleVideoUrl,
     sampleOriginalUrl: item.sampleOriginalUrl,
     sampleThumbnailUrl: item.sampleThumbnailUrl,
