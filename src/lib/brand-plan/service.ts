@@ -9,7 +9,12 @@ import {
   matchPromotionStrategyCreativeBatch,
 } from '@/lib/promotion-strategy/clients'
 import type { PublishingFreq } from '@/lib/brandContextBuilder'
-import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import {
+  getPlanMonthlyContentQuota,
+  getPlanPlatformCoverage,
+  getPlanPublishingFreq,
+  SUBSCRIPTION_PLANS,
+} from '@/lib/subscription/catalog'
 import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
 import { callLLM } from '@/lib/llmRouter'
 import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
@@ -3019,46 +3024,15 @@ async function buildSubscriptionStrategy(brand: BrandPlanBrand) {
   const plan = active ? SUBSCRIPTION_PLANS.find((item) => item.id === active.planId) : null
   const planId = active?.planId || 'none'
   const policy = planId !== 'none' ? await getSubscriptionOperationsPolicy(planId) : null
-  const platformCoverage = policy?.platformCoverage.length ? policy.platformCoverage : platformCoverageForPlan(planId)
+  const platformCoverage = policy?.platformCoverage.length ? policy.platformCoverage : getPlanPlatformCoverage(planId)
   const configuredPublishingFreq = policy ? normalizePublishingFreq(policy.publishingFreq) : null
   return {
     planId,
     planName: policy?.planName || plan?.name || active?.planName || '未激活订阅',
     includedServices: policy?.includedServices.length ? policy.includedServices : plan?.services || [],
     platformCoverage,
-    monthlyContentQuota: policy?.monthlyContentQuota || monthlyContentQuotaForPlan(planId),
-    publishingFreq: normalizePublishingFreq(brand.knowledge?.publishingFreq) || configuredPublishingFreq || publishingFreqForPlan(planId, platformCoverage),
-  }
-}
-
-function platformCoverageForPlan(planId: string) {
-  if (planId === 'essential') return ['instagram', 'tiktok', 'google_business']
-  if (planId === 'booster') return ['instagram', 'tiktok', 'xiaohongshu', 'google_business']
-  return []
-}
-
-function monthlyContentQuotaForPlan(planId: string) {
-  if (planId === 'essential') return 20
-  if (planId === 'booster') return 38
-  return 0
-}
-
-function publishingFreqForPlan(planId: string, platforms: string[]): PublishingFreq | null {
-  if (!platforms.length) return null
-  const monthlyByPlan = planId === 'booster'
-    ? { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
-    : planId === 'essential'
-      ? { instagram: 12, tiktok: 6, google_business: 2 }
-      : {}
-  const normalizedPlatforms = platforms.map(normalizePlatformSlug).filter(Boolean)
-  const configuredTotal = normalizedPlatforms.reduce((sum, platform) =>
-    sum + (monthlyByPlan[platform as keyof typeof monthlyByPlan] || 0), 0)
-  if (!configuredTotal) return null
-  return {
-    platforms: Object.fromEntries(normalizedPlatforms.map((platform) => [
-      platform,
-      { postsPerMonth: monthlyByPlan[platform as keyof typeof monthlyByPlan] || 1 },
-    ])),
+    monthlyContentQuota: policy?.monthlyContentQuota || getPlanMonthlyContentQuota(planId),
+    publishingFreq: normalizePublishingFreq(brand.knowledge?.publishingFreq) || configuredPublishingFreq || normalizePublishingFreq(getPlanPublishingFreq(planId)),
   }
 }
 

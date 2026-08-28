@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       })
 
       // C. Create Active Subscription Package
-      const normalizedPlanId = planId === 'booster' ? 'booster' : 'essential'
+      const normalizedPlanId = planId === 'starter' || planId === 'essential' || planId === 'booster' ? planId : 'starter'
       const selectedPlan = SUBSCRIPTION_PLANS.find(plan => plan.id === normalizedPlanId)
       if (!selectedPlan) {
         throw new Error('Invalid subscription plan')

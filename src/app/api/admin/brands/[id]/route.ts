@@ -10,7 +10,7 @@ type Params = { params: Promise<{ id: string }> }
 
 const BRAND_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const
 const SUBSCRIPTION_STATUSES = ['PENDING', 'ACTIVE', 'FAILED', 'CANCELLED'] as const
-const DURATIONS = [3, 6, 12] as const
+const DURATIONS = [12] as const
 
 function normalizeString(value: unknown) {
   return typeof value === 'string' ? value.trim() : undefined

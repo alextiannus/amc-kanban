@@ -27,6 +27,7 @@ import {
   sortSkuLibrary,
   type SkuLibraryItem,
 } from '@/lib/sku-library/service'
+import { getPlanPublishingFreq } from '@/lib/subscription/catalog'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -268,21 +269,30 @@ type PublishingScheduleDraft = Record<string, number>
 
 const PUBLISHING_PLATFORM_OPTIONS = [
   { slug: 'instagram', label: 'Instagram' },
+  { slug: 'facebook', label: 'Facebook' },
   { slug: 'tiktok', label: 'TikTok' },
   { slug: 'google_business', label: 'Google Business' },
   { slug: 'xiaohongshu', label: '小红书' },
+  { slug: 'youtube', label: 'YouTube' },
+  { slug: 'twitter', label: 'Twitter / X' },
+  { slug: 'meituan_dianping', label: 'Meituan Dianping' },
 ]
 
 function defaultPublishingScheduleForPlan(planId?: string): PublishingScheduleDraft {
-  if (planId === 'booster') return { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
-  if (planId === 'essential') return { instagram: 12, tiktok: 6, google_business: 2 }
-  return {}
+  const freq = planId ? getPlanPublishingFreq(planId) : null
+  return Object.fromEntries(
+    Object.entries(freq?.platforms || {}).map(([platform, config]) => [
+      platform,
+      Math.max(0, Math.floor(Number(config.postsPerMonth || 0))),
+    ])
+  )
 }
 
 function planIdFromLabel(value?: string) {
   const normalized = String(value || '').toLowerCase()
   if (normalized.includes('booster')) return 'booster'
   if (normalized.includes('essential')) return 'essential'
+  if (normalized.includes('starter')) return 'starter'
   return ''
 }
 

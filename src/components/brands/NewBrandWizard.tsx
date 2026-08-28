@@ -11,7 +11,7 @@ import {
 interface PlanOption {
   id: string
   name: string
-  monthlyUsd: number
+  annualUsd: number
   description: string
   highlights: string[]
   explanation: {
@@ -35,7 +35,7 @@ interface WizardState {
   // Step 2
   planId: string
   planName: string
-  monthlyBaseUsd: number
+  annualBaseUsd: number
   durationMonths: number
   // Promo code
   promoCode: string
@@ -69,67 +69,87 @@ type PromoValidationResponse = {
 
 const PLANS: PlanOption[] = [
   {
-    id: 'essential',
-    name: 'Essential · 基础线上经营',
-    monthlyUsd: 800,
-    description: '基础线上门面 + 稳定内容维护',
+    id: 'starter',
+    name: 'Starter · AI Staff Hiring Plan',
+    annualUsd: 5200,
+    description: 'Hiring AI staff for Social Media Marketing',
     highlights: [
-      '每月 12 IG + 6 TikTok + 2 Google Business',
-      'Instagram / TikTok / Google Map',
-      '评论监控与地图资料维护',
-      '每月 2-4 位 KOC/微型博主探店',
-      '每月舆情报告',
+      'S$5,200 / 年，12 个月 license',
+      '最多 4 个平台：Instagram / Facebook / TikTok / Google Map',
+      '品牌评估报告与平台化多语言内容生成',
+      '智能排期、Google Map 评论监控与回复建议',
+      '使用上限 150 posts/month',
     ],
     explanation: {
-      positioning: '基础线上门面 + 稳定内容维护',
-      promise: '让客户在 Instagram / TikTok / Google Map 上找得到、看得懂、愿意来。',
+      positioning: '年度 AI Staff 起步方案',
+      promise: '部署核心 AI Marketing Crew，支持商户社媒内容、排期、评论建议和月度报告。',
       operations: [
-        'Instagram：品牌门面和信任留存，呈现招牌产品、环境、套餐和顾客场景。',
-        'TikTok：轻量曝光和兴趣种草，持续推新品、优惠、活动和门店氛围。',
-        'Google Map：最后一公里转化，维护分类、营业时间、菜单、照片、电话、链接和评论回复。',
-        '默认发布节奏：每月 12 条 Instagram、6 条 TikTok、2 条 Google Business，可在品牌策划页按月调整。',
+        '覆盖 Instagram、Facebook、TikTok 和 Google Map。',
+        '根据客户管理的素材和品牌上下文生成平台化内容。',
+        '审核后智能排期，监控 Google Map 评论并提供回复建议。',
       ],
-      reporting: '每月汇总评论、评分变化、热门内容、客户反馈和下月优化建议。',
-      bestFor: ['新店开业', '社媒断更', 'Google Map 信息不完整', '老板没时间稳定发内容'],
+      reporting: '每日增长数据与月度报告。',
+      bestFor: ['核心社媒起步', '需要 12 个月 AI Staff license', '需要账户设置、客服和培训'],
     },
     icon: <Zap className="w-5 h-5" />,
     color: 'blue',
   },
   {
-    id: 'booster',
-    name: 'Booster · 增长战役版',
-    monthlyUsd: 3200,
-    description: '增长战役 + 素材资产 + 博主扩散',
+    id: 'essential',
+    name: 'Essential · AI Staff Hiring Plan',
+    annualUsd: 10600,
+    description: 'Hiring AI staff for Social Media Marketing',
     highlights: [
-      '每月 12 IG + 12 TikTok + 12 小红书 + 2 Google Business',
-      'Instagram / TikTok / 小红书 / Google Map',
-      '定制月度增长策划案',
-      '专业素材采集与视频剪辑',
-      '12 位博主分批探店',
-      '每周舆情复盘',
+      'S$10,600 / 年，12 个月 license',
+      '最多 4 个平台：Instagram / Facebook / TikTok / Google Map',
+      'Image Designer / Video Maker / Branding Researcher',
+      '品牌调研、素材标签、下载和 AI 图片生成',
+      '使用上限 180 posts/month、150 videos/month',
     ],
     explanation: {
-      positioning: '增长战役 + 素材资产 + 博主扩散',
-      promise: '用一个月把品牌内容、活动话题、博主探店和地图口碑一起推起来。',
+      positioning: '年度 AI Staff 完整内容方案',
+      promise: '在核心 AI Staff 之外加入图片、视频、品牌调研和素材管理能力。',
       operations: [
-        'Instagram：从门面展示升级为品牌经营，做招牌故事、套餐组合、Reels 和 Story 互动。',
-        'TikTok：主攻爆点内容，围绕价格锚点、反差卖点、制作过程、限时活动和探店视频连续发布。',
-        '小红书：面向中文用户、游客、留学生，做可搜索、可收藏、可照着去的生活方式笔记。',
-        'Google Map：强化评论回复、差评修复、照片更新、菜单和热门产品呈现。',
-        '默认发布节奏：每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business，可在品牌策划页按月调整。',
+        '覆盖 4 个核心平台，并加入图片、视频和品牌调研 AI Staff。',
+        '完成商户访谈、品牌 brief、品牌策略和营销策略配置。',
+        '支持智能排期、素材标签、下载、AI 图片生成和有限 AI 视频创作。',
       ],
-      reporting: '每周看曝光、互动、评论、收藏、私信、Google 评分、热门内容和下周调整动作。',
-      bestFor: ['新店或新菜单上线', '节日档期推广', '口碑修复', '吸引游客和中文用户', '商圈竞争强'],
+      reporting: '每日增长数据与月度报告。',
+      bestFor: ['需要内容、图片和视频', '需要品牌上下文搭建', '需要素材管理'],
     },
     icon: <Building2 className="w-5 h-5" />,
     color: 'indigo',
+  },
+  {
+    id: 'booster',
+    name: 'Booster · AI Staff Hiring Plan',
+    annualUsd: 16800,
+    description: 'Hiring AI staff for Social Media Marketing',
+    highlights: [
+      'S$16,800 / 年，12 个月 license',
+      '最多 8 个平台，含小红书、美团点评、YouTube、Twitter/X',
+      '扩展创意、调研和多平台 Copywriter 团队',
+      '美团点评品牌装修、发帖、评论监控与推广设置',
+      '使用上限 240 posts/month、240 videos/month',
+    ],
+    explanation: {
+      positioning: '年度 AI Staff 多平台扩展方案',
+      promise: '部署扩展版 AI Marketing Crew，覆盖更多平台和更高视频内容容量。',
+      operations: [
+        '覆盖最多 8 个平台：Instagram、TikTok、Facebook、Google Map、美团点评、小红书、YouTube、Twitter/X。',
+        '生成小红书内容，供客户审核与批准。',
+        '支持美团点评品牌装修、内容发布、评论监控和推广设置。',
+      ],
+      reporting: '每日增长数据与月度报告。',
+      bestFor: ['需要多平台扩展', '需要小红书和美团点评', '需要更高图片和视频容量'],
+    },
+    icon: <Sparkles className="w-5 h-5" />,
+    color: 'violet',
     badge: '最受欢迎',
   },
 ]
 
 const DURATIONS: Array<{ months: number; label: string; discount: number; badge?: string }> = [
-  { months: 3,  label: '3 个月',  discount: 0 },
-  { months: 6,  label: '6 个月',  discount: 0 },
   { months: 12, label: '12 个月', discount: 0 },
 ]
 
@@ -262,7 +282,7 @@ function Step1({ state, onChange }: {
 
 function Step2({ state, onPlan, onDuration, currentUser, onChange, validatingPromo }: {
   state: WizardState
-  onPlan: (planId: string, planName: string, monthlyUsd: number) => void
+  onPlan: (planId: string, planName: string, annualUsd: number) => void
   onDuration: (months: number) => void
   currentUser: WizardCurrentUser
   onChange: (k: keyof WizardState, v: string) => void
@@ -284,7 +304,7 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, validatingPro
               <button
                 key={plan.id}
                 id={`wizard-plan-${plan.id}`}
-                onClick={() => onPlan(plan.id, plan.name, plan.monthlyUsd)}
+                onClick={() => onPlan(plan.id, plan.name, plan.annualUsd)}
                 className={`w-full text-left rounded-2xl border-2 p-4 transition-all ${
                   selected
                     ? `${c.bg} ${c.border} ring-2 ${c.ring}`
@@ -341,9 +361,9 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, validatingPro
                   </div>
                   <div className="text-right flex-shrink-0 ml-2">
                     <div className={`font-bold text-base ${selected ? c.text : 'text-slate-700 dark:text-slate-200'}`}>
-                      SGD {plan.monthlyUsd.toLocaleString()}
+                      SGD {plan.annualUsd.toLocaleString()}
                     </div>
-                    <div className="text-xs text-slate-400">/月</div>
+                    <div className="text-xs text-slate-400">/年</div>
                   </div>
                 </div>
               </button>
@@ -355,8 +375,8 @@ function Step2({ state, onPlan, onDuration, currentUser, onChange, validatingPro
       {/* Duration */}
       <div>
         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wide">合同时长</p>
-        <div className={`grid ${state.planId === 'essential' ? 'grid-cols-2' : 'grid-cols-3'} gap-2`}>
-          {DURATIONS.filter(d => !(state.planId === 'essential' && d.months === 3)).map(d => (
+        <div className="grid grid-cols-1 gap-2">
+          {DURATIONS.map(d => (
             <button
               key={d.months}
               id={`wizard-duration-${d.months}`}
@@ -422,17 +442,17 @@ function Step3({ state }: { state: WizardState }) {
   const plan = PLANS.find(p => p.id === state.planId)
   const duration = DURATIONS.find(d => d.months === state.durationMonths)
   const discountPct = duration?.discount ?? 0
-  const baseDiscountedMonthly = state.monthlyBaseUsd * (1 - discountPct / 100)
+  const baseDiscountedAnnual = state.annualBaseUsd * (1 - discountPct / 100)
   
   let promoDiscountVal = 0
   if (state.promoValid && state.promoDiscountType === 'PERCENT') {
-    promoDiscountVal = baseDiscountedMonthly * (state.promoDiscountValue / 100)
+    promoDiscountVal = baseDiscountedAnnual * (state.promoDiscountValue / 100)
   } else if (state.promoValid && state.promoDiscountType === 'FIXED_AMOUNT') {
     promoDiscountVal = state.promoDiscountValue
   }
 
-  const discountedMonthly = Math.max(0, Math.round(baseDiscountedMonthly - promoDiscountVal))
-  const totalDue = discountedMonthly * state.durationMonths
+  const discountedAnnual = Math.max(0, Math.round(baseDiscountedAnnual - promoDiscountVal))
+  const totalDue = discountedAnnual
 
   const rows = [
     { label: '品牌名称',  value: state.brandName },
@@ -441,10 +461,10 @@ function Step3({ state }: { state: WizardState }) {
     { label: '套餐',     value: plan?.name ?? '—' },
     { label: '合同时长',  value: duration?.label ?? '—' },
     { 
-      label: '月费',     
+      label: '年度服务费',
       value: state.promoValid 
-        ? `SGD ${discountedMonthly.toLocaleString()} (折上折: 已应用优惠)`
-        : `SGD ${discountedMonthly.toLocaleString()}${discountPct ? ` (${discountPct}% 折)` : ''}` 
+        ? `SGD ${discountedAnnual.toLocaleString()} (已应用优惠)`
+        : `SGD ${discountedAnnual.toLocaleString()}${discountPct ? ` (${discountPct}% 折)` : ''}`
     },
     { label: '合同总额',  value: `SGD ${totalDue.toLocaleString()}` },
   ]
@@ -487,10 +507,10 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     ownerEmail: '',
     ownerPhone: '',
     location: '',
-    planId: 'booster',
-    planName: 'Booster · 增长战役版',
-    monthlyBaseUsd: 3200,
-    durationMonths: 3,
+    planId: 'starter',
+    planName: 'Starter · AI Staff Hiring Plan',
+    annualBaseUsd: 5200,
+    durationMonths: 12,
     promoCode: '',
     promoDiscountType: null,
     promoDiscountValue: 0,
@@ -568,15 +588,14 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
     }))
   }
 
-  function onPlan(planId: string, planName: string, monthlyUsd: number) {
+  function onPlan(planId: string, planName: string, annualUsd: number) {
     setState(prev => {
-      const nextDuration = (planId === 'essential' && prev.durationMonths === 3) ? 6 : prev.durationMonths
       return {
         ...prev,
         planId,
         planName,
-        monthlyBaseUsd: monthlyUsd,
-        durationMonths: nextDuration
+        annualBaseUsd: annualUsd,
+        durationMonths: 12
       }
     })
   }
@@ -588,17 +607,16 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
   // Compute derived totals
   const duration = DURATIONS.find(d => d.months === state.durationMonths)
   const discountPct = duration?.discount ?? 0
-  const baseDiscountedMonthly = state.monthlyBaseUsd * (1 - discountPct / 100)
+  const baseDiscountedAnnual = state.annualBaseUsd * (1 - discountPct / 100)
   
   let promoDiscountVal = 0
   if (state.promoValid && state.promoDiscountType === 'PERCENT') {
-    promoDiscountVal = baseDiscountedMonthly * (state.promoDiscountValue / 100)
+    promoDiscountVal = baseDiscountedAnnual * (state.promoDiscountValue / 100)
   } else if (state.promoValid && state.promoDiscountType === 'FIXED_AMOUNT') {
     promoDiscountVal = state.promoDiscountValue
   }
 
-  const discountedMonthly = Math.max(0, Math.round(baseDiscountedMonthly - promoDiscountVal))
-  const totalDue = discountedMonthly * state.durationMonths
+  const totalDue = Math.max(0, Math.round(baseDiscountedAnnual - promoDiscountVal))
 
   function validateStep1(): string | null {
     if (!state.brandName.trim()) return '请填写品牌名称'
@@ -639,8 +657,8 @@ export default function NewBrandWizard({ onClose, onSuccess }: NewBrandWizardPro
           planId: state.planId,
           planName: state.planName,
           durationMonths: state.durationMonths,
-          monthlyBaseUsd: state.monthlyBaseUsd, // Pass base monthly fee
-          totalDueUsd: baseDiscountedMonthly * state.durationMonths, // Pass un-promo due amount
+          monthlyBaseUsd: state.annualBaseUsd,
+          totalDueUsd: baseDiscountedAnnual,
           promoCode: state.promoValid ? state.promoCode.trim().toUpperCase() : undefined,
           _tempPassword: tempPassword,
         }),

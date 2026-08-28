@@ -13,7 +13,7 @@ const CHECK_SECTIONS = [
     items: [
       '确认客户公司名称、UEN、联系人、邮箱和合同编号完整。',
       '确认套餐、周期、开始日期、到期日和总费用已写入订单或协议。',
-      '合同采用一次性预付：3 个月 x 3，6 个月 x 6，12 个月 x 12。',
+      '合同采用 12 个月年度服务方案一次性预付，可变成本项目按实际单位另计。',
       '确认付款凭证已收到，并在 1 个工作日内完成内部确认。',
     ],
   },
@@ -24,16 +24,16 @@ const CHECK_SECTIONS = [
       '签署后 7 个工作日内收齐品牌资料、账号授权和必要素材。',
       '账号接入后 14 个工作日内完成首批内容上线。',
       '确认审批人有权代表客户批准内容和服务决策。',
-      '现场拍摄或探店服务需提前不少于 5 个工作日预约。',
+      '如需年度方案之外的独立服务，需提前确认单独报价和交付安排。',
     ],
   },
   {
     title: '内容与报告检查',
     icon: FileText,
     items: [
-      'Essential 每月 12 条 Instagram、6 条 TikTok、2 条 Google Business 内容维护，并提供月度舆情报告。',
-      'Booster 每月 12 条 Instagram、12 条 TikTok、12 条小红书、2 条 Google Business 内容维护，并提供每周舆情报告。',
-      'Google Map 配置、评论监控和打分优化按套餐范围执行。',
+      'Starter 使用上限为 150 posts/month，覆盖最多 4 个核心社媒平台。',
+      'Essential 使用上限为 180 posts/month、150 videos/month，包含图片、视频、品牌调研和素材管理。',
+      'Booster 使用上限为 240 posts/month、240 videos/month，覆盖最多 8 个平台和美团点评运营支持。',
       '所有内容需完成事实、价格、活动规则和品牌适配检查后再发布。',
     ],
   },
@@ -56,7 +56,7 @@ export default function ServiceCheckPage() {
               href="/dashboard/addon-services"
               className="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2 text-xs font-black text-white transition hover:bg-slate-700 dark:bg-white dark:text-slate-950"
             >
-              查看增值服务
+              查看可变成本
             </Link>
             <Link
               href="/terms"
@@ -76,8 +76,8 @@ export default function ServiceCheckPage() {
                   <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">{plan.description}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-black">S${plan.monthlyUsd.toLocaleString()}</p>
-                  <p className="text-xs font-bold text-slate-500">/ 月</p>
+                  <p className="text-2xl font-black">S${(plan.annualUsd ?? plan.monthlyUsd * 12).toLocaleString()}</p>
+                  <p className="text-xs font-bold text-slate-500">/ 年</p>
                 </div>
               </div>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -124,12 +124,12 @@ export default function ServiceCheckPage() {
         </section>
 
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <h2 className="text-sm font-black">加购服务检查</h2>
+          <h2 className="text-sm font-black">可变成本检查</h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {SUBSCRIPTION_ADDONS.map((addon) => (
               <div key={addon.id} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
                 <p className="text-sm font-black">{addon.name}</p>
-                <p className="mt-1 text-xs font-bold text-slate-500">{addon.pricing === 'monthly' ? '月费' : '单次'} · S${addon.usd.toLocaleString()}</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">单位 · S${addon.usd.toLocaleString()}</p>
               </div>
             ))}
           </div>

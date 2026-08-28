@@ -10,6 +10,7 @@ import {
   SUBSCRIPTION_PLANS,
   calculatePricing,
   getAllowedDurationsForPlan,
+  normalizeAddonQuantity,
   type PlanId,
 } from '@/lib/subscription/catalog'
 import { SUBSCRIPTION_TERMS_FULL_TEXT, SUBSCRIPTION_TERMS_NOTICE, SUBSCRIPTION_TERMS_TITLE } from '@/lib/subscription/terms'
@@ -78,7 +79,7 @@ function extractStoresFromMarkdown(markdown: string): StoreSummary[] {
 }
 
 function toPlanId(value: string | null | undefined): PlanId | null {
-  if (value === 'essential' || value === 'booster') {
+  if (value === 'starter' || value === 'essential' || value === 'booster') {
     return value
   }
   return null
@@ -469,7 +470,7 @@ export async function POST(request: Request) {
   const summary = calculatePricing(planId, durationMonths, uniqueAddonIds, addonQuantities)
   const selectedAddons = SUBSCRIPTION_ADDONS.filter((a: any) => uniqueAddonIds.includes(a.id)).map((addon: any) => ({
     ...addon,
-    quantity: addon.id === 'multi_store' ? (addonQuantities['multi_store'] ?? 0) : 1,
+    quantity: normalizeAddonQuantity(addon.id, addonQuantities[addon.id] ?? 1),
   }))
 
   // Resolve promo code / invite code

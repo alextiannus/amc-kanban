@@ -3,7 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import Stripe from 'stripe'
-import { SUBSCRIPTION_PLANS, SUBSCRIPTION_ADDONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, calculatePricing } from '@/lib/subscription/catalog'
+import { SUBSCRIPTION_PLANS, SUBSCRIPTION_ADDONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, calculatePricing, normalizeAddonQuantity } from '@/lib/subscription/catalog'
 import { buildOfflineInvoiceResponse, buildBillingActivatedResponse, buildBillingActivationData } from '@/lib/subscription/workflow'
 import { createBrandForActivatedSubscription } from '@/lib/subscription/service'
 import { sendSubscriptionSuccessEmail } from '@/lib/email'
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
     const summary = calculatePricing(planId, durationMonths, uniqueAddonIds, addonQuantities)
     const selectedAddons = SUBSCRIPTION_ADDONS.filter((a: any) => uniqueAddonIds.includes(a.id)).map((addon: any) => ({
       ...addon,
-      quantity: addon.id === 'multi_store' ? (addonQuantities['multi_store'] ?? 0) : 1,
+      quantity: normalizeAddonQuantity(addon.id, addonQuantities[addon.id] ?? 1),
     }))
 
     // Resolve promo code / invite code

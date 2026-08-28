@@ -31,33 +31,23 @@ This Agreement is entered into on the date stated above between the parties belo
 
 甲方选择以下服务套餐 / Party A selects the following plan:
 
-| 选择 | 套餐 Plan | 月费 Monthly Fee | 包含内容 Includes | 签约周期 |
+| 选择 | 套餐 Plan | 年费 Annual Fee | 包含内容 Includes | 签约周期 |
 | --- | --- | --- | --- | --- |
-| ☐ | ESSENTIAL（海外社媒代运营新加坡本地版） | S$800 / 月 | Instagram、TikTok 图文内容发布；Google Map 配置和评论监控、打分优化；中英双语；每月舆情报告；远程交付；营销策划、自媒体运营与私域留存规划；至少发布 12 次图文；可安排 2-4 位博主 / KOC 探店。 | 6 / 12 个月 |
-| ☐ | Booster（流量爆发计划） | S$3,200 / 月 | Instagram、TikTok、小红书等自媒体内容策划；流量增长和运营活动策划；Google Map 配置和评论监控、打分优化；中英双语；每周舆情报告；远程交付；营销策划、定制增长策划与短期快速曝光；至少发布 24 次图文和 12 次精品视频；专业素材采集、视频剪辑；KOL 同步推广，最少安排 12 位博主探店（6 个 2k+ 粉丝，4 个 4k+，2 个 1w+）。 | 3 个月 |
-
-优惠活动：2026 年 9 月 30 日前签约商家赠送 1 次价值 S$300 的素材拍摄采集和 4 条视频，最终服务范围以双方签约确认为准。
+| ☐ | Starter · AI Staff Hiring Plan | S$5,200 / 年 | 雇佣 AI Marketing Crew 管理最多 4 个社媒平台，包括 Instagram、Facebook、TikTok 和 Google Map；包含品牌评估报告、平台化多语言内容生成、审核后智能排期、Google Map 评论监控与回复建议、每日增长数据和月度报告；使用上限 150 posts/month。 | 12 个月 |
+| ☐ | Essential · AI Staff Hiring Plan | S$10,600 / 年 | 在 Starter 基础上加入 Image Designer、Video Maker、Branding Researcher、品牌访谈、品牌 brief、品牌策略、营销策略配置、素材标签与下载、AI 图片生成和有限 AI 视频创作；使用上限 180 posts/month、150 videos/month。 | 12 个月 |
+| ☐ | Booster · AI Staff Hiring Plan | S$16,800 / 年 | 雇佣扩展版 AI Marketing Crew，覆盖最多 8 个平台：Instagram、TikTok、Facebook、Google Map、美团点评、小红书、YouTube、Twitter/X；包含小红书内容生成、美团点评品牌装修、内容发布、评论监控与推广设置、AI 图片生成与优化、AI 视频生成不设限制；使用上限 240 posts/month、240 videos/month。 | 12 个月 |
 
 **合同开始日期 Start Date:** ________________
 **合同到期日 End Date:** ________________
 
-### 增值服务加购 Add-on Services
+### 可变成本项目 Variable Cost Items
 
 | 选择 | 平台 / 服务 | 费用 Fee | 说明 |
 | --- | --- | --- | --- |
-| ☐ | 小红书 Xiaohongshu | S$600 / 月 | 和英文平台同步运营 |
-| ☐ | 美团点评 Meituan Dianping 开通服务 | S$2,200 / 年 | 海外华人点评管理 |
-| ☐ | 美团点评 Meituan Dianping 代运营 | S$200 / 月 | 海外华人点评管理 |
-| ☐ | 12Eat 唐人街外卖上线 | S$220 / 次 | 外卖平台账号管理 |
-| ☐ | 12Eat 唐人街外卖代运营 | S$80 / 月 | 外卖平台账号管理 |
-| ☐ | Grab / Foodpanda | S$300 / 月 | 本地外卖平台管理 |
-| ☐ | YouTube | S$800 / 月 | 视频内容制作与发布 |
-| ☐ | 视频制作（6 条） | S$600 | 短视频内容制作 |
-| ☐ | 现场拍摄服务 On-site Photography | S$300 / 次 | 专业摄影，素材采集，视频剪辑 |
-| ☐ | 博主探店服务 | S$1,500 / 套 | 博主探店（6 个 2k+ 粉丝，4 个 4k+，2 个 1w+） |
-| ☐ | 同一品牌下新增门店 | S$300 / 门店 | 增加一个 Google Map 账号 |
+| ☐ | Video Generation Scripts | S$200 / unit | 每单位最多 24 次视频生成，最少 1 个单位，最多 20 个单位 |
+| ☐ | Video Generation Token Pack | S$200 / unit | 每单位最多 24 次视频生成，最少 1 个单位，最多 20 个单位 |
 
-**合同月费合计 Total Monthly Fee (excl. one-time add-ons):** S$___________
+**合同年费合计 Total Annual Fee (excl. variable cost items):** S$___________
 
 ## 2. 服务内容 Scope of Services
 
@@ -65,7 +55,7 @@ This Agreement is entered into on the date stated above between the parties belo
 
 2.2 所有内容以中英双语呈现，由系统辅助生成后经人工审核，确保准确、专业，并符合甲方品牌形象。
 
-2.3 每月内容数量按所选套餐执行。甲方可通过指定渠道提交特别需求，乙方在合理范围内配合安排。
+2.3 内容与视频使用上限按所选套餐执行。甲方可通过指定渠道提交特别需求，乙方在合理范围内配合安排。
 
 2.4 舆情监控包括新加坡标准工作日（周一至周五，公众假期除外）内的评论回复与差评处理；发现重大舆情时乙方将在 4 小时内通知甲方。
 
@@ -75,19 +65,19 @@ This Agreement is entered into on the date stated above between the parties belo
 
 ## 3. 服务期限 Term of Agreement
 
-3.1 本协议最短服务期限为三（3）个月，自乙方完成账号接入并首批内容上线之日起计算（服务开始日）。Essential 套餐签约周期为 6 或 12 个月；Booster 套餐签约周期为 3 个月。
+3.1 本协议服务期限为十二（12）个月，自乙方完成账号接入并首批内容上线之日起计算（服务开始日）。
 
 3.2 合同期满后，如甲方希望续约，须在到期前十四（14）日内重新签署新合同并完成付款，方可继续享受服务。续约合同可选择当时可售套餐周期。
 
 3.3 服务开始日预计为合同签署后十四（14）个工作日内，具体日期由双方确认。
 
-3.4 This Agreement has a minimum term of three (3) months. Fees are paid upfront for the full contract duration. Upon expiry, renewal requires execution of a new agreement and full advance payment within fourteen (14) days prior to expiry.
+3.4 This Agreement has a twelve (12) month term. Fees are paid upfront for the full contract duration. Upon expiry, renewal requires execution of a new agreement and full advance payment within fourteen (14) days prior to expiry.
 
 ## 4. 付款条款 Payment Terms
 
 4.1 本协议采用一次性预付制。甲方须于签署本协议后七（7）个工作日内，一次性支付所选合同周期内的全部服务费用。
 
-4.2 付款金额按所选套餐月费乘以合同月数计算：3 个月合约按月费 x 3 计算；6 个月合约按月费 x 6 计算；12 个月合约按月费 x 12 计算。
+4.2 付款金额按所选年度套餐和已确认的可变成本项目计算。
 
 4.3 付款方式：银行转账至乙方指定账户（账户信息见附件 B），或通过 PayNow 至乙方 UEN 转账。付款后请将转账凭证发送至乙方指定邮箱，收到凭证后乙方将在一（1）个工作日内确认。
 
@@ -97,7 +87,7 @@ This Agreement is entered into on the date stated above between the parties belo
 
 4.6 所有费用以新加坡元（SGD / S$）计价，不含税。GST（如适用）及银行手续费由甲方自行承担。
 
-4.7 All fees are payable in full and in advance for the entire contract duration selected. The minimum single payment equals three (3) months of the applicable monthly rate. All fees are quoted in SGD exclusive of applicable taxes.
+4.7 All fees are payable in full and in advance for the annual contract duration selected. All fees are quoted in SGD exclusive of applicable taxes.
 
 ## 5. 双方义务 Obligations of the Parties
 
@@ -252,4 +242,4 @@ AMC - Your AI Marketing Crew | Deliverychinatown Pte. Ltd. | amc.immedi.ai | Gov
 
 ---
 
-*合同版本 Contract Version: AMC-SMSA-v1.09 | 生效日期 Effective Date: 2026-08-24*
+*合同版本 Contract Version: AMC-SMSA-v1.10 | 生效日期 Effective Date: 2026-08-28*

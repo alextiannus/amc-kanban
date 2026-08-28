@@ -101,7 +101,7 @@ export default function BrandsTab({
   const [newBrand, setNewBrand] = useState({
     brandName: '',
     ownerEmail: '',
-    planId: 'essential',
+    planId: 'starter',
     durationMonths: 12,
     location: '',
     timezone: 'Asia/Singapore',
@@ -125,7 +125,7 @@ export default function BrandsTab({
     setIsCreating(false)
     if (result.ok) {
       setShowCreateForm(false)
-      setNewBrand({ brandName: '', ownerEmail: '', planId: 'essential', durationMonths: 12, location: '', timezone: 'Asia/Singapore' })
+      setNewBrand({ brandName: '', ownerEmail: '', planId: 'starter', durationMonths: 12, location: '', timezone: 'Asia/Singapore' })
     } else {
       setCreateError(result.error || '创建失败，请重试')
     }
@@ -489,8 +489,9 @@ export default function BrandsTab({
                         onChange={e => setNewBrand(p => ({ ...p, planId: e.target.value }))}
                         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
-                        <option value="essential">ESSENTIAL（基础线上经营）</option>
-                        <option value="booster">BOOSTER（增长战役）</option>
+                        <option value="starter">Starter · AI Staff Hiring Plan</option>
+                        <option value="essential">Essential · AI Staff Hiring Plan</option>
+                        <option value="booster">Booster · AI Staff Hiring Plan</option>
                       </select>
                     </div>
                     <div>
@@ -502,8 +503,6 @@ export default function BrandsTab({
                         onChange={e => setNewBrand(p => ({ ...p, durationMonths: Number(e.target.value) }))}
                         className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
-                        <option value={3}>3 个月</option>
-                        <option value={6}>6 个月</option>
                         <option value={12}>12 个月</option>
                       </select>
                     </div>
@@ -712,8 +711,9 @@ export default function BrandsTab({
                           onChange={e => onUpdateBrandDraft(editingBrand.id, { planId: e.target.value })} 
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
-                          <option value="essential">ESSENTIAL (基础线上经营)</option>
-                          <option value="booster">BOOSTER (增长战役)</option>
+                          <option value="starter">Starter · AI Staff Hiring Plan</option>
+                          <option value="essential">Essential · AI Staff Hiring Plan</option>
+                          <option value="booster">Booster · AI Staff Hiring Plan</option>
                         </select>
                       </label>
                       <label className="space-y-1.5 block">
@@ -736,8 +736,6 @@ export default function BrandsTab({
                           onChange={e => onUpdateBrandDraft(editingBrand.id, { durationMonths: Number(e.target.value) })} 
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
-                          <option value={3}>3 个月</option>
-                          <option value={6}>6 个月</option>
                           <option value={12}>12 个月</option>
                         </select>
                       </label>

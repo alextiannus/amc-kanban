@@ -3,8 +3,7 @@ import { ArrowLeft, CheckCircle2, PlusCircle } from 'lucide-react'
 import { SUBSCRIPTION_ADDONS } from '@/lib/subscription/catalog'
 
 export default function AddonServicesPage() {
-  const monthly = SUBSCRIPTION_ADDONS.filter((addon) => addon.pricing === 'monthly')
-  const oneTime = SUBSCRIPTION_ADDONS.filter((addon) => addon.pricing === 'one_time')
+  const variableCosts = SUBSCRIPTION_ADDONS.filter((addon) => addon.pricing === 'one_time')
 
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
@@ -15,10 +14,10 @@ export default function AddonServicesPage() {
               <ArrowLeft className="h-4 w-4" />
               服务检查
             </Link>
-            <p className="mt-4 text-xs font-black uppercase tracking-[0.24em] text-indigo-600">AMC Add-ons</p>
-            <h1 className="mt-2 text-3xl font-black tracking-normal">加购增值服务</h1>
+            <p className="mt-4 text-xs font-black uppercase tracking-[0.24em] text-indigo-600">AMC Variable Costs</p>
+            <h1 className="mt-2 text-3xl font-black tracking-normal">AI Staff 可变成本项目</h1>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600 dark:text-slate-400">
-              这些项目仅在报价、订单、发票、工作说明或书面确认中列明时才包含。第三方平台费用、创作者费用、广告投放费和供应商费用另行确认。
+              当前只显示年度 AI Staff 服务方案相关的可变成本项目。原月度服务和旧增值服务已保留在目录中，暂不在此页面展示。
             </p>
           </div>
           <Link
@@ -29,8 +28,7 @@ export default function AddonServicesPage() {
           </Link>
         </header>
 
-        <AddonGroup title="月度加购" subtitle="适合需要持续维护的平台或渠道。" addons={monthly} />
-        <AddonGroup title="单次加购" subtitle="适合拍摄、短视频制作或集中探店项目。" addons={oneTime} />
+        <AddonGroup title="可变成本" subtitle="按实际视频生成单位另行确认。" addons={variableCosts} />
       </div>
     </main>
   )

@@ -2210,15 +2210,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         }
       }
 
-      const { SUBSCRIPTION_PLANS } = await import('@/lib/subscription/catalog')
+      const { getPlanMonthlyContentQuota, getPlanPlatformCoverage, SUBSCRIPTION_PLANS } = await import('@/lib/subscription/catalog')
       const planId = subscription.planId
       const plan = SUBSCRIPTION_PLANS.find(p => p.id === planId)
       const included_services = plan?.services ?? []
-      const monthly_content_quota = planId === 'essential' ? 12 : planId === 'booster' ? 24 : 0
-      
-      let platform_coverage: string[] = []
-      if (planId === 'essential') platform_coverage = ['Instagram', 'TikTok', 'Google Business Profile']
-      else if (planId === 'booster') platform_coverage = ['Instagram', 'TikTok', 'Xiaohongshu', 'Google Business Profile']
+      const monthly_content_quota = getPlanMonthlyContentQuota(planId)
+      const platform_coverage = getPlanPlatformCoverage(planId)
 
       return {
         content: [{

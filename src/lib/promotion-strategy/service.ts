@@ -252,7 +252,7 @@ function buildPromotionPoints(input: {
   servicePlanId: string
   marketEvents: any[]
 }): PromotionPoint[] {
-  const limit = input.servicePlanId === 'essential' ? 4 : 6
+  const limit = input.servicePlanId === 'booster' ? 8 : 4
   const points = input.sellingPoints.slice(0, Math.min(limit, Math.max(3, input.sellingPoints.length)))
   const fallback = points.length ? points : ['招牌产品或核心服务', '到店理由', '真实信任内容']
   return fallback.map((sellingPoint, index) => ({
@@ -261,7 +261,7 @@ function buildPromotionPoints(input: {
     sellingPoint,
     customerAction: actionForPoint(sellingPoint),
     targetPlatforms: rotatePlatforms(input.platforms, index),
-    requestedCandidateCount: input.servicePlanId === 'essential' ? 3 : 5,
+    requestedCandidateCount: input.servicePlanId === 'booster' ? 5 : 3,
     targetPublishWindow: { start: dateInMonth(input.month, 1 + index * 6), end: dateInMonth(input.month, 6 + index * 6) },
   }))
 }
@@ -336,7 +336,7 @@ function inferCategory(brand: any, knowledge: Record<string, any>) {
 
 function normalizeServicePlan(value: unknown) {
   const plan = String(value || '').trim().toLowerCase()
-  return ['essential', 'booster'].includes(plan) ? plan : 'essential'
+  return ['starter', 'essential', 'booster'].includes(plan) ? plan : 'essential'
 }
 
 function normalizePlatforms(value: unknown) {

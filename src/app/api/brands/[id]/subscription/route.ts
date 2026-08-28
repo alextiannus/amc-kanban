@@ -4,7 +4,15 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { authenticateRequest } from '@/lib/auth-v2'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canOwnBrand } from '@/lib/brandAccess'
-import { calculatePricing, SUBSCRIPTION_ADDONS, SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import {
+  BILLABLE_SUBSCRIPTION_ADDONS,
+  calculatePricing,
+  getPlanMonthlyContentQuota,
+  getPlanPlatformCoverage,
+  getPlanPublishingFreq,
+  normalizeAddonQuantity,
+  SUBSCRIPTION_PLANS,
+} from '@/lib/subscription/catalog'
 import { POST as humanPost } from '../../../subscription/route'
 
 type Params = { params: Promise<{ id: string }> }
@@ -43,14 +51,10 @@ function getSelectedAddonPricingInput(selectedAddons: unknown) {
 
   const add = (id: unknown, quantity: unknown = 1) => {
     if (typeof id !== 'string') return
-    const addon = SUBSCRIPTION_ADDONS.find((item) => item.id === id)
+    const addon = BILLABLE_SUBSCRIPTION_ADDONS.find((item) => item.id === id)
     if (!addon) return
 
-    const parsedQuantity = typeof quantity === 'number' && Number.isFinite(quantity)
-      ? Math.max(0, Math.floor(quantity))
-      : Number.isFinite(Number(quantity))
-        ? Math.max(0, Math.floor(Number(quantity)))
-        : 1
+    const parsedQuantity = normalizeAddonQuantity(id, quantity)
 
     if (parsedQuantity <= 0) return
     addonIds.push(id)
@@ -83,42 +87,16 @@ function getSelectedAddonPricingInput(selectedAddons: unknown) {
   }
 }
 
-function getPlatformCoverage(planId: string) {
-  if (planId === 'essential') return ['instagram', 'tiktok', 'google_business']
-  if (planId === 'booster') return ['instagram', 'tiktok', 'xiaohongshu', 'google_business']
-  return []
-}
-
-function getMonthlyContentQuota(planId: string) {
-  if (planId === 'essential') return 20
-  if (planId === 'booster') return 38
-  return 0
-}
-
-function getPublishingFrequencyPlan(planId: string, platformCoverage: string[]) {
-  const monthlyByPlan = planId === 'booster'
-    ? { instagram: 12, tiktok: 12, xiaohongshu: 12, google_business: 2 }
-    : planId === 'essential'
-      ? { instagram: 12, tiktok: 6, google_business: 2 }
-      : {}
-  const entries = platformCoverage
-    .map((platform) => [platform, monthlyByPlan[platform as keyof typeof monthlyByPlan]] as const)
-    .filter(([, count]) => Number(count) > 0)
-  return entries.length
-    ? { platforms: Object.fromEntries(entries.map(([platform, count]) => [platform, { postsPerMonth: count }])) }
-    : null
-}
-
 async function getOperationsStrategy(planId: string, planServices: string[]) {
   const configured = await prisma.subscriptionOperationsStrategy.findUnique({ where: { planId } })
-  const defaultCoverage = getPlatformCoverage(planId)
+  const defaultCoverage = getPlanPlatformCoverage(planId)
   const platformCoverage = defaultCoverage.length ? defaultCoverage : configured ? stringList(configured.platformCoverage) : []
-  const monthlyContentQuota = getMonthlyContentQuota(planId) || configured?.monthlyContentQuota || 0
+  const monthlyContentQuota = getPlanMonthlyContentQuota(planId) || configured?.monthlyContentQuota || 0
   return {
     platformCoverage,
     monthlyContentQuota,
     includedServices: configured ? stringList(configured.includedServices) : planServices,
-    publishingFrequencyPlan: getPublishingFrequencyPlan(planId, platformCoverage) || configured?.publishingFreq || null,
+    publishingFrequencyPlan: getPlanPublishingFreq(planId) || configured?.publishingFreq || null,
     storeLimit: configured?.storeLimit ?? 1,
     strategyNotes: configured?.strategyNotes || null,
   }
@@ -241,6 +219,12 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const pricingInput = getSelectedAddonPricingInput(selectedAddons)
   const pricing = calculatePricing(subscription.planId, subscription.durationMonths, pricingInput.addonIds, pricingInput.addonQuantities)
+  const normalizedSelectedAddons = BILLABLE_SUBSCRIPTION_ADDONS
+    .filter((addon) => pricingInput.addonIds.includes(addon.id))
+    .map((addon) => ({
+      ...addon,
+      quantity: normalizeAddonQuantity(addon.id, pricingInput.addonQuantities[addon.id] ?? 1),
+    }))
 
   const updatedSub = await prisma.brandSubscription.update({
     where: { id: subscription.id },
@@ -250,7 +234,7 @@ export async function PATCH(request: Request, { params }: Params) {
       recurringAddonsUsd: pricing.recurringAddonsUsd,
       oneTimeAddonsUsd: pricing.oneTimeAddonsUsd,
       totalDueUsd: subscription.feeWaived ? 0 : pricing.totalDueUsd,
-      selectedAddons: selectedAddons as Prisma.InputJsonValue,
+      selectedAddons: normalizedSelectedAddons as Prisma.InputJsonValue,
     },
   })
 

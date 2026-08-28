@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
-export const SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.09'
+export const SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.10'
 export const SUBSCRIPTION_TERMS_TITLE = 'AI Marketing Crew Service Terms / AI Marketing Crew 服务条款'
 export const SUBSCRIPTION_TERMS_EN_FILENAME = 'AI-Marketing-Crew-Service-Terms-English.pdf'
 export const SUBSCRIPTION_TERMS_ZH_FILENAME = 'AI-Marketing-Crew-Service-Terms-Chinese.pdf'

@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
+import { getPlanMonthlyContentQuota, getPlanPlatformCoverage, getPlanPublishingFreq, SUBSCRIPTION_PLANS } from '@/lib/subscription/catalog'
 
 export type SubscriptionOperationsPolicy = {
   planId: string
@@ -20,9 +20,9 @@ export async function getSubscriptionOperationsPolicy(planId: string): Promise<S
     where: { planId: normalizedPlanId },
   })
   if (configured) {
-    const defaultFreq = defaultPublishingFreq(normalizedPlanId)
-    const defaultQuota = defaultMonthlyContentQuota(normalizedPlanId)
-    const defaultCoverage = defaultPlatforms(normalizedPlanId)
+    const defaultFreq = getPlanPublishingFreq(normalizedPlanId)
+    const defaultQuota = getPlanMonthlyContentQuota(normalizedPlanId)
+    const defaultCoverage = getPlanPlatformCoverage(normalizedPlanId)
     return {
       planId: configured.planId,
       planName: configured.planName,
@@ -41,9 +41,9 @@ export async function getSubscriptionOperationsPolicy(planId: string): Promise<S
     planId: catalogPlan.id,
     planName: catalogPlan.name,
     includedServices: catalogPlan.services,
-    platformCoverage: defaultPlatforms(catalogPlan.id),
-    monthlyContentQuota: defaultMonthlyContentQuota(catalogPlan.id),
-    publishingFreq: defaultPublishingFreq(catalogPlan.id),
+    platformCoverage: getPlanPlatformCoverage(catalogPlan.id),
+    monthlyContentQuota: getPlanMonthlyContentQuota(catalogPlan.id),
+    publishingFreq: getPlanPublishingFreq(catalogPlan.id),
     storeLimit: 1,
     strategyNotes: catalogPlan.explanation,
   }
@@ -51,39 +51,4 @@ export async function getSubscriptionOperationsPolicy(planId: string): Promise<S
 
 function asStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
-}
-
-function defaultPlatforms(planId: string) {
-  if (planId === 'booster') return ['instagram', 'tiktok', 'xiaohongshu', 'google_business']
-  if (planId === 'essential') return ['instagram', 'tiktok', 'google_business']
-  return []
-}
-
-function defaultMonthlyContentQuota(planId: string) {
-  if (planId === 'booster') return 38
-  if (planId === 'essential') return 20
-  return 0
-}
-
-function defaultPublishingFreq(planId: string) {
-  if (planId === 'booster') {
-    return {
-      platforms: {
-        instagram: { postsPerMonth: 12 },
-        tiktok: { postsPerMonth: 12 },
-        xiaohongshu: { postsPerMonth: 12 },
-        google_business: { postsPerMonth: 2 },
-      },
-    }
-  }
-  if (planId === 'essential') {
-    return {
-      platforms: {
-        instagram: { postsPerMonth: 12 },
-        tiktok: { postsPerMonth: 6 },
-        google_business: { postsPerMonth: 2 },
-      },
-    }
-  }
-  return null
 }
