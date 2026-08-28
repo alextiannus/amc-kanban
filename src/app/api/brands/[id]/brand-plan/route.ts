@@ -38,7 +38,11 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json(data)
   } catch (error) {
     if (error instanceof BrandPlanError) {
-      return NextResponse.json({ error: error.message }, { status: error.status })
+      return NextResponse.json({
+        error: error.message,
+        code: error.code,
+        ...(error.details ? { details: error.details } : {}),
+      }, { status: error.status })
     }
     console.error('[brand-plan] action failed:', error)
     return NextResponse.json({ error: 'brand_plan_action_failed' }, { status: 500 })

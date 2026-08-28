@@ -17,6 +17,7 @@ import type {
 } from '@/lib/brandIdentity'
 import { brandPlanEditorIdentityValues } from '@/lib/brandPlanEditorIdentity'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
+import { calendarCreativeErrorMessage } from '@/lib/brand-plan/errorMessages'
 import {
   createSkuId,
   formatSkuPrice,
@@ -376,7 +377,10 @@ function createStoreId() {
 }
 
 function brandPlanErrorMessage(error: unknown) {
-  const code = typeof error === 'string' ? error : ''
+  const calendarMessage = calendarCreativeErrorMessage(error)
+  if (calendarMessage) return calendarMessage
+  const response = error && typeof error === 'object' && !Array.isArray(error) ? error as Record<string, unknown> : {}
+  const code = typeof error === 'string' ? error : typeof response.error === 'string' ? response.error : ''
   if (code === 'merchant_interview_required') return '请先填写并保存品牌主张访谈。'
   if (code === 'brand_plan_update_required') return '请先生成营销计划。'
   if (code === 'annual_plan_required') return '请先生成营销计划。'
@@ -560,7 +564,7 @@ function BrandProfileContent({
       showToast(message, type)
     } else {
       setToast({ message, type })
-      setTimeout(() => setToast(null), 3000)
+      setTimeout(() => setToast(null), type === 'error' ? 12000 : 3000)
     }
   }
 
@@ -896,7 +900,7 @@ ${storeLines}
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      showToastVal(brandPlanErrorMessage(data.error), 'error')
+      showToastVal(brandPlanErrorMessage(data), 'error')
       return null
     }
     const marketingSolution = data.marketingSolution || data.brandPlan
@@ -2689,7 +2693,7 @@ ${storeLines}
         </div>
       )}
       {toast && (
-        <div className={`fixed left-1/2 top-4 z-50 flex -translate-x-1/2 items-center gap-2 rounded-xl border px-4 py-2.5 text-xs font-bold text-white shadow-lg ${
+        <div className={`fixed left-1/2 top-4 z-50 flex max-w-[min(92vw,760px)] -translate-x-1/2 items-center gap-2 whitespace-pre-line rounded-xl border px-4 py-2.5 text-left text-xs font-bold leading-5 text-white shadow-lg ${
           toast.type === 'success' ? 'border-emerald-400 bg-emerald-500' : toast.type === 'error' ? 'border-rose-400 bg-rose-500' : 'border-slate-700 bg-slate-800'
         }`}>
           {toast.message}

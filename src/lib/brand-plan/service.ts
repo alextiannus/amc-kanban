@@ -1511,21 +1511,33 @@ async function requestCalendarCreativePool(
       promotionPointIds: promotionPoints.map((point) => point.id),
       reason,
     })
-    throw new BrandPlanError(`calendar_content_creative_match_failed:${reason}`, 502)
+    throw new BrandPlanError('calendar_content_creative_match_failed', 502, { reason })
   }
 
   const creativeCandidates = (Array.isArray(result.creativeCandidates) ? result.creativeCandidates : [])
     .filter((candidate) => Boolean(calendarInspirationCreativeId(candidate)))
-  const missingPromotionPointIds = promotionPoints
+  const missingPromotionPoints = promotionPoints
     .filter((point) => !creativeCandidates.some((candidate) => text(candidate.promotionPointId) === point.id))
-    .map((point) => point.id)
-  if (missingPromotionPointIds.length) {
+    .map((point) => ({
+      id: point.id,
+      name: point.sellingPoint,
+      goal: point.goal,
+      platforms: point.platforms,
+      expectedPublishCount: point.expectedPublishCount,
+    }))
+  if (missingPromotionPoints.length) {
     const gapReasons = (Array.isArray(result.contentLibraryGaps) ? result.contentLibraryGaps : [])
       .map((gap) => text(gap.reason))
       .filter(Boolean)
     throw new BrandPlanError(
-      `calendar_content_creative_missing:${JSON.stringify({ missingPromotionPointIds, gapReasons: uniqueStrings(gapReasons) })}`,
-      502
+      'calendar_content_creative_missing',
+      409,
+      {
+        month: text(missingPromotionPoints[0]?.id).match(/^bp_(\d{4})(\d{2})_/)?.slice(1, 3).join('-'),
+        missingPromotionPoints,
+        gapReasons: uniqueStrings(gapReasons),
+        contentMatchRequestId: text(result.contentMatchRequestId),
+      }
     )
   }
   return { ...result, creativeCandidates }
@@ -1956,7 +1968,7 @@ async function reviewCalendarCreativeItemsWithLLM(
         .map((entry) => text(entry.id))
       if (rejectedItemIds.length) {
         console.warn('[brand-plan] calendar creative review rejected source-anchored items', { rejectedItemIds })
-        throw new BrandPlanError(`calendar_creative_review_rejected:${JSON.stringify(rejectedItemIds)}`, 502)
+        throw new BrandPlanError('calendar_creative_review_rejected', 502, { rejectedItemIds })
       }
       const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
       const reviewedItems = items.map((item) => {
@@ -3412,8 +3424,12 @@ function text(value: unknown) {
 
 export class BrandPlanError extends Error {
   status: number
-  constructor(message: string, status = 500) {
-    super(message)
+  code: string
+  details?: Record<string, unknown>
+  constructor(code: string, status = 500, details?: Record<string, unknown>) {
+    super(code)
+    this.code = code
     this.status = status
+    this.details = details
   }
 }
