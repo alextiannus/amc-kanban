@@ -418,7 +418,7 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
 function extractTimelineShots(value: string) {
   const text = value.trim()
   if (!text) return []
-  const matches = Array.from(text.matchAll(/(?:^|[\s。；;，,])((?:(?:\d{1,2}(?:-\d{1,2})?秒)|(?:第?\d+镜)|(?:镜头\s*\d+)|(?:分镜\s*\d+))[:：][\s\S]*?)(?=(?:[\s。；;，,](?:(?:\d{1,2}(?:-\d{1,2})?秒)|(?:第?\d+镜)|(?:镜头\s*\d+)|(?:分镜\s*\d+))[:：])|$)/g))
+  const matches = Array.from(text.matchAll(/(?:^|[\s。；;，,])((?:(?:\d{1,2}(?:-\d{1,2})?(?:秒|s))|(?:第?\d+镜)|(?:镜头\s*\d+)|(?:分镜\s*\d+))[:：][\s\S]*?)(?=(?:[\s。；;，,](?:(?:\d{1,2}(?:-\d{1,2})?(?:秒|s))|(?:第?\d+镜)|(?:镜头\s*\d+)|(?:分镜\s*\d+))[:：])|$)/gi))
   return matches
     .map((match) => match[1].replace(/[。；;，,\s]+$/, '').trim())
     .filter(Boolean)

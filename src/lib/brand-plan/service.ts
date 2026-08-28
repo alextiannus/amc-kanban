@@ -1395,15 +1395,8 @@ async function buildPublishingCalendarItemByIndex(
       ? calendarContentGap(pool.contentLibraryGaps, promotionPoint.id, candidate)
       : calendarIndependentCreativeGap(pool.missingPromotionPoints, promotionPoint.id),
   }
-  const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [draft]).catch((error) => {
-    console.warn('[brand-plan] calendar item review failed; using rule fallback', {
-      itemId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return fallbackReviewedCalendarItems(brand, [draft])
-  })
-  requireValidCalendarInspirationIdentity([reviewed])
-  return reviewed
+  requireValidCalendarInspirationIdentity([draft])
+  return draft
 }
 
 async function buildIndependentPublishingCalendarItemByIndex(
@@ -1477,14 +1470,7 @@ async function buildIndependentPublishingCalendarItemByIndex(
     materialRequirements: calendarMaterialRequirements(product, null),
     contentLibraryGap: '单条灵感匹配暂不可用，已按平台规则生成原创 brief；主理人 review 时可补充参考灵感。',
   }
-  const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [draft]).catch((error) => {
-    console.warn('[brand-plan] independent calendar item review failed; using rule fallback', {
-      itemId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return fallbackReviewedCalendarItems(brand, [draft])
-  })
-  return reviewed
+  return draft
 }
 
 async function regeneratePublishingCalendarItem(
