@@ -2272,10 +2272,12 @@ async function mapWithConcurrency<T, R>(
   return results
 }
 
-function mergeReviewedCalendarPlanning(_planning: string, creativeSummary: string, qualityNote: string, _approved: boolean) {
+function mergeReviewedCalendarPlanning(planning: string, creativeSummary: string, qualityNote: string, _approved: boolean) {
+  const scriptDetail = planning.trim()
   const sections = [
     creativeSummary ? `创意总结：${creativeSummary}` : '',
     qualityNote ? `审核备注：${qualityNote}` : '',
+    scriptDetail && !scriptDetail.includes(creativeSummary) ? scriptDetail : '',
   ].filter(Boolean)
   return sections.join('\n')
 }

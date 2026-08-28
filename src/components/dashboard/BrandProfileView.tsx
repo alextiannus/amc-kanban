@@ -6,7 +6,7 @@ import {
   X, ChevronLeft, Save,
   Settings, BookOpen, Loader2,
   RefreshCw, FileText, Store, Utensils,
-  Edit3, Plus,
+  Edit3, Plus, Pin,
   Users, Goal, HelpCircle,
   MapPin, Music2, ExternalLink, WalletCards, Download
 } from 'lucide-react'
@@ -2344,6 +2344,7 @@ ${storeLines}
                   videoScript.subtitles.length ||
                   videoScript.closing
                 )
+                const isPinned = item.status === '已确认'
                 return (
                 <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className={`rounded-xl border border-l-4 border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 ${calendarPlatformAccent(platformSlug)}`}>
                   <div className="flex items-start justify-between gap-2">
@@ -2392,6 +2393,20 @@ ${storeLines}
                     <div className="flex shrink-0 items-center gap-1">
                       <button
                         type="button"
+                        onClick={() => handleUpdateCalendarItem(item.id, index, { status: isPinned ? '待确认' : '已确认' })}
+                        disabled={Boolean(planGenerating)}
+                        aria-label={isPinned ? '取消固定这个创意' : '固定这个创意'}
+                        title={isPinned ? '已固定，点击取消' : '未固定，点击固定'}
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition disabled:opacity-50 ${
+                          isPinned
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-200'
+                            : 'border-amber-200 bg-amber-50 text-amber-600 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200'
+                        }`}
+                      >
+                        <Pin className={`h-3.5 w-3.5 ${isPinned ? 'fill-current' : ''}`} />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleRegenerateCalendarItem(item.id)}
                         disabled={Boolean(planGenerating) || !item.id}
                         aria-label="重做这一条"
@@ -2432,9 +2447,9 @@ ${storeLines}
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}
                   {hasVideoScript ? (
-                    <details className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/70 px-3 py-2 text-[11px] text-slate-700 open:space-y-2 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-slate-200">
+                    <details open className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/70 px-3 py-2 text-[11px] text-slate-700 open:space-y-2 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-slate-200">
                       <summary className="cursor-pointer font-black text-indigo-700 dark:text-indigo-200">
-                        视频脚本 · {videoScript.shots.length || 1} 个分镜
+                        详细分镜 · {videoScript.shots.length || 1} 个镜头
                       </summary>
                       {videoSourceTitle ? (
                         <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">原创意：</span>{videoSourceTitle}</p>
@@ -2496,16 +2511,6 @@ ${storeLines}
                       原始来源
                     </a>
                   ) : null}
-                  <select
-                    value={item.status}
-                    onChange={(event) => handleUpdateCalendarItem(item.id, index, { status: event.target.value })}
-                    className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                  >
-                    <option value="待确认">待确认</option>
-                    <option value="已确认">已确认</option>
-                    <option value="待补素材">待补素材</option>
-                    <option value="已完成">已完成</option>
-                  </select>
                 </div>
                 )
               }) : (
