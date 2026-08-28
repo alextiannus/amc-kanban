@@ -27,11 +27,15 @@ type TtsConfig = {
   timeoutMs: number | null
 }
 
+type MiniMaxTtsProfileCandidate = TtsConfig & {
+  taskTags?: unknown
+}
+
 function normalizeTaskTag(tag: unknown): string {
   return String(tag).trim().toLowerCase().replace(/[\s-]+/g, '_')
 }
 
-function isMiniMaxTtsProfile(config: { provider?: string | null; modelName?: string | null; baseUrl?: string | null; taskTags?: unknown }) {
+function isMiniMaxTtsProfile(config: MiniMaxTtsProfileCandidate): config is MiniMaxTtsProfileCandidate {
   if (String(config.provider || '').trim().toLowerCase() !== 'minimax') return false
   const tags = Array.isArray(config.taskTags) ? config.taskTags.map(normalizeTaskTag) : []
   const model = String(config.modelName || '').trim().toLowerCase()
@@ -45,7 +49,7 @@ function ttsTimeout(configTimeoutMs: number | null | undefined) {
 }
 
 async function getActiveMiniMaxTtsConfigs(): Promise<TtsConfig[]> {
-  const configs = await prisma.lLMConfig.findMany({
+  const configs: MiniMaxTtsProfileCandidate[] = await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,
     },
