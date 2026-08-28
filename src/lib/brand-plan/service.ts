@@ -50,6 +50,18 @@ type BrandPlanCalendarItem = {
   sampleSourcePlatform?: string
   materialRequirements?: string[]
   contentLibraryGap?: string
+  scriptSource?: 'inspiration' | 'generated_from_idea' | 'merchant'
+  creativeMatchStatus?: 'matched' | 'no_candidate_after_retry'
+  videoScript?: CalendarVideoScriptData
+}
+
+type CalendarVideoScriptData = {
+  opening?: string
+  shots?: string[]
+  voiceover?: string[]
+  subtitles?: string[]
+  closing?: string
+  source?: 'inspiration' | 'generated_from_idea' | 'merchant'
 }
 
 export type BrandPlanWorkspaceData = {
@@ -1268,9 +1280,10 @@ async function buildPublishingMonth(
     }
     const candidateCreativeId = calendarInspirationCreativeId(candidate)
     if (candidateCreativeId) usedCreativeIds.add(candidateCreativeId)
+    const creativeMatchStatus = (candidate ? 'matched' : 'no_candidate_after_retry') as BrandPlanCalendarItem['creativeMatchStatus']
     const sampleLinks = calendarSampleLinks(candidate)
     const inspirationSource = calendarInspirationSource(candidate)
-    return {
+    return withCalendarScriptFields({
       id: itemId,
       date: slot.date,
       title: calendarItemTitle({
@@ -1308,10 +1321,12 @@ async function buildPublishingMonth(
       sampleThumbnailUrl: sampleLinks.thumbnailUrl,
       sampleSourcePlatform: sampleLinks.platform,
       materialRequirements: calendarMaterialRequirements(product, candidate),
+      scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
+      creativeMatchStatus,
       contentLibraryGap: candidate
         ? calendarContentGap(itemCreativePool.contentLibraryGaps, promotionPoint.id, candidate)
         : calendarIndependentCreativeGap(itemCreativePool.missingPromotionPoints, promotionPoint.id),
-    }
+    })
   })
   requireValidCalendarInspirationIdentity(items)
   return items
@@ -1362,7 +1377,8 @@ async function buildPublishingCalendarItemByIndex(
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
   const candidateCreativeId = calendarInspirationCreativeId(candidate)
-  const draft: BrandPlanCalendarItem = {
+  const creativeMatchStatus = (candidate ? 'matched' : 'no_candidate_after_retry') as BrandPlanCalendarItem['creativeMatchStatus']
+  const draft: BrandPlanCalendarItem = withCalendarScriptFields({
     id: itemId,
     date: slot.date,
     title: calendarItemTitle({
@@ -1400,10 +1416,12 @@ async function buildPublishingCalendarItemByIndex(
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
     sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(product, candidate),
+    scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
+    creativeMatchStatus,
     contentLibraryGap: candidate
       ? calendarContentGap(pool.contentLibraryGaps, promotionPoint.id, candidate)
       : calendarIndependentCreativeGap(pool.missingPromotionPoints, promotionPoint.id),
-  }
+  })
   requireValidCalendarInspirationIdentity([draft])
   return draft
 }
@@ -1433,7 +1451,8 @@ async function regeneratePublishingCalendarItem(
   }
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
-  const replacement: BrandPlanCalendarItem = {
+  const creativeMatchStatus = (candidate ? 'matched' : 'no_candidate_after_retry') as BrandPlanCalendarItem['creativeMatchStatus']
+  const replacement: BrandPlanCalendarItem = withCalendarScriptFields({
     ...item,
     date: clampCalendarDateToMinimum(item.date),
     title: calendarItemTitle({
@@ -1467,10 +1486,12 @@ async function regeneratePublishingCalendarItem(
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
     sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(item.product, candidate),
+    scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
+    creativeMatchStatus,
     contentLibraryGap: candidate
       ? calendarContentGap(pool.contentLibraryGaps, point.id, candidate)
       : calendarIndependentCreativeGap(pool.missingPromotionPoints, point.id),
-  }
+  })
   requireValidCalendarInspirationIdentity([replacement])
   return replacement
 }
@@ -1640,28 +1661,7 @@ async function requestCalendarCreativePool(
       promotionPointIds: promotionPoints.map((point) => point.id),
       reason,
     })
-    const missingPromotionPoints = promotionPoints.map((point) => ({
-      id: point.id,
-      name: point.sellingPoint,
-      goal: point.goal,
-      platforms: point.platforms,
-      expectedPublishCount: point.expectedPublishCount,
-      candidateCount: 0,
-      returnedCount: 0,
-      rankedCount: 0,
-      persistedRankedCount: 0,
-      gapReasons: ['content_library_search_failed'],
-    }))
-    return {
-      contentMatchRequestId: '',
-      matches: [],
-      creativeCandidates: [],
-      contentLibraryGaps: missingPromotionPoints.map((point) => ({
-        promotionPointId: point.id,
-        reason: 'content_library_search_failed',
-      })),
-      missingPromotionPoints,
-    }
+    throw new BrandPlanError('calendar_content_match_failed', 502, { reason })
   }
 
   const creativeCandidates = (Array.isArray(result.creativeCandidates) ? result.creativeCandidates : [])
@@ -1700,7 +1700,7 @@ async function requestCalendarCreativePool(
       }
     })
   if (missingPromotionPoints.length) {
-    console.warn('[brand-plan] calendar creative pool has item-level gaps; falling back to independent briefs', {
+    console.warn('[brand-plan] calendar creative pool has item-level gaps', {
       missingPromotionPoints,
       contentMatchRequestId: text(result.contentMatchRequestId),
     })
@@ -2113,6 +2113,7 @@ async function rewriteCalendarItemDetailsWithLLM(
       inspirationSourceSummary: item.inspirationSourceSummary,
       matchedTags: item.matchedTags || [],
       matchedInspirations: item.matchedInspirations || [],
+      scriptSource: item.scriptSource,
     },
   }
   const prompt = [
@@ -2137,7 +2138,10 @@ async function rewriteCalendarItemDetailsWithLLM(
   })
   const parsed = objectValue(parseJsonValue(result.text))
   const title = cleanReviewedCalendarTitle(text(parsed.title), item.title, brandName, approvedPricePhrases)
-  const planning = cleanReviewedCalendarText(text(parsed.planning), '', approvedPricePhrases)
+  const planning = sanitizeCalendarRewritePlanning(
+    cleanReviewedCalendarText(text(parsed.planning), '', approvedPricePhrases),
+    item
+  )
   const materialRequirements = stringList(parsed.materialRequirements)
     .map((line) => cleanReviewedCalendarText(line, '', approvedPricePhrases))
     .filter(Boolean)
@@ -2149,12 +2153,13 @@ async function rewriteCalendarItemDetailsWithLLM(
     })
     throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
   }
-  const rewritten = {
+  const rewritten = withCalendarScriptFields({
     ...item,
     title,
     planning,
     materialRequirements,
-  }
+    scriptSource: 'merchant' as const,
+  })
   const qualityIssues = calendarCreativeQualityIssues([rewritten], approvedPricePhrases)
   if (qualityIssues.length) {
     console.warn('[brand-plan] calendar item detail rewrite failed quality gate', {
@@ -2164,6 +2169,105 @@ async function rewriteCalendarItemDetailsWithLLM(
     throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
   }
   return rewritten
+}
+
+function sanitizeCalendarRewritePlanning(planning: string, sourceItem: BrandPlanCalendarItem) {
+  const lines = planning
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const sourceText = [sourceItem.planning, sourceItem.title, sourceItem.contentType].join('\n')
+  const wantsVoiceover = calendarTextRequestsScriptPart(sourceText, 'voiceover')
+  const wantsSubtitles = calendarTextRequestsScriptPart(sourceText, 'subtitles')
+  const kept = lines.filter((line) => {
+    if (line.startsWith('口播方向：')) return wantsVoiceover
+    if (line.startsWith('字幕方向：')) return wantsSubtitles
+    return true
+  })
+  const hasVoiceover = kept.some((line) => line.startsWith('口播方向：'))
+  const hasSubtitles = kept.some((line) => line.startsWith('字幕方向：'))
+  if (wantsVoiceover && !hasVoiceover) kept.push('口播方向：根据内容做口播')
+  if (wantsSubtitles && !hasSubtitles) kept.push('字幕方向：根据内容做字幕')
+  return kept.join('\n')
+}
+
+function calendarTextRequestsScriptPart(value: string, part: 'voiceover' | 'subtitles') {
+  const body = cleanCalendarText(value, '')
+  if (part === 'voiceover') {
+    if (/不要口播|无口播|不需要口播|不用口播/.test(body)) return false
+    return /口播|旁白|解说词|讲解词/.test(body)
+  }
+  if (/不要字幕|无字幕|不需要字幕|不用字幕/.test(body)) return false
+  return /字幕|屏幕文案|画面文字|贴字|字幕条/.test(body)
+}
+
+function withCalendarScriptFields(item: BrandPlanCalendarItem): BrandPlanCalendarItem {
+  if (!calendarItemIsVideo(item)) return { ...item, videoScript: undefined }
+  const parsed = parseCalendarPlanningVideoScript(item.planning)
+  return {
+    ...item,
+    videoScript: {
+      ...parsed,
+      source: item.scriptSource || 'generated_from_idea',
+    },
+  }
+}
+
+function calendarItemIsVideo(item: Pick<BrandPlanCalendarItem, 'contentType' | 'platform' | 'platformSlug' | 'planning'>) {
+  const blob = [item.contentType, item.platform, item.platformSlug, item.planning].join(' ').toLowerCase()
+  return /视频|短视频|video|reel|tiktok/.test(blob)
+}
+
+function parseCalendarPlanningVideoScript(planning: string): CalendarVideoScriptData {
+  const lines = String(planning || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const script: CalendarVideoScriptData = {
+    shots: [],
+    voiceover: [],
+    subtitles: [],
+  }
+  let section: 'shots' | null = null
+  for (const line of lines) {
+    if (line.startsWith('开场：')) {
+      script.opening = line.replace(/^开场：/, '').trim()
+      section = null
+      continue
+    }
+    if (line.startsWith('分镜脚本：') || line.startsWith('拍摄建议：')) {
+      const inline = line.replace(/^(分镜脚本|拍摄建议)：/, '').trim()
+      if (inline) script.shots = [...(script.shots || []), ...splitCalendarScriptPieces(inline)]
+      section = 'shots'
+      continue
+    }
+    if (line.startsWith('口播方向：')) {
+      script.voiceover = line.replace(/^口播方向：/, '').split(/\s*\/\s*/).map((item) => item.trim()).filter(Boolean)
+      section = null
+      continue
+    }
+    if (line.startsWith('字幕方向：')) {
+      script.subtitles = line.replace(/^字幕方向：/, '').split(/\s*\/\s*/).map((item) => item.trim()).filter(Boolean)
+      section = null
+      continue
+    }
+    if (line.startsWith('收尾：')) {
+      script.closing = line.replace(/^收尾：/, '').trim()
+      section = null
+      continue
+    }
+    if (section === 'shots' && /^\d+[.、]\s*/.test(line)) {
+      script.shots = [...(script.shots || []), line.replace(/^\d+[.、]\s*/, '').trim()]
+    }
+  }
+  return script
+}
+
+function splitCalendarScriptPieces(value: string) {
+  return value
+    .split(/\s*(?:\n|；|;|(?=\d+[.、]\s)|(?=\d+-\d+s)|(?=结尾：))\s*/)
+    .map((item) => item.replace(/^\d+[.、]\s*/, '').trim())
+    .filter(Boolean)
 }
 
 async function mapWithConcurrency<T, R>(

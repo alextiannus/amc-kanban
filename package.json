@@ -55,6 +55,7 @@
     "test:brand-growth-sync": "node --experimental-strip-types scripts/test-brand-growth-sync-contract.mts",
     "test:planning-ownership": "node --experimental-strip-types scripts/test-planning-ownership-contract.mts",
     "test:brand-plan-inspiration-link": "node --experimental-strip-types scripts/test-brand-plan-inspiration-link.mts",
+    "test:brand-plan-calendar-script-contract": "node --experimental-strip-types scripts/test-brand-plan-calendar-script-contract.mts",
     "test:brand-plan-calendar-recovery": "node --experimental-strip-types scripts/test-brand-plan-calendar-recovery.mts",
     "brand-plan:recover-calendars:dry-run": "tsx scripts/recover-brand-plan-calendars.mts --dry-run",
     "brand-plan:recover-calendars": "tsx scripts/recover-brand-plan-calendars.mts --apply",

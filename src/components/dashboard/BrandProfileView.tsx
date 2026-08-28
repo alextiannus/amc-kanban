@@ -215,6 +215,9 @@ type BrandPlanWorkspaceData = {
       sampleSourcePlatform?: string
       materialRequirements?: string[]
       contentLibraryGap?: string
+      scriptSource?: 'inspiration' | 'generated_from_idea' | 'merchant'
+      creativeMatchStatus?: 'matched' | 'no_candidate_after_retry'
+      videoScript?: CalendarVideoScriptPayload
     }>>
   }
 }
@@ -345,6 +348,15 @@ type CalendarVideoScript = {
   closing: string
 }
 
+type CalendarVideoScriptPayload = {
+  opening?: string
+  shots?: string[]
+  voiceover?: string[]
+  subtitles?: string[]
+  closing?: string
+  source?: 'inspiration' | 'generated_from_idea' | 'merchant'
+}
+
 function isCalendarVideoItem(item: { contentType?: string; platform?: string; platformSlug?: string; planning?: string }) {
   const textBlob = [
     item.contentType,
@@ -416,6 +428,18 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
   }
   script.shots = Array.from(new Set(script.shots.map((shot) => shot.trim()).filter(Boolean)))
   return script
+}
+
+function calendarVideoScriptForItem(item: { planning?: string; scriptSource?: string; videoScript?: CalendarVideoScriptPayload }): CalendarVideoScript {
+  if (!item.videoScript) return parseCalendarVideoScript(item.planning)
+  return {
+    opening: item.videoScript.opening || '',
+    shots: Array.isArray(item.videoScript.shots) ? item.videoScript.shots.filter(Boolean) : [],
+    shotLabel: item.videoScript.source === 'inspiration' || item.scriptSource === 'inspiration' ? '分镜' : '建议',
+    voiceover: Array.isArray(item.videoScript.voiceover) ? item.videoScript.voiceover.filter(Boolean) : [],
+    subtitles: Array.isArray(item.videoScript.subtitles) ? item.videoScript.subtitles.filter(Boolean) : [],
+    closing: item.videoScript.closing || '',
+  }
 }
 
 function extractTimelineShots(value: string) {
@@ -1496,7 +1520,7 @@ ${storeLines}
       .slice()
       .sort((left, right) => String(left.date || '').localeCompare(String(right.date || '')))
       .map((item, index) => {
-        const videoScript = parseCalendarVideoScript(item.planning)
+        const videoScript = calendarVideoScriptForItem(item)
         const sourceUrl = item.sampleVideoUrl || item.sampleOriginalUrl || ''
         const sourceTitle = item.inspirationSourceTitle || item.sampleSourcePlatform || ''
         const videoScriptHtml = isCalendarVideoItem(item) && (videoScript.opening || videoScript.shots.length || videoScript.voiceover.length || videoScript.subtitles.length || videoScript.closing)
@@ -1514,7 +1538,7 @@ ${storeLines}
             </div>
           `
           : ''
-        const shotRequirements = videoScript.shots.map((shot, shotIndex) => `分镜 ${shotIndex + 1}：${shot}`)
+        const shotRequirements = videoScript.shots.map((shot, shotIndex) => `${videoScript.shotLabel} ${shotIndex + 1}：${shot}`)
         const requirementLines = item.materialRequirements?.length
           ? [...item.materialRequirements, ...shotRequirements]
           : shotRequirements.length
@@ -2387,7 +2411,7 @@ ${storeLines}
                 const inspirationCreativeId = resolveInspirationCreativeId(item)
                 const videoSourceUrl = item.sampleVideoUrl || item.sampleOriginalUrl || ''
                 const videoSourceTitle = item.inspirationSourceTitle || item.sampleSourcePlatform || ''
-                const videoScript = parseCalendarVideoScript(item.planning)
+                const videoScript = calendarVideoScriptForItem(item)
                 const hasVideoScript = isCalendarVideoItem(item) && Boolean(
                   videoScript.opening ||
                   videoScript.shots.length ||
