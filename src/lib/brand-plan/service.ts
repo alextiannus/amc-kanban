@@ -1996,18 +1996,33 @@ async function reviewCalendarCreativeItemsWithLLM(
         .filter((entry) => entry.approved === false)
         .map((entry) => text(entry.id))
       if (rejectedItemIds.length) {
-        console.warn('[brand-plan] calendar creative review rejected source-anchored items', { rejectedItemIds })
-        throw new BrandPlanError('calendar_creative_review_rejected', 502, { rejectedItemIds })
+        console.warn('[brand-plan] calendar creative review rewrote rejected source-anchored items', { rejectedItemIds })
       }
       const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
       const reviewedItems = items.map((item) => {
         const review = byId.get(item.id)
         if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+        const approved = review.approved !== false
+        const product = productDisplayName(item.product)
+        const fallbackSummary = `拍${brandName}的${product}上桌、夹起和门店环境，再补顾客点单理由与到店信息，作为可直接执行的拍摄 brief。`
+        const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), fallbackSummary)
+        const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '')
+        const materialRequirements = stringList(review.materialRequirements)
+          .map((line) => cleanReviewedCalendarText(line, ''))
+          .filter(Boolean)
+        const reviewGap = approved
+          ? ''
+          : qualityNote || '审核认为原灵感不适合直接使用，已改写为当前品牌可执行方案。'
         return {
           ...item,
-          title: item.title,
-          planning: item.planning,
-          materialRequirements: item.materialRequirements,
+          title: cleanReviewedCalendarTitle(text(review.title), item.title, brandName),
+          planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
+          materialRequirements: materialRequirements.length
+            ? materialRequirements
+            : item.materialRequirements,
+          contentLibraryGap: reviewGap
+            ? uniqueStrings([item.contentLibraryGap || '', `审核改写：${reviewGap}`]).join('\n')
+            : item.contentLibraryGap,
         }
       })
       const qualityIssues = calendarCreativeQualityIssues(reviewedItems)
@@ -2091,10 +2106,11 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
   const cleaned = cleanCalendarText(value, fallback)
     .replace(/\b(Bao Specialty Cafe|Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery)\b/gi, '')
     .replace(/查看原视频链接|查看参考视频|参考内容|样板爆品/g, '')
-    .replace(/\$\s?\d+(?:\.\d+)?/g, '门店确认价')
-    .replace(/人均不到门店确认价/g, '两个人这样点更稳')
-    .replace(/不到门店确认价/g, '点单前先看这份参考')
-    .replace(/门店确认价\+?/g, '门店确认后')
+    .replace(/\$\s?\d+(?:\.\d+)?/g, '菜单信息需门店确认')
+    .replace(/人均不到菜单信息需门店确认/g, '两个人这样点更稳')
+    .replace(/不到菜单信息需门店确认/g, '点单前先看这份参考')
+    .replace(/菜单信息需门店确认\+?/g, '菜单信息需门店确认')
+    .replace(/门店确认价\+?/g, '菜单信息需门店确认')
     .replace(/价格数字/g, '菜单信息')
     .replace(/优惠时间/g, '到店信息')
     .replace(/套餐价公开/g, '点单前先看')

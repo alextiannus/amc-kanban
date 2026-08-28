@@ -477,6 +477,7 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'growth_research_create_failed') return '品牌摸底没有启动成功，请稍后重试。'
   if (code.startsWith('marketing_plan_llm_failed')) return '营销计划没有生成成功，请检查模型配置后重试。'
   if (code === 'calendar_creative_review_llm_failed') return '内容创意审核没有生成成功，请检查模型配置后重试。'
+  if (code === 'calendar_creative_review_rejected') return '内容创意审核认为部分灵感不适合直接使用，请补充素材或重新生成。'
   if (code === 'calendar_creative_candidate_missing') return '没有找到可用的内容创意候选，请先补充或重新同步 amc-content。'
   return code || '操作失败，请重试'
 }
