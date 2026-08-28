@@ -190,6 +190,7 @@ type BrandPlanAction =
   | 'generate_annual_strategy'
   | 'generate_next_quarter_plan'
   | 'generate_publishing_calendar'
+  | 'generate_publishing_calendar_item'
   | 'regenerate_calendar_item'
   | 'ensure_presentation_theme'
 
@@ -300,6 +301,7 @@ export async function runBrandPlanAction(input: {
   if (!brand) throw new BrandPlanError('brand_not_found', 404)
   const current = readMarketingSolutionWorkspace(brand)
   let latestInterview = serializeMerchantInterview(brand.brandPlanInterviews[0])
+  let extraPayload: Record<string, unknown> = {}
 
   let next = current
   if (input.action === 'generate_research_report') {
@@ -403,6 +405,14 @@ export async function runBrandPlanAction(input: {
       researchSnapshotId: current.researchReport?.snapshotId,
       generationMode: 'AMC_CONTENT_ASSISTED',
     })
+  } else if (input.action === 'generate_publishing_calendar_item') {
+    requireQuarterPlan(current)
+    const month = clampSchedulableCalendarMonth(normalizeMonth(input.body?.month))
+    const itemIndex = Math.max(0, Number(input.body?.itemIndex) || 0)
+    const publishingFreqOverride = normalizePublishingFreq(input.body?.publishingFreqOverride)
+    const item = await buildPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex)
+    next = current
+    extraPayload = { calendarItem: item, month, itemIndex }
   } else if (input.action === 'regenerate_calendar_item') {
     requireQuarterPlan(current)
     const month = normalizeMonth(input.body?.month)
@@ -475,6 +485,7 @@ export async function runBrandPlanAction(input: {
     merchantInterview: latestInterview,
     merchantInterviewRequired: !latestInterview,
     merchantInterviewGuideline: buildMerchantInterviewGuideline(next.researchReport),
+    ...extraPayload,
   }
 }
 
@@ -1292,6 +1303,98 @@ async function buildPublishingMonth(
   const reviewedItems = await reviewCalendarCreativeItemsWithLLM(brand, current, items)
   requireValidCalendarInspirationIdentity(reviewedItems)
   return reviewedItems
+}
+
+async function buildPublishingCalendarItemByIndex(
+  brand: BrandPlanBrand,
+  month: string,
+  interview: BrandPlanMerchantInterview | null,
+  current: BrandPlanWorkspaceData,
+  publishingFreqOverride: PublishingFreq | null,
+  itemIndex: number
+): Promise<BrandPlanCalendarItem> {
+  const products = primaryProducts(brand, { available: false })
+  const interviewFocus = interviewMaterialText(interview)
+  const subscriptionStrategy = await buildSubscriptionStrategy(brand)
+  const overrideMonthlyQuota = sumMonthlyPosts(publishingFreqOverride)
+  const schedule = buildMonthlyPublishingSchedule(
+    month,
+    publishingFreqOverride || subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
+    subscriptionStrategy.platformCoverage,
+    overrideMonthlyQuota || subscriptionStrategy.monthlyContentQuota
+  )
+  const slot = schedule[itemIndex]
+  if (!slot) throw new BrandPlanError('calendar_item_not_found', 404)
+  const promotionPoints = buildCalendarPromotionPoints({
+    brand,
+    current,
+    month,
+    products,
+    interviewFocus,
+    schedule,
+  })
+  const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, itemIndex)
+  const product = products[itemIndex % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
+  const itemId = `${month}-${String(itemIndex + 1).padStart(2, '0')}-${slot.platform.slug}`
+  let pool = await requestCalendarCreativePool(brand, current, [promotionPoint], itemId)
+  let candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex)
+  if (!candidate) {
+    pool = await requestCalendarCreativePool(brand, current, [promotionPoint], `${itemId}:retry`)
+    candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex)
+  }
+  const sampleLinks = calendarSampleLinks(candidate)
+  const inspirationSource = calendarInspirationSource(candidate)
+  const draft: BrandPlanCalendarItem = {
+    id: itemId,
+    date: slot.date,
+    title: calendarItemTitle({
+      brand,
+      product,
+      promotionPoint,
+      platformSlug: slot.platform.slug,
+      candidate,
+      index: itemIndex,
+    }),
+    platform: slot.platform.label,
+    platformSlug: slot.platform.slug,
+    contentType: calendarContentType(candidate, itemIndex),
+    product,
+    planning: calendarPlanningText({
+      brand,
+      product,
+      promotionPoint,
+      platformSlug: slot.platform.slug,
+      candidate,
+      interviewFocus,
+      index: itemIndex,
+    }),
+    sampleHit: '',
+    status: '待确认',
+    selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
+    creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate, index: itemIndex }),
+    matchedTags: stringList(candidate?.matchedTags),
+    matchedInspirations: stringList(candidate?.matchedInspirations),
+    inspirationCreativeId: calendarInspirationCreativeId(candidate),
+    inspirationSourceTitle: inspirationSource.title,
+    inspirationSourceSummary: inspirationSource.summary,
+    sampleVideoUrl: sampleLinks.videoUrl,
+    sampleOriginalUrl: sampleLinks.originalUrl,
+    sampleThumbnailUrl: sampleLinks.thumbnailUrl,
+    sampleSourcePlatform: sampleLinks.platform,
+    materialRequirements: calendarMaterialRequirements(product, candidate),
+    contentLibraryGap: candidate
+      ? calendarContentGap(pool.contentLibraryGaps, promotionPoint.id, candidate)
+      : calendarIndependentCreativeGap(pool.missingPromotionPoints, promotionPoint.id),
+  }
+  const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [draft]).catch((error) => {
+    console.warn('[brand-plan] calendar item review failed; using rule fallback', {
+      itemId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return fallbackReviewedCalendarItems(brand, [draft])
+  })
+  requireValidCalendarInspirationIdentity([reviewed])
+  return reviewed
 }
 
 async function regeneratePublishingCalendarItem(

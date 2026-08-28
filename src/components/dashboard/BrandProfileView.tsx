@@ -669,6 +669,7 @@ function BrandProfileContent({
   const [editingAiJson, setEditingAiJson] = useState('')
   const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
   const [annualGenerationStep, setAnnualGenerationStep] = useState('')
+  const [calendarGenerationProgress, setCalendarGenerationProgress] = useState('')
   const [calendarMonth, setCalendarMonth] = useState(() => {
     return firstCompleteNaturalMonthValue()
   })
@@ -974,9 +975,16 @@ ${storeLines}
     }
   }
 
-  const runBrandPlanAction = async (
+  type BrandPlanActionResult = {
+    brandPlan: BrandPlanWorkspaceData
+    marketingSolution?: BrandPlanWorkspaceData
+    calendarItem?: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string][number]
+    merchantInterview?: MerchantInterviewRecord | null
+    merchantInterviewRequired?: boolean
+  }
+
+  const postBrandPlanAction = async (
     action: string,
-    successMsg: string,
     body: Record<string, unknown> = {}
   ) => {
     const res = await fetch(`/api/brands/${brandId}/brand-plan`, {
@@ -989,6 +997,16 @@ ${storeLines}
       showToastVal(brandPlanErrorMessage(data), 'error')
       return null
     }
+    return data as BrandPlanActionResult
+  }
+
+  const runBrandPlanAction = async (
+    action: string,
+    successMsg: string,
+    body: Record<string, unknown> = {}
+  ) => {
+    const data = await postBrandPlanAction(action, body)
+    if (!data) return null
     const marketingSolution = data.marketingSolution || data.brandPlan
     if (marketingSolution && typeof marketingSolution === 'object') {
       setBrandPlanData(marketingSolution)
@@ -998,7 +1016,7 @@ ${storeLines}
     showToastVal(successMsg, 'success')
     await loadAllConfig()
     await loadIdentity()
-    return data as { brandPlan: BrandPlanWorkspaceData; marketingSolution?: BrandPlanWorkspaceData; merchantInterview?: MerchantInterviewRecord | null }
+    return data
   }
 
   const openAiContentEditor = (content: EditableAiContent) => {
@@ -1274,14 +1292,55 @@ ${storeLines}
       return
     }
     setPlanGenerating('calendar')
+    setCalendarGenerationProgress('')
     try {
-      await runBrandPlanAction('generate_publishing_calendar', '内容计划已生成', {
+      const publishingFreqOverride = publishingFreqPayload(publishingScheduleDraft)
+      const total = publishingScheduleTotal(publishingScheduleDraft)
+      const confirmedItems = currentCalendarItems.filter(item => item.status === '已确认')
+      let visibleItems = [...confirmedItems]
+      const applyVisibleItems = (items: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]) => {
+        setBrandPlanData(current => ({
+          ...current,
+          publishingCalendar: {
+            generatedAt: current.publishingCalendar?.generatedAt || new Date().toISOString(),
+            generationMode: 'AMC_CONTENT_ASSISTED',
+            months: {
+              ...(current.publishingCalendar?.months || {}),
+              [calendarMonth]: items,
+            },
+          },
+        }))
+      }
+      applyVisibleItems(visibleItems)
+      await postBrandPlanAction('save_workspace_patch', {
+        target: 'calendar_month',
         month: calendarMonth,
-        publishingFreqOverride: publishingFreqPayload(publishingScheduleDraft),
+        value: visibleItems,
+      })
+      for (let index = 0; index < total; index += 1) {
+        setCalendarGenerationProgress(`正在生成第 ${index + 1} / ${total} 条`)
+        const data = await postBrandPlanAction('generate_publishing_calendar_item', {
+          month: calendarMonth,
+          itemIndex: index,
+          publishingFreqOverride,
+        })
+        if (!data?.calendarItem) return
+        if (confirmedItems.some(item => item.id === data.calendarItem?.id)) continue
+        visibleItems = [
+          ...visibleItems.filter(item => item.id !== data.calendarItem?.id),
+          data.calendarItem,
+        ]
+        applyVisibleItems(visibleItems)
+      }
+      await runBrandPlanAction('save_workspace_patch', '内容计划已生成', {
+        target: 'calendar_month',
+        month: calendarMonth,
+        value: visibleItems,
       })
       await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
+      setCalendarGenerationProgress('')
     }
   }
 
@@ -2198,7 +2257,7 @@ ${storeLines}
                 />
                 <button type="button" onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100">下个月</button>
                 <button type="button" onClick={handleGeneratePublishingCalendar} disabled={Boolean(planGenerating) || !calendarQuarterReady} className="inline-flex items-center gap-2 rounded-lg bg-rose-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
-                  {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} 生成内容计划
+                  {planGenerating === 'calendar' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} {calendarGenerationProgress || '生成内容计划'}
                 </button>
                 <button type="button" onClick={handleAddCalendarItem} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50 dark:border-rose-900/60 dark:bg-rose-950/20 dark:text-rose-200">
                   <Plus className="h-3.5 w-3.5" /> 新增
