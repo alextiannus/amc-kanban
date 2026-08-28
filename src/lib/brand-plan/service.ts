@@ -1234,14 +1234,20 @@ async function buildPublishingMonth(
   })
   const creativePool = await requestCalendarCreativePool(brand, current, promotionPoints)
 
-  const items = schedule.map((slot, index) => {
+  const items = await mapWithConcurrency(schedule, 2, async (slot, index) => {
     const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, index)
     const product = products[index % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
-    const candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+    const itemId = `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`
+    let candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+    let itemCreativePool = creativePool
+    if (!candidate) {
+      itemCreativePool = await requestCalendarCreativePool(brand, current, [promotionPoint], itemId)
+      candidate = selectCalendarCreativeCandidate(itemCreativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+    }
     const sampleLinks = calendarSampleLinks(candidate)
     const inspirationSource = calendarInspirationSource(candidate)
     return {
-      id: `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`,
+      id: itemId,
       date: slot.date,
       title: calendarItemTitle({
         brand,
@@ -1279,8 +1285,8 @@ async function buildPublishingMonth(
       sampleSourcePlatform: sampleLinks.platform,
       materialRequirements: calendarMaterialRequirements(product, candidate),
       contentLibraryGap: candidate
-        ? calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate)
-        : calendarIndependentCreativeGap(creativePool.missingPromotionPoints, promotionPoint.id),
+        ? calendarContentGap(itemCreativePool.contentLibraryGaps, promotionPoint.id, candidate)
+        : calendarIndependentCreativeGap(itemCreativePool.missingPromotionPoints, promotionPoint.id),
     }
   })
   const reviewedItems = await reviewCalendarCreativeItemsWithLLM(brand, current, items)
@@ -1305,8 +1311,12 @@ async function regeneratePublishingCalendarItem(
     platforms: [platform],
     targetPublishWindow: { start: item.date, end: item.date },
   }
-  const pool = await requestCalendarCreativePool(brand, current, [point], item.id)
-  const candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
+  let pool = await requestCalendarCreativePool(brand, current, [point], item.id)
+  let candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
+  if (!candidate) {
+    pool = await requestCalendarCreativePool(brand, current, [point], `${item.id}:retry`)
+    candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
+  }
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
   const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [{
@@ -1903,7 +1913,7 @@ function calendarIndependentCreativeGap(
   const missing = missingPromotionPoints.find((point) => text(point.id) === promotionPointId)
   const reasons = stringList(missing?.gapReasons)
   return [
-    'Content 灵感库没有匹配到这条推广点的可靠可引用灵感，已按平台规则生成原创 brief。',
+    'Content 灵感库批量匹配和单条重试都没有匹配到可靠可引用灵感，已按平台规则生成原创 brief。',
     reasons.length ? `原因：${reasons.join('、')}` : '',
     '可在主理人 review 时补充参考灵感或素材。',
   ].filter(Boolean).join('\n')
