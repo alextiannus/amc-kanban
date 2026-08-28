@@ -1868,6 +1868,8 @@ async function reviewCalendarCreativeItemsWithLLM(
   }
   const brandName = brandDisplayName(brand)
   const promptTemplate = await getPromptTemplate('calendar_creative_review')
+  const productCatalog = skuLibraryForLLM(brand.knowledge?.menuItems, 30)
+  const approvedPricePhrases = productCatalogPricePhrases(productCatalog)
   const payload = {
     brand: {
       name: brandName,
@@ -1879,6 +1881,8 @@ async function reviewCalendarCreativeItemsWithLLM(
       goal: current.annualPlan?.goal || current.researchReport?.summary || '',
       platformStrategy: current.annualPlan?.platformStrategy || [],
       contentPillars: current.annualPlan?.contentPillars || current.quarterlyPlans?.flatMap((plan) => plan.contentDirections || []) || [],
+      productCatalog,
+      priceUseRule: '商品库中明确提供的价格可以用于创意和点单判断；没有在商品库、品牌资料或输入中明确出现的具体价格不得编造。需要价格但缺少来源时，把“主理人确认/补充价格”写入 materialRequirements，不要让创意失败。',
     },
     items: items.map((item) => ({
       id: item.id,
@@ -2005,17 +2009,17 @@ async function reviewCalendarCreativeItemsWithLLM(
         const approved = review.approved !== false
         const product = productDisplayName(item.product)
         const fallbackSummary = `拍${brandName}的${product}上桌、夹起和门店环境，再补顾客点单理由与到店信息，作为可直接执行的拍摄 brief。`
-        const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), fallbackSummary)
-        const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '')
+        const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), fallbackSummary, approvedPricePhrases)
+        const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '', approvedPricePhrases)
         const materialRequirements = stringList(review.materialRequirements)
-          .map((line) => cleanReviewedCalendarText(line, ''))
+          .map((line) => cleanReviewedCalendarText(line, '', approvedPricePhrases))
           .filter(Boolean)
         const reviewGap = approved
           ? ''
           : qualityNote || '审核认为原灵感不适合直接使用，已改写为当前品牌可执行方案。'
         return {
           ...item,
-          title: cleanReviewedCalendarTitle(text(review.title), item.title, brandName),
+          title: cleanReviewedCalendarTitle(text(review.title), item.title, brandName, approvedPricePhrases),
           planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
           materialRequirements: materialRequirements.length
             ? materialRequirements
@@ -2025,7 +2029,7 @@ async function reviewCalendarCreativeItemsWithLLM(
             : item.contentLibraryGap,
         }
       })
-      const qualityIssues = calendarCreativeQualityIssues(reviewedItems)
+      const qualityIssues = calendarCreativeQualityIssues(reviewedItems, approvedPricePhrases)
       if (!qualityIssues.length) return reviewedItems
       if (attempt === 0) {
         repairNote = [
@@ -2096,17 +2100,19 @@ function mergeReviewedCalendarPlanning(_planning: string, creativeSummary: strin
   return sections.join('\n')
 }
 
-function cleanReviewedCalendarTitle(value: string, fallback: string, brandName: string) {
-  const cleaned = cleanReviewedCalendarText(value, fallback)
+function cleanReviewedCalendarTitle(value: string, fallback: string, brandName: string, approvedPricePhrases: string[] = []) {
+  const cleaned = cleanReviewedCalendarText(value, fallback, approvedPricePhrases)
   const safe = cleaned || fallback || `${brandName}本周内容计划`
   return safe.slice(0, 34)
 }
 
-function cleanReviewedCalendarText(value: string, fallback: string) {
+function cleanReviewedCalendarText(value: string, fallback: string, approvedPricePhrases: string[] = []) {
   const cleaned = cleanCalendarText(value, fallback)
     .replace(/\b(Bao Specialty Cafe|Bao Specialty|DAILY|breakfast|Afternoon Tea|bakery)\b/gi, '')
     .replace(/查看原视频链接|查看参考视频|参考内容|样板爆品/g, '')
-    .replace(/\$\s?\d+(?:\.\d+)?/g, '菜单信息需门店确认')
+    .replace(/(?:S\$|\$|RM|¥|￥)\s?\d+(?:\.\d+)?/gi, (match) => (
+      isApprovedPricePhrase(match, approvedPricePhrases) ? match : '菜单信息需门店确认'
+    ))
     .replace(/人均不到菜单信息需门店确认/g, '两个人这样点更稳')
     .replace(/不到菜单信息需门店确认/g, '点单前先看这份参考')
     .replace(/菜单信息需门店确认\+?/g, '菜单信息需门店确认')
@@ -2136,7 +2142,47 @@ function cleanReviewedCalendarText(value: string, fallback: string) {
   return cleaned || fallback
 }
 
-function calendarCreativeQualityIssues(items: BrandPlanCalendarItem[]) {
+function productCatalogPricePhrases(productCatalog: ReturnType<typeof skuLibraryForLLM>) {
+  const phrases: string[] = []
+  for (const item of productCatalog) {
+    const price = text(item.price)
+    if (!price) continue
+    const currency = text(item.currency) || 'S$'
+    phrases.push(price)
+    if (/^\$|^S\$|^RM|^¥|^￥/i.test(price)) {
+      phrases.push(price)
+    } else {
+      phrases.push(`${currency}${price}`)
+      if (currency.toUpperCase() === 'S$') phrases.push(`$${price}`)
+    }
+  }
+  return uniqueStrings(phrases)
+}
+
+function normalizePricePhrase(value: string) {
+  return value
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/^S\$/, '$')
+}
+
+function isApprovedPricePhrase(value: string, approvedPricePhrases: string[]) {
+  const normalized = normalizePricePhrase(value)
+  return approvedPricePhrases.some((price) => normalizePricePhrase(price) === normalized)
+}
+
+function stripApprovedPricePhrases(value: string, approvedPricePhrases: string[]) {
+  let stripped = value
+  for (const price of approvedPricePhrases) {
+    const normalizedPrice = normalizePricePhrase(price)
+    stripped = stripped.replace(/(?:S\$|\$|RM|¥|￥)\s?\d+(?:\.\d+)?/gi, (match) => (
+      normalizePricePhrase(match) === normalizedPrice ? '' : match
+    ))
+  }
+  return stripped
+}
+
+function calendarCreativeQualityIssues(items: BrandPlanCalendarItem[], approvedPricePhrases: string[] = []) {
   const issues = new Set<string>()
   const forbidden = [
     { label: '来源说明', pattern: /保留灵感|当前灵感|适配提醒|原视频|参考内容|样板爆品|复刻目标|mp4/i },
@@ -2146,11 +2192,11 @@ function calendarCreativeQualityIssues(items: BrandPlanCalendarItem[]) {
     { label: '夸张口号', pattern: /天花板|必吃|必点|爆单|刷屏|引爆|全网/i },
   ]
   items.forEach((item) => {
-    const body = [
+    const body = stripApprovedPricePhrases([
       item.title,
       item.planning,
       ...(item.materialRequirements || []),
-    ].join('\n')
+    ].join('\n'), approvedPricePhrases)
     forbidden.forEach((rule) => {
       if (rule.pattern.test(body)) issues.add(rule.label)
     })
