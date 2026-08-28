@@ -21,7 +21,6 @@ import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
 import { writeAuditLog } from '@/lib/audit'
 import { skuLibraryForLLM } from '@/lib/sku-library/service'
 import {
-  inspectCalendarInspirationIdentity,
   minimumCompleteCalendarMonthValue,
 } from '@/lib/brand-plan/calendarRecovery'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
@@ -1279,7 +1278,9 @@ async function buildPublishingMonth(
       sampleThumbnailUrl: sampleLinks.thumbnailUrl,
       sampleSourcePlatform: sampleLinks.platform,
       materialRequirements: calendarMaterialRequirements(product, candidate),
-      contentLibraryGap: calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate),
+      contentLibraryGap: candidate
+        ? calendarContentGap(creativePool.contentLibraryGaps, promotionPoint.id, candidate)
+        : calendarIndependentCreativeGap(creativePool.missingPromotionPoints, promotionPoint.id),
     }
   })
   const reviewedItems = await reviewCalendarCreativeItemsWithLLM(brand, current, items)
@@ -1307,9 +1308,6 @@ async function regeneratePublishingCalendarItem(
   const pool = await requestCalendarCreativePool(brand, current, [point], item.id)
   const candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
   const sampleLinks = calendarSampleLinks(candidate)
-  if (!candidate) {
-    throw new BrandPlanError('calendar_creative_candidate_missing', 502)
-  }
   const inspirationSource = calendarInspirationSource(candidate)
   const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [{
     ...item,
@@ -1333,10 +1331,10 @@ async function regeneratePublishingCalendarItem(
       index: 0,
     }),
     sampleHit: '',
-    selectedCreativeCandidateId: text(candidate.creativeCandidateId),
+    selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
     creativeMechanism: calendarCreativeMechanism({ brand, product: item.product, promotionPoint: point, platformSlug: platform, candidate, index: 0 }),
-    matchedTags: stringList(candidate.matchedTags),
-    matchedInspirations: stringList(candidate.matchedInspirations),
+    matchedTags: stringList(candidate?.matchedTags),
+    matchedInspirations: stringList(candidate?.matchedInspirations),
     inspirationCreativeId: calendarInspirationCreativeId(candidate),
     inspirationSourceTitle: inspirationSource.title,
     inspirationSourceSummary: inspirationSource.summary,
@@ -1345,8 +1343,19 @@ async function regeneratePublishingCalendarItem(
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
     sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(item.product, candidate),
-    contentLibraryGap: calendarContentGap(pool.contentLibraryGaps, point.id, candidate),
-  }])
+    contentLibraryGap: candidate
+      ? calendarContentGap(pool.contentLibraryGaps, point.id, candidate)
+      : calendarIndependentCreativeGap(pool.missingPromotionPoints, point.id),
+  }]).catch((error) => {
+    console.warn('[brand-plan] calendar single-day review failed; using rule fallback', {
+      itemId: item.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return fallbackReviewedCalendarItems(brand, [{
+      ...item,
+      contentLibraryGap: item.contentLibraryGap || '单条审核暂不可用，已按平台规则生成原创 brief。',
+    }])
+  })
   requireValidCalendarInspirationIdentity([reviewed])
   return reviewed
 }
@@ -1516,7 +1525,28 @@ async function requestCalendarCreativePool(
       promotionPointIds: promotionPoints.map((point) => point.id),
       reason,
     })
-    throw new BrandPlanError('calendar_content_creative_match_failed', 502, { reason })
+    const missingPromotionPoints = promotionPoints.map((point) => ({
+      id: point.id,
+      name: point.sellingPoint,
+      goal: point.goal,
+      platforms: point.platforms,
+      expectedPublishCount: point.expectedPublishCount,
+      candidateCount: 0,
+      returnedCount: 0,
+      rankedCount: 0,
+      persistedRankedCount: 0,
+      gapReasons: ['content_library_search_failed'],
+    }))
+    return {
+      contentMatchRequestId: '',
+      matches: [],
+      creativeCandidates: [],
+      contentLibraryGaps: missingPromotionPoints.map((point) => ({
+        promotionPointId: point.id,
+        reason: 'content_library_search_failed',
+      })),
+      missingPromotionPoints,
+    }
   }
 
   const creativeCandidates = (Array.isArray(result.creativeCandidates) ? result.creativeCandidates : [])
@@ -1555,21 +1585,12 @@ async function requestCalendarCreativePool(
       }
     })
   if (missingPromotionPoints.length) {
-    const gapReasons = (Array.isArray(result.contentLibraryGaps) ? result.contentLibraryGaps : [])
-      .map((gap) => text(gap.reason))
-      .filter(Boolean)
-    throw new BrandPlanError(
-      'calendar_content_creative_missing',
-      409,
-      {
-        month: text(missingPromotionPoints[0]?.id).match(/^bp_(\d{4})(\d{2})_/)?.slice(1, 3).join('-'),
-        missingPromotionPoints,
-        gapReasons: uniqueStrings(gapReasons),
-        contentMatchRequestId: text(result.contentMatchRequestId),
-      }
-    )
+    console.warn('[brand-plan] calendar creative pool has item-level gaps; falling back to independent briefs', {
+      missingPromotionPoints,
+      contentMatchRequestId: text(result.contentMatchRequestId),
+    })
   }
-  return { ...result, creativeCandidates }
+  return { ...result, creativeCandidates, missingPromotionPoints }
 }
 
 function selectCalendarCreativeCandidate(
@@ -1828,11 +1849,33 @@ function calendarInspirationCreativeId(candidate: Record<string, unknown> | null
 }
 
 function requireValidCalendarInspirationIdentity(items: BrandPlanCalendarItem[]) {
-  const inspection = inspectCalendarInspirationIdentity(items)
-  if (!inspection.issues.length) return
+  const itemIds = new Map<string, number>()
+  for (const item of items) itemIds.set(item.id, (itemIds.get(item.id) || 0) + 1)
+  const duplicateIds = [...itemIds.entries()].filter(([, count]) => count > 1).map(([id]) => id)
+  if (duplicateIds.length) {
+    console.warn('[brand-plan] calendar item id validation failed', { duplicateIds })
+    throw new BrandPlanError('calendar_inspiration_identity_invalid', 502, { duplicateIds })
+  }
+  const sourceAnchoredItems = items.filter((item) =>
+    Boolean(item.inspirationCreativeId || item.inspirationSourceTitle || item.inspirationSourceSummary || item.sampleVideoUrl || item.sampleOriginalUrl)
+  )
+  if (!sourceAnchoredItems.length) return
+  const issues = sourceAnchoredItems.flatMap((item) => {
+    const actualCreativeId = text(item.inspirationCreativeId)
+    if (!actualCreativeId) return [{ code: 'missing_creative_id', itemId: item.id }]
+    if (!/^cre_[A-Za-z0-9_-]+$/.test(actualCreativeId)) {
+      return [{ code: 'invalid_creative_id', itemId: item.id, actualCreativeId }]
+    }
+    const expectedCreativeId = resolveInspirationCreativeId(item)
+    if (expectedCreativeId && expectedCreativeId !== actualCreativeId) {
+      return [{ code: 'media_creative_mismatch', itemId: item.id, expectedCreativeId, actualCreativeId }]
+    }
+    return []
+  })
+  if (!issues.length) return
   console.warn('[brand-plan] calendar inspiration identity validation failed', {
-    itemCount: inspection.itemCount,
-    issues: inspection.issues,
+    itemCount: sourceAnchoredItems.length,
+    issues,
   })
   throw new BrandPlanError('calendar_inspiration_identity_invalid', 502)
 }
@@ -1853,17 +1896,40 @@ function calendarContentGap(
     : undefined
 }
 
+function calendarIndependentCreativeGap(
+  missingPromotionPoints: Array<Record<string, unknown>>,
+  promotionPointId: string
+) {
+  const missing = missingPromotionPoints.find((point) => text(point.id) === promotionPointId)
+  const reasons = stringList(missing?.gapReasons)
+  return [
+    'Content 灵感库没有匹配到这条推广点的可靠可引用灵感，已按平台规则生成原创 brief。',
+    reasons.length ? `原因：${reasons.join('、')}` : '',
+    '可在主理人 review 时补充参考灵感或素材。',
+  ].filter(Boolean).join('\n')
+}
+
 async function reviewCalendarCreativeItemsWithLLM(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
   items: BrandPlanCalendarItem[]
 ): Promise<BrandPlanCalendarItem[]> {
   if (!items.length) return items
-  const chunkSize = 4
+  const chunkSize = 1
   if (items.length > chunkSize) {
     const chunks: BrandPlanCalendarItem[][] = []
     for (let index = 0; index < items.length; index += chunkSize) chunks.push(items.slice(index, index + chunkSize))
-    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 1, (chunk): Promise<BrandPlanCalendarItem[]> => reviewCalendarCreativeItemsWithLLM(brand, current, chunk))
+    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 1, async (chunk): Promise<BrandPlanCalendarItem[]> => {
+      try {
+        return await reviewCalendarCreativeItemsWithLLM(brand, current, chunk)
+      } catch (error) {
+        console.warn('[brand-plan] calendar creative review failed for single item; using rule fallback', {
+          itemIds: chunk.map((item) => item.id),
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return fallbackReviewedCalendarItems(brand, chunk)
+      }
+    })
     return reviewedChunks.flat()
   }
   const brandName = brandDisplayName(brand)
@@ -1897,6 +1963,7 @@ async function reviewCalendarCreativeItemsWithLLM(
       inspirationCreativeId: item.inspirationCreativeId,
       inspirationSourceTitle: item.inspirationSourceTitle,
       inspirationSourceSummary: item.inspirationSourceSummary,
+      contentLibraryGap: item.contentLibraryGap,
       matchedTags: item.matchedTags || [],
       matchedInspirations: item.matchedInspirations || [],
     })),
