@@ -207,6 +207,8 @@ type BrandPlanWorkspaceData = {
       matchedInspirations?: string[]
       selectedCreativeCandidateId?: string
       inspirationCreativeId?: string
+      inspirationSourceTitle?: string
+      inspirationSourceSummary?: string
       sampleVideoUrl?: string
       sampleOriginalUrl?: string
       sampleThumbnailUrl?: string
@@ -332,6 +334,79 @@ function publishingFreqPayload(schedule: PublishingScheduleDraft) {
         .map(([platform, count]) => [platform, { postsPerMonth: count }])
     ),
   }
+}
+
+type CalendarVideoScript = {
+  opening: string
+  shots: string[]
+  voiceover: string[]
+  subtitles: string[]
+  closing: string
+}
+
+function isCalendarVideoItem(item: { contentType?: string; platform?: string; platformSlug?: string; planning?: string }) {
+  const textBlob = [
+    item.contentType,
+    item.platform,
+    item.platformSlug,
+    item.planning,
+  ].join(' ').toLowerCase()
+  return /视频|短视频|video|reel|tiktok/.test(textBlob)
+}
+
+function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
+  const lines = String(planning || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const script: CalendarVideoScript = {
+    opening: '',
+    shots: [],
+    voiceover: [],
+    subtitles: [],
+    closing: '',
+  }
+  let section: 'shots' | null = null
+  for (const line of lines) {
+    if (line.startsWith('开场：')) {
+      script.opening = line.replace(/^开场：/, '').trim()
+      section = null
+      continue
+    }
+    if (line.startsWith('分镜脚本：')) {
+      const inline = line.replace(/^分镜脚本：/, '').trim()
+      if (inline) script.shots.push(inline)
+      section = 'shots'
+      continue
+    }
+    if (line.startsWith('口播方向：')) {
+      script.voiceover = line
+        .replace(/^口播方向：/, '')
+        .split(/\s*\/\s*/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+      section = null
+      continue
+    }
+    if (line.startsWith('字幕方向：')) {
+      script.subtitles = line
+        .replace(/^字幕方向：/, '')
+        .split(/\s*\/\s*/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+      section = null
+      continue
+    }
+    if (line.startsWith('收尾：')) {
+      script.closing = line.replace(/^收尾：/, '').trim()
+      section = null
+      continue
+    }
+    if (section === 'shots' && /^\d+[.、]\s*/.test(line)) {
+      script.shots.push(line.replace(/^\d+[.、]\s*/, '').trim())
+    }
+  }
+  return script
 }
 
 const CONTENT_PLANNING_LEAD_DAYS = 7
@@ -1310,8 +1385,32 @@ ${storeLines}
       .slice()
       .sort((left, right) => String(left.date || '').localeCompare(String(right.date || '')))
       .map((item, index) => {
-        const requirements = item.materialRequirements?.length
-          ? item.materialRequirements.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
+        const videoScript = parseCalendarVideoScript(item.planning)
+        const sourceUrl = item.sampleVideoUrl || item.sampleOriginalUrl || ''
+        const sourceTitle = item.inspirationSourceTitle || item.sampleSourcePlatform || ''
+        const videoScriptHtml = isCalendarVideoItem(item) && (videoScript.opening || videoScript.shots.length || videoScript.voiceover.length || videoScript.subtitles.length || videoScript.closing)
+          ? `
+            <div class="script">
+              <p><strong>视频分镜与脚本：</strong></p>
+              ${sourceTitle ? `<p><span>原创意：</span>${escapeHtml(sourceTitle)}</p>` : ''}
+              ${item.inspirationSourceSummary ? `<p><span>参考重点：</span>${escapeHtml(item.inspirationSourceSummary)}</p>` : ''}
+              ${sourceUrl ? `<p><span>来源：</span><a href="${escapeHtml(sourceUrl)}">${escapeHtml(sourceUrl)}</a></p>` : ''}
+              ${videoScript.opening ? `<p><span>开场：</span>${escapeHtml(videoScript.opening)}</p>` : ''}
+              ${videoScript.shots.length ? `<ol>${videoScript.shots.map((shot) => `<li>${escapeHtml(shot)}</li>`).join('')}</ol>` : ''}
+              ${videoScript.voiceover.length ? `<p><span>口播：</span>${escapeHtml(videoScript.voiceover.join(' / '))}</p>` : ''}
+              ${videoScript.subtitles.length ? `<p><span>字幕：</span>${escapeHtml(videoScript.subtitles.join(' / '))}</p>` : ''}
+              ${videoScript.closing ? `<p><span>收尾：</span>${escapeHtml(videoScript.closing)}</p>` : ''}
+            </div>
+          `
+          : ''
+        const shotRequirements = videoScript.shots.map((shot, shotIndex) => `分镜 ${shotIndex + 1}：${shot}`)
+        const requirementLines = item.materialRequirements?.length
+          ? [...item.materialRequirements, ...shotRequirements]
+          : shotRequirements.length
+            ? shotRequirements
+            : [item.planning || '请按创意说明采集可用于发布的图片或视频素材。']
+        const requirements = requirementLines.length
+          ? requirementLines.map((line) => `<li>${escapeHtml(line)}</li>`).join('')
           : `<li>${escapeHtml(item.planning || '请按创意说明采集可用于发布的图片或视频素材。')}</li>`
         return `
           <section class="creative">
@@ -1319,6 +1418,7 @@ ${storeLines}
             <h2>${escapeHtml(item.title || '内容创意')}</h2>
             <p><strong>主题：</strong>${escapeHtml(item.product || '待填写')}</p>
             <p><strong>创意说明：</strong>${escapeHtml(item.planning || '待填写')}</p>
+            ${videoScriptHtml}
             <p><strong>素材需求：</strong></p>
             <ul>${requirements}</ul>
           </section>
@@ -1338,8 +1438,11 @@ ${storeLines}
     .meta { color: #be123c; font-size: 12px; font-weight: 700; margin-bottom: 6px; }
     h2 { font-size: 18px; margin: 0 0 10px; }
     p { margin: 6px 0; }
+    .script { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 10px 0; padding: 10px 12px; }
+    .script span { color: #475569; font-weight: 700; }
+    ol { margin: 6px 0 0 20px; padding: 0; }
     ul { margin: 6px 0 0 20px; padding: 0; }
-    li { margin: 4px 0; }
+    li { margin: 4px 0; white-space: pre-wrap; }
     @media print { body { margin: 18mm; } .creative { page-break-inside: avoid; } }
   </style>
 </head>
@@ -2171,6 +2274,16 @@ ${storeLines}
               {filteredCalendarItems.length ? filteredCalendarItems.map(({ item, index }) => {
                 const platformSlug = normalizeSchedulePlatform(item.platformSlug || item.platform || '')
                 const inspirationCreativeId = resolveInspirationCreativeId(item)
+                const videoSourceUrl = item.sampleVideoUrl || item.sampleOriginalUrl || ''
+                const videoSourceTitle = item.inspirationSourceTitle || item.sampleSourcePlatform || ''
+                const videoScript = parseCalendarVideoScript(item.planning)
+                const hasVideoScript = isCalendarVideoItem(item) && Boolean(
+                  videoScript.opening ||
+                  videoScript.shots.length ||
+                  videoScript.voiceover.length ||
+                  videoScript.subtitles.length ||
+                  videoScript.closing
+                )
                 return (
                 <div key={item.id || `${item.date}-${item.platformSlug || item.platform}-${index}`} className={`rounded-xl border border-l-4 border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 ${calendarPlatformAccent(platformSlug)}`}>
                   <div className="flex items-start justify-between gap-2">
@@ -2257,6 +2370,49 @@ ${storeLines}
                   />
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
+                  ) : null}
+                  {hasVideoScript ? (
+                    <details className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/70 px-3 py-2 text-[11px] text-slate-700 open:space-y-2 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-slate-200">
+                      <summary className="cursor-pointer font-black text-indigo-700 dark:text-indigo-200">
+                        视频脚本 · {videoScript.shots.length || 1} 个分镜
+                      </summary>
+                      {videoSourceTitle ? (
+                        <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">原创意：</span>{videoSourceTitle}</p>
+                      ) : null}
+                      {item.inspirationSourceSummary ? (
+                        <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">参考重点：</span>{item.inspirationSourceSummary}</p>
+                      ) : null}
+                      {videoSourceUrl ? (
+                        <a
+                          href={videoSourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-md text-[11px] font-black text-indigo-700 underline-offset-2 hover:underline dark:text-indigo-200"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          查看原创意
+                        </a>
+                      ) : null}
+                      {videoScript.opening ? (
+                        <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">开场：</span>{videoScript.opening}</p>
+                      ) : null}
+                      {videoScript.shots.length ? (
+                        <ol className="space-y-1 pl-4">
+                          {videoScript.shots.map((shot, shotIndex) => (
+                            <li key={`${item.id || index}-shot-${shotIndex}`} className="list-decimal leading-relaxed">{shot}</li>
+                          ))}
+                        </ol>
+                      ) : null}
+                      {videoScript.voiceover.length ? (
+                        <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">口播：</span>{videoScript.voiceover.join(' / ')}</p>
+                      ) : null}
+                      {videoScript.subtitles.length ? (
+                        <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">字幕：</span>{videoScript.subtitles.join(' / ')}</p>
+                      ) : null}
+                      {videoScript.closing ? (
+                        <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">收尾：</span>{videoScript.closing}</p>
+                      ) : null}
+                    </details>
                   ) : null}
                   {inspirationCreativeId ? (
                     <a
