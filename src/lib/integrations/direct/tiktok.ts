@@ -36,7 +36,7 @@ export async function publishTiktokVideo(input: TiktokPublishInput): Promise<Tik
         disable_duet: false,
         disable_stitch: false,
         disable_comment: false,
-        video_cover_timestamp_ms: 1000,
+        video_cover_timestamp_ms: 0,
       },
       source_info: {
         source: 'FILE_UPLOAD',

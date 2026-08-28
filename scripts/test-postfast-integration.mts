@@ -124,9 +124,10 @@ async function startMockPostFast() {
         assert.equal(post.mediaItems[0].coverImageKey, 'image/cover.jpg')
         return json(res, 201, { postIds: ['pf_post_facebook_cover_001'] })
       }
-      if (post.content === 'TikTok unsupported cover') {
+      if (post.content === 'TikTok first-frame cover') {
         assert.equal(post.socialMediaId, 'pf_acc_video')
         assert.equal(post.mediaItems[0].key, 'video/reel-key')
+        assert.equal(post.mediaItems[0].coverTimestamp, '0')
         assert.equal(post.mediaItems[0].coverImageKey, undefined)
         return json(res, 201, { postIds: ['pf_post_tiktok_cover_001'] })
       }
@@ -385,14 +386,14 @@ async function main() {
       apiKey: API_KEY,
       platform: 'tiktok',
       accountId: 'pf_acc_video',
-      caption: 'TikTok unsupported cover',
+      caption: 'TikTok first-frame cover',
       mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
       coverImage: { storageKey: 'image/cover.jpg', metadata: validCoverMetadata },
       scheduledAt,
     })
     assert.equal(tiktokCoverPublish.success, true)
     assert.equal(tiktokCoverPublish.postId, 'pf_post_tiktok_cover_001')
-    assert.ok(tiktokCoverPublish.warnings?.some((warning) => warning.field === 'coverImage'))
+    assert.equal(tiktokCoverPublish.warnings?.some((warning) => warning.field === 'coverImage') ?? false, false)
 
     const imageCoverPublish = await postfast.postfastPublish({
       apiKey: API_KEY,

@@ -1069,7 +1069,7 @@ async function preparePostfastMedia(
     preparedCover &&
     prepared.length === 1 &&
     prepared[0].metadata.kind === 'video' &&
-    !['instagram', 'facebook'].includes(normalizedPlatform)
+    !['instagram', 'facebook', 'tiktok'].includes(normalizedPlatform)
   ) {
     warnings.push({
       assetId: preparedCover.assetId,
@@ -1357,6 +1357,9 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
         key: item.key,
         type,
         sortOrder: index,
+        ...(index === 0 && type === 'VIDEO' && normalizedPublishPlatform === 'tiktok'
+          ? { coverTimestamp: '0' }
+          : {}),
         ...(index === 0 && type === 'VIDEO' && resolvedCoverImageKey ? { coverImageKey: resolvedCoverImageKey } : {}),
       }
     })
