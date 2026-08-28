@@ -1346,6 +1346,7 @@ ${storeLines}
           month: calendarMonth,
           itemIndex: index,
           publishingFreqOverride,
+          usedCreativeIds: visibleItems.map(item => item.inspirationCreativeId || resolveInspirationCreativeId(item)).filter(Boolean),
         })
         if (!data?.calendarItem) {
           failedCount += 1

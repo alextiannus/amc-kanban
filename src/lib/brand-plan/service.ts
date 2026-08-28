@@ -410,7 +410,8 @@ export async function runBrandPlanAction(input: {
     const month = clampSchedulableCalendarMonth(normalizeMonth(input.body?.month))
     const itemIndex = Math.max(0, Number(input.body?.itemIndex) || 0)
     const publishingFreqOverride = normalizePublishingFreq(input.body?.publishingFreqOverride)
-    const item = await buildPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex)
+    const usedCreativeIds = stringList(input.body?.usedCreativeIds)
+    const item = await buildPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex, usedCreativeIds)
       .catch(async (error) => {
         console.warn('[brand-plan] calendar item generation failed; using independent rule item', {
           brandId: brand.id,
@@ -1252,18 +1253,21 @@ async function buildPublishingMonth(
     interviewFocus,
     schedule,
   })
+  const usedCreativeIds = new Set(recentCalendarCreativeIds(current, month))
   const creativePool = await requestCalendarCreativePool(brand, current, promotionPoints)
 
-  const items = await mapWithConcurrency(schedule, 2, async (slot, index) => {
+  const items = await mapWithConcurrency(schedule, 1, async (slot, index) => {
     const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, index)
     const product = products[index % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
     const itemId = `${month}-${String(index + 1).padStart(2, '0')}-${slot.platform.slug}`
-    let candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+    let candidate = selectCalendarCreativeCandidate(creativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index, usedCreativeIds)
     let itemCreativePool = creativePool
     if (!candidate) {
       itemCreativePool = await requestCalendarCreativePool(brand, current, [promotionPoint], itemId)
-      candidate = selectCalendarCreativeCandidate(itemCreativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index)
+      candidate = selectCalendarCreativeCandidate(itemCreativePool.creativeCandidates, promotionPoint.id, slot.platform.slug, index, usedCreativeIds)
     }
+    const candidateCreativeId = calendarInspirationCreativeId(candidate)
+    if (candidateCreativeId) usedCreativeIds.add(candidateCreativeId)
     const sampleLinks = calendarSampleLinks(candidate)
     const inspirationSource = calendarInspirationSource(candidate)
     return {
@@ -1296,7 +1300,7 @@ async function buildPublishingMonth(
       creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate, index }),
       matchedTags: stringList(candidate?.matchedTags),
       matchedInspirations: stringList(candidate?.matchedInspirations),
-      inspirationCreativeId: calendarInspirationCreativeId(candidate),
+      inspirationCreativeId: candidateCreativeId,
       inspirationSourceTitle: inspirationSource.title,
       inspirationSourceSummary: inspirationSource.summary,
       sampleVideoUrl: sampleLinks.videoUrl,
@@ -1320,7 +1324,8 @@ async function buildPublishingCalendarItemByIndex(
   interview: BrandPlanMerchantInterview | null,
   current: BrandPlanWorkspaceData,
   publishingFreqOverride: PublishingFreq | null,
-  itemIndex: number
+  itemIndex: number,
+  excludedCreativeIds: string[] = []
 ): Promise<BrandPlanCalendarItem> {
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
@@ -1345,14 +1350,19 @@ async function buildPublishingCalendarItemByIndex(
   const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, itemIndex)
   const product = products[itemIndex % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
   const itemId = `${month}-${String(itemIndex + 1).padStart(2, '0')}-${slot.platform.slug}`
+  const usedCreativeIds = new Set([
+    ...recentCalendarCreativeIds(current, month),
+    ...excludedCreativeIds,
+  ])
   let pool = await requestCalendarCreativePool(brand, current, [promotionPoint], itemId)
-  let candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex)
+  let candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex, usedCreativeIds)
   if (!candidate) {
     pool = await requestCalendarCreativePool(brand, current, [promotionPoint], `${itemId}:retry`)
-    candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex)
+    candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex, usedCreativeIds)
   }
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
+  const candidateCreativeId = calendarInspirationCreativeId(candidate)
   const draft: BrandPlanCalendarItem = {
     id: itemId,
     date: slot.date,
@@ -1383,7 +1393,7 @@ async function buildPublishingCalendarItemByIndex(
     creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate, index: itemIndex }),
     matchedTags: stringList(candidate?.matchedTags),
     matchedInspirations: stringList(candidate?.matchedInspirations),
-    inspirationCreativeId: calendarInspirationCreativeId(candidate),
+    inspirationCreativeId: candidateCreativeId,
     inspirationSourceTitle: inspirationSource.title,
     inspirationSourceSummary: inspirationSource.summary,
     sampleVideoUrl: sampleLinks.videoUrl,
@@ -1786,9 +1796,14 @@ function selectCalendarCreativeCandidate(
   candidates: Array<Record<string, unknown>>,
   promotionPointId: string,
   platform: string,
-  index: number
+  index: number,
+  excludedCreativeIds: Set<string> = new Set()
 ) {
-  const pointCandidates = candidates.filter((candidate) => text(candidate.promotionPointId) === promotionPointId)
+  const pointCandidates = candidates.filter((candidate) => {
+    if (text(candidate.promotionPointId) !== promotionPointId) return false
+    const creativeId = calendarInspirationCreativeId(candidate)
+    return !creativeId || !excludedCreativeIds.has(creativeId)
+  })
   const platformCandidates = pointCandidates.filter((candidate) => {
     const sourcePlatform = text(objectValue(candidate.sourceVideo).platform || objectValue(candidate.sourcePost).platform)
     return !sourcePlatform || normalizePlatformSlug(sourcePlatform) === normalizePlatformSlug(platform)
@@ -1796,6 +1811,27 @@ function selectCalendarCreativeCandidate(
   const pool = platformCandidates.length ? platformCandidates : pointCandidates
   if (!pool.length) return null
   return pool[index % pool.length]
+}
+
+function recentCalendarCreativeIds(current: BrandPlanWorkspaceData, month: string) {
+  const ids: string[] = []
+  const targetIndex = monthSortIndex(month)
+  const months = current.publishingCalendar?.months || {}
+  Object.entries(months).forEach(([calendarMonth, items]) => {
+    const distance = targetIndex - monthSortIndex(calendarMonth)
+    if (distance < 0 || distance > 2) return
+    items.forEach((item) => {
+      const creativeId = text(item.inspirationCreativeId) || resolveInspirationCreativeId(item)
+      if (creativeId) ids.push(creativeId)
+    })
+  })
+  return uniqueStrings(ids)
+}
+
+function monthSortIndex(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number)
+  if (!Number.isFinite(year) || !Number.isFinite(monthNumber)) return 0
+  return year * 12 + monthNumber
 }
 
 type CalendarCopyContext = {
@@ -1899,8 +1935,8 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
   const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
   const shots = calendarReplicationShots(input)
-  const voiceover = calendarScriptLines(candidate, 'voiceover').slice(0, 3)
-  const subtitles = calendarScriptLines(candidate, 'subtitles').slice(0, 3)
+  const voiceover = calendarScriptLines(input, 'voiceover').slice(0, 3)
+  const subtitles = calendarScriptLines(input, 'subtitles').slice(0, 3)
   const mechanism = calendarCreativeMechanism(input)
   const inspirationSource = calendarInspirationSource(candidate)
   return [
@@ -1909,8 +1945,8 @@ function calendarPlanningText(input: CalendarCopyContext) {
     `内容创意：${mechanism}`,
     `开场：${calendarHookText(input)}`,
     shots.length ? `分镜脚本：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
-    voiceover.length ? `口播方向：${voiceover.map((line) => adaptCalendarScriptText(line, input)).join(' / ')}` : '',
-    subtitles.length ? `字幕方向：${subtitles.map((line) => adaptCalendarScriptText(line, input)).join(' / ')}` : '',
+    voiceover.length ? `口播方向：${voiceover.join(' / ')}` : '',
+    subtitles.length ? `字幕方向：${subtitles.join(' / ')}` : '',
     angle ? `拍摄重点：${adaptCalendarScriptText(angle, input)}。` : '',
     input.interviewFocus ? `可带一句主理人原话：${cleanCalendarText(input.interviewFocus, '')}。` : '',
     `收尾：引导顾客${customerAction}。`,
@@ -1977,9 +2013,12 @@ function calendarReplicationShots(input: CalendarCopyContext) {
   ]
 }
 
-function calendarScriptLines(candidate: Record<string, unknown> | null, key: 'voiceover' | 'subtitles') {
+function calendarScriptLines(input: CalendarCopyContext, key: 'voiceover' | 'subtitles') {
+  const candidate = input.candidate || null
   const script = objectValue(candidate?.scriptContent)
   return stringList(script[key])
+    .map((line) => adaptCalendarScriptText(line, input))
+    .filter(Boolean)
 }
 
 function adaptCalendarScriptText(value: string, input: CalendarCopyContext) {
