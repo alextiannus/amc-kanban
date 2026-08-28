@@ -6,7 +6,7 @@ import {
   X, ChevronLeft, Save,
   Settings, BookOpen, Loader2,
   RefreshCw, FileText, Store, Utensils,
-  Edit3, Plus, Pin,
+  Edit3, Plus, Pin, Sparkles,
   Users, Goal, HelpCircle,
   MapPin, Music2, ExternalLink, WalletCards, Download
 } from 'lucide-react'
@@ -1384,6 +1384,26 @@ ${storeLines}
     }
   }
 
+  const handleRewriteCalendarItemDetails = async (
+    item: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string][number],
+    index: number
+  ) => {
+    if (!item?.id) return
+    const loadingKey = `calendar_rewrite:${item.id}`
+    setPlanGenerating(loadingKey)
+    try {
+      const data = await postBrandPlanAction('rewrite_calendar_item_details', {
+        month: calendarMonth,
+        item,
+      })
+      if (!data?.calendarItem) return
+      handleUpdateCalendarItem(item.id, index, data.calendarItem)
+      showToastVal('已根据内容创意重写详情', 'success')
+    } finally {
+      setPlanGenerating(null)
+    }
+  }
+
   const updateCalendarMonthItems = (
     updater: (items: NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]) => NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
   ) => {
@@ -2465,12 +2485,24 @@ ${storeLines}
                     onChange={(event) => handleUpdateCalendarItem(item.id, index, { product: event.target.value })}
                     className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                   />
-                  <textarea
-                    value={item.planning}
-                    onChange={(event) => handleUpdateCalendarItem(item.id, index, { planning: event.target.value })}
-                    rows={7}
-                    className="mt-2 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
-                  />
+                  <div className="relative mt-2">
+                    <textarea
+                      value={item.planning}
+                      onChange={(event) => handleUpdateCalendarItem(item.id, index, { planning: event.target.value })}
+                      rows={7}
+                      className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2 pb-11 text-xs leading-relaxed text-slate-600 outline-none focus:border-rose-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRewriteCalendarItemDetails(item, index)}
+                      disabled={Boolean(planGenerating) || !item.planning?.trim()}
+                      aria-label="根据内容创意重写详情"
+                      title="根据内容创意重写详情"
+                      className="absolute bottom-2 right-2 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm hover:bg-indigo-100 disabled:opacity-50 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-200"
+                    >
+                      {planGenerating === `calendar_rewrite:${item.id}` ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                   {item.materialRequirements?.length ? (
                     <p className="mt-2 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">素材要求：{item.materialRequirements.join('；')}</p>
                   ) : null}

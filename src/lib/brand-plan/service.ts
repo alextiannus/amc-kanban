@@ -192,6 +192,7 @@ type BrandPlanAction =
   | 'generate_publishing_calendar'
   | 'generate_publishing_calendar_item'
   | 'regenerate_calendar_item'
+  | 'rewrite_calendar_item_details'
   | 'ensure_presentation_theme'
 
 type BrandPlanBrand = NonNullable<Awaited<ReturnType<typeof loadBrandPlanBrand>>>
@@ -456,6 +457,14 @@ export async function runBrandPlanAction(input: {
       researchSnapshotId: current.researchReport?.snapshotId,
       generationMode: 'AMC_CONTENT_ASSISTED',
     })
+  } else if (input.action === 'rewrite_calendar_item_details') {
+    requireQuarterPlan(current)
+    const month = clampSchedulableCalendarMonth(normalizeMonth(input.body?.month))
+    const item = objectValue(input.body?.item) as BrandPlanCalendarItem
+    if (!text(item.id)) throw new BrandPlanError('calendar_item_not_found', 404)
+    const rewritten = await rewriteCalendarItemDetailsWithLLM(brand, current, item)
+    next = current
+    extraPayload = { calendarItem: rewritten, month }
   } else if (input.action === 'ensure_presentation_theme') {
     requireAnnualPlan(current)
     next = {
@@ -2135,6 +2144,97 @@ function calendarIndependentCreativeGap(
     reasons.length ? `原因：${reasons.join('、')}` : '',
     '可在主理人 review 时补充参考灵感或素材。',
   ].filter(Boolean).join('\n')
+}
+
+async function rewriteCalendarItemDetailsWithLLM(
+  brand: BrandPlanBrand,
+  current: BrandPlanWorkspaceData,
+  item: BrandPlanCalendarItem
+): Promise<BrandPlanCalendarItem> {
+  const brandName = brandDisplayName(brand)
+  const productCatalog = skuLibraryForLLM(brand.knowledge?.menuItems, 30)
+  const approvedPricePhrases = productCatalogPricePhrases(productCatalog)
+  const payload = {
+    brand: {
+      name: brandName,
+      industry: brand.industry || 'Restaurant / F&B',
+      market: text(brand.knowledge?.market || brand.location) || 'Singapore',
+      address: text(brand.address),
+      description: cleanCalendarText(text(brand.description || brand.knowledge?.summary), ''),
+    },
+    strategy: {
+      goal: current.annualPlan?.goal || current.researchReport?.summary || '',
+      platformStrategy: current.annualPlan?.platformStrategy || [],
+      contentPillars: current.annualPlan?.contentPillars || current.quarterlyPlans?.flatMap((plan) => plan.contentDirections || []) || [],
+      productCatalog,
+      priceUseRule: '商品库中明确提供的价格可以用于创意和点单判断；没有明确来源的具体价格不得编造。需要价格但缺少来源时，把“主理人确认/补充价格”写入 materialRequirements。',
+    },
+    item: {
+      id: item.id,
+      date: item.date,
+      platform: item.platform,
+      platformSlug: item.platformSlug,
+      contentType: item.contentType,
+      product: item.product,
+      title: item.title,
+      contentIdea: item.planning,
+      materialRequirements: item.materialRequirements || [],
+      inspirationCreativeId: item.inspirationCreativeId,
+      inspirationSourceTitle: item.inspirationSourceTitle,
+      inspirationSourceSummary: item.inspirationSourceSummary,
+      matchedTags: item.matchedTags || [],
+      matchedInspirations: item.matchedInspirations || [],
+    },
+  }
+  const prompt = [
+    '你是 AMC 的本地商家内容策划总监。用户刚修改了一条内容创意，请基于用户当前内容重写这条创意的详细执行内容。',
+    '只返回 JSON 对象，不要 Markdown，不要解释。字段必须包含 title, planning, materialRequirements。',
+    'title：保留用户创意方向，写成当前品牌、当前商品和当前平台可用的中文标题。',
+    'planning：输出可直接给拍摄/运营执行的详细内容。短视频必须包含“开场：”“分镜脚本：”“口播方向：”“字幕方向：”“收尾：”；图文必须包含画面结构、首图/正文重点和行动引导。',
+    'materialRequirements：3-6 条素材需求，具体到画面、门店信息或主理人需要补充确认的内容。',
+    '不要编造价格、优惠、赠品、暗号、隐藏福利、出示本条、排名、销量或到店人数。没有来源的价格/活动只写入素材需求让主理人确认。',
+    '不要写原视频、参考视频、参考内容、样板爆品、复刻目标、文件名或其他品牌名。',
+    `输入 JSON：${JSON.stringify(payload)}`,
+  ].join('\n\n')
+  const result = await callLLM('marketing_plan', prompt, 1200, {
+    temperature: 0.35,
+    jsonMode: true,
+    deadlineMs: 60000,
+    attemptTimeoutMs: [55000],
+    maxAttempts: 1,
+    allowDefaultFallback: false,
+    allowAnyFallback: false,
+    allowSystemFallback: false,
+  })
+  const parsed = objectValue(parseJsonValue(result.text))
+  const title = cleanReviewedCalendarTitle(text(parsed.title), item.title, brandName, approvedPricePhrases)
+  const planning = cleanReviewedCalendarText(text(parsed.planning), '', approvedPricePhrases)
+  const materialRequirements = stringList(parsed.materialRequirements)
+    .map((line) => cleanReviewedCalendarText(line, '', approvedPricePhrases))
+    .filter(Boolean)
+  if (!planning || !materialRequirements.length) {
+    console.warn('[brand-plan] calendar item detail rewrite returned incomplete payload', {
+      itemId: item.id,
+      responseTextCharCount: result.text?.length || 0,
+      snippet: result.text?.slice(0, 1000) || '',
+    })
+    throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+  }
+  const rewritten = {
+    ...item,
+    title,
+    planning,
+    materialRequirements,
+  }
+  const qualityIssues = calendarCreativeQualityIssues([rewritten], approvedPricePhrases)
+  if (qualityIssues.length) {
+    console.warn('[brand-plan] calendar item detail rewrite failed quality gate', {
+      itemId: item.id,
+      qualityIssues,
+    })
+    throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
+  }
+  return rewritten
 }
 
 async function reviewCalendarCreativeItemsWithLLM(
