@@ -1322,9 +1322,8 @@ async function buildPublishingMonth(
         : calendarIndependentCreativeGap(itemCreativePool.missingPromotionPoints, promotionPoint.id),
     }
   })
-  const reviewedItems = await reviewCalendarCreativeItemsWithLLM(brand, current, items)
-  requireValidCalendarInspirationIdentity(reviewedItems)
-  return reviewedItems
+  requireValidCalendarInspirationIdentity(items)
+  return items
 }
 
 async function buildPublishingCalendarItemByIndex(
@@ -1517,7 +1516,7 @@ async function regeneratePublishingCalendarItem(
   }
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
-  const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [{
+  const replacement: BrandPlanCalendarItem = {
     ...item,
     date: clampCalendarDateToMinimum(item.date),
     title: calendarItemTitle({
@@ -1554,18 +1553,9 @@ async function regeneratePublishingCalendarItem(
     contentLibraryGap: candidate
       ? calendarContentGap(pool.contentLibraryGaps, point.id, candidate)
       : calendarIndependentCreativeGap(pool.missingPromotionPoints, point.id),
-  }]).catch((error) => {
-    console.warn('[brand-plan] calendar single-day review failed; using rule fallback', {
-      itemId: item.id,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return fallbackReviewedCalendarItems(brand, [{
-      ...item,
-      contentLibraryGap: item.contentLibraryGap || '单条审核暂不可用，已按平台规则生成原创 brief。',
-    }])
-  })
-  requireValidCalendarInspirationIdentity([reviewed])
-  return reviewed
+  }
+  requireValidCalendarInspirationIdentity([replacement])
+  return replacement
 }
 
 function assignPromotionPointToSlot(
@@ -1940,7 +1930,6 @@ function calendarHookText(input: CalendarCopyContext) {
 function calendarPlanningText(input: CalendarCopyContext) {
   const product = productDisplayName(input.product)
   const candidate = input.candidate || null
-  const brandName = brandDisplayName(input.brand)
   const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
   const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
   const shots = calendarReplicationShots(input)
@@ -2011,14 +2000,31 @@ function calendarReplicationShots(input: CalendarCopyContext) {
     })
     .filter(Boolean)
   if (adapted.length) return adapted
-  const brandName = brandDisplayName(input.brand)
   const product = productDisplayName(input.product)
   const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
+  const mechanism = calendarCreativeMechanism(input)
+  const platform = normalizePlatformSlug(input.platformSlug)
+  if (platform === 'google_business') {
+    return [
+      `0-3s：拍清${product}主体和店内真实环境，第一眼说明这是门店更新。`,
+      `4-10s：补门头、地址动线或服务过程，让顾客知道怎么到店和如何咨询。`,
+      `11-18s：围绕“${mechanism}”拍一个具体信息点，避免只做氛围镜头。`,
+      `结尾：用营业信息、电话、地址或路线引导顾客${customerAction}。`,
+    ]
+  }
+  if (platform === 'xiaohongshu') {
+    return [
+      `0-3s：先拍${product}最能判断口味和分量的画面，配一句真实种草理由。`,
+      `4-10s：按“${mechanism}”拆成 2 个决策点，分别拍菜品细节和用餐场景。`,
+      `11-18s：补地址、适合人群或点单建议，帮助收藏后能照着来。`,
+      `结尾：引导顾客${customerAction}。`,
+    ]
+  }
   return [
-    `0-3s：近景拍${product}上桌，先给热气、鱼肉状态和夹菜动作。`,
-    `4-10s：补一组过程镜头，拍汤色、配菜、分量和适合几个人吃。`,
-    `11-18s：带到${brandName}门店环境、桌面氛围和顾客会关心的口味细节。`,
-    `结尾：用地址、预约或收藏动作引导顾客${customerAction}。`,
+    `0-3s：先拍${product}最有识别度的一秒，直接承接标题里的钩子。`,
+    `4-10s：把“${mechanism}”拍成一个真实过程，不空拍门头或泛环境。`,
+    `11-18s：补顾客会关心的分量、口味、服务或到店信息。`,
+    `结尾：用清楚的行动入口引导顾客${customerAction}。`,
   ]
 }
 
@@ -2190,7 +2196,7 @@ async function rewriteCalendarItemDetailsWithLLM(
     '你是 AMC 的本地商家内容策划总监。用户刚修改了一条内容创意，请基于用户当前内容重写这条创意的详细执行内容。',
     '只返回 JSON 对象，不要 Markdown，不要解释。字段必须包含 title, planning, materialRequirements。',
     'title：保留用户创意方向，写成当前品牌、当前商品和当前平台可用的中文标题。',
-    'planning：输出可直接给拍摄/运营执行的详细内容。短视频必须包含“开场：”“分镜脚本：”“口播方向：”“字幕方向：”“收尾：”；图文必须包含画面结构、首图/正文重点和行动引导。',
+    'planning：输出可直接给拍摄/运营执行的详细内容。短视频必须包含“开场：”“分镜脚本：”“收尾：”；只有输入中已有明确口播/字幕，或用户创意明确要求口播/字幕时，才包含“口播方向：”“字幕方向：”。如果需要口播/字幕但无法确定具体文案，只写“口播方向：根据内容做口播”或“字幕方向：根据内容做字幕”，不要硬编固定文案。图文必须包含画面结构、首图/正文重点和行动引导。',
     'materialRequirements：3-6 条素材需求，具体到画面、门店信息或主理人需要补充确认的内容。',
     '不要编造价格、优惠、赠品、暗号、隐藏福利、出示本条、排名、销量或到店人数。没有来源的价格/活动只写入素材需求让主理人确认。',
     '不要写原视频、参考视频、参考内容、样板爆品、复刻目标、文件名或其他品牌名。',
@@ -2251,11 +2257,11 @@ async function reviewCalendarCreativeItemsWithLLM(
       try {
         return await reviewCalendarCreativeItemsWithLLM(brand, current, chunk)
       } catch (error) {
-        console.warn('[brand-plan] calendar creative review failed for single item; using rule fallback', {
+        console.warn('[brand-plan] calendar creative review failed for single item', {
           itemIds: chunk.map((item) => item.id),
           error: error instanceof Error ? error.message : String(error),
         })
-        return fallbackReviewedCalendarItems(brand, chunk)
+        throw error
       }
     })
     return reviewedChunks.flat()
@@ -2443,30 +2449,6 @@ async function reviewCalendarCreativeItemsWithLLM(
     if (error instanceof BrandPlanError) throw error
     throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
   }
-}
-
-function fallbackReviewedCalendarItems(brand: BrandPlanBrand, items: BrandPlanCalendarItem[]) {
-  const brandName = brandDisplayName(brand)
-  return items.map((item) => {
-    const product = productDisplayName(item.product)
-    const productPhrase = brandName.includes(product) ? `这锅招牌${product}` : product
-    return {
-      ...item,
-      planning: mergeReviewedCalendarPlanning(
-        item.planning,
-        `先拍${productPhrase}上桌和夹起的近景，再补一组门店环境、点单理由和到店信息。画面要能让顾客看清分量、口味和适合什么场景，拍完可以直接给运营排版发布。`,
-        '',
-        true
-      ),
-      materialRequirements: item.materialRequirements?.length
-        ? item.materialRequirements.map((line) => cleanReviewedCalendarText(line, '')).filter(Boolean)
-        : [
-            `${product}的上桌近景和夹起特写`,
-            `${brandName}门店环境、桌面和服务过程`,
-            '地址、营业时间、价格或活动规则确认',
-          ],
-    }
-  })
 }
 
 async function mapWithConcurrency<T, R>(
