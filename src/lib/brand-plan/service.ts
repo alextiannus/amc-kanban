@@ -411,6 +411,15 @@ export async function runBrandPlanAction(input: {
     const itemIndex = Math.max(0, Number(input.body?.itemIndex) || 0)
     const publishingFreqOverride = normalizePublishingFreq(input.body?.publishingFreqOverride)
     const item = await buildPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex)
+      .catch(async (error) => {
+        console.warn('[brand-plan] calendar item generation failed; using independent rule item', {
+          brandId: brand.id,
+          month,
+          itemIndex,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return buildIndependentPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex)
+      })
     next = current
     extraPayload = { calendarItem: item, month, itemIndex }
   } else if (input.action === 'regenerate_calendar_item') {
@@ -1394,6 +1403,87 @@ async function buildPublishingCalendarItemByIndex(
     return fallbackReviewedCalendarItems(brand, [draft])
   })
   requireValidCalendarInspirationIdentity([reviewed])
+  return reviewed
+}
+
+async function buildIndependentPublishingCalendarItemByIndex(
+  brand: BrandPlanBrand,
+  month: string,
+  interview: BrandPlanMerchantInterview | null,
+  current: BrandPlanWorkspaceData,
+  publishingFreqOverride: PublishingFreq | null,
+  itemIndex: number
+): Promise<BrandPlanCalendarItem> {
+  const products = primaryProducts(brand, { available: false })
+  const interviewFocus = interviewMaterialText(interview)
+  const subscriptionStrategy = await buildSubscriptionStrategy(brand)
+  const overrideMonthlyQuota = sumMonthlyPosts(publishingFreqOverride)
+  const schedule = buildMonthlyPublishingSchedule(
+    month,
+    publishingFreqOverride || subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
+    subscriptionStrategy.platformCoverage,
+    overrideMonthlyQuota || subscriptionStrategy.monthlyContentQuota
+  )
+  const slot = schedule[itemIndex]
+  if (!slot) throw new BrandPlanError('calendar_item_not_found', 404)
+  const promotionPoints = buildCalendarPromotionPoints({
+    brand,
+    current,
+    month,
+    products,
+    interviewFocus,
+    schedule,
+  })
+  const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, itemIndex)
+  const product = products[itemIndex % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
+  const itemId = `${month}-${String(itemIndex + 1).padStart(2, '0')}-${slot.platform.slug}`
+  const draft: BrandPlanCalendarItem = {
+    id: itemId,
+    date: slot.date,
+    title: calendarItemTitle({
+      brand,
+      product,
+      promotionPoint,
+      platformSlug: slot.platform.slug,
+      candidate: null,
+      index: itemIndex,
+    }),
+    platform: slot.platform.label,
+    platformSlug: slot.platform.slug,
+    contentType: calendarContentType(null, itemIndex),
+    product,
+    planning: calendarPlanningText({
+      brand,
+      product,
+      promotionPoint,
+      platformSlug: slot.platform.slug,
+      candidate: null,
+      interviewFocus,
+      index: itemIndex,
+    }),
+    sampleHit: '',
+    status: '待确认',
+    selectedCreativeCandidateId: '',
+    creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate: null, index: itemIndex }),
+    matchedTags: [],
+    matchedInspirations: [],
+    inspirationCreativeId: undefined,
+    inspirationSourceTitle: '',
+    inspirationSourceSummary: '',
+    sampleVideoUrl: '',
+    sampleOriginalUrl: '',
+    sampleThumbnailUrl: '',
+    sampleSourcePlatform: '',
+    materialRequirements: calendarMaterialRequirements(product, null),
+    contentLibraryGap: '单条灵感匹配暂不可用，已按平台规则生成原创 brief；主理人 review 时可补充参考灵感。',
+  }
+  const [reviewed] = await reviewCalendarCreativeItemsWithLLM(brand, current, [draft]).catch((error) => {
+    console.warn('[brand-plan] independent calendar item review failed; using rule fallback', {
+      itemId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return fallbackReviewedCalendarItems(brand, [draft])
+  })
   return reviewed
 }
 

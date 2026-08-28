@@ -368,6 +368,7 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
   }
   let section: 'shots' | null = null
   for (const line of lines) {
+    const timelineShots = extractTimelineShots(line)
     if (line.startsWith('开场：')) {
       script.opening = line.replace(/^开场：/, '').trim()
       section = null
@@ -375,7 +376,7 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
     }
     if (line.startsWith('分镜脚本：')) {
       const inline = line.replace(/^分镜脚本：/, '').trim()
-      if (inline) script.shots.push(inline)
+      if (inline) script.shots.push(...(extractTimelineShots(inline).length ? extractTimelineShots(inline) : splitScriptPieces(inline)))
       section = 'shots'
       continue
     }
@@ -404,9 +405,30 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
     }
     if (section === 'shots' && /^\d+[.、]\s*/.test(line)) {
       script.shots.push(line.replace(/^\d+[.、]\s*/, '').trim())
+      continue
+    }
+    if (timelineShots.length) {
+      script.shots.push(...timelineShots)
     }
   }
+  script.shots = Array.from(new Set(script.shots.map((shot) => shot.trim()).filter(Boolean)))
   return script
+}
+
+function extractTimelineShots(value: string) {
+  const text = value.trim()
+  if (!text) return []
+  const matches = Array.from(text.matchAll(/(?:^|[\s。；;，,])((?:(?:\d{1,2}(?:-\d{1,2})?秒)|(?:第?\d+镜)|(?:镜头\s*\d+)|(?:分镜\s*\d+))[:：][\s\S]*?)(?=(?:[\s。；;，,](?:(?:\d{1,2}(?:-\d{1,2})?秒)|(?:第?\d+镜)|(?:镜头\s*\d+)|(?:分镜\s*\d+))[:：])|$)/g))
+  return matches
+    .map((match) => match[1].replace(/[。；;，,\s]+$/, '').trim())
+    .filter(Boolean)
+}
+
+function splitScriptPieces(value: string) {
+  return value
+    .split(/\s*(?:\n+|[；;]\s*|\s+\/\s+)\s*/)
+    .map((item) => item.replace(/^\d+[.、]\s*/, '').trim())
+    .filter(Boolean)
 }
 
 const CONTENT_PLANNING_LEAD_DAYS = 7
@@ -1317,6 +1339,7 @@ ${storeLines}
         month: calendarMonth,
         value: visibleItems,
       })
+      let failedCount = 0
       for (let index = 0; index < total; index += 1) {
         setCalendarGenerationProgress(`正在生成第 ${index + 1} / ${total} 条`)
         const data = await postBrandPlanAction('generate_publishing_calendar_item', {
@@ -1324,7 +1347,10 @@ ${storeLines}
           itemIndex: index,
           publishingFreqOverride,
         })
-        if (!data?.calendarItem) return
+        if (!data?.calendarItem) {
+          failedCount += 1
+          continue
+        }
         if (confirmedItems.some(item => item.id === data.calendarItem?.id)) continue
         visibleItems = [
           ...visibleItems.filter(item => item.id !== data.calendarItem?.id),
@@ -1338,6 +1364,7 @@ ${storeLines}
         value: visibleItems,
       })
       await loadBrandPlanWorkspace()
+      if (failedCount) showToastVal(`内容计划已生成，${failedCount} 条暂未生成成功。`, 'info')
     } finally {
       setPlanGenerating(null)
       setCalendarGenerationProgress('')
@@ -2472,9 +2499,15 @@ ${storeLines}
                         <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">开场：</span>{videoScript.opening}</p>
                       ) : null}
                       {videoScript.shots.length ? (
-                        <ol className="space-y-1 pl-4">
+                        <ol className="space-y-1.5">
                           {videoScript.shots.map((shot, shotIndex) => (
-                            <li key={`${item.id || index}-shot-${shotIndex}`} className="list-decimal leading-relaxed">{shot}</li>
+                            <li
+                              key={`${item.id || index}-shot-${shotIndex}`}
+                              className="rounded-md border border-white/80 bg-white px-2 py-1.5 leading-relaxed shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                            >
+                              <span className="mb-0.5 block text-[10px] font-black text-indigo-500 dark:text-indigo-300">镜头 {shotIndex + 1}</span>
+                              {shot}
+                            </li>
                           ))}
                         </ol>
                       ) : null}
