@@ -413,15 +413,6 @@ export async function runBrandPlanAction(input: {
     const publishingFreqOverride = normalizePublishingFreq(input.body?.publishingFreqOverride)
     const usedCreativeIds = stringList(input.body?.usedCreativeIds)
     const item = await buildPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex, usedCreativeIds)
-      .catch(async (error) => {
-        console.warn('[brand-plan] calendar item generation failed; using independent rule item', {
-          brandId: brand.id,
-          month,
-          itemIndex,
-          error: error instanceof Error ? error.message : String(error),
-        })
-        return buildIndependentPublishingCalendarItemByIndex(brand, month, latestInterview, current, publishingFreqOverride, itemIndex)
-      })
     next = current
     extraPayload = { calendarItem: item, month, itemIndex }
   } else if (input.action === 'regenerate_calendar_item') {
@@ -1417,80 +1408,6 @@ async function buildPublishingCalendarItemByIndex(
   return draft
 }
 
-async function buildIndependentPublishingCalendarItemByIndex(
-  brand: BrandPlanBrand,
-  month: string,
-  interview: BrandPlanMerchantInterview | null,
-  current: BrandPlanWorkspaceData,
-  publishingFreqOverride: PublishingFreq | null,
-  itemIndex: number
-): Promise<BrandPlanCalendarItem> {
-  const products = primaryProducts(brand, { available: false })
-  const interviewFocus = interviewMaterialText(interview)
-  const subscriptionStrategy = await buildSubscriptionStrategy(brand)
-  const overrideMonthlyQuota = sumMonthlyPosts(publishingFreqOverride)
-  const schedule = buildMonthlyPublishingSchedule(
-    month,
-    publishingFreqOverride || subscriptionStrategy.publishingFreq || brand.knowledge?.publishingFreq,
-    subscriptionStrategy.platformCoverage,
-    overrideMonthlyQuota || subscriptionStrategy.monthlyContentQuota
-  )
-  const slot = schedule[itemIndex]
-  if (!slot) throw new BrandPlanError('calendar_item_not_found', 404)
-  const promotionPoints = buildCalendarPromotionPoints({
-    brand,
-    current,
-    month,
-    products,
-    interviewFocus,
-    schedule,
-  })
-  const promotionPoint = assignPromotionPointToSlot(promotionPoints, slot, itemIndex)
-  const product = products[itemIndex % Math.max(1, products.length)] || promotionPoint?.sellingPoint || '招牌产品'
-  const itemId = `${month}-${String(itemIndex + 1).padStart(2, '0')}-${slot.platform.slug}`
-  const draft: BrandPlanCalendarItem = {
-    id: itemId,
-    date: slot.date,
-    title: calendarItemTitle({
-      brand,
-      product,
-      promotionPoint,
-      platformSlug: slot.platform.slug,
-      candidate: null,
-      index: itemIndex,
-    }),
-    platform: slot.platform.label,
-    platformSlug: slot.platform.slug,
-    contentType: calendarContentType(null, itemIndex),
-    product,
-    planning: calendarPlanningText({
-      brand,
-      product,
-      promotionPoint,
-      platformSlug: slot.platform.slug,
-      candidate: null,
-      interviewFocus,
-      index: itemIndex,
-    }),
-    sampleHit: '',
-    status: '待确认',
-    selectedCreativeCandidateId: '',
-    creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate: null, index: itemIndex }),
-    matchedTags: [],
-    matchedInspirations: [],
-    inspirationCreativeId: undefined,
-    inspirationSourceTitle: '',
-    inspirationSourceSummary: '',
-    sampleVideoUrl: '',
-    sampleOriginalUrl: '',
-    sampleThumbnailUrl: '',
-    sampleSourcePlatform: '',
-    materialRequirements: calendarMaterialRequirements(product, null),
-    contentLibraryGap: '单条灵感匹配暂不可用，已按平台规则生成原创 brief；主理人 review 时可补充参考灵感。',
-  }
-  return draft
-}
-
 async function regeneratePublishingCalendarItem(
   brand: BrandPlanBrand,
   _month: string,
@@ -1937,12 +1854,13 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const subtitles = calendarScriptLines(input, 'subtitles').slice(0, 3)
   const mechanism = calendarCreativeMechanism(input)
   const inspirationSource = calendarInspirationSource(candidate)
+  const hasSourceShots = hasCalendarSourceShots(candidate)
   return [
     inspirationSource.title ? `灵感主题：${inspirationSource.title}` : '',
     inspirationSource.summary ? `灵感核心：${inspirationSource.summary}` : '',
     `内容创意：${mechanism}`,
     `开场：${calendarHookText(input)}`,
-    shots.length ? `分镜脚本：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
+    shots.length ? `${hasSourceShots ? '分镜脚本' : '拍摄建议'}：\n${shots.map((shot, index) => `${index + 1}. ${shot}`).join('\n')}` : '',
     voiceover.length ? `口播方向：${voiceover.join(' / ')}` : '',
     subtitles.length ? `字幕方向：${subtitles.join(' / ')}` : '',
     angle ? `拍摄重点：${adaptCalendarScriptText(angle, input)}。` : '',
@@ -1986,6 +1904,11 @@ function calendarCreativeMechanism(input: CalendarCopyContext) {
     return `用菜单和分量先给判断：拍清${product}适合几个人吃、怎么搭配更稳，价格必须以门店确认为准。`
   }
   return variants[input.index % variants.length]
+}
+
+function hasCalendarSourceShots(candidate: Record<string, unknown> | null) {
+  const script = objectValue(candidate?.scriptContent)
+  return Array.isArray(script.shots) && script.shots.length > 0
 }
 
 function calendarReplicationShots(input: CalendarCopyContext) {
@@ -2243,214 +2166,6 @@ async function rewriteCalendarItemDetailsWithLLM(
   return rewritten
 }
 
-async function reviewCalendarCreativeItemsWithLLM(
-  brand: BrandPlanBrand,
-  current: BrandPlanWorkspaceData,
-  items: BrandPlanCalendarItem[]
-): Promise<BrandPlanCalendarItem[]> {
-  if (!items.length) return items
-  const chunkSize = 1
-  if (items.length > chunkSize) {
-    const chunks: BrandPlanCalendarItem[][] = []
-    for (let index = 0; index < items.length; index += chunkSize) chunks.push(items.slice(index, index + chunkSize))
-    const reviewedChunks: BrandPlanCalendarItem[][] = await mapWithConcurrency(chunks, 1, async (chunk): Promise<BrandPlanCalendarItem[]> => {
-      try {
-        return await reviewCalendarCreativeItemsWithLLM(brand, current, chunk)
-      } catch (error) {
-        console.warn('[brand-plan] calendar creative review failed for single item', {
-          itemIds: chunk.map((item) => item.id),
-          error: error instanceof Error ? error.message : String(error),
-        })
-        throw error
-      }
-    })
-    return reviewedChunks.flat()
-  }
-  const brandName = brandDisplayName(brand)
-  const promptTemplate = await getPromptTemplate('calendar_creative_review')
-  const productCatalog = skuLibraryForLLM(brand.knowledge?.menuItems, 30)
-  const approvedPricePhrases = productCatalogPricePhrases(productCatalog)
-  const payload = {
-    brand: {
-      name: brandName,
-      industry: brand.industry || 'Restaurant / F&B',
-      market: text(brand.knowledge?.market || brand.location) || 'Singapore',
-      description: cleanCalendarText(text(brand.description || brand.knowledge?.summary), ''),
-    },
-    strategy: {
-      goal: current.annualPlan?.goal || current.researchReport?.summary || '',
-      platformStrategy: current.annualPlan?.platformStrategy || [],
-      contentPillars: current.annualPlan?.contentPillars || current.quarterlyPlans?.flatMap((plan) => plan.contentDirections || []) || [],
-      productCatalog,
-      priceUseRule: '商品库中明确提供的价格可以用于创意和点单判断；没有在商品库、品牌资料或输入中明确出现的具体价格不得编造。需要价格但缺少来源时，把“主理人确认/补充价格”写入 materialRequirements，不要让创意失败。',
-    },
-    items: items.map((item) => ({
-      id: item.id,
-      date: item.date,
-      platform: item.platform,
-      contentType: item.contentType,
-      product: item.product,
-      draftTitle: item.title,
-      draftPlanning: item.planning.slice(0, 900),
-      draftMaterialRequirements: item.materialRequirements || [],
-      hasInspirationLink: Boolean(item.sampleVideoUrl || item.sampleOriginalUrl),
-      inspirationCreativeId: item.inspirationCreativeId,
-      inspirationSourceTitle: item.inspirationSourceTitle,
-      inspirationSourceSummary: item.inspirationSourceSummary,
-      contentLibraryGap: item.contentLibraryGap,
-      matchedTags: item.matchedTags || [],
-      matchedInspirations: item.matchedInspirations || [],
-    })),
-  }
-  try {
-    let repairNote = ''
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const prompt = renderPromptTemplate(promptTemplate?.template || '', {
-        inputJson: [
-          repairNote ? `返修要求：${repairNote}` : '',
-          `输入 JSON：${JSON.stringify(payload)}`,
-        ].filter(Boolean).join('\n\n'),
-      }) || [
-        '你是 AMC 的本地商家内容策划总监。请把输入改成当前品牌能直接执行的内容计划。',
-        '只返回 JSON 对象。items 每项包含 id, approved, title, creativeSummary, materialRequirements, qualityNote。',
-        repairNote ? `返修要求：${repairNote}` : '',
-        `输入 JSON：${JSON.stringify(payload)}`,
-      ].filter(Boolean).join('\n\n')
-      const result = await callLLM('marketing_plan', prompt, Math.min(3600, 900 + items.length * 520), {
-        temperature: 0.25,
-        jsonMode: true,
-        deadlineMs: 90000,
-        attemptTimeoutMs: [85000],
-        maxAttempts: 1,
-        allowDefaultFallback: false,
-        allowAnyFallback: false,
-        allowSystemFallback: false,
-      })
-      let reviewed: Array<Record<string, unknown>> = []
-      try {
-        const parsed = parseJsonValue(result.text)
-        reviewed = (Array.isArray(parsed) ? parsed : arrayValue(objectValue(parsed).items)).map(objectValue)
-      } catch (parseError) {
-        if (attempt === 0) {
-          repairNote = [
-            '上一版不是合法 JSON，请只输出可解析 JSON 对象。',
-            'items 必须是数组；每项 id 必须原样使用输入 id；materialRequirements 必须是字符串数组。',
-            '不要输出 Markdown、注释、半截字段或多余文字。',
-          ].join('\n')
-          console.warn('[brand-plan] calendar creative review returned invalid json; retrying', {
-            responseTextCharCount: result.text?.length || 0,
-            snippet: result.text?.slice(0, 800) || '',
-            error: parseError instanceof Error ? parseError.message : String(parseError),
-          })
-          continue
-        }
-        console.warn('[brand-plan] calendar creative review returned invalid json', {
-          responseTextCharCount: result.text?.length || 0,
-          snippet: result.text?.slice(0, 1200) || '',
-          error: parseError instanceof Error ? parseError.message : String(parseError),
-        })
-        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-      }
-      if (!reviewed.length) {
-        console.warn('[brand-plan] calendar creative review returned no parsable items', {
-          responseTextCharCount: result.text?.length || 0,
-          snippet: result.text?.slice(0, 1200) || '',
-        })
-        if (attempt === 0) {
-          repairNote = '上一版 JSON 没有返回 items 数组。请按输入条目逐条返回，id 必须原样保留。'
-          continue
-        }
-        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-      }
-      if (reviewed.length < items.length) {
-        console.warn('[brand-plan] calendar creative review returned fewer items than requested', {
-          expected: items.length,
-          actual: reviewed.length,
-          snippet: result.text?.slice(0, 1200) || '',
-        })
-        if (attempt === 0) {
-          repairNote = `上一版只返回 ${reviewed.length} 条，输入有 ${items.length} 条。请补齐所有条目，id 必须原样保留。`
-          continue
-        }
-        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-      }
-      const expectedIds = new Set(items.map((item) => item.id))
-      const reviewedIds = reviewed.map((entry) => text(entry.id))
-      const returnedIdCounts = new Map<string, number>()
-      for (const id of reviewedIds) returnedIdCounts.set(id, (returnedIdCounts.get(id) || 0) + 1)
-      const invalidReturnedIds = reviewedIds.filter((id) => !expectedIds.has(id))
-      const duplicateReturnedIds = [...returnedIdCounts.entries()].filter(([, count]) => count > 1).map(([id]) => id)
-      const missingReturnedIds = items.map((item) => item.id).filter((id) => !returnedIdCounts.has(id))
-      if (invalidReturnedIds.length || duplicateReturnedIds.length || missingReturnedIds.length) {
-        console.warn('[brand-plan] calendar creative review returned mismatched item ids', {
-          invalidReturnedIds,
-          duplicateReturnedIds,
-          missingReturnedIds,
-        })
-        if (attempt === 0) {
-          repairNote = [
-            '上一版返回的条目 id 与输入不一致。',
-            `必须且只能逐条返回这些 id：${items.map((item) => item.id).join('、')}。`,
-            '不得省略、改写、重复或新增 id。',
-          ].join('\n')
-          continue
-        }
-        throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-      }
-      const rejectedItemIds = reviewed
-        .filter((entry) => entry.approved === false)
-        .map((entry) => text(entry.id))
-      if (rejectedItemIds.length) {
-        console.warn('[brand-plan] calendar creative review rewrote rejected source-anchored items', { rejectedItemIds })
-      }
-      const byId = new Map(reviewed.map((entry) => [text(entry.id), entry]))
-      const reviewedItems = items.map((item) => {
-        const review = byId.get(item.id)
-        if (!review) throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-        const approved = review.approved !== false
-        const product = productDisplayName(item.product)
-        const fallbackSummary = `拍${brandName}的${product}上桌、夹起和门店环境，再补顾客点单理由与到店信息，作为可直接执行的拍摄 brief。`
-        const creativeSummary = cleanReviewedCalendarText(text(review.creativeSummary), fallbackSummary, approvedPricePhrases)
-        const qualityNote = cleanReviewedCalendarText(text(review.qualityNote), '', approvedPricePhrases)
-        const materialRequirements = stringList(review.materialRequirements)
-          .map((line) => cleanReviewedCalendarText(line, '', approvedPricePhrases))
-          .filter(Boolean)
-        const reviewGap = approved
-          ? ''
-          : qualityNote || '审核认为原灵感不适合直接使用，已改写为当前品牌可执行方案。'
-        return {
-          ...item,
-          title: cleanReviewedCalendarTitle(text(review.title), item.title, brandName, approvedPricePhrases),
-          planning: mergeReviewedCalendarPlanning(item.planning, creativeSummary, qualityNote, approved),
-          materialRequirements: materialRequirements.length
-            ? materialRequirements
-            : item.materialRequirements,
-          contentLibraryGap: reviewGap
-            ? uniqueStrings([item.contentLibraryGap || '', `审核改写：${reviewGap}`]).join('\n')
-            : item.contentLibraryGap,
-        }
-      })
-      const qualityIssues = calendarCreativeQualityIssues(reviewedItems, approvedPricePhrases)
-      if (!qualityIssues.length) return reviewedItems
-      if (attempt === 0) {
-        repairNote = [
-          '上一版内容不合格，请重写命中问题的条目。',
-          `问题：${qualityIssues.join('；')}`,
-          '不要写未确认的价格、优惠、赠品、暗号、出示本条、隐藏福利、套餐价公开、天花板、必吃、必点、流量承诺或来源说明。',
-          '如果价格或活动没有在输入里明确给出，只能写“菜单/活动规则需门店确认”，不要把它作为卖点。',
-        ].join('\n')
-        continue
-      }
-      console.warn('[brand-plan] calendar creative review failed quality gate', { qualityIssues })
-      throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-    }
-    throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-  } catch (error) {
-    if (error instanceof BrandPlanError) throw error
-    throw new BrandPlanError('calendar_creative_review_llm_failed', 502)
-  }
-}
-
 async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
@@ -2467,16 +2182,6 @@ async function mapWithConcurrency<T, R>(
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker))
   return results
-}
-
-function mergeReviewedCalendarPlanning(planning: string, creativeSummary: string, qualityNote: string, _approved: boolean) {
-  const scriptDetail = planning.trim()
-  const sections = [
-    creativeSummary ? `创意总结：${creativeSummary}` : '',
-    qualityNote ? `审核备注：${qualityNote}` : '',
-    scriptDetail && !scriptDetail.includes(creativeSummary) ? scriptDetail : '',
-  ].filter(Boolean)
-  return sections.join('\n')
 }
 
 function cleanReviewedCalendarTitle(value: string, fallback: string, brandName: string, approvedPricePhrases: string[] = []) {

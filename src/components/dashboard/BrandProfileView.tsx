@@ -339,6 +339,7 @@ function publishingFreqPayload(schedule: PublishingScheduleDraft) {
 type CalendarVideoScript = {
   opening: string
   shots: string[]
+  shotLabel: '分镜' | '建议'
   voiceover: string[]
   subtitles: string[]
   closing: string
@@ -362,6 +363,7 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
   const script: CalendarVideoScript = {
     opening: '',
     shots: [],
+    shotLabel: '分镜',
     voiceover: [],
     subtitles: [],
     closing: '',
@@ -374,8 +376,9 @@ function parseCalendarVideoScript(planning?: string): CalendarVideoScript {
       section = null
       continue
     }
-    if (line.startsWith('分镜脚本：')) {
-      const inline = line.replace(/^分镜脚本：/, '').trim()
+    if (line.startsWith('分镜脚本：') || line.startsWith('拍摄建议：')) {
+      script.shotLabel = line.startsWith('拍摄建议：') ? '建议' : '分镜'
+      const inline = line.replace(/^(分镜脚本|拍摄建议)：/, '').trim()
       if (inline) script.shots.push(...(extractTimelineShots(inline).length ? extractTimelineShots(inline) : splitScriptPieces(inline)))
       section = 'shots'
       continue
@@ -2509,7 +2512,7 @@ ${storeLines}
                   {hasVideoScript ? (
                     <details open className="mt-2 rounded-lg border border-indigo-100 bg-indigo-50/70 px-3 py-2 text-[11px] text-slate-700 open:space-y-2 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:text-slate-200">
                       <summary className="cursor-pointer font-black text-indigo-700 dark:text-indigo-200">
-                        详细分镜 · {videoScript.shots.length || 1} 个镜头
+                        {videoScript.shotLabel === '分镜' ? '详细分镜' : '拍摄建议'} · {videoScript.shots.length || 1} 个镜头
                       </summary>
                       {videoSourceTitle ? (
                         <p className="leading-relaxed"><span className="font-black text-slate-500 dark:text-slate-400">原创意：</span>{videoSourceTitle}</p>
@@ -2538,7 +2541,7 @@ ${storeLines}
                               key={`${item.id || index}-shot-${shotIndex}`}
                               className="rounded-md border border-white/80 bg-white px-2 py-1.5 leading-relaxed shadow-sm dark:border-slate-800 dark:bg-slate-900"
                             >
-                              <span className="mb-0.5 block text-[10px] font-black text-indigo-500 dark:text-indigo-300">镜头 {shotIndex + 1}</span>
+                              <span className="mb-0.5 block text-[10px] font-black text-indigo-500 dark:text-indigo-300">{videoScript.shotLabel === '分镜' ? '镜头' : '建议'} {shotIndex + 1}</span>
                               {shot}
                             </li>
                           ))}
