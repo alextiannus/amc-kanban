@@ -28,7 +28,32 @@ function promotionPointLabel(point: UnknownRecord) {
   const match = id.match(/^bp_(\d{4})(\d{2})_(\d+)$/)
   const fallback = match ? `${match[1]} 年 ${Number(match[2])} 月第 ${Number(match[3])} 个推广点` : id || '未命名推广点'
   const platforms = stringList(point.platforms).map(platformLabel)
-  return `• ${name ? `「${name}」` : fallback}${platforms.length ? `（平台：${platforms.join('、')}）` : ''}`
+  const metrics = [
+    numberDetail(point.candidateCount, '候选'),
+    numberDetail(point.returnedCount, '返回'),
+    numberDetail(point.rankedCount, '入围'),
+    numberDetail(point.persistedRankedCount, '已生成 creative'),
+  ].filter(Boolean)
+  const reasons = stringList(point.gapReasons).map(gapReasonLabel)
+  return [
+    `• ${name ? `「${name}」` : fallback}${platforms.length ? `（平台：${platforms.join('、')}）` : ''}${metrics.length ? `：${metrics.join('，')}` : ''}`,
+    reasons.length ? `  原因：${reasons.join('；')}` : '',
+  ].filter(Boolean).join('\n')
+}
+
+function numberDetail(value: unknown, label: string) {
+  if (value === undefined || value === null || value === '') return ''
+  const count = Number(value)
+  return Number.isFinite(count) ? `${label} ${count}` : ''
+}
+
+function gapReasonLabel(value: string) {
+  if (value === 'matched_creatives_missing_persisted_identity') return '有相关行，但未绑定可用 creative 身份'
+  if (value === 'no_persisted_creatives_available') return '没有已生成且可引用的 creative'
+  if (value === 'no_ranked_creatives_for_platform') return '搜索有结果但相关度未达入围标准'
+  if (value === 'content_library_search_failed') return 'Content 灵感库搜索失败'
+  if (value === 'using_cross_platform_food_creative') return '可用跨平台餐饮灵感改写'
+  return value
 }
 
 function legacyDetails(error: string) {
@@ -64,7 +89,7 @@ export function calendarCreativeErrorMessage(payload: unknown) {
   return [
     '内容计划暂未生成：本次在 Content 灵感库中没有找到以下推广点的可靠匹配：',
     pointLines,
-    '请人工确认：在 Content 灵感库搜索上述主题，检查相关灵感是否已入库、已生成 creative，并具有清晰的标题、正文或标签。',
+    '请人工确认：在 Content 灵感库搜索上述主题，检查相关灵感是否已入库、已生成 creative，并具有清晰的标题、正文或标签；Google Business 可借用 Instagram/TikTok 餐饮灵感改写。',
     '确认或补充后再重试；本次没有写入任何日历卡片。',
   ].join('\n')
 }

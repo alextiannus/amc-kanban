@@ -1523,13 +1523,37 @@ async function requestCalendarCreativePool(
     .filter((candidate) => Boolean(calendarInspirationCreativeId(candidate)))
   const missingPromotionPoints = promotionPoints
     .filter((point) => !creativeCandidates.some((candidate) => text(candidate.promotionPointId) === point.id))
-    .map((point) => ({
-      id: point.id,
-      name: point.sellingPoint,
-      goal: point.goal,
-      platforms: point.platforms,
-      expectedPublishCount: point.expectedPublishCount,
-    }))
+    .map((point) => {
+      const match = (Array.isArray(result.matches) ? result.matches : [])
+        .map((item) => objectValue(item))
+        .find((item) => text(item.promotionPointId) === point.id)
+      const allGaps = (Array.isArray(result.contentLibraryGaps) ? result.contentLibraryGaps : [])
+        .map((gap) => objectValue(gap))
+      const explicitPointGaps = allGaps.filter((gap) => text(gap.promotionPointId) === point.id)
+      const pointGaps = explicitPointGaps.length
+        ? explicitPointGaps
+        : allGaps.filter((gap) => !text(gap.promotionPointId))
+      const pointGapReasons = uniqueStrings([
+        ...stringList(match?.gapReasons),
+        ...pointGaps.map((gap) => text(gap.reason)).filter(Boolean),
+      ])
+      const candidateCount = Number(match?.candidateCount)
+      const returnedCount = pointGaps.reduce((sum, gap) => sum + Math.max(0, Number(gap.returnedCount || 0)), 0)
+      const rankedCount = pointGaps.reduce((sum, gap) => sum + Math.max(0, Number(gap.rankedCount || 0)), 0)
+      const persistedRankedCount = pointGaps.reduce((sum, gap) => sum + Math.max(0, Number(gap.persistedRankedCount || 0)), 0)
+      return {
+        id: point.id,
+        name: point.sellingPoint,
+        goal: point.goal,
+        platforms: point.platforms,
+        expectedPublishCount: point.expectedPublishCount,
+        candidateCount: Number.isFinite(candidateCount) ? candidateCount : 0,
+        returnedCount,
+        rankedCount,
+        persistedRankedCount,
+        gapReasons: pointGapReasons,
+      }
+    })
   if (missingPromotionPoints.length) {
     const gapReasons = (Array.isArray(result.contentLibraryGaps) ? result.contentLibraryGaps : [])
       .map((gap) => text(gap.reason))
