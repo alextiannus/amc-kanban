@@ -264,7 +264,7 @@ export default function SystemTab({
   const singleSectionMode = Boolean(section)
   const headerCopy = section ? SYSTEM_SECTION_COPY[section] : {
     title: '系统服务与全局配置',
-    description: '在此管理 Kanban 模型路由、邮件发送网关、监控定时任务与系统审计日志。TTS 与视频执行会按任务路由对接 amc-content Content Lab。',
+    description: '在此管理 Kanban 模型路由、MiniMax TTS、邮件发送网关、监控定时任务与系统审计日志。',
   }
   const showSection = (key: SystemSettingsSection) => !section || section === key
   const sectionOpen = (key: SystemSettingsSection | 'ai') => singleSectionMode ? section === key : activeAccordion === key
@@ -754,13 +754,13 @@ export default function SystemTab({
               <div className="flex justify-between items-start gap-4 pt-2">
                 <div className="space-y-1">
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-bold">
-                    这里显示 Kanban 的文本 LLM、MiniMax TTS 与视频模型路由；TTS 和视频任务会通过 amc-content Content Lab 执行。
+                    这里显示 Kanban 的文本 LLM、MiniMax TTS 与视频模型路由；MM 语音试听会直接使用已启用的 MiniMax TTS 配置。
                   </p>
                   <a
                     href="/admin/content-lab"
                     className="inline-flex text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
                   >
-                    打开 amc-content Content Lab 查看执行侧模型与 TTS 配置
+                    打开 amc-content Content Lab 查看内容与视频执行侧配置
                   </a>
                 </div>
                 <button
@@ -964,10 +964,10 @@ export default function SystemTab({
                   AI 模型与 API Key 已迁移至 AI 模型配置
                 </p>
                 <p className="text-[11px] text-indigo-600 dark:text-indigo-400 leading-relaxed">
-                  Kanban 已恢复本地模型路由可见性；MiniMax TTS、amc-content Copywriter、参考视频分析与视频生成的实际执行由 <strong>amc-content Content Lab</strong> 承接。
+                  Kanban 已恢复本地模型路由可见性；MiniMax TTS 会由 Kanban 已启用的 TTS 配置直接执行，amc-content Copywriter、参考视频分析与视频生成由 <strong>amc-content Content Lab</strong> 承接。
                 </p>
                 <p className="text-[10px] text-indigo-500 dark:text-indigo-500">
-                  MiniMax TTS：Content Lab / 模型与路由 / tts_generation<br/>
+                  MiniMax TTS：Kanban / AI 模型配置 / tts 或 tts_generation<br/>
                   Copywriter：Content Lab / 模型与路由 / body_composition 与 quality_rewrite<br/>
                   视频生成：Content Lab / 模型与路由 / video_generation
                 </p>
