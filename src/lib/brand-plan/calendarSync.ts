@@ -243,10 +243,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
     })
   })
 
-  const today = new Date().toISOString().slice(0, 10)
-  return options
-    .filter((item) => item.date >= today)
-    .map((item) => ({ ...item, draftId: generated.get(calendarSyncMarker(item.id)) || null }))
+  return options.map((item) => ({ ...item, draftId: generated.get(calendarSyncMarker(item.id)) || null }))
 }
 
 export async function submitAssetToCalendarCreativeRequirement(input: {
