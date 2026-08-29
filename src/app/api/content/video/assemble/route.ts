@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { assembleRemoteVideo } from '@/lib/amc-content/remoteContentService'
+import { assembleVideo } from '@/lib/videoProduction'
 
 export const maxDuration = 120
 
@@ -34,25 +34,13 @@ export async function POST(request: Request) {
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const execution = await assembleRemoteVideo({
+    const execution = await assembleVideo({
       brandId,
       actorId: actor.id,
-      actorType: actor.type,
-      actorRole: actor.role,
       title,
       clipUrls,
-      voiceoverUrl: optionalString(body.voiceoverUrl),
-      musicUrl: optionalString(body.musicUrl),
-      logoUrl: optionalString(body.logoUrl),
-      subtitles: Array.isArray(body.subtitles) ? body.subtitles : undefined,
-      addressText: optionalString(body.addressText),
-      ctaText: optionalString(body.ctaText),
       finalText: optionalString(body.finalText) || scriptSummary,
-      referenceTexts: stringArray(body.referenceTexts),
       referenceAssetIds: stringArray(body.referenceAssetIds),
-      projectId: optionalString(body.projectId),
-      variantId: optionalString(body.variantId),
-      promptBundleVersionId: optionalString(body.promptBundleVersionId),
       parentAssetIds: stringArray(body.parentAssetIds),
     })
 

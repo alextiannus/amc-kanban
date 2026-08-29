@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
-import { refreshRemoteVideoJob } from '@/lib/amc-content/remoteContentService'
+import { refreshVideoGeneration } from '@/lib/videoProduction'
 
 export const maxDuration = 60
 
@@ -29,12 +29,10 @@ export async function POST(request: Request) {
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const execution = await refreshRemoteVideoJob({
+    const execution = await refreshVideoGeneration({
       brandId,
       actorId: actor.id,
-      actorType: actor.type,
-      actorRole: actor.role,
-      jobId: taskId,
+      taskId,
     })
 
     return NextResponse.json({ success: true, execution })
