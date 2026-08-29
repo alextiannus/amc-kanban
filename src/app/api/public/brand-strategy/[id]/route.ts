@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getBrandPlan } from '@/lib/brand-plan/service'
+import { formatSkuPrice, normalizeSkuLibrary, skuBadges, sortSkuLibrary } from '@/lib/sku-library/service'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -75,6 +76,21 @@ function publicCrew(brand: Record<string, any>) {
         themeColor: text(user.themeColor),
       }
     })
+}
+
+function publicCoreSkus(value: unknown) {
+  return sortSkuLibrary(normalizeSkuLibrary(value))
+    .slice(0, 8)
+    .map((item) => ({
+      id: item.id || '',
+      type: item.type || 'single',
+      name: item.name,
+      price: formatSkuPrice(item),
+      description: item.description || '',
+      serves: item.serves || '',
+      bundleItems: Array.isArray(item.bundleItems) ? item.bundleItems.join(' / ') : item.bundleItems || '',
+      badges: skuBadges(item),
+    }))
 }
 
 export async function GET(_request: Request, { params }: Params) {
@@ -166,6 +182,7 @@ export async function GET(_request: Request, { params }: Params) {
       promotionFocus: knowledge?.promotionFocus || '',
     },
     stores: publicStores(brand),
+    coreSkus: publicCoreSkus(knowledge?.menuItems),
     socialAccounts: brand.accounts.map((account: {
       platformId: string
       handle: string
