@@ -247,28 +247,40 @@ async function submitKieMarket(config: VideoProviderConfig, job: SeedanceJob): P
   const req = job.request!
   const references = (req.references || []).map((ref) => text(ref.url)).filter(Boolean)
   const model = config.modelName || 'bytedance/seedance-2'
+  const seedanceInput: Record<string, unknown> = {
+    prompt: req.prompt,
+    aspect_ratio: normalizeRatio(req.ratio),
+    aspectRatio: normalizeRatio(req.ratio),
+    duration: clampDuration(req.duration),
+    generate_audio: req.generateAudio === true,
+    resolution: normalizeKieResolution(req.resolution),
+    web_search: false,
+  }
+  if (references.length === 1) {
+    seedanceInput.first_frame_url = references[0]
+  } else if (references.length === 2) {
+    seedanceInput.first_frame_url = references[0]
+    seedanceInput.last_frame_url = references[1]
+  } else if (references.length > 2) {
+    seedanceInput.reference_image_urls = references.slice(0, 9)
+  }
   const response = await fetch(`${config.baseUrl}/api/v1/jobs/createTask`, {
     method: 'POST',
     headers: { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       model,
-      input: {
-        prompt: req.prompt,
-        imageUrls: references,
-        image_urls: references,
-        aspectRatio: normalizeRatio(req.ratio),
-        ratio: normalizeRatio(req.ratio),
-        duration: clampDuration(req.duration),
-        generate_audio: req.generateAudio === true,
-      },
+      input: seedanceInput,
     }),
     cache: 'no-store',
     signal: AbortSignal.timeout(config.timeoutMs),
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) throw Object.assign(new Error(data?.message || data?.error || `KIE video generation failed with ${response.status}`), { status: response.status })
-  const taskId = text(data?.task_id || data?.taskId || data?.data?.taskId || data?.data?.task_id || data?.id)
-  if (!taskId) throw Object.assign(new Error('KIE did not return a task id'), { status: 502 })
+  if (!isKieSuccess(data)) {
+    throw Object.assign(new Error(kieErrorMessage(data)), { status: 502 })
+  }
+  const taskId = marketTaskId(data)
+  if (!taskId) throw Object.assign(new Error(`KIE did not return a task id (${kieResponseSummary(data)})`), { status: 502 })
   const provider = config.provider === 'minimax' ? 'minimax' : config.provider === 'kieai' ? 'kieai' : 'seedance'
   return { ok: true, jobId: taskId, status: 'submitted', provider, providerTaskIds: [`${provider}:${taskId}`], raw: data }
 }
@@ -359,6 +371,11 @@ function normalizeMiniMaxResolution(value: unknown) {
   return resolution === '2K' ? '2K' : '768P'
 }
 
+function normalizeKieResolution(value: unknown) {
+  const resolution = text(value).toLowerCase()
+  return ['480p', '720p', '1080p'].includes(resolution) ? resolution : '720p'
+}
+
 function normalizeStatus(value: unknown): VideoExecution['status'] {
   const status = text(value).toLowerCase()
   if (['succeeded', 'success', 'completed', 'done'].includes(status)) return 'completed'
@@ -382,6 +399,50 @@ function outputUrlFrom(value: any): string | undefined {
     || text(value?.resultUrls?.[0])
     || text(value?.result_urls?.[0])
     || text(value?.outputs?.[0]?.url)
+}
+
+function isKieSuccess(value: any): boolean {
+  const code = value?.code ?? value?.statusCode
+  if (code === undefined || code === null || code === '') return true
+  if (typeof code === 'number') return code >= 200 && code < 300
+  const textCode = text(code)
+  return textCode === '200' || textCode.toLowerCase() === 'success'
+}
+
+function marketTaskId(value: any): string {
+  return text(
+    value?.task_id
+      || value?.taskId
+      || value?.id
+      || value?.data?.taskId
+      || value?.data?.task_id
+      || value?.data?.id
+      || value?.data?.task?.taskId
+      || value?.data?.task?.task_id
+      || value?.data?.task?.id
+      || value?.result?.taskId
+      || value?.result?.task_id
+      || value?.result?.id
+  )
+}
+
+function kieErrorMessage(value: any): string {
+  return text(value?.message)
+    || text(value?.msg)
+    || text(value?.error?.message)
+    || text(value?.error)
+    || `KIE video generation was not accepted (${kieResponseSummary(value)})`
+}
+
+function kieResponseSummary(value: any): string {
+  if (!value || typeof value !== 'object') return 'empty response'
+  return JSON.stringify({
+    code: value.code ?? value.statusCode,
+    msg: value.msg ?? value.message,
+    error: typeof value.error === 'string' ? value.error : value.error?.message,
+    dataKeys: value.data && typeof value.data === 'object' ? Object.keys(value.data).slice(0, 8) : undefined,
+    resultKeys: value.result && typeof value.result === 'object' ? Object.keys(value.result).slice(0, 8) : undefined,
+  })
 }
 
 function stringArray(value: unknown): string[] {
