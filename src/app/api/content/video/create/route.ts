@@ -104,8 +104,12 @@ export async function POST(request: Request) {
     })
   } catch (err: any) {
     console.error('[VideoCreate] failed:', err)
-    return NextResponse.json({ error: err.message || 'Video creator failed' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Video creator failed' }, { status: statusFromError(err) })
   }
+}
+
+function statusFromError(err: any): number {
+  return typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 500
 }
 
 function stringOrEmpty(value: unknown): string {

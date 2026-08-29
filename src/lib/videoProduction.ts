@@ -207,7 +207,7 @@ async function submitMiniMax(config: VideoProviderConfig, job: SeedanceJob): Pro
 }
 
 async function refreshMiniMax(config: VideoProviderConfig, taskId: string): Promise<VideoExecution> {
-  const response = await fetch(`${config.baseUrl}/v2/query/video_generation/${encodeURIComponent(taskId)}`, {
+  const response = await fetch(`${config.baseUrl}/v1/query/video_generation?task_id=${encodeURIComponent(taskId)}`, {
     headers: { authorization: `Bearer ${config.apiKey}` },
     cache: 'no-store',
     signal: AbortSignal.timeout(Math.min(config.timeoutMs, 60000)),
@@ -215,15 +215,32 @@ async function refreshMiniMax(config: VideoProviderConfig, taskId: string): Prom
   const data = await response.json().catch(() => null)
   if (!response.ok) throw Object.assign(new Error(data?.error?.message || data?.message || `MiniMax video status failed with ${response.status}`), { status: response.status })
   const task = data?.task || data
+  const status = normalizeStatus(task?.status)
+  const directUrl = outputUrlFrom(task)
+  const fileId = text(task?.file_id || task?.fileId || task?.file?.file_id)
+  const outputUrl = directUrl || (status === 'completed' && fileId ? await retrieveMiniMaxFileUrl(config, fileId) : undefined)
   return {
     ok: true,
     jobId: taskId,
-    status: normalizeStatus(task?.status),
+    status,
     provider: 'minimax',
     providerTaskIds: [`minimax:${taskId}`],
-    outputUrl: text(task?.content?.url || task?.output_url || task?.outputUrl),
+    outputUrl,
     raw: data,
   }
+}
+
+async function retrieveMiniMaxFileUrl(config: VideoProviderConfig, fileId: string): Promise<string | undefined> {
+  const response = await fetch(`${config.baseUrl}/v1/files/retrieve?file_id=${encodeURIComponent(fileId)}`, {
+    headers: { authorization: `Bearer ${config.apiKey}` },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(Math.min(config.timeoutMs, 60000)),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) {
+    throw Object.assign(new Error(data?.error?.message || data?.message || `MiniMax video file retrieval failed with ${response.status}`), { status: response.status })
+  }
+  return outputUrlFrom(data)
 }
 
 async function submitKieMarket(config: VideoProviderConfig, job: SeedanceJob): Promise<VideoExecution> {
@@ -346,7 +363,7 @@ function normalizeStatus(value: unknown): VideoExecution['status'] {
   const status = text(value).toLowerCase()
   if (['succeeded', 'success', 'completed', 'done'].includes(status)) return 'completed'
   if (['failed', 'fail', 'error', 'cancelled', 'canceled'].includes(status)) return 'failed'
-  if (['running', 'generating', 'processing'].includes(status)) return 'processing'
+  if (['running', 'generating', 'processing', 'preparing', 'queueing'].includes(status)) return 'processing'
   return status ? 'submitted' : 'queued'
 }
 
@@ -355,6 +372,10 @@ function outputUrlFrom(value: any): string | undefined {
     || text(value?.output_url)
     || text(value?.url)
     || text(value?.content?.url)
+    || text(value?.file?.download_url)
+    || text(value?.file?.downloadUrl)
+    || text(value?.download_url)
+    || text(value?.downloadUrl)
     || text(value?.resultUrl)
     || text(value?.result_url)
     || text(value?.response?.resultUrls?.[0])

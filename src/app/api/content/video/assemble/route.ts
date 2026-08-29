@@ -47,8 +47,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, execution })
   } catch (err: any) {
     console.error('[VideoAssemble] failed:', err)
-    return NextResponse.json({ error: err.message || 'Video assembly failed' }, { status: 500 })
+    return NextResponse.json({ error: err.message || 'Video assembly failed' }, { status: statusFromError(err) })
   }
+}
+
+function statusFromError(err: any): number {
+  return typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 500
 }
 
 function optionalString(value: unknown): string | undefined {

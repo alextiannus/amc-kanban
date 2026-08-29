@@ -430,6 +430,7 @@ model Brand {
   marketingSolutions BrandMarketingSolution[]
   postfastDeliveryJobs PostfastDeliveryJob[]
   videoShootBatches VideoShootBatch[]
+  videoProductionJobs VideoProductionJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -743,6 +744,37 @@ model VideoShootBatch {
   @@unique([brandId, name])
   @@unique([brandId, videoProjectId])
   @@index([brandId, captureDate])
+}
+
+model VideoProductionJob {
+  id              String   @id
+  brandId         String
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creativeId      String?
+  title           String
+  platform        String
+  idea            String
+  status          String
+  progress        Int      @default(0)
+  thumbnailUrl    String?
+  finalVideoUrl   String?
+  narration       String?
+  musicBrief      String?
+  creatorType     String?
+  aspectRatio     String?
+  assetIds        String[] @default([])
+  mediaUrls       String[] @default([])
+  scenes          Json
+  plan            Json?
+  sceneExecutions Json?
+  finalExecution  Json?
+  error           String?
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([brandId, status, updatedAt])
+  @@index([brandId, creativeId])
 }
 
 model PlanningReview {
