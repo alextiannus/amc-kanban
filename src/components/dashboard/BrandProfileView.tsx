@@ -2455,6 +2455,11 @@ ${storeLines}
                         {socialPlatformLogo(platformSlug)}
                         {socialPlatformLabel(platformSlug)}
                       </span>
+                      {item.creativeMatchStatus === 'no_candidate_after_retry' ? (
+                        <span className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-black text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+                          未找到灵感 · 平台规则原创
+                        </span>
+                      ) : null}
                       <select
                         value={item.contentType}
                         onChange={(event) => handleUpdateCalendarItem(item.id, index, { contentType: event.target.value })}

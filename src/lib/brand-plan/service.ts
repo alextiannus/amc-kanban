@@ -23,6 +23,8 @@ import { skuLibraryForLLM } from '@/lib/sku-library/service'
 import {
   minimumCompleteCalendarMonthValue,
 } from '@/lib/brand-plan/calendarRecovery'
+import type { CalendarCreativeMatchStatus } from '@/lib/brand-plan/calendarCreativeMatching'
+import { resolveCalendarCreativeCandidateWithRetry } from '@/lib/brand-plan/calendarCreativeMatching'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import { syncConfirmedCalendarItemsToDrafts } from '@/lib/brand-plan/calendarSync'
 
@@ -51,7 +53,7 @@ type BrandPlanCalendarItem = {
   materialRequirements?: string[]
   contentLibraryGap?: string
   scriptSource?: 'inspiration' | 'generated_from_idea' | 'merchant'
-  creativeMatchStatus?: 'matched' | 'no_candidate_after_retry'
+  creativeMatchStatus?: CalendarCreativeMatchStatus
   videoScript?: CalendarVideoScriptData
 }
 
@@ -1368,16 +1370,17 @@ async function buildPublishingCalendarItemByIndex(
     ...recentCalendarCreativeIds(current, month),
     ...excludedCreativeIds,
   ])
-  let pool = await requestCalendarCreativePool(brand, current, [promotionPoint], itemId)
-  let candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex, usedCreativeIds)
-  if (!candidate) {
-    pool = await requestCalendarCreativePool(brand, current, [promotionPoint], `${itemId}:retry`)
-    candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex, usedCreativeIds)
-  }
+  const match = await resolveCalendarCreativeCandidateWithRetry({
+    requestPool: (refreshPublicationId) => requestCalendarCreativePool(brand, current, [promotionPoint], refreshPublicationId),
+    selectCandidate: (pool) => selectCalendarCreativeCandidate(pool.creativeCandidates, promotionPoint.id, slot.platform.slug, itemIndex, usedCreativeIds),
+    initialRefreshPublicationId: itemId,
+    retryRefreshPublicationId: `${itemId}:retry`,
+  })
+  const pool = match.pool
+  const candidate = match.candidate
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
   const candidateCreativeId = calendarInspirationCreativeId(candidate)
-  const creativeMatchStatus = (candidate ? 'matched' : 'no_candidate_after_retry') as BrandPlanCalendarItem['creativeMatchStatus']
   const draft: BrandPlanCalendarItem = withCalendarScriptFields({
     id: itemId,
     date: slot.date,
@@ -1417,7 +1420,7 @@ async function buildPublishingCalendarItemByIndex(
     sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(product, candidate),
     scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
-    creativeMatchStatus,
+    creativeMatchStatus: match.status,
     contentLibraryGap: candidate
       ? calendarContentGap(pool.contentLibraryGaps, promotionPoint.id, candidate)
       : calendarIndependentCreativeGap(pool.missingPromotionPoints, promotionPoint.id),
@@ -1443,15 +1446,16 @@ async function regeneratePublishingCalendarItem(
     platforms: [platform],
     targetPublishWindow: { start: item.date, end: item.date },
   }
-  let pool = await requestCalendarCreativePool(brand, current, [point], item.id)
-  let candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
-  if (!candidate) {
-    pool = await requestCalendarCreativePool(brand, current, [point], `${item.id}:retry`)
-    candidate = selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0)
-  }
+  const match = await resolveCalendarCreativeCandidateWithRetry({
+    requestPool: (refreshPublicationId) => requestCalendarCreativePool(brand, current, [point], refreshPublicationId),
+    selectCandidate: (pool) => selectCalendarCreativeCandidate(pool.creativeCandidates, point.id, platform, 0),
+    initialRefreshPublicationId: item.id,
+    retryRefreshPublicationId: `${item.id}:retry`,
+  })
+  const pool = match.pool
+  const candidate = match.candidate
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
-  const creativeMatchStatus = (candidate ? 'matched' : 'no_candidate_after_retry') as BrandPlanCalendarItem['creativeMatchStatus']
   const replacement: BrandPlanCalendarItem = withCalendarScriptFields({
     ...item,
     date: clampCalendarDateToMinimum(item.date),
@@ -1487,7 +1491,7 @@ async function regeneratePublishingCalendarItem(
     sampleSourcePlatform: sampleLinks.platform,
     materialRequirements: calendarMaterialRequirements(item.product, candidate),
     scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
-    creativeMatchStatus,
+    creativeMatchStatus: match.status,
     contentLibraryGap: candidate
       ? calendarContentGap(pool.contentLibraryGaps, point.id, candidate)
       : calendarIndependentCreativeGap(pool.missingPromotionPoints, point.id),
