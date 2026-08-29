@@ -930,15 +930,15 @@ async function buildAnnualMarketingSolution(
     scope: 'annual',
     input,
     llm: strategyLlm,
-    fallbackUsed: !strategyLlm.value,
+    fallbackUsed: false,
   })
   if (!strategyLlm.value) {
-    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; using rule fallback marketing plan.', {
+    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; not saving annual plan.', {
       provider: strategyLlm.provider,
       modelName: strategyLlm.modelName,
       error: strategyLlm.error || 'llm_returned_invalid_json',
     })
-    return withMarketingPlanFallbackError(fallback, strategyLlm)
+    throw new BrandPlanError('marketing_plan_llm_failed', 502)
   }
   const strategyPlan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
   const quarterlyPlans: NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']> = []
@@ -970,27 +970,19 @@ async function buildAnnualMarketingSolution(
       scope: 'quarter',
       input: quarterInput,
       llm: quarterLlm,
-      fallbackUsed: !quarterLlm.value,
+      fallbackUsed: false,
     })
     if (!quarterLlm.value) {
-      console.warn('[brand-plan] quarter marketing_plan LLM returned no valid JSON; using rule fallback quarter plan.', {
+      console.warn('[brand-plan] quarter marketing_plan LLM returned no valid JSON; not saving partial plan.', {
         quarter: fallbackQuarter.quarter,
         provider: quarterLlm.provider,
         modelName: quarterLlm.modelName,
         error: quarterLlm.error || 'llm_returned_invalid_json',
       })
-      return withMarketingPlanFallbackError({
-        ...strategyPlan,
-        quarterlyPlans: mergeAnnualQuarterPlans(fallback.quarterlyPlans || [], quarterlyPlans),
-      }, quarterLlm)
+      throw new BrandPlanError('marketing_plan_llm_failed', 502)
     }
     const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [fallbackQuarter])
-    if (!quarterPlan) {
-      return withMarketingPlanFallbackError({
-        ...strategyPlan,
-        quarterlyPlans: mergeAnnualQuarterPlans(fallback.quarterlyPlans || [], quarterlyPlans),
-      }, quarterLlm)
-    }
+    if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
     quarterlyPlans.push(quarterPlan)
   }
   return normalizeAnnualMarketingStrategy({
@@ -1030,9 +1022,9 @@ async function buildAnnualMarketingStrategyOnly(
     scope: 'annual',
     input,
     llm: strategyLlm,
-    fallbackUsed: !strategyLlm.value,
+    fallbackUsed: false,
   })
-  if (!strategyLlm.value) return annualStrategyFallbackPlan(fallback, strategyLlm)
+  if (!strategyLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
   const plan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
   return {
     ...plan,
@@ -1099,11 +1091,11 @@ async function buildNextQuarterMarketingPlan(
     scope: 'quarter',
     input: quarterInput,
     llm: quarterLlm,
-    fallbackUsed: !quarterLlm.value,
+    fallbackUsed: false,
   })
-  if (!quarterLlm.value) return withFallbackQuarterPlan(current.annualPlan, fallback.quarterlyPlans || [], targetQuarter, existingQuarters, quarterLlm)
+  if (!quarterLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
   const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [targetQuarter])
-  if (!quarterPlan) return withFallbackQuarterPlan(current.annualPlan, fallback.quarterlyPlans || [], targetQuarter, existingQuarters, quarterLlm)
+  if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
   const fallbackOrder = new Map((fallback.quarterlyPlans || []).map((item, index) => [item.startMonth, index]))
   const quarterlyPlans = [
     ...existingQuarters.filter((item) => item.startMonth !== quarterPlan.startMonth),
@@ -1142,24 +1134,6 @@ async function buildNextQuarterMarketingPlan(
   }
 }
 
-function marketingPlanLlmError(llm: { error?: string; provider?: string; modelName?: string }) {
-  return llm.error || 'marketing_plan_llm_failed'
-}
-
-function withMarketingPlanFallbackError(
-  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
-  llm: { provider: string; modelName: string; error?: string }
-): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
-  return {
-    ...fallback,
-    generatedAt: new Date().toISOString(),
-    generationMode: 'RULE_FALLBACK',
-    llmProvider: llm.provider || fallback.llmProvider,
-    llmModel: llm.modelName || fallback.llmModel,
-    llmError: marketingPlanLlmError(llm),
-  }
-}
-
 function annualQuarterPlaceholders(fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>) {
   return (fallback.quarterlyPlans || []).map((item) => ({
     quarter: item.quarter,
@@ -1170,70 +1144,6 @@ function annualQuarterPlaceholders(fallback: NonNullable<BrandPlanWorkspaceData[
     focus: '待生成季度计划',
     campaigns: [],
   }))
-}
-
-function annualStrategyFallbackPlan(
-  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
-  llm: { provider: string; modelName: string; error?: string }
-): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
-  return {
-    ...withMarketingPlanFallbackError(fallback, llm),
-    quarterlyFocus: annualQuarterPlaceholders(fallback),
-    quarterlyPlans: [],
-  }
-}
-
-function mergeAnnualQuarterPlans(
-  fallbackQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans'],
-  generatedQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']
-) {
-  const generatedByStartMonth = new Map((generatedQuarters || []).map((item) => [item.startMonth, item]))
-  return (fallbackQuarters || []).map((fallbackQuarter) => generatedByStartMonth.get(fallbackQuarter.startMonth) || fallbackQuarter)
-}
-
-function withFallbackQuarterPlan(
-  annualPlan: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
-  fallbackQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans'],
-  targetQuarter: NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']>[number],
-  existingQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans'],
-  llm: { provider: string; modelName: string; error?: string }
-): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
-  const fallbackOrder = new Map((fallbackQuarters || []).map((item, index) => [item.startMonth, index]))
-  const quarterlyPlans = [
-    ...(existingQuarters || []).filter((item) => item.startMonth !== targetQuarter.startMonth),
-    targetQuarter,
-  ].sort((a, b) => (fallbackOrder.get(a.startMonth || '') ?? 99) - (fallbackOrder.get(b.startMonth || '') ?? 99))
-  return {
-    ...annualPlan,
-    generatedAt: new Date().toISOString(),
-    quarterlyPlans,
-    quarterlyFocus: (fallbackQuarters || []).map((fallbackQuarter) => {
-      const generated = quarterlyPlans.find((item) => item.startMonth === fallbackQuarter.startMonth)
-      return generated
-        ? {
-            quarter: generated.quarter,
-            year: generated.year,
-            startMonth: generated.startMonth,
-            endMonth: generated.endMonth,
-            periodLabel: generated.periodLabel,
-            focus: generated.focus,
-            campaigns: generated.campaigns,
-          }
-        : {
-            quarter: fallbackQuarter.quarter,
-            year: fallbackQuarter.year,
-            startMonth: fallbackQuarter.startMonth,
-            endMonth: fallbackQuarter.endMonth,
-            periodLabel: fallbackQuarter.periodLabel,
-            focus: '待生成季度计划',
-            campaigns: [],
-          }
-    }),
-    generationMode: 'RULE_FALLBACK',
-    llmProvider: llm.provider || annualPlan.llmProvider,
-    llmModel: llm.modelName || annualPlan.llmModel,
-    llmError: marketingPlanLlmError(llm),
-  }
 }
 
 async function buildRuleAnnualMarketingSolution(
@@ -2801,9 +2711,54 @@ function dateText(value: unknown) {
 type MarketingPlanLLMScope = 'annual_strategy' | 'quarter'
 
 async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<string, unknown>) {
+  const jsonShape = scope === 'annual_strategy'
+    ? {
+        goal: '一句年度经营目标',
+        theme: '一句年度策划主题',
+        strategyPrinciples: ['原则一', '原则二', '原则三'],
+        platformStrategy: [
+          {
+            platform: '平台名称',
+            role: '该平台承担的角色',
+            contentApproach: '内容打法',
+            customerAction: '希望顾客采取的行动',
+          },
+        ],
+        contentPillars: ['内容支柱一', '内容支柱二', '内容支柱三', '内容支柱四'],
+        metrics: ['指标一', '指标二', '指标三', '指标四'],
+        researchFocus: '承接摸底报告的一句重点',
+      }
+    : {
+        quarter: 'Q1',
+        year: 2026,
+        startMonth: '2026-09',
+        endMonth: '2026-11',
+        periodLabel: '2026-09 至 2026-11',
+        strategy: '一句季度策略',
+        focus: '一句季度重点',
+        promotionPoints: [
+          {
+            name: '推广重点一',
+            rationale: '选择原因',
+            targetAudience: '目标顾客',
+            customerAction: '希望顾客采取的行动',
+            platforms: ['平台 slug'],
+            suggestedMonthlyPosts: 2,
+          },
+        ],
+        campaigns: ['活动一', '活动二'],
+        contentThemes: ['主题一', '主题二', '主题三'],
+        monthlyFocus: [
+          {
+            month: '2026-09',
+            focus: '本月重点',
+            promotionPoints: ['推广重点一'],
+          },
+        ],
+      }
   const schemaInstruction = scope === 'annual_strategy'
     ? [
-      '只返回一个严格 JSON 对象，不要 Markdown，不要解释。',
+      '只返回一个可被 JSON.parse 解析的 JSON 对象，不要 Markdown，不要解释，不要代码块。',
       '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, metrics, researchFocus。',
       '数量限制：strategyPrinciples 3 条；platformStrategy 按订阅平台各 1 条；contentPillars 4 条；metrics 4 条。',
       '不要生成 quarterlyFocus 或 quarterlyPlans；季度计划会在后续步骤逐个生成。',
@@ -2813,7 +2768,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
     ].join('\n')
     : [
-      '只返回一个严格 JSON 对象，不要 Markdown，不要解释。',
+      '只返回一个可被 JSON.parse 解析的 JSON 对象，不要 Markdown，不要解释，不要代码块。',
       '字段必须为：quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
       'promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
       'monthlyFocus 每项含 month, focus, promotionPoints。',
@@ -2831,12 +2786,14 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     '你是 AMC 的本地商家品牌营销策划负责人。请基于输入生成可执行的滚动营销方案。',
     schemaInstruction,
     '写法要求：中文、短句、具体、像给门店运营团队的计划；避免 AI 腔、空泛口号和无法验证承诺。',
-    'JSON 字符串中不要换行，不要使用尾逗号。',
+    '输出必须使用双引号；不要使用尾逗号；所有字符串内部如需换行请用空格代替。',
+    `JSON 形状参考，只替换里面的值，不要新增外层字段：${JSON.stringify(jsonShape)}`,
     `输入 JSON：${compactInputJson}`,
   ].join('\n\n')
   const prompt = promptTemplate?.template
     ? renderPromptTemplate(promptTemplate.template, {
         schemaInstruction,
+        jsonShape: JSON.stringify(jsonShape),
         inputJson: `输入 JSON：${compactInputJson}`,
       })
     : fallbackPrompt
@@ -2856,8 +2813,8 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       temperature: 0.35,
       jsonMode: true,
       deadlineMs: scope === 'annual_strategy' ? 60000 : 65000,
-      attemptTimeoutMs: [scope === 'annual_strategy' ? 55000 : 60000],
-      maxAttempts: 1,
+      attemptTimeoutMs: scope === 'annual_strategy' ? [45000, 55000] : [50000, 60000],
+      maxAttempts: 2,
       allowDefaultFallback: true,
       allowAnyFallback: false,
       allowSystemFallback: false,
