@@ -56,7 +56,8 @@ export async function submitVideoGeneration(input: SubmitVideoInput): Promise<Vi
   if (!job?.request?.prompt?.trim()) throw Object.assign(new Error('Video prompt is required'), { status: 400 })
 
   if (config.provider === 'minimax') return submitMiniMax(config, job)
-  if (config.provider === 'kieai' || config.provider === 'seedance') return submitKieMarket(config, job)
+  if (config.provider === 'seedance') return submitSeedanceArk(config, job)
+  if (config.provider === 'kieai') return submitKieMarket(config, job)
 
   throw Object.assign(
     new Error(`Video provider ${config.provider} is configured but not supported by the AMC video production runner yet.`),
@@ -70,7 +71,9 @@ export async function refreshVideoGeneration(input: { brandId: string; taskId: s
 
   const execution = config.provider === 'minimax'
     ? await refreshMiniMax(config, parsed.taskId)
-    : config.provider === 'kieai' || config.provider === 'seedance'
+    : config.provider === 'seedance'
+      ? await refreshSeedanceArk(config, parsed.taskId)
+      : config.provider === 'kieai'
       ? await refreshKieMarket(config, parsed.taskId)
       : null
 
@@ -168,7 +171,7 @@ async function getVideoProviderConfig(providerHint?: string): Promise<VideoProvi
     id: config.id,
     provider: config.provider.toLowerCase(),
     displayName: config.displayName,
-    modelName: config.modelName,
+    modelName: normalizeSeedanceModelName(config.provider, config.modelName),
     apiKey: config.apiKey,
     baseUrl: (config.baseUrl || defaultBaseUrl(config.provider)).replace(/\/+$/, ''),
     timeoutMs: config.timeoutMs || 120000,
@@ -241,6 +244,54 @@ async function retrieveMiniMaxFileUrl(config: VideoProviderConfig, fileId: strin
     throw Object.assign(new Error(data?.error?.message || data?.message || `MiniMax video file retrieval failed with ${response.status}`), { status: response.status })
   }
   return outputUrlFrom(data)
+}
+
+async function submitSeedanceArk(config: VideoProviderConfig, job: SeedanceJob): Promise<VideoExecution> {
+  const req = job.request!
+  const references = (req.references || []).map((ref) => text(ref.url)).filter(Boolean)
+  const content: any[] = [{ type: 'text', text: req.negativePrompt ? `${req.prompt}\nAvoid: ${req.negativePrompt}` : req.prompt }]
+  references.slice(0, 9).forEach((url) => {
+    content.push({ type: inferReferenceType(url), [inferReferenceType(url)]: { url } })
+  })
+  const response = await fetch(`${config.baseUrl}/api/v3/contents/generations/tasks`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${config.apiKey}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: config.modelName || 'dreamina-seedance-2-0-fast-260128',
+      content,
+      ratio: normalizeRatio(req.ratio),
+      duration: clampDuration(req.duration),
+      resolution: normalizeKieResolution(req.resolution),
+      generate_audio: req.generateAudio === true,
+    }),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(config.timeoutMs),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw Object.assign(new Error(seedanceArkErrorMessage(data) || `Seedance video generation failed with ${response.status}`), { status: response.status })
+  const taskId = marketTaskId(data)
+  if (!taskId) throw Object.assign(new Error(`Seedance did not return a task id (${kieResponseSummary(data)})`), { status: 502 })
+  return { ok: true, jobId: taskId, status: 'submitted', provider: 'seedance', providerTaskIds: [`seedance:${taskId}`], raw: data }
+}
+
+async function refreshSeedanceArk(config: VideoProviderConfig, taskId: string): Promise<VideoExecution> {
+  const response = await fetch(`${config.baseUrl}/api/v3/contents/generations/tasks/${encodeURIComponent(taskId)}`, {
+    headers: { authorization: `Bearer ${config.apiKey}`, accept: 'application/json' },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(Math.min(config.timeoutMs, 60000)),
+  })
+  const data = await response.json().catch(() => null)
+  if (!response.ok) throw Object.assign(new Error(seedanceArkErrorMessage(data) || `Seedance video status failed with ${response.status}`), { status: response.status })
+  const record = data?.data || data
+  return {
+    ok: true,
+    jobId: taskId,
+    status: normalizeStatus(record?.status || record?.state),
+    provider: 'seedance',
+    providerTaskIds: [`seedance:${taskId}`],
+    outputUrl: outputUrlFrom(record),
+    raw: data,
+  }
 }
 
 async function submitKieMarket(config: VideoProviderConfig, job: SeedanceJob): Promise<VideoExecution> {
@@ -352,8 +403,28 @@ function parseProviderTaskId(value: string) {
 
 function defaultBaseUrl(provider: string) {
   if (provider.toLowerCase() === 'minimax') return 'https://api.minimax.io'
-  if (provider.toLowerCase() === 'kieai' || provider.toLowerCase() === 'seedance') return 'https://api.kie.ai'
+  if (provider.toLowerCase() === 'seedance') return 'https://ark.ap-southeast.bytepluses.com'
+  if (provider.toLowerCase() === 'kieai') return 'https://api.kie.ai'
   return ''
+}
+
+function normalizeSeedanceModelName(provider: string, value: string) {
+  if (provider.toLowerCase() !== 'seedance') return value
+  const model = text(value)
+  if (!model || ['seedance-2.0-fast', 'seedance-2-0-fast', 'doubao-seedance-2-0-fast'].includes(model)) {
+    return 'dreamina-seedance-2-0-fast-260128'
+  }
+  if (['seedance-2.0', 'seedance-2-0', 'bytedance/seedance-2', 'doubao-seedance-2-0'].includes(model)) {
+    return 'dreamina-seedance-2-0-260128'
+  }
+  return model
+}
+
+function inferReferenceType(url: string) {
+  const clean = url.split('?')[0]?.toLowerCase() || ''
+  if (/\.(mp4|mov|webm|m4v)$/.test(clean)) return 'video_url'
+  if (/\.(mp3|wav|m4a|aac|ogg)$/.test(clean)) return 'audio_url'
+  return 'image_url'
 }
 
 function clampDuration(value: unknown) {
@@ -393,6 +464,16 @@ function outputUrlFrom(value: any): string | undefined {
     || text(value?.file?.downloadUrl)
     || text(value?.download_url)
     || text(value?.downloadUrl)
+    || text(value?.content?.video_url)
+    || text(value?.content?.videoUrl)
+    || text(value?.output?.video_url)
+    || text(value?.output?.videoUrl)
+    || text(value?.data?.output?.video_url)
+    || text(value?.data?.output?.videoUrl)
+    || text(value?.data?.video_url)
+    || text(value?.data?.videoUrl)
+    || text(value?.data?.response?.resultUrls?.[0])
+    || text(value?.data?.response?.result_urls?.[0])
     || text(value?.resultUrl)
     || text(value?.result_url)
     || text(value?.response?.resultUrls?.[0])
@@ -432,6 +513,13 @@ function kieErrorMessage(value: any): string {
     || text(value?.error?.message)
     || text(value?.error)
     || `KIE video generation was not accepted (${kieResponseSummary(value)})`
+}
+
+function seedanceArkErrorMessage(value: any): string {
+  return text(value?.error?.message)
+    || text(value?.message)
+    || text(value?.msg)
+    || text(value?.error)
 }
 
 function kieResponseSummary(value: any): string {
