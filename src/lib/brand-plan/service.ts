@@ -82,6 +82,13 @@ export type BrandPlanWorkspaceData = {
     pdfReportPath?: string
     pdfDownloadPath?: string
     pdfDownloadUrl?: string
+    reportVersionId?: string
+    reportTemplateVersion?: string
+    viewerUrl?: string
+    markdownDownloadPath?: string
+    jsonDownloadPath?: string
+    structuredReport?: Record<string, unknown>
+    freshness?: Record<string, unknown>
     coverageScore?: number | null
     sourceCoverage?: Record<string, unknown>
     sourcePayload?: Record<string, unknown>
@@ -250,8 +257,44 @@ export async function loadBrandPlanBrand(brandId: string) {
           profileUrl: true,
           followerCount: true,
           ratingScore: true,
+          updatedAt: true,
         },
         orderBy: { updatedAt: 'desc' },
+      },
+      assets: {
+        select: {
+          id: true,
+          mimeType: true,
+          sizeBytes: true,
+          width: true,
+          height: true,
+          aiTags: true,
+          aiCategory: true,
+          aiCaption: true,
+          aiReady: true,
+          usedCount: true,
+          captureDate: true,
+          rightsStatus: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      },
+      socialInsightReviews: {
+        select: {
+          id: true,
+          source: true,
+          platform: true,
+          rating: true,
+          text: true,
+          replyText: true,
+          reviewUrl: true,
+          publishedAt: true,
+          lastSeenAt: true,
+        },
+        orderBy: { publishedAt: 'desc' },
+        take: 100,
       },
       brandPlanInterviews: {
         select: {
@@ -518,7 +561,8 @@ export async function runBrandPlanAction(input: {
 }
 
 async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
-  const job = await generateGrowthResearchReportForBrand(brand)
+  const merchantContext = await buildGrowthMerchantContext(brand)
+  const job = await generateGrowthResearchReportForBrand(brand, merchantContext)
   if (text(job.status) === 'failed') {
     throw new BrandPlanError('growth_research_failed', 502)
   }
@@ -527,19 +571,23 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
   }
   const result = objectValue(job.result)
   const reportVersions = objectValue(job.report_versions)
-  const advancedReport = objectValue(reportVersions.advanced)
   const initialReport = objectValue(reportVersions.initial)
-  const selectedReport = Object.keys(advancedReport).length ? advancedReport : initialReport
+  const selectedReport = initialReport
   const selectedReportResult = objectValue(selectedReport.result)
+  const structuredReport = objectValue(
+    selectedReport.structured_report ||
+    selectedReportResult.structured_report ||
+    job.structured_report
+  )
+  if (text(job.report_template_version || selectedReportResult.report_template_version) !== 'v3' || !Object.keys(structuredReport).length) {
+    throw new BrandPlanError('growth_research_v3_missing', 502)
+  }
   const sourceCoverage = objectValue(job.source_coverage)
   const coverageScore = typeof job.coverage_score === 'number'
     ? job.coverage_score
     : typeof result.coverage_score === 'number'
       ? result.coverage_score
       : null
-  const coverageItems = Object.entries(sourceCoverage)
-    .filter(([, value]) => Boolean(value))
-    .map(([key]) => key)
   const reportMarkdown = text(job.latest_report_markdown) || text(job.latest_report_content) || text(selectedReport.report_content)
   if (!reportMarkdown) {
     throw new BrandPlanError('growth_research_report_missing', 502)
@@ -555,20 +603,28 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
     text(result.report_path),
   ].filter(Boolean)
   const reportTier = text(job.latest_report_tier) || text(selectedReport.tier) || (reportPaths[0]?.includes('deep') ? 'advanced' : 'initial')
-  const reportSummary = extractGrowthReportSummary(reportMarkdown, brand.name)
+  const metadata = objectValue(structuredReport.metadata)
+  const coverage = objectValue(structuredReport.coverage)
+  const gaps = objectList(structuredReport.evidence_gaps)
+  const recommendations = objectList(structuredReport.growth_recommendations)
+  const focusCompetitors = objectList(objectValue(structuredReport.competitor_benchmark).focus_competitors)
+  const sources = objectList(structuredReport.sources)
+  const reportSummary = [
+    `${brand.name} 的客观数据调研报告 V3 已生成。`,
+    typeof coverage.overall === 'number' ? `数据覆盖度 ${coverage.overall}/100。` : '',
+    text(structuredReport.status) === 'needs_review' ? '存在资料冲突，需要人工确认。' : '',
+  ].filter(Boolean).join(' ')
   const growthIssues = uniqueStrings([
-    ...extractGrowthReportBullets(reportMarkdown, ['数据缺口', '下一步采集计划']),
+    ...gaps.map((item) => [text(item.label), text(item.detail)].filter(Boolean).join('：')),
     coverageScore !== null && coverageScore < 70 ? `公开资料覆盖度约 ${coverageScore}，建议补齐缺失平台资料。` : '',
     text(job.status) === 'needs_review' ? 'Growth 调研结果需要主理人复核后再用于重要决策。' : '',
   ].filter(Boolean))
-  const growthPoints = uniqueStrings([
-    ...extractGrowthReportBullets(reportMarkdown, ['提升建议', '立即执行', '30 天提升', '60-90 天提升']),
-    '根据 Growth 品牌摸底报告补齐 Google Maps、官网、社交媒体和本地搜索的关键资料。',
-  ]).slice(0, 10)
-  const missingQuestions = uniqueStrings([
-    ...extractGrowthReportBullets(reportMarkdown, ['数据缺口', '数据来源与缺口']),
-    '请主理人查看 Growth 报告全文，确认是否有平台资料缺失或竞品判断需要修正。',
-  ]).slice(0, 10)
+  const growthPoints = uniqueStrings(recommendations.map((item) => text(item.title) || text(item.action))).slice(0, 10)
+  const missingQuestions = uniqueStrings(gaps.map((item) => text(item.label))).slice(0, 10)
+  const reportVersionId = text(job.report_version_id || selectedReport.report_version_id)
+  const viewerUrl = text(job.viewer_url || selectedReport.viewer_url)
+  const markdownDownloadPath = text(job.markdown_download_url || selectedReport.markdown_download_url)
+  const jsonDownloadPath = text(job.json_download_url || selectedReport.json_download_url)
   const sourcePayload = {
     jobId: job.job_id,
     status: job.status,
@@ -576,115 +632,271 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
     brandKey: text(result.brand_key || selectedReportResult.brand_key),
     reportTier,
     reportPath: reportPaths[0] || '',
-    reportVersionId: text(selectedReport.report_version_id),
+    reportVersionId,
+    reportTemplateVersion: 'v3',
+    viewerUrl,
+    markdownDownloadPath,
+    jsonDownloadPath,
     pdfReportPath,
     pdfDownloadPath,
-    result,
   }
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: text(job.generated_at || metadata.generated_at) || new Date().toISOString(),
     sourceSystem: 'amc-growth',
     growthJobId: text(job.job_id),
     growthBrandKey: text(result.brand_key || selectedReportResult.brand_key),
     reportTier,
     reportPath: reportPaths[0] || '',
     reportMarkdown,
+    reportVersionId,
+    reportTemplateVersion: 'v3',
+    viewerUrl,
+    markdownDownloadPath,
+    jsonDownloadPath,
+    structuredReport,
+    freshness: objectValue(job.freshness),
     pdfReportPath,
     pdfDownloadPath,
-    pdfDownloadUrl: growthDownloadUrl(pdfDownloadPath),
+    pdfDownloadUrl: pdfDownloadPath ? `/api/brands/${encodeURIComponent(brand.id)}/research-report?format=pdf` : '',
     coverageScore,
     sourceCoverage,
     sourcePayload,
-    summary: reportSummary || [
-      `${brand.name} 的品牌摸底报告已由 AMC-Growth 生成。`,
-      coverageScore !== null ? `公开资料覆盖度：${coverageScore}。` : '',
-      reportPaths.length ? `报告路径：${reportPaths[0]}` : '',
-    ].filter(Boolean).join(' '),
+    summary: reportSummary,
     dataSources: uniqueStrings([
-      'AMC-Growth 品牌摸底调研',
-      reportTier ? `Growth ${reportTier} report` : '',
-      reportPaths[0] ? `Growth report: ${reportPaths[0]}` : '',
-      ...coverageItems.map((item) => `Growth ${item}`),
+      'AMC-Growth 客观数据调研报告 V3',
+      ...sources.map((item) => `${text(item.id)} ${text(item.title)}`),
     ]),
-    brandImage: text(result.report_name || selectedReportResult.report_name) || `${brand.name} 的线上品牌摸底报告`,
-    marketingStatus: text(result.assessment_status)
-      ? `Growth 调研状态：${text(result.assessment_status)}。`
-      : `Growth 调研状态：${text(job.status) || 'completed'}。`,
+    brandImage: '证据驱动的本地商家增长底稿',
+    marketingStatus: `Growth 调研状态：${text(structuredReport.status) || text(job.status) || 'completed'}。`,
     marketAnalysis: [
       text(result.market || selectedReportResult.market || job.market),
       text(result.category || selectedReportResult.category),
       coverageScore !== null ? `覆盖度 ${coverageScore}` : '',
-    ].filter(Boolean).join(' / ') || '详见 AMC-Growth 品牌摸底报告正文。',
-    competitors: extractGrowthReportTableNames(reportMarkdown, '竞品候选'),
-    issues: growthIssues.length ? growthIssues : ['详见 AMC-Growth 品牌摸底报告的数据缺口与下一步采集计划。'],
+    ].filter(Boolean).join(' / ') || '详见 AMC-Growth 客观数据调研报告 V3 正文。',
+    competitors: uniqueStrings(focusCompetitors.map((item) => text(item.name))),
+    issues: growthIssues.length ? growthIssues : ['详见 AMC-Growth 客观数据调研报告 V3 的数据缺口与待确认事项。'],
     growthPoints,
     missingQuestions,
   }
 }
 
-function extractGrowthReportSummary(markdown: string, brandName: string) {
-  if (!markdown) return ''
-  const lines = markdown
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-  const firstBodyLine = lines.find((line) =>
-    !line.startsWith('---') &&
-    !line.startsWith('#') &&
-    !line.startsWith('|') &&
-    !line.startsWith('- ') &&
-    !line.includes(': ') &&
-    line.length > 12
-  )
-  return firstBodyLine || `${brandName} 的 AMC-Growth 品牌摸底报告已生成。`
+const PLAN_CAPABILITY_IDS: Record<string, string[]> = {
+  starter: ['merchant_data_maintenance', 'google_business_optimization', 'review_management', 'social_content', 'competitor_research'],
+  essential: ['merchant_data_maintenance', 'google_business_optimization', 'review_management', 'social_content', 'competitor_research', 'asset_production'],
+  booster: ['merchant_data_maintenance', 'google_business_optimization', 'review_management', 'social_content', 'competitor_research', 'asset_production', 'menu_optimization'],
 }
 
-function growthDownloadUrl(pathValue: string) {
-  if (!pathValue) return ''
-  if (/^https?:\/\//i.test(pathValue)) return pathValue
-  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
-  const baseUrl = (process.env.AMC_GROWTH_API_URL || (isProd ? 'https://amc-growth.onrender.com' : 'http://localhost:4188')).replace(/\/$/, '')
-  return `${baseUrl}${pathValue.startsWith('/') ? pathValue : `/${pathValue}`}`
+const ADDON_CAPABILITY_IDS: Record<string, string[]> = {
+  onsite_photo: ['asset_production'],
+  short_video_six: ['asset_production'],
+  xiaohongshu_ops: ['social_content'],
+  meituan_dianping_ops: ['menu_optimization', 'review_management'],
+  grab_foodpanda_ops: ['menu_optimization'],
+  twelveeat_delivery_ops: ['menu_optimization'],
 }
 
-function extractGrowthReportBullets(markdown: string, sectionKeywords: string[]) {
-  if (!markdown) return []
-  const lines = markdown.split('\n')
-  const results: string[] = []
-  let active = false
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
-    if (/^#{2,4}\s+/.test(line)) {
-      active = sectionKeywords.some((keyword) => line.includes(keyword))
-      continue
-    }
-    if (!active) continue
-    const ordered = line.match(/^\d+\.\s+(.+)/)
-    const unordered = line.match(/^[-*]\s+(.+)/)
-    const value = text(ordered?.[1] || unordered?.[1])
-    if (value && !value.includes('暂无数据')) results.push(value)
+async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
+  const observedAt = new Date().toISOString()
+  const knowledge = brand.knowledge
+  const rawStores = objectList(knowledge?.stores)
+  const stores: Array<Record<string, unknown>> = rawStores.length ? rawStores : [{
+    storeId: `${brand.id}:primary`,
+    name: brand.name,
+    address: brand.address,
+    phone: brand.phone,
+    businessHours: knowledge?.businessHours,
+    reservationUrl: knowledge?.reservationUrl,
+    orderingUrl: knowledge?.orderingUrl,
+    googlePlaceId: brand.googlePlaceId,
+    googleMapsUrl: brand.googleBusinessUrl || brand.googleReviewUrl,
+    latitude: brand.latitude,
+    longitude: brand.longitude,
+    isPrimary: true,
+  }]
+  const locations = stores.map((store, index) => ({
+    location_id: text(store.storeId || store.locationId) || `${brand.id}:location:${index + 1}`,
+    name: text(store.name) || `${brand.name} ${index + 1}`,
+    address: text(store.address),
+    phone: text(store.phone),
+    business_hours: text(store.businessHours),
+    website: text(store.website) || brand.website || '',
+    reservation_url: text(store.reservationUrl),
+    ordering_url: text(store.orderingUrl),
+    google_place_id: text(store.googlePlaceId) || (index === 0 ? brand.googlePlaceId || '' : ''),
+    google_maps_url: text(store.googleMapsUrl) || (index === 0 ? brand.googleBusinessUrl || brand.googleReviewUrl || '' : ''),
+    latitude: numberOrNull(store.latitude),
+    longitude: numberOrNull(store.longitude),
+    timezone: text(store.timezone) || brand.timezone,
+    is_primary: Boolean(store.isPrimary ?? index === 0),
+    status: 'merchant_confirmed',
+    updated_at: knowledge?.updatedAt?.toISOString() || brand.updatedAt.toISOString(),
+  }))
+
+  const ownedByPlatform = new Map<string, Record<string, unknown>>()
+  for (const account of brand.accounts) {
+    const platform = normalizeGrowthPlatformId(account.platformId)
+    if (!platform || ownedByPlatform.has(platform)) continue
+    ownedByPlatform.set(platform, {
+      platform,
+      profile_url: account.profileUrl || '',
+      handle: account.handle || '',
+      display_name: account.displayName || '',
+      follower_count: account.followerCount,
+      rating_score: account.ratingScore,
+      status: 'merchant_confirmed',
+      updated_at: account.updatedAt.toISOString(),
+    })
   }
-  return uniqueStrings(results)
+  if (locations.some((location) => location.google_place_id || location.google_maps_url)) {
+    ownedByPlatform.set('google_business', {
+      platform: 'google_business',
+      profile_url: locations.find((location) => location.is_primary)?.google_maps_url || '',
+      status: 'merchant_confirmed',
+      updated_at: observedAt,
+    })
+  }
+  const knownSocialPlatforms = ['instagram', 'tiktok', 'facebook', 'xiaohongshu']
+  const excludedPlatforms = knownSocialPlatforms.filter((platform) => !ownedByPlatform.has(platform))
+
+  const menuItems = objectList(knowledge?.menuItems).map((item, index) => ({
+    id: text(item.id) || `menu-${index + 1}`,
+    name: text(item.name),
+    category: text(item.category),
+    description: text(item.description),
+    price: numberOrNull(item.price),
+    currency: text(item.currency) || 'SGD',
+    signature: Boolean(item.signature || item.isSignature),
+    bundle: Boolean(item.bundle || item.isBundle),
+    lunch: Boolean(item.lunch || item.isLunch),
+    delivery_suitable: item.deliverySuitable === undefined ? undefined : Boolean(item.deliverySuitable),
+    beverage: Boolean(item.beverage),
+    addon: Boolean(item.addon),
+    portion: text(item.portion),
+    ingredients: stringList(item.ingredients),
+    allergens: stringList(item.allergens),
+    packaging_limits: text(item.packagingLimits),
+    image_urls: stringList(item.images),
+    status: 'merchant_confirmed',
+    updated_at: knowledge?.updatedAt?.toISOString() || observedAt,
+  })).filter((item) => item.name)
+
+  const subscription = brand.subscriptions[0]
+  const policy = subscription ? await getSubscriptionOperationsPolicy(subscription.planId) : null
+  const addonIds = selectedAddonIds(subscription?.selectedAddons)
+  const capabilityIds = uniqueStrings([
+    ...(subscription ? PLAN_CAPABILITY_IDS[subscription.planId.toLowerCase()] || [] : []),
+    ...addonIds.flatMap((addonId) => ADDON_CAPABILITY_IDS[addonId] || []),
+  ])
+  const previousReport = objectValue(objectValue(knowledge?.researchReport).structuredReport)
+
+  return {
+    schema_version: 'amc.merchant_research_input.v3',
+    brand: {
+      brand_id: brand.id,
+      brand_key: brand.growthBrandKey || '',
+      name: brand.name,
+      category: brand.industry || '',
+      market: knowledge?.market || brand.location || 'Singapore',
+      region: knowledge?.district || '',
+      website: brand.website || '',
+      phone: brand.phone || '',
+      description: brand.description || '',
+      currency: 'SGD',
+      timezone: brand.timezone,
+      language: 'zh',
+      status: 'merchant_confirmed',
+      updated_at: brand.updatedAt.toISOString(),
+    },
+    locations,
+    owned_channels: [...ownedByPlatform.values()],
+    excluded_platforms: excludedPlatforms,
+    reviews: {
+      source: brand.socialInsightReviews[0]?.source || '',
+      collected_at: brand.socialInsightReviews[0]?.lastSeenAt.toISOString() || null,
+      items: brand.socialInsightReviews.map((review: {
+        source: string; platform: string; rating: number; text: string; replyText: string | null;
+        reviewUrl: string | null; publishedAt: Date;
+      }) => ({
+        location_id: locations.length === 1 ? locations[0].location_id : '',
+        platform: normalizeGrowthPlatformId(review.platform) || 'google_business',
+        rating: review.rating,
+        text: review.text,
+        reply_text: review.replyText || '',
+        url: review.reviewUrl || '',
+        published_at: review.publishedAt.toISOString(),
+        source: review.source,
+      })),
+    },
+    menu_items: menuItems,
+    menu_updated_at: knowledge?.updatedAt?.toISOString() || null,
+    asset_inventory: brand.assets.map((asset: {
+      id: string; mimeType: string; sizeBytes: number | null; aiCategory: string | null; aiTags: string[]; aiCaption: string | null;
+      width: number | null; height: number | null; captureDate: Date | null; rightsStatus: string | null;
+      usedCount: number; createdAt: Date; updatedAt: Date;
+    }) => ({
+      asset_id: asset.id,
+      mime_type: asset.mimeType,
+      size_bytes: asset.sizeBytes,
+      category: asset.aiCategory || '',
+      tags: asset.aiTags,
+      caption: asset.aiCaption || '',
+      width: asset.width,
+      height: asset.height,
+      capture_date: asset.captureDate?.toISOString() || null,
+      rights_status: asset.rightsStatus || '',
+      used_count: asset.usedCount,
+      status: 'observed',
+      created_at: asset.createdAt.toISOString(),
+      updated_at: asset.updatedAt.toISOString(),
+    })),
+    assets_collected_at: brand.assets[0]?.updatedAt.toISOString() || null,
+    subscription: subscription ? {
+      plan_id: subscription.planId,
+      plan_name: subscription.planName,
+      status: subscription.status,
+      contract_start: subscription.contractStartDate?.toISOString() || null,
+      contract_end: subscription.contractEndDate?.toISOString() || null,
+      platform_coverage: policy?.platformCoverage || [],
+      included_service_ids: [`plan:${subscription.planId}`, ...addonIds.map((id) => `addon:${id}`)],
+      capability_ids: capabilityIds,
+      monthly_content_quota: policy?.monthlyContentQuota || 0,
+      selected_addons: addonIds,
+      observed_at: observedAt,
+    } : {},
+    confirmed_competitors: objectList(knowledge?.competitors).length
+      ? objectList(knowledge?.competitors).map((item) => ({ ...item, status: 'confirmed', updated_at: knowledge?.updatedAt?.toISOString() || observedAt }))
+      : stringList(knowledge?.competitors).map((name) => ({ name, status: 'confirmed', updated_at: knowledge?.updatedAt?.toISOString() || observedAt })),
+    competitors_updated_at: knowledge?.updatedAt?.toISOString() || null,
+    previous_report: previousReport,
+  }
 }
 
-function extractGrowthReportTableNames(markdown: string, sectionKeyword: string) {
-  if (!markdown) return []
-  const lines = markdown.split('\n')
-  const results: string[] = []
-  let active = false
-  for (const rawLine of lines) {
-    const line = rawLine.trim()
-    if (/^#{2,4}\s+/.test(line)) {
-      active = line.includes(sectionKeyword)
-      continue
-    }
-    if (!active || !line.startsWith('|') || line.includes('---')) continue
-    const cells = line.split('|').map((item) => item.trim()).filter(Boolean)
-    const name = cells[0]
-    if (name && !['竞品候选', '暂无数据'].includes(name)) results.push(name)
-  }
-  return uniqueStrings(results).slice(0, 8)
+function normalizeGrowthPlatformId(value: unknown) {
+  const key = text(value).toLowerCase().replaceAll('-', '_')
+  if (key.includes('instagram')) return 'instagram'
+  if (key.includes('tiktok')) return 'tiktok'
+  if (key.includes('facebook') || key === 'fb') return 'facebook'
+  if (key.includes('xiaohongshu') || key === 'xhs') return 'xiaohongshu'
+  if (key.includes('google')) return 'google_business'
+  return key
+}
+
+function selectedAddonIds(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return uniqueStrings(value.map((item) => typeof item === 'string' ? item : text(objectValue(item).id || objectValue(item).addonId)))
+}
+
+function numberOrNull(value: unknown) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function objectList(value: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => objectValue(item))
+    .filter((item) => Object.keys(item).length > 0)
 }
 
 function isGrowthResearchReport(report: BrandPlanWorkspaceData['researchReport']): report is BrandPlanResearchReport {

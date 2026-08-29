@@ -42,6 +42,20 @@ async function growthRequest(path: string, init: RequestInit) {
   }
 }
 
+export async function readGrowthReportArtifact(pathValue: string) {
+  const path = pathValue.startsWith('/') ? pathValue : `/${pathValue}`
+  const allowed = /^\/v1\/admin\/report-versions\/\d+\/(download|download-json)$/.test(path)
+    || /^\/downloads\/brand-intelligence-intake\/[A-Za-z0-9_./-]+\.pdf$/.test(path)
+  if (!allowed) throw new GrowthDataCenterError(400, 'growth_report_artifact_path_invalid')
+  const response = await growthRequest(path, { method: 'GET' })
+  if (!response.ok) throw new GrowthDataCenterError(response.status, `growth_report_artifact_failed:${response.status}`)
+  return {
+    body: await response.arrayBuffer(),
+    contentType: response.headers.get('content-type') || 'application/octet-stream',
+    contentDisposition: response.headers.get('content-disposition') || '',
+  }
+}
+
 export class GrowthDataCenterError extends Error {
   status: number
   code: string
@@ -246,9 +260,23 @@ export type GrowthBrandIntelligenceJob = {
     tier?: string
     report_path?: string | null
     report_content?: string | null
+    viewer_url?: string | null
+    markdown_download_url?: string | null
+    pdf_download_url?: string | null
+    json_download_url?: string | null
+    structured_report?: Record<string, unknown> | null
     result?: Record<string, unknown> | null
     created_at?: string
   }>
+  report_version_id?: string | null
+  report_template_version?: string | null
+  viewer_url?: string | null
+  markdown_download_url?: string | null
+  pdf_download_url?: string | null
+  json_download_url?: string | null
+  generated_at?: string | null
+  freshness?: Record<string, unknown> | null
+  structured_report?: Record<string, unknown> | null
   latest_report_tier?: string | null
   latest_report_path?: string | null
   latest_report_markdown?: string | null
@@ -267,15 +295,18 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   phone?: string | null
   googleBusinessUrl?: string | null
   googleReviewUrl?: string | null
-  accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null }>
-}) {
+  accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null; displayName?: string | null; followerCount?: number | null; ratingScore?: number | null }>
+}, merchantContext: Record<string, unknown>) {
   const owner = brand.owners?.find((item) => item.role === 'owner' && item.user?.email)?.user
     || brand.owners?.find((item) => item.user?.email)?.user
   const contactEmail = owner?.email || process.env.AMC_GROWTH_REPORT_EMAIL || 'contact@immedi.ai'
   const contactName = owner?.nickname || owner?.email?.split('@')[0] || 'AMC Kanban'
-  const socialProfiles = Object.fromEntries((brand.accounts || [])
-    .map((account) => [normalizeGrowthSocialPlatform(account.platformId), account.profileUrl || account.handle || ''])
-    .filter(([platform, value]) => platform && value))
+  const socialProfiles: Record<string, string> = {}
+  for (const account of brand.accounts || []) {
+    const platform = normalizeGrowthSocialPlatform(account.platformId)
+    const value = account.profileUrl || account.handle || ''
+    if (platform && value && !socialProfiles[platform]) socialProfiles[platform] = value
+  }
   const payload = {
     brand_name: brand.name,
     market: brand.location || brand.address || 'Singapore',
@@ -288,9 +319,20 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
     facebook_url: socialProfiles.facebook || '',
     tiktok_url: socialProfiles.tiktok || '',
     xiaohongshu_url: socialProfiles.xiaohongshu || '',
+    manual_social_profiles: {
+      instagram: socialProfiles.instagram || '',
+      tiktok: socialProfiles.tiktok || '',
+      xiaohongshu: socialProfiles.xiaohongshu || '',
+    },
+    social_profiles: socialProfiles,
+    excluded_social_platforms: Array.isArray(merchantContext.excluded_platforms)
+      ? merchantContext.excluded_platforms
+      : [],
     main_concern: '生成品牌计划前的线上经营摸底调研报告。',
     report_tier: 'initial',
-    generate_advanced: true,
+    report_template_version: 'v3',
+    generate_advanced: false,
+    merchant_context: merchantContext,
     source: 'amc-kanban-brand-plan',
     force_refresh: true,
     external_evidence: {

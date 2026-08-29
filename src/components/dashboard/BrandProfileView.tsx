@@ -106,6 +106,13 @@ type BrandPlanWorkspaceData = {
     pdfReportPath?: string
     pdfDownloadPath?: string
     pdfDownloadUrl?: string
+    reportVersionId?: string
+    reportTemplateVersion?: string
+    viewerUrl?: string
+    markdownDownloadPath?: string
+    jsonDownloadPath?: string
+    structuredReport?: Record<string, unknown>
+    freshness?: Record<string, unknown>
     coverageScore?: number | null
     sourceCoverage?: Record<string, unknown>
     sourcePayload?: Record<string, unknown>
@@ -519,11 +526,12 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'brand_plan_update_required') return '请先生成营销计划。'
   if (code === 'annual_plan_required') return '请先生成营销计划。'
   if (code === 'quarter_plan_required') return '请先补齐季度计划。'
-  if (code === 'growth_research_report_required') return '请先完成品牌摸底报告，再保存访谈记录。'
-  if (code === 'growth_research_report_missing') return '品牌摸底任务已完成，但报告正文没有保存下来，请稍后重试。'
-  if (code === 'growth_research_still_running') return '品牌摸底报告还在整理，请稍后再看。'
-  if (code === 'growth_research_failed') return '品牌摸底报告没有生成成功，请稍后重试。'
-  if (code === 'growth_research_create_failed') return '品牌摸底没有启动成功，请稍后重试。'
+  if (code === 'growth_research_report_required') return '请先完成客观数据调研报告 V3，再保存访谈记录。'
+  if (code === 'growth_research_report_missing') return '客观数据调研任务已完成，但报告正文没有保存下来，请稍后重试。'
+  if (code === 'growth_research_v3_missing') return 'Growth 已完成任务，但没有返回 V3 结构化报告，请稍后重试。'
+  if (code === 'growth_research_still_running') return '客观数据调研报告 V3 还在整理，请稍后再看。'
+  if (code === 'growth_research_failed') return '客观数据调研报告 V3 没有生成成功，请稍后重试。'
+  if (code === 'growth_research_create_failed') return '客观数据调研没有启动成功，请稍后重试。'
   if (code.startsWith('marketing_plan_llm_failed')) return '营销计划没有生成成功，请检查模型配置后重试。'
   if (code === 'calendar_creative_review_llm_failed') return '内容创意审核没有生成成功，请检查模型配置后重试。'
   if (code === 'calendar_creative_review_rejected') return '内容创意审核认为部分灵感不适合直接使用，请补充素材或重新生成。'
@@ -641,6 +649,7 @@ function BrandProfileContent({
 }: Props & { brand: Brand }) {
   const brandId = brand.id
   const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report`
+  const growthResearchDownloadHref = `/api/brands/${encodeURIComponent(brandId)}/research-report`
 
   // Local Brand States (fetched on mount/change, used if props are not passed)
   const [localBrandTone, setLocalBrandTone] = useState('')
@@ -1307,7 +1316,7 @@ ${storeLines}
   const handleGenerateResearchReport = async () => {
     setPlanGenerating('research')
     try {
-      const nextPlan = await runBrandPlanAction('generate_research_report', '品牌摸底报告已生成')
+      const nextPlan = await runBrandPlanAction('generate_research_report', '客观数据调研报告 V3 已生成')
       if ((nextPlan?.marketingSolution || nextPlan?.brandPlan)?.researchReport) setShowResearchReport(true)
       await loadBrandPlanWorkspace()
     } finally {
@@ -1732,7 +1741,7 @@ ${storeLines}
   const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
   const postfastSyncedAt = typeof brandSettings?.postfastSyncedAt === 'string' ? brandSettings.postfastSyncedAt : null
   const sourceStatusItems = [
-    { label: '品牌摸底', value: report ? '已完成' : '待完成', status: report ? 'ready' : 'pending' },
+    { label: '客观数据调研', value: report ? '已完成' : '待完成', status: report ? 'ready' : 'pending' },
     { label: '社交媒体渠道', value: socialAccounts.length ? `${socialAccounts.length} 个账号` : '待同步', status: socialAccounts.length ? 'ready' : 'pending' },
     { label: '品牌主张', value: merchantInterviewRequired ? '需完成' : '已记录', status: merchantInterviewRequired ? 'pending' : 'ready' },
     { label: '计划资料', value: brandPlanUpdated ? '可用' : '待补', status: brandPlanUpdated ? 'ready' : 'warning' },
@@ -1746,7 +1755,7 @@ ${storeLines}
       <div className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white">品牌摸底报告</h3>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">客观数据调研报告 V3</h3>
             <p className="mt-1 text-xs text-slate-400">{report?.generatedAt ? new Date(report.generatedAt).toLocaleString() : '尚未生成'}</p>
           </div>
           <button type="button" onClick={() => setShowResearchReport(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
@@ -1762,16 +1771,15 @@ ${storeLines}
                 <span className="sm:col-span-2">PDF: {report.pdfDownloadPath || report.pdfReportPath || '未记录'}</span>
                 {typeof report.coverageScore === 'number' ? <span>Coverage: {report.coverageScore}</span> : null}
               </div>
-              {(report.pdfDownloadUrl || report.pdfDownloadPath) ? (
-                <a
-                  href={report.pdfDownloadUrl || report.pdfDownloadPath}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-3 inline-flex rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-black text-white"
-                >
-                  下载 PDF
-                </a>
-              ) : null}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(report.pdfDownloadPath || report.pdfReportPath) ? (
+                  <a href={`${growthResearchDownloadHref}?format=pdf`} className="inline-flex rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-black text-white">下载 PDF</a>
+                ) : null}
+                <a href={`${growthResearchDownloadHref}?format=markdown`} className="inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-black text-blue-700">下载 Markdown</a>
+                {report.structuredReport ? (
+                  <a href={`${growthResearchDownloadHref}?format=json`} className="inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-black text-blue-700">下载 JSON</a>
+                ) : null}
+              </div>
             </section>
           ) : null}
           {growthReportMarkdown ? (
@@ -2118,25 +2126,25 @@ ${storeLines}
           </section>
 
           <section className="grid gap-3 lg:grid-cols-2">
-            {/* 品牌摸底报告 compact row */}
+            {/* 客观数据调研报告 V3 compact row */}
             <div
               role="button"
               tabIndex={0}
               onClick={(event) => {
-                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) openAiContentEditor({ target: 'research_report', title: '编辑品牌摸底报告', value: report })
+                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) openAiContentEditor({ target: 'research_report', title: '编辑客观数据调研报告 V3', value: report })
               }}
               onKeyDown={(event) => {
                 if ((event.key === 'Enter' || event.key === ' ') && report) {
                   event.preventDefault()
-                  openAiContentEditor({ target: 'research_report', title: '编辑品牌摸底报告', value: report })
+                  openAiContentEditor({ target: 'research_report', title: '编辑客观数据调研报告 V3', value: report })
                 }
               }}
               className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
-              title={report ? '点击编辑品牌摸底报告' : '尚未生成品牌摸底报告'}
+              title={report ? '点击编辑客观数据调研报告 V3' : '尚未生成客观数据调研报告 V3'}
             >
               <FileText className="h-4 w-4 shrink-0 text-blue-500" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-black text-slate-900 dark:text-white">品牌摸底报告</p>
+                <p className="text-xs font-black text-slate-900 dark:text-white">客观数据调研报告 V3</p>
                 <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{report ? report.summary : '尚未获取调研报告'}</p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">

@@ -555,7 +555,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **212** 个 API 路径、**301** 个 HTTP 方法组合。
+共 **229** 个 API 路径、**325** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -571,6 +571,7 @@ Permanent QR contract:
 | PATCH | `/api/admin/companion-messages/{id}/annotate` |
 | GET | `/api/admin/debug/avatar` |
 | POST | `/api/admin/email/test` |
+| POST | `/api/admin/integrations/immedi-erp/test` |
 | GET, POST | `/api/admin/llm-configs` |
 | DELETE, PATCH | `/api/admin/llm-configs/{id}` |
 | GET | `/api/admin/logs` |
@@ -580,6 +581,8 @@ Permanent QR contract:
 | GET | `/api/admin/model-tasks` |
 | POST | `/api/admin/permissions` |
 | GET, PATCH, POST | `/api/admin/postfast-keys` |
+| GET, POST | `/api/admin/prompt-templates` |
+| DELETE, PATCH | `/api/admin/prompt-templates/{id}` |
 | PATCH | `/api/admin/subscriptions/{id}` |
 | POST | `/api/admin/sync-draft-statuses` |
 | GET, PATCH | `/api/admin/system-config` |
@@ -614,6 +617,7 @@ Permanent QR contract:
 | DELETE, GET, PATCH | `/api/brands/{id}` |
 | GET, POST | `/api/brands/{id}/accounts` |
 | DELETE, PATCH | `/api/brands/{id}/accounts/{aid}` |
+| GET | `/api/brands/{id}/accounts/{aid}/gbp-locations` |
 | GET | `/api/brands/{id}/actions` |
 | PATCH | `/api/brands/{id}/actions/{aid}/approve` |
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
@@ -627,10 +631,13 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/assets/confirm-upload` |
 | GET | `/api/brands/{id}/assets/presign-upload` |
 | GET, POST | `/api/brands/{id}/assets/upload` |
+| GET, POST | `/api/brands/{id}/brand-plan` |
 | GET, POST | `/api/brands/{id}/brand-story-sync` |
 | GET | `/api/brands/{id}/companion/context` |
 | GET, POST | `/api/brands/{id}/companion/history` |
 | GET | `/api/brands/{id}/companion/sessions` |
+| POST | `/api/brands/{id}/content-calendar/generate` |
+| GET | `/api/brands/{id}/content-creatives` |
 | POST | `/api/brands/{id}/copywriter-log` |
 | POST | `/api/brands/{id}/copywriter/bulk-generate` |
 | POST | `/api/brands/{id}/copywriter/voice-chat` |
@@ -644,6 +651,7 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/drafts/{draftId}/reset-publishing` |
 | PATCH | `/api/brands/{id}/drafts/{draftId}/submit` |
 | POST | `/api/brands/{id}/drafts/{draftId}/trigger-copywriter` |
+| POST | `/api/brands/{id}/drafts/batch-trigger-copywriter` |
 | POST | `/api/brands/{id}/drafts/sync-statuses` |
 | DELETE, GET, POST | `/api/brands/{id}/folders` |
 | GET, POST | `/api/brands/{id}/growth-sync` |
@@ -651,6 +659,7 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/identity/{field}/sync` |
 | GET, PATCH | `/api/brands/{id}/knowledge` |
 | POST | `/api/brands/{id}/logo` |
+| POST | `/api/brands/{id}/marketing-plan/generate` |
 | POST | `/api/brands/{id}/mcp/execute` |
 | GET, POST | `/api/brands/{id}/memory` |
 | POST | `/api/brands/{id}/notifications` |
@@ -660,9 +669,13 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/posts` |
 | GET, POST | `/api/brands/{id}/posts/publish` |
 | GET, PATCH | `/api/brands/{id}/profile` |
+| GET, POST | `/api/brands/{id}/promotion-execution` |
+| GET, POST | `/api/brands/{id}/promotion-strategy` |
+| GET | `/api/brands/{id}/research-report` |
 | GET, POST | `/api/brands/{id}/reviews` |
 | POST | `/api/brands/{id}/scheduling/recommend` |
 | GET, PATCH | `/api/brands/{id}/settings` |
+| GET, PATCH | `/api/brands/{id}/sku-library` |
 | GET | `/api/brands/{id}/social-insight` |
 | GET, PATCH, POST | `/api/brands/{id}/subscription` |
 | POST | `/api/brands/{id}/subscription/confirm` |
@@ -677,6 +690,7 @@ Permanent QR contract:
 | POST | `/api/content/generate` |
 | POST | `/api/content/video/assemble` |
 | POST | `/api/content/video/create` |
+| GET, POST | `/api/content/video/jobs` |
 | GET | `/api/content/video/presets` |
 | POST | `/api/content/video/status` |
 | POST | `/api/copywriter/generate-hooks` |
@@ -723,11 +737,12 @@ Permanent QR contract:
 | GET | `/api/integrations/social/public-profile` |
 | GET | `/api/integrations/status` |
 | POST | `/api/integrations/stripe/webhook` |
-| POST | `/api/internal/content-context` |
 | POST | `/api/internal/content-assets` |
+| POST | `/api/internal/content-context` |
 | POST | `/api/internal/content-lab-admin` |
 | POST | `/api/internal/content-log` |
 | POST | `/api/internal/llm-generate` |
+| POST | `/api/internal/menu-service` |
 | POST | `/api/internal/video-generate` |
 | POST | `/api/internal/video-performance` |
 | GET, POST | `/api/invite/{token}` |
@@ -758,6 +773,7 @@ Permanent QR contract:
 | GET | `/api/profile/principal-dashboard` |
 | POST | `/api/promo/validate` |
 | OPTIONS, POST | `/api/public/brand-intelligence-intake` |
+| GET | `/api/public/brand-strategy/{id}` |
 | OPTIONS, POST | `/api/public/ecosystem-partners` |
 | GET | `/api/public/snapshots` |
 | POST | `/api/researcher/capture-snapshots` |

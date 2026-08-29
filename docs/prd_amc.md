@@ -1789,5 +1789,10 @@ Admin → AI 模型配置 页面：
 - `ADMIN` 拥有 Provider 验证和非敏感配置权限；`AMC_PRINCIPAL` 可管理任务和人工复核，但不能修改基础设施配置。
 - `AMC_KNOWLEDGE_TOKEN` 继续用于内部 API/MCP 应急访问，不作为 Dashboard 的常规登录方式。
 - 官网 V2 初级报告使用质量优先的受控 AI 策略：主模型最多 40 秒、一个备用模型最多 15 秒、总截止时间 58 秒；输出使用 JSON 模式，超时或全部模型失败时使用规则分析安全回退并正常交付单一报告版本。该策略同时适用于中文和英文初级报告，不改变高级报告策略。
+- Kanban 品牌策划生成“客观数据调研报告”时显式请求 Growth `report_template_version=v3`、`report_tier=initial`、`generate_advanced=false`。V1/V2 历史报告、下载、链接和旧调用继续保留；Growth 的公开 intake 与其他入口仍默认 V2，除非调用方明确选择 V3。
+- V3 是后续品牌计划与内容 brief 使用的证据型商家增长底稿，不是 Kanban 任务或发布文案。一个品牌生成一份报告；多门店的事实、评论、商圈和竞品按稳定门店 ID 隔离后再汇总。报告同时保存 Markdown、PDF 和版本化结构化 JSON；Kanban 下游只读取结构化字段，不依赖 Markdown 标题解析。
+- Kanban 调用 V3 时发送已确认品牌/门店资料、固定社媒账号与明确排除平台、菜单商品、去除顾客姓名的最新评论样本、素材元数据盘点、有效订阅与能力 ID、已确认竞品。Growth 继续负责公开来源采集和证据判断；来源冲突必须并列显示，缺失或过期数据必须标记待确认或本次未取得。
+- V3 的完整增长建议不受套餐限制；“当前计划内可执行”只允许使用 Kanban 根据计划和附加服务确定后传入的能力 ID，其余建议进入升级讨论。没有有效订阅时统一显示“订阅计划待确认”。报告生成不得自动创建任务、排期、ContentDraft 或发布文案。
+- 品牌用户通过 Kanban 权限查看并下载 V3 Markdown、PDF 和 JSON；不得因此获得 Growth Dashboard 权限。`ADMIN`、`AMC_PRINCIPAL` 仍可通过现有 SSO 深链进入 Growth 原报告版本。重新生成必须创建不可变的新版本并保留旧版本。
 - `/api/internal/llm-generate` 只对持有内部服务令牌的调用方接受可选生成策略，包括 JSON 输出、温度、总截止时间、分次超时和最大尝试次数；调用取消必须向 Provider 传播。Provider、模型、尝试次数和耗时只进入内部响应与审计，不通过公开评估 API 暴露。
 - 公开 intake 路径、响应格式、60 天去重、配额与 TikHub 两阶段任务保持不变；现有 Bearer Token API 保持兼容。
