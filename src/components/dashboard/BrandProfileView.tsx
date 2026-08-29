@@ -710,6 +710,9 @@ function BrandProfileContent({
   const [profileMarkdown, setProfileMarkdown] = useState('')
   const [brandPlanData, setBrandPlanData] = useState<BrandPlanWorkspaceData>({})
   const [publishingScheduleDraft, setPublishingScheduleDraft] = useState<PublishingScheduleDraft>({})
+  const [publishingScheduleSaveState, setPublishingScheduleSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const publishingScheduleSaveReadyRef = useRef(false)
+  const publishingScheduleSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [merchantInterview, setMerchantInterview] = useState<MerchantInterviewRecord | null>(null)
   const [merchantInterviewRequired, setMerchantInterviewRequired] = useState(true)
   const [showResearchReport, setShowResearchReport] = useState(false)
@@ -741,6 +744,8 @@ function BrandProfileContent({
       monthlyContentQuota: 0,
       publishingFreq: subscriptionSummary.publishingFrequencyPlan || null,
     })
+    publishingScheduleSaveReadyRef.current = false
+    setPublishingScheduleSaveState('idle')
     setPublishingScheduleDraft(Object.keys(fromStrategy).length
       ? fromStrategy
       : Object.keys(fromSubscription).length
@@ -1068,6 +1073,34 @@ ${storeLines}
     await loadIdentity()
     return data
   }
+
+  useEffect(() => {
+    if (!Object.keys(publishingScheduleDraft).length) return
+    if (!publishingScheduleSaveReadyRef.current) {
+      publishingScheduleSaveReadyRef.current = true
+      return
+    }
+    if (publishingScheduleSaveTimerRef.current) clearTimeout(publishingScheduleSaveTimerRef.current)
+    setPublishingScheduleSaveState('saving')
+    publishingScheduleSaveTimerRef.current = setTimeout(async () => {
+      const data = await postBrandPlanAction('save_workspace_patch', {
+        target: 'publishing_freq',
+        value: publishingFreqPayload(publishingScheduleDraft),
+      })
+      if (!data) {
+        setPublishingScheduleSaveState('error')
+        return
+      }
+      const marketingSolution = data.marketingSolution || data.brandPlan
+      if (marketingSolution && typeof marketingSolution === 'object') {
+        setBrandPlanData(marketingSolution)
+      }
+      setPublishingScheduleSaveState('saved')
+    }, 600)
+    return () => {
+      if (publishingScheduleSaveTimerRef.current) clearTimeout(publishingScheduleSaveTimerRef.current)
+    }
+  }, [publishingScheduleDraft, brandId])
 
   const openAiContentEditor = (content: EditableAiContent) => {
     setEditingAiContent(content)
@@ -2356,7 +2389,12 @@ ${storeLines}
                   <p className="text-xs font-black text-slate-800 dark:text-slate-100">发布节奏</p>
                   <p className="mt-0.5 text-[11px] text-slate-400">按当前订阅服务带出，改完后可重新生成。</p>
                 </div>
-                <div className="text-xs font-black text-rose-600">合计 {publishingScheduleCount} 条/月</div>
+                <div className="flex items-center gap-2 text-xs font-black">
+                  <span className="text-rose-600">合计 {publishingScheduleCount} 条/月</span>
+                  {publishingScheduleSaveState === 'saving' ? <span className="text-slate-400">保存中...</span> : null}
+                  {publishingScheduleSaveState === 'saved' ? <span className="text-emerald-600">已自动保存</span> : null}
+                  {publishingScheduleSaveState === 'error' ? <span className="text-rose-600">保存失败</span> : null}
+                </div>
               </div>
               <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {(activePublishingPlatforms.length ? activePublishingPlatforms : PUBLISHING_PLATFORM_OPTIONS.slice(0, 3)).map((platform) => (

@@ -484,7 +484,9 @@ export async function runBrandPlanAction(input: {
 
   const persistedPublishingFreq = input.action === 'generate_publishing_calendar'
     ? normalizePublishingFreq(input.body?.publishingFreqOverride)
-    : null
+    : input.action === 'save_workspace_patch' && text(input.body?.target) === 'publishing_freq'
+      ? normalizePublishingFreq(input.body?.value ?? input.body?.publishingFreqOverride)
+      : null
 
   await prisma.brandKnowledge.upsert({
     where: { brandId: brand.id },
@@ -798,6 +800,22 @@ async function saveWorkspacePatch(
       period: marketingPlanPeriod(annualPlan),
       input: { target, editedAt: new Date().toISOString() },
       output: annualPlan,
+      researchSnapshotId: current.researchReport?.snapshotId,
+      generationMode: 'MANUAL_EDIT',
+    })
+    return { ...current, annualPlan }
+  }
+
+  if (target === 'publishing_freq') {
+    const publishingFreq = normalizePublishingFreq(value ?? body?.publishingFreqOverride)
+    if (!publishingFreq) throw new BrandPlanError('invalid_publishing_freq', 400)
+    const annualPlan = applyPublishingFrequencyOverride(current.annualPlan, publishingFreq)
+    await saveMarketingSolutionVersion({
+      brandId,
+      kind: 'ANNUAL',
+      period: annualPlan ? marketingPlanPeriod(annualPlan) : 'publishing_frequency',
+      input: { target, editedAt: new Date().toISOString() },
+      output: { publishingFreq, annualPlan },
       researchSnapshotId: current.researchReport?.snapshotId,
       generationMode: 'MANUAL_EDIT',
     })
