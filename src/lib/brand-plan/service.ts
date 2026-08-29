@@ -930,15 +930,15 @@ async function buildAnnualMarketingSolution(
     scope: 'annual',
     input,
     llm: strategyLlm,
-    fallbackUsed: false,
+    fallbackUsed: !strategyLlm.value,
   })
   if (!strategyLlm.value) {
-    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; refusing to save a non-LLM marketing plan.', {
+    console.warn('[brand-plan] marketing_plan LLM returned no valid JSON; using rule fallback marketing plan.', {
       provider: strategyLlm.provider,
       modelName: strategyLlm.modelName,
       error: strategyLlm.error || 'llm_returned_invalid_json',
     })
-    throw new BrandPlanError('marketing_plan_llm_failed', 502)
+    return withMarketingPlanFallbackError(fallback, strategyLlm)
   }
   const strategyPlan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
   const quarterlyPlans: NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']> = []
@@ -970,19 +970,27 @@ async function buildAnnualMarketingSolution(
       scope: 'quarter',
       input: quarterInput,
       llm: quarterLlm,
-      fallbackUsed: false,
+      fallbackUsed: !quarterLlm.value,
     })
     if (!quarterLlm.value) {
-      console.warn('[brand-plan] quarter marketing_plan LLM returned no valid JSON; refusing to save a partial plan.', {
+      console.warn('[brand-plan] quarter marketing_plan LLM returned no valid JSON; using rule fallback quarter plan.', {
         quarter: fallbackQuarter.quarter,
         provider: quarterLlm.provider,
         modelName: quarterLlm.modelName,
         error: quarterLlm.error || 'llm_returned_invalid_json',
       })
-      throw new BrandPlanError('marketing_plan_llm_failed', 502)
+      return withMarketingPlanFallbackError({
+        ...strategyPlan,
+        quarterlyPlans: mergeAnnualQuarterPlans(fallback.quarterlyPlans || [], quarterlyPlans),
+      }, quarterLlm)
     }
     const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [fallbackQuarter])
-    if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+    if (!quarterPlan) {
+      return withMarketingPlanFallbackError({
+        ...strategyPlan,
+        quarterlyPlans: mergeAnnualQuarterPlans(fallback.quarterlyPlans || [], quarterlyPlans),
+      }, quarterLlm)
+    }
     quarterlyPlans.push(quarterPlan)
   }
   return normalizeAnnualMarketingStrategy({
@@ -1022,22 +1030,13 @@ async function buildAnnualMarketingStrategyOnly(
     scope: 'annual',
     input,
     llm: strategyLlm,
-    fallbackUsed: false,
+    fallbackUsed: !strategyLlm.value,
   })
-  if (!strategyLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  if (!strategyLlm.value) return annualStrategyFallbackPlan(fallback, strategyLlm)
   const plan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
-  const quarterPlaceholders = (fallback.quarterlyPlans || []).map((item) => ({
-    quarter: item.quarter,
-    year: item.year,
-    startMonth: item.startMonth,
-    endMonth: item.endMonth,
-    periodLabel: item.periodLabel,
-    focus: '待生成季度计划',
-    campaigns: [],
-  }))
   return {
     ...plan,
-    quarterlyFocus: quarterPlaceholders,
+    quarterlyFocus: annualQuarterPlaceholders(fallback),
     quarterlyPlans: [],
   }
 }
@@ -1100,11 +1099,11 @@ async function buildNextQuarterMarketingPlan(
     scope: 'quarter',
     input: quarterInput,
     llm: quarterLlm,
-    fallbackUsed: false,
+    fallbackUsed: !quarterLlm.value,
   })
-  if (!quarterLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  if (!quarterLlm.value) return withFallbackQuarterPlan(current.annualPlan, fallback.quarterlyPlans || [], targetQuarter, existingQuarters, quarterLlm)
   const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [targetQuarter])
-  if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  if (!quarterPlan) return withFallbackQuarterPlan(current.annualPlan, fallback.quarterlyPlans || [], targetQuarter, existingQuarters, quarterLlm)
   const fallbackOrder = new Map((fallback.quarterlyPlans || []).map((item, index) => [item.startMonth, index]))
   const quarterlyPlans = [
     ...existingQuarters.filter((item) => item.startMonth !== quarterPlan.startMonth),
@@ -1140,6 +1139,100 @@ async function buildNextQuarterMarketingPlan(
     llmProvider: quarterLlm.provider || current.annualPlan.llmProvider,
     llmModel: quarterLlm.modelName || current.annualPlan.llmModel,
     llmError: undefined,
+  }
+}
+
+function marketingPlanLlmError(llm: { error?: string; provider?: string; modelName?: string }) {
+  return llm.error || 'marketing_plan_llm_failed'
+}
+
+function withMarketingPlanFallbackError(
+  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
+  llm: { provider: string; modelName: string; error?: string }
+): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
+  return {
+    ...fallback,
+    generatedAt: new Date().toISOString(),
+    generationMode: 'RULE_FALLBACK',
+    llmProvider: llm.provider || fallback.llmProvider,
+    llmModel: llm.modelName || fallback.llmModel,
+    llmError: marketingPlanLlmError(llm),
+  }
+}
+
+function annualQuarterPlaceholders(fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>) {
+  return (fallback.quarterlyPlans || []).map((item) => ({
+    quarter: item.quarter,
+    year: item.year,
+    startMonth: item.startMonth,
+    endMonth: item.endMonth,
+    periodLabel: item.periodLabel,
+    focus: '待生成季度计划',
+    campaigns: [],
+  }))
+}
+
+function annualStrategyFallbackPlan(
+  fallback: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
+  llm: { provider: string; modelName: string; error?: string }
+): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
+  return {
+    ...withMarketingPlanFallbackError(fallback, llm),
+    quarterlyFocus: annualQuarterPlaceholders(fallback),
+    quarterlyPlans: [],
+  }
+}
+
+function mergeAnnualQuarterPlans(
+  fallbackQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans'],
+  generatedQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']
+) {
+  const generatedByStartMonth = new Map((generatedQuarters || []).map((item) => [item.startMonth, item]))
+  return (fallbackQuarters || []).map((fallbackQuarter) => generatedByStartMonth.get(fallbackQuarter.startMonth) || fallbackQuarter)
+}
+
+function withFallbackQuarterPlan(
+  annualPlan: NonNullable<BrandPlanWorkspaceData['annualPlan']>,
+  fallbackQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans'],
+  targetQuarter: NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']>[number],
+  existingQuarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans'],
+  llm: { provider: string; modelName: string; error?: string }
+): NonNullable<BrandPlanWorkspaceData['annualPlan']> {
+  const fallbackOrder = new Map((fallbackQuarters || []).map((item, index) => [item.startMonth, index]))
+  const quarterlyPlans = [
+    ...(existingQuarters || []).filter((item) => item.startMonth !== targetQuarter.startMonth),
+    targetQuarter,
+  ].sort((a, b) => (fallbackOrder.get(a.startMonth || '') ?? 99) - (fallbackOrder.get(b.startMonth || '') ?? 99))
+  return {
+    ...annualPlan,
+    generatedAt: new Date().toISOString(),
+    quarterlyPlans,
+    quarterlyFocus: (fallbackQuarters || []).map((fallbackQuarter) => {
+      const generated = quarterlyPlans.find((item) => item.startMonth === fallbackQuarter.startMonth)
+      return generated
+        ? {
+            quarter: generated.quarter,
+            year: generated.year,
+            startMonth: generated.startMonth,
+            endMonth: generated.endMonth,
+            periodLabel: generated.periodLabel,
+            focus: generated.focus,
+            campaigns: generated.campaigns,
+          }
+        : {
+            quarter: fallbackQuarter.quarter,
+            year: fallbackQuarter.year,
+            startMonth: fallbackQuarter.startMonth,
+            endMonth: fallbackQuarter.endMonth,
+            periodLabel: fallbackQuarter.periodLabel,
+            focus: '待生成季度计划',
+            campaigns: [],
+          }
+    }),
+    generationMode: 'RULE_FALLBACK',
+    llmProvider: llm.provider || annualPlan.llmProvider,
+    llmModel: llm.modelName || annualPlan.llmModel,
+    llmError: marketingPlanLlmError(llm),
   }
 }
 
@@ -2759,7 +2852,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 1300, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1800 : 2200, {
       temperature: 0.35,
       jsonMode: true,
       deadlineMs: scope === 'annual_strategy' ? 60000 : 65000,
@@ -2823,7 +2916,7 @@ async function repairMarketingPlanJson(scope: MarketingPlanLLMScope, rawText: st
     `原文：${rawText.slice(0, 12000)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1100 : 950, {
+    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1600 : 1400, {
       temperature: 0,
       jsonMode: true,
       deadlineMs: 22000,
