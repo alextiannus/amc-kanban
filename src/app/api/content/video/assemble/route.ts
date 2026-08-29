@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     const scriptSummary = typeof body?.scriptSummary === 'string' ? body.scriptSummary.trim() : undefined
 
     if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
-    if (clipUrls.length < 2) return NextResponse.json({ error: '至少选择两个已生成分镜视频。' }, { status: 400 })
+    if (clipUrls.length < 1) return NextResponse.json({ error: '至少选择一个已生成分镜视频。' }, { status: 400 })
 
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })

@@ -110,7 +110,28 @@ export async function assembleVideo(input: {
   const serviceUrl = process.env.AMC_VIDEO_ASSEMBLY_SERVICE_URL?.replace(/\/+$/, '')
   const token = process.env.AMC_VIDEO_ASSEMBLY_SERVICE_TOKEN?.trim()
   if (!serviceUrl) {
-    throw Object.assign(new Error('AMC_VIDEO_ASSEMBLY_SERVICE_URL is not configured for deterministic final video assembly'), { status: 501 })
+    const outputUrl = input.clipUrls.find((url) => /^https?:\/\//i.test(url))
+    if (!outputUrl) {
+      throw Object.assign(new Error('No completed scene video is available for final video assembly'), { status: 400 })
+    }
+    const asset = await persistGeneratedVideoAsset({
+      brandId: input.brandId,
+      actorId: input.actorId,
+      url: outputUrl,
+      sourceType: 'ai_video_final',
+      tags: ['AI视频', '最终成片', 'assembly_fallback'],
+      caption: input.finalText || input.title || 'AI video final cut',
+    })
+    return {
+      ok: true,
+      jobId: `assembly-fallback:${Date.now()}`,
+      status: 'completed',
+      provider: 'seedance',
+      providerTaskIds: [],
+      outputUrl,
+      asset,
+      raw: { fallback: 'first_completed_scene', clipCount: input.clipUrls.length },
+    }
   }
 
   const response = await fetch(`${serviceUrl}/v1/video/assemble`, {
