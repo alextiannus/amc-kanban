@@ -19,6 +19,78 @@ const TASK_PLATFORM_HINTS: Array<{ platform: string; keywords: string[] }> = [
   { platform: 'TripAdvisor', keywords: ['tripadvisor'] },
 ]
 
+const CALENDAR_DRAFT_STATUSES = [
+  'planned_unimplemented',
+  'draft',
+  'pending_review',
+  'pending',
+  'approved',
+  'scheduled',
+  'publishing',
+  'published',
+  'done',
+  'failed',
+]
+
+function startOfUtcDay(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()))
+}
+
+function validDate(value: unknown): Date | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(String(value))
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function draftEventDate(draft: any): Date | null {
+  const status = String(draft.status || '').toLowerCase()
+  if (status === 'published' || status === 'done') {
+    return validDate(draft.publishedAt) ?? validDate(draft.scheduledAt) ?? validDate(draft.updatedAt)
+  }
+  if (status === 'failed') {
+    return validDate(draft.deliveryFailureAt) ?? validDate(draft.updatedAt) ?? validDate(draft.scheduledAt)
+  }
+  return validDate(draft.scheduledAt) ?? validDate(draft.updatedAt) ?? validDate(draft.createdAt)
+}
+
+function isCalendarVisibleDraft(draft: any, rangeStart: Date, rangeEnd: Date, now = new Date()) {
+  const status = String(draft.status || '').toLowerCase()
+  const eventAt = draftEventDate(draft)
+  if (!eventAt) return false
+  if (eventAt < rangeStart || eventAt >= rangeEnd) return false
+
+  if (status === 'published' || status === 'done') return true
+
+  if (status === 'failed') {
+    const failureAt = validDate(draft.deliveryFailureAt) ?? validDate(draft.updatedAt) ?? eventAt
+    return now.getTime() - failureAt.getTime() <= 3 * 24 * 60 * 60 * 1000
+  }
+
+  const scheduledAt = validDate(draft.scheduledAt)
+  if (scheduledAt && scheduledAt < startOfUtcDay(now)) return false
+
+  return [
+    'planned_unimplemented',
+    'draft',
+    'pending_review',
+    'pending',
+    'approved',
+    'scheduled',
+    'publishing',
+  ].includes(status)
+}
+
+function calendarEventStatus(statusValue: unknown) {
+  const status = String(statusValue || '').toLowerCase()
+  if (status === 'published' || status === 'done') return 'done'
+  if (status === 'planned_unimplemented') return 'planned_unimplemented'
+  if (status === 'scheduled') return 'scheduled'
+  if (status === 'publishing') return 'publishing'
+  if (status === 'failed') return 'failed'
+  if (status === 'pending_review' || status === 'pending' || status === 'approved') return 'pending'
+  return 'draft'
+}
+
 function inferTaskPlatform(task: { title: string; description: string | null; materials: string | null; tags: string[] }) {
   const text = [task.title, task.description ?? '', task.materials ?? '', ...(task.tags ?? [])]
     .join(' ')
@@ -71,6 +143,7 @@ export async function GET(request: Request) {
   const monthIndex = monthDate.getUTCMonth()
   const rangeStart = new Date(Date.UTC(year, monthIndex, 1))
   const rangeEnd = new Date(Date.UTC(year, monthIndex + 1, 1))
+  const failedWindowStart = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
 
   const brandIds = await getAccessibleBrandIds(session.user.id, session.user.type ?? 'HUMAN', session.user.role)
   if (brandIds.length === 0) return NextResponse.json({ events: [] })
@@ -84,10 +157,13 @@ export async function GET(request: Request) {
   const drafts = await prisma.contentDraft.findMany({
     where: {
       brandId: { in: scopedBrandIds },
-      status: { in: ['planned_unimplemented', 'scheduled', 'publishing', 'published'] },
+      status: { in: CALENDAR_DRAFT_STATUSES },
       OR: [
         { scheduledAt: { gte: rangeStart, lt: rangeEnd } },
         { publishedAt: { gte: rangeStart, lt: rangeEnd } },
+        { deliveryFailureAt: { gte: failedWindowStart, lt: rangeEnd } },
+        { updatedAt: { gte: rangeStart, lt: rangeEnd } },
+        { createdAt: { gte: rangeStart, lt: rangeEnd } },
       ],
     },
     include: {
@@ -96,6 +172,7 @@ export async function GET(request: Request) {
       coverAsset: { select: { id: true, url: true } },
     },
     orderBy: [{ scheduledAt: 'asc' }, { updatedAt: 'desc' }],
+    take: 1000,
   })
 
   const brands = await prisma.brand.findMany({
@@ -147,13 +224,15 @@ export async function GET(request: Request) {
     }
   }
 
+  const visibleDrafts = drafts.filter((draft: any) => isCalendarVisibleDraft(draft, rangeStart, rangeEnd))
+
   // ── Phase B: Dynamically resolve postUrl for published drafts using PostFast ──────────────
-  const needsUrlResolution = drafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
+  const needsUrlResolution = visibleDrafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
   const draftPostUrlMap = new Map<string, string>()
 
   if (needsUrlResolution) {
     const brandIdsWithPublished = Array.from(new Set(
-      drafts
+      visibleDrafts
         .filter((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
         .map((d: any) => d.brandId)
     ))
@@ -179,7 +258,7 @@ export async function GET(request: Request) {
       }
 
       // Inline update the DB for any draft where we resolved the URL from PostFast
-      for (const d of drafts) {
+      for (const d of visibleDrafts) {
         if (d.status === 'published' && d.platformPostId && !d.postUrl) {
           const resolvedUrl = draftPostUrlMap.get(d.platformPostId)
           if (resolvedUrl) {
@@ -195,16 +274,10 @@ export async function GET(request: Request) {
   }
 
 
-  const events = drafts.map((draft: any) => {
-    const eventAt = draft.status === 'published'
-      ? (draft.publishedAt ?? draft.scheduledAt ?? draft.updatedAt)
-      : (draft.scheduledAt ?? draft.updatedAt)
+  const events = visibleDrafts.map((draft: any) => {
+    const eventAt = draftEventDate(draft) ?? draft.updatedAt
     const platform = draft.account?.platformId || '全平台'
-    const status = draft.status === 'published'
-      ? 'done'
-      : draft.status === 'planned_unimplemented'
-        ? 'planned_unimplemented'
-        : 'scheduled'
+    const status = calendarEventStatus(draft.status)
 
     const eventMediaUrls = Array.from(new Set([
       draft.coverAsset?.url,

@@ -119,17 +119,28 @@ function fromDateTimeLocal(value: string) {
 const STATUS_COLORS: Record<string, string> = {
   'done': 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/20',
   'pending': 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/20',
+  'draft': 'bg-slate-50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
   'planned_unimplemented': 'bg-rose-50 dark:bg-rose-900/10 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900/20',
   'scheduled': 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/20',
+  'publishing': 'bg-violet-50 dark:bg-violet-900/10 text-violet-600 dark:text-violet-400 border-violet-100 dark:border-violet-900/20',
+  'failed': 'bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/20',
 }
 
-type CalendarEventStatus = 'done' | 'pending' | 'planned_unimplemented' | 'scheduled'
+type CalendarEventStatus = 'done' | 'pending' | 'draft' | 'planned_unimplemented' | 'scheduled' | 'publishing' | 'failed'
+type CalendarFilter = 'all' | CalendarEventStatus
 
 function calendarStatusLabel(status: CalendarEventStatus, type?: 'post' | 'task') {
   if (status === 'done') return type === 'task' ? '已完成' : '已发布'
   if (status === 'pending') return '待审核'
-  if (status === 'planned_unimplemented') return '计划未实施'
+  if (status === 'draft') return '草稿'
+  if (status === 'planned_unimplemented') return '排期待制作'
+  if (status === 'publishing') return '发布中'
+  if (status === 'failed') return '发布失败'
   return '已排期'
+}
+
+function isCalendarGridStatus(status: CalendarEventStatus) {
+  return ['done', 'pending', 'draft', 'planned_unimplemented', 'scheduled', 'publishing', 'failed'].includes(status)
 }
 
 function escapeHtml(value: unknown) {
@@ -294,7 +305,7 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
   const [triggeringId, setTriggeringId] = useState<string | null>(null)
 
   // Stitch & Postis UX elements
-  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'planned_unimplemented' | 'scheduled' | 'done'>('all')
+  const [activeFilter, setActiveFilter] = useState<CalendarFilter>('all')
   const [activeView, setActiveView] = useState<'month' | 'week' | 'day' | 'list'>('month')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [isBrandsCollapsed, setIsBrandsCollapsed] = useState(true)
@@ -1535,8 +1546,8 @@ ${contentIdea || 'No details provided.'}`
   // Derived state memoizations
   const filteredEvents = useMemo(() => {
     return events.filter(ev => {
-      // Calendar grid shows generated plans, scheduled posts and published posts.
-      const isVisible = ev.status === 'done' || ev.status === 'scheduled' || ev.status === 'planned_unimplemented'
+      // Calendar grid shows the bounded publishing workflow returned by the API.
+      const isVisible = isCalendarGridStatus(ev.status)
       if (activeFilter === 'all') return isVisible
       if (activeFilter === 'done') return ev.status === 'done' && ev.type !== 'task'
       return ev.status === activeFilter
@@ -1823,9 +1834,12 @@ ${contentIdea || 'No details provided.'}`
 
   const stats = {
     done: visibleEvents.filter(e => e.status === 'done' && e.type !== 'task').length,
+    draft: visibleEvents.filter(e => e.status === 'draft').length,
     scheduled: visibleEvents.filter(e => e.status === 'scheduled').length,
     planned: visibleEvents.filter(e => e.status === 'planned_unimplemented').length,
     pending: visibleEvents.filter(e => e.status === 'pending').length,
+    publishing: visibleEvents.filter(e => e.status === 'publishing').length,
+    failed: visibleEvents.filter(e => e.status === 'failed').length,
     total: visibleEvents.length
   }
 
@@ -2176,7 +2190,7 @@ ${contentIdea || 'No details provided.'}`
 
           <div className="flex items-center gap-4">
             <div className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
-              {(['all', 'planned_unimplemented', 'pending', 'scheduled', 'done'] as const).map((filter) => (
+              {(['all', 'planned_unimplemented', 'draft', 'pending', 'scheduled', 'publishing', 'done', 'failed'] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => { setActiveFilter(filter); setSelectedEventId(null) }}
@@ -2186,7 +2200,7 @@ ${contentIdea || 'No details provided.'}`
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
-                  {filter === 'all' ? '全部' : filter === 'planned_unimplemented' ? '计划未实施' : filter === 'pending' ? '待审核' : filter === 'scheduled' ? '已排期' : '已发布'}
+                  {filter === 'all' ? '全部' : filter === 'planned_unimplemented' ? '排期待制作' : filter === 'draft' ? '草稿' : filter === 'pending' ? '待审核' : filter === 'scheduled' ? '排期待发布' : filter === 'publishing' ? '发布中' : filter === 'failed' ? '发布失败' : '已发布'}
                 </button>
               ))}
             </div>
@@ -2329,7 +2343,7 @@ ${contentIdea || 'No details provided.'}`
                   return evDate.getDate() === d.getDate() &&
                          evDate.getMonth() === d.getMonth() &&
                          evDate.getFullYear() === d.getFullYear() &&
-                         (activeFilter === 'all' ? ['planned_unimplemented', 'scheduled', 'done'].includes(ev.status) : ev.status === activeFilter)
+                         (activeFilter === 'all' ? isCalendarGridStatus(ev.status) : ev.status === activeFilter)
                 })
 
                 return (
