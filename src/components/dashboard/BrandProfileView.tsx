@@ -640,6 +640,7 @@ function BrandProfileContent({
   onOpenSettings,
 }: Props & { brand: Brand }) {
   const brandId = brand.id
+  const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report`
 
   // Local Brand States (fetched on mount/change, used if props are not passed)
   const [localBrandTone, setLocalBrandTone] = useState('')
@@ -2115,14 +2116,15 @@ ${storeLines}
                   {planGenerating === 'research' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                   {report ? '重新生成' : '生成报告'}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowResearchReport(true)}
-                  disabled={!report || Boolean(planGenerating)}
-                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300"
+                <a
+                  href={report ? growthResearchReportHref : undefined}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-disabled={!report || Boolean(planGenerating)}
+                  className={`rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 ${!report || planGenerating ? 'pointer-events-none opacity-40' : ''}`}
                 >
                   查看
-                </button>
+                </a>
               </div>
             </div>
             {/* 品牌主张访谈 compact row */}
