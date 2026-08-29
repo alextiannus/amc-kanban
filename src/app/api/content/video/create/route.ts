@@ -16,6 +16,17 @@ const creatorTypes = new Set([
   'brand_refresh',
 ])
 
+const contentCreatorAliases = new Set([
+  ...creatorTypes,
+  'short_video',
+  'video',
+  'reel',
+  'reels',
+  'tiktok',
+  '短视频',
+  '视频',
+])
+
 async function getActor(request: Request) {
   const session = await getSession()
   const apiKey = extractApiKey(request)
@@ -37,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     const brandId = stringOrEmpty(body.brandId)
-    const creatorType = stringOrEmpty(body.creatorType)
+    const creatorType = normalizeCreatorType(body.creatorType)
     const theme = stringOrEmpty(body.theme || body.idea)
     const assetIds = stringArray(body.assetIds)
     const mediaUrls = stringArray(body.mediaUrls)
@@ -114,6 +125,12 @@ function statusFromError(err: any): number {
 
 function stringOrEmpty(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeCreatorType(value: unknown): string {
+  const text = stringOrEmpty(value)
+  if (!text) return ''
+  return contentCreatorAliases.has(text.toLowerCase()) ? 'product_showcase' : text
 }
 
 function optionalString(value: unknown): string | undefined {
