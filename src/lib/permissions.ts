@@ -130,6 +130,12 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
         { id: 'amc-content-roles',  view: 'managementOverview', label: 'AI 角色库', icon: 'Sparkles', href: '/admin/content-lab' },
       ],
     })
+    groups.push({
+      groupLabel: '知识增长中心',
+      items: [
+        { id: 'amc-growth', view: 'managementOverview', label: '知识库', icon: 'TrendingUp', href: '/api/integrations/amc-growth/sso/start?returnTo=%2Fdashboard%2Fknowledge' },
+      ],
+    })
   }
 
   // ── 2. 品牌主 (Brand-level ops — inline brand switcher as header) ─

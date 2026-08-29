@@ -55,6 +55,7 @@ const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
   'video-production',
   'viral-copy-scripts',
   'amc-content-roles',
+  'amc-growth',
 ])
 
 const MENU_TRANSLATIONS: Record<string, string> = {
