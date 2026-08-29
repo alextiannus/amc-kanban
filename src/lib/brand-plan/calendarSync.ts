@@ -13,6 +13,9 @@ export type CalendarCreativeItem = {
   status?: string
   materialRequirements?: string[]
   matchedTags?: string[]
+  aiTags?: string[]
+  aiCaption?: string
+  productionFormats?: Array<'post' | 'video'>
 }
 
 export type CalendarCreativeOption = {
@@ -28,6 +31,7 @@ export type CalendarCreativeOption = {
   suggestedFolder: string
   aiTags: string[]
   aiCaption: string
+  productionFormats?: Array<'post' | 'video'>
   draftId?: string | null
 }
 
@@ -92,6 +96,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
   const planning = text(item.planning)
   const materialRequirements = stringList(item.materialRequirements)
   const suggestedFolder = `${date}-${slugPart(title) || id.slice(0, 8)}`
+  const storedAiTags = stringList(item.aiTags)
   const aiTags = Array.from(new Set([
     '内容创意素材',
     calendarSyncMarker(id),
@@ -100,8 +105,9 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     contentType,
     product,
     ...stringList(item.matchedTags).slice(0, 6),
+    ...storedAiTags,
   ]))
-  const aiCaption = [
+  const aiCaption = text(item.aiCaption) || [
     `对应创意：${title}`,
     `计划日期：${date}`,
     `发布平台：${platformLabel(platformSlug, text(item.platform))}`,
@@ -124,6 +130,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     suggestedFolder: `创意素材/${suggestedFolder}`,
     aiTags,
     aiCaption,
+    productionFormats: item.productionFormats,
   }
 }
 

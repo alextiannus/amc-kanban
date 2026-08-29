@@ -825,8 +825,23 @@ async function saveWorkspacePatch(
 
   if (target === 'calendar_month') {
     const month = clampSchedulableCalendarMonth(normalizeMonth(body?.month))
+    const existingItems = current.publishingCalendar?.months?.[month] || []
+    const existingById = new Map<string, BrandPlanCalendarItem>()
+    existingItems.forEach((item) => {
+      const id = text(item.id)
+      if (id) existingById.set(id, item)
+    })
+    const incomingItems = arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
+    const mergedItems = incomingItems.map((item) => {
+      const existing = existingById.get(text(item.id))
+      return {
+        ...(existing || {}),
+        ...item,
+        status: text(item.status) || existing?.status || '已生成',
+      }
+    })
     const items = clampCalendarItemsToMinimumDate(
-      arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
+      mergedItems
     )
     const publishingCalendar = {
       generatedAt: new Date().toISOString(),
