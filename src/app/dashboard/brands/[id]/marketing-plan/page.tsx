@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, CalendarDays, Loader2, Megaphone, Save, Target, TrendingUp, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Copy, Loader2, Megaphone, Save, Share2, Target, TrendingUp, X } from 'lucide-react'
 import MobileLayout from '@/components/dashboard/MobileLayout'
 
 type PresentationTheme = {
@@ -156,6 +156,7 @@ function withSyncedQuarterlyFocus(plan: AnnualPlan): AnnualPlan {
 export default function BrandMarketingPlanPresentationPage() {
   const params = useParams<{ id: string }>()
   const brandId = params?.id
+  const brandStrategyShareUrl = brandId ? `https://amc-mm.immedi.ai/brand-strategy/${encodeURIComponent(brandId)}` : ''
   const [data, setData] = useState<BrandPlanResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -343,9 +344,31 @@ export default function BrandMarketingPlanPresentationPage() {
       <main style={cssVars} className="min-h-screen bg-[var(--brand-bg)] text-[var(--brand-text)]">
         <div className="border-b border-black/5 bg-white/80 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 py-4">
-            <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-              <ArrowLeft className="h-3.5 w-3.5" /> 返回工作台
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                <ArrowLeft className="h-3.5 w-3.5" /> 返回工作台
+              </Link>
+              {brandStrategyShareUrl ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard?.writeText(brandStrategyShareUrl)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                    title="复制客户分享链接"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> 复制分享链接
+                  </button>
+                  <a
+                    href={brandStrategyShareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                  >
+                    <Share2 className="h-3.5 w-3.5" /> 客户汇报页
+                  </a>
+                </>
+              ) : null}
+            </div>
             <div className="text-right">
               <p className="text-[10px] font-black uppercase tracking-widest text-[var(--brand-muted)]">Brand Marketing Plan</p>
               <p className="text-xs font-bold text-[var(--brand-primary)]">{theme.paletteName}</p>
