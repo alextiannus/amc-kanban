@@ -411,6 +411,7 @@ export async function runBrandPlanAction(input: {
       },
     }
     await syncCalendarMaterialRequirements(brand.id, month, monthItems)
+    await syncConfirmedCalendarItemsToDrafts(brand.id, month, monthItems)
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'CALENDAR',
@@ -450,6 +451,7 @@ export async function runBrandPlanAction(input: {
       },
     }
     await syncCalendarMaterialRequirements(brand.id, month, monthItems)
+    await syncConfirmedCalendarItemsToDrafts(brand.id, month, monthItems)
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'CALENDAR',
@@ -1310,7 +1312,7 @@ async function buildPublishingMonth(
         index,
       }),
       sampleHit: '',
-      status: '待确认',
+      status: '已生成',
       selectedCreativeCandidateId: text(candidate?.creativeCandidateId),
       creativeMechanism: calendarCreativeMechanism({ brand, product, promotionPoint, platformSlug: slot.platform.slug, candidate, index }),
       matchedTags: stringList(candidate?.matchedTags),

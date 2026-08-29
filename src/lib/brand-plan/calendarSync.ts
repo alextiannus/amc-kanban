@@ -32,6 +32,7 @@ export type CalendarCreativeOption = {
 }
 
 const SYNC_MARKER_PREFIX = 'brand-plan-calendar-item:'
+export const CALENDAR_PLAN_UNIMPLEMENTED_STATUS = 'planned_unimplemented'
 
 function text(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
@@ -150,7 +151,7 @@ async function ensurePlaceholderAccount(tx: Prisma.TransactionClient, brandId: s
 
 export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month: string, items: CalendarCreativeItem[]) {
   const confirmed = items
-    .filter((item) => text(item.status) === '已确认')
+    .filter((item) => !['已删除', '归档', 'archived', 'deleted'].includes(text(item.status).toLowerCase()))
     .map(calendarCreativeOption)
     .filter((item): item is CalendarCreativeOption => Boolean(item))
 
@@ -172,7 +173,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
         where: { brandId, agentNote: { contains: marker, mode: 'insensitive' } },
         select: { id: true, status: true },
       })
-      if (existing && !['publishing', 'published', 'done'].includes(existing.status)) {
+      if (existing && !['publishing', 'published', 'done', 'scheduled'].includes(existing.status)) {
         await tx.contentDraft.update({
           where: { id: existing.id },
           data: {
@@ -180,7 +181,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
             caption,
             captionLang: 'zh',
             scheduledAt: scheduledAtForDate(item.date),
-            status: existing.status === 'archived' ? 'draft' : existing.status,
+            status: CALENDAR_PLAN_UNIMPLEMENTED_STATUS,
             agentNote,
             creativeHooks: item.aiCaption,
             hashtags: item.aiTags.filter((tag) => !tag.includes(':')).slice(0, 12),
@@ -195,7 +196,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
             caption,
             captionLang: 'zh',
             scheduledAt: scheduledAtForDate(item.date),
-            status: 'draft',
+            status: CALENDAR_PLAN_UNIMPLEMENTED_STATUS,
             agentNote,
             creativeHooks: item.aiCaption,
             hashtags: item.aiTags.filter((tag) => !tag.includes(':')).slice(0, 12),

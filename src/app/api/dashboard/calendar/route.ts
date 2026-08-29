@@ -84,7 +84,7 @@ export async function GET(request: Request) {
   const drafts = await prisma.contentDraft.findMany({
     where: {
       brandId: { in: scopedBrandIds },
-      status: { in: ['scheduled', 'publishing', 'published'] },
+      status: { in: ['planned_unimplemented', 'scheduled', 'publishing', 'published'] },
       OR: [
         { scheduledAt: { gte: rangeStart, lt: rangeEnd } },
         { publishedAt: { gte: rangeStart, lt: rangeEnd } },
@@ -202,7 +202,9 @@ export async function GET(request: Request) {
     const platform = draft.account?.platformId || '全平台'
     const status = draft.status === 'published'
       ? 'done'
-      : 'scheduled'
+      : draft.status === 'planned_unimplemented'
+        ? 'planned_unimplemented'
+        : 'scheduled'
 
     const eventMediaUrls = Array.from(new Set([
       draft.coverAsset?.url,

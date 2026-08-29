@@ -45,6 +45,7 @@ import {
   Check,
   Maximize2,
   ExternalLink,
+  Download,
   Save,
   Trash2
 } from 'lucide-react'
@@ -118,7 +119,25 @@ function fromDateTimeLocal(value: string) {
 const STATUS_COLORS: Record<string, string> = {
   'done': 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/20',
   'pending': 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/20',
+  'planned_unimplemented': 'bg-rose-50 dark:bg-rose-900/10 text-rose-600 dark:text-rose-400 border-rose-100 dark:border-rose-900/20',
   'scheduled': 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-100 dark:border-indigo-900/20',
+}
+
+type CalendarEventStatus = 'done' | 'pending' | 'planned_unimplemented' | 'scheduled'
+
+function calendarStatusLabel(status: CalendarEventStatus, type?: 'post' | 'task') {
+  if (status === 'done') return type === 'task' ? '已完成' : '已发布'
+  if (status === 'pending') return '待审核'
+  if (status === 'planned_unimplemented') return '计划未实施'
+  return '已排期'
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 interface Comment {
@@ -138,7 +157,7 @@ interface GroupedEvent {
   platform: string
   title: string
   cleanTitle: string
-  status: 'done' | 'pending' | 'scheduled'
+  status: CalendarEventStatus
   time: string
   scheduledAt: string
   mediaUrls?: string[]
@@ -183,7 +202,9 @@ function groupEventsByTitle(events: CalendarEvent[]): GroupedEvent[] {
       group.status = 'done'
     } else if (ev.status === 'scheduled' && group.status !== 'done') {
       group.status = 'scheduled'
-    } else if (ev.status === 'pending' && group.status !== 'done' && group.status !== 'scheduled') {
+    } else if (ev.status === 'planned_unimplemented' && group.status !== 'done' && group.status !== 'scheduled') {
+      group.status = 'planned_unimplemented'
+    } else if (ev.status === 'pending' && group.status !== 'done' && group.status !== 'scheduled' && group.status !== 'planned_unimplemented') {
       group.status = 'pending'
     }
     if (ev.clicks) group.clicks = (group.clicks || 0) + ev.clicks
@@ -241,7 +262,7 @@ interface CalendarEvent {
   brandName: string
   platform: string
   title: string
-  status: 'done' | 'pending' | 'scheduled'
+  status: CalendarEventStatus
   time: string
   scheduledAt: string
   mediaUrls?: string[]
@@ -273,7 +294,7 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
   const [triggeringId, setTriggeringId] = useState<string | null>(null)
 
   // Stitch & Postis UX elements
-  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'scheduled' | 'done'>('all')
+  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'planned_unimplemented' | 'scheduled' | 'done'>('all')
   const [activeView, setActiveView] = useState<'month' | 'week' | 'day' | 'list'>('month')
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [isBrandsCollapsed, setIsBrandsCollapsed] = useState(true)
@@ -1202,6 +1223,96 @@ ${contentIdea || 'No details provided.'}`
     }
   }
 
+  const calendarCreativeIdFromEvent = (event: CalendarEvent) => {
+    return event.agentNote?.match(/brand-plan-calendar-item:([^\s]+)/)?.[1] || ''
+  }
+
+  const materialRequirementsFromEvent = (event: CalendarEvent) => {
+    const source = event.creativeHooks || event.agentNote || ''
+    const materialLine = source
+      .split(/\r?\n/)
+      .find((line) => line.startsWith('素材需求：') || line.startsWith('material:'))
+    const raw = materialLine
+      ? materialLine.replace(/^素材需求：/, '').replace(/^material:/, '')
+      : ''
+    return raw
+      .split(/[；;]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+  }
+
+  const handleDownloadMaterialRequirement = (event: CalendarEvent) => {
+    const requirements = materialRequirementsFromEvent(event)
+    const fallback = event.creativeHooks || event.agentNote || event.title
+    const html = `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(event.title)} - 素材需求</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #111827; line-height: 1.55; }
+    header { border-bottom: 2px solid #111827; margin-bottom: 20px; padding-bottom: 12px; }
+    h1 { font-size: 24px; margin: 0 0 6px; }
+    .meta { color: #475569; font-size: 13px; }
+    section { break-inside: avoid; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; }
+    p { margin: 6px 0; white-space: pre-wrap; }
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 6px 0; white-space: pre-wrap; }
+    @media print { body { margin: 18mm; } section { page-break-inside: avoid; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>${escapeHtml(event.title || '内容创意')}</h1>
+    <div class="meta">${escapeHtml(new Date(event.scheduledAt).toLocaleDateString('zh-CN'))} · ${escapeHtml(event.platform)} · ${escapeHtml(event.brandName)}</div>
+  </header>
+  <section>
+    ${requirements.length
+      ? `<p><strong>素材需求：</strong></p><ul>${requirements.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}</ul>`
+      : `<p>${escapeHtml(fallback || '请按创意说明采集可用于发布的图片或视频素材。')}</p>`}
+  </section>
+</body>
+</html>`
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const date = event.scheduledAt.slice(0, 10)
+    link.href = url
+    link.download = `${date}-${event.title || event.id}-素材需求.html`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleRegenerateCalendarCreative = async (event: CalendarEvent) => {
+    const itemId = calendarCreativeIdFromEvent(event)
+    if (!itemId) {
+      alert('未找到对应的内容日历创意')
+      return
+    }
+    setTriggeringId(event.id)
+    try {
+      const month = event.scheduledAt.slice(0, 7)
+      const res = await fetch(`/api/brands/${event.brandId}/brand-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'regenerate_calendar_item',
+          month,
+          itemId,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '重新生成创意失败')
+      await refreshCalendar()
+    } catch (error: any) {
+      alert(error?.message || '重新生成创意失败')
+    } finally {
+      setTriggeringId(null)
+    }
+  }
+
   const handleAIWrite = async (eventBrandId: string, draftId: string) => {
     const targetBrandId = eventBrandId || activeBrandId
     if (!targetBrandId) {
@@ -1424,8 +1535,8 @@ ${contentIdea || 'No details provided.'}`
   // Derived state memoizations
   const filteredEvents = useMemo(() => {
     return events.filter(ev => {
-      // Calendar grid only shows published (done) and scheduled events
-      const isVisible = ev.status === 'done' || ev.status === 'scheduled'
+      // Calendar grid shows generated plans, scheduled posts and published posts.
+      const isVisible = ev.status === 'done' || ev.status === 'scheduled' || ev.status === 'planned_unimplemented'
       if (activeFilter === 'all') return isVisible
       if (activeFilter === 'done') return ev.status === 'done' && ev.type !== 'task'
       return ev.status === activeFilter
@@ -1713,6 +1824,7 @@ ${contentIdea || 'No details provided.'}`
   const stats = {
     done: visibleEvents.filter(e => e.status === 'done' && e.type !== 'task').length,
     scheduled: visibleEvents.filter(e => e.status === 'scheduled').length,
+    planned: visibleEvents.filter(e => e.status === 'planned_unimplemented').length,
     pending: visibleEvents.filter(e => e.status === 'pending').length,
     total: visibleEvents.length
   }
@@ -2064,7 +2176,7 @@ ${contentIdea || 'No details provided.'}`
 
           <div className="flex items-center gap-4">
             <div className="flex bg-slate-100/80 dark:bg-slate-800/80 p-1 rounded-xl">
-              {(['all', 'pending', 'scheduled', 'done'] as const).map((filter) => (
+              {(['all', 'planned_unimplemented', 'pending', 'scheduled', 'done'] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => { setActiveFilter(filter); setSelectedEventId(null) }}
@@ -2074,7 +2186,7 @@ ${contentIdea || 'No details provided.'}`
                       : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                   }`}
                 >
-                  {filter === 'all' ? '全部' : filter === 'pending' ? '待审核' : filter === 'scheduled' ? '已排期' : '已发布'}
+                  {filter === 'all' ? '全部' : filter === 'planned_unimplemented' ? '计划未实施' : filter === 'pending' ? '待审核' : filter === 'scheduled' ? '已排期' : '已发布'}
                 </button>
               ))}
             </div>
@@ -2217,7 +2329,7 @@ ${contentIdea || 'No details provided.'}`
                   return evDate.getDate() === d.getDate() &&
                          evDate.getMonth() === d.getMonth() &&
                          evDate.getFullYear() === d.getFullYear() &&
-                         (activeFilter === 'all' ? ['scheduled', 'done'].includes(ev.status) : ev.status === activeFilter)
+                         (activeFilter === 'all' ? ['planned_unimplemented', 'scheduled', 'done'].includes(ev.status) : ev.status === activeFilter)
                 })
 
                 return (
@@ -2365,6 +2477,7 @@ ${contentIdea || 'No details provided.'}`
                     {selectedDayEvents.map((ev) => {
                       const normPlatform = normalizePlatformLabel(ev.platform)
                       const isExpired = expiredAccounts.some((acc: any) => acc.platformId === ev.platform)
+                      const isCalendarCreative = Boolean(calendarCreativeIdFromEvent(ev))
                       return (
                         <div 
                           key={ev.id}
@@ -2408,8 +2521,35 @@ ${contentIdea || 'No details provided.'}`
                                     </a>
                                   )}
                                   <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
-                                    {ev.status === 'done' ? (ev.type === 'task' ? '已完成' : '已发布') : ev.status === 'pending' ? '待审核' : '已排期'}
+                                    {calendarStatusLabel(ev.status, ev.type)}
                                   </span>
+                                  {isCalendarCreative && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDownloadMaterialRequirement(ev)
+                                        }}
+                                        className="w-6 h-6 inline-flex items-center justify-center rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100"
+                                        title="下载素材需求"
+                                      >
+                                        <Download className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleRegenerateCalendarCreative(ev)
+                                        }}
+                                        disabled={triggeringId === ev.id}
+                                        className="w-6 h-6 inline-flex items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 disabled:opacity-50"
+                                        title="重新生成创意"
+                                      >
+                                        <RefreshCw className={`w-3 h-3 ${triggeringId === ev.id ? 'animate-spin' : ''}`} />
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                               <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-relaxed">
@@ -2455,6 +2595,7 @@ ${contentIdea || 'No details provided.'}`
                       const normPlatform = normalizePlatformLabel(ev.platform)
                       const evDate = new Date(ev.scheduledAt)
                       const isSelected = selectedEventId === ev.id
+                      const isCalendarCreative = Boolean(calendarCreativeIdFromEvent(ev))
                       return (
                         <div
                           key={ev.id}
@@ -2501,8 +2642,35 @@ ${contentIdea || 'No details provided.'}`
                               </a>
                             )}
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border ${STATUS_COLORS[ev.status]}`}>
-                              {ev.status === 'done' ? (ev.type === 'task' ? '已完成' : '已发布') : ev.status === 'pending' ? '待审核' : '已排期'}
+                              {calendarStatusLabel(ev.status, ev.type)}
                             </span>
+                            {isCalendarCreative && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDownloadMaterialRequirement(ev)
+                                  }}
+                                  className="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-slate-50 text-slate-600 border border-slate-200 hover:bg-slate-100"
+                                  title="下载素材需求"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleRegenerateCalendarCreative(ev)
+                                  }}
+                                  disabled={triggeringId === ev.id}
+                                  className="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 disabled:opacity-50"
+                                  title="重新生成创意"
+                                >
+                                  <RefreshCw className={`w-3.5 h-3.5 ${triggeringId === ev.id ? 'animate-spin' : ''}`} />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
                       )

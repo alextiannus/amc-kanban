@@ -64,6 +64,7 @@ const DRAFT_SELECT = {
 
 const DRAFT_STATUSES = new Set([
   'draft',
+  'planned_unimplemented',
   'pending_review',
   'approved',
   'scheduled',
