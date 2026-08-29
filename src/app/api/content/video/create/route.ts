@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { createRemoteVideoPlan } from '@/lib/amc-content/remoteContentService'
+import { submitVideoGeneration } from '@/lib/videoProduction'
 
 export const maxDuration = 120
 
@@ -102,8 +103,21 @@ export async function POST(request: Request) {
 
     let execution: unknown = undefined
     if (executionMode === 'submit') {
-      const remoteResult = result as { result?: any; execution?: any; remote?: { result?: any; execution?: any } }
-      execution = remoteResult.execution || remoteResult.remote?.execution
+      if (suppliedPlan) {
+        execution = await submitVideoGeneration({
+          brandId,
+          actorId: actor.id,
+          creatorType,
+          platform: optionalString(body.platform) || 'tiktok',
+          plan: suppliedPlan as any,
+          seedanceJobs: Array.isArray(body.seedanceJobs) ? body.seedanceJobs : Array.isArray((suppliedPlan as any).seedanceJobs) ? (suppliedPlan as any).seedanceJobs : undefined,
+          assetIds,
+          imageUrls: mediaUrls,
+        })
+      } else {
+        const remoteResult = result as { result?: any; execution?: any; remote?: { result?: any; execution?: any } }
+        execution = remoteResult.execution || remoteResult.remote?.execution
+      }
       if (!execution) return NextResponse.json({ error: 'AMC-Content did not execute the approved video plan' }, { status: 502 })
     }
 
