@@ -25,6 +25,8 @@ const DEFAULT_TAXES = 'Singapore GST 9% - IMD'
  * Admins can override via SystemConfig.immediErpItemCodeMap (JSON).
  */
 const DEFAULT_ITEM_CODE_MAP: Record<string, string> = {
+  // Generic BD lead product interest
+  bd_lead:           'AMC-STARTER',
   // Subscription plans
   starter:           'AMC-STARTER',
   essential:         'AMC-ESSENTIAL',
@@ -120,6 +122,25 @@ export interface ErpTaskResult {
   status?:      number
 }
 
+export interface CreateLeadParams {
+  item_code:     string
+  lead_name:     string
+  company_name:  string
+  mobile_no?:    string | null
+  email_id?:     string | null
+  source?:       string
+  remarks?:      string
+  business_unit?: string
+}
+
+export interface ErpLeadResult {
+  ok:             boolean
+  erpLeadName?:   string
+  alreadyExists?: boolean
+  error?:         string
+  status?:        number
+}
+
 // ── HTTP helpers ───────────────────────────────────────────────────────────
 
 interface FetchOptions {
@@ -173,6 +194,65 @@ async function erpPost<T>(
     }
   }
   throw new Error('[immediErp] Exhausted retries')
+}
+
+// ── Lead ──────────────────────────────────────────────────────────────────
+
+export async function createErpLead(
+  cfg: ImmediErpConfig,
+  params: CreateLeadParams
+): Promise<ErpLeadResult> {
+  try {
+    const { status, data } = await erpPost<Record<string, unknown>>({
+      baseUrl: cfg.baseUrl,
+      apiKey: cfg.apiKey,
+      path: '/leads',
+      body: {
+        item_code: params.item_code,
+        lead_name: params.lead_name,
+        company_name: params.company_name,
+        ...(params.mobile_no ? { mobile_no: params.mobile_no } : {}),
+        ...(params.email_id ? { email_id: params.email_id } : {}),
+        source: params.source || 'AMC-MM BD',
+        ...(params.remarks ? { remarks: params.remarks } : {}),
+        business_unit: params.business_unit || DEFAULT_BUSINESS_UNIT,
+      },
+    })
+
+    const result = data?.result as Record<string, unknown> | undefined
+    const lead = result?.lead as Record<string, unknown> | undefined
+    const erpLeadName = lead?.name as string | undefined
+    if ((status === 200 || status === 201) && erpLeadName) {
+      return { ok: true, erpLeadName }
+    }
+
+    // The ERP duplicate guard includes the existing Lead ID in its safe 409
+    // message. This recovers a retry when the first response was lost.
+    if (status === 409) {
+      const message = String(data?.error || '')
+      const existingName = message.match(/created recently:\s*([^\s]+)/i)?.[1]
+      if (existingName) {
+        return { ok: true, erpLeadName: existingName, alreadyExists: true }
+      }
+    }
+
+    return { ok: false, error: safeErpError(data), status }
+  } catch (err) {
+    return { ok: false, error: safeErpError(err) }
+  }
+}
+
+function safeErpError(value: unknown): string {
+  let message: string
+  if (value && typeof value === 'object' && 'error' in value) {
+    message = String((value as { error?: unknown }).error || 'ERP request failed')
+  } else {
+    message = String(value instanceof Error ? value.message : value || 'ERP request failed')
+  }
+  return message
+    .replace(/Bearer\s+[^\s,;]+/gi, 'Bearer [REDACTED]')
+    .replace(/imx_[A-Za-z0-9_-]+/g, 'imx_[REDACTED]')
+    .slice(0, 500)
 }
 
 // ── Sales Order ────────────────────────────────────────────────────────────
