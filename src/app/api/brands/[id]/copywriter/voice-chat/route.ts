@@ -43,6 +43,17 @@ function polishVoiceReply(reply: string, isEnglish: boolean): string {
   return text
 }
 
+function extractActionMarker(reply: string): { cleanReply: string; action: string; params?: Record<string, any> } {
+  const actionMatch = reply.match(/<<ACTION:([A-Z_]+)(?::([^>]*))?>>\s*$/)
+  if (!actionMatch) return { cleanReply: reply, action: 'NONE' }
+  const param = actionMatch[2]?.trim()
+  return {
+    cleanReply: reply.replace(actionMatch[0], '').trim(),
+    action: actionMatch[1],
+    params: param ? { topic: param, query: param } : undefined,
+  }
+}
+
 /**
  * Synthesise speech server-side via MiniMax TTS (LLMConfig[tts]) and return
  * the audio as a base64 string so the caller can play it directly without a
@@ -394,7 +405,7 @@ export async function POST(request: Request, { params }: Params) {
           ? (isEnglish ? `Pending draft IDs for approval: ${context.pendingDraftIds.join(', ')}` : `待审批草稿 IDs: ${context.pendingDraftIds.join(', ')}`)
           : ''
         const companionContext = typeof context.companion?.promptContext === 'string'
-          ? context.companion.promptContext.slice(0, 2400)
+          ? context.companion.promptContext.slice(0, 5200)
           : ''
 
         const skillsPrompts = brand.companionSkills?.map((s: any) => `[Skill: ${s.displayName}]\n${s.systemPrompt}`).join('\n\n') || ''
@@ -440,6 +451,13 @@ export async function POST(request: Request, { params }: Params) {
           `  3. Reply with the final payment status and instructions; do not repeat the quoting process.`,
           `\n=== Media Upload Trigger Rules ===`,
           `- When the user expresses a request to upload photos, post videos, upload files, open the album, or select assets, you must append <<ACTION:TRIGGER_UPLOAD>> at the end of your response. For example: "Sure! I've opened the album for you. Please select the assets you'd like to upload. <<ACTION:TRIGGER_UPLOAD>>"`,
+          `- When the user explicitly asks to review plans, calendar items, schedules, or drafts, append <<ACTION:QUERY_CALENDAR>>.`,
+          `- When the user explicitly asks for the asset library, append <<ACTION:OPEN_ASSETS>>.`,
+          `- When the user explicitly asks for reports, monthly reviews, or performance reports, append <<ACTION:OPEN_REPORTS>>.`,
+          `- When the user explicitly asks for social insights or account performance, append <<ACTION:OPEN_SOCIAL_INSIGHT>>.`,
+          `- When the user explicitly asks for add-ons, plugins, or more available services, append <<ACTION:OPEN_ADDONS>>.`,
+          `- When the user explicitly asks for brand story, positioning, profile, or AI voice settings, append <<ACTION:OPEN_BRAND_STORY>>.`,
+          `- When the user explicitly asks to connect or bind social accounts, append <<ACTION:OPEN_ACCOUNT_BINDING>>.`,
         ].filter(Boolean).join('\n') : [
           `你是品牌"${brand.name}"身边的运营搭档，用中文自然沟通；只有必要的专业词才用英文。`,
           `品牌简介：${brand.description ?? '优质餐厅品牌'}`,
@@ -466,6 +484,13 @@ export async function POST(request: Request, { params }: Params) {
           `  3. 将最终的支付状态和指引回复给用户，不用重复做前面的报价流程。`,
           `\n=== 媒体素材上传规范 ===`,
           `- 当用户表达需要上传照片、发视频、传图、打开相册、选择素材等指令时，你必须在回答末尾附带 <<ACTION:TRIGGER_UPLOAD>>，例如："好的，已为您打开相册，请选择您要上传的素材。<<ACTION:TRIGGER_UPLOAD>>"`,
+          `- 当用户明确要看计划审批、发布日历、排期或草稿时，回复末尾附带 <<ACTION:QUERY_CALENDAR>>。`,
+          `- 当用户明确要看素材库时，回复末尾附带 <<ACTION:OPEN_ASSETS>>。`,
+          `- 当用户明确要看报表、月报或经营回顾时，回复末尾附带 <<ACTION:OPEN_REPORTS>>。`,
+          `- 当用户明确要看社媒洞察、平台表现或账号数据时，回复末尾附带 <<ACTION:OPEN_SOCIAL_INSIGHT>>。`,
+          `- 当用户明确要看加购、插件或更多可用服务时，回复末尾附带 <<ACTION:OPEN_ADDONS>>。`,
+          `- 当用户明确要看品牌故事、品牌定位、品牌资料或语音设置时，回复末尾附带 <<ACTION:OPEN_BRAND_STORY>>。`,
+          `- 当用户明确要绑定或连接社媒账号时，回复末尾附带 <<ACTION:OPEN_ACCOUNT_BINDING>>。`,
         ].filter(Boolean).join('\n')
 
         // Inject the user message (detect GENERATE_AND_PUBLISH intent first for compatibility)
@@ -552,10 +577,12 @@ export async function POST(request: Request, { params }: Params) {
         )
 
         console.log(`[voice-chat] callGeminiChat done in ${Date.now() - tGemini}ms, reply length=${result.reply?.length ?? 0}`)
-        const finalReply = polishVoiceReply(
+        const polishedReply = polishVoiceReply(
           result.reply || (isEnglish ? "Sorry, I ran into some issues processing that. Could you please say it again?" : '抱歉，我处理时遇到了些问题，请再说一遍。'),
           isEnglish,
         )
+        const markerAction = extractActionMarker(polishedReply)
+        const finalReply = markerAction.cleanReply
 
         // 合并 TTS：如果客户端提供了 voiceId，就在服务端就地合成音频并随返回结果一起发回。
         // 这样可以减少一次浏览器↔服务器的往返，把总延迟降低 300-500ms。
@@ -574,8 +601,8 @@ export async function POST(request: Request, { params }: Params) {
         safeEnqueue(controller, encoder.encode(JSON.stringify({
           type: 'done',
           reply: finalReply,
-          action: result.action || 'NONE',
-          params: result.params || {},
+          action: result.action && result.action !== 'NONE' ? result.action : markerAction.action,
+          params: result.action && result.action !== 'NONE' ? (result.params || {}) : (markerAction.params || {}),
           ...(audiob64 ? { audiob64 } : {}),
         }) + '\n'))
         controller.close()
