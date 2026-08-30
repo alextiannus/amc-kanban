@@ -18,6 +18,7 @@ import type {
 import { brandPlanEditorIdentityValues } from '@/lib/brandPlanEditorIdentity'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import { calendarCreativeErrorMessage } from '@/lib/brand-plan/errorMessages'
+import { growthReportSsoHref } from '@/lib/growthReportViewer'
 import {
   createSkuId,
   formatSkuPrice,
@@ -537,33 +538,6 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'calendar_creative_review_rejected') return '内容创意审核认为部分灵感不适合直接使用，请补充素材或重新生成。'
   if (code === 'calendar_creative_candidate_missing') return '没有找到可用的内容创意候选，请先补充或重新同步 amc-content。'
   return code || '操作失败，请重试'
-}
-
-function growthReportViewerHref(
-  report: { viewerUrl?: string; reportVersionId?: string },
-  fallbackHref: string
-) {
-  const savedViewerUrl = report.viewerUrl?.trim()
-  const versionPath = report.reportVersionId
-    ? `/dashboard/reports/versions/${encodeURIComponent(report.reportVersionId)}`
-    : ''
-  let returnTo = ''
-
-  for (const candidate of [savedViewerUrl, versionPath]) {
-    if (!candidate) continue
-    try {
-      const parsed = new URL(candidate, 'https://amc-growth.invalid')
-      if (!/^\/dashboard\/reports\/versions\/\d+$/.test(parsed.pathname)) continue
-      parsed.searchParams.set('view', 'standalone')
-      returnTo = `${parsed.pathname}${parsed.search}${parsed.hash}`
-      break
-    } catch {
-      continue
-    }
-  }
-  if (!returnTo) return fallbackHref
-  const params = new URLSearchParams({ returnTo, fallback: fallbackHref })
-  return `/api/integrations/amc-growth/sso/start?${params.toString()}`
 }
 
 function statusDotClass(status: 'ready' | 'warning' | 'pending') {
@@ -2185,7 +2159,7 @@ ${storeLines}
                   {report ? '重新生成' : '生成报告'}
                 </button>
                 <a
-                  href={report ? growthReportViewerHref(report, growthResearchReportHref) : undefined}
+                  href={report ? growthReportSsoHref(report, growthResearchReportHref) : undefined}
                   target="_blank"
                   rel="noreferrer"
                   aria-disabled={!report || Boolean(planGenerating)}

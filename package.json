@@ -65,6 +65,7 @@
     "test:brand-plan-calendar-clear": "node --experimental-strip-types scripts/test-brand-plan-calendar-clear.mts",
     "test:brand-plan-error-message": "node --experimental-strip-types scripts/test-brand-plan-error-message.mts",
     "test:growth-google-sync": "node --experimental-strip-types scripts/test-growth-google-sync.mts",
+    "test:growth-report-viewer": "node --experimental-strip-types scripts/test-growth-report-viewer.mts",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
     "test:game-permanent-qr": "node --experimental-strip-types scripts/test-game-permanent-qr.mts",

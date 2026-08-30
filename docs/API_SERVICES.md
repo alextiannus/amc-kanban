@@ -798,4 +798,4 @@ Permanent QR contract:
 - 只接受已登录的人类 Auth V2 Session，允许角色为 `ADMIN`、`AMC_PRINCIPAL`。
 - 接口签发 60 秒、`aud=amc-growth`、带唯一 `jti` 的一次性票据并跳转 Growth callback。
 - `AMC_GROWTH_SSO_SECRET` 必须与 Growth 服务一致；响应和日志不得回显该 Secret。
-- 报告沉浸阅读使用 `returnTo=/dashboard/reports/versions/:id?view=standalone`，只保留 PDF/Markdown 下载和报告内容。`fallback` 仅允许 Kanban 品牌 `research-report` 页面；无 Growth 角色时安全回退，不签发票据。
+- 报告沉浸阅读使用 `returnTo=/dashboard/reports/versions/:id?view=standalone`，只保留 PDF/Markdown 下载和报告内容。`ADMIN`、`AMC_PRINCIPAL` 直接访问已有合法 Growth 版本 ID 的 Kanban `/dashboard/brands/:id/research-report` 时也重定向到该 SSO 入口；`fallback` 仅允许同一 Kanban 报告页。品牌用户、API Key 请求或无版本 ID 的历史报告继续本地渲染，不签发票据。

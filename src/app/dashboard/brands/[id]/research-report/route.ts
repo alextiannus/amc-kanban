@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getBrandPlan } from '@/lib/brand-plan/service'
+import { canUseGrowthStandaloneReport, growthReportSsoHref } from '@/lib/growthReportViewer'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 
 type Params = { params: Promise<{ id: string }> }
@@ -166,6 +167,13 @@ export async function GET(request: Request, { params }: Params) {
       }),
       { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     )
+  }
+
+  const requestUrl = new URL(request.url)
+  const localReportPath = requestUrl.pathname
+  const growthReportHref = growthReportSsoHref(report, localReportPath)
+  if (canUseGrowthStandaloneReport(auth.principal) && growthReportHref !== localReportPath) {
+    return NextResponse.redirect(new URL(growthReportHref, requestUrl.origin))
   }
 
   return new NextResponse(
