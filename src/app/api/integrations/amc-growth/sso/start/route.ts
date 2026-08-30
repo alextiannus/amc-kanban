@@ -27,6 +27,8 @@ export async function GET(request: Request) {
 
   const roles = principal.globalRoles.filter((role) => ALLOWED_ROLES.has(role))
   if (roles.length === 0) {
+    const fallback = safeKanbanReportFallback(requestUrl.searchParams.get('fallback'))
+    if (fallback) return NextResponse.redirect(new URL(fallback, publicKanbanOrigin(request)))
     return NextResponse.redirect(new URL('/dashboard/access-denied?reason=role', growthUrl))
   }
 
@@ -104,5 +106,17 @@ function safeGrowthReturnTo(raw: string | null, growthUrl: string) {
     return `${url.pathname}${url.search}${url.hash}`
   } catch {
     return '/dashboard'
+  }
+}
+
+function safeKanbanReportFallback(raw: string | null) {
+  if (!raw) return ''
+  try {
+    const url = new URL(raw, 'https://amc-kanban.invalid')
+    const isReportPath = /^\/dashboard\/brands\/[^/]+\/research-report$/.test(url.pathname)
+    if (url.origin !== 'https://amc-kanban.invalid' || !isReportPath) return ''
+    return `${url.pathname}${url.search}${url.hash}`
+  } catch {
+    return ''
   }
 }

@@ -539,6 +539,33 @@ function brandPlanErrorMessage(error: unknown) {
   return code || '操作失败，请重试'
 }
 
+function growthReportViewerHref(
+  report: { viewerUrl?: string; reportVersionId?: string },
+  fallbackHref: string
+) {
+  const savedViewerUrl = report.viewerUrl?.trim()
+  const versionPath = report.reportVersionId
+    ? `/dashboard/reports/versions/${encodeURIComponent(report.reportVersionId)}`
+    : ''
+  let returnTo = ''
+
+  for (const candidate of [savedViewerUrl, versionPath]) {
+    if (!candidate) continue
+    try {
+      const parsed = new URL(candidate, 'https://amc-growth.invalid')
+      if (!/^\/dashboard\/reports\/versions\/\d+$/.test(parsed.pathname)) continue
+      parsed.searchParams.set('view', 'standalone')
+      returnTo = `${parsed.pathname}${parsed.search}${parsed.hash}`
+      break
+    } catch {
+      continue
+    }
+  }
+  if (!returnTo) return fallbackHref
+  const params = new URLSearchParams({ returnTo, fallback: fallbackHref })
+  return `/api/integrations/amc-growth/sso/start?${params.toString()}`
+}
+
 function statusDotClass(status: 'ready' | 'warning' | 'pending') {
   if (status === 'ready') return 'bg-emerald-500 shadow-emerald-500/30'
   if (status === 'warning') return 'bg-amber-400 shadow-amber-400/30'
@@ -2158,10 +2185,11 @@ ${storeLines}
                   {report ? '重新生成' : '生成报告'}
                 </button>
                 <a
-                  href={report ? growthResearchReportHref : undefined}
+                  href={report ? growthReportViewerHref(report, growthResearchReportHref) : undefined}
                   target="_blank"
                   rel="noreferrer"
                   aria-disabled={!report || Boolean(planGenerating)}
+                  title={report?.viewerUrl || report?.reportVersionId ? '通过 Growth SSO 查看最新原报告' : '查看 Kanban 报告预览'}
                   className={`rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 ${!report || planGenerating ? 'pointer-events-none opacity-40' : ''}`}
                 >
                   查看

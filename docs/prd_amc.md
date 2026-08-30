@@ -1794,5 +1794,6 @@ Admin → AI 模型配置 页面：
 - Kanban 调用 V3 时发送已确认品牌/门店资料、固定社媒账号与明确排除平台、菜单商品、去除顾客姓名的最新评论样本、素材元数据盘点、有效订阅与能力 ID、已确认竞品。Growth 继续负责公开来源采集和证据判断；来源冲突必须并列显示，缺失或过期数据必须标记待确认或本次未取得。
 - V3 的完整增长建议不受套餐限制；“当前计划内可执行”只允许使用 Kanban 根据计划和附加服务确定后传入的能力 ID，其余建议进入升级讨论。没有有效订阅时统一显示“订阅计划待确认”。报告生成不得自动创建任务、排期、ContentDraft 或发布文案。
 - 品牌用户通过 Kanban 权限查看并下载 V3 Markdown、PDF 和 JSON；不得因此获得 Growth Dashboard 权限。`ADMIN`、`AMC_PRINCIPAL` 仍可通过现有 SSO 深链进入 Growth 原报告版本。重新生成必须创建不可变的新版本并保留旧版本。
+- Kanban 的最新报告“查看”对 `ADMIN`、`AMC_PRINCIPAL` 使用 Growth SSO 深链 `/dashboard/reports/versions/:id?view=standalone`。该模式继续校验 Growth Session，但不渲染后台左侧导航、账户退出、返回报告库、分享和删除，只显示封面、目录、正文以及 PDF/Markdown 下载。普通 Growth 报告链接与后台管理界面保持不变；无 Growth 角色的品牌用户仍回退 Kanban 本地报告页，不得借沉浸展示模式绕过授权。
 - `/api/internal/llm-generate` 只对持有内部服务令牌的调用方接受可选生成策略，包括 JSON 输出、温度、总截止时间、分次超时和最大尝试次数；调用取消必须向 Provider 传播。Provider、模型、尝试次数和耗时只进入内部响应与审计，不通过公开评估 API 暴露。
 - 公开 intake 路径、响应格式、60 天去重、配额与 TikHub 两阶段任务保持不变；现有 Bearer Token API 保持兼容。
