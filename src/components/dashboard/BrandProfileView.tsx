@@ -126,6 +126,7 @@ type BrandPlanWorkspaceData = {
   }
   annualPlan?: {
     generatedAt: string
+    planningStartMonth?: string
     goal: string
     theme: string
     strategyPrinciples?: string[]
@@ -731,11 +732,13 @@ function BrandProfileContent({
   const [editingAiJson, setEditingAiJson] = useState('')
   const [planGenerating, setPlanGenerating] = useState<'research' | 'interview' | 'annual' | 'quarter' | 'calendar' | string | null>(null)
   const [annualGenerationStep, setAnnualGenerationStep] = useState('')
+  const [planningStartMonth, setPlanningStartMonth] = useState(() => firstCompleteNaturalMonthValue())
   const [calendarGenerationProgress, setCalendarGenerationProgress] = useState('')
   const [calendarMonth, setCalendarMonth] = useState(() => {
     return firstCompleteNaturalMonthValue()
   })
   const [calendarPlatformFilter, setCalendarPlatformFilter] = useState('all')
+  const planningStartMonthInitializedRef = useRef('')
   const calendarMonthInitializedRef = useRef('')
 
   useEffect(() => {
@@ -806,7 +809,14 @@ function BrandProfileContent({
       if (!res.ok) return
       const data = await res.json()
       const marketingSolution = data.marketingSolution || data.brandPlan
-      setBrandPlanData(marketingSolution && typeof marketingSolution === 'object' && !Array.isArray(marketingSolution) ? marketingSolution : {})
+      const workspace = marketingSolution && typeof marketingSolution === 'object' && !Array.isArray(marketingSolution)
+        ? marketingSolution as BrandPlanWorkspaceData
+        : {}
+      setBrandPlanData(workspace)
+      if (workspace.annualPlan?.planningStartMonth) {
+        setPlanningStartMonth(workspace.annualPlan.planningStartMonth)
+        planningStartMonthInitializedRef.current = brandId
+      }
       setMerchantInterview(data.merchantInterview || null)
       setMerchantInterviewRequired(data.merchantInterviewRequired !== false)
     } catch (error) {
@@ -884,6 +894,10 @@ function BrandProfileContent({
         if (dataSub.contract_start && calendarMonthInitializedRef.current !== brandId) {
           setCalendarMonth(firstCompleteNaturalMonthValue(dataSub.contract_start))
           calendarMonthInitializedRef.current = brandId
+        }
+        if (dataSub.contract_start && planningStartMonthInitializedRef.current !== brandId) {
+          setPlanningStartMonth(firstCompleteNaturalMonthValue(dataSub.contract_start))
+          planningStartMonthInitializedRef.current = brandId
         }
         setStoreEntitlements({
           storeLimit: typeof dataSub.store_limit === 'number' ? Math.max(1, dataSub.store_limit) : 1,
@@ -1349,13 +1363,14 @@ ${storeLines}
   const handleGenerateAnnualPlan = async () => {
     setPlanGenerating('annual')
     setAnnualGenerationStep('正在生成整体策略')
+    const generationBody = { planningStartMonth }
     try {
-      const strategyResult = await runBrandPlanAction('generate_annual_strategy', '整体策略已生成')
+      const strategyResult = await runBrandPlanAction('generate_annual_strategy', '整体策略已生成', generationBody)
       if (!strategyResult) return
       await loadBrandPlanWorkspace()
       for (let index = 0; index < 4; index += 1) {
         setAnnualGenerationStep(`正在生成第 ${index + 1} 个季度计划`)
-        const result = await runBrandPlanAction('generate_next_quarter_plan', `第 ${index + 1} 个季度计划已生成`)
+        const result = await runBrandPlanAction('generate_next_quarter_plan', `第 ${index + 1} 个季度计划已生成`, generationBody)
         if (!result) return
         await loadBrandPlanWorkspace()
       }
@@ -2214,8 +2229,19 @@ ${storeLines}
                 <h3 className="text-lg font-black text-slate-900 dark:text-white">营销计划</h3>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+                  <span className="whitespace-nowrap">开始月份</span>
+                  <input
+                    type="month"
+                    value={planningStartMonth}
+                    onChange={(event) => setPlanningStartMonth(event.target.value)}
+                    disabled={Boolean(planGenerating)}
+                    className="w-[118px] bg-transparent text-xs font-black text-slate-900 outline-none disabled:opacity-60 dark:text-white"
+                  />
+                </label>
                 <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
                   {annualPlan?.generatedAt ? `生成时间：${new Date(annualPlan.generatedAt).toLocaleString()}` : '尚未生成'}
+                  {annualPlan?.planningStartMonth ? ` · 起始：${annualPlan.planningStartMonth}` : ''}
                 </span>
                 <button type="button" onClick={handleGenerateAnnualPlan} disabled={Boolean(planGenerating)} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-xs font-bold text-white disabled:opacity-60">
                   {planGenerating === 'annual' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Goal className="h-3.5 w-3.5" />} {planGenerating === 'annual' && annualGenerationStep ? annualGenerationStep : annualPlan ? '重新生成计划' : '生成营销计划'}

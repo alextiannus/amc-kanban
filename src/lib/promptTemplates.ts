@@ -26,7 +26,7 @@ export const DEFAULT_PROMPT_TEMPLATES = [
       '核心目标：让顾客找得到、看得懂、愿意来。策略要能落到收藏、询问、路线、预约、到店或下单。',
       '必须受 subscriptionStrategy 的平台、频次和服务范围约束。超出范围只能写成未来升级讨论，不写进当前交付。',
       '平台分工：Google Business 负责搜索可见和到店信息；Instagram 负责视觉和场景；TikTok 负责短视频发现；Facebook 负责社区和老客触达；小红书负责中文用户搜索种草和收藏决策。',
-      '如果有 planningWindow.quarters，必须按该顺序和月份规划未来四个有效周期，不要补自然年的无效季度。',
+      '如果有 planningWindow.selectedStartMonth 和 planningWindow.quarters，必须从 selectedStartMonth 开始，按 quarters 的顺序和月份规划未来四个有效周期，不要改成自然年季度，也不要补起始月份之前的月份。',
       '如果有 annualStrategy 和 previousQuarterPlans，当前季度必须承接前文，避免重复。',
       '{{schemaInstruction}}',
       '只输出合法 JSON。不要 Markdown，不要解释。字符串里不要换行，不要尾逗号。',

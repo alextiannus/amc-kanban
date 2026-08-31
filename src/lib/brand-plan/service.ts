@@ -108,6 +108,7 @@ export type BrandPlanWorkspaceData = {
   }
   annualPlan?: {
     generatedAt: string
+    planningStartMonth?: string
     goal: string
     theme: string
     strategyPrinciples?: string[]
@@ -385,14 +386,14 @@ export async function runBrandPlanAction(input: {
   } else if (input.action === 'save_workspace_patch') {
     next = await saveWorkspacePatch(brand.id, current, input.body)
   } else if (input.action === 'generate_annual_plan') {
-    const annualPlan = await buildAnnualMarketingSolution(brand, current, latestInterview)
+    const annualPlan = await buildAnnualMarketingSolution(brand, current, latestInterview, input.body)
     next = { ...current, annualPlan }
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'ANNUAL',
       period: marketingPlanPeriod(annualPlan),
       input: {
-        ...buildMarketingPlanInput(brand, current, latestInterview),
+        ...buildMarketingPlanInput(brand, current, latestInterview, input.body),
         subscriptionStrategy: annualPlan.subscriptionStrategy,
       },
       output: annualPlan,
@@ -403,14 +404,14 @@ export async function runBrandPlanAction(input: {
       llmError: annualPlan.llmError,
     })
   } else if (input.action === 'generate_annual_strategy') {
-    const annualPlan = await buildAnnualMarketingStrategyOnly(brand, current, latestInterview)
+    const annualPlan = await buildAnnualMarketingStrategyOnly(brand, current, latestInterview, input.body)
     next = { ...current, annualPlan }
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'ANNUAL',
       period: marketingPlanPeriod(annualPlan),
       input: {
-        ...buildMarketingPlanInput(brand, current, latestInterview),
+        ...buildMarketingPlanInput(brand, current, latestInterview, input.body),
         subscriptionStrategy: annualPlan.subscriptionStrategy,
         generationStep: 'annual_strategy',
       },
@@ -422,14 +423,14 @@ export async function runBrandPlanAction(input: {
       llmError: annualPlan.llmError,
     })
   } else if (input.action === 'generate_next_quarter_plan') {
-    const annualPlan = await buildNextQuarterMarketingPlan(brand, current, latestInterview)
+    const annualPlan = await buildNextQuarterMarketingPlan(brand, current, latestInterview, input.body)
     next = { ...current, annualPlan }
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'ANNUAL',
       period: marketingPlanPeriod(annualPlan),
       input: {
-        ...buildMarketingPlanInput(brand, current, latestInterview),
+        ...buildMarketingPlanInput(brand, current, latestInterview, input.body),
         subscriptionStrategy: annualPlan.subscriptionStrategy,
         generationStep: 'quarter',
       },
@@ -1139,17 +1140,19 @@ function buildBrandClaimFromInterview(interview: BrandPlanMerchantInterview) {
 async function buildAnnualMarketingSolution(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
-  interview: BrandPlanMerchantInterview | null
+  interview: BrandPlanMerchantInterview | null,
+  body?: Record<string, unknown>
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
-  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview, body)
   const marketContext = await buildMarketingPlanMarketContext(brand, fallback.quarterlyPlans || [])
   const input = {
-    ...buildMarketingPlanInput(brand, current, interview),
+    ...buildMarketingPlanInput(brand, current, interview, body),
     subscriptionStrategy: fallback.subscriptionStrategy,
     marketCalendar: marketContext.marketCalendar,
     storeActivities: marketContext.storeActivities,
     planningWindow: {
-      rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
+      rule: `只规划有效周期：从 ${fallback.planningStartMonth || '指定起始月份'} 开始，连续规划未来四个三个月周期，不要补全年自然季度。`,
+      selectedStartMonth: fallback.planningStartMonth,
       quarters: (fallback.quarterlyPlans || []).map((item) => ({
         quarter: item.quarter,
         year: item.year,
@@ -1231,17 +1234,19 @@ async function buildAnnualMarketingSolution(
 async function buildAnnualMarketingStrategyOnly(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
-  interview: BrandPlanMerchantInterview | null
+  interview: BrandPlanMerchantInterview | null,
+  body?: Record<string, unknown>
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
-  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview, body)
   const marketContext = await buildMarketingPlanMarketContext(brand, fallback.quarterlyPlans || [])
   const input = {
-    ...buildMarketingPlanInput(brand, current, interview),
+    ...buildMarketingPlanInput(brand, current, interview, body),
     subscriptionStrategy: fallback.subscriptionStrategy,
     marketCalendar: marketContext.marketCalendar,
     storeActivities: marketContext.storeActivities,
     planningWindow: {
-      rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
+      rule: `只规划有效周期：从 ${fallback.planningStartMonth || '指定起始月份'} 开始，连续规划未来四个三个月周期，不要补全年自然季度。`,
+      selectedStartMonth: fallback.planningStartMonth,
       quarters: (fallback.quarterlyPlans || []).map((item) => ({
         quarter: item.quarter,
         year: item.year,
@@ -1273,10 +1278,17 @@ async function buildAnnualMarketingStrategyOnly(
 async function buildNextQuarterMarketingPlan(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
-  interview: BrandPlanMerchantInterview | null
+  interview: BrandPlanMerchantInterview | null,
+  body?: Record<string, unknown>
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
   if (!current.annualPlan) throw new BrandPlanError('annual_plan_required', 409)
-  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview)
+  const effectiveBody = {
+    ...(body || {}),
+    planningStartMonth: normalizePlanningStartMonth(body?.planningStartMonth)
+      || current.annualPlan.planningStartMonth
+      || body?.planningStartMonth,
+  }
+  const fallback = await buildRuleAnnualMarketingSolution(brand, current, interview, effectiveBody)
   const existingQuarters = current.annualPlan.quarterlyPlans || []
   const targetQuarter = (fallback.quarterlyPlans || []).find((candidate) =>
     !existingQuarters.some((existing) => existing.startMonth === candidate.startMonth)
@@ -1284,12 +1296,13 @@ async function buildNextQuarterMarketingPlan(
   if (!targetQuarter) return current.annualPlan
   const marketContext = await buildMarketingPlanMarketContext(brand, fallback.quarterlyPlans || [])
   const baseInput = {
-    ...buildMarketingPlanInput(brand, current, interview),
+    ...buildMarketingPlanInput(brand, current, interview, effectiveBody),
     subscriptionStrategy: current.annualPlan.subscriptionStrategy || fallback.subscriptionStrategy,
     marketCalendar: marketContext.marketCalendar,
     storeActivities: marketContext.storeActivities,
     planningWindow: {
-      rule: '只规划有效周期：从用户订阅计划后的第一个完整自然月开始，连续规划未来四个三个月周期，不要补全年自然季度。',
+      rule: `只规划有效周期：从 ${fallback.planningStartMonth || '指定起始月份'} 开始，连续规划未来四个三个月周期，不要补全年自然季度。`,
+      selectedStartMonth: fallback.planningStartMonth,
       quarters: (fallback.quarterlyPlans || []).map((item) => ({
         quarter: item.quarter,
         year: item.year,
@@ -1341,6 +1354,7 @@ async function buildNextQuarterMarketingPlan(
   return {
     ...current.annualPlan,
     generatedAt: new Date().toISOString(),
+    planningStartMonth: fallback.planningStartMonth || current.annualPlan.planningStartMonth,
     quarterlyPlans,
     quarterlyFocus: (fallback.quarterlyPlans || []).map((fallbackQuarter) => {
       const generated = quarterlyPlans.find((item) => item.startMonth === fallbackQuarter.startMonth)
@@ -1386,9 +1400,12 @@ function annualQuarterPlaceholders(fallback: NonNullable<BrandPlanWorkspaceData[
 async function buildRuleAnnualMarketingSolution(
   brand: BrandPlanBrand,
   current: BrandPlanWorkspaceData,
-  interview: BrandPlanMerchantInterview | null
+  interview: BrandPlanMerchantInterview | null,
+  body?: Record<string, unknown>
 ): Promise<NonNullable<BrandPlanWorkspaceData['annualPlan']>> {
-  const planningQuarters = planningQuarterSequence(subscriptionPlanningStartDate(brand))
+  const planningStartDate = marketingPlanningStartDate(brand, body?.planningStartMonth)
+  const planningStartMonth = formatMonthValue(planningStartDate)
+  const planningQuarters = planningQuarterSequence(planningStartDate)
   const products = primaryProducts(brand, { available: false })
   const interviewFocus = interviewMaterialText(interview)
   const subscriptionStrategy = await buildSubscriptionStrategy(brand)
@@ -1469,6 +1486,7 @@ async function buildRuleAnnualMarketingSolution(
   })
   return {
     generatedAt: new Date().toISOString(),
+    planningStartMonth,
     goal: interviewFocus
       ? `未来四个季度围绕主理人确认的经营重点，结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`
       : `未来四个季度结合订阅服务范围，让附近顾客持续看见、看懂并愿意行动。`,
@@ -2826,6 +2844,7 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
     },
     planningWindow: {
       rule: text(planningWindow.rule),
+      selectedStartMonth: text(planningWindow.selectedStartMonth),
       quarters: planningQuarters,
     },
     annualStrategy: scope === 'quarter'
@@ -2999,6 +3018,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, metrics, researchFocus。',
       '数量限制：strategyPrinciples 3 条；platformStrategy 按订阅平台各 1 条；contentPillars 4 条；metrics 4 条。',
       '不要生成 quarterlyFocus 或 quarterlyPlans；季度计划会在后续步骤逐个生成。',
+      '如果输入提供 planningWindow.selectedStartMonth，年度策略必须服务于从该月份开始的四个连续三个月周期，不要补起始月份之前的月份。',
       '方案必须适合本地商家，围绕“让顾客找得到、看得懂、愿意来”；不得承诺流量、排名、销量或到店人数。',
       '必须读取 productCatalog：把商品/服务/套餐按热销品、高复购品、商家当下主推/主理人判断有潜力、招牌、套餐等标签归类，允许一个 SKU 同时属于多类；多类重合的 SKU 应作为品牌推广重点。',
       '如果 productCatalog 提供明确价格、适合人数、套餐内容或搭配建议，可以用于策略判断和价格感知内容方向，例如人均、几个人吃、套餐怎么点；如果没有明确价格，不得编价格。',
@@ -3011,6 +3031,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       'monthlyFocus 每项含 month, focus, promotionPoints。',
       '数量限制：promotionPoints 必须刚好 2 项；campaigns 2 条；contentThemes 3 条；monthlyFocus 必须刚好 3 项。',
       '所有字段都用短句。不要编折扣、赠品、暗号、排队、客流、顾客评价或不存在的活动。',
+      '必须使用 currentQuarter 里的 startMonth, endMonth, periodLabel 和 months；不要自行改成自然年季度。',
       '必须参考 annualStrategy 和 previousQuarterPlans，当前季度要承接前面季度，避免重复。',
       '必须参考 productCatalog 选择具体 SKU 或套餐进入 promotionPoints/contentThemes/monthlyFocus；优先使用同时命中热销、高复购、商家主推、招牌或套餐的项目。',
       '如果 productCatalog 提供真实价格、适合人数或套餐内容，可以写入价格引导和点单判断；如果没有提供，不得写任何具体价格。',
@@ -3268,6 +3289,7 @@ function normalizeAnnualMarketingSolution(
   return {
     ...fallback,
     generatedAt: new Date().toISOString(),
+    planningStartMonth: normalizePlanningStartMonth(value.planningStartMonth) || fallback.planningStartMonth,
     goal: text(value.goal) || fallback.goal,
     theme: text(value.theme) || fallback.theme,
     strategyPrinciples: stringList(value.strategyPrinciples).length ? stringList(value.strategyPrinciples) : fallback.strategyPrinciples,
@@ -3862,6 +3884,26 @@ function subscriptionPlanningStartDate(brand: BrandPlanBrand) {
   const subscription = Array.isArray(brand.subscriptions) ? brand.subscriptions[0] : null
   const start = subscription?.contractStartDate || subscription?.createdAt || new Date()
   return firstCompleteNaturalMonth(start)
+}
+
+function marketingPlanningStartDate(brand: BrandPlanBrand, value: unknown) {
+  const month = normalizePlanningStartMonth(value)
+  if (!month) return subscriptionPlanningStartDate(brand)
+  const [year, monthNumber] = month.split('-').map(Number)
+  return new Date(year, monthNumber - 1, 1)
+}
+
+function normalizePlanningStartMonth(value: unknown) {
+  const month = text(value)
+  const match = month.match(/^(\d{4})-(\d{2})$/)
+  if (!match) return ''
+  const monthNumber = Number(match[2])
+  if (monthNumber < 1 || monthNumber > 12) return ''
+  return month
+}
+
+function formatMonthValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 function firstCompleteNaturalMonth(date: Date) {
