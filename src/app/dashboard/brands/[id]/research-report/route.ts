@@ -163,8 +163,7 @@ export async function GET(request: Request, { params }: Params) {
   const localReportPath = requestUrl.pathname
   if (canUseGrowthStandaloneReport(auth.principal)) {
     const latestGrowthReport = await findLatestGrowthV3ReportReference({
-      growthBrandKey: data.brand.growthBrandKey || report?.growthBrandKey,
-      brandName: data.brand.name,
+      growthBrandKeys: [data.brand.growthBrandKey, report?.growthBrandKey],
     }).catch((error) => {
       console.error('[growth-report] latest V3 lookup failed:', error)
       return null

@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { selectLatestGrowthV3ReportReference } from '@/lib/growthReportViewer'
+import {
+  selectLatestGrowthV3ReportVersionReference,
+  type GrowthReportVersionCandidate,
+} from '@/lib/growthReportViewer'
 
 type GrowthLinkedBrand = {
   id: string
@@ -294,16 +297,20 @@ export type GrowthBrandIntelligenceJob = {
   error?: unknown
 }
 
-export async function findLatestGrowthV3ReportReference(identity: {
-  growthBrandKey?: string | null
-  brandName?: string | null
+export async function findLatestGrowthV3ReportReference(input: {
+  growthBrandKeys: Array<string | null | undefined>
 }) {
-  const response = await growthRequest('/v1/brand-intelligence/jobs?limit=200', { method: 'GET' })
-  const payload = await response.json().catch(() => ({})) as { jobs?: GrowthBrandIntelligenceJob[]; error?: string }
-  if (!response.ok) {
-    throw new GrowthDataCenterError(response.status, payload.error || `growth_research_list_failed:${response.status}`)
+  const brandKeys = [...new Set(input.growthBrandKeys.map((value) => String(value || '').trim()).filter(Boolean))]
+  const versions: GrowthReportVersionCandidate[] = []
+  for (const brandKey of brandKeys) {
+    const response = await growthRequest(`/v1/admin/reports/${encodeURIComponent(brandKey)}/versions`, { method: 'GET' })
+    const payload = await response.json().catch(() => ({})) as { items?: GrowthReportVersionCandidate[]; error?: string }
+    if (!response.ok) {
+      throw new GrowthDataCenterError(response.status, payload.error || `growth_report_versions_failed:${response.status}`)
+    }
+    versions.push(...(payload.items || []))
   }
-  return selectLatestGrowthV3ReportReference(payload.jobs || [], identity)
+  return selectLatestGrowthV3ReportVersionReference(versions)
 }
 
 export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBrand & {

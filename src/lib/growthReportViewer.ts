@@ -3,23 +3,12 @@ export type GrowthReportViewerReference = {
   reportVersionId?: string
 }
 
-type GrowthReportVersionCandidate = {
+export type GrowthReportVersionCandidate = {
   report_version_id?: string | number | null
   viewer_url?: string | null
+  tier?: string | null
   created_at?: string | null
   result?: Record<string, unknown> | null
-}
-
-export type GrowthReportJobCandidate = {
-  status?: string | null
-  brand_name?: string | null
-  report_template_version?: string | null
-  generated_at?: string | null
-  created_at?: string | null
-  completed_at?: string | null
-  viewer_url?: string | null
-  result?: Record<string, unknown> | null
-  report_versions?: Record<string, GrowthReportVersionCandidate | undefined>
 }
 
 type GrowthReportPrincipal = {
@@ -42,47 +31,20 @@ function candidateRecord(value: unknown) {
     : {}
 }
 
-function reportJobBrandKey(job: GrowthReportJobCandidate) {
-  const initial = job.report_versions?.initial
-  return candidateText(job.result?.brand_key)
-    || candidateText(initial?.result?.brand_key)
-}
-
-function reportJobTimestamp(job: GrowthReportJobCandidate) {
-  const initial = job.report_versions?.initial
-  return candidateText(initial?.created_at)
-    || candidateText(job.generated_at)
-    || candidateText(job.completed_at)
-    || candidateText(job.created_at)
-}
-
-export function selectLatestGrowthV3ReportReference(
-  jobs: GrowthReportJobCandidate[],
-  identity: { growthBrandKey?: string | null; brandName?: string | null }
+export function selectLatestGrowthV3ReportVersionReference(
+  versions: GrowthReportVersionCandidate[]
 ): GrowthReportViewerReference | null {
-  const targetBrandKey = candidateText(identity.growthBrandKey)
-  const targetBrandName = candidateText(identity.brandName).toLocaleLowerCase()
-
-  const matches = jobs.flatMap((job) => {
-    if (!['completed', 'needs_review'].includes(candidateText(job.status).toLocaleLowerCase())) return []
-    const initial = job.report_versions?.initial
-    const initialResult = candidateRecord(initial?.result)
-    const templateVersion = candidateText(job.report_template_version || initialResult.report_template_version).toLocaleLowerCase()
-    if (templateVersion !== 'v3') return []
-
-    const jobBrandKey = reportJobBrandKey(job)
-    const sameBrand = targetBrandKey
-      ? jobBrandKey === targetBrandKey
-      : Boolean(targetBrandName && candidateText(job.brand_name).toLocaleLowerCase() === targetBrandName)
-    if (!sameBrand) return []
-
-    const reportVersionId = candidateText(initial?.report_version_id)
+  const matches = versions.flatMap((version) => {
+    const result = candidateRecord(version.result)
+    if (candidateText(version.tier).toLocaleLowerCase() !== 'initial') return []
+    if (candidateText(result.report_template_version).toLocaleLowerCase() !== 'v3') return []
+    const reportVersionId = candidateText(version.report_version_id)
     if (!REPORT_VERSION_ID.test(reportVersionId)) return []
     return [{
-      timestamp: reportJobTimestamp(job),
+      timestamp: candidateText(version.created_at),
       reference: {
         reportVersionId,
-        viewerUrl: candidateText(initial?.viewer_url) || candidateText(job.viewer_url) || undefined,
+        viewerUrl: candidateText(version.viewer_url) || undefined,
       },
     }]
   })

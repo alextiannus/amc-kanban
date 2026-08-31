@@ -4,7 +4,7 @@ import {
   canUseGrowthStandaloneReport,
   growthReportSsoHref,
   growthReportStandalonePath,
-  selectLatestGrowthV3ReportReference,
+  selectLatestGrowthV3ReportVersionReference,
 } from '../src/lib/growthReportViewer.ts'
 
 assert.equal(
@@ -35,53 +35,48 @@ assert.equal(canUseGrowthStandaloneReport({ source: 'session', actorType: 'HUMAN
 assert.equal(canUseGrowthStandaloneReport({ source: 'api_key', actorType: 'HUMAN', globalRoles: ['ADMIN'] }), false)
 assert.equal(canUseGrowthStandaloneReport({ source: 'session', actorType: 'AI_AGENT', globalRoles: ['ADMIN'] }), false)
 
-const latest = selectLatestGrowthV3ReportReference([
+const latest = selectLatestGrowthV3ReportVersionReference([
   {
-    status: 'completed',
-    brand_name: '东北人餐厅',
-    report_template_version: 'v3',
+    tier: 'initial',
     created_at: '2026-08-29T15:12:00.000Z',
-    result: { brand_key: 'jalan-besar-416870473e' },
-    report_versions: { initial: { report_version_id: '39', viewer_url: '/dashboard/reports/versions/39', created_at: '2026-08-29T15:12:00.000Z' } },
+    result: { report_template_version: 'v3' },
+    report_version_id: '39',
+    viewer_url: '/dashboard/reports/versions/39',
   },
   {
-    status: 'completed',
-    brand_name: '东北人餐厅',
-    report_template_version: 'v3',
-    created_at: '2026-08-24T06:22:00.000Z',
-    result: { brand_key: 'jalan-besar-416870473e' },
-    report_versions: { initial: { report_version_id: '12', created_at: '2026-08-24T06:22:00.000Z' } },
+    tier: 'initial',
+    created_at: '2026-08-30T15:12:00.000Z',
+    result: { report_template_version: 'v3' },
+    report_version_id: '40',
+    viewer_url: '/dashboard/reports/versions/40',
   },
   {
-    status: 'completed',
-    brand_name: '东北人餐厅',
-    report_template_version: 'v3',
-    created_at: '2026-08-30T06:22:00.000Z',
-    result: { brand_key: 'another-brand' },
-    report_versions: { initial: { report_version_id: '99', created_at: '2026-08-30T06:22:00.000Z' } },
+    tier: 'advanced',
+    created_at: '2026-08-31T15:12:00.000Z',
+    result: { report_template_version: 'v3' },
+    report_version_id: '99',
   },
-], { growthBrandKey: 'jalan-besar-416870473e', brandName: '东北人餐厅' })
+])
 assert.deepEqual(latest, {
-  reportVersionId: '39',
-  viewerUrl: '/dashboard/reports/versions/39',
+  reportVersionId: '40',
+  viewerUrl: '/dashboard/reports/versions/40',
 })
 
 assert.deepEqual(
-  selectLatestGrowthV3ReportReference([{
-    status: 'needs_review',
-    brand_name: '东北人餐厅',
-    report_versions: { initial: { report_version_id: '41', result: { report_template_version: 'v3' } } },
-  }], { brandName: ' 东北人餐厅 ' }),
+  selectLatestGrowthV3ReportVersionReference([{
+    tier: 'initial',
+    report_version_id: '41',
+    result: { report_template_version: 'v3' },
+  }]),
   { reportVersionId: '41', viewerUrl: undefined }
 )
 
 assert.equal(
-  selectLatestGrowthV3ReportReference([{
-    status: 'completed',
-    brand_name: '东北人餐厅',
-    report_template_version: 'v2',
-    report_versions: { initial: { report_version_id: '42' } },
-  }], { brandName: '东北人餐厅' }),
+  selectLatestGrowthV3ReportVersionReference([{
+    tier: 'initial',
+    report_version_id: '42',
+    result: { report_template_version: 'v2' },
+  }]),
   null
 )
 
@@ -92,5 +87,11 @@ assert(currentWorkspaceReport > 0 && legacyDedicatedReport > currentWorkspaceRep
 
 const brandProfileView = readFileSync(new URL('../src/components/dashboard/BrandProfileView.tsx', import.meta.url), 'utf8')
 assert(brandProfileView.includes('href={report ? growthResearchReportHref : undefined}'), 'report view button must use the server-side latest-version resolver')
+
+const growthDataCenter = readFileSync(new URL('../src/lib/growthDataCenter.ts', import.meta.url), 'utf8')
+assert(
+  growthDataCenter.includes('/v1/admin/reports/${encodeURIComponent(brandKey)}/versions'),
+  'latest report lookup must use the Growth report-version API'
+)
 
 console.log('Growth report viewer link tests passed.')
