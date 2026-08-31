@@ -18,6 +18,10 @@ async function fetchPlanningData(brandId: string) {
   return await readJson(response) as PlanningData
 }
 
+function isActiveBrand(brand: Brand) {
+  return !brand.status || brand.status === 'ACTIVE'
+}
+
 export function usePlanningWorkspace() {
   const [brands, setBrands] = useState<Brand[]>([])
   const [brandId, setBrandId] = useState('')
@@ -37,7 +41,7 @@ export function usePlanningWorkspace() {
       .then(readJson)
       .then((payload) => {
         if (cancelled) return
-        const items = Array.isArray(payload) ? payload as Brand[] : []
+        const items = Array.isArray(payload) ? (payload as Brand[]).filter(isActiveBrand) : []
         setBrands(items)
         const saved = localStorage.getItem(ACTIVE_BRAND_KEY)
         const selected = items.find((item) => item.id === saved)?.id || items[0]?.id || ''

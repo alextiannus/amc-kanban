@@ -83,6 +83,8 @@ export type BrandPlanWorkspaceData = {
     growthBrandKey?: string
     reportTier?: string
     reportPath?: string
+    reportHtmlPath?: string
+    reportHtmlUrl?: string
     reportMarkdown?: string
     reportContent?: string
     pdfReportPath?: string
@@ -579,8 +581,9 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
   }
   const result = objectValue(job.result)
   const reportVersions = objectValue(job.report_versions)
+  const advancedReport = objectValue(reportVersions.advanced)
   const initialReport = objectValue(reportVersions.initial)
-  const selectedReport = initialReport
+  const selectedReport = Object.keys(advancedReport).length ? advancedReport : initialReport
   const selectedReportResult = objectValue(selectedReport.result)
   const structuredReport = objectValue(
     selectedReport.structured_report ||
@@ -631,6 +634,14 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
   const missingQuestions = uniqueStrings(gaps.map((item) => text(item.label))).slice(0, 10)
   const reportVersionId = text(job.report_version_id || selectedReport.report_version_id)
   const viewerUrl = text(job.viewer_url || selectedReport.viewer_url)
+  const reportHtmlPath = text(job.latest_report_html_path)
+    || text(selectedReportResult.report_html_path)
+    || text(result.advanced_report_html_path)
+    || text(result.report_html_path)
+  const reportHtmlUrl = [
+    reportHtmlPath,
+    viewerUrl,
+  ].map(growthReportHtmlUrl).find(Boolean) || ''
   const markdownDownloadPath = text(job.markdown_download_url || selectedReport.markdown_download_url)
   const jsonDownloadPath = text(job.json_download_url || selectedReport.json_download_url)
   const sourcePayload = {
@@ -640,6 +651,8 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
     brandKey: text(result.brand_key || selectedReportResult.brand_key),
     reportTier,
     reportPath: reportPaths[0] || '',
+    reportHtmlPath,
+    reportHtmlUrl,
     reportVersionId,
     reportTemplateVersion: 'v3',
     viewerUrl,
@@ -656,6 +669,8 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
     growthBrandKey: text(result.brand_key || selectedReportResult.brand_key),
     reportTier,
     reportPath: reportPaths[0] || '',
+    reportHtmlPath,
+    reportHtmlUrl,
     reportMarkdown,
     reportVersionId,
     reportTemplateVersion: 'v3',
@@ -686,6 +701,22 @@ async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNull
     issues: growthIssues.length ? growthIssues : ['详见 AMC-Growth 客观数据调研报告 V3 的数据缺口与待确认事项。'],
     growthPoints,
     missingQuestions,
+  }
+}
+
+function growthReportHtmlUrl(pathValue: string) {
+  if (!pathValue) return ''
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+  const baseUrl = (process.env.AMC_GROWTH_API_URL || (isProd ? 'https://amc-growth.onrender.com' : 'http://localhost:4188')).replace(/\/$/, '')
+  const allowedPath = /^\/public\/brand-intelligence\/[^?#]+\.html$/i
+
+  try {
+    const base = new URL(baseUrl)
+    const parsed = new URL(pathValue, base)
+    if (parsed.origin !== base.origin || !allowedPath.test(parsed.pathname)) return ''
+    return parsed.toString()
+  } catch {
+    return ''
   }
 }
 

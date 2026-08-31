@@ -286,6 +286,7 @@ export type GrowthBrandIntelligenceJob = {
   structured_report?: Record<string, unknown> | null
   latest_report_tier?: string | null
   latest_report_path?: string | null
+  latest_report_html_path?: string | null
   latest_report_markdown?: string | null
   latest_report_content?: string | null
   latest_report_pdf_path?: string | null
@@ -352,7 +353,7 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
       ? merchantContext.excluded_platforms
       : [],
     main_concern: '生成品牌计划前的线上经营摸底调研报告。',
-    report_tier: 'initial',
+    report_tier: 'advanced',
     report_template_version: 'v3',
     generate_advanced: false,
     merchant_context: merchantContext,

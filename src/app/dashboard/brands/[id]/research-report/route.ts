@@ -17,12 +17,30 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;')
 }
 
+function growthReportHtmlUrl(pathValue: string | undefined) {
+  if (!pathValue) return ''
+  const isProd = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true'
+  const baseUrl = (process.env.AMC_GROWTH_API_URL || (isProd ? 'https://amc-growth.onrender.com' : 'http://localhost:4188')).replace(/\/$/, '')
+  const allowedPath = /^\/public\/brand-intelligence\/[^?#]+\.html$/i
+
+  try {
+    const base = new URL(baseUrl)
+    const parsed = new URL(pathValue, base)
+    if (parsed.origin !== base.origin || !allowedPath.test(parsed.pathname)) return ''
+    return parsed.toString()
+  } catch {
+    return ''
+  }
+}
+
 function renderReportPage(input: {
   brandName: string
   generatedAt?: string
   growthJobId?: string
   reportTier?: string
   reportPath?: string
+  reportHtmlUrl?: string
+  reportHtmlPath?: string
   pdfDownloadUrl?: string
   pdfDownloadPath?: string
   downloadBase?: string
@@ -184,6 +202,15 @@ export async function GET(request: Request, { params }: Params) {
       }),
       { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     )
+  }
+
+  const reportHtmlUrl = [
+    report.reportHtmlUrl,
+    report.reportHtmlPath,
+    report.viewerUrl,
+  ].map(growthReportHtmlUrl).find(Boolean)
+  if (reportHtmlUrl) {
+    return NextResponse.redirect(reportHtmlUrl)
   }
 
   return new NextResponse(

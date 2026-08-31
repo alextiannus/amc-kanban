@@ -22,6 +22,7 @@ interface Brand {
   id: string
   name: string
   location?: string
+  status?: string | null
   subscriptions?: Array<{
     id: string
     planId?: string
@@ -29,6 +30,10 @@ interface Brand {
     status?: string
     contractEndDate?: string | null
   }>
+}
+
+function isActiveBrand(brand: Brand) {
+  return !brand.status || brand.status === 'ACTIVE'
 }
 
 function isEffectiveActiveSubscription(subscription?: { status?: string; contractEndDate?: string | null } | null) {
@@ -105,7 +110,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     try {
       const res = await fetch('/api/brands?assignedOnly=true')
       if (res.ok) {
-        const list: Brand[] = await res.json()
+        const payload: Brand[] = await res.json()
+        const list = payload.filter(isActiveBrand)
         setBrands(list)
         if (list.length > 0) {
           let savedBrandId: string | null = null
@@ -115,7 +121,9 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
             console.error(e)
           }
           const savedBrand = list.find(b => b.id === savedBrandId)
-          setActiveBrand(prev => prev ?? savedBrand ?? list[0])
+          setActiveBrand(prev => (prev && list.some(b => b.id === prev.id) ? prev : savedBrand ?? list[0]))
+        } else {
+          setActiveBrand(null)
         }
       }
     } catch (e) {

@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     }
 
     const activeBrandFilter = {
-      status: { not: 'ARCHIVED' as const },
+      status: 'ACTIVE' as const,
     }
 
     // 1. ADMIN human — see ALL brands across the system

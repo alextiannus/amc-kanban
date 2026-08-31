@@ -1,6 +1,7 @@
 export type Brand = {
   id: string
   name: string
+  status?: string | null
 }
 
 export type InspirationBrief = {

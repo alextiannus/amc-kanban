@@ -277,6 +277,58 @@ function sceneMotion(scene: VideoScene) {
   return motionMap[scene.cameraMotion] || scene.cameraMotion
 }
 
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function firstString(value: unknown): string {
+  if (Array.isArray(value)) return value.map((item) => text(item)).find(Boolean) || ''
+  return text(value)
+}
+
+function executionOutputUrl(value: any): string {
+  return text(value?.outputUrl)
+    || text(value?.output_url)
+    || text(value?.url)
+    || text(value?.asset?.url)
+    || text(value?.assetUrl)
+    || text(value?.asset_url)
+    || text(value?.content?.url)
+    || text(value?.file?.downloadUrl)
+    || text(value?.file?.download_url)
+    || text(value?.downloadUrl)
+    || text(value?.download_url)
+    || text(value?.data?.output?.videoUrl)
+    || text(value?.data?.output?.video_url)
+    || text(value?.data?.videoUrl)
+    || text(value?.data?.video_url)
+    || text(value?.resultUrls?.[0])
+    || text(value?.result_urls?.[0])
+    || text(value?.response?.resultUrls?.[0])
+    || text(value?.data?.response?.resultUrls?.[0])
+    || ''
+}
+
+function executionProviderTaskIds(value: any): string[] {
+  const ids = Array.isArray(value?.providerTaskIds)
+    ? value.providerTaskIds.map((item: unknown) => text(item)).filter(Boolean)
+    : []
+  const taskId = firstString(value?.taskId || value?.task_id || value?.jobId || value?.job_id || value?.id)
+  return ids.length || !taskId ? ids : [taskId]
+}
+
+function normalizeVideoExecution(value: any) {
+  if (!value || typeof value !== 'object') return value
+  const outputUrl = executionOutputUrl(value)
+  const providerTaskIds = executionProviderTaskIds(value)
+  return {
+    ...value,
+    ...(outputUrl ? { outputUrl } : {}),
+    providerTaskIds,
+    status: outputUrl ? 'completed' : (text(value.status) || (providerTaskIds.length ? 'submitted' : 'queued')),
+  }
+}
+
 function splitSceneDurations(totalDuration: number, sceneCount: number): number[] {
   if (sceneCount <= 0) return []
   const safeTotal = Math.max(sceneCount * 4, Math.round(totalDuration || sceneCount * 4))
@@ -392,9 +444,9 @@ function VideoCreatorPageInner() {
     })
   }, [assets, assetFilter, selectedAssetIds, assetIdsInRows])
 
-  const selectedFinalRows = rows.filter((row) => row.includeInFinal && row.execution?.outputUrl)
+  const selectedFinalRows = rows.filter((row) => row.includeInFinal && executionOutputUrl(row.execution))
   const selectedFinalUrls = selectedFinalRows
-    .map((row) => row.execution?.outputUrl)
+    .map((row) => executionOutputUrl(row.execution))
     .filter((url): url is string => typeof url === 'string' && Boolean(url))
 
   const setRow = (rowId: string, patch: Partial<SceneRow>) => {
@@ -639,7 +691,7 @@ function VideoCreatorPageInner() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '生成分镜视频失败')
-      setRow(row.rowId, { execution: json.execution, busy: false })
+      setRow(row.rowId, { execution: normalizeVideoExecution(json.execution), busy: false })
     } catch (err: any) {
       setError(err?.message || '生成分镜视频失败')
       setRow(row.rowId, { busy: false })
@@ -665,7 +717,7 @@ function VideoCreatorPageInner() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '刷新分镜失败')
-      setRow(row.rowId, { execution: json.execution, busy: false })
+      setRow(row.rowId, { execution: normalizeVideoExecution(json.execution), busy: false })
     } catch (err: any) {
       if (!auto) setError(err?.message || '刷新分镜失败')
       setRow(row.rowId, { busy: false })
@@ -673,7 +725,14 @@ function VideoCreatorPageInner() {
   }
 
   const handleGenerateFinal = async () => {
-    if (!plan || selectedFinalUrls.length === 0) return
+    if (!plan) {
+      setError('请先确认剧本并生成分镜表。')
+      return
+    }
+    if (selectedFinalUrls.length === 0) {
+      setError('请先生成至少一个已完成的分镜视频，再合成最终视频。')
+      return
+    }
     setFinalBusy(true)
     setError(null)
     try {
@@ -690,7 +749,11 @@ function VideoCreatorPageInner() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '合成最终视频失败')
-      setFinalExecution(json.execution)
+      const execution = normalizeVideoExecution(json.execution)
+      setFinalExecution(execution)
+      if (!execution?.outputUrl && execution?.providerTaskIds?.length === 0) {
+        setError('合成任务已提交，但服务没有返回可刷新任务 ID。请稍后重试或检查视频合成服务配置。')
+      }
     } catch (err: any) {
       setError(err?.message || '合成最终视频失败')
     } finally {
@@ -700,7 +763,10 @@ function VideoCreatorPageInner() {
 
   const handleCheckFinal = async () => {
     const taskId = finalExecution?.providerTaskIds?.[0]
-    if (!taskId) return
+    if (!taskId) {
+      setError('当前最终视频任务没有可刷新任务 ID，请重新点击合成最终视频。')
+      return
+    }
     setFinalBusy(true)
     setError(null)
     try {
@@ -716,7 +782,7 @@ function VideoCreatorPageInner() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json.error || '刷新最终视频失败')
-      setFinalExecution(json.execution)
+      setFinalExecution(normalizeVideoExecution(json.execution))
     } catch (err: any) {
       setError(err?.message || '刷新最终视频失败')
     } finally {
@@ -1100,7 +1166,7 @@ function VideoCreatorPageInner() {
                     刷新最终视频
                   </button>
                 ) : (
-                  <button onClick={handleGenerateFinal} disabled={finalBusy || selectedFinalUrls.length === 0} className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
+                  <button onClick={handleGenerateFinal} disabled={finalBusy} className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-black text-white disabled:opacity-60">
                     {finalBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     合成最终视频
                   </button>

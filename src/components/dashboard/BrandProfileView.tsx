@@ -101,6 +101,8 @@ type BrandPlanWorkspaceData = {
     growthBrandKey?: string
     reportTier?: string
     reportPath?: string
+    reportHtmlPath?: string
+    reportHtmlUrl?: string
     reportContent?: string
     reportMarkdown?: string
     pdfReportPath?: string
@@ -649,7 +651,6 @@ function BrandProfileContent({
   onOpenSettings,
 }: Props & { brand: Brand }) {
   const brandId = brand.id
-  const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report`
   const growthResearchDownloadHref = `/api/brands/${encodeURIComponent(brandId)}/research-report`
 
   // Local Brand States (fetched on mount/change, used if props are not passed)
@@ -1720,6 +1721,7 @@ ${storeLines}
     return Array.isArray(value) ? value : fallback
   }
   const report = brandPlanData.researchReport
+  const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report`
   const growthReportMarkdown = report?.reportMarkdown || report?.reportContent || ''
   const interview = merchantInterview
   const annualPlan = brandPlanData.annualPlan

@@ -9,6 +9,7 @@ export interface Brand {
   id: string
   name: string
   location?: string
+  status?: string | null
   subscriptions?: Array<{
     id: string
     planId?: string

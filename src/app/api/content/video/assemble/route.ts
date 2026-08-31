@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       actorId: actor.id,
       title,
       clipUrls,
+      aspectRatio: optionalString(body.aspectRatio),
       finalText: optionalString(body.finalText) || scriptSummary,
       referenceAssetIds: stringArray(body.referenceAssetIds),
       parentAssetIds: stringArray(body.parentAssetIds),

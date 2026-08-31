@@ -663,7 +663,7 @@ ${contentIdea || 'No details provided.'}`
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setAllBrands(data)
+          setAllBrands(data.filter((brand) => !brand?.status || brand.status === 'ACTIVE'))
         }
       })
       .catch(() => {})

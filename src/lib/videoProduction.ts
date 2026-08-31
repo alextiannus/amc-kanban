@@ -1,4 +1,10 @@
 import { prisma } from '@/lib/prisma'
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 
 type VideoProviderConfig = {
   id: string
@@ -103,13 +109,22 @@ export async function assembleVideo(input: {
   actorId: string
   title?: string
   clipUrls: string[]
+  aspectRatio?: string
   finalText?: string
   referenceAssetIds?: string[]
   parentAssetIds?: string[]
 }): Promise<VideoExecution> {
-  const serviceUrl = process.env.AMC_VIDEO_ASSEMBLY_SERVICE_URL?.replace(/\/+$/, '')
+  const serviceUrl = (
+    process.env.AMC_VIDEO_ASSEMBLY_SERVICE_URL
+    || process.env.AMC_CONTENT_SERVICE_URL
+  )?.replace(/\/+$/, '')
   const token = process.env.AMC_VIDEO_ASSEMBLY_SERVICE_TOKEN?.trim()
+    || process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
   if (!serviceUrl) {
+    if (input.clipUrls.length > 1) {
+      return assembleVideoWithFfmpeg(input)
+    }
+
     const outputUrl = input.clipUrls.find((url) => /^https?:\/\//i.test(url))
     if (!outputUrl) {
       throw Object.assign(new Error('No completed scene video is available for final video assembly'), { status: 400 })
@@ -134,41 +149,226 @@ export async function assembleVideo(input: {
     }
   }
 
-  const response = await fetch(`${serviceUrl}/v1/video/assemble`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(input),
-    cache: 'no-store',
-    signal: AbortSignal.timeout(115000),
+  try {
+    const response = await fetch(`${serviceUrl}/v1/video/assemble`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(input),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(115000),
+    })
+    const data = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw Object.assign(new Error(data?.error || `Video assembly failed with ${response.status}`), { status: response.status })
+    }
+    const outputUrl = outputUrlFrom(data)
+    if (!outputUrl && input.clipUrls.length > 1) {
+      return assembleVideoWithFfmpeg(input, { serviceFallbackReason: `assembly service returned ${normalizeStatus(data?.status)} without outputUrl` })
+    }
+    const asset = outputUrl
+      ? await persistGeneratedVideoAsset({
+          brandId: input.brandId,
+          actorId: input.actorId,
+          url: outputUrl,
+          sourceType: 'ai_video_final',
+          tags: ['AI视频', '最终成片'],
+          caption: input.finalText || input.title || 'AI video final cut',
+        })
+      : undefined
+    return {
+      ok: true,
+      jobId: text(data?.jobId) || `assembly:${Date.now()}`,
+      status: outputUrl ? 'completed' : normalizeStatus(data?.status),
+      provider: 'seedance',
+      providerTaskIds: stringArray(data?.providerTaskIds),
+      outputUrl,
+      asset,
+      raw: data,
+    }
+  } catch (error: any) {
+    if (input.clipUrls.length > 1) {
+      return assembleVideoWithFfmpeg(input, { serviceFallbackReason: error?.message || 'assembly service failed' })
+    }
+    throw error
+  }
+}
+
+async function assembleVideoWithFfmpeg(input: {
+  brandId: string
+  actorId: string
+  title?: string
+  clipUrls: string[]
+  aspectRatio?: string
+  finalText?: string
+}, options: { serviceFallbackReason?: string } = {}): Promise<VideoExecution> {
+  const ffmpegBin = process.env.FFMPEG_PATH?.trim() || 'ffmpeg'
+  const workDir = await mkdtemp(path.join(tmpdir(), 'amc-video-assembly-'))
+  try {
+    const clipPaths = await Promise.all(input.clipUrls.map((url, index) => downloadClip(url, workDir, index)))
+    const listPath = path.join(workDir, 'clips.txt')
+    const outputPath = path.join(workDir, 'final.mp4')
+    await writeFile(listPath, clipPaths.map((clipPath) => `file '${escapeFfmpegConcatPath(clipPath)}'`).join('\n'), 'utf8')
+
+    const copyResult = await runFfmpeg(ffmpegBin, [
+      '-y',
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-f', 'concat',
+      '-safe', '0',
+      '-i', listPath,
+      '-c', 'copy',
+      '-movflags', '+faststart',
+      outputPath,
+    ])
+
+    if (!copyResult.ok) {
+      const transcodeResult = await runFfmpeg(ffmpegBin, buildNormalizeConcatArgs(clipPaths, outputPath, input.aspectRatio))
+      if (!transcodeResult.ok) {
+        throw Object.assign(
+          new Error(`Video assembly failed: ${transcodeResult.error || copyResult.error || 'ffmpeg concat failed'}`),
+          { status: transcodeResult.missingBinary ? 503 : 502 },
+        )
+      }
+    }
+
+    const outputBuffer = await readFile(outputPath)
+    const stored = await storeAssembledVideo({
+      brandId: input.brandId,
+      actorId: input.actorId,
+      title: input.title,
+      caption: input.finalText || input.title || 'AI video final cut',
+      buffer: outputBuffer,
+    })
+
+    return {
+      ok: true,
+      jobId: `assembly-ffmpeg:${Date.now()}`,
+      status: 'completed',
+      provider: 'seedance',
+      providerTaskIds: [],
+      outputUrl: stored.url,
+      asset: stored.asset,
+      raw: { localAssembly: 'ffmpeg_concat', clipCount: input.clipUrls.length, serviceFallbackReason: options.serviceFallbackReason },
+    }
+  } finally {
+    await rm(workDir, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
+function buildNormalizeConcatArgs(clipPaths: string[], outputPath: string, aspectRatio: string | undefined): string[] {
+  const { width, height } = videoDimensionsForAspectRatio(aspectRatio)
+  const args = ['-y', '-hide_banner', '-loglevel', 'error']
+  clipPaths.forEach((clipPath) => {
+    args.push('-i', clipPath)
   })
-  const data = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw Object.assign(new Error(data?.error || `Video assembly failed with ${response.status}`), { status: response.status })
+  const filters = clipPaths.map((_, index) =>
+    `[${index}:v]fps=30,scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1[v${index}]`,
+  )
+  const concatInputs = clipPaths.map((_, index) => `[v${index}]`).join('')
+  args.push(
+    '-filter_complex',
+    `${filters.join(';')};${concatInputs}concat=n=${clipPaths.length}:v=1:a=0[v]`,
+    '-map', '[v]',
+    '-c:v', 'libx264',
+    '-preset', 'veryfast',
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    outputPath,
+  )
+  return args
+}
+
+function videoDimensionsForAspectRatio(value: string | undefined) {
+  const ratio = text(value)
+  if (ratio === '1:1') return { width: 1080, height: 1080 }
+  if (ratio === '16:9') return { width: 1920, height: 1080 }
+  if (ratio === '4:5') return { width: 1080, height: 1350 }
+  return { width: 1080, height: 1920 }
+}
+
+async function downloadClip(url: string, workDir: string, index: number): Promise<string> {
+  const clipPath = path.join(workDir, `clip-${String(index + 1).padStart(3, '0')}.mp4`)
+  if (/^https?:\/\//i.test(url)) {
+    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(60000) })
+    if (!response.ok) throw Object.assign(new Error(`Failed to download clip ${index + 1}: HTTP ${response.status}`), { status: 502 })
+    const buffer = Buffer.from(await response.arrayBuffer())
+    await writeFile(clipPath, buffer)
+    return clipPath
   }
-  const outputUrl = outputUrlFrom(data)
-  const asset = outputUrl
-    ? await persistGeneratedVideoAsset({
-        brandId: input.brandId,
-        actorId: input.actorId,
-        url: outputUrl,
-        sourceType: 'ai_video_final',
-        tags: ['AI视频', '最终成片'],
-        caption: input.finalText || input.title || 'AI video final cut',
-      })
-    : undefined
-  return {
-    ok: true,
-    jobId: text(data.jobId) || `assembly:${Date.now()}`,
-    status: outputUrl ? 'completed' : normalizeStatus(data.status),
-    provider: 'seedance',
-    providerTaskIds: stringArray(data.providerTaskIds),
-    outputUrl,
-    asset,
-    raw: data,
+
+  if (url.startsWith('/')) {
+    const localPath = path.join(process.cwd(), 'public', url)
+    const buffer = await readFile(localPath).catch(() => null)
+    if (!buffer) throw Object.assign(new Error(`Failed to read local clip ${index + 1}`), { status: 502 })
+    await writeFile(clipPath, buffer)
+    return clipPath
   }
+
+  throw Object.assign(new Error(`Unsupported clip URL for assembly: ${url}`), { status: 400 })
+}
+
+async function storeAssembledVideo(input: {
+  brandId: string
+  actorId: string
+  title?: string
+  caption: string
+  buffer: Buffer
+}) {
+  const filename = `${safeFilename(input.title || 'ai-video-final')}-${Date.now()}-${randomUUID().slice(0, 8)}.mp4`
+  const obsKey = makeBrandAssetKey({ brandId: input.brandId, folder: 'AI生视频', filename })
+  const obs = await uploadHuaweiObsObject({
+    key: obsKey,
+    body: input.buffer,
+    contentType: 'video/mp4',
+  })
+
+  const url = obs.ok ? obs.url : await storeLocalAssembledVideo(input.brandId, filename, input.buffer)
+  const asset = await persistGeneratedVideoAsset({
+    brandId: input.brandId,
+    actorId: input.actorId,
+    url,
+    sourceType: obs.ok ? 'huawei_obs' : 'local',
+    tags: ['AI视频', '最终成片', 'ffmpeg_assembly'],
+    caption: input.caption,
+    sizeBytes: input.buffer.byteLength,
+  })
+  return { url, asset }
+}
+
+async function storeLocalAssembledVideo(brandId: string, filename: string, buffer: Buffer): Promise<string> {
+  const relativeDir = path.join('uploads', 'brand-assets', brandId)
+  const absoluteDir = path.join(process.cwd(), 'public', relativeDir)
+  await mkdir(absoluteDir, { recursive: true })
+  await writeFile(path.join(absoluteDir, filename), buffer)
+  return `/${relativeDir.replace(/\\/g, '/')}/${filename}`
+}
+
+async function runFfmpeg(binary: string, args: string[]): Promise<{ ok: true } | { ok: false; error: string; missingBinary?: boolean }> {
+  return new Promise((resolve) => {
+    const child = spawn(binary, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+    let stderr = ''
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk)
+    })
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      resolve({ ok: false, error: error.message, missingBinary: error.code === 'ENOENT' })
+    })
+    child.on('close', (code) => {
+      if (code === 0) resolve({ ok: true })
+      else resolve({ ok: false, error: stderr.trim() || `ffmpeg exited with code ${code}` })
+    })
+  })
+}
+
+function escapeFfmpegConcatPath(value: string): string {
+  return value.replace(/'/g, "'\\''")
+}
+
+function safeFilename(value: string): string {
+  return value.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'ai-video-final'
 }
 
 async function getVideoProviderConfig(providerHint?: string): Promise<VideoProviderConfig> {
@@ -385,6 +585,7 @@ async function persistGeneratedVideoAsset(input: {
   sourceType: string
   tags: string[]
   caption: string
+  sizeBytes?: number
 }) {
   const existing = await prisma.mediaAsset.findFirst({
     where: { brandId: input.brandId, url: input.url },
@@ -397,7 +598,7 @@ async function persistGeneratedVideoAsset(input: {
       url: input.url,
       filename: input.url.split('/').pop()?.split('?')[0] || 'ai-video.mp4',
       mimeType: 'video/mp4',
-      sizeBytes: 0,
+      sizeBytes: input.sizeBytes || 0,
       aiReady: true,
       aiCategory: 'AI生视频',
       aiTags: Array.from(new Set(input.tags)),
@@ -480,6 +681,7 @@ function outputUrlFrom(value: any): string | undefined {
   return text(value?.outputUrl)
     || text(value?.output_url)
     || text(value?.url)
+    || text(value?.asset?.url)
     || text(value?.content?.url)
     || text(value?.file?.download_url)
     || text(value?.file?.downloadUrl)
