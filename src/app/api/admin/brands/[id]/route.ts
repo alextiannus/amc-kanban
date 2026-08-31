@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
-import { calculatePricing, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
+import { calculatePricing, getAllowedDurationsForPlan, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
 import { addCrewMember } from '@/lib/user-management/crew'
 import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
 import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
@@ -10,7 +10,6 @@ type Params = { params: Promise<{ id: string }> }
 
 const BRAND_STATUSES = ['ACTIVE', 'PAUSED', 'ARCHIVED'] as const
 const SUBSCRIPTION_STATUSES = ['PENDING', 'ACTIVE', 'FAILED', 'CANCELLED'] as const
-const DURATIONS = [12] as const
 
 function normalizeString(value: unknown) {
   return typeof value === 'string' ? value.trim() : undefined
@@ -42,9 +41,19 @@ export async function PATCH(request: Request, { params }: Params) {
   const ownerUserId = normalizeString(body.ownerUserId)
   const ownerEmail = normalizeString(body.ownerEmail)?.toLowerCase()
   const rawAgentIds: unknown[] | undefined = Array.isArray(body.agentIds) ? body.agentIds : undefined
-  const planId = body.planId
+  const planId = normalizeString(body.planId)
   const subscriptionStatus = normalizeString(body.subscriptionStatus)
-  const durationMonths = Number(body.durationMonths || 12)
+  const existingSubscription = await prisma.brandSubscription.findFirst({
+    where: { brandId: id },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true, planId: true, durationMonths: true },
+  })
+  const effectivePlanId = isPlanId(planId) ? planId : (isPlanId(existingSubscription?.planId) ? existingSubscription.planId : 'essential')
+  const allowedDurations = getAllowedDurationsForPlan(effectivePlanId)
+  const requestedDurationMonths = Number(body.durationMonths ?? existingSubscription?.durationMonths ?? allowedDurations[0] ?? 12)
+  const durationMonths = allowedDurations.includes(requestedDurationMonths)
+    ? requestedDurationMonths
+    : allowedDurations[0] ?? 12
   const feeWaived = Boolean(body.feeWaived)
   const growthDirtyPaths = growthPathsForBrandPatch(body as Record<string, unknown>)
   const growthActor = {
@@ -64,10 +73,6 @@ export async function PATCH(request: Request, { params }: Params) {
   if (planId !== undefined && !isPlanId(planId)) {
     return NextResponse.json({ error: 'Invalid planId' }, { status: 400 })
   }
-  if (!DURATIONS.includes(durationMonths as (typeof DURATIONS)[number])) {
-    return NextResponse.json({ error: 'Invalid durationMonths' }, { status: 400 })
-  }
-
   let resolvedOwnerId: string | undefined
   if (ownerUserId || ownerEmail) {
     const owner = await prisma.user.findFirst({
@@ -163,14 +168,13 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     if (planId !== undefined || subscriptionStatus !== undefined || body.durationMonths !== undefined) {
-      const effectivePlanId = isPlanId(planId) ? planId : 'essential'
       const plan = SUBSCRIPTION_PLANS.find((item) => item.id === effectivePlanId)!
       const pricing = calculatePricing(effectivePlanId, durationMonths, [])
       const startDate = body.contractStartDate ? new Date(String(body.contractStartDate)) : new Date()
       const endDate = body.contractEndDate ? new Date(String(body.contractEndDate)) : new Date(startDate)
       if (!body.contractEndDate) endDate.setMonth(endDate.getMonth() + durationMonths)
 
-      const latest = await tx.brandSubscription.findFirst({ where: { brandId: id }, orderBy: { updatedAt: 'desc' }, select: { id: true } })
+      const latest = existingSubscription
       const data = {
         planId: effectivePlanId,
         planName: plan.name,

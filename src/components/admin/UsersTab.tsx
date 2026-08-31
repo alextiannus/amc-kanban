@@ -84,31 +84,14 @@ export default function UsersTab({
   savingPerms,
 }: UsersTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('humans')
-  const [editingHumanUser, setEditingHumanUser] = useState<{ id: string; email: string; nickname: string | null; role: string; type: string } | null>(null)
+  const [editingHumanUser, setEditingHumanUser] = useState<UserRecord | null>(null)
 
   const humans = users.filter(u => u.type === 'HUMAN')
 
-  const handleEditHumanUserSave = async (updated: { id: string; email: string; nickname: string | null; role: string; type: string }) => {
-    try {
-      const res = await fetch(`/api/admin/users/${updated.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: updated.email,
-          nickname: updated.nickname,
-        }),
-      })
-      if (res.ok) {
-        await onFetchUsers()
-        setEditingHumanUser(null)
-      } else {
-        const data = await res.json()
-        alert(data.error || '保存失败')
-      }
-    } catch (e) {
-      console.error(e)
-      alert('保存失败')
-    }
+  const handleEditHumanUserSave = async (updated: { id: string; email: string; nickname: string | null; role: string; type: string; businessRoles?: Array<{ role: string }> }) => {
+    void updated
+    await onFetchUsers()
+    setEditingHumanUser(null)
   }
 
   return (

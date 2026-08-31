@@ -58,6 +58,7 @@ export async function GET() {
           select: { brand: { select: { id: true, name: true, status: true } } },
         },
         ownedBrands: {
+          where: { brand: { status: { not: 'ARCHIVED' } } },
           select: { brand: { select: { id: true, name: true, status: true } } },
         },
         apiKeys: {
@@ -80,7 +81,7 @@ export async function GET() {
     const humanIds = users.filter((user: any) => user.type === 'HUMAN').map((user: any) => user.id)
     const legacyOwnedBrands = humanIds.length
       ? await prisma.brand.findMany({
-          where: { ownerId: { in: humanIds } },
+          where: { ownerId: { in: humanIds }, status: { not: 'ARCHIVED' } },
           select: { id: true, name: true, status: true, ownerId: true },
         })
       : []

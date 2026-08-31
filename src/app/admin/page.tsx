@@ -457,12 +457,17 @@ function AdminPageInner() {
   const handleSaveBrandDraft = async (brand: BrandRecord) => {
     const draft = brandDrafts[brand.id]
     if (!draft) return
+    const normalizedDraft = {
+      ...draft,
+      planId: ['starter', 'essential', 'booster'].includes(draft.planId) ? draft.planId : 'essential',
+      durationMonths: 12,
+    }
     setActionLoading(p => ({ ...p, [brand.id + '_brand']: '1' }))
     try {
       const res = await fetch(`/api/admin/brands/${brand.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(draft),
+        body: JSON.stringify(normalizedDraft),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {

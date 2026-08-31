@@ -29,7 +29,7 @@ interface UserAccountsPanelProps {
   onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
   onResetPassword: (user: UserRecord) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
-  onEditUser: (user: { id: string; email: string; nickname: string | null; role: string; type: string }) => void
+  onEditUser: (user: UserRecord) => void
   onFetchUsers?: () => Promise<void>
   onSavePermissions?: (humanId: string, agentIds: string[]) => Promise<void>
   savingPerms?: boolean
@@ -52,6 +52,7 @@ export default function UserAccountsPanel({
   onToggleBusinessRole,
   onResetPassword,
   onDeleteUser,
+  onEditUser,
   onFetchUsers,
   onSavePermissions,
   savingPerms = false,
@@ -84,6 +85,15 @@ export default function UserAccountsPanel({
   const allAgents = users.filter(u => u.type === 'AI_AGENT' && !['copywriter@platform.amc', 'designer@platform.amc', 'researcher@platform.amc'].includes(u.email))
 
   const humans = users.filter((u) => u.type === 'HUMAN')
+  const visibleOwnedBrands = (user: UserRecord) => {
+    const byId = new Map<string, { id: string; name: string; status: string }>()
+    for (const item of [...(user.ownedBrands || []), ...(user.legacyOwnedBrands || [])]) {
+      const brand = item.brand
+      if (!brand || brand.status === 'ARCHIVED') continue
+      byId.set(brand.id, brand)
+    }
+    return Array.from(byId.values())
+  }
   const filteredHumans = humans.filter((u) => {
     const query = searchTerm.trim().toLowerCase()
     if (!query) return true
@@ -104,17 +114,6 @@ export default function UserAccountsPanel({
       businessRoles: (user.businessRoles || []).map((r) => r.role),
     })
   }, [editingUserId, users])
-
-  const startEdit = (user: UserRecord) => {
-    setEditingUserId(user.id)
-    setShowKeyPlaintext(false)
-    setDraft({
-      nickname: user.nickname || '',
-      email: user.email || '',
-      role: user.role || 'USER',
-      businessRoles: (user.businessRoles || []).map((r) => r.role),
-    })
-  }
 
   const toggleDraftBusinessRole = (role: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => {
     setDraft((prev) => ({
@@ -295,7 +294,8 @@ export default function UserAccountsPanel({
             ) : (
               filteredHumans.map((user) => {
                 const isEditing = editingUserId === user.id
-                const ownedBrandCount = (user.ownedBrands || []).length + (user.legacyOwnedBrands || []).length
+                const myOwnedBrands = visibleOwnedBrands(user)
+                const ownedBrandCount = myOwnedBrands.length
                 const apiKeys = user.apiKeys || []
                 const activeKeyCount = apiKeys.filter((key) => !key.revokedAt).length
                 const isKeyExpanded = expandedKeyUserId === user.id
@@ -390,10 +390,6 @@ export default function UserAccountsPanel({
                               {ownedBrandCount > 0 ? `${ownedBrandCount} 品牌` : '无绑定品牌'}
                             </span>
                             {(() => {
-                              const myOwnedBrands = Array.from(new Set([
-                                ...(user.ownedBrands || []).map(b => b.brand),
-                                ...(user.legacyOwnedBrands || []).map(b => b.brand)
-                              ].filter(Boolean)))
                               const brandNames = myOwnedBrands.map(b => b.name).join(', ')
                               return brandNames && (
                                 <p className="text-[10px] text-slate-400 truncate max-w-[180px]" title={brandNames}>
@@ -443,7 +439,7 @@ export default function UserAccountsPanel({
                             </>
                           ) : (
                             <>
-                              <button onClick={() => startEdit(user)} className="admin-icon-button" title="编辑成员">
+                              <button onClick={() => onEditUser(user)} className="admin-icon-button" title="编辑成员详情">
                                 <Edit3 size={14} />
                               </button>
                               <button
