@@ -258,6 +258,7 @@ export async function runActorAndWait<T = unknown>(
 
 export interface ApifyReview {
   source: 'google_maps' | 'yelp'
+  placeId?: string
   reviewerName: string
   rating: number        // 1–5
   text: string
@@ -331,6 +332,7 @@ export async function scrapeGoogleMapsReviews(input: {
 
   const reviews: ApifyReview[] = (result.items ?? []).map((r) => ({
     source: 'google_maps' as const,
+    ...(input.placeId ? { placeId: input.placeId } : {}),
     reviewerName: r.reviewer?.displayName ?? r.name ?? '匿名顾客',
     rating: typeof r.stars === 'number' ? r.stars : (typeof r.rating === 'number' ? r.rating : 3),
     text: r.text ?? r.snippet ?? '',

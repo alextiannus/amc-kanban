@@ -594,7 +594,7 @@ export async function GET(req: Request, { params }: Params) {
     text: review.text,
     replyText: review.replyText,
     publishedAt: review.createTime,
-    raw: review,
+    raw: { ...review, placeId: brand.googlePlaceId },
   }))
   const profileMetrics = [
     ...asArray<Record<string, unknown>>(apifyMeta.instagramProfiles),

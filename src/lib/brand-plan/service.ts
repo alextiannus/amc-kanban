@@ -27,6 +27,12 @@ import type { CalendarCreativeMatchStatus } from '@/lib/brand-plan/calendarCreat
 import { resolveCalendarCreativeCandidateWithRetry } from '@/lib/brand-plan/calendarCreativeMatching'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import { syncConfirmedCalendarItemsToDrafts } from '@/lib/brand-plan/calendarSync'
+import {
+  researchReportTimezone,
+  researchReviewLocationId,
+  researchStoreGoogleMapsUrl,
+  researchStoreGooglePlaceId,
+} from '@/lib/growthResearchContext'
 
 type BrandPlanCalendarItem = {
   id: string
@@ -292,6 +298,7 @@ export async function loadBrandPlanBrand(brandId: string) {
           reviewUrl: true,
           publishedAt: true,
           lastSeenAt: true,
+          raw: true,
         },
         orderBy: { publishedAt: 'desc' },
         take: 100,
@@ -715,7 +722,7 @@ async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
     isPrimary: true,
   }]
   const locations = stores.map((store, index) => ({
-    location_id: text(store.storeId || store.locationId) || `${brand.id}:location:${index + 1}`,
+    location_id: text(store.storeId || store.locationId || store.locationKey) || `${brand.id}:location:${index + 1}`,
     name: text(store.name) || `${brand.name} ${index + 1}`,
     address: text(store.address),
     phone: text(store.phone),
@@ -723,8 +730,8 @@ async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
     website: text(store.website) || brand.website || '',
     reservation_url: text(store.reservationUrl),
     ordering_url: text(store.orderingUrl),
-    google_place_id: text(store.googlePlaceId) || (index === 0 ? brand.googlePlaceId || '' : ''),
-    google_maps_url: text(store.googleMapsUrl) || (index === 0 ? brand.googleBusinessUrl || brand.googleReviewUrl || '' : ''),
+    google_place_id: researchStoreGooglePlaceId(store, index === 0 ? brand.googlePlaceId || '' : ''),
+    google_maps_url: researchStoreGoogleMapsUrl(store, index === 0 ? brand.googleBusinessUrl || brand.googleReviewUrl || '' : ''),
     latitude: numberOrNull(store.latitude),
     longitude: numberOrNull(store.longitude),
     timezone: text(store.timezone) || brand.timezone,
@@ -803,7 +810,7 @@ async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
       phone: brand.phone || '',
       description: brand.description || '',
       currency: 'SGD',
-      timezone: brand.timezone,
+      timezone: researchReportTimezone(brand.timezone, knowledge?.market || brand.location, locations.map((location) => location.address)),
       language: 'zh',
       status: 'merchant_confirmed',
       updated_at: brand.updatedAt.toISOString(),
@@ -816,9 +823,9 @@ async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
       collected_at: brand.socialInsightReviews[0]?.lastSeenAt.toISOString() || null,
       items: brand.socialInsightReviews.map((review: {
         source: string; platform: string; rating: number; text: string; replyText: string | null;
-        reviewUrl: string | null; publishedAt: Date;
+        reviewUrl: string | null; publishedAt: Date; raw: Prisma.JsonValue | null;
       }) => ({
-        location_id: locations.length === 1 ? locations[0].location_id : '',
+        location_id: researchReviewLocationId(review.raw, locations),
         platform: normalizeGrowthPlatformId(review.platform) || 'google_business',
         rating: review.rating,
         text: review.text,
