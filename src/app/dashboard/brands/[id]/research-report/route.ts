@@ -3,6 +3,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getBrandPlan } from '@/lib/brand-plan/service'
 import { findLatestGrowthV3ReportReference } from '@/lib/growthDataCenter'
 import { canUseGrowthStandaloneReport, growthReportSsoHref } from '@/lib/growthReportViewer'
+import { publicKanbanOrigin } from '@/lib/publicKanbanOrigin'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 
 type Params = { params: Promise<{ id: string }> }
@@ -170,7 +171,7 @@ export async function GET(request: Request, { params }: Params) {
     })
     const growthReportHref = growthReportSsoHref(latestGrowthReport || report || {}, localReportPath)
     if (growthReportHref !== localReportPath) {
-      return NextResponse.redirect(new URL(growthReportHref, requestUrl.origin))
+      return NextResponse.redirect(new URL(growthReportHref, publicKanbanOrigin(request)))
     }
   }
 

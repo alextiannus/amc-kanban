@@ -795,6 +795,7 @@ Permanent QR contract:
 ## AMC Growth SSO（内部）
 
 - `GET /api/integrations/amc-growth/sso/start?returnTo=/dashboard/...`
+- SSO 前置跳转和登录回跳统一使用 Kanban 公网 Origin。生产环境优先读取 `NEXT_PUBLIC_APP_URL`，缺失或指向回环地址时使用 `https://amc-kanban.immedi.ai`；不得把 Render 内部 `localhost:10000` 写入 `Location`。Growth Origin 读取 `AMC_GROWTH_URL`，缺失时使用 `https://amc-growth.immedi.ai`。
 - 只接受已登录的人类 Auth V2 Session，允许角色为 `ADMIN`、`AMC_PRINCIPAL`。
 - 接口签发 60 秒、`aud=amc-growth`、带唯一 `jti` 的一次性票据并跳转 Growth callback。
 - `AMC_GROWTH_SSO_SECRET` 必须与 Growth 服务一致；响应和日志不得回显该 Secret。

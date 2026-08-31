@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server'
 import { authenticateRequest } from '@/lib/auth-v2'
 import { ensureGrowthMerchantByBrandId } from '@/lib/growthDataCenter'
 import { prisma } from '@/lib/prisma'
+import { publicKanbanOrigin } from '@/lib/publicKanbanOrigin'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,18 +79,6 @@ async function scopedGrowthBrandKeys(principal: NonNullable<Awaited<ReturnType<t
     brand.growthBrandKey || await ensureGrowthMerchantByBrandId(brand.id).catch(() => '')
   )))
   return [...new Set(keys.filter(Boolean))]
-}
-
-function publicKanbanOrigin(request: Request) {
-  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim()
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim() || 'https'
-  if (forwardedHost && !forwardedHost.startsWith('localhost')) return `${forwardedProto}://${forwardedHost}`
-
-  const requestUrl = new URL(request.url)
-  if (requestUrl.hostname !== 'localhost' && requestUrl.hostname !== '127.0.0.1') return requestUrl.origin
-
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim()
-  return configured ? new URL(configured).origin : 'https://amc-kanban.immedi.ai'
 }
 
 function configuredGrowthUrl() {

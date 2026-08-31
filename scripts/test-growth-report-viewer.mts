@@ -6,6 +6,7 @@ import {
   growthReportStandalonePath,
   selectLatestGrowthV3ReportVersionReference,
 } from '../src/lib/growthReportViewer.ts'
+import { publicKanbanOrigin } from '../src/lib/publicKanbanOrigin.ts'
 
 assert.equal(
   growthReportStandalonePath({ viewerUrl: 'https://amc-growth.immedi.ai/dashboard/reports/versions/39' }),
@@ -34,6 +35,24 @@ assert.equal(canUseGrowthStandaloneReport({ source: 'session', actorType: 'HUMAN
 assert.equal(canUseGrowthStandaloneReport({ source: 'session', actorType: 'HUMAN', globalRoles: ['BRAND_OWNER'] }), false)
 assert.equal(canUseGrowthStandaloneReport({ source: 'api_key', actorType: 'HUMAN', globalRoles: ['ADMIN'] }), false)
 assert.equal(canUseGrowthStandaloneReport({ source: 'session', actorType: 'AI_AGENT', globalRoles: ['ADMIN'] }), false)
+
+const internalRenderRequest = new Request('https://localhost:10000/dashboard/brands/brand-1/research-report')
+assert.equal(
+  publicKanbanOrigin(internalRenderRequest, { production: true, configuredUrl: null }),
+  'https://amc-kanban.immedi.ai'
+)
+assert.equal(
+  publicKanbanOrigin(internalRenderRequest, { production: true, configuredUrl: 'https://localhost:10000' }),
+  'https://amc-kanban.immedi.ai'
+)
+assert.equal(
+  publicKanbanOrigin(internalRenderRequest, { production: true, configuredUrl: 'https://kanban-staging.immedi.ai/path' }),
+  'https://kanban-staging.immedi.ai'
+)
+assert.equal(
+  publicKanbanOrigin(internalRenderRequest, { production: false, configuredUrl: null }),
+  'https://localhost:10000'
+)
 
 const latest = selectLatestGrowthV3ReportVersionReference([
   {
@@ -92,6 +111,12 @@ const growthDataCenter = readFileSync(new URL('../src/lib/growthDataCenter.ts', 
 assert(
   growthDataCenter.includes('/v1/admin/reports/${encodeURIComponent(brandKey)}/versions'),
   'latest report lookup must use the Growth report-version API'
+)
+
+const researchReportRoute = readFileSync(new URL('../src/app/dashboard/brands/[id]/research-report/route.ts', import.meta.url), 'utf8')
+assert(
+  researchReportRoute.includes('new URL(growthReportHref, publicKanbanOrigin(request))'),
+  'server-side report redirect must never use the Render internal request origin'
 )
 
 console.log('Growth report viewer link tests passed.')
