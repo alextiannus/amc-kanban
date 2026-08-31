@@ -33,7 +33,7 @@ function run() {
     video_generation_scripts: 2,
     video_generation_tokens: 3,
   })
-  assertEqual(videoUnits.totalDueUsd, 11600, 'variable video costs use unit quantity')
+  assertEqual(videoUnits.totalDueUsd, 11200, 'legacy and current video add-on ids are one billable service')
 
   const clamped = calculatePricing('starter', 12, ['video_generation_scripts'], { video_generation_scripts: 30 })
   assertEqual(clamped.totalDueUsd, 9200, 'variable cost quantity is capped at 20')

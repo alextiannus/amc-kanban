@@ -419,14 +419,6 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 
 export const SUBSCRIPTION_ADDONS: AddonItem[] = [
   {
-    id: 'video_generation_scripts',
-    name: 'Video Generation Scripts',
-    pricing: 'one_time',
-    usd: 200,
-    description: 'Video generation scripts for up to 24 video generations.',
-    details: ['S$200 / unit', 'Minimum 1 unit', 'Maximum 20 units', 'Each unit supports up to 24 video generations'],
-  },
-  {
     id: 'video_generation_tokens',
     name: 'Video Generation Token Pack',
     pricing: 'one_time',
@@ -487,7 +479,7 @@ export function getAllowedDurationsForPlan(planId: string): readonly number[] {
   return ALLOWED_DURATIONS
 }
 
-export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.10'
+export const DEFAULT_SUBSCRIPTION_TERMS_VERSION = 'AMC-SMSA-v1.11'
 
 type PlanOperationConfig = {
   platformCoverage: string[]
@@ -565,10 +557,14 @@ export function normalizeAddonQuantity(addonId: string, quantity: unknown): numb
       ? Number(quantity)
       : 1
   const whole = Math.floor(parsed)
-  if (addonId === 'video_generation_scripts' || addonId === 'video_generation_tokens') {
+  if (normalizeSubscriptionAddonId(addonId) === 'video_generation_tokens') {
     return Math.min(20, Math.max(1, whole))
   }
   return Math.max(0, whole)
+}
+
+export function normalizeSubscriptionAddonId(addonId: string): string {
+  return addonId === 'video_generation_scripts' ? 'video_generation_tokens' : addonId
 }
 
 export function calculatePricing(
@@ -586,7 +582,12 @@ export function calculatePricing(
     throw new Error('Invalid contract duration for plan')
   }
 
-  const uniqueAddonIds = Array.from(new Set(addonIds))
+  const normalizedAddonQuantities = Object.entries(addonQuantities || {}).reduce<Record<string, number>>((acc, [id, quantity]) => {
+    const normalizedId = normalizeSubscriptionAddonId(id)
+    acc[normalizedId] = Math.max(acc[normalizedId] || 0, Number(quantity) || 0)
+    return acc
+  }, {})
+  const uniqueAddonIds = Array.from(new Set(addonIds.map(normalizeSubscriptionAddonId)))
 
   const selectedAddons = uniqueAddonIds
     .map((id) => BILLABLE_SUBSCRIPTION_ADDONS.find((a) => a.id === id))
@@ -596,13 +597,13 @@ export function calculatePricing(
   const recurringAddonsUsd = selectedAddons
     .filter((a) => a.pricing === 'monthly')
     .reduce((sum, a) => {
-      const qty = addonQuantities?.[a.id] ?? 1
+      const qty = normalizedAddonQuantities[a.id] ?? 1
       return sum + a.usd * qty
     }, 0)
   const oneTimeAddonsUsd = selectedAddons
     .filter((a) => a.pricing === 'one_time')
     .reduce((sum, a) => {
-      const qty = normalizeAddonQuantity(a.id, addonQuantities?.[a.id] ?? 1)
+      const qty = normalizeAddonQuantity(a.id, normalizedAddonQuantities[a.id] ?? 1)
       return sum + a.usd * qty
     }, 0)
   const annualBaseUsd = plan.annualUsd ?? (plan.promoMonthlyUsd ?? plan.monthlyUsd) * 12

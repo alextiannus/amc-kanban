@@ -39,8 +39,8 @@ function run() {
   assertDate(activeFromPending.contractStartDate, 'activate contractStartDate')
   assertDate(activeFromPending.contractEndDate, 'activate contractEndDate')
   assertEqual(activeFromPending.trialStartsAt?.toISOString(), '2026-05-29T10:00:00.000Z', 'trial starts on activation')
-  assertEqual(activeFromPending.trialEndsAt?.toISOString(), '2026-06-05T10:00:00.000Z', 'trial ends after 7 days')
-  assertEqual(activeFromPending.billingStartsAt?.toISOString(), '2026-06-05T10:00:00.000Z', 'billing starts after trial')
+  assertEqual(activeFromPending.trialEndsAt?.toISOString(), '2026-06-03T10:00:00.000Z', 'trial ends after 5 days')
+  assertEqual(activeFromPending.billingStartsAt?.toISOString(), '2026-06-03T10:00:00.000Z', 'billing starts after trial')
 
   const activeKeepDates = buildAdminStatusUpdateData(
     {
