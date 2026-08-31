@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
+import { selectLatestGrowthV3ReportReference } from '@/lib/growthReportViewer'
 
 type GrowthLinkedBrand = {
   id: string
@@ -254,6 +255,9 @@ export type GrowthBrandIntelligenceJob = {
   progress?: number
   market?: string | null
   category?: string | null
+  brand_name?: string | null
+  created_at?: string | null
+  completed_at?: string | null
   result?: Record<string, unknown> | null
   report_versions?: Record<string, {
     report_version_id?: string
@@ -288,6 +292,18 @@ export type GrowthBrandIntelligenceJob = {
   coverage_score?: number | null
   source_coverage?: Record<string, unknown>
   error?: unknown
+}
+
+export async function findLatestGrowthV3ReportReference(identity: {
+  growthBrandKey?: string | null
+  brandName?: string | null
+}) {
+  const response = await growthRequest('/v1/brand-intelligence/jobs?limit=200', { method: 'GET' })
+  const payload = await response.json().catch(() => ({})) as { jobs?: GrowthBrandIntelligenceJob[]; error?: string }
+  if (!response.ok) {
+    throw new GrowthDataCenterError(response.status, payload.error || `growth_research_list_failed:${response.status}`)
+  }
+  return selectLatestGrowthV3ReportReference(payload.jobs || [], identity)
 }
 
 export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBrand & {

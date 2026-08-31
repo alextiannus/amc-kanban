@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getBrandPlan } from '@/lib/brand-plan/service'
+import { findLatestGrowthV3ReportReference } from '@/lib/growthDataCenter'
 import { canUseGrowthStandaloneReport, growthReportSsoHref } from '@/lib/growthReportViewer'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 
@@ -158,6 +159,22 @@ export async function GET(request: Request, { params }: Params) {
   if (!data) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
 
   const report = data.marketingSolution.researchReport
+  const requestUrl = new URL(request.url)
+  const localReportPath = requestUrl.pathname
+  if (canUseGrowthStandaloneReport(auth.principal)) {
+    const latestGrowthReport = await findLatestGrowthV3ReportReference({
+      growthBrandKey: data.brand.growthBrandKey || report?.growthBrandKey,
+      brandName: data.brand.name,
+    }).catch((error) => {
+      console.error('[growth-report] latest V3 lookup failed:', error)
+      return null
+    })
+    const growthReportHref = growthReportSsoHref(latestGrowthReport || report || {}, localReportPath)
+    if (growthReportHref !== localReportPath) {
+      return NextResponse.redirect(new URL(growthReportHref, requestUrl.origin))
+    }
+  }
+
   const rawReport = report?.reportMarkdown || report?.reportContent || ''
   if (!report || !rawReport) {
     return new NextResponse(
@@ -167,13 +184,6 @@ export async function GET(request: Request, { params }: Params) {
       }),
       { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     )
-  }
-
-  const requestUrl = new URL(request.url)
-  const localReportPath = requestUrl.pathname
-  const growthReportHref = growthReportSsoHref(report, localReportPath)
-  if (canUseGrowthStandaloneReport(auth.principal) && growthReportHref !== localReportPath) {
-    return NextResponse.redirect(new URL(growthReportHref, requestUrl.origin))
   }
 
   return new NextResponse(

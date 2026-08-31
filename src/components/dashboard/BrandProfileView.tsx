@@ -18,7 +18,6 @@ import type {
 import { brandPlanEditorIdentityValues } from '@/lib/brandPlanEditorIdentity'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import { calendarCreativeErrorMessage } from '@/lib/brand-plan/errorMessages'
-import { growthReportSsoHref } from '@/lib/growthReportViewer'
 import {
   createSkuId,
   formatSkuPrice,
@@ -2159,11 +2158,11 @@ ${storeLines}
                   {report ? '重新生成' : '生成报告'}
                 </button>
                 <a
-                  href={report ? growthReportSsoHref(report, growthResearchReportHref) : undefined}
+                  href={report ? growthResearchReportHref : undefined}
                   target="_blank"
                   rel="noreferrer"
                   aria-disabled={!report || Boolean(planGenerating)}
-                  title={report?.viewerUrl || report?.reportVersionId ? '通过 Growth SSO 查看最新原报告' : '查看 Kanban 报告预览'}
+                  title="查看 Growth 最新 V3 原报告"
                   className={`rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 ${!report || planGenerating ? 'pointer-events-none opacity-40' : ''}`}
                 >
                   查看

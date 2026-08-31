@@ -3480,13 +3480,16 @@ function serializeBrandSummary(brand: BrandPlanBrand) {
     id: brand.id,
     name: brand.name,
     location: brand.location,
+    growthBrandKey: brand.growthBrandKey,
   }
 }
 
 function readMarketingSolutionWorkspace(brand: BrandPlanBrand): BrandPlanWorkspaceData {
   const legacyWorkspace = normalizeBrandPlan(brand.knowledge?.brandPlan)
   const marketingSolution = normalizeBrandPlan(brand.knowledge?.marketingSolution)
-  const researchReport = normalizeResearchReport(brand.knowledge?.researchReport) || legacyWorkspace.researchReport
+  const researchReport = normalizeResearchReport(marketingSolution.researchReport)
+    || normalizeResearchReport(brand.knowledge?.researchReport)
+    || normalizeResearchReport(legacyWorkspace.researchReport)
   return {
     ...legacyWorkspace,
     ...marketingSolution,
