@@ -288,10 +288,32 @@ interface CalendarEvent {
   creativeHooks?: string | null
 }
 
+interface HistoricalPostFormState {
+  accountId: string
+  publishedAt: string
+  postUrl: string
+  caption: string
+  hashtags: string
+  mediaUrls: string
+}
+
 interface DashboardCalendarProps {
   brandId?: string
   preselectedAssetIds?: string[] | null
   clearPreselectedAssets?: () => void
+}
+
+function dateTimeLocalForCalendarDay(year: number, month: number, day: number) {
+  const date = new Date(year, month, day, 12, 0, 0, 0)
+  if (date.getTime() > Date.now()) date.setTime(Date.now())
+  return toDateTimeLocal(date.toISOString())
+}
+
+function splitCsvOrLines(value: string) {
+  return value
+    .split(/[\n,，]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }
 
 export default function DashboardCalendar({ brandId, preselectedAssetIds, clearPreselectedAssets }: DashboardCalendarProps) {
@@ -365,6 +387,16 @@ export default function DashboardCalendar({ brandId, preselectedAssetIds, clearP
   const [showPublishDropdown, setShowPublishDropdown] = useState(false)
   const [previewModalOpen, setPreviewModalOpen] = useState(false)
   const [previewOnly, setPreviewOnly] = useState(false)
+  const [showHistoricalPostForm, setShowHistoricalPostForm] = useState(false)
+  const [historicalPostForm, setHistoricalPostForm] = useState<HistoricalPostFormState>(() => ({
+    accountId: 'unconfigured_instagram',
+    publishedAt: dateTimeLocalForCalendarDay(today.getFullYear(), today.getMonth(), today.getDate()),
+    postUrl: '',
+    caption: '',
+    hashtags: '',
+    mediaUrls: '',
+  }))
+  const [historicalPostError, setHistoricalPostError] = useState<string | null>(null)
 
   const handleGenerateHooks = async () => {
     setIsGeneratingHooks(true)
@@ -541,6 +573,80 @@ ${contentIdea || 'No details provided.'}`
     })
     return list
   }, [accounts, createdDrafts])
+
+  const openHistoricalPostForm = (day = selectedDay || today.getDate()) => {
+    const firstAccount = accountOptions[0]
+    setHistoricalPostForm({
+      accountId: firstAccount?.id || 'unconfigured_instagram',
+      publishedAt: dateTimeLocalForCalendarDay(viewYear, viewMonth, day),
+      postUrl: '',
+      caption: '',
+      hashtags: '',
+      mediaUrls: '',
+    })
+    setHistoricalPostError(null)
+    setShowHistoricalPostForm(true)
+  }
+
+  const submitHistoricalPost = async () => {
+    if (!activeBrandId) {
+      setHistoricalPostError('请先选择一个品牌。')
+      return
+    }
+    const captionValue = historicalPostForm.caption.trim()
+    if (!captionValue) {
+      setHistoricalPostError('请填写已发布帖文内容。')
+      return
+    }
+    const publishedAt = historicalPostForm.publishedAt ? new Date(historicalPostForm.publishedAt) : null
+    if (!publishedAt || Number.isNaN(publishedAt.getTime())) {
+      setHistoricalPostError('请选择真实发布时间。')
+      return
+    }
+    if (publishedAt.getTime() > Date.now()) {
+      setHistoricalPostError('补录内容的发布时间不能晚于当前时间。')
+      return
+    }
+    const postUrl = historicalPostForm.postUrl.trim()
+    if (postUrl) {
+      try {
+        const parsed = new URL(postUrl)
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('invalid')
+      } catch {
+        setHistoricalPostError('真实链接需要以 http:// 或 https:// 开头。')
+        return
+      }
+    }
+
+    setSaving(true)
+    setHistoricalPostError(null)
+    try {
+      const res = await fetch(`/api/brands/${activeBrandId}/drafts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: historicalPostForm.accountId || 'unconfigured_instagram',
+          caption: captionValue,
+          hashtags: splitCsvOrLines(historicalPostForm.hashtags).map((tag) => tag.replace(/^#/, '')),
+          mediaUrls: splitCsvOrLines(historicalPostForm.mediaUrls),
+          scheduledAt: null,
+          status: 'published',
+          publishedAt: publishedAt.toISOString(),
+          postUrl: postUrl || null,
+          agentNote: 'manual-historical-published-post',
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '补录已发布帖文失败')
+      setShowHistoricalPostForm(false)
+      await refreshCalendar()
+      alert('已保存到内容日历。')
+    } catch (error: any) {
+      setHistoricalPostError(error?.message || '补录已发布帖文失败')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (!isAiGenerating || !createdDrafts || createdDrafts.length === 0) return
@@ -1789,6 +1895,10 @@ ${contentIdea || 'No details provided.'}`
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1)
   ]
   while (cells.length % 7 !== 0) cells.push(null)
+  const selectedDate = selectedDay ? new Date(viewYear, viewMonth, selectedDay) : null
+  const selectedDateIsPast = selectedDate
+    ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime() <= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+    : false
 
   const getDaysForWeekView = () => {
     const referenceDate = selectedDay ? new Date(viewYear, viewMonth, selectedDay) : new Date(viewYear, viewMonth, 1)
@@ -2241,6 +2351,10 @@ ${contentIdea || 'No details provided.'}`
                 const dayEvents = day ? (eventsByDay[day] || []) : []
                 const selected = day === selectedDay
                 const todayCell = day ? isToday(day) : false
+                const dayDate = day ? new Date(viewYear, viewMonth, day) : null
+                const dayIsPast = dayDate
+                  ? new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime() <= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+                  : false
 
                 return (
                   <div
@@ -2259,6 +2373,20 @@ ${contentIdea || 'No details provided.'}`
                           </span>
                           {dayEvents.length > 2 && (
                             <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">+{dayEvents.length - 2}</span>
+                          )}
+                          {activeBrandId && dayIsPast && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedDay(day)
+                                openHistoricalPostForm(day)
+                              }}
+                              className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                              title="补录已发布帖文"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
                           )}
                         </div>
                         
@@ -2337,6 +2465,7 @@ ${contentIdea || 'No details provided.'}`
                 const isSelected = selectedDay === d.getDate() && viewMonth === d.getMonth() && viewYear === d.getFullYear()
                 const todayCell = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
                 const isCurrentMonth = d.getMonth() === viewMonth
+                const dayIsPast = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() <= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
                 
                 const dayEvents = filteredEvents.filter(ev => {
                   const evDate = new Date(ev.scheduledAt)
@@ -2363,6 +2492,22 @@ ${contentIdea || 'No details provided.'}`
                         ${todayCell ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
                         {d.getDate()}
                       </span>
+                      {activeBrandId && dayIsPast && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setViewYear(d.getFullYear())
+                            setViewMonth(d.getMonth())
+                            setSelectedDay(d.getDate())
+                            openHistoricalPostForm(d.getDate())
+                          }}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                          title="补录已发布帖文"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                       <span className="text-[8px] font-bold text-slate-400 uppercase">{WEEKDAYS[d.getDay()]}</span>
                     </div>
                     
@@ -2444,6 +2589,16 @@ ${contentIdea || 'No details provided.'}`
                     </h3>
                     <p className="text-xs text-slate-400 mt-1">当天共有 {selectedDayEvents.length} 条排期记录</p>
                   </div>
+                  {activeBrandId && selectedDateIsPast && (
+                    <button
+                      type="button"
+                      onClick={() => openHistoricalPostForm(selectedDay || today.getDate())}
+                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 shadow-sm active:scale-95 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>补录已发布帖文</span>
+                    </button>
+                  )}
                 </div>
                 
                 {selectedDayEvents.length === 0 ? (
@@ -2474,15 +2629,14 @@ ${contentIdea || 'No details provided.'}`
                       <p className="text-xs text-slate-450 mt-2">该品牌暂未绑定任何托管发布渠道。请先前往“品牌设置”连接渠道账号。</p>
                     )}
 
-                          {activeBrandId && (
+                          {activeBrandId && selectedDateIsPast && (
                       <button
-                        onClick={() => {
-                          alert('请在“发布”或“任务”视图新建排期草稿，发布后将在日历对应日期上显示。')
-                        }}
-                        className="mt-6 inline-flex items-center gap-2 bg-indigo-650 hover:bg-indigo-750 text-white font-bold text-xs py-2 px-4 rounded-xl transition-all shadow-md active:scale-95"
+                        type="button"
+                        onClick={() => openHistoricalPostForm(selectedDay || today.getDate())}
+                        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md transition-all active:scale-95"
                       >
                         <Plus className="w-3.5 h-3.5 text-white" />
-                        <span>新建排期草稿</span>
+                        <span>补录已发布帖文</span>
                       </button>
                     )}
                   </div>
@@ -2697,6 +2851,114 @@ ${contentIdea || 'No details provided.'}`
         </div>
         </>
       </main>
+      {showHistoricalPostForm && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-slate-950/55 px-4 pb-4 sm:items-center">
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-slate-900 dark:text-slate-100">补录已发布帖文</h3>
+                <p className="mt-1 text-[11px] font-semibold text-slate-400">保存非 AMC 发布的真实内容、发布时间和原文链接。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHistoricalPostForm(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="关闭"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">平台账号</span>
+                <select
+                  value={historicalPostForm.accountId}
+                  onChange={(event) => setHistoricalPostForm({ ...historicalPostForm, accountId: event.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                >
+                  {accountOptions.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.displayName || account.handle || normalizePlatformLabel(account.platformId)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">真实发布时间</span>
+                <input
+                  type="datetime-local"
+                  value={historicalPostForm.publishedAt}
+                  max={toDateTimeLocal(new Date().toISOString())}
+                  onChange={(event) => setHistoricalPostForm({ ...historicalPostForm, publishedAt: event.target.value })}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">真实链接</span>
+                <input
+                  type="url"
+                  value={historicalPostForm.postUrl}
+                  onChange={(event) => setHistoricalPostForm({ ...historicalPostForm, postUrl: event.target.value })}
+                  placeholder="https://"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">帖文内容</span>
+                <textarea
+                  value={historicalPostForm.caption}
+                  onChange={(event) => setHistoricalPostForm({ ...historicalPostForm, caption: event.target.value })}
+                  rows={4}
+                  className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">Hashtags</span>
+                  <textarea
+                    value={historicalPostForm.hashtags}
+                    onChange={(event) => setHistoricalPostForm({ ...historicalPostForm, hashtags: event.target.value })}
+                    rows={2}
+                    placeholder="#sgfood, #supper"
+                    className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[10px] font-black uppercase text-slate-400">图片/视频链接</span>
+                  <textarea
+                    value={historicalPostForm.mediaUrls}
+                    onChange={(event) => setHistoricalPostForm({ ...historicalPostForm, mediaUrls: event.target.value })}
+                    rows={2}
+                    placeholder="https://..."
+                    className="w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                  />
+                </label>
+              </div>
+
+              {historicalPostError && (
+                <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-bold text-rose-700 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-300">
+                  {historicalPostError}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={submitHistoricalPost}
+                disabled={saving}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-black text-white shadow-sm active:scale-[0.99] disabled:opacity-60"
+              >
+                {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>{saving ? '保存中' : '保存到内容日历'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <PostEditDrawer
         isOpen={selectedEventId !== null || isCreatingNewPost}
         onClose={() => {
