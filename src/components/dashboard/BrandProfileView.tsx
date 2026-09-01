@@ -1971,7 +1971,7 @@ ${storeLines}
                 <Edit3 className="h-3.5 w-3.5" /> 编辑基础资料
               </button>
             </div>
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <div className="grid gap-4 lg:grid-cols-2">
               <div
                 role="button"
                 tabIndex={0}
@@ -1984,10 +1984,10 @@ ${storeLines}
                     openPlanEditor()
                   }
                 }}
-                className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
+                className="group min-w-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
                 title="点击编辑品牌基础资料"
               >
-                <div className="grid gap-3 text-sm">
+                <div className="grid min-w-0 gap-3 text-sm">
                   {[
                     ['品牌名称', draftName || brand.name],
                     ['品牌介绍', draftDesc || '待补充'],
@@ -1995,9 +1995,9 @@ ${storeLines}
                     ['官网链接', draftWebsite || '待补充'],
                     ['所在市场', [draftMarket, draftDistrict].filter(Boolean).join(' / ') || draftLocation || '待补充'],
                   ].map(([label, value]) => (
-                    <div key={label} className="grid grid-cols-[86px_1fr] gap-3 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0 dark:border-slate-800">
+                    <div key={label} className="grid min-w-0 grid-cols-[86px_minmax(0,1fr)] gap-3 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0 dark:border-slate-800">
                       <span className="text-xs font-bold text-slate-400">{label}</span>
-                      <span className="break-words text-xs font-semibold leading-relaxed text-slate-700 dark:text-slate-200">{value}</span>
+                      <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] text-xs font-semibold leading-relaxed text-slate-700 dark:text-slate-200">{value}</span>
                     </div>
                   ))}
                 </div>
@@ -2014,7 +2014,7 @@ ${storeLines}
                     openPlanEditor()
                   }
                 }}
-                className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
+                className="group min-w-0 cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
                 title="点击编辑门店和 SKU"
               >
                 <div className="mb-4 flex items-center justify-between gap-3">
