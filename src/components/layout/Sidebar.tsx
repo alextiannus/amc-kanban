@@ -71,7 +71,6 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '知识库': 'Knowledge Base',
   '品牌灵感': 'Brand Inspiration',
   '推广计划': 'Marketing Plans',
-  '素材执行': 'Material Execution',
   'AI 角色库': 'AI Role Library',
   '视频生产': 'Video Production',
   '爆品脚本': 'Viral Copy Scripts',

@@ -119,7 +119,6 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
       items: [
         { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
-        { id: 'promotion-execution',view: 'assets', label: '素材执行', icon: 'Camera' },
       ],
     })
     groups.push({

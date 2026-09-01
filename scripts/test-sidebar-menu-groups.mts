@@ -4,7 +4,7 @@ import { getMenuGroups as getMenuGroupsMain } from '../src/lib/permissions.ts'
 import { getMenuGroups as getMenuGroupsUserManagement } from '../src/lib/user-management/permissions.ts'
 
 const expectedManagedGroups = [
-  ['主理人', ['主理人总览', '账号快照', '素材执行']],
+  ['主理人', ['主理人总览', '账号快照']],
   ['内容中心', ['视频生产', '爆品脚本', 'AI 角色库']],
   ['知识增长中心', ['知识库']],
 ]

@@ -44,6 +44,7 @@ export default function UserMenu({
   const router = useRouter()
 
   const roles = resolveRoles(user)
+  const displayName = (user?.nickname?.trim() || user?.email || '').trim()
   const roleLabel = roles.length > 0
     ? roles.map(r => isEn ? (ROLE_LABELS[r] || r) : (
       r === 'BRAND_OWNER' ? '品牌主' :
@@ -78,14 +79,22 @@ export default function UserMenu({
     <div className="relative" ref={containerRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold hover:shadow-md hover:scale-105 transition-all duration-200 border border-slate-200 dark:border-slate-700 overflow-hidden"
+        aria-label={displayName ? `Hi, ${displayName}` : t('用户菜单', 'User menu')}
+        className="flex h-9 items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 pl-1 pr-3 text-slate-700 dark:text-slate-200 font-bold hover:shadow-md hover:scale-[1.02] transition-all duration-200 border border-slate-200 dark:border-slate-700"
       >
-        {user?.avatar ? (
-          <img src={user.avatar} alt={t('头像', 'Avatar')} className="w-full h-full object-cover" />
-        ) : user ? (
-          (user.nickname || user.email).charAt(0).toUpperCase()
-        ) : (
-          <UserIcon size={16} />
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white dark:bg-slate-900 text-xs">
+          {user?.avatar ? (
+            <img src={user.avatar} alt={t('头像', 'Avatar')} className="w-full h-full object-cover" />
+          ) : user ? (
+            (displayName || user.email).charAt(0).toUpperCase()
+          ) : (
+            <UserIcon size={15} />
+          )}
+        </span>
+        {displayName && (
+          <span className="hidden sm:inline text-sm leading-none whitespace-nowrap">
+            Hi, {displayName}
+          </span>
         )}
       </button>
 
