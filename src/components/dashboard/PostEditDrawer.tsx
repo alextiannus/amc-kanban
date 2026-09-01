@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   X,
   Heart,
@@ -139,6 +139,13 @@ function normalizePlatformLabel(plat?: string): string {
 function isGooglePlatform(plat?: string | null): boolean {
   return ['google', 'google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb']
     .includes(String(plat ?? '').toLowerCase().trim())
+}
+
+function normalizeHttpUrl(value?: string | null): string | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  return trimmed.startsWith('http://') || trimmed.startsWith('https://') ? trimmed : null
 }
 
 interface DraftItem {
@@ -292,6 +299,11 @@ export default function PostEditDrawer({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const postUrlClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const postUrlInputRef = useRef<HTMLInputElement | null>(null)
+  const [manualPostUrl, setManualPostUrl] = useState('')
+  const [manualPostUrlError, setManualPostUrlError] = useState('')
+  const [isEditingPostUrl, setIsEditingPostUrl] = useState(false)
 
   // AI copywriting monitoring states
   const [isAiGenerating, setIsAiGenerating] = useState(false)
@@ -561,6 +573,9 @@ export default function PostEditDrawer({
       setMediaUrlsInput('')
       setNewUrlInput('')
       setCommentsList([])
+      setManualPostUrl('')
+      setManualPostUrlError('')
+      setIsEditingPostUrl(false)
       return
     }
 
@@ -573,6 +588,9 @@ export default function PostEditDrawer({
         const json = await res.json()
         const draft = json.draft as DraftItem
         setSelectedDraft(draft)
+        setManualPostUrl(draft.postUrl || '')
+        setManualPostUrlError('')
+        setIsEditingPostUrl(!normalizeHttpUrl(draft.postUrl))
         setSelectedViralCopyScript(draft.viralCopyScriptId && draft.viralCopyScriptVersionId ? {
           id: draft.viralCopyScriptId,
           name: draft.viralCopyScriptName || '已固定爆品脚本',
@@ -668,6 +686,72 @@ export default function PostEditDrawer({
 
     loadDraft()
   }, [isOpen, postId, brandId, accounts.length])
+
+  useEffect(() => {
+    return () => {
+      if (postUrlClickTimerRef.current) clearTimeout(postUrlClickTimerRef.current)
+    }
+  }, [])
+
+  const saveManualPostUrl = async () => {
+    if (!selectedDraft || !isPublished) return
+    const trimmed = manualPostUrl.trim()
+    if (trimmed && !normalizeHttpUrl(trimmed)) {
+      setManualPostUrlError('真实链接需要以 http:// 或 https:// 开头。')
+      return
+    }
+    setSaving(true)
+    setManualPostUrlError('')
+    try {
+      const res = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postUrl: trimmed || null }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || '保存帖文链接失败')
+      const updatedDraft = json.draft as DraftItem | undefined
+      if (updatedDraft) {
+        setSelectedDraft(updatedDraft)
+        setManualPostUrl(updatedDraft.postUrl || '')
+        setIsEditingPostUrl(!normalizeHttpUrl(updatedDraft.postUrl))
+      } else {
+        setSelectedDraft({ ...selectedDraft, postUrl: trimmed || null })
+        setIsEditingPostUrl(!trimmed)
+      }
+      onSuccess()
+    } catch (error: any) {
+      setManualPostUrlError(error?.message || '保存帖文链接失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePublishedUrlClick = () => {
+    const postUrl = normalizeHttpUrl(selectedDraft?.postUrl)
+    if (!postUrl) {
+      setIsEditingPostUrl(true)
+      setTimeout(() => postUrlInputRef.current?.focus(), 0)
+      return
+    }
+    if (isEditingPostUrl) return
+    if (postUrlClickTimerRef.current) clearTimeout(postUrlClickTimerRef.current)
+    postUrlClickTimerRef.current = setTimeout(() => {
+      window.location.assign(postUrl)
+      postUrlClickTimerRef.current = null
+    }, 220)
+  }
+
+  const handlePublishedUrlDoubleClick = () => {
+    if (postUrlClickTimerRef.current) {
+      clearTimeout(postUrlClickTimerRef.current)
+      postUrlClickTimerRef.current = null
+    }
+    setManualPostUrl(selectedDraft?.postUrl || '')
+    setManualPostUrlError('')
+    setIsEditingPostUrl(true)
+    setTimeout(() => postUrlInputRef.current?.focus(), 0)
+  }
 
   // AI Generation Polling logic
   useEffect(() => {
@@ -1507,6 +1591,7 @@ Return the output strictly in a valid JSON array format, containing:
   const isScheduled = selectedDraft?.status === 'scheduled'
   const isPendingReview = selectedDraft?.status === 'pending_review'
   const isDraftOrFailed = !selectedDraft || ['draft', 'failed'].includes(selectedDraft.status)
+  const publishedPostUrl = normalizeHttpUrl(selectedDraft?.postUrl)
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30 p-3 backdrop-blur-sm" onClick={onClose}>
@@ -1519,16 +1604,6 @@ Return the output strictly in a valid JSON array format, containing:
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-slate-400 flex items-center gap-2">
               <span>{selectedDraft ? STATUS_LABELS[selectedDraft.status] || selectedDraft.status : '草稿'}</span>
-              {isPublished && selectedDraft.postUrl && (
-                <a
-                  href={selectedDraft.postUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-indigo-650 hover:text-indigo-750 hover:underline dark:text-indigo-400 dark:hover:text-indigo-300 font-bold"
-                >
-                  🔗 查看文章
-                </a>
-              )}
             </p>
             <h3 className="text-lg font-black text-slate-955 dark:text-white">
               {selectedDraft ? (isPublished ? '查看已发布文章' : isScheduled ? '编辑已排期文章' : isPendingReview ? '审核文章' : '编辑草稿') : '新建发布草稿'}
@@ -2354,23 +2429,59 @@ Return the output strictly in a valid JSON array format, containing:
 
           {/* DYNAMIC ACTIONS BY STATUS */}
           {isPublished ? (
-            selectedDraft?.postUrl ? (
-              <a
-                href={selectedDraft.postUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white transition-colors"
-              >
-                打开已发布文章
-              </a>
-            ) : (
-              <button
-                disabled
-                className="inline-flex items-center gap-2 rounded-md bg-slate-300 dark:bg-slate-700 px-4 py-2 text-sm font-bold text-slate-550 dark:text-slate-400 cursor-not-allowed"
-              >
-                打开已发布文章 (暂无链接)
-              </button>
-            )
+            <div className="mr-auto flex min-w-[260px] max-w-full flex-col gap-1.5">
+              <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <input
+                    ref={postUrlInputRef}
+                    type="url"
+                    readOnly={!isEditingPostUrl}
+                    value={isEditingPostUrl ? manualPostUrl : (publishedPostUrl || manualPostUrl)}
+                    onClick={handlePublishedUrlClick}
+                    onDoubleClick={handlePublishedUrlDoubleClick}
+                    onChange={(event) => {
+                      if (!isEditingPostUrl) return
+                      setManualPostUrl(event.target.value)
+                      setManualPostUrlError('')
+                    }}
+                    onKeyDown={(event) => {
+                      if (isEditingPostUrl && event.key === 'Enter' && !saving) {
+                        event.preventDefault()
+                        void saveManualPostUrl()
+                      }
+                    }}
+                    placeholder="粘贴已发布帖文真实链接"
+                    className={`w-full rounded-md border px-3 py-2 pr-9 text-sm font-semibold outline-none transition-colors ${
+                      isEditingPostUrl
+                        ? 'border-slate-200 bg-slate-50 text-slate-800 focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100'
+                        : 'cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-750 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-200'
+                    }`}
+                    title={isEditingPostUrl ? '编辑已发布帖文链接' : '点击打开，双击修改'}
+                  />
+                  {!isEditingPostUrl && publishedPostUrl && (
+                    <ExternalLink className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-emerald-600 dark:text-emerald-300" />
+                  )}
+                </div>
+                {isEditingPostUrl && (
+                  <button
+                    type="button"
+                    onClick={saveManualPostUrl}
+                    disabled={saving || (!manualPostUrl.trim() && !publishedPostUrl)}
+                    className="flex w-11 items-center justify-center rounded-md bg-indigo-600 text-white disabled:opacity-40"
+                    title="保存帖文链接"
+                  >
+                    {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  </button>
+                )}
+              </div>
+              {manualPostUrlError ? (
+                <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-300">{manualPostUrlError}</p>
+              ) : (
+                <p className="text-[11px] font-semibold text-slate-400">
+                  {publishedPostUrl && !isEditingPostUrl ? '已保存真实帖文链接。' : '自动发布未返回链接时，可以在这里手动补充。'}
+                </p>
+              )}
+            </div>
           ) : isDraftOrFailed ? (
             <>
               <button
