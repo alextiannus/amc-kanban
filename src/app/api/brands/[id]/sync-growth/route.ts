@@ -15,6 +15,7 @@ import {
   selectPrimaryGrowthLocation,
   type GrowthMerchantLocation,
 } from '@/lib/growthGooglePlaces'
+import { serializeSkuLibrary, validateSkuLibrary } from '@/lib/sku-library/service'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -197,12 +198,12 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
     reservationUrl,
     orderingUrl,
   })
-  const menuItems = firstArray([
+  const rawMenuItems = firstArray([
     value('menu.items'),
     value('product.menu_items'),
-    story.signature_dishes,
-    profile.product_assumptions,
   ])
+  const invalidMenuIndexes = new Set(validateSkuLibrary(rawMenuItems).map(issue => issue.index))
+  const menuItems = serializeSkuLibrary(rawMenuItems.filter((_, index) => !invalidMenuIndexes.has(index)))
   const slangDict = firstRecord([
     value('brand.slang'),
     value('local.terminology'),

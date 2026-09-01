@@ -53,6 +53,7 @@
     "audit:auth-v2-debt": "node scripts/audit-auth-v2-debt.mjs",
     "test:auth-v2": "node --experimental-strip-types scripts/test-auth-v2.mts",
     "test:brand-identity": "node --experimental-strip-types scripts/test-brand-identity-contract.mts",
+    "test:sku-library": "node --experimental-strip-types scripts/test-sku-library.mts",
     "test:brand-growth-sync": "node --experimental-strip-types scripts/test-brand-growth-sync-contract.mts",
     "test:planning-ownership": "node --experimental-strip-types scripts/test-planning-ownership-contract.mts",
     "test:brand-plan-inspiration-link": "node --experimental-strip-types scripts/test-brand-plan-inspiration-link.mts",

@@ -25,6 +25,7 @@ import {
   serializeSkuLibraryItem,
   skuBadges,
   sortSkuLibrary,
+  validateSkuLibrary,
   type SkuLibraryItem,
 } from '@/lib/sku-library/service'
 import { getPlanPublishingFreq } from '@/lib/subscription/catalog'
@@ -1198,6 +1199,11 @@ ${storeLines}
       const menuItems = draftMenuItems.length
         ? draftMenuItems.map(serializeSkuLibraryItem).filter(item => item.name)
         : textLines(draftMenuText).map(name => serializeSkuLibraryItem({ id: createSkuId(), type: 'single', name }))
+      const skuIssues = validateSkuLibrary(menuItems)
+      if (skuIssues.length) {
+        showToastVal(`${skuIssues[0].message}，请将名称、价格、人数和卖点分别填写`, 'error')
+        return
+      }
       const settingsRes = await fetch(`/api/brands/${brandId}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2048,10 +2054,13 @@ ${storeLines}
                       {priorityMenuItems.slice(0, 8).map((item, index) => {
                         const badges = skuBadges(item)
                         const price = formatSkuPrice(item)
+                        const nameNeedsReview = validateSkuLibrary([item]).some(issue => issue.field === 'name')
                         return (
-                          <div key={`${item.id || item.name}-${index}`} className="rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                          <div key={`${item.id || item.name}-${index}`} className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
                             <div className="flex items-start justify-between gap-2">
-                              <p className="min-w-0 text-[11px] font-black text-slate-700 dark:text-slate-200">{item.name || `SKU ${index + 1}`}</p>
+                              <p title={nameNeedsReview ? undefined : item.name} className={`line-clamp-2 min-w-0 flex-1 break-words text-[11px] font-black ${nameNeedsReview ? 'text-rose-600' : 'text-slate-700 dark:text-slate-200'}`}>
+                                {nameNeedsReview ? '该商品名称包含混合内容，请编辑修正' : item.name || `SKU ${index + 1}`}
+                              </p>
                               {price ? <span className="shrink-0 text-[11px] font-black text-emerald-600">{price}</span> : null}
                             </div>
                             {badges.length ? (
@@ -2830,12 +2839,12 @@ ${storeLines}
                             <option value="bundle">套餐</option>
                             <option value="service">服务</option>
                           </select>
-                          <input value={item.name} onChange={event => updateProductServiceItem(index, { name: event.target.value })} placeholder="名称，例如 铁锅炖大鹅" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
-                          <input value={item.price || ''} onChange={event => updateProductServiceItem(index, { price: event.target.value })} placeholder="价格，例如 38 / 200" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
-                          <input value={item.serves || ''} onChange={event => updateProductServiceItem(index, { serves: event.target.value })} placeholder="适合人数" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
-                          <input value={item.bundleItems || ''} onChange={event => updateProductServiceItem(index, { bundleItems: event.target.value })} placeholder="套餐内容 / 搭配建议" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-2" />
-                          <input value={item.imageUrl || ''} onChange={event => updateProductServiceItem(index, { imageUrl: event.target.value })} placeholder="图片 URL" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-2" />
-                          <textarea value={item.description || ''} onChange={event => updateProductServiceItem(index, { description: event.target.value })} rows={2} placeholder="卖点、分量、适合场景，例如 $200 够几个人吃、$30/人能吃到什么" className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-4" />
+                          <input maxLength={80} value={item.name} onChange={event => updateProductServiceItem(index, { name: event.target.value })} placeholder="名称，例如 铁锅炖大鹅" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                          <input maxLength={40} value={item.price || ''} onChange={event => updateProductServiceItem(index, { price: event.target.value })} placeholder="价格，例如 38 / 200" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                          <input maxLength={40} value={item.serves || ''} onChange={event => updateProductServiceItem(index, { serves: event.target.value })} placeholder="适合人数" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                          <input maxLength={500} value={item.bundleItems || ''} onChange={event => updateProductServiceItem(index, { bundleItems: event.target.value })} placeholder="套餐内容 / 搭配建议" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-2" />
+                          <input maxLength={2000} value={item.imageUrl || ''} onChange={event => updateProductServiceItem(index, { imageUrl: event.target.value })} placeholder="图片 URL" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-2" />
+                          <textarea maxLength={2000} value={item.description || ''} onChange={event => updateProductServiceItem(index, { description: event.target.value })} rows={2} placeholder="卖点、分量、适合场景，例如 $200 够几个人吃、$30/人能吃到什么" className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 md:col-span-4" />
                         </div>
                         <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold text-slate-600 dark:text-slate-300">
                           <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isHotSeller)} onChange={event => updateProductServiceItem(index, { isHotSeller: event.target.checked })} /> 热销品</label>

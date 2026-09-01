@@ -7,6 +7,7 @@ import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
 import {
   buildSkuLibraryResponse,
   serializeSkuLibrary,
+  validateSkuLibrary,
 } from '@/lib/sku-library/service'
 
 export const maxDuration = 60
@@ -54,7 +55,15 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
-  const items = serializeSkuLibrary(body.items ?? body.menuItems)
+  const rawItems = body.items ?? body.menuItems
+  if (!Array.isArray(rawItems)) {
+    return NextResponse.json({ error: 'items must be an array' }, { status: 400 })
+  }
+  const issues = validateSkuLibrary(rawItems)
+  if (issues.length) {
+    return NextResponse.json({ error: issues[0].message, issues }, { status: 400 })
+  }
+  const items = serializeSkuLibrary(rawItems)
 
   const knowledge = await prisma.brandKnowledge.upsert({
     where: { brandId },

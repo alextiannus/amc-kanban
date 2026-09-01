@@ -30,6 +30,22 @@ export type SkuLibraryResponse = {
   }
 }
 
+export const SKU_FIELD_LIMITS = {
+  name: 80,
+  price: 40,
+  serves: 40,
+  bundleItems: 500,
+  description: 2000,
+  imageUrl: 2000,
+} as const
+
+export type SkuLibraryValidationIssue = {
+  index: number
+  field: keyof typeof SKU_FIELD_LIMITS
+  code: 'too_long' | 'multiple_products'
+  message: string
+}
+
 export function createSkuId() {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return `sku_${crypto.randomUUID()}`
@@ -59,18 +75,19 @@ function normalizeType(value: unknown, tags: string[]): SkuItemType {
 }
 
 export function normalizeSkuLibraryItem(item: unknown): SkuLibraryItem {
-  if (typeof item === 'string') return { id: createSkuId(), type: 'single', name: item }
+  if (typeof item === 'string') return { id: createSkuId(), type: 'single', name: stringValue(item) }
   const raw = rawObject(item)
   const tags = stringArray(raw.tags)
+  const imageUrls = stringArray(raw.image_urls)
   return {
     id: stringValue(raw.id) || createSkuId(),
-    type: normalizeType(raw.type, tags),
-    name: stringValue(raw.name || raw.title),
+    type: normalizeType(raw.type || (raw.bundle ? 'bundle' : ''), tags),
+    name: stringValue(raw.name ?? raw.title),
     price: stringValue(raw.price),
     currency: stringValue(raw.currency) || 'S$',
     description: stringValue(raw.description),
-    imageUrl: stringValue(raw.imageUrl || raw.image),
-    serves: stringValue(raw.serves),
+    imageUrl: stringValue(raw.imageUrl || raw.image || imageUrls[0]),
+    serves: stringValue(raw.serves || raw.portion),
     bundleItems: Array.isArray(raw.bundleItems)
       ? stringArray(raw.bundleItems).join(' / ')
       : stringValue(raw.bundleItems),
@@ -78,14 +95,62 @@ export function normalizeSkuLibraryItem(item: unknown): SkuLibraryItem {
     isHotSeller: Boolean(raw.isHotSeller || tags.includes('热销品') || tags.includes('热销') || tags.includes('hot_seller')),
     isHighRepeat: Boolean(raw.isHighRepeat || tags.includes('高复购品') || tags.includes('高复购') || tags.includes('high_repeat')),
     isMerchantPick: Boolean(raw.isMerchantPick || tags.includes('商家主推') || tags.includes('主推品') || tags.includes('主推') || tags.includes('merchant_pick')),
-    isSignature: Boolean(raw.isSignature || tags.includes('招牌') || tags.includes('signature')),
+    isSignature: Boolean(raw.isSignature || raw.signature || tags.includes('招牌') || tags.includes('signature')),
   }
 }
 
 export function normalizeSkuLibrary(items: unknown): SkuLibraryItem[] {
+  const usedIds = new Set<string>()
   return (Array.isArray(items) ? items : [])
     .map(normalizeSkuLibraryItem)
     .filter(item => item.name)
+    .map(item => {
+      let id = item.id || createSkuId()
+      while (usedIds.has(id)) id = createSkuId()
+      usedIds.add(id)
+      return id === item.id ? item : { ...item, id }
+    })
+}
+
+function currencyTokenCount(value: string) {
+  return value.match(/(?:S\$|RM|US\$|[$¥￥€£])\s*\d/gi)?.length || 0
+}
+
+export function validateSkuLibrary(items: unknown): SkuLibraryValidationIssue[] {
+  return (Array.isArray(items) ? items : []).flatMap((rawItem, index) => {
+    const item = normalizeSkuLibraryItem(rawItem)
+    const issues: SkuLibraryValidationIssue[] = []
+    const fields: Array<[keyof typeof SKU_FIELD_LIMITS, string]> = [
+      ['name', item.name],
+      ['price', item.price || ''],
+      ['serves', item.serves || ''],
+      ['bundleItems', Array.isArray(item.bundleItems) ? item.bundleItems.join(' / ') : item.bundleItems || ''],
+      ['description', item.description || ''],
+      ['imageUrl', item.imageUrl || ''],
+    ]
+
+    for (const [field, value] of fields) {
+      if (value.length > SKU_FIELD_LIMITS[field]) {
+        issues.push({
+          index,
+          field,
+          code: 'too_long',
+          message: `SKU ${index + 1} 的${field === 'name' ? '名称' : '字段'}内容过长`,
+        })
+      }
+    }
+
+    if (/\r|\n/.test(item.name) || currencyTokenCount(item.name) > 1) {
+      issues.push({
+        index,
+        field: 'name',
+        code: 'multiple_products',
+        message: `SKU ${index + 1} 的名称疑似包含多个商品内容`,
+      })
+    }
+
+    return issues
+  })
 }
 
 export function serializeSkuLibraryItem(item: SkuLibraryItem): SkuLibraryItem {
