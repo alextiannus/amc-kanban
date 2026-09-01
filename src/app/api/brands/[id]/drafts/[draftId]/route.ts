@@ -254,6 +254,11 @@ export async function PATCH(request: Request, { params }: Params) {
   }
   const coverAssetIdUpdate = hasCoverAssetUpdate ? (coverAsset?.id ?? null) : undefined
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
+  const hasPostUrlUpdate = Object.prototype.hasOwnProperty.call(body, 'postUrl')
+  const postUrlUpdate = hasPostUrlUpdate ? normalizeOptionalHttpUrl(body.postUrl) : undefined
+  if (postUrlUpdate === false) {
+    return NextResponse.json({ error: 'postUrl must be an http(s) URL or null' }, { status: 400 })
+  }
 
   let platformPostIdUpdate: string | null | undefined = undefined
   const isScheduledOnPostfast = !!existing.platformPostId && !existing.publishedAt
@@ -307,6 +312,7 @@ export async function PATCH(request: Request, { params }: Params) {
         scheduledAt: typeof body.scheduledAt === 'string' ? (body.scheduledAt ? new Date(body.scheduledAt) : null) : undefined,
         status: nextStatus,
         platformPostId: platformPostIdUpdate,
+        postUrl: postUrlUpdate,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : undefined,
         rejectionNote: nextStatus === 'pending_review' ? null : typeof body.rejectionNote === 'string' ? body.rejectionNote : undefined,
         creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : undefined,
@@ -440,6 +446,19 @@ export async function PATCH(request: Request, { params }: Params) {
 
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function normalizeOptionalHttpUrl(value: unknown): string | null | false {
+  if (value === null) return null
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : false
+  } catch {
+    return false
+  }
 }
 
 export async function DELETE(request: Request, { params }: Params) {
