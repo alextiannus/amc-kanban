@@ -18,7 +18,7 @@ export type TtsExecution = {
   }
 }
 
-type TtsConfig = {
+export type TtsConfig = {
   id: string
   provider: string
   modelName: string
@@ -48,7 +48,7 @@ function ttsTimeout(configTimeoutMs: number | null | undefined) {
   return Math.max(3_000, Math.min(configured, MAX_TTS_TIMEOUT_MS))
 }
 
-async function getActiveMiniMaxTtsConfigs(): Promise<TtsConfig[]> {
+export async function getActiveMiniMaxTtsConfigs(): Promise<TtsConfig[]> {
   const configs: MiniMaxTtsProfileCandidate[] = await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,

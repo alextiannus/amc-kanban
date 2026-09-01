@@ -216,6 +216,8 @@ export async function GET(request: Request) {
           if (d) {
             d.status = update.to
             if (update.publishedAt) d.publishedAt = new Date(update.publishedAt)
+            if (update.postUrl) d.postUrl = update.postUrl
+            if (update.recoveredPostId) d.platformPostId = update.recoveredPostId
           }
         }
       } catch (e: any) {
@@ -227,13 +229,13 @@ export async function GET(request: Request) {
   const visibleDrafts = drafts.filter((draft: any) => isCalendarVisibleDraft(draft, rangeStart, rangeEnd))
 
   // ── Phase B: Dynamically resolve postUrl for published drafts using PostFast ──────────────
-  const needsUrlResolution = visibleDrafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
+  const needsUrlResolution = visibleDrafts.some((d: any) => ['published', 'done'].includes(String(d.status || '').toLowerCase()) && d.platformPostId && !d.postUrl)
   const draftPostUrlMap = new Map<string, string>()
 
   if (needsUrlResolution) {
     const brandIdsWithPublished = Array.from(new Set(
       visibleDrafts
-        .filter((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
+        .filter((d: any) => ['published', 'done'].includes(String(d.status || '').toLowerCase()) && d.platformPostId && !d.postUrl)
         .map((d: any) => d.brandId)
     ))
 
@@ -259,7 +261,7 @@ export async function GET(request: Request) {
 
       // Inline update the DB for any draft where we resolved the URL from PostFast
       for (const d of visibleDrafts) {
-        if (d.status === 'published' && d.platformPostId && !d.postUrl) {
+        if (['published', 'done'].includes(String(d.status || '').toLowerCase()) && d.platformPostId && !d.postUrl) {
           const resolvedUrl = draftPostUrlMap.get(d.platformPostId)
           if (resolvedUrl) {
             d.postUrl = resolvedUrl // update in-memory object so it is returned

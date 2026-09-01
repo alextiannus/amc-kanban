@@ -10,10 +10,21 @@ import { prisma } from '@/lib/prisma'
  */
 export const dynamic = 'force-dynamic'
 
+const HEALTH_CACHE_TTL_MS = Number(process.env.AMC_MM_HEALTH_CACHE_TTL_MS || 10000)
+let cachedHealth: { expiresAt: number; value: Record<string, unknown> } | null = null
+
 export async function GET(req: NextRequest) {
   const xClientType = req.headers.get('x-client-type')
   if (xClientType !== 'mm') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (cachedHealth && cachedHealth.expiresAt > Date.now()) {
+    return NextResponse.json({
+      ...cachedHealth.value,
+      cached: true,
+      cacheTtlMs: HEALTH_CACHE_TTL_MS,
+    })
   }
 
   const results: Record<string, unknown> = {
@@ -56,5 +67,6 @@ export async function GET(req: NextRequest) {
     results.dbWrite = { ok: false, error: err.message }
   }
 
+  cachedHealth = { expiresAt: Date.now() + HEALTH_CACHE_TTL_MS, value: results }
   return NextResponse.json(results)
 }

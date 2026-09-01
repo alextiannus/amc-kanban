@@ -30,6 +30,7 @@
     "test:llm-routing-policy": "node --experimental-strip-types scripts/test-llm-routing-policy.mts",
     "test:video-model-routing": "node --experimental-strip-types scripts/test-video-model-routing.mts",
     "test:video-production-entry": "node --experimental-strip-types scripts/test-video-production-entry.mts",
+    "test:video-script-presets": "node --experimental-strip-types scripts/test-video-script-presets.mts",
     "test:video-assembly": "node --experimental-strip-types scripts/test-video-assembly.mts",
     "test:video-production-playwright": "node --experimental-strip-types scripts/test-video-production-playwright.mts",
     "test:video-originals": "node --experimental-strip-types scripts/test-video-originals.mts",

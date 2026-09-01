@@ -1386,7 +1386,10 @@ model BrandKnowledge {
   slangDict  Json? // JSON dictionary of localized slang mappings
   brandTone  String? // String description of customized tone/perspective
   negPrompts String[] // List of forbidden words or guidelines
-  voiceId    String? // The chosen AI voice ID
+  voiceId    String? // Legacy chosen AI companion voice ID
+  companionVoiceId String? // AI companion voice setting, not used for merchant content voiceover
+  brandVoiceProfiles Json? // Merchant-recorded/cloned voice profiles for generated voiceover
+  defaultBrandVoiceProfileId String? // Default merchant voice profile for generated voiceover
 
   // Structured brand context (from brand owner + amc-growth sync)
   audienceAssumptions String? // Who the target audience is

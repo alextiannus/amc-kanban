@@ -11,6 +11,7 @@ export const maxDuration = 60
 type Params = { params: Promise<{ id: string }> }
 
 function serializeKnowledge(k: BrandKnowledge) {
+  const record = k as BrandKnowledge & Record<string, any>
   return {
     brandId: k.brandId,
     // Section 1
@@ -18,6 +19,9 @@ function serializeKnowledge(k: BrandKnowledge) {
     audienceAssumptions: k.audienceAssumptions || '',
     productAssumptions: k.productAssumptions || '',
     voiceId: k.voiceId || '',
+    companionVoiceId: record.companionVoiceId || k.voiceId || '',
+    brandVoiceProfiles: record.brandVoiceProfiles || [],
+    defaultBrandVoiceProfileId: record.defaultBrandVoiceProfileId || '',
     negPrompts: k.negPrompts || [],
     slangDict: k.slangDict || {},
     // Section 2
@@ -49,6 +53,9 @@ const EMPTY_KNOWLEDGE = {
   audienceAssumptions: '',
   productAssumptions: '',
   voiceId: '',
+  companionVoiceId: '',
+  brandVoiceProfiles: [] as unknown[],
+  defaultBrandVoiceProfileId: '',
   negPrompts: [] as string[],
   slangDict: {} as Record<string, string>,
   businessHours: null,
@@ -151,17 +158,23 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const {
     // Section 1 (identity fields use /identity)
-    slangDict, negPrompts, voiceId,
+    slangDict, negPrompts, voiceId, companionVoiceId, brandVoiceProfiles, defaultBrandVoiceProfileId,
     // Section 2
     businessHours, reservationUrl, orderingUrl, deliveryUrls, stores,
     // Section 3
     market, district, competitors, menuItems,
   } = body
 
-  const updateData: Prisma.BrandKnowledgeUncheckedUpdateInput = {}
+  const updateData: Record<string, unknown> = {}
   if (slangDict !== undefined) updateData.slangDict = slangDict
   if (negPrompts !== undefined) updateData.negPrompts = negPrompts
   if (voiceId !== undefined) updateData.voiceId = voiceId
+  if (companionVoiceId !== undefined) {
+    updateData.companionVoiceId = companionVoiceId
+    updateData.voiceId = companionVoiceId
+  }
+  if (brandVoiceProfiles !== undefined) updateData.brandVoiceProfiles = brandVoiceProfiles
+  if (defaultBrandVoiceProfileId !== undefined) updateData.defaultBrandVoiceProfileId = defaultBrandVoiceProfileId
   if (businessHours !== undefined) updateData.businessHours = businessHours
   if (reservationUrl !== undefined) updateData.reservationUrl = reservationUrl
   if (orderingUrl !== undefined) updateData.orderingUrl = orderingUrl
@@ -177,13 +190,16 @@ export async function PATCH(request: Request, { params }: Params) {
   const knowledge = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const saved = await tx.brandKnowledge.upsert({
       where: { brandId },
-      update: updateData,
+      update: updateData as Prisma.BrandKnowledgeUncheckedUpdateInput,
       create: {
         brandId,
         slangDict: slangDict || {},
         negPrompts: negPrompts || [],
         menuItems: menuItems || [],
-        voiceId: voiceId || '',
+        voiceId: companionVoiceId || voiceId || '',
+        companionVoiceId: companionVoiceId || voiceId || '',
+        brandVoiceProfiles: brandVoiceProfiles || [],
+        defaultBrandVoiceProfileId: defaultBrandVoiceProfileId || '',
         businessHours: businessHours || null,
         reservationUrl: reservationUrl || '',
         orderingUrl: orderingUrl || '',
@@ -192,7 +208,7 @@ export async function PATCH(request: Request, { params }: Params) {
         market: market || '',
         district: district || '',
         competitors: competitors || [],
-      },
+      } as Prisma.BrandKnowledgeUncheckedCreateInput,
     })
     if (hasGrowthChanges) {
       await queueBrandGrowthSync({ brandId, dirtyPaths: growthDirtyPaths, actor: syncActor, tx })

@@ -4,6 +4,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Check, ExternalLink, Film, Loader2, Play, Plus, RefreshCw, Sparkles, Trash2, X } from 'lucide-react'
+import type { VideoScriptPreset } from '@/lib/videoScriptPresets'
 
 type Asset = {
   id: string
@@ -35,23 +36,6 @@ type SceneRow = {
   includeInFinal: boolean
   execution?: any
   busy?: boolean
-}
-
-type VideoScriptPreset = {
-  id: string
-  name: string
-  description?: string
-  creatorType: string
-  vertical?: string
-  bestFor?: string[]
-  structure?: string
-  shotDrafts: Array<{
-    title: string
-    visualPrompt: string
-    cameraMotion: string
-    textOverlay: string
-    voiceover?: string
-  }>
 }
 
 type VideoPreview = {
@@ -265,6 +249,19 @@ function localizeScriptPreset(preset: VideoScriptPreset): VideoScriptPreset {
   }
 }
 
+function prepareScriptPresetForLanguage(preset: VideoScriptPreset, language: 'zh' | 'en'): VideoScriptPreset {
+  if (language === 'en') return preset
+  return localizeScriptPreset(preset)
+}
+
+function resolveVideoLanguage(mode: 'auto' | 'zh' | 'en', idea: string, platform: string): 'zh' | 'en' {
+  if (mode === 'zh' || mode === 'en') return mode
+  if (hasChinese(idea)) return 'zh'
+  if (/[A-Za-z]/.test(idea)) return 'en'
+  if (platform === 'xiaohongshu') return 'zh'
+  return 'en'
+}
+
 function sceneTitle(scene: VideoScene) {
   return sceneTitleMap[scene.title] || scene.title
 }
@@ -370,6 +367,7 @@ function VideoCreatorPageInner() {
   const [creatorType, setCreatorType] = useState('product_showcase')
   const [idea, setIdea] = useState(creatorOptions[0].defaultIdea)
   const [platform, setPlatform] = useState('tiktok')
+  const [videoLanguageMode, setVideoLanguageMode] = useState<'auto' | 'zh' | 'en'>('auto')
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const [duration, setDuration] = useState(creatorOptions[0].duration)
   const [assetFilter, setAssetFilter] = useState<'unused' | 'all'>('unused')
@@ -393,6 +391,11 @@ function VideoCreatorPageInner() {
     [creatorType],
   )
 
+  const videoLanguage = useMemo(
+    () => resolveVideoLanguage(videoLanguageMode, idea, platform),
+    [videoLanguageMode, idea, platform],
+  )
+
   useEffect(() => {
     setSelectedAssetIds(initialAssetIds)
   }, [initialAssetIds])
@@ -412,7 +415,9 @@ function VideoCreatorPageInner() {
     fetch(`/api/content/video/presets?creatorType=${encodeURIComponent(creatorType)}`)
       .then((res) => res.json())
       .then((json) => {
-        const presets = Array.isArray(json.presets) ? json.presets.map(localizeScriptPreset) : []
+        const presets = Array.isArray(json.presets)
+          ? json.presets.map((preset: VideoScriptPreset) => prepareScriptPresetForLanguage(preset, videoLanguage))
+          : []
         setScriptPresets(presets)
         const next = presets[0] || null
         setSelectedScriptId(next?.id || '')
@@ -424,7 +429,7 @@ function VideoCreatorPageInner() {
         setScriptDraft(null)
       })
       .finally(() => setLoadingPresets(false))
-  }, [creatorType])
+  }, [creatorType, videoLanguage])
 
   const assetIdsInRows = useMemo(
     () => Array.from(new Set(rows.flatMap((row) => row.assetIds))),
@@ -627,7 +632,7 @@ function VideoCreatorPageInner() {
           platform,
           aspectRatio,
           targetDurationSec: duration,
-          language: 'zh',
+          language: videoLanguage,
           assetIds: selectedAssetIds,
           scriptPresetId: selectedScriptId,
           scriptDraft,
@@ -679,7 +684,7 @@ function VideoCreatorPageInner() {
           platform,
           aspectRatio,
           targetDurationSec: row.scene.durationSec,
-          language: 'zh',
+          language: videoLanguage,
           assetIds: row.assetIds,
           executionMode: 'submit',
           plan: {
@@ -900,7 +905,7 @@ function VideoCreatorPageInner() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
               <label className="text-[11px] font-black text-slate-500">
                 平台
                 <select value={platform} onChange={(e) => { setPlatform(e.target.value); resetPlan() }} className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs">
@@ -908,6 +913,21 @@ function VideoCreatorPageInner() {
                   <option value="instagram">Instagram</option>
                   <option value="facebook">Facebook</option>
                   <option value="google_business">Google</option>
+                </select>
+              </label>
+              <label className="text-[11px] font-black text-slate-500">
+                成片语言
+                <select
+                  value={videoLanguageMode}
+                  onChange={(e) => {
+                    setVideoLanguageMode(e.target.value as 'auto' | 'zh' | 'en')
+                    resetPlan()
+                  }}
+                  className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
+                >
+                  <option value="auto">自动 ({videoLanguage === 'zh' ? '中文' : 'English'})</option>
+                  <option value="en">English</option>
+                  <option value="zh">中文</option>
                 </select>
               </label>
               <label className="text-[11px] font-black text-slate-500">
@@ -945,7 +965,7 @@ function VideoCreatorPageInner() {
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
             <div className="min-w-0">
               <p className="text-xs font-black text-slate-700">{selectedCreator.flow}</p>
-              <p className="mt-1 truncate text-[11px] text-slate-500">{rows.length || '自动'} 个分镜 · {duration} 秒 · {aspectRatio}</p>
+              <p className="mt-1 truncate text-[11px] text-slate-500">{rows.length || '自动'} 个分镜 · {duration} 秒 · {aspectRatio} · {videoLanguage === 'zh' ? '中文' : 'English'}</p>
             </div>
             <button
               type="button"

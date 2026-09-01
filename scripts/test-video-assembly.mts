@@ -10,8 +10,8 @@ const [videoProduction, assembleRoute, videoPage] = await Promise.all([
 
 assert.match(
   videoProduction,
-  /if \(!serviceUrl\) {\s*if \(input\.clipUrls\.length > 1\) {\s*return assembleVideoWithFfmpeg\(input\)/s,
-  'multiple clips must use real FFmpeg assembly when no assembly service is configured',
+  /if \(!serviceUrl\) {\s*if \(input\.voiceoverSegments\?\.length\) {\s*throw Object\.assign\(new Error\('Video assembly service is required when voiceover segments are provided'\), \{ status: 503 \}\)\s*}\s*if \(input\.clipUrls\.length > 1\) {\s*return assembleVideoWithFfmpeg\(input\)/s,
+  'multiple clips must use real FFmpeg assembly when no assembly service is configured, except voiceover jobs that require service mixing',
 )
 assert.match(
   videoProduction,
@@ -20,13 +20,23 @@ assert.match(
 )
 assert.match(
   videoProduction,
-  /if \(!outputUrl && input\.clipUrls\.length > 1\) {\s*return assembleVideoWithFfmpeg\(input,/s,
-  'remote assembly responses without an output URL must fall back to FFmpeg instead of leaving an unrefreshable job',
+  /if \(!outputUrl && input\.clipUrls\.length > 1\) {\s*if \(input\.voiceoverSegments\?\.length\) {\s*throw Object\.assign\(new Error\('Video assembly service did not return a voiceover-capable final video'\), \{ status: 502 \}\)\s*}\s*return assembleVideoWithFfmpeg\(input,/s,
+  'remote assembly responses without an output URL must fall back to FFmpeg only when voiceover mixing is not required',
 )
 assert.match(
   videoProduction,
   /buildNormalizeConcatArgs\(clipPaths, outputPath, input\.aspectRatio\)/,
   'FFmpeg fallback must normalize clip dimensions before final concat retry',
+)
+assert.match(
+  videoProduction,
+  /pipeline\(Readable\.fromWeb\(response\.body as any\), createWriteStream\(clipPath\)\)/,
+  'remote clip downloads must stream directly to disk instead of buffering whole videos',
+)
+assert.doesNotMatch(
+  videoProduction,
+  /await response\.arrayBuffer\(\)/,
+  'remote clip downloads must not load entire videos into memory',
 )
 assert.match(
   videoProduction,
@@ -42,6 +52,16 @@ assert.match(
   assembleRoute,
   /aspectRatio: optionalString\(body\.aspectRatio\)/,
   'the video assembly API must pass the requested aspect ratio to the assembly runner',
+)
+assert.match(
+  assembleRoute,
+  /voiceoverSegmentsInput\.length && !voiceoverVoiceId/,
+  'the video assembly API must reject voiceover text when no voice ID is provided',
+)
+assert.match(
+  assembleRoute,
+  /TTS did not return an audio URL for a voiceover segment/,
+  'voiceover TTS failures must be surfaced instead of silently assembling a video without narration',
 )
 assert.match(
   videoPage,

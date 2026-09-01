@@ -25,6 +25,9 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 
 export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  const requestHeaders = new Headers(request.headers)
+  const requestId = requestHeaders.get('x-amc-request-id') || crypto.randomUUID()
+  requestHeaders.set('x-amc-request-id', requestId)
 
   // ── Main app (immedi.ai) ──────────────────────────────────────────────────
   const isPublicPage = 
@@ -52,7 +55,9 @@ export default async function proxy(request: NextRequest) {
 
   // Bypass API and public routes
   if (isApiRoute || isPublicPage) {
-    return NextResponse.next()
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
+    response.headers.set('x-amc-request-id', requestId)
+    return response
   }
 
   const sessionExists = await hasValidSession(request)
@@ -62,7 +67,9 @@ export default async function proxy(request: NextRequest) {
     if (sessionExists) {
       return NextResponse.redirect(new URL('/board', request.url))
     }
-    return NextResponse.next()
+    const response = NextResponse.next({ request: { headers: requestHeaders } })
+    response.headers.set('x-amc-request-id', requestId)
+    return response
   }
 
   // Other paths: redirect to / if not logged in
@@ -70,7 +77,9 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
-  return NextResponse.next()
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
+  response.headers.set('x-amc-request-id', requestId)
+  return response
 }
 
 export const config = {

@@ -44,6 +44,7 @@ export interface SyncDraftStatusResult {
     reason: 'provider_id' | 'legacy_unique' | 'legacy_duplicate_consensus' | 'provider_result_unknown'
     applied: boolean
     publishedAt?: string
+    postUrl?: string
     recoveredPostId?: string
     deliveryFailureCode?: string
   }>
@@ -405,6 +406,7 @@ export async function syncBrandDraftStatuses(
           newValue: {
             status: resolvedStatus,
             platformPostId: recoveredPostId ?? draft.platformPostId,
+            postUrl: providerPost.postUrl ?? null,
             deliveryFailureCode: failureCode ?? null,
           },
           reason: `PostFast reconciliation: ${reason}`,
@@ -422,6 +424,7 @@ export async function syncBrandDraftStatuses(
       reason,
       applied,
       ...(publishedAt ? { publishedAt: publishedAt.toISOString() } : {}),
+      ...(providerPost.postUrl ? { postUrl: providerPost.postUrl } : {}),
       ...(recoveredPostId ? { recoveredPostId } : {}),
       ...(failureCode ? { deliveryFailureCode: failureCode } : {}),
     })

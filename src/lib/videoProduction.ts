@@ -1,9 +1,12 @@
 import { prisma } from '@/lib/prisma'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { createWriteStream } from 'node:fs'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 
 type VideoProviderConfig = {
@@ -113,6 +116,7 @@ export async function assembleVideo(input: {
   finalText?: string
   referenceAssetIds?: string[]
   parentAssetIds?: string[]
+  voiceoverSegments?: Array<{ url: string; offsetSec?: number; shotDurationSec: number; shotId?: string; shotIndex?: number }>
 }): Promise<VideoExecution> {
   const serviceUrl = (
     process.env.AMC_VIDEO_ASSEMBLY_SERVICE_URL
@@ -121,6 +125,9 @@ export async function assembleVideo(input: {
   const token = process.env.AMC_VIDEO_ASSEMBLY_SERVICE_TOKEN?.trim()
     || process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
   if (!serviceUrl) {
+    if (input.voiceoverSegments?.length) {
+      throw Object.assign(new Error('Video assembly service is required when voiceover segments are provided'), { status: 503 })
+    }
     if (input.clipUrls.length > 1) {
       return assembleVideoWithFfmpeg(input)
     }
@@ -166,6 +173,9 @@ export async function assembleVideo(input: {
     }
     const outputUrl = outputUrlFrom(data)
     if (!outputUrl && input.clipUrls.length > 1) {
+      if (input.voiceoverSegments?.length) {
+        throw Object.assign(new Error('Video assembly service did not return a voiceover-capable final video'), { status: 502 })
+      }
       return assembleVideoWithFfmpeg(input, { serviceFallbackReason: `assembly service returned ${normalizeStatus(data?.status)} without outputUrl` })
     }
     const asset = outputUrl
@@ -190,6 +200,9 @@ export async function assembleVideo(input: {
     }
   } catch (error: any) {
     if (input.clipUrls.length > 1) {
+      if (input.voiceoverSegments?.length) {
+        throw error
+      }
       return assembleVideoWithFfmpeg(input, { serviceFallbackReason: error?.message || 'assembly service failed' })
     }
     throw error
@@ -203,6 +216,7 @@ async function assembleVideoWithFfmpeg(input: {
   clipUrls: string[]
   aspectRatio?: string
   finalText?: string
+  voiceoverSegments?: Array<{ url: string; offsetSec?: number; shotDurationSec: number; shotId?: string; shotIndex?: number }>
 }, options: { serviceFallbackReason?: string } = {}): Promise<VideoExecution> {
   const ffmpegBin = process.env.FFMPEG_PATH?.trim() || 'ffmpeg'
   const workDir = await mkdtemp(path.join(tmpdir(), 'amc-video-assembly-'))
@@ -292,18 +306,18 @@ function videoDimensionsForAspectRatio(value: string | undefined) {
 async function downloadClip(url: string, workDir: string, index: number): Promise<string> {
   const clipPath = path.join(workDir, `clip-${String(index + 1).padStart(3, '0')}.mp4`)
   if (/^https?:\/\//i.test(url)) {
-    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(60000) })
+    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(120000) })
     if (!response.ok) throw Object.assign(new Error(`Failed to download clip ${index + 1}: HTTP ${response.status}`), { status: 502 })
-    const buffer = Buffer.from(await response.arrayBuffer())
-    await writeFile(clipPath, buffer)
+    if (!response.body) throw Object.assign(new Error(`Failed to download clip ${index + 1}: empty response body`), { status: 502 })
+    await pipeline(Readable.fromWeb(response.body as any), createWriteStream(clipPath))
     return clipPath
   }
 
   if (url.startsWith('/')) {
     const localPath = path.join(process.cwd(), 'public', url)
-    const buffer = await readFile(localPath).catch(() => null)
-    if (!buffer) throw Object.assign(new Error(`Failed to read local clip ${index + 1}`), { status: 502 })
-    await writeFile(clipPath, buffer)
+    await copyFile(localPath, clipPath).catch(() => {
+      throw Object.assign(new Error(`Failed to read local clip ${index + 1}`), { status: 502 })
+    })
     return clipPath
   }
 
