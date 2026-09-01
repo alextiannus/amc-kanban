@@ -261,7 +261,23 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'coverAssetId must reference a JPEG or PNG image in this brand' }, { status: 400 })
   }
   const status = typeof body.status === 'string' ? body.status : 'draft'
+  if (!DRAFT_STATUSES.has(status)) {
+    return NextResponse.json({ error: 'Invalid draft status' }, { status: 400 })
+  }
   const scheduledAt = typeof body.scheduledAt === 'string' && body.scheduledAt ? new Date(body.scheduledAt) : null
+  if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
+    return NextResponse.json({ error: 'scheduledAt must be a valid date' }, { status: 400 })
+  }
+  const isPublishedStatus = status === 'published' || status === 'done'
+  const publishedAt = normalizeOptionalPastDate(body.publishedAt, isPublishedStatus ? new Date() : null)
+  if (publishedAt === false) {
+    return NextResponse.json({ error: 'publishedAt must be a valid past date' }, { status: 400 })
+  }
+  const postUrl = normalizeOptionalHttpUrl(body.postUrl)
+  if (postUrl === false) {
+    return NextResponse.json({ error: 'postUrl must be an http(s) URL or null' }, { status: 400 })
+  }
+  const platformPostId = optionalString(body.platformPostId)
 
   let newTask: any = null
 
@@ -278,6 +294,9 @@ export async function POST(request: Request, { params }: Params) {
         hashtags: normalizeStringArray(body.hashtags),
         scheduledAt,
         status,
+        platformPostId,
+        postUrl,
+        publishedAt,
         agentId: actor.type === 'AI_AGENT' ? actor.id : typeof body.agentId === 'string' ? body.agentId : null,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : null,
         creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : null,
@@ -412,4 +431,25 @@ export async function POST(request: Request, { params }: Params) {
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeOptionalHttpUrl(value: unknown): string | null | false {
+  if (value === undefined || value === null) return null
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  try {
+    const url = new URL(trimmed)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : false
+  } catch {
+    return false
+  }
+}
+
+function normalizeOptionalPastDate(value: unknown, fallback: Date | null): Date | null | false {
+  if (value === undefined || value === null || value === '') return fallback
+  if (typeof value !== 'string') return false
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now()) return false
+  return parsed
 }
