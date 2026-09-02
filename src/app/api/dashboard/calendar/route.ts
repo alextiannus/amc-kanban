@@ -103,7 +103,7 @@ function inferTaskPlatform(task: { title: string; description: string | null; ma
   return '任务'
 }
 
-async function getAccessibleBrandIds(userId: string, userType: string, role: string) {
+async function getAccessibleBrandIds(userId: string, userType: string, role: string, userRoles: string[] = []) {
   if (userType === 'AI_AGENT') {
     const links = await prisma.brandAgent.findMany({
       where: { agentId: userId, active: true },
@@ -112,7 +112,7 @@ async function getAccessibleBrandIds(userId: string, userType: string, role: str
     return links.map((link: any) => link.brandId)
   }
 
-  if (role === 'ADMIN') {
+  if (role === 'ADMIN' || userRoles.includes('ADMIN') || userRoles.includes('AMC_PRINCIPAL')) {
     const brands = await prisma.brand.findMany({ select: { id: true } })
     return brands.map((brand: any) => brand.id)
   }
@@ -145,7 +145,12 @@ export async function GET(request: Request) {
   const rangeEnd = new Date(Date.UTC(year, monthIndex + 1, 1))
   const failedWindowStart = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
 
-  const brandIds = await getAccessibleBrandIds(session.user.id, session.user.type ?? 'HUMAN', session.user.role)
+  const brandIds = await getAccessibleBrandIds(
+    session.user.id,
+    session.user.type ?? 'HUMAN',
+    session.user.role,
+    session.user.userRoles ?? [],
+  )
   if (brandIds.length === 0) return NextResponse.json({ events: [] })
 
   const scopedBrandIds = requestedBrandId

@@ -575,6 +575,10 @@ ${contentIdea || 'No details provided.'}`
   }, [accounts, createdDrafts])
 
   const openHistoricalPostForm = (day = selectedDay || today.getDate()) => {
+    if (!activeBrandId) {
+      alert('请先选择一个品牌，再补录已发布帖文。')
+      return
+    }
     const firstAccount = accountOptions[0]
     setHistoricalPostForm({
       accountId: firstAccount?.id || 'unconfigured_instagram',
@@ -1895,11 +1899,6 @@ ${contentIdea || 'No details provided.'}`
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1)
   ]
   while (cells.length % 7 !== 0) cells.push(null)
-  const selectedDate = selectedDay ? new Date(viewYear, viewMonth, selectedDay) : null
-  const selectedDateIsPast = selectedDate
-    ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate()).getTime() <= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-    : false
-
   const getDaysForWeekView = () => {
     const referenceDate = selectedDay ? new Date(viewYear, viewMonth, selectedDay) : new Date(viewYear, viewMonth, 1)
     const dayOfWeek = referenceDate.getDay() // 0 is Sunday
@@ -2294,7 +2293,23 @@ ${contentIdea || 'No details provided.'}`
               onClick={() => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); setSelectedDay(today.getDate()) }}
               className="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all bg-white dark:bg-slate-900"
             >
-              今天 (Today)
+              今天
+            </button>
+            <button
+              type="button"
+              onClick={() => openHistoricalPostForm(selectedDay || today.getDate())}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 shadow-sm transition-all active:scale-95 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300"
+              title="补录过去已发布帖文"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={refreshCalendar}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:bg-slate-50 active:scale-95 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
+              title="刷新发布状态"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
             </button>
           </div>
 
@@ -2351,11 +2366,6 @@ ${contentIdea || 'No details provided.'}`
                 const dayEvents = day ? (eventsByDay[day] || []) : []
                 const selected = day === selectedDay
                 const todayCell = day ? isToday(day) : false
-                const dayDate = day ? new Date(viewYear, viewMonth, day) : null
-                const dayIsPast = dayDate
-                  ? new Date(dayDate.getFullYear(), dayDate.getMonth(), dayDate.getDate()).getTime() <= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-                  : false
-
                 return (
                   <div
                     key={idx}
@@ -2373,20 +2383,6 @@ ${contentIdea || 'No details provided.'}`
                           </span>
                           {dayEvents.length > 2 && (
                             <span className="text-[9px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 rounded">+{dayEvents.length - 2}</span>
-                          )}
-                          {activeBrandId && dayIsPast && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedDay(day)
-                                openHistoricalPostForm(day)
-                              }}
-                              className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-                              title="补录已发布帖文"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
                           )}
                         </div>
                         
@@ -2465,8 +2461,6 @@ ${contentIdea || 'No details provided.'}`
                 const isSelected = selectedDay === d.getDate() && viewMonth === d.getMonth() && viewYear === d.getFullYear()
                 const todayCell = d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
                 const isCurrentMonth = d.getMonth() === viewMonth
-                const dayIsPast = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() <= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-                
                 const dayEvents = filteredEvents.filter(ev => {
                   const evDate = new Date(ev.scheduledAt)
                   return evDate.getDate() === d.getDate() &&
@@ -2492,22 +2486,6 @@ ${contentIdea || 'No details provided.'}`
                         ${todayCell ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400'}`}>
                         {d.getDate()}
                       </span>
-                      {activeBrandId && dayIsPast && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setViewYear(d.getFullYear())
-                            setViewMonth(d.getMonth())
-                            setSelectedDay(d.getDate())
-                            openHistoricalPostForm(d.getDate())
-                          }}
-                          className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100 focus:opacity-100 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-                          title="补录已发布帖文"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                      )}
                       <span className="text-[8px] font-bold text-slate-400 uppercase">{WEEKDAYS[d.getDay()]}</span>
                     </div>
                     
@@ -2589,16 +2567,6 @@ ${contentIdea || 'No details provided.'}`
                     </h3>
                     <p className="text-xs text-slate-400 mt-1">当天共有 {selectedDayEvents.length} 条排期记录</p>
                   </div>
-                  {activeBrandId && selectedDateIsPast && (
-                    <button
-                      type="button"
-                      onClick={() => openHistoricalPostForm(selectedDay || today.getDate())}
-                      className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 shadow-sm active:scale-95 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>补录已发布帖文</span>
-                    </button>
-                  )}
                 </div>
                 
                 {selectedDayEvents.length === 0 ? (
@@ -2627,17 +2595,6 @@ ${contentIdea || 'No details provided.'}`
                       <p className="text-xs text-slate-450 mt-2">当前显示合并品牌看板。选择左侧特定品牌，可检测该品牌的具体渠道发布缺口。</p>
                     ) : (
                       <p className="text-xs text-slate-450 mt-2">该品牌暂未绑定任何托管发布渠道。请先前往“品牌设置”连接渠道账号。</p>
-                    )}
-
-                          {activeBrandId && selectedDateIsPast && (
-                      <button
-                        type="button"
-                        onClick={() => openHistoricalPostForm(selectedDay || today.getDate())}
-                        className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md transition-all active:scale-95"
-                      >
-                        <Plus className="w-3.5 h-3.5 text-white" />
-                        <span>补录已发布帖文</span>
-                      </button>
                     )}
                   </div>
                 ) : (

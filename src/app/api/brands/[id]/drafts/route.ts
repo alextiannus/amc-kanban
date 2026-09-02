@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
@@ -82,8 +82,8 @@ async function getActor(request: Request) {
   const apiKey = extractApiKey(request)
   const authenticatedAgent = apiKey ? await getAgentFromApiKey(apiKey) : null
   if (apiKey && !authenticatedAgent) return null
-  if (authenticatedAgent) return { id: authenticatedAgent.id, type: authenticatedAgent.type, role: 'USER' }
-  if (session?.user) return { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
+  if (authenticatedAgent) return { id: authenticatedAgent.id, type: authenticatedAgent.type, role: authenticatedAgent.role, userRoles: authenticatedAgent.userRoles ?? [] }
+  if (session?.user) return { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role, userRoles: session.user.userRoles ?? [] }
   return null
 }
 
@@ -101,7 +101,22 @@ function isGooglePlatform(platformId?: string | null) {
 async function ensureAccess(request: Request, brandId: string) {
   const actor = await getActor(request)
   if (!actor) return null
+  if (actor.role === 'ADMIN' || actor.userRoles.includes('ADMIN') || actor.userRoles.includes('AMC_PRINCIPAL')) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
+    return brand ? actor : null
+  }
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
+  return ok ? actor : null
+}
+
+async function ensureWriteAccess(request: Request, brandId: string) {
+  const actor = await getActor(request)
+  if (!actor) return null
+  if (actor.role === 'ADMIN' || actor.userRoles.includes('ADMIN') || actor.userRoles.includes('AMC_PRINCIPAL')) {
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
+    return brand ? actor : null
+  }
+  const ok = await canSessionWriteBrandProject(brandId, actor.id, actor.type)
   return ok ? actor : null
 }
 
@@ -185,7 +200,7 @@ export async function GET(request: Request, { params }: Params) {
 
 export async function POST(request: Request, { params }: Params) {
   const { id: brandId } = await params
-  const actor = await ensureAccess(request, brandId)
+  const actor = await ensureWriteAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
