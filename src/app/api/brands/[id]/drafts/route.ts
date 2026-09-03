@@ -180,7 +180,7 @@ export async function GET(request: Request, { params }: Params) {
             if (resolvedUrl) urlsToCache.push({ id: d.id, postUrl: resolvedUrl })
             return { ...d, postUrl: resolvedUrl }
           }
-          return { ...d, postUrl: undefined }
+          return { ...d, postUrl: d.postUrl ?? undefined }
         })
         // Batch-cache resolved URLs in a single transaction (fire & forget)
         if (urlsToCache.length > 0) {
