@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { resolveContentGenerationTheme } from '../src/lib/amc-content/generationTheme.ts'
 
 const root = process.cwd()
 
@@ -82,6 +83,34 @@ function testContentGenerationService() {
   assertIncludes(internalLlmRoute, "'copywriting'", 'internal LLM route defaults to copywriting tag')
 }
 
+function testTriggerThemeResolution() {
+  const draft = {
+    caption: '【AI 正在创作中...】',
+    agentNote: '【AI 生成指令】使用现有图片介绍午餐新品【/AI 生成指令】\n内部备注',
+  }
+
+  assert.equal(
+    resolveContentGenerationTheme('  优先使用页面刚输入的创意  ', draft),
+    '优先使用页面刚输入的创意',
+    'trigger request theme should override the persisted draft instruction',
+  )
+  assert.equal(
+    resolveContentGenerationTheme('   ', draft),
+    '使用现有图片介绍午餐新品',
+    'blank request theme should fall back to the persisted AI instruction',
+  )
+  assert.equal(
+    resolveContentGenerationTheme(undefined, { caption: '介绍周末新品', agentNote: '' }),
+    '介绍周末新品',
+    'stored caption should remain the final theme fallback',
+  )
+  assert.equal(
+    resolveContentGenerationTheme(undefined, { caption: '【AI 正在创作中...】', agentNote: '' }),
+    '',
+    'AI placeholder captions must not become generation themes',
+  )
+}
+
 function testLegacyEntrypointsUseFacade() {
   const bulkRoute = read('src/app/api/brands/[id]/copywriter/bulk-generate/route.ts')
   const copywriterNode = read('src/agents/nodes/copywriter.ts')
@@ -131,11 +160,15 @@ function testLegacyEntrypointsUseFacade() {
   assertIncludes(state, 'copyScriptVersionId: Annotation<string>', 'graph state preserves fixed viral script versions')
   assertIncludes(copywriterNode, 'copyScriptVersionId: state.copyScriptVersionId', 'copywriter node forwards fixed viral script versions')
   assertIncludes(triggerRoute, "import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'", 'copywriter trigger calls amc-content directly')
+  assertIncludes(triggerRoute, 'resolveContentGenerationTheme(body?.theme, draft)', 'copywriter trigger prefers the caller theme and falls back to persisted draft context')
   assertNotIncludes(triggerRoute, "import('@/agents/graph/marketingGraph.ts')", 'copywriter trigger must not invoke legacy marketing graph')
   assertIncludes(triggerRoute, '[trigger-copywriter-direct]', 'copywriter trigger logs the direct generation route')
   assertIncludes(triggerRoute, "status: 'failed'", 'copywriter trigger preserves failed drafts for diagnostics')
   assertIncludes(triggerRoute, '`stage=${stage}`', 'copywriter trigger writes the failed step into draft diagnostics')
   assertIncludes(triggerRoute, 'RemoteContentServiceError', 'copywriter trigger preserves remote status and diagnostics')
+  assertIncludes(triggerRoute, 'hashtags: result.hashtags', 'copywriter trigger persists generated hashtags')
+  assertIncludes(read('src/app/api/brands/[id]/drafts/[draftId]/route.ts'), 'hashtags: true', 'draft detail API returns persisted hashtags')
+  assertIncludes(postEditDrawer, 'setHashtags(formatTags(draft.hashtags || []))', 'post editor reloads persisted hashtags into the input')
   assertNotIncludes(triggerRoute, 'result?.quality', 'copywriter trigger response must not include content quality metadata')
   assertNotIncludes(triggerRoute, 'content_quality_gate', 'copywriter trigger must not preserve old quality-gate stage metadata')
   assertNotIncludes(batchTriggerRoute, 'result.result.quality', 'batch trigger response must not include content quality metadata')
@@ -315,6 +348,7 @@ function testViralCopyScriptBridge() {
 function main() {
   testContentGenerateApi()
   testContentGenerationService()
+  testTriggerThemeResolution()
   testLegacyEntrypointsUseFacade()
   testContentLabStandaloneEntry()
   testCopywriterFirstCreativeUi()
