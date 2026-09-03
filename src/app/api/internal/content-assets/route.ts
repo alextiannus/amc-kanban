@@ -90,10 +90,13 @@ async function presignAsset(brandId: string, body: any) {
   }
   if (!getHuaweiObsConfig()) return NextResponse.json({ error: 'Huawei OBS is not configured' }, { status: 503 })
   const projectId = text(body.videoProjectId)
+  const basicVideoReference = text(body.usage) === 'basic_video_reference'
   const captureDate = normalizeDate(body.captureDate)
-  if (mediaKind === 'video' && !projectId) return NextResponse.json({ error: 'videoProjectId is required for original video uploads' }, { status: 400 })
+  if (mediaKind === 'video' && !projectId && !basicVideoReference) return NextResponse.json({ error: 'videoProjectId is required for original video uploads' }, { status: 400 })
   const key = mediaKind === 'video'
-    ? makeBrandVideoOriginalKey({ brandId, captureDate, projectId, filename })
+    ? basicVideoReference
+      ? makeBrandAssetKey({ brandId, folder: '视频制作参考', filename })
+      : makeBrandVideoOriginalKey({ brandId, captureDate, projectId, filename })
     : makeBrandAssetKey({ brandId, folder: text(body.folder) || '视频生产', filename })
   const result = getHuaweiObsPresignedPutUrl({ key, contentType: mimeType })
   if (!result) return NextResponse.json({ error: 'Failed to create upload URL' }, { status: 500 })
@@ -109,11 +112,15 @@ async function confirmAsset(brandId: string, actorId: string, body: any) {
   const mediaKind = mimeType.startsWith('video/') ? 'video' : mimeType.startsWith('image/') ? 'image' : ''
   const shootBatchId = text(body.shootBatchId)
   const videoProjectId = text(body.videoProjectId)
+  const basicVideoReference = text(body.usage) === 'basic_video_reference'
   if (!filename || !mediaKind || !url || !key || !config || !key.startsWith(`brands/${brandId}/assets/`)) {
     return NextResponse.json({ error: 'Upload confirmation does not match the brand asset scope' }, { status: 400 })
   }
-  if (mediaKind === 'video' && (!shootBatchId || !videoProjectId || !key.includes('/assets/视频原片/'))) {
+  if (mediaKind === 'video' && !basicVideoReference && (!shootBatchId || !videoProjectId || !key.includes('/assets/视频原片/'))) {
     return NextResponse.json({ error: 'Original video confirmation requires a shoot batch and video project scope' }, { status: 400 })
+  }
+  if (mediaKind === 'video' && basicVideoReference && !key.includes('/assets/视频制作参考/')) {
+    return NextResponse.json({ error: 'Basic video reference confirmation does not match its upload scope' }, { status: 400 })
   }
   try {
     const actual = new URL(url)
@@ -121,8 +128,8 @@ async function confirmAsset(brandId: string, actorId: string, body: any) {
     if (actual.origin !== base.origin || !decodeURIComponent(actual.pathname).endsWith(`/${key}`)) {
       return NextResponse.json({ error: 'Upload URL does not match the configured OBS scope' }, { status: 400 })
     }
-    const batch = mediaKind === 'video' ? await prisma.videoShootBatch.findFirst({ where: { id: shootBatchId, brandId, videoProjectId } }) : null
-    if (mediaKind === 'video' && !batch) return NextResponse.json({ error: 'Shoot batch not found for this brand and project' }, { status: 404 })
+    const batch = mediaKind === 'video' && !basicVideoReference ? await prisma.videoShootBatch.findFirst({ where: { id: shootBatchId, brandId, videoProjectId } }) : null
+    if (mediaKind === 'video' && !basicVideoReference && !batch) return NextResponse.json({ error: 'Shoot batch not found for this brand and project' }, { status: 404 })
     const existing = await prisma.mediaAsset.findFirst({ where: { brandId, url }, include: { shootBatch: true } })
     if (existing) return NextResponse.json({ ok: true, asset: existing, idempotentReplay: true })
     const metadata = await inspectMediaUrl(url, { filename, mimeType, sizeBytes: Number(body.sizeBytes) || undefined })
@@ -131,9 +138,9 @@ async function confirmAsset(brandId: string, actorId: string, body: any) {
     const asset = await prisma.mediaAsset.create({ data: {
       brandId, url, filename, mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes,
       width: metadata.width ?? null, height: metadata.height ?? null, technicalMetadata: metadata,
-      aiTags: [], aiCategory: mediaKind === 'video' ? '视频原片' : text(body.folder) || '视频生产', aiReady: true,
-      uploadedBy: actorId, sourceType: mediaKind === 'video' ? 'video_production_upload' : 'huawei_obs',
-      shootBatchId: batch?.id, videoProjectId: mediaKind === 'video' ? videoProjectId : null,
+      aiTags: [], aiCategory: mediaKind === 'video' ? (basicVideoReference ? '视频制作参考' : '视频原片') : text(body.folder) || '视频生产', aiReady: true,
+      uploadedBy: actorId, sourceType: mediaKind === 'video' ? (basicVideoReference ? 'basic_video_reference' : 'video_production_upload') : 'huawei_obs',
+      shootBatchId: batch?.id, videoProjectId: mediaKind === 'video' && !basicVideoReference ? videoProjectId : null,
       creativeId: batch?.creativeId, creativeVersion: batch?.creativeVersion,
       extractionVersion: batch?.extractionVersion, captureDate: batch?.captureDate,
       originalFilename: filename, rightsStatus: text(body.rightsStatus) || (mediaKind === 'video' ? 'owned' : null),
