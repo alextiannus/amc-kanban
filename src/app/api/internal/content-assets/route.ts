@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, getHuaweiObsPresignedPutUrl, makeBrandAssetKey, makeBrandVideoOriginalKey } from '@/lib/integrations/huaweiObs'
 import { assertUploadMedia, inspectMediaUrl, MediaValidationError, mediaValidationResponse, mediaValidationStatus, type MediaTechnicalMetadata } from '@/lib/mediaValidation'
@@ -34,26 +35,30 @@ async function listAssets(brandId: string, body: any, requestOrigin: string) {
   const pageSize = Math.min(60, Math.max(1, Number(body.pageSize) || 24))
   const query = text(body.q)
   const queryDate = /^\d{4}-\d{2}-\d{2}$/.test(query) ? new Date(`${query}T00:00:00.000Z`) : null
-  const mediaKind = text(body.mediaKind) === 'video' ? 'video' : 'image'
+  const requestedMediaKind = text(body.mediaKind)
+  const mediaKind = requestedMediaKind === 'image' || requestedMediaKind === 'video' ? requestedMediaKind : 'all'
   const shootBatchId = text(body.shootBatchId)
   const videoProjectId = text(body.videoProjectId)
   const assetIds = Array.isArray(body.assetIds) ? body.assetIds.map(text).filter(Boolean).slice(0, 60) : []
-  const where = {
+  const filters: Prisma.MediaAssetWhereInput[] = [mediaKind === 'all'
+    ? { OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }] }
+    : { mimeType: { startsWith: `${mediaKind}/` } }]
+  if (query) filters.push({ OR: [
+    { filename: { contains: query, mode: 'insensitive' } },
+    { originalFilename: { contains: query, mode: 'insensitive' } },
+    { uploadedBy: { contains: query, mode: 'insensitive' } },
+    { videoProjectId: { contains: query, mode: 'insensitive' } },
+    { shootBatch: { is: { name: { contains: query, mode: 'insensitive' } } } },
+    ...(queryDate ? [{ captureDate: queryDate }] : []),
+    { aiCaption: { contains: query, mode: 'insensitive' } },
+    { aiTags: { has: query.toLowerCase() } },
+  ] })
+  const where: Prisma.MediaAssetWhereInput = {
     brandId,
-    mimeType: { startsWith: `${mediaKind}/` },
+    AND: filters,
     ...(assetIds.length ? { id: { in: assetIds } } : {}),
     ...(shootBatchId ? { shootBatchId } : {}),
     ...(videoProjectId ? { videoProjectId } : {}),
-    ...(query ? { OR: [
-      { filename: { contains: query, mode: 'insensitive' as const } },
-      { originalFilename: { contains: query, mode: 'insensitive' as const } },
-      { uploadedBy: { contains: query, mode: 'insensitive' as const } },
-      { videoProjectId: { contains: query, mode: 'insensitive' as const } },
-      { shootBatch: { is: { name: { contains: query, mode: 'insensitive' as const } } } },
-      ...(queryDate ? [{ captureDate: queryDate }] : []),
-      { aiCaption: { contains: query, mode: 'insensitive' as const } },
-      { aiTags: { has: query.toLowerCase() } },
-    ] } : {}),
   }
   const [assets, total] = await Promise.all([
     prisma.mediaAsset.findMany({ where, include: { shootBatch: true }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
