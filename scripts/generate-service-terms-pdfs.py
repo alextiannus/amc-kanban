@@ -17,7 +17,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 
@@ -28,6 +28,14 @@ OUTPUTS = {
     "en": OUTPUT_DIR / "AI-Marketing-Crew-Service-Terms-English.pdf",
     "zh": OUTPUT_DIR / "AI-Marketing-Crew-Service-Terms-Chinese.pdf",
 }
+
+CJK_FONT_CANDIDATES = (
+    Path("/System/Library/Fonts/Supplemental/Arial Unicode.ttf"),
+    Path("/Library/Fonts/Arial Unicode.ttf"),
+    Path("/System/Library/Fonts/STHeiti Medium.ttc"),
+    Path("/System/Library/Fonts/Supplemental/Songti.ttc"),
+    Path("/System/Library/Fonts/Supplemental/Hiragino Sans GB.ttc"),
+)
 
 
 def split_markdown(markdown: str) -> dict[str, str]:
@@ -51,11 +59,19 @@ def should_generate(output: Path, force: bool) -> bool:
     return output.stat().st_mtime < SOURCE.stat().st_mtime
 
 
+def register_cjk_font() -> str:
+    for font_path in CJK_FONT_CANDIDATES:
+        if font_path.exists():
+            font_name = "AMC-CJK"
+            pdfmetrics.registerFont(TTFont(font_name, str(font_path)))
+            return font_name
+    raise FileNotFoundError("No CJK-capable font found for Chinese service terms PDF generation")
+
+
 def build_styles(language: str):
     styles = getSampleStyleSheet()
     if language == "zh":
-        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-        font = "STSong-Light"
+        font = register_cjk_font()
         leading = 14
         word_wrap = "CJK"
     else:

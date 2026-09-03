@@ -8,7 +8,7 @@ Location: Singapore
 
 Service brand: AMC - Your AI Marketing Crew
 
-Version: AMC-SMSA-v1.11
+Version: AMC-SMSA-v1.12
 
 Effective date: 2026-08-31
 
@@ -111,9 +111,14 @@ Upon completion or termination, subject to payment of outstanding fees, AMC will
 
 AMC provides post-sales support from Monday to Friday, excluding Singapore public holidays, from 09:00 to 18:00 Singapore time via online support, email, contact form or teleconference. Email and contact form requests may be submitted at any time and will be handled during support hours.
 
-AMC will use commercially reasonable efforts to acknowledge and triage support requests within the following target response times: critical service access issues within 1 business day, standard product or workflow issues within 2 business days, and general questions or change requests within 3 business days.
+AMC will use commercially reasonable efforts to acknowledge, triage and resolve support requests according to the following service levels:
 
-Resolution depends on issue severity, Customer cooperation, third-party platform availability, account permissions, supplied information and technical complexity. AMC may provide a workaround, correction, support guidance, escalation plan, change request or scheduled product fix. Issues caused by Customer systems, third-party platforms, missing permissions, unsupported scope or late Customer input are not subject to guaranteed resolution times.
+- Critical incident: A production outage or major access failure that prevents the Customer from using core subscribed AMC functions. Target acknowledgement: 1 business day. Target workaround or resolution: 1 business day where the issue is within AMC's control.
+- High-priority issue: A material defect affecting an important subscribed workflow while the service remains partly usable. Target acknowledgement: 2 business days. Target workaround or resolution plan: 5 business days where the issue is within AMC's control.
+- Standard issue: A product question, non-critical workflow issue, configuration issue or minor defect. Target acknowledgement: 3 business days. Target resolution, support guidance or scheduled fix plan: 10 business days where the issue is within AMC's control.
+- General request or change request: General enquiries, training questions, feature requests, content changes, new scope or enhancement requests. Target acknowledgement: 3 business days. Target response, quotation, support guidance or planned handling: 15 business days where commercially reasonable.
+
+Resolution depends on issue severity, Customer cooperation, third-party platform availability, account permissions, supplied information and technical complexity. AMC may provide a workaround, correction, support guidance, escalation plan, change request or scheduled product fix. Issues caused by Customer systems, third-party platforms, missing permissions, unsupported scope, late Customer input, misuse or force majeure are not subject to the target resolution times above.
 
 ## 13. Confidentiality and Security
 
@@ -163,7 +168,7 @@ UEN：201835327N
 
 服务品牌：AMC - Your AI Marketing Crew
 
-版本：AMC-SMSA-v1.11
+版本：AMC-SMSA-v1.12
 
 生效日期：2026-08-31
 
@@ -266,9 +271,14 @@ AMC 可提供使用报告、活动报告、数字素材日志、已发布内容�
 
 AMC 在新加坡公共假期除外的周一至周五 09:00 至 18:00（新加坡时间）通过在线支持、电子邮件、联系表单或远程会议提供售后支持。电子邮件和联系表单可随时提交，并将在支持时间内处理。
 
-AMC 将以商业上合理努力按以下目标响应时间确认并分流支持请求：关键服务访问问题 1 个工作日内，标准产品或流程问题 2 个工作日内，一般问题或变更请求 3 个工作日内。
+AMC 将以商业上合理努力按以下服务等级确认、分流并处理支持请求：
 
-解决时间取决于问题严重程度、客户配合、第三方平台可用性、账号权限、客户提供信息及技术复杂度。AMC 可提供替代方案、修正、支持指引、升级计划、变更请求或排期产品修复。由客户系统、第三方平台、权限缺失、未支持范围或客户延迟输入导致的问题，不适用保证解决时间。
+- 关键事故：生产环境故障或重大访问故障，导致客户无法使用已订阅的 AMC 核心功能。目标确认时间：1 个工作日。若问题属于 AMC 可控范围，目标替代方案或修复时间：1 个工作日。
+- 高优先级问题：影响重要订阅流程的重大缺陷，但服务仍可部分使用。目标确认时间：2 个工作日。若问题属于 AMC 可控范围，目标替代方案或解决计划：5 个工作日。
+- 标准问题：产品咨询、非关键流程问题、配置问题或轻微缺陷。目标确认时间：3 个工作日。若问题属于 AMC 可控范围，目标解决、支持指引或排期修复计划：10 个工作日。
+- 一般请求或变更请求：一般咨询、培训问题、功能建议、内容修改、新范围或增强需求。目标确认时间：3 个工作日。商业上合理情况下，目标回复、报价、支持指引或计划处理时间：15 个工作日。
+
+解决时间取决于问题严重程度、客户配合、第三方平台可用性、账号权限、客户提供信息及技术复杂度。AMC 可提供替代方案、修正、支持指引、升级计划、变更请求或排期产品修复。由客户系统、第三方平台、权限缺失、未支持范围、客户延迟输入、误用或不可抗力导致的问题，不适用上述目标解决时间。
 
 ## 13. 保密与安全
 
