@@ -48,6 +48,8 @@ This PRD consolidates the design, execution, and integration routes for each pla
     *   *Implementation*: Yelp-specific reviews are scraped using Apify's Google/Yelp aggregator actors.
 
 ### 3.3 Instagram, TikTok & Xiaohongshu (RED)
+*   **Account Authorization**:
+    *   *Implementation*: When a brand has a PostFast API key, `BrandSettingsPanel` displays the stored workspace Connect Link and allows the operator to generate or regenerate it. AMC calls the brand-scoped PostFast integration route, persists the returned link and refresh timestamp only after provider success, and keeps the previous link unchanged on failure.
 *   **Content Publishing**:
     *   *Implementation*: Unified under **PostFast**. The Agent calls `postfastPublish` with a specific account ID (`accountId`) and target platform. Captions, hashtags, and media storage keys (uploaded via PostFast's pre-signed URLs) are compiled and sent to PostFast.
     *   *Post identity contract*: A successful `POST /social-posts` response is `{ postIds: string[] }`. AMC persists `postIds[0]` as `ContentDraft.platformPostId`; a success response without an ID is treated as an integration failure.
@@ -82,6 +84,7 @@ This PRD consolidates the design, execution, and integration routes for each pla
 *   `get_social_insights`: Returns scraped post performance data.
 
 ### 4.2 REST APIs
+*   `POST /api/integrations/postfast` with `action: "generate_connect_link"` — Generate a fresh PostFast Connect Link for an authorized brand and persist it to `Brand.postfastConnectLink` with `postfastConnectLinkUpdatedAt` before returning it to the UI.
 *   `GET /api/brands/[id]/drafts?status=:status` — Fetch server-filtered drafts plus full per-status counts.
 *   `POST /api/brands/[id]/drafts/sync-statuses` — Reconcile PostFast scheduled posts to `published` or `failed` before refreshing the Scheduled view.
 *   `GET /api/brands/[id]/reviews` — Fetch reviews from all active sources.

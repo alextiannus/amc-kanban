@@ -149,7 +149,20 @@ export async function POST(request: Request) {
         label: params.label ?? brand?.name,
         redirectUrl: params.redirectUrl,
       })
-      return NextResponse.json(result)
+      if (!result.success || !result.connectUrl) {
+        return NextResponse.json(result)
+      }
+
+      const updatedAt = new Date()
+      await prisma.brand.update({
+        where: { id: brandId },
+        data: {
+          postfastConnectLink: result.connectUrl,
+          postfastConnectLinkUpdatedAt: updatedAt,
+        },
+      })
+
+      return NextResponse.json({ ...result, updatedAt: updatedAt.toISOString() })
     }
 
     case 'get_gbp_locations': {

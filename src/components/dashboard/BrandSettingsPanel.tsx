@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect, useCallback } from 'react'
-import { X, Save, Loader2, CheckCircle2, Copy, ExternalLink } from 'lucide-react'
+import { X, Save, Loader2, CheckCircle2, Copy, ExternalLink, RefreshCw } from 'lucide-react'
 
 // ── Integration field types ──────────────────────────────────────────────────
 interface IntegrationField {
@@ -101,8 +101,15 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
   const [status, setStatus] = useState<Record<string, boolean>>({})
   const [statusMessages, setStatusMessages] = useState<Record<string, string>>({})
   const [postfastSync, setPostfastSync] = useState<{ synced: number; accounts: string[] } | null>(null)
+  const [postfastConnectLink, setPostfastConnectLink] = useState('')
+  const [regeneratingPostfastLink, setRegeneratingPostfastLink] = useState(false)
+  const [postfastLinkFeedback, setPostfastLinkFeedback] = useState<{
+    type: 'success' | 'error'
+    message: string
+  } | null>(null)
   const [preferOAuth, setPreferOAuth] = useState(true)
 
+  const initialPostfastConnectLink = asText(initialSettings?.postfastConnectLink)
   const googleLocationName = asText(initialSettings?.googleLocationName)
   const googlePreferOAuth = asBool(initialSettings?.googlePreferOAuth, true)
   const googleLinksMeta = initialSettings?.googleLinksMeta && typeof initialSettings.googleLinksMeta === 'object' && !Array.isArray(initialSettings.googleLinksMeta)
@@ -135,6 +142,13 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
       }
     })
   }, [googlePreferOAuth, initialSettings, open])
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setPostfastConnectLink(initialPostfastConnectLink)
+      setPostfastLinkFeedback(null)
+    })
+  }, [brandId, initialPostfastConnectLink])
 
   const fetchStatus = useCallback(async () => {
     const res = await fetch(`/api/integrations/status?brandId=${brandId}`)
@@ -213,6 +227,33 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
     }
   }
 
+  const handleRegeneratePostfastLink = async () => {
+    setRegeneratingPostfastLink(true)
+    setPostfastLinkFeedback(null)
+    try {
+      const res = await fetch('/api/integrations/postfast', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brandId, action: 'generate_connect_link' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data?.success || typeof data?.connectUrl !== 'string') {
+        throw new Error(typeof data?.error === 'string' ? data.error : '重新生成链接失败')
+      }
+
+      setPostfastConnectLink(data.connectUrl)
+      setPostfastLinkFeedback({ type: 'success', message: '新链接已生成并保存' })
+    } catch (error) {
+      console.error('[BrandSettings] Failed to regenerate PostFast connect link:', error)
+      setPostfastLinkFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : '重新生成链接失败，请稍后重试',
+      })
+    } finally {
+      setRegeneratingPostfastLink(false)
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     setPostfastSync(null)
@@ -258,6 +299,8 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
 
   if (!open) return null
 
+  const postfastConfigured = status.postfast || asBool(initialSettings?.postfastConfigured)
+
   const Field = ({ f }: { f: IntegrationField }) => (
     <div className="space-y-1.5">
       <label className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">{f.label}</label>
@@ -300,29 +343,50 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
         <div className="overflow-y-auto flex-1 p-6 space-y-6">
 
           {/* PostFast */}
-          <Section label="PostFast（内容发布）" badge={<StatusBadge ok={status.postfast} />}>
+          <Section label="PostFast（内容发布）" badge={<StatusBadge ok={postfastConfigured} />}>
             {POSTFAST_FIELDS.map(f => <Field key={f.key} f={f} />)}
-            {typeof initialSettings?.postfastConnectLink === 'string' && (
+            {(postfastConfigured || postfastConnectLink) && (
               <div className="mt-2.5 p-3.5 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100/50 dark:border-indigo-900/30 space-y-1.5">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">社媒连接分享链接</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     readOnly
-                    value={initialSettings.postfastConnectLink as string}
-                    className="flex-1 text-xs bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300 select-all"
+                    value={postfastConnectLink}
+                    placeholder="尚未生成分享链接"
+                    className="min-w-0 flex-1 text-xs bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 rounded-xl px-3 py-1.5 font-medium text-slate-700 dark:text-slate-300 select-all"
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(initialSettings.postfastConnectLink as string)
-                      alert('已复制到剪贴板！')
+                    disabled={!postfastConnectLink}
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(postfastConnectLink)
+                        setPostfastLinkFeedback({ type: 'success', message: '已复制到剪贴板' })
+                      } catch (error) {
+                        console.error('[BrandSettings] Failed to copy PostFast connect link:', error)
+                        setPostfastLinkFeedback({ type: 'error', message: '复制失败，请手动选择链接复制' })
+                      }
                     }}
-                    className="px-3 py-1.5 text-xs font-bold text-primary bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 rounded-xl transition-colors"
+                    className="px-3 py-1.5 text-xs font-bold text-primary bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/40 dark:hover:bg-indigo-900/60 rounded-xl transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     复制
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleRegeneratePostfastLink}
+                    disabled={!postfastConfigured || regeneratingPostfastLink}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <RefreshCw size={12} className={regeneratingPostfastLink ? 'animate-spin' : ''} />
+                    {regeneratingPostfastLink ? '生成中' : postfastConnectLink ? '重新生成' : '生成链接'}
+                  </button>
                 </div>
+                {postfastLinkFeedback && (
+                  <p className={`text-[10px] font-medium ${postfastLinkFeedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    {postfastLinkFeedback.message}
+                  </p>
+                )}
                 <p className="text-[9px] text-slate-400 font-medium leading-normal">
                   此链接可分享给品牌管理员，用于直接在 PostFast 绑定/更新该品牌的 Facebook, Instagram, TikTok 账号连接。
                 </p>

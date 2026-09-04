@@ -340,6 +340,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 说明：
 
+- `POST /api/integrations/postfast` 的 `generate_connect_link` 动作在 PostFast 成功返回链接后，必须同时更新当前品牌的 `postfastConnectLink` 与 `postfastConnectLinkUpdatedAt`；失败时保留旧链接。品牌集成配置面板提供“生成链接/重新生成”按钮并立即显示新链接。
 - PostFast 当前没有本地封装的 scheduled post update；更新排期采用 delete + recreate。
 - 发布服务应保持 transport/integration/fallback 角色，不承载 Dify 工作流编排。
 

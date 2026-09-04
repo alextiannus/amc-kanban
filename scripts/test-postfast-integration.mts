@@ -89,6 +89,13 @@ async function startMockPostFast() {
       ])
     }
 
+    if (method === 'POST' && url === '/social-media/connect-link') {
+      assert.deepEqual(body, { label: 'AMC Store' })
+      return json(res, 201, {
+        connectUrl: 'https://app.postfa.st/connect?token=fresh-test-token',
+      })
+    }
+
     if (method === 'POST' && url === '/file/get-signed-upload-urls') {
       assert.equal(body.count, 1)
       assert.equal(body.contentType, 'video/mp4')
@@ -295,6 +302,10 @@ async function main() {
     assert.equal(accounts.success, true)
     assert.equal(accounts.accounts.length, 4)
     assert.equal(accounts.accounts[0].platformId, 'instagram')
+
+    const connectLink = await postfast.postfastGenerateConnectLink(API_KEY, { label: 'AMC Store' })
+    assert.equal(connectLink.success, true)
+    assert.equal(connectLink.connectUrl, 'https://app.postfa.st/connect?token=fresh-test-token')
 
     const uploadSlots = await postfast.postfastGetSignedUploadUrls(API_KEY, [
       { filename: 'reel.mp4', mimeType: 'video/mp4', sizeBytes: 10 },
@@ -557,6 +568,7 @@ async function main() {
 
     assert.ok(seen.some((r) => r.method === 'GET' && r.url.startsWith('/social-media/my-social-accounts')))
     assert.ok(seen.some((r) => r.method === 'GET' && r.url === '/social-media/pf_acc_google/gbp-locations'))
+    assert.ok(seen.some((r) => r.method === 'POST' && r.url === '/social-media/connect-link'))
     assert.ok(seen.some((r) => r.method === 'POST' && r.url === '/file/get-signed-upload-urls'))
     assert.ok(seen.some((r) => r.method === 'PUT' && r.url === '/upload/video-key'))
     assert.ok(seen.some((r) => r.method === 'POST' && r.url === '/social-posts'))
