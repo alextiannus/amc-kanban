@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
+import { postfastFetchAccounts, postfastGetFollowerHistory, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 import { recordRemoteCopyScriptOutcome } from '@/lib/amc-content/remoteContentService'
 import { processPostfastDeliveryQueue } from '@/lib/postfastDelivery'
+import { syncPostfastInbox } from '@/lib/postfastInbox'
 import {
   persistInternalPublishedPosts,
   persistSocialAccountMetrics,
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
     googleLocationId: string | null
   }>
   const draftStatusResults: Array<{ brandId: string; checked?: number; updated?: number; error?: string }> = []
+  const inboxSyncResults: Array<{ brandId: string; conversations?: number; items?: number; actionItems?: number; error?: string }> = []
   for (const brand of configuredBrands) {
     if (!brand.postfastApiKey || Date.now() - startedAt.getTime() >= 270_000) break
     try {
@@ -94,6 +96,12 @@ export async function POST(req: NextRequest) {
       draftStatusResults.push({ brandId: brand.id, checked: syncResult.checked, updated: syncResult.updated })
     } catch (error: unknown) {
       draftStatusResults.push({ brandId: brand.id, error: error instanceof Error ? error.message : String(error) })
+    }
+    try {
+      const inbox = await syncPostfastInbox(brand.id, brand.postfastApiKey)
+      inboxSyncResults.push({ brandId: brand.id, ...inbox })
+    } catch (error: unknown) {
+      inboxSyncResults.push({ brandId: brand.id, error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -159,7 +167,7 @@ export async function POST(req: NextRequest) {
   const failed = results.filter(r => !r.ok).length
   console.log(`[PostFast Cron] Done — ${succeeded} succeeded, ${failed} failed in ${Date.now() - startedAt.getTime()}ms`)
 
-  return NextResponse.json({ ok: true, startedAt, deliveryQueue, draftStatusResults, fullSyncDeferred: false, succeeded, failed, results })
+  return NextResponse.json({ ok: true, startedAt, deliveryQueue, draftStatusResults, inboxSyncResults, fullSyncDeferred: false, succeeded, failed, results })
 }
 
 export async function syncViralCopyExperimentOutcomes(brandId: string, analyticsPosts: any[]) {
@@ -246,7 +254,7 @@ export async function syncBrand(brand: {
         if (existing) {
           await prisma.socialAccount.update({
             where: { id: existing.id },
-            data: { platformId: 'google', handle: acc.handle, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
+            data: { platformId: 'google', postfastAccountId: acc.id, handle: acc.handle, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date(), connectionStatus: acc.connectionStatus, disabledReason: acc.disabledReason ?? null, inboxCapable: acc.inboxCapable, followerCountUpdatedAt: acc.followerCountUpdatedAt ? new Date(acc.followerCountUpdatedAt) : null },
           })
           continue
         }
@@ -260,7 +268,7 @@ export async function syncBrand(brand: {
         if (existingByProfile) {
           await prisma.socialAccount.update({
             where: { id: existingByProfile.id },
-            data: { handle: acc.handle, displayName: acc.displayName ?? acc.handle, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
+            data: { postfastAccountId: acc.id, handle: acc.handle, displayName: acc.displayName ?? acc.handle, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date(), connectionStatus: acc.connectionStatus, disabledReason: acc.disabledReason ?? null, inboxCapable: acc.inboxCapable, followerCountUpdatedAt: acc.followerCountUpdatedAt ? new Date(acc.followerCountUpdatedAt) : null },
           })
           continue
         }
@@ -268,8 +276,8 @@ export async function syncBrand(brand: {
 
       await prisma.socialAccount.upsert({
         where: { brandId_platformId_handle: { brandId: brand.id, platformId: acc.platformId, handle: acc.handle } },
-        create: { brandId: brand.id, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
-        update: { displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
+        create: { brandId: brand.id, platformId: acc.platformId, postfastAccountId: acc.id, handle: acc.handle, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date(), connectionStatus: acc.connectionStatus, disabledReason: acc.disabledReason ?? null, inboxCapable: acc.inboxCapable, followerCountUpdatedAt: acc.followerCountUpdatedAt ? new Date(acc.followerCountUpdatedAt) : null },
+        update: { postfastAccountId: acc.id, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date(), connectionStatus: acc.connectionStatus, disabledReason: acc.disabledReason ?? null, inboxCapable: acc.inboxCapable, followerCountUpdatedAt: acc.followerCountUpdatedAt ? new Date(acc.followerCountUpdatedAt) : null },
       })
     }
 
@@ -287,7 +295,7 @@ export async function syncBrand(brand: {
 
     syncedAccounts = await prisma.socialAccount.findMany({
       where: { brandId: brand.id },
-      select: { id: true, platformId: true, handle: true, displayName: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true },
+      select: { id: true, platformId: true, postfastAccountId: true, handle: true, displayName: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true, connectionStatus: true, disabledReason: true, inboxCapable: true, followerCountUpdatedAt: true },
     })
 
   // 2. Build 7-day operations report
@@ -362,6 +370,16 @@ export async function syncBrand(brand: {
       raw: account,
     })), analyticsTo),
     persistInternalPublishedPosts(brand.id, analyticsTo),
+    Promise.all(pfResult.accounts.map(async (account) => {
+      const history = await postfastGetFollowerHistory(brand.postfastApiKey!, account.id)
+      if (!history.success) return
+      await Promise.all(history.history.map((point) => persistSocialAccountMetrics(brand.id, [{
+        platform: account.platformId,
+        handle: account.handle,
+        followerCount: point.followerCount,
+        raw: point,
+      }], new Date(point.capturedAt))))
+    })),
   ])
 
   return { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt: analyticsTo.toISOString() }

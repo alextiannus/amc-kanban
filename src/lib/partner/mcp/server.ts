@@ -16,6 +16,7 @@ import { authenticateApiKey, type AuthPrincipal } from '@/lib/auth-v2'
 import { canUserAccessBrand } from '@/lib/user-management/brandAccess'
 import { postfastFetchAccounts } from '@/lib/integrations/postfast'
 import { writeAuditLog, actorFromContext } from '@/lib/audit'
+import { completePostfastPublish, reservePostfastPublish } from '@/lib/postfastPublishIdempotency'
 import { readBrandProfileMarkdown, refreshBrandProfileMarkdown, writeBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -1024,8 +1025,10 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
   const publishContentSchema = {
     brandId: z.string().describe('Brand ID — backend credentials are loaded automatically.'),
+    idempotencyKey: z.string().min(1).describe('Required stable key for this publish attempt. Reuse it only to retrieve a known result; an unknown outcome must be reconciled before a new publish.'),
     platform: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'x', 'linkedin', 'threads', 'bluesky', 'pinterest', 'snapchat', 'telegram', 'google'])
       .describe('Target platform'),
+    instagramPublishType: z.enum(['TIMELINE', 'REEL', 'STORY']).optional().describe('Instagram format; defaults to REEL for one video and TIMELINE otherwise.'),
     caption: z.string().describe('Post caption / body text'),
     mediaStorageKeys: z.array(z.string()).optional().describe('Storage keys from board_upload_media (preferred over mediaUrls)'),
     mediaUrls: z.array(z.string()).optional().describe('Public image or video URLs (fallback when storage keys unavailable)'),
@@ -1033,8 +1036,15 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     scheduledAt: z.string().optional().describe('ISO 8601 UTC datetime to schedule (omit = publish immediately)'),
     accountId: z.string().optional().describe('Specific account ID to post from'),
     gbpLocationId: z.string().optional().describe('Required Google Business location ID when platform is google'),
+    postfastControls: z.object({
+      firstComment: z.string().optional(), instagramLocationId: z.string().optional(), instagramLocationDisplayName: z.string().optional(),
+      instagramIsAiGenerated: z.boolean().optional(), instagramPostToGrid: z.boolean().optional(), instagramTrialReelStrategy: z.enum(['SS_PERFORMANCE']).optional(),
+      tiktokMusicSoundId: z.string().optional(), tiktokMusicSoundName: z.string().optional(), tiktokAutoAddMusic: z.boolean().optional(),
+      gbpTopicType: z.enum(['STANDARD', 'EVENT', 'OFFER']).optional(), gbpCallToActionType: z.enum(['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL']).optional(), gbpCallToActionUrl: z.string().optional(),
+      gbpEventTitle: z.string().optional(), gbpEventStartDate: z.string().optional(), gbpEventEndDate: z.string().optional(), gbpOfferCouponCode: z.string().optional(), gbpOfferRedeemUrl: z.string().optional(), gbpOfferTerms: z.string().optional(),
+    }).optional().describe('Platform-specific publish controls; display-name fields are retained by the caller and not sent to PostFast.'),
   }
-  const publishContentHandler = async ({ brandId, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId }: { brandId: string; platform: 'instagram' | 'tiktok' | 'xiaohongshu' | 'facebook' | 'youtube' | 'x' | 'linkedin' | 'threads' | 'bluesky' | 'pinterest' | 'snapchat' | 'telegram' | 'google'; caption: string; mediaStorageKeys?: string[]; mediaUrls?: string[]; hashtags?: string[]; scheduledAt?: string; accountId?: string; gbpLocationId?: string }) => {
+  const publishContentHandler = async ({ brandId, idempotencyKey, platform, instagramPublishType, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId, postfastControls }: { brandId: string; idempotencyKey: string; platform: 'instagram' | 'tiktok' | 'xiaohongshu' | 'facebook' | 'youtube' | 'x' | 'linkedin' | 'threads' | 'bluesky' | 'pinterest' | 'snapchat' | 'telegram' | 'google'; instagramPublishType?: 'TIMELINE' | 'REEL' | 'STORY'; caption: string; mediaStorageKeys?: string[]; mediaUrls?: string[]; hashtags?: string[]; scheduledAt?: string; accountId?: string; gbpLocationId?: string; postfastControls?: Record<string, unknown> }) => {
     const agent = await resolveAgent()
     if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -1050,17 +1060,51 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
 
     if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
+    if (!accountId?.trim()) return { content: [{ type: 'text' as const, text: 'Error: accountId is required and must reference a connected account for this brand.' }], isError: true }
+
+    const account = await prisma.socialAccount.findFirst({
+      where: { id: accountId.trim(), brandId },
+      select: { platformId: true, postfastAccountId: true },
+    })
+    if (!account?.postfastAccountId) {
+      return { content: [{ type: 'text' as const, text: 'Error: accountId must reference a connected PostFast account for this brand.' }], isError: true }
+    }
+    if (normalizeCalendarPlatform(account.platformId) !== normalizeCalendarPlatform(platform)) {
+      return { content: [{ type: 'text' as const, text: 'Error: accountId platform is not compatible with the requested publish platform.' }], isError: true }
+    }
+
+    const scope = `postfast-publish:${brandId}:${accountId.trim()}`
+    const payload = { platform, instagramPublishType, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId: accountId.trim(), gbpLocationId, postfastControls }
+    const reservation = await reservePostfastPublish({ scope, key: idempotencyKey.trim(), payload })
+    if ('conflict' in reservation) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Idempotency key conflict' }) }], isError: true }
+    if ('replay' in reservation) return { content: [{ type: 'text' as const, text: JSON.stringify(reservation.replay.response) }], isError: reservation.replay.statusCode >= 400 }
+    if ('pending' in reservation) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ code: 'POSTFAST_RESULT_UNKNOWN', status: 503, error: 'The prior PostFast publish outcome is pending or unknown. Do not retry automatically; reconcile the social platform before using a new idempotency key.' }) }], isError: true }
+    }
+
     const { postfastPublish } = await import('@/lib/integrations/postfast')
-    const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId })
+    const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, instagramPublishType, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId: account.postfastAccountId, gbpLocationId, ...postfastControls })
 
     if (!result.success) {
       const payload = result.code
         ? { code: result.code, error: result.error, issues: result.issues || [] }
         : { error: result.error }
+      if (result.code !== 'POSTFAST_RESULT_UNKNOWN') {
+        await completePostfastPublish(scope, idempotencyKey.trim(), payload, 502)
+      }
       return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }], isError: true }
     }
+    const published = { ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }
+    await writeAuditLog({
+      actor: { id: agent.id, type: 'AI_AGENT', name: agent.email },
+      action: 'POSTFAST_DIRECT_PUBLISH',
+      resourceId: result.postId || accountId.trim(),
+      resourceType: 'SocialPost',
+      metadata: { brandId, accountId: accountId.trim(), providerAccountId: account.postfastAccountId, platform: normalizeCalendarPlatform(platform), postId: result.postId, scheduledAt: result.scheduledAt || scheduledAt },
+    })
+    await completePostfastPublish(scope, idempotencyKey.trim(), published, 200)
     const responseContent: Array<{ type: 'text'; text: string }> = [
-      { type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform, scheduledAt: scheduledAt ?? 'immediate' }) }
+      { type: 'text' as const, text: JSON.stringify(published) }
     ]
     const notice = getSkillUpdateNotice()
     if (notice) {
@@ -1321,10 +1365,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       reviewId: z.string().optional().describe('Review ID (required for replies)'),
       replyText: z.string().optional().describe('Reply comment (required for replies)'),
       caption: z.string().optional().describe('Social post caption'),
+      accountId: z.string().optional().describe('Connected brand account ID (required for publish_post)'),
+      idempotencyKey: z.string().optional().describe('Stable key required for publish_post'),
       mediaUrls: z.array(z.string()).optional().describe('Social post media URLs'),
       hashtags: z.array(z.string()).optional().describe('Social post hashtags without #'),
     },
-    async ({ brandId, actionType, platform, reviewId, replyText, caption, mediaUrls, hashtags }) => {
+    async ({ brandId, actionType, platform, reviewId, replyText, caption, accountId, idempotencyKey, mediaUrls, hashtags }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
 
@@ -1452,12 +1498,27 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       }
 
       if (actionType === 'publish_post') {
-        if (!platform || !caption) {
-          return { content: [{ type: 'text' as const, text: 'Error: platform and caption are required for publish_post' }], isError: true }
+        if (!platform || !caption || !accountId?.trim() || !idempotencyKey?.trim()) {
+          return { content: [{ type: 'text' as const, text: 'Error: platform, caption, accountId, and idempotencyKey are required for publish_post' }], isError: true }
         }
 
         if (!brand.postfastApiKey) {
           return { content: [{ type: 'text' as const, text: 'Error: PostFast API key required for publish_post' }], isError: true }
+        }
+        const account = await prisma.socialAccount.findFirst({
+          where: { id: accountId.trim(), brandId },
+          select: { platformId: true, postfastAccountId: true },
+        })
+        if (!account?.postfastAccountId || normalizeCalendarPlatform(account.platformId) !== normalizeCalendarPlatform(platform)) {
+          return { content: [{ type: 'text' as const, text: 'Error: accountId must reference a connected account compatible with the requested publish platform.' }], isError: true }
+        }
+        const scope = `postfast-publish:${brandId}:${accountId.trim()}`
+        const publishPayload = { platform, caption, accountId: accountId.trim(), mediaUrls, hashtags }
+        const reservation = await reservePostfastPublish({ scope, key: idempotencyKey.trim(), payload: publishPayload })
+        if ('conflict' in reservation) return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'Idempotency key conflict' }) }], isError: true }
+        if ('replay' in reservation) return { content: [{ type: 'text' as const, text: JSON.stringify(reservation.replay.response) }], isError: reservation.replay.statusCode >= 400 }
+        if ('pending' in reservation) {
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ code: 'POSTFAST_RESULT_UNKNOWN', status: 503, error: 'The prior PostFast publish outcome is pending or unknown. Do not retry automatically; reconcile the social platform before using a new idempotency key.' }) }], isError: true }
         }
         const { postfastPublish } = await import('@/lib/integrations/postfast')
         const result = await postfastPublish({
@@ -1466,15 +1527,28 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           caption,
           mediaUrls,
           hashtags,
+          accountId: account.postfastAccountId,
         })
 
         if (!result.success) {
           const payload = result.code
             ? { code: result.code, error: result.error, issues: result.issues || [] }
             : { error: result.error }
+          if (result.code !== 'POSTFAST_RESULT_UNKNOWN') {
+            await completePostfastPublish(scope, idempotencyKey.trim(), payload, 502)
+          }
           return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }], isError: true }
         }
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, postId: result.postId, url: result.url, platform }) }] }
+        const published = { ok: true, postId: result.postId, url: result.url, platform }
+        await writeAuditLog({
+          actor: { id: agent.id, type: 'AI_AGENT', name: agent.email },
+          action: 'POSTFAST_DIRECT_PUBLISH',
+          resourceId: result.postId || accountId.trim(),
+          resourceType: 'SocialPost',
+          metadata: { brandId, accountId: accountId.trim(), providerAccountId: account.postfastAccountId, platform: normalizeCalendarPlatform(platform), postId: result.postId },
+        })
+        await completePostfastPublish(scope, idempotencyKey.trim(), published, 200)
+        return { content: [{ type: 'text' as const, text: JSON.stringify(published) }] }
       }
 
       return { content: [{ type: 'text' as const, text: 'Error: Unsupported action type' }], isError: true }

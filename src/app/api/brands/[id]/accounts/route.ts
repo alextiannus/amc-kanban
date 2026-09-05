@@ -31,6 +31,10 @@ export async function GET(_request: Request, { params }: Params) {
       displayName: true,
       autoPilot: true,
       profileUrl: true,
+      connectionStatus: true,
+      disabledReason: true,
+      inboxCapable: true,
+      followerCountUpdatedAt: true,
     },
   })
 

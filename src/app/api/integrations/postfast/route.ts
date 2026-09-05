@@ -11,6 +11,9 @@
  *   delete_post       — cancel a scheduled post { postId }
  *   generate_connect_link — create a client connect link
  *   get_gbp_locations — list GBP locations { accountId }
+ *   get_follower_history — list account follower snapshots { accountId }
+ *   search_places — search Instagram places { accountId, query }
+ *   get_tiktok_sounds — list TikTok commercial sounds { accountId }
  */
 
 import { NextResponse } from 'next/server'
@@ -24,6 +27,11 @@ import {
   postfastDeletePost,
   postfastGenerateConnectLink,
   postfastGetGBPLocations,
+  postfastGetFollowerHistory,
+  postfastGetTikTokSounds,
+  postfastSearchPlaces,
+  postfastListInboxConversations,
+  postfastListInboxItems,
 } from '@/lib/integrations/postfast'
 
 type PostFastRouteBody = {
@@ -37,6 +45,8 @@ type PostFastRouteBody = {
   label?: string
   redirectUrl?: string
   accountId?: string
+  query?: string
+  conversationId?: string
 }
 
 // ── Auth: accept session OR agent API key ──────────────────────────────────
@@ -84,6 +94,14 @@ async function getBrandApiKey(
     return brand?.postfastApiKey ?? null
   }
   return null
+}
+
+async function getPostfastAccountId(brandId: string, accountId: string) {
+  const account = await prisma.socialAccount.findFirst({
+    where: { brandId, postfastAccountId: accountId },
+    select: { postfastAccountId: true },
+  })
+  return account?.postfastAccountId ?? null
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -167,8 +185,54 @@ export async function POST(request: Request) {
 
     case 'get_gbp_locations': {
       if (!params.accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
-      const result = await postfastGetGBPLocations(apiKey, params.accountId)
+      const accountId = await getPostfastAccountId(brandId, params.accountId)
+      if (!accountId) return NextResponse.json({ error: 'PostFast account not found' }, { status: 404 })
+      const result = await postfastGetGBPLocations(apiKey, accountId)
       return NextResponse.json(result)
+    }
+
+    case 'get_follower_history': {
+      if (!params.accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
+      const accountId = await getPostfastAccountId(brandId, params.accountId)
+      if (!accountId) return NextResponse.json({ error: 'PostFast account not found' }, { status: 404 })
+      return NextResponse.json(await postfastGetFollowerHistory(apiKey, accountId))
+    }
+
+    case 'search_places': {
+      if (!params.query) return NextResponse.json({ error: 'query required' }, { status: 400 })
+      return NextResponse.json(await postfastSearchPlaces(apiKey, params.query))
+    }
+
+    case 'get_tiktok_sounds': {
+      if (!params.accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
+      const accountId = await getPostfastAccountId(brandId, params.accountId)
+      if (!accountId) return NextResponse.json({ error: 'PostFast account not found' }, { status: 404 })
+      return NextResponse.json(await postfastGetTikTokSounds(apiKey, accountId))
+    }
+
+    case 'list_inbox_conversations': {
+      const result = await postfastListInboxConversations(apiKey, { limit: params.limit, page: params.page })
+      if (!result.success) return NextResponse.json(result)
+
+      const accounts = await prisma.socialAccount.findMany({
+        where: { brandId, postfastAccountId: { not: null } },
+        select: { postfastAccountId: true },
+      })
+      const allowedPostfastAccountIds = new Set(accounts.flatMap((account: { postfastAccountId: string | null }) => account.postfastAccountId ? [account.postfastAccountId] : []))
+      const conversations = result.conversations.filter((conversation) =>
+        Boolean(conversation.socialMediaId) && allowedPostfastAccountIds.has(conversation.socialMediaId!),
+      )
+      return NextResponse.json({ ...result, conversations, total: conversations.length })
+    }
+
+    case 'get_inbox_items': {
+      if (!params.conversationId) return NextResponse.json({ error: 'conversationId required' }, { status: 400 })
+      const conversation = await prisma.postfastInboxConversation.findUnique({
+        where: { brandId_providerId: { brandId, providerId: params.conversationId } },
+        select: { providerId: true },
+      })
+      if (!conversation) return NextResponse.json({ error: 'Inbox conversation not found' }, { status: 404 })
+      return NextResponse.json(await postfastListInboxItems(apiKey, conversation.providerId, { limit: params.limit, page: params.page }))
     }
 
     default:

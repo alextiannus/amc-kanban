@@ -19,6 +19,7 @@
     "typecheck": "tsc --project tsconfig.check.json",
     "test:content-engine-integration": "node --experimental-strip-types scripts/test-content-engine-integration.mts",
     "test:postfast-integration": "node --experimental-strip-types scripts/test-postfast-integration.mts",
+    "test:postfast-inbox": "node --experimental-strip-types scripts/test-postfast-inbox.mts",
     "test:postfast-delivery": "node --experimental-strip-types scripts/test-postfast-delivery.mts",
     "test:draft-status-reconciliation": "node --experimental-strip-types scripts/test-draft-status-reconciliation.mts",
     "postfast:repair-statuses:dry-run": "node --experimental-strip-types scripts/repair-postfast-draft-statuses.mts --dry-run",

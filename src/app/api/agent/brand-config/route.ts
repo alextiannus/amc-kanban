@@ -292,8 +292,8 @@ export async function PATCH(request: Request) {
         for (const acc of pfResult.accounts) {
           await prisma.socialAccount.upsert({
             where: { brandId_platformId_handle: { brandId, platformId: acc.platformId, handle: acc.handle } },
-            create: { brandId, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle },
-            update: { displayName: acc.displayName ?? acc.handle },
+            create: { brandId, platformId: acc.platformId, postfastAccountId: acc.id, handle: acc.handle, displayName: acc.displayName ?? acc.handle },
+            update: { postfastAccountId: acc.id, displayName: acc.displayName ?? acc.handle },
           })
         }
 

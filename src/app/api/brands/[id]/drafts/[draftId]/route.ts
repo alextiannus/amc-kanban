@@ -7,12 +7,15 @@ import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/com
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
 import { findActivePostfastDeliveryJob } from '@/lib/postfastDelivery'
+import { sanitizePostFastDraftControls } from '@/lib/integrations/postfast'
 
 const DRAFT_SELECT = {
   id: true,
   brandId: true,
   accountId: true,
   gbpLocationId: true,
+  instagramPublishType: true,
+  postfastControls: true,
   caption: true,
   captionLang: true,
   mediaUrls: true,
@@ -86,6 +89,11 @@ function isGooglePlatform(platformId?: string | null) {
     .includes(String(platformId ?? '').toLowerCase().trim())
 }
 
+function optionalInstagramPublishType(value: unknown) {
+  if (value === undefined || value === null || value === '') return null
+  return value === 'TIMELINE' || value === 'REEL' || value === 'STORY' ? value : false
+}
+
 async function ensureAccess(request: Request, brandId: string) {
   const actor = await getActor(request)
   if (!actor) return null
@@ -139,11 +147,24 @@ export async function PATCH(request: Request, { params }: Params) {
       coverAssetId: true,
       accountId: true,
       gbpLocationId: true,
+      instagramPublishType: true,
+      postfastControls: true,
     },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
+
+  const hasInstagramPublishTypeUpdate = Object.prototype.hasOwnProperty.call(body, 'instagramPublishType')
+  const instagramPublishTypeUpdate = hasInstagramPublishTypeUpdate
+    ? optionalInstagramPublishType(body.instagramPublishType)
+    : undefined
+  if (instagramPublishTypeUpdate === false) {
+    return NextResponse.json({ error: 'instagramPublishType must be TIMELINE, REEL, STORY, or null' }, { status: 400 })
+  }
+  const hasPostfastControlsUpdate = Object.prototype.hasOwnProperty.call(body, 'postfastControls')
+  const parsedPostfastControls = hasPostfastControlsUpdate ? sanitizePostFastDraftControls(body.postfastControls) : {}
+  if (parsedPostfastControls.error) return NextResponse.json({ error: parsedPostfastControls.error }, { status: 400 })
 
   if (existing.status === 'publishing' && Object.prototype.hasOwnProperty.call(body, 'gbpLocationId')) {
     return NextResponse.json({ error: '发布正在进行中，Google Business 发布门店暂时不能修改。' }, { status: 409 })
@@ -151,7 +172,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const publishCriticalFields = [
     'caption', 'captionLang', 'accountId', 'mediaUrls', 'assetIds', 'coverAssetId',
-    'hashtags', 'scheduledAt', 'status', 'gbpLocationId',
+    'hashtags', 'scheduledAt', 'status', 'gbpLocationId', 'instagramPublishType', 'postfastControls',
   ]
   if (existing.status === 'publishing' && publishCriticalFields.some((field) => Object.prototype.hasOwnProperty.call(body, field))) {
     const activeJob = await findActivePostfastDeliveryJob(draftId)
@@ -306,6 +327,8 @@ export async function PATCH(request: Request, { params }: Params) {
         captionLang: typeof body.captionLang === 'string' ? body.captionLang : undefined,
         accountId: typeof body.accountId === 'string' ? body.accountId : undefined,
         gbpLocationId: gbpLocationIdUpdate,
+        instagramPublishType: instagramPublishTypeUpdate,
+        postfastControls: hasPostfastControlsUpdate ? parsedPostfastControls.controls ?? null : undefined,
         mediaUrls: Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined,
         coverAssetId: coverAssetIdUpdate,
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,

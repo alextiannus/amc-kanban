@@ -54,6 +54,9 @@ async function startMockPostFast() {
           platformUsername: 'amc_store',
           displayName: 'AMC Store',
           isConnected: true,
+          connectionStatus: 'CONNECTED',
+          inboxCapable: true,
+          followerCountUpdatedAt: '2026-09-05T00:00:00.000Z',
         },
         {
           id: 'pf_acc_video',
@@ -61,6 +64,7 @@ async function startMockPostFast() {
           platformUsername: '@video_store',
           displayName: 'Video Store',
           isConnected: true,
+          connectionStatus: 'CONNECTED',
         },
         {
           id: 'pf_acc_google',
@@ -76,6 +80,15 @@ async function startMockPostFast() {
           displayName: 'AMC Store Facebook',
           isConnected: true,
         },
+        {
+          id: 'pf_acc_disabled',
+          platform: 'THREADS',
+          platformUsername: 'disabled_store',
+          displayName: 'Disabled Store',
+          isConnected: false,
+          connectionStatus: 'DISABLED',
+          disabledReason: 'Threads connection expired',
+        },
       ])
     }
 
@@ -87,6 +100,18 @@ async function startMockPostFast() {
           address: '1 Test Street',
         },
       ])
+    }
+
+    if (method === 'GET' && url === '/social-media/pf_acc_instagram/follower-history') {
+      return json(res, 200, { series: [{ capturedAt: '2026-09-04T00:00:00.000Z', followerCount: 120 }] })
+    }
+
+    if (method === 'GET' && url === '/social-media/search-places?q=Marina%20Bay') {
+      return json(res, 200, [{ id: 'place_1', name: 'Marina Bay', city: 'Singapore' }])
+    }
+
+    if (method === 'GET' && url === '/social-media/pf_acc_video/tiktok-sounds') {
+      return json(res, 200, [{ musicSoundId: 'sound_1', name: 'Commercial sound', artist: 'PostFast' }])
     }
 
     if (method === 'POST' && url === '/social-media/connect-link') {
@@ -164,14 +189,14 @@ async function startMockPostFast() {
         return json(res, 201, { postIds: ['pf_post_instagram_cover_001'] })
       }
       if (post.content === 'Image cover first') {
-        assert.equal(body.controls?.instagramPublishType, undefined)
+        assert.equal(body.controls?.instagramPublishType, 'TIMELINE')
         assert.equal(post.mediaItems.length, 2)
         assert.equal(post.mediaItems[0].key, 'image/cover.jpg')
         assert.equal(post.mediaItems[1].key, 'image/content.jpg')
         return json(res, 201, { postIds: ['pf_post_image_cover_001'] })
       }
       if (post.content === 'Relaxed image warning') {
-        assert.equal(body.controls?.instagramPublishType, undefined)
+        assert.equal(body.controls?.instagramPublishType, 'TIMELINE')
         assert.equal(post.mediaItems[0].key, 'image/oversized-photo.jpg')
         assert.equal(post.mediaItems[0].type, 'IMAGE')
         return json(res, 200, {
@@ -184,6 +209,30 @@ async function startMockPostFast() {
             },
           ],
         })
+      }
+      if (post.content === 'Instagram Story') {
+        assert.equal(body.controls.instagramPublishType, 'STORY')
+        assert.equal(post.mediaItems.length, 1)
+        assert.equal(post.mediaItems[0].type, 'IMAGE')
+        return json(res, 201, { postIds: ['pf_post_story_001'] })
+      }
+      if (post.content === 'Instagram advanced controls') {
+        assert.deepEqual(body.controls, {
+          instagramPublishType: 'REEL',
+          firstComment: 'Pinned detail',
+          instagramLocationId: 'place_1',
+          instagramIsAiGenerated: true,
+          instagramPostToGrid: true,
+          instagramTrialReelStrategy: 'SS_PERFORMANCE',
+        })
+        return json(res, 201, { postIds: ['pf_post_instagram_controls_001'] })
+      }
+      if (post.content === 'Instagram default trial reel') {
+        assert.deepEqual(body.controls, {
+          instagramPublishType: 'REEL',
+          instagramTrialReelStrategy: 'SS_PERFORMANCE',
+        })
+        return json(res, 201, { postIds: ['pf_post_instagram_default_trial_001'] })
       }
       assert.equal(body.controls.instagramPublishType, 'REEL')
       if (post.content === 'Opaque video key') {
@@ -300,8 +349,28 @@ async function main() {
     }
     const accounts = await postfast.postfastFetchAccounts(API_KEY)
     assert.equal(accounts.success, true)
-    assert.equal(accounts.accounts.length, 4)
+    assert.equal(accounts.accounts.length, 5)
     assert.equal(accounts.accounts[0].platformId, 'instagram')
+    assert.equal(accounts.accounts[0].connectionStatus, 'CONNECTED')
+    assert.equal(accounts.accounts[0].inboxCapable, true)
+    assert.equal(accounts.accounts[4].connectionStatus, 'DISABLED')
+
+    const followerHistory = await postfast.postfastGetFollowerHistory(API_KEY, 'pf_acc_instagram')
+    assert.deepEqual(followerHistory.history, [{ capturedAt: '2026-09-04T00:00:00.000Z', followerCount: 120 }])
+    const places = await postfast.postfastSearchPlaces(API_KEY, 'Marina Bay')
+    assert.deepEqual(places.places, [{ id: 'place_1', name: 'Marina Bay' }])
+    const sounds = await postfast.postfastGetTikTokSounds(API_KEY, 'pf_acc_video')
+    assert.deepEqual(sounds.sounds, [{ musicSoundId: 'sound_1', name: 'Commercial sound', authorName: 'PostFast' }])
+
+    const disabledPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'threads',
+      accountId: 'pf_acc_disabled',
+      caption: 'Disabled Threads',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    })
+    assert.equal(disabledPublish.code, 'POSTFAST_ACCOUNT_DISABLED')
 
     const connectLink = await postfast.postfastGenerateConnectLink(API_KEY, { label: 'AMC Store' })
     assert.equal(connectLink.success, true)
@@ -418,6 +487,72 @@ async function main() {
     assert.equal(imageCoverPublish.success, true)
     assert.equal(imageCoverPublish.postId, 'pf_post_image_cover_001')
 
+    const storyPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      instagramPublishType: 'STORY',
+      caption: 'Instagram Story',
+      mediaItems: [{ storageKey: 'image/content.jpg', metadata: validCoverMetadata }],
+      scheduledAt,
+    })
+    assert.equal(storyPublish.success, true)
+    assert.equal(storyPublish.postId, 'pf_post_story_001')
+
+    const instagramControlsPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      instagramPublishType: 'REEL',
+      caption: 'Instagram advanced controls',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      firstComment: 'Pinned detail',
+      instagramLocationId: 'place_1',
+      instagramLocationDisplayName: 'Marina Bay',
+      instagramIsAiGenerated: true,
+      instagramPostToGrid: true,
+      instagramTrialReelStrategy: 'SS_PERFORMANCE',
+      tiktokMusicSoundId: 'must-not-send',
+      scheduledAt,
+    })
+    assert.equal(instagramControlsPublish.postId, 'pf_post_instagram_controls_001')
+
+    const defaultTrialReelPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      caption: 'Instagram default trial reel',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      instagramTrialReelStrategy: 'SS_PERFORMANCE',
+      scheduledAt,
+    })
+    assert.equal(defaultTrialReelPublish.success, true)
+    assert.equal(defaultTrialReelPublish.postId, 'pf_post_instagram_default_trial_001')
+
+    const tiktokMusicConflict = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'tiktok',
+      accountId: 'pf_acc_video',
+      caption: 'TikTok music conflict',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+      tiktokMusicSoundId: 'sound_1',
+      tiktokAutoAddMusic: true,
+      scheduledAt,
+    })
+    assert.equal(tiktokMusicConflict.code, 'TIKTOK_MUSIC_CONFLICT')
+
+    const invalidReelPublish = await postfast.postfastPublish({
+      apiKey: API_KEY,
+      platform: 'instagram',
+      accountId: 'pf_acc_instagram',
+      instagramPublishType: 'REEL',
+      caption: 'Invalid image Reel',
+      mediaItems: [{ storageKey: 'image/content.jpg', metadata: validCoverMetadata }],
+      scheduledAt,
+    })
+    assert.equal(invalidReelPublish.success, false)
+    assert.equal(invalidReelPublish.code, 'INSTAGRAM_PUBLISH_TYPE_INVALID')
+
     const publish = await postfast.postfastPublish({
       apiKey: API_KEY,
       platform: 'instagram',
@@ -434,13 +569,13 @@ async function main() {
     const missingProviderId = await postfast.postfastPublish({
       apiKey: API_KEY,
       platform: 'instagram',
-      accountId: 'pf_acc_instagram',
+      accountId: 'pf_acc_missing',
       caption: 'Missing provider ID',
       mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
       scheduledAt,
     })
     assert.equal(missingProviderId.success, false)
-    assert.equal(missingProviderId.code, 'POSTFAST_RESULT_UNKNOWN')
+    assert.match(missingProviderId.error || '', /未在 PostFast 中找到匹配/)
 
     const relaxedVideoPublish = await postfast.postfastPublish({
       apiKey: API_KEY,

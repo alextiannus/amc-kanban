@@ -212,6 +212,7 @@ model IdempotencyRecord {
   response    Json?
   expiresAt   DateTime
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@unique([scope, key])
   @@index([expiresAt])
@@ -403,6 +404,7 @@ model Brand {
   assets            MediaAsset[]
   topicFeeds        TopicFeed[]
   actionItems       ActionItem[]
+  inboxConversations PostfastInboxConversation[]
   conversions       ConversionEvent[]
   socialInsightPosts          SocialInsightPost[]
   socialInsightReviews        SocialInsightReview[]
@@ -553,6 +555,7 @@ model SocialAccount {
   brandId      String
   brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
   platformId   String
+  postfastAccountId String?
   handle       String
   displayName  String?
   accessToken  String?
@@ -569,15 +572,21 @@ model SocialAccount {
   followerDelta Int?      @default(0)
   ratingScore   Float?
   snapshotAt    DateTime?
+  connectionStatus String @default("UNKNOWN")
+  disabledReason String?
+  inboxCapable Boolean @default(false)
+  followerCountUpdatedAt DateTime?
 
   drafts      ContentDraft[]
   actionItems ActionItem[]
+  inboxConversations PostfastInboxConversation[]
   snapshots   SocialAccountSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, platformId, handle])
+  @@unique([brandId, postfastAccountId])
   @@index([brandId])
 }
 
@@ -588,6 +597,8 @@ model ContentDraft {
   accountId                       String?
   account                         SocialAccount? @relation(fields: [accountId], references: [id])
   gbpLocationId                   String?
+  instagramPublishType            String?
+  postfastControls                Json?
   caption                         String
   captionLang                     String         @default("en")
   mediaUrls                       String[]       @default([])
@@ -682,6 +693,54 @@ model ActionItem {
   updatedAt DateTime @updatedAt
 
   @@index([brandId, status, priority])
+}
+
+model PostfastInboxConversation {
+  id                 String              @id @default(cuid())
+  brandId            String
+  brand              Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId          String?
+  account            SocialAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  providerId         String
+  platform           String
+  status             String              @default("OPEN")
+  subject            String?
+  participantName    String?
+  unreadCount        Int                 @default(0)
+  needsAttention     Boolean             @default(false)
+  lastMessageAt      DateTime?
+  lastSyncedAt       DateTime            @default(now())
+  raw                Json?
+  items              PostfastInboxItem[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([brandId, providerId])
+  @@index([brandId, unreadCount, needsAttention])
+  @@index([accountId])
+}
+
+model PostfastInboxItem {
+  id                 String                     @id @default(cuid())
+  conversationId     String
+  conversation       PostfastInboxConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  providerId         String
+  authorName         String?
+  body               String?
+  direction          String?
+  state              String?
+  unread             Boolean                    @default(false)
+  canReply           Boolean                    @default(false)
+  canPrivateReply    Boolean                    @default(false)
+  maxReplyLength     Int?
+  maxPrivateReplyLengthBytes Int?
+  replyWindowEndsAt  DateTime?
+  raw                Json?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  @@unique([conversationId, providerId])
+  @@index([conversationId, unread])
 }
 
 model MediaAsset {

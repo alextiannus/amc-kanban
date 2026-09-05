@@ -176,7 +176,42 @@ export interface PostFastAccount {
   followerCount?: number
   followerDelta?: number
   ratingScore?: number
+  connectionStatus: PostFastConnectionStatus
+  disabledReason?: string
+  inboxCapable: boolean
+  followerCountUpdatedAt?: string
 }
+
+export type PostFastConnectionStatus = 'CONNECTED' | 'DISCONNECTED' | 'EXPIRED' | 'DISABLED' | 'UNKNOWN'
+export type PostFastInstagramPublishType = 'TIMELINE' | 'REEL' | 'STORY'
+export type PostFastTrialReelStrategy = 'SS_PERFORMANCE'
+export type PostFastGbpTopicType = 'STANDARD' | 'EVENT' | 'OFFER'
+export type PostFastGbpCallToAction = 'BOOK' | 'ORDER' | 'SHOP' | 'LEARN_MORE' | 'SIGN_UP' | 'CALL'
+
+export interface PostFastFollowerHistoryPoint {
+  capturedAt: string
+  followerCount: number
+}
+
+export interface PostFastPlace {
+  id: string
+  name: string
+  address?: string
+}
+
+export interface PostFastTikTokSound {
+  musicSoundId: string
+  name: string
+  authorName?: string
+}
+
+export type PostFastDraftControls = Pick<PostFastPublishInput,
+  'firstComment' | 'instagramLocationId' | 'instagramLocationDisplayName' |
+  'instagramIsAiGenerated' | 'instagramPostToGrid' | 'instagramTrialReelStrategy' |
+  'tiktokMusicSoundId' | 'tiktokMusicSoundName' | 'tiktokAutoAddMusic' |
+  'gbpTopicType' | 'gbpCallToActionType' | 'gbpCallToActionUrl' | 'gbpEventTitle' |
+  'gbpEventStartDate' | 'gbpEventEndDate' | 'gbpOfferCouponCode' | 'gbpOfferRedeemUrl' | 'gbpOfferTerms'
+>
 
 export interface PostFastPost {
   id: string
@@ -198,6 +233,35 @@ export interface PostFastPost {
     reach?: number
     clicks?: number
   }
+}
+
+export interface PostFastInboxConversation {
+  id: string
+  socialMediaId?: string
+  platform: string
+  status?: string
+  subject?: string
+  participantName?: string
+  unreadCount: number
+  needsAttention: boolean
+  lastMessageAt?: string
+  raw: JsonRecord
+}
+
+export interface PostFastInboxItem {
+  id: string
+  conversationId?: string
+  authorName?: string
+  body?: string
+  direction?: string
+  state?: string
+  unread: boolean
+  canReply: boolean
+  canPrivateReply: boolean
+  maxReplyLength?: number
+  maxPrivateReplyLengthBytes?: number
+  replyWindowEndsAt?: string
+  raw: JsonRecord
 }
 
 // Analytics-specific type returned by GET /social-posts/analytics
@@ -222,6 +286,7 @@ export interface PostFastAnalyticsPost {
 export interface PostFastPublishInput {
   apiKey: string
   platform: string
+  instagramPublishType?: PostFastInstagramPublishType
   caption: string
   mediaItems?: PostFastMediaInput[] // preferred: preserves MIME/type metadata
   coverImage?: PostFastMediaInput    // optional custom cover; image posts use it as the first media item
@@ -231,6 +296,24 @@ export interface PostFastPublishInput {
   scheduledAt?: string          // ISO 8601 UTC
   accountId?: string            // specific account ID to post from
   gbpLocationId?: string         // required by PostFast for Google Business Profile posts
+  firstComment?: string
+  instagramLocationId?: string
+  instagramLocationDisplayName?: string // UI-only metadata; never sent to PostFast
+  instagramIsAiGenerated?: boolean
+  instagramPostToGrid?: boolean
+  instagramTrialReelStrategy?: PostFastTrialReelStrategy
+  tiktokMusicSoundId?: string
+  tiktokMusicSoundName?: string // UI-only metadata; never sent to PostFast
+  tiktokAutoAddMusic?: boolean
+  gbpTopicType?: PostFastGbpTopicType
+  gbpCallToActionType?: PostFastGbpCallToAction
+  gbpCallToActionUrl?: string
+  gbpEventTitle?: string
+  gbpEventStartDate?: string
+  gbpEventEndDate?: string
+  gbpOfferCouponCode?: string
+  gbpOfferRedeemUrl?: string
+  gbpOfferTerms?: string
 }
 
 export interface PostFastMediaInput {
@@ -254,6 +337,47 @@ export interface PostFastPublishResult {
   warnings?: MediaValidationIssue[]
 }
 
+export function sanitizePostFastDraftControls(value: unknown): { controls?: PostFastDraftControls; error?: string } {
+  if (value === undefined || value === null) return {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { error: 'postfastControls must be an object' }
+  const input = value as Record<string, unknown>
+  const allowed = new Set([
+    'firstComment', 'instagramLocationId', 'instagramLocationDisplayName', 'instagramIsAiGenerated',
+    'instagramPostToGrid', 'instagramTrialReelStrategy', 'tiktokMusicSoundId', 'tiktokMusicSoundName',
+    'tiktokAutoAddMusic', 'gbpTopicType', 'gbpCallToActionType', 'gbpCallToActionUrl', 'gbpEventTitle',
+    'gbpEventStartDate', 'gbpEventEndDate', 'gbpOfferCouponCode', 'gbpOfferRedeemUrl', 'gbpOfferTerms',
+  ])
+  if (Object.keys(input).some((key) => !allowed.has(key))) return { error: 'postfastControls contains an unsupported field' }
+  const controls: Record<string, unknown> = {}
+  for (const key of ['firstComment', 'instagramLocationId', 'instagramLocationDisplayName', 'tiktokMusicSoundId', 'tiktokMusicSoundName', 'gbpCallToActionUrl', 'gbpEventTitle', 'gbpEventStartDate', 'gbpEventEndDate', 'gbpOfferCouponCode', 'gbpOfferRedeemUrl', 'gbpOfferTerms']) {
+    const field = input[key]
+    if (field !== undefined) {
+      if (typeof field !== 'string' || !field.trim()) return { error: `postfastControls.${key} must be a non-empty string` }
+      controls[key] = field.trim()
+    }
+  }
+  for (const key of ['instagramIsAiGenerated', 'instagramPostToGrid', 'tiktokAutoAddMusic']) {
+    const field = input[key]
+    if (field !== undefined) {
+      if (typeof field !== 'boolean') return { error: `postfastControls.${key} must be boolean` }
+      controls[key] = field
+    }
+  }
+  if (input.instagramTrialReelStrategy !== undefined) {
+    if (input.instagramTrialReelStrategy !== 'SS_PERFORMANCE') return { error: 'postfastControls.instagramTrialReelStrategy is invalid' }
+    controls.instagramTrialReelStrategy = input.instagramTrialReelStrategy
+  }
+  if (input.gbpTopicType !== undefined) {
+    if (!['STANDARD', 'EVENT', 'OFFER'].includes(String(input.gbpTopicType))) return { error: 'postfastControls.gbpTopicType is invalid' }
+    controls.gbpTopicType = input.gbpTopicType
+  }
+  if (input.gbpCallToActionType !== undefined) {
+    if (!['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL'].includes(String(input.gbpCallToActionType))) return { error: 'postfastControls.gbpCallToActionType is invalid' }
+    controls.gbpCallToActionType = input.gbpCallToActionType
+  }
+  return { controls: controls as PostFastDraftControls }
+}
+
 function remainingTimeout(deadlineAt: number, capMs: number) {
   return Math.max(1, Math.min(capMs, deadlineAt - Date.now()))
 }
@@ -264,6 +388,12 @@ function postfastPublishTimeout(): PostFastPublishResult {
     code: 'POSTFAST_PUBLISH_TIMEOUT',
     error: '发布链路超时，未继续创建帖子，请稍后重试',
   }
+}
+
+function normalizeConnectionStatus(value: unknown, connected: boolean): PostFastConnectionStatus {
+  const status = asString(value).toUpperCase().trim()
+  if (status === 'CONNECTED' || status === 'DISCONNECTED' || status === 'EXPIRED' || status === 'DISABLED') return status
+  return connected ? 'CONNECTED' : 'DISCONNECTED'
 }
 
 // ── Account Management ─────────────────────────────────────────────────────
@@ -287,6 +417,7 @@ export async function postfastFetchAccounts(apiKey: string, timeoutMs = 15_000):
     const followerDelta = asNumber(a.followerDelta)
     const ratingScore = asNumber(a.ratingScore)
 
+    const connected = a.isConnected !== false
     return {
       id: asString(a.id),
       platform: pfPlatform,
@@ -294,13 +425,75 @@ export async function postfastFetchAccounts(apiKey: string, timeoutMs = 15_000):
       handle: asString(a.platformUsername) || asString(a.displayName) || asString(a.id),
       displayName: asString(a.displayName) || undefined,
       profileUrl: asString(a.profileUrl) || undefined,
-      connected: a.isConnected !== false,
+      connected,
       followerCount,
       followerDelta,
       ratingScore,
+      connectionStatus: normalizeConnectionStatus(a.connectionStatus ?? a.status, connected),
+      disabledReason: asString(a.disabledReason) || undefined,
+      inboxCapable: a.inboxCapable === true,
+      followerCountUpdatedAt: asString(a.followerCountUpdatedAt) || undefined,
     }
   })
   return { success: true, accounts }
+}
+
+/** GET /social-media/:id/follower-history */
+export async function postfastGetFollowerHistory(apiKey: string, accountId: string, timeoutMs = 15_000): Promise<{
+  success: boolean
+  history: PostFastFollowerHistoryPoint[]
+  error?: string
+}> {
+  const r = await pfFetch(apiKey, `/social-media/${encodeURIComponent(accountId)}/follower-history`, {}, timeoutMs)
+  if (!r.ok) return { success: false, history: [], error: r.error }
+  const data = asObject(r.data)
+  const rows = Array.isArray(r.data) ? r.data : Array.isArray(data.series) ? data.series : []
+  const history = rows.flatMap((row): PostFastFollowerHistoryPoint[] => {
+    const point = asObject(row)
+    const followerCount = asNumber(point.followerCount ?? point.count)
+    const capturedAt = asString(point.capturedAt) || asString(point.recordedAt) || asString(point.date)
+    return followerCount === undefined || !capturedAt ? [] : [{ followerCount, capturedAt }]
+  })
+  return { success: true, history }
+}
+
+/** GET /social-media/:id/places?query= */
+export async function postfastSearchPlaces(apiKey: string, query: string, timeoutMs = 15_000): Promise<{
+  success: boolean
+  places: PostFastPlace[]
+  error?: string
+}> {
+  const trimmedQuery = query.trim()
+  if (!trimmedQuery) return { success: false, places: [], error: 'query is required' }
+  const r = await pfFetch(apiKey, `/social-media/search-places?q=${encodeURIComponent(trimmedQuery)}`, {}, timeoutMs)
+  if (!r.ok) return { success: false, places: [], error: r.error }
+  const data = asObject(r.data)
+  const rows = Array.isArray(r.data) ? r.data : Array.isArray(data.places) ? data.places : Array.isArray(data.data) ? data.data : []
+  return { success: true, places: rows.flatMap((row): PostFastPlace[] => {
+    const place = asObject(row)
+    const id = asString(place.id) || asString(place.locationId)
+    const name = asString(place.name) || asString(place.displayName)
+    const address = asString(place.address) || undefined
+    return id && name ? [{ id, name, ...(address ? { address } : {}) }] : []
+  }) }
+}
+
+/** GET /social-media/:id/tiktok-sounds */
+export async function postfastGetTikTokSounds(apiKey: string, accountId: string, timeoutMs = 15_000): Promise<{
+  success: boolean
+  sounds: PostFastTikTokSound[]
+  error?: string
+}> {
+  const r = await pfFetch(apiKey, `/social-media/${encodeURIComponent(accountId)}/tiktok-sounds`, {}, timeoutMs)
+  if (!r.ok) return { success: false, sounds: [], error: r.error }
+  const data = asObject(r.data)
+  const rows = Array.isArray(r.data) ? r.data : Array.isArray(data.sounds) ? data.sounds : Array.isArray(data.data) ? data.data : []
+  return { success: true, sounds: rows.flatMap((row): PostFastTikTokSound[] => {
+    const sound = asObject(row)
+    const musicSoundId = asString(sound.musicSoundId)
+    const name = asString(sound.name) || asString(sound.title)
+    return musicSoundId && name ? [{ musicSoundId, name, authorName: asString(sound.artist) || undefined }] : []
+  }) }
 }
 
 /**
@@ -727,6 +920,93 @@ function detectMediaType(keyOrUrl: string, mimeType?: string | null, explicitTyp
     return 'VIDEO'
   }
   return 'IMAGE'
+}
+
+function resolveInstagramPublishType(input: PostFastPublishInput, media: PreparedPostFastMedia[]): {
+  publishType?: PostFastInstagramPublishType
+  error?: string
+} {
+  const requested = input.instagramPublishType
+  if (requested && !['TIMELINE', 'REEL', 'STORY'].includes(requested)) {
+    return { error: 'Instagram 发布类型必须是 TIMELINE、REEL 或 STORY。' }
+  }
+  const isSingleVideo = media.length === 1 && media[0].metadata.kind === 'video'
+  if (!requested) return { publishType: isSingleVideo ? 'REEL' : 'TIMELINE' }
+  if (requested === 'REEL' && !isSingleVideo) {
+    return { error: 'Instagram Reel 必须且只能包含一个视频素材。' }
+  }
+  if (requested === 'STORY' && media.length !== 1) {
+    return { error: 'Instagram Story 必须且只能包含一个图片或视频素材。' }
+  }
+  if (requested === 'TIMELINE' && isSingleVideo) {
+    return { error: 'Instagram 单视频请使用 REEL 或 STORY 发布类型。' }
+  }
+  return { publishType: requested }
+}
+
+function validIsoDate(value: string | undefined): boolean {
+  return !!value && !Number.isNaN(new Date(value).getTime())
+}
+
+function buildPublishControls(input: PostFastPublishInput, platform: string, media: PreparedPostFastMedia[]): { controls?: Record<string, unknown>; error?: string; code?: string } {
+  const optionalStrings = [
+    input.firstComment, input.instagramLocationId, input.instagramLocationDisplayName,
+    input.tiktokMusicSoundId, input.tiktokMusicSoundName, input.gbpCallToActionUrl,
+    input.gbpEventTitle, input.gbpEventStartDate, input.gbpEventEndDate, input.gbpOfferCouponCode,
+    input.gbpOfferRedeemUrl, input.gbpOfferTerms,
+  ]
+  if (optionalStrings.some((value) => value !== undefined && (typeof value !== 'string' || !value.trim()))) {
+    return { code: 'POSTFAST_CONTROL_INVALID', error: 'PostFast text controls must be non-empty strings.' }
+  }
+  if ([input.instagramIsAiGenerated, input.instagramPostToGrid, input.tiktokAutoAddMusic].some((value) => value !== undefined && typeof value !== 'boolean')) {
+    return { code: 'POSTFAST_CONTROL_INVALID', error: 'PostFast boolean controls must be true or false.' }
+  }
+  if (input.instagramTrialReelStrategy && input.instagramTrialReelStrategy !== 'SS_PERFORMANCE') {
+    return { code: 'POSTFAST_CONTROL_INVALID', error: 'instagramTrialReelStrategy is invalid.' }
+  }
+  if (input.gbpTopicType && !['STANDARD', 'EVENT', 'OFFER'].includes(input.gbpTopicType)) {
+    return { code: 'POSTFAST_CONTROL_INVALID', error: 'gbpTopicType is invalid.' }
+  }
+  if (input.gbpCallToActionType && !['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL'].includes(input.gbpCallToActionType)) {
+    return { code: 'POSTFAST_CONTROL_INVALID', error: 'gbpCallToActionType is invalid.' }
+  }
+  const controls: Record<string, unknown> = {}
+  if (input.firstComment?.trim()) controls.firstComment = input.firstComment.trim()
+  if (platform === 'instagram') {
+    if (input.instagramLocationId) {
+      if (media.length !== 1) return { code: 'INSTAGRAM_LOCATION_INVALID', error: 'Instagram location is only supported for a single-media post.' }
+      controls.instagramLocationId = input.instagramLocationId
+    }
+    if (input.instagramIsAiGenerated === true) controls.instagramIsAiGenerated = true
+    if (input.instagramPostToGrid !== undefined) controls.instagramPostToGrid = input.instagramPostToGrid
+    if (input.instagramTrialReelStrategy) {
+      if (input.instagramPublishType !== 'REEL') return { code: 'INSTAGRAM_TRIAL_REEL_INVALID', error: 'Instagram trial reel strategy requires instagramPublishType REEL.' }
+      controls.instagramTrialReelStrategy = input.instagramTrialReelStrategy
+    }
+  }
+  if (platform === 'tiktok') {
+    if (input.tiktokMusicSoundId && input.tiktokAutoAddMusic) return { code: 'TIKTOK_MUSIC_CONFLICT', error: 'TikTok selected music and automatic music are mutually exclusive.' }
+    if (input.tiktokMusicSoundId) {
+      if (media.length < 2 || media.some((item) => item.metadata.kind !== 'image')) return { code: 'TIKTOK_MUSIC_INVALID', error: 'TikTok commercial music is only supported for image carousels.' }
+      controls.tiktokMusicSoundId = input.tiktokMusicSoundId
+    }
+    if (input.tiktokAutoAddMusic === true) controls.tiktokAutoAddMusic = true
+  }
+  if (platform === 'google') {
+    const topicType = input.gbpTopicType ?? 'STANDARD'
+    if (topicType === 'EVENT') {
+      if (!validIsoDate(input.gbpEventStartDate) || !validIsoDate(input.gbpEventEndDate) || new Date(input.gbpEventStartDate!).getTime() > new Date(input.gbpEventEndDate!).getTime()) return { code: 'GBP_EVENT_INVALID', error: 'GBP EVENT requires valid event start and end dates in chronological order.' }
+    } else if (input.gbpEventStartDate || input.gbpEventEndDate) return { code: 'GBP_EVENT_INVALID', error: 'GBP event dates require gbpTopicType EVENT.' }
+    if (topicType === 'OFFER') {
+      if (!validIsoDate(input.gbpEventStartDate) || !validIsoDate(input.gbpEventEndDate) || new Date(input.gbpEventStartDate!).getTime() > new Date(input.gbpEventEndDate!).getTime()) return { code: 'GBP_OFFER_INVALID', error: 'GBP OFFER requires valid event start and end dates in chronological order.' }
+    } else if (input.gbpOfferCouponCode || input.gbpOfferRedeemUrl || input.gbpOfferTerms) return { code: 'GBP_OFFER_INVALID', error: 'GBP offer fields require gbpTopicType OFFER.' }
+    controls.gbpTopicType = topicType
+    if (input.gbpCallToActionType) controls.gbpCallToActionType = input.gbpCallToActionType
+    if (input.gbpCallToActionUrl) controls.gbpCallToActionUrl = input.gbpCallToActionUrl
+    if (topicType === 'EVENT' || topicType === 'OFFER') Object.assign(controls, { gbpEventTitle: input.gbpEventTitle, gbpEventStartDate: input.gbpEventStartDate, gbpEventEndDate: input.gbpEventEndDate })
+    if (topicType === 'OFFER') Object.assign(controls, { gbpOfferCouponCode: input.gbpOfferCouponCode, gbpOfferRedeemUrl: input.gbpOfferRedeemUrl, gbpOfferTerms: input.gbpOfferTerms })
+  }
+  return Object.keys(controls).length ? { controls } : {}
 }
 
 async function uploadPublicUrlToPostfast(
@@ -1180,10 +1460,15 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     }
   }
 
-  // Fallback: match by platform name
-  if (!matchedAccount) {
+  // Only callers without an explicit account may use a platform-level default.
+  // A stale explicit provider ID must fail rather than publish through another account.
+  if (!matchedAccount && !input.accountId) {
     const targetPlatformId = normalizePlatform(input.platform)
     matchedAccount = accounts.find(a => a.platformId.toLowerCase() === targetPlatformId.toLowerCase())
+  }
+
+  if (matchedAccount?.connectionStatus === 'DISABLED') {
+    return { success: false, code: 'POSTFAST_ACCOUNT_DISABLED', error: matchedAccount.disabledReason || 'The selected PostFast account is disabled. Reconnect it before publishing.' }
   }
 
   if (!matchedAccount) {
@@ -1305,17 +1590,22 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   const requestControls: Record<string, unknown> = {}
   const isInstagramPost = normalizePlatform(input.platform) === 'instagram' ||
     normalizePlatform(matchedAccount.platformId) === 'instagram'
-  if (
-    isInstagramPost &&
-    resolvedMediaItems.length === 1 &&
-    detectMediaType(
-      resolvedMediaItems[0].key,
-      resolvedMediaItems[0].mimeType,
-      resolvedMediaItems[0].type,
-    ) === 'VIDEO'
-  ) {
-    requestControls.instagramPublishType = 'REEL'
+  let resolvedInstagramPublishType: PostFastInstagramPublishType | undefined
+  if (isInstagramPost) {
+    const instagramPublishType = resolveInstagramPublishType(input, preparedMediaItems)
+    if (!instagramPublishType.publishType) {
+      return { success: false, code: 'INSTAGRAM_PUBLISH_TYPE_INVALID', error: instagramPublishType.error }
+    }
+    resolvedInstagramPublishType = instagramPublishType.publishType
+    requestControls.instagramPublishType = resolvedInstagramPublishType
   }
+  const platformControls = buildPublishControls(
+    { ...input, instagramPublishType: resolvedInstagramPublishType ?? input.instagramPublishType },
+    normalizedPublishPlatform,
+    preparedMediaItems,
+  )
+  if (platformControls.error) return { success: false, code: platformControls.code, error: platformControls.error }
+  Object.assign(requestControls, platformControls.controls)
   const isFacebookPost = normalizePlatform(input.platform) === 'facebook' ||
     normalizePlatform(matchedAccount.platformId) === 'facebook'
   if (isFacebookPost && resolvedCoverImageKey && resolvedMediaItems.length === 1) {
@@ -1421,6 +1711,113 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 }
 
 // ── Review Replies ─────────────────────────────────────────────────────────
+
+function inboxCollection(data: unknown, key: 'conversations' | 'items'): JsonRecord[] {
+  if (Array.isArray(data)) return data.filter((entry): entry is JsonRecord => Boolean(entry && typeof entry === 'object'))
+  const root = asObject(data)
+  const collection = Array.isArray(root[key]) ? root[key] : Array.isArray(root.data) ? root.data : []
+  return collection.filter((entry): entry is JsonRecord => Boolean(entry && typeof entry === 'object'))
+}
+
+function inboxPagination(data: unknown) {
+  const root = asObject(data)
+  const pageInfo = asObject(root.pageInfo)
+  return {
+    total: asNumber(root.totalCount) ?? asNumber(root.total),
+    hasNextPage: typeof pageInfo.hasNextPage === 'boolean'
+      ? pageInfo.hasNextPage
+      : typeof root.hasNextPage === 'boolean'
+        ? root.hasNextPage
+        : undefined,
+  }
+}
+
+function postfastInboxConversation(value: JsonRecord): PostFastInboxConversation {
+  return {
+    id: asString(value.id) || asString(value.conversationId),
+    socialMediaId: asString(value.socialMediaId) || asString(value.accountId) || undefined,
+    platform: normalizePlatform(value.platform),
+    status: asString(value.status) || undefined,
+    subject: asString(value.subject) || asString(value.title) || undefined,
+    participantName: asString(value.participantName) || asString(value.senderName) || undefined,
+    unreadCount: asNumber(value.unreadCount) ?? (value.unread === true ? 1 : 0),
+    needsAttention: value.needsAttention === true || value.requiresAttention === true,
+    lastMessageAt: asString(value.lastMessageAt) || asString(value.updatedAt) || undefined,
+    raw: value,
+  }
+}
+
+function postfastInboxItem(value: JsonRecord): PostFastInboxItem {
+  return {
+    id: asString(value.id) || asString(value.itemId) || asString(value.commentId),
+    conversationId: asString(value.conversationId) || undefined,
+    authorName: asString(value.authorName) || asString(value.senderName) || undefined,
+    body: asString(value.body) || asString(value.text) || asString(value.message) || undefined,
+    direction: asString(value.direction) || undefined,
+    state: asString(value.state) || asString(value.moderationState) || undefined,
+    unread: value.unread === true || value.isUnread === true,
+    canReply: value.canReply === true,
+    canPrivateReply: value.canPrivateReply === true,
+    maxReplyLength: asNumber(value.maxReplyLength),
+    maxPrivateReplyLengthBytes: asNumber(value.maxPrivateReplyLengthBytes),
+    replyWindowEndsAt: asString(value.replyWindowEndsAt) || asString(value.replyWindowEnd) || undefined,
+    raw: value,
+  }
+}
+
+export async function postfastListInboxConversations(apiKey: string, options: { limit?: number; page?: number } = {}): Promise<{
+  success: boolean
+  conversations: PostFastInboxConversation[]
+  total?: number
+  hasNextPage?: boolean
+  error?: string
+}> {
+  const query = new URLSearchParams()
+  if (options.limit) query.set('limit', String(options.limit))
+  if (options.page !== undefined) query.set('page', String(options.page))
+  const r = await pfFetch(apiKey, `/social-inbox/conversations${query.size ? `?${query}` : ''}`)
+  if (!r.ok) return { success: false, conversations: [] as PostFastInboxConversation[], error: r.error }
+  return { success: true, conversations: inboxCollection(r.data, 'conversations').map(postfastInboxConversation), ...inboxPagination(r.data) }
+}
+
+export async function postfastListInboxItems(apiKey: string, conversationId: string, options: { limit?: number; page?: number } = {}): Promise<{
+  success: boolean
+  items: PostFastInboxItem[]
+  total?: number
+  hasNextPage?: boolean
+  error?: string
+}> {
+  const query = new URLSearchParams()
+  if (options.limit) query.set('limit', String(options.limit))
+  if (options.page !== undefined) query.set('page', String(options.page))
+  const r = await pfFetch(apiKey, `/social-inbox/conversations/${encodeURIComponent(conversationId)}/items${query.size ? `?${query}` : ''}`)
+  if (!r.ok) return { success: false, items: [] as PostFastInboxItem[], error: r.error }
+  return { success: true, items: inboxCollection(r.data, 'items').map(postfastInboxItem), ...inboxPagination(r.data) }
+}
+
+export async function postfastReplyInboxItem(input: { apiKey: string; itemId: string; text: string; idempotencyKey: string }) {
+  const r = await pfFetch(input.apiKey, `/social-inbox/items/${encodeURIComponent(input.itemId)}/reply`, {
+    method: 'POST', headers: { 'Idempotency-Key': input.idempotencyKey }, body: JSON.stringify({ text: input.text, idempotencyKey: input.idempotencyKey }),
+  })
+  return r.ok ? { success: true, status: r.status } : { success: false, status: r.status, error: r.error }
+}
+
+export async function postfastPrivateReplyInboxItem(input: { apiKey: string; itemId: string; text: string; idempotencyKey: string }) {
+  const r = await pfFetch(input.apiKey, `/social-inbox/items/${encodeURIComponent(input.itemId)}/private-reply`, {
+    method: 'POST', headers: { 'Idempotency-Key': input.idempotencyKey }, body: JSON.stringify({ text: input.text, idempotencyKey: input.idempotencyKey }),
+  })
+  return r.ok ? { success: true, status: r.status } : { success: false, status: r.status, error: r.error }
+}
+
+export async function postfastSetInboxItemState(input: { apiKey: string; itemId: string; state: 'HIDE' | 'UNHIDE' | 'DELETE'; idempotencyKey: string }) {
+  if (!['HIDE', 'UNHIDE', 'DELETE'].includes(input.state)) {
+    return { success: false, status: 400, error: 'PostFast inbox state must be HIDE, UNHIDE, or DELETE.' }
+  }
+  const r = await pfFetch(input.apiKey, `/social-inbox/items/${encodeURIComponent(input.itemId)}/state`, {
+    method: 'POST', headers: { 'Idempotency-Key': input.idempotencyKey }, body: JSON.stringify({ action: input.state, idempotencyKey: input.idempotencyKey }),
+  })
+  return r.ok ? { success: true, status: r.status } : { success: false, status: r.status, error: r.error }
+}
 
 /**
  * POST /reviews/reply

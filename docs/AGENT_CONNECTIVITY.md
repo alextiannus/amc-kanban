@@ -65,6 +65,7 @@ Content-Type: application/json
 1. 使用 `get_brand_reviews` 获取新评论。
 2. 有自动处理权限且符合品牌规则时使用 `board_reply_review`。
 3. 低星评价、敏感内容或需人工决策时创建 `post_action_item`。
+4. 对 PostFast Social Inbox 评论，先读取会话能力与原文，再创建包含建议回复的 `ActionItem`；不得自行发送私信、隐藏或删除评论。
 
 ### 素材与配额
 
