@@ -1715,19 +1715,26 @@ model PromoCodeUsage {
 
 // ── BD Sales Leads ──────────────────────────────────────────────────────────
 model SalesLead {
-  id        String   @id @default(cuid())
-  bdUserId  String?
-  name      String // Restaurant / Contact Name
-  phone     String?
-  email     String?
-  status    String   @default("NEW") // "NEW" | "CONTACTED" | "DEMO_SCHEDULED" | "ONBOARDED" | "REJECTED"
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String    @id @default(cuid())
+  bdUserId        String?
+  name            String // Restaurant / Contact Name
+  phone           String?
+  email           String?
+  status          String    @default("NEW") // "NEW" | "CONTACTED" | "DEMO_SCHEDULED" | "ONBOARDED" | "REJECTED"
+  notes           String?
+  erpLeadName     String?   @unique
+  erpSyncStatus   String    @default("PENDING") // "PENDING" | "SYNCING" | "SYNCED" | "FAILED"
+  erpSyncError    String?   @db.Text
+  erpSyncAttempts Int       @default(0)
+  erpLastSyncAt   DateTime?
+  erpSyncedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   bdUser User? @relation(fields: [bdUserId], references: [id], onDelete: SetNull)
 
   @@index([bdUserId])
+  @@index([erpSyncStatus])
 }
 
 // ── AMC Ecosystem Partner Applications ─────────────────────────────────────
