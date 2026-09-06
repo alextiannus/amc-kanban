@@ -555,6 +555,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       ? {
           status: scheduled ? 'scheduled' : 'published',
           platformPostId: result.postId || null,
+          postUrl: result.url || null,
           publishedAt: scheduled ? null : new Date(),
           deliveryFailureCode: null,
           deliveryFailureAt: null,

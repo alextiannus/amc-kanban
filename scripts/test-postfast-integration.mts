@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 const PORT = 4017
@@ -327,6 +328,16 @@ async function startMockPostFast() {
 }
 
 async function main() {
+  const postfastRouteSource = readFileSync(new URL('../src/app/api/integrations/postfast/route.ts', import.meta.url), 'utf8')
+  assert.match(postfastRouteSource, /function resolvePostfastAccountId/)
+  assert.match(postfastRouteSource, /\{\s*id:\s*trimmedAccountId\s*\}/)
+  assert.match(postfastRouteSource, /\{\s*postfastAccountId:\s*trimmedAccountId\s*\}/)
+  const postfastSource = readFileSync(new URL('../src/lib/integrations/postfast.ts', import.meta.url), 'utf8')
+  const mcpServerSource = readFileSync(new URL('../src/lib/partner/mcp/server.ts', import.meta.url), 'utf8')
+  assert.match(postfastSource, /function defaultInstagramPublishTypeForMedia/)
+  assert.match(postfastSource, /return isSingleVideo \? 'REEL' : 'TIMELINE'/)
+  assert.match(mcpServerSource, /omit to let AMC auto-select by media type/)
+
   process.env.POSTFAST_BASE_URL = BASE_URL
   const postfast = await import('../src/lib/integrations/postfast.ts')
   const publishMedia = await import('../src/lib/publishMedia.ts')

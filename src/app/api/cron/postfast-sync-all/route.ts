@@ -11,6 +11,7 @@ import {
   persistSocialPosts,
   postfastHistoryInputs,
 } from '@/lib/socialInsightHistory'
+import { buildPostfastPlanningFeedback } from '@/lib/postfastPlanningFeedback'
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
@@ -134,11 +135,16 @@ export async function POST(req: NextRequest) {
     if (!brand.postfastApiKey) continue
     try {
       const { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt } = await syncBrand(brand)
+      const baseSnapshot = { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt }
+      const planningFeedback = await buildPostfastPlanningFeedback(brand.id, 30, baseSnapshot).catch((feedbackErr) => {
+        console.warn(`[PostFast Cron] Planning feedback build failed for brand ${brand.id} (non-fatal):`, feedbackErr)
+        return null
+      })
       const syncedAt = new Date()
       await prisma.brand.update({
         where: { id: brand.id },
         data: {
-          postfastSnapshot: { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt },
+          postfastSnapshot: planningFeedback ? { ...baseSnapshot, planningFeedback } : baseSnapshot,
           postfastSyncedAt: syncedAt,
         },
       })

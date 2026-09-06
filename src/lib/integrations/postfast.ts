@@ -922,6 +922,11 @@ function detectMediaType(keyOrUrl: string, mimeType?: string | null, explicitTyp
   return 'IMAGE'
 }
 
+function defaultInstagramPublishTypeForMedia(media: PreparedPostFastMedia[]): PostFastInstagramPublishType {
+  const isSingleVideo = media.length === 1 && media[0]?.metadata.kind === 'video'
+  return isSingleVideo ? 'REEL' : 'TIMELINE'
+}
+
 function resolveInstagramPublishType(input: PostFastPublishInput, media: PreparedPostFastMedia[]): {
   publishType?: PostFastInstagramPublishType
   error?: string
@@ -931,7 +936,7 @@ function resolveInstagramPublishType(input: PostFastPublishInput, media: Prepare
     return { error: 'Instagram 发布类型必须是 TIMELINE、REEL 或 STORY。' }
   }
   const isSingleVideo = media.length === 1 && media[0].metadata.kind === 'video'
-  if (!requested) return { publishType: isSingleVideo ? 'REEL' : 'TIMELINE' }
+  if (!requested) return { publishType: defaultInstagramPublishTypeForMedia(media) }
   if (requested === 'REEL' && !isSingleVideo) {
     return { error: 'Instagram Reel 必须且只能包含一个视频素材。' }
   }

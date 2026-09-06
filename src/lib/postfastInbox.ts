@@ -13,6 +13,15 @@ function asDate(value: string | undefined) {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    const object = value as Record<string, unknown>
+    return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stableJson(object[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
 function inboxItemData(conversationId: string, item: PostFastInboxItem) {
   return {
     conversationId,
@@ -137,7 +146,7 @@ export async function syncPostfastInbox(brandId: string, apiKey: string) {
 const INCOMPLETE_RESERVATION_LEASE_MS = 60_000
 
 export async function reserveInboxWrite(input: { scope: string; key: string; payload: unknown }) {
-  const requestHash = createHash('sha256').update(JSON.stringify(input.payload)).digest('hex')
+  const requestHash = createHash('sha256').update(stableJson(input.payload)).digest('hex')
   const reserveExisting = async (tx: Prisma.TransactionClient) => {
     const existing = await tx.idempotencyRecord.findUnique({ where: { scope_key: { scope: input.scope, key: input.key } } })
     if (!existing) return null

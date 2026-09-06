@@ -58,6 +58,7 @@ type BrandPlanCalendarItem = {
   sampleSourcePlatform?: string
   materialRequirements?: string[]
   contentLibraryGap?: string
+  postfastControls?: Record<string, unknown>
   scriptSource?: 'inspiration' | 'generated_from_idea' | 'merchant'
   creativeMatchStatus?: CalendarCreativeMatchStatus
   videoScript?: CalendarVideoScriptData
@@ -1591,20 +1592,21 @@ async function buildPublishingMonth(
     const creativeMatchStatus = (candidate ? 'matched' : 'no_candidate_after_retry') as BrandPlanCalendarItem['creativeMatchStatus']
     const sampleLinks = calendarSampleLinks(candidate)
     const inspirationSource = calendarInspirationSource(candidate)
+    const title = calendarItemTitle({
+      brand,
+      product,
+      promotionPoint,
+      platformSlug: slot.platform.slug,
+      candidate,
+      index,
+    })
     return withCalendarScriptFields({
       id: itemId,
       date: slot.date,
-      title: calendarItemTitle({
-        brand,
-        product,
-        promotionPoint,
-        platformSlug: slot.platform.slug,
-        candidate,
-        index,
-      }),
+      title,
       platform: slot.platform.label,
       platformSlug: slot.platform.slug,
-      contentType: calendarContentType(candidate, index),
+      contentType: calendarContentType(candidate, index, slot.platform.slug, promotionPoint),
       product,
       planning: calendarPlanningText({
         brand,
@@ -1628,7 +1630,10 @@ async function buildPublishingMonth(
       sampleOriginalUrl: sampleLinks.originalUrl,
       sampleThumbnailUrl: sampleLinks.thumbnailUrl,
       sampleSourcePlatform: sampleLinks.platform,
-      materialRequirements: calendarMaterialRequirements(product, candidate),
+      materialRequirements: calendarMaterialRequirements(product, candidate, slot.platform.slug, promotionPoint),
+      postfastControls: isGoogleBusinessSlot(slot.platform.slug)
+        ? googleBusinessCalendarPostfastControls({ itemDate: slot.date, title, promotionPoint })
+        : undefined,
       scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
       creativeMatchStatus,
       contentLibraryGap: candidate
@@ -1687,20 +1692,21 @@ async function buildPublishingCalendarItemByIndex(
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
   const candidateCreativeId = calendarInspirationCreativeId(candidate)
+  const title = calendarItemTitle({
+    brand,
+    product,
+    promotionPoint,
+    platformSlug: slot.platform.slug,
+    candidate,
+    index: itemIndex,
+  })
   const draft: BrandPlanCalendarItem = withCalendarScriptFields({
     id: itemId,
     date: slot.date,
-    title: calendarItemTitle({
-      brand,
-      product,
-      promotionPoint,
-      platformSlug: slot.platform.slug,
-      candidate,
-      index: itemIndex,
-    }),
+    title,
     platform: slot.platform.label,
     platformSlug: slot.platform.slug,
-    contentType: calendarContentType(candidate, itemIndex),
+    contentType: calendarContentType(candidate, itemIndex, slot.platform.slug, promotionPoint),
     product,
     planning: calendarPlanningText({
       brand,
@@ -1724,7 +1730,10 @@ async function buildPublishingCalendarItemByIndex(
     sampleOriginalUrl: sampleLinks.originalUrl,
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
     sampleSourcePlatform: sampleLinks.platform,
-    materialRequirements: calendarMaterialRequirements(product, candidate),
+    materialRequirements: calendarMaterialRequirements(product, candidate, slot.platform.slug, promotionPoint),
+    postfastControls: isGoogleBusinessSlot(slot.platform.slug)
+      ? googleBusinessCalendarPostfastControls({ itemDate: slot.date, title, promotionPoint })
+      : undefined,
     scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
     creativeMatchStatus: match.status,
     contentLibraryGap: candidate
@@ -1743,6 +1752,8 @@ async function regeneratePublishingCalendarItem(
   current: BrandPlanWorkspaceData
 ): Promise<BrandPlanCalendarItem> {
   const platform = item.platformSlug || normalizePlatformSlug(item.platform)
+  const itemDate = clampCalendarDateToMinimum(item.date)
+  const itemMonth = itemDate.slice(0, 7)
   const point = {
     id: item.id,
     goal: current.annualPlan?.goal || current.researchReport?.summary || '提升本地顾客认知和行动',
@@ -1750,7 +1761,8 @@ async function regeneratePublishingCalendarItem(
     customerAction: '收藏、咨询、点击路线、预订或下单',
     expectedPublishCount: 1,
     platforms: [platform],
-    targetPublishWindow: { start: item.date, end: item.date },
+    targetPublishWindow: { start: itemDate, end: itemDate },
+    calendarContext: calendarMonthContext(current, itemMonth),
   }
   const match = await resolveCalendarCreativeCandidateWithRetry({
     requestPool: (refreshPublicationId) => requestCalendarCreativePool(brand, current, [point], refreshPublicationId),
@@ -1762,18 +1774,19 @@ async function regeneratePublishingCalendarItem(
   const candidate = match.candidate
   const sampleLinks = calendarSampleLinks(candidate)
   const inspirationSource = calendarInspirationSource(candidate)
+  const title = calendarItemTitle({
+    brand,
+    product: item.product,
+    promotionPoint: point,
+    platformSlug: platform,
+    candidate,
+    index: 0,
+  })
   const replacement: BrandPlanCalendarItem = withCalendarScriptFields({
     ...item,
-    date: clampCalendarDateToMinimum(item.date),
-    title: calendarItemTitle({
-      brand,
-      product: item.product,
-      promotionPoint: point,
-      platformSlug: platform,
-      candidate,
-      index: 0,
-    }),
-    contentType: calendarContentType(candidate, 0),
+    date: itemDate,
+    title,
+    contentType: calendarContentType(candidate, 0, platform, point),
     planning: calendarPlanningText({
       brand,
       product: item.product,
@@ -1795,7 +1808,10 @@ async function regeneratePublishingCalendarItem(
     sampleOriginalUrl: sampleLinks.originalUrl,
     sampleThumbnailUrl: sampleLinks.thumbnailUrl,
     sampleSourcePlatform: sampleLinks.platform,
-    materialRequirements: calendarMaterialRequirements(item.product, candidate),
+    materialRequirements: calendarMaterialRequirements(item.product, candidate, platform, point),
+    postfastControls: isGoogleBusinessSlot(platform)
+      ? googleBusinessCalendarPostfastControls({ itemDate, title, promotionPoint: point })
+      : undefined,
     scriptSource: (hasCalendarSourceShots(candidate) ? 'inspiration' : 'generated_from_idea') as BrandPlanCalendarItem['scriptSource'],
     creativeMatchStatus: match.status,
     contentLibraryGap: candidate
@@ -1838,6 +1854,26 @@ type CalendarPromotionPoint = {
   expectedPublishCount: number
   platforms: string[]
   targetPublishWindow: { start: string; end: string }
+  calendarContext?: {
+    monthFocus?: string
+    campaigns?: string[]
+    holidays?: string[]
+  }
+}
+
+const SINGAPORE_RETAIL_MOMENTS_BY_MONTH: Record<string, string[]> = {
+  '01': ['New Year', 'Chinese New Year season'],
+  '02': ['Chinese New Year season', 'Valentine dining'],
+  '03': ['School holiday outings'],
+  '04': ['Hari Raya season', 'Good Friday / Easter weekend'],
+  '05': ['Labour Day', 'Mother’s Day', 'Vesak Day'],
+  '06': ['Father’s Day', 'School holiday outings'],
+  '07': ['Youth Day season'],
+  '08': ['National Day', 'Hungry Ghost Festival season'],
+  '09': ['School holiday outings'],
+  '10': ['Deepavali season', 'Children’s Day season'],
+  '11': ['Year-end gatherings', 'Deepavali season'],
+  '12': ['Christmas', 'New Year countdown', 'Year-end gatherings'],
 }
 
 function buildCalendarPromotionPoints(input: {
@@ -1853,6 +1889,7 @@ function buildCalendarPromotionPoints(input: {
     || input.current.quarterlyPlans?.find((plan) => plan.quarter === quarter)
   const annualQuarterPlan = findPlanForMonth(input.current.annualPlan?.quarterlyPlans || [], input.month)
     || input.current.annualPlan?.quarterlyPlans?.find((plan) => plan.quarter === quarter)
+  const monthContext = calendarMonthContext(input.current, input.month)
   const structuredPoints = [
     ...(quarterPlan?.promotionPoints || []),
     ...(annualQuarterPlan?.promotionPoints || []).map((point) => ({
@@ -1885,6 +1922,7 @@ function buildCalendarPromotionPoints(input: {
           start: dates[0] || `${input.month}-01`,
           end: dates[dates.length - 1] || `${input.month}-28`,
         },
+        calendarContext: monthContext,
       }
     })
   }
@@ -1917,8 +1955,61 @@ function buildCalendarPromotionPoints(input: {
         start: dates[0] || `${input.month}-01`,
         end: dates[dates.length - 1] || `${input.month}-28`,
       },
+      calendarContext: monthContext,
     }
   })
+}
+
+function calendarMonthContext(current: BrandPlanWorkspaceData, month: string) {
+  const [, monthNumber] = month.split('-')
+  const quarter = quarterForMonth(month)
+  const quarterPlan = findPlanForMonth(current.quarterlyPlans || [], month)
+    || current.quarterlyPlans?.find((plan) => plan.quarter === quarter)
+  const annualQuarterPlan = findPlanForMonth(current.annualPlan?.quarterlyPlans || [], month)
+    || current.annualPlan?.quarterlyPlans?.find((plan) => plan.quarter === quarter)
+  const monthlyFocus = [
+    ...(quarterPlan?.monthlyFocus || []).filter((item) => item.month === month).map((item) => item.focus),
+    ...(annualQuarterPlan?.monthlyFocus || []).filter((item) => item.month === month).flatMap((item) => [item.focus, ...(item.promotionPoints || [])]),
+  ]
+  return {
+    monthFocus: uniqueStrings(monthlyFocus).join('；'),
+    campaigns: uniqueStrings([...((quarterPlan as any)?.campaigns || []), ...(annualQuarterPlan?.campaigns || [])]).slice(0, 4),
+    holidays: uniqueStrings(SINGAPORE_RETAIL_MOMENTS_BY_MONTH[monthNumber] || []).slice(0, 4),
+  }
+}
+
+function isGoogleBusinessSlot(platformSlug: string) {
+  return normalizePlatformSlug(platformSlug) === 'google_business'
+}
+
+function googleBusinessCalendarPostfastControls(input: {
+  itemDate: string
+  title: string
+  promotionPoint: CalendarPromotionPoint
+}) {
+  const context = input.promotionPoint.calendarContext
+  const signal = [
+    input.title,
+    input.promotionPoint.sellingPoint,
+    input.promotionPoint.goal,
+    context?.monthFocus,
+    ...(context?.campaigns || []),
+    ...(context?.holidays || []),
+  ].join(' ').toLowerCase()
+  const isEvent = /活动|节日|holiday|festival|season|christmas|new year|national day|deepavali|hari raya|vesak|mother|father|school holiday/.test(signal)
+  if (!isEvent) {
+    return {
+      gbpTopicType: 'STANDARD',
+      gbpCallToActionType: 'CALL',
+    }
+  }
+  return {
+    gbpTopicType: 'EVENT',
+    gbpCallToActionType: 'CALL',
+    gbpEventTitle: cleanCalendarText(input.title, input.promotionPoint.sellingPoint).slice(0, 58),
+    gbpEventStartDate: `${input.itemDate}T00:00:00.000+08:00`,
+    gbpEventEndDate: `${input.itemDate}T23:59:59.000+08:00`,
+  }
 }
 
 function quarterForMonth(month: string) {
@@ -2136,7 +2227,25 @@ function calendarItemTitle(input: Omit<CalendarCopyContext, 'interviewFocus'>) {
   return cleanCalendarText(pool[input.index % pool.length], fallback).slice(0, 30)
 }
 
-function calendarContentType(candidate: Record<string, unknown> | null, index: number) {
+function calendarContentType(
+  candidate: Record<string, unknown> | null,
+  index: number,
+  platformSlug?: string,
+  promotionPoint?: CalendarPromotionPoint
+) {
+  if (platformSlug && isGoogleBusinessSlot(platformSlug)) {
+    const context = promotionPoint?.calendarContext
+    const signal = [
+      promotionPoint?.sellingPoint,
+      promotionPoint?.goal,
+      context?.monthFocus,
+      ...(context?.campaigns || []),
+      ...(context?.holidays || []),
+    ].join(' ').toLowerCase()
+    return /活动|节日|holiday|festival|season|christmas|new year|national day|deepavali|hari raya|vesak|mother|father|school holiday/.test(signal)
+      ? 'Google Business 活动贴'
+      : 'Google Business 店铺更新'
+  }
   const format = text(candidate?.contentFormat).toLowerCase()
   if (format.includes('video')) return '短视频'
   if (format.includes('carousel') || format.includes('image') || format.includes('post')) return '图文'
@@ -2159,6 +2268,8 @@ function calendarPlanningText(input: CalendarCopyContext) {
   const candidate = input.candidate || null
   const angle = cleanCalendarText(text(candidate?.contentAngle) || text(candidate?.recommendationReason), '')
   const customerAction = cleanCalendarText(input.promotionPoint.customerAction, '收藏、咨询、点击路线、预订或下单')
+  const platform = normalizePlatformSlug(input.platformSlug)
+  if (platform === 'google_business') return googleBusinessCalendarPlanningText(input, angle, customerAction)
   const shots = calendarReplicationShots(input)
   const voiceover = calendarScriptLines(input, 'voiceover').slice(0, 3)
   const subtitles = calendarScriptLines(input, 'subtitles').slice(0, 3)
@@ -2176,6 +2287,29 @@ function calendarPlanningText(input: CalendarCopyContext) {
     angle ? `拍摄重点：${adaptCalendarScriptText(angle, input)}。` : '',
     input.interviewFocus ? `可带一句主理人原话：${cleanCalendarText(input.interviewFocus, '')}。` : '',
     `收尾：引导顾客${customerAction}。`,
+  ].filter(Boolean).join('\n')
+}
+
+function googleBusinessCalendarPlanningText(input: CalendarCopyContext, angle: string, customerAction: string) {
+  const product = productDisplayName(input.product)
+  const context = input.promotionPoint.calendarContext
+  const holidays = context?.holidays?.length ? context.holidays.join('、') : ''
+  const campaigns = context?.campaigns?.length ? context.campaigns.join('、') : ''
+  const controls = googleBusinessCalendarPostfastControls({
+    itemDate: input.promotionPoint.targetPublishWindow.start || '',
+    title: calendarItemTitle(input),
+    promotionPoint: input.promotionPoint,
+  })
+  return [
+    `Google 发布类型：${controls.gbpTopicType === 'EVENT' ? 'EVENT 活动贴' : 'STANDARD 店铺更新'}。`,
+    context?.monthFocus ? `本月商家活动重点：${cleanCalendarText(context.monthFocus, '')}。` : '',
+    campaigns ? `当前活动安排：${cleanCalendarText(campaigns, '')}。` : '',
+    holidays ? `本月节日/经营节点：${cleanCalendarText(holidays, '')}。` : '',
+    `内容创意：围绕${product}做本地搜索友好的门店更新，说明适合谁、为什么现在来、到店前要知道什么。`,
+    `正文结构：第一句点明${product}和到店理由；第二段补营业/位置/服务/菜单信息；结尾引导顾客${customerAction}。`,
+    angle ? `内容依据：${adaptCalendarScriptText(angle, input)}。` : '',
+    '素材重点：使用清楚的门店图、产品图或菜单信息，不编造折扣、赠品、价格和不存在的活动。',
+    input.interviewFocus ? `可带一句主理人原话：${cleanCalendarText(input.interviewFocus, '')}。` : '',
   ].filter(Boolean).join('\n')
 }
 
@@ -2356,9 +2490,21 @@ function requireValidCalendarInspirationIdentity(items: BrandPlanCalendarItem[])
   throw new BrandPlanError('calendar_inspiration_identity_invalid', 502)
 }
 
-function calendarMaterialRequirements(product: string, candidate: Record<string, unknown> | null) {
+function calendarMaterialRequirements(
+  product: string,
+  candidate: Record<string, unknown> | null,
+  platformSlug?: string,
+  promotionPoint?: CalendarPromotionPoint
+) {
   const assetNeeds = stringList(candidate?.assetNeeds)
-  return assetNeeds.length ? assetNeeds : [`补充“${product}”真实门店画面或顾客场景素材。`]
+  if (!isGoogleBusinessSlot(platformSlug || '')) return assetNeeds.length ? assetNeeds : [`补充“${product}”真实门店画面或顾客场景素材。`]
+  const context = promotionPoint?.calendarContext
+  return uniqueStrings([
+    ...assetNeeds,
+    `补充“${product}”清晰产品图、门头或菜单信息。`,
+    '确认 Google Business 发布门店、营业时间和行动入口。',
+    context?.campaigns?.length || context?.holidays?.length ? '如使用活动贴，请确认活动名称、当天有效时间和活动是否真实存在。' : '',
+  ]).slice(0, 6)
 }
 
 function calendarContentGap(
@@ -2780,6 +2926,7 @@ function buildMarketingPlanInput(
   body?: Record<string, unknown>
 ) {
   const productCatalog = skuLibraryForLLM(brand.knowledge?.menuItems, 30)
+  const planningFeedback = objectValue(objectValue(brand.postfastSnapshot).planningFeedback)
   return {
     brand: {
       id: brand.id,
@@ -2798,6 +2945,7 @@ function buildMarketingPlanInput(
     researchReport: current.researchReport || null,
     subscriptionStrategy: current.annualPlan?.subscriptionStrategy || null,
     annualPlan: current.annualPlan || null,
+    postfastPlanningFeedback: planningFeedback,
     request: body || {},
   }
 }
@@ -2836,6 +2984,9 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
       }
     })
     .slice(-4)
+  const postfastPlanningFeedback = objectValue(input.postfastPlanningFeedback)
+  const contentSignals = objectValue(postfastPlanningFeedback.contentSignals)
+  const dashboardFeedback = objectValue(postfastPlanningFeedback.dashboard)
   return {
     brand: {
       id: text(brand.id),
@@ -2898,6 +3049,15 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
         }
       : null,
     previousQuarterPlans,
+    postfastPlanningFeedback: {
+      recentTopPostThemes: stringList(contentSignals.recentTopPostThemes).slice(0, 4),
+      weakPlatformSignals: stringList(contentSignals.weakPlatformSignals).slice(0, 5),
+      promptHints: stringList(contentSignals.promptHints).slice(0, 4),
+      unresolvedCommentCount: Number(dashboardFeedback.unresolvedCommentCount) || 0,
+      reconnectAccountCount: Number(dashboardFeedback.reconnectAccountCount) || 0,
+      thisMonthPublished: Number(dashboardFeedback.thisMonthPublished) || 0,
+      thisMonthScheduled: Number(dashboardFeedback.thisMonthScheduled) || 0,
+    },
     request: input.request || {},
   }
 }
@@ -3054,6 +3214,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '必须读取 productCatalog：把商品/服务/套餐按热销品、高复购品、商家当下主推/主理人判断有潜力、招牌、套餐等标签归类，允许一个 SKU 同时属于多类；多类重合的 SKU 应作为品牌推广重点。',
       '如果 productCatalog 提供明确价格、适合人数、套餐内容或搭配建议，可以用于策略判断和价格感知内容方向，例如人均、几个人吃、套餐怎么点；如果没有明确价格，不得编价格。',
       '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
+      '如果输入提供 postfastPlanningFeedback，必须用近期表现好的主题、弱平台信号、未回复评论和账号健康问题优化下一周期策略；不要编造不存在的数据。',
     ].join('\n')
     : [
       '只返回一个可被 JSON.parse 解析的 JSON 对象，不要 Markdown，不要解释，不要代码块。',
@@ -3067,6 +3228,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
       '必须参考 productCatalog 选择具体 SKU 或套餐进入 promotionPoints/contentThemes/monthlyFocus；优先使用同时命中热销、高复购、商家主推、招牌或套餐的项目。',
       '如果 productCatalog 提供真实价格、适合人数或套餐内容，可以写入价格引导和点单判断；如果没有提供，不得写任何具体价格。',
       '内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。',
+      '如果输入提供 postfastPlanningFeedback，必须把近期 top post 主题、弱平台、发布失败/未知和未回复评论转化为本季度/月度内容重点；不要让分析只停留在报告里。',
     ].join('\n')
   const promptTemplate = await getPromptTemplate('marketing_plan_generation')
   const compactInput = compactMarketingPlanInputForLLM(input, scope)

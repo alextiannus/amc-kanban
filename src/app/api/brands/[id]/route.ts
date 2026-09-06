@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canWriteBrandProject } from '@/lib/brandAccess'
 import { refreshBrandProfileMarkdown } from '@/lib/brandProfileMarkdown'
 import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
+import { buildPostfastPlanningFeedback } from '@/lib/postfastPlanningFeedback'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -81,8 +82,12 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const snapshot = (brand as any).postfastSnapshot as { accounts?: any[]; operationsReport?: any } | null
   const operationsReport = snapshot?.operationsReport ?? null
   const postfastSyncedAt = (brand as any).postfastSyncedAt ?? null
+  const planningFeedback = await buildPostfastPlanningFeedback(id).catch((error) => {
+    console.warn('[brand-detail] planning feedback unavailable:', error instanceof Error ? error.message : error)
+    return (snapshot as any)?.planningFeedback ?? null
+  })
 
-  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, operationsReport, postfastSyncedAt })
+  return NextResponse.json({ ...brand, weekConversions: conversions, recentDrafts, operationsReport, postfastSyncedAt, planningFeedback })
 }
 
 // PATCH /api/brands/[id] — update editable brand profile fields

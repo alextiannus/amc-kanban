@@ -1028,7 +1028,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     idempotencyKey: z.string().min(1).describe('Required stable key for this publish attempt. Reuse it only to retrieve a known result; an unknown outcome must be reconciled before a new publish.'),
     platform: z.enum(['instagram', 'tiktok', 'xiaohongshu', 'facebook', 'youtube', 'x', 'linkedin', 'threads', 'bluesky', 'pinterest', 'snapchat', 'telegram', 'google'])
       .describe('Target platform'),
-    instagramPublishType: z.enum(['TIMELINE', 'REEL', 'STORY']).optional().describe('Instagram format; defaults to REEL for one video and TIMELINE otherwise.'),
+    instagramPublishType: z.enum(['TIMELINE', 'REEL', 'STORY']).optional().describe('Instagram format; omit to let AMC auto-select by media type: single video = REEL, image/carousel/mixed media = TIMELINE. STORY must be explicit.'),
     caption: z.string().describe('Post caption / body text'),
     mediaStorageKeys: z.array(z.string()).optional().describe('Storage keys from board_upload_media (preferred over mediaUrls)'),
     mediaUrls: z.array(z.string()).optional().describe('Public image or video URLs (fallback when storage keys unavailable)'),

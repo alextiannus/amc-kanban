@@ -96,9 +96,17 @@ async function getBrandApiKey(
   return null
 }
 
-async function getPostfastAccountId(brandId: string, accountId: string) {
+async function resolvePostfastAccountId(brandId: string, accountId: string) {
+  const trimmedAccountId = accountId.trim()
+  if (!trimmedAccountId) return null
   const account = await prisma.socialAccount.findFirst({
-    where: { brandId, postfastAccountId: accountId },
+    where: {
+      brandId,
+      OR: [
+        { id: trimmedAccountId },
+        { postfastAccountId: trimmedAccountId },
+      ],
+    },
     select: { postfastAccountId: true },
   })
   return account?.postfastAccountId ?? null
@@ -185,7 +193,7 @@ export async function POST(request: Request) {
 
     case 'get_gbp_locations': {
       if (!params.accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
-      const accountId = await getPostfastAccountId(brandId, params.accountId)
+      const accountId = await resolvePostfastAccountId(brandId, params.accountId)
       if (!accountId) return NextResponse.json({ error: 'PostFast account not found' }, { status: 404 })
       const result = await postfastGetGBPLocations(apiKey, accountId)
       return NextResponse.json(result)
@@ -193,7 +201,7 @@ export async function POST(request: Request) {
 
     case 'get_follower_history': {
       if (!params.accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
-      const accountId = await getPostfastAccountId(brandId, params.accountId)
+      const accountId = await resolvePostfastAccountId(brandId, params.accountId)
       if (!accountId) return NextResponse.json({ error: 'PostFast account not found' }, { status: 404 })
       return NextResponse.json(await postfastGetFollowerHistory(apiKey, accountId))
     }
@@ -205,7 +213,7 @@ export async function POST(request: Request) {
 
     case 'get_tiktok_sounds': {
       if (!params.accountId) return NextResponse.json({ error: 'accountId required' }, { status: 400 })
-      const accountId = await getPostfastAccountId(brandId, params.accountId)
+      const accountId = await resolvePostfastAccountId(brandId, params.accountId)
       if (!accountId) return NextResponse.json({ error: 'PostFast account not found' }, { status: 404 })
       return NextResponse.json(await postfastGetTikTokSounds(apiKey, accountId))
     }
