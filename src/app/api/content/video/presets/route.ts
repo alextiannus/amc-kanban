@@ -22,7 +22,8 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const creatorType = url.searchParams.get('creatorType')?.trim()
-    const catalog: any = await fetchRemoteContentCatalog().catch((err) => {
+    const idea = url.searchParams.get('idea')?.trim()
+    const catalog: any = await fetchRemoteContentCatalog({ videoIdea: idea, videoCreatorType: creatorType }).catch((err) => {
       console.warn('[VideoPresets] remote catalog unavailable, using local presets:', err?.message || err)
       return null
     })

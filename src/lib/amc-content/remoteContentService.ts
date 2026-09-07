@@ -46,6 +46,7 @@ export type RemoteVideoCreatorRequest = {
   scriptPresetId?: string
   scriptDraft?: unknown
   generateScript?: boolean
+  adaptScript?: boolean
   executionMode?: 'plan_only' | 'submit'
   projectId?: string
   referenceAnalysisAssetId?: string
@@ -261,6 +262,7 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
       scriptPresetId: input.scriptPresetId,
       scriptDraft: input.scriptDraft,
       generateScript: input.generateScript,
+      adaptScript: input.adaptScript,
       executionMode: input.executionMode || 'plan_only',
       projectId: input.projectId,
       referenceAnalysisAssetId: input.referenceAnalysisAssetId,
@@ -357,7 +359,7 @@ async function callRemoteVideoJson(
   return data
 }
 
-export async function fetchRemoteContentCatalog(): Promise<unknown> {
+export async function fetchRemoteContentCatalog(options: { videoIdea?: string; videoCreatorType?: string } = {}): Promise<unknown> {
   const isLocal = process.env.NODE_ENV !== 'production'
     || process.env.APP_BASE_URL?.includes('localhost')
     || process.env.JWT_SECRET?.includes('local')
@@ -374,7 +376,10 @@ export async function fetchRemoteContentCatalog(): Promise<unknown> {
     || (isLocal ? 'local-service-token' : undefined)
   if (token) headers.authorization = `Bearer ${token}`
 
-  const response = await fetch(`${baseUrl}/v1/platforms`, {
+  const url = new URL(`${baseUrl}/v1/platforms`)
+  if (options.videoIdea) url.searchParams.set('videoIdea', options.videoIdea)
+  if (options.videoCreatorType) url.searchParams.set('videoCreatorType', options.videoCreatorType)
+  const response = await fetch(url, {
     method: 'GET',
     headers,
     cache: 'no-store',
