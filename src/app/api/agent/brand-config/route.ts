@@ -1,3 +1,4 @@
+import { syncSocialAccountBindings } from '@/lib/socialAccountBinding'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
                 larkOwnerId: true,
                 postfastApiKey: true, googleApiKey: true,
                 larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
-                accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+                accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
               },
             },
           },
@@ -105,7 +106,7 @@ export async function GET(request: Request) {
       larkDriveFolderId: true, larkOwnerId: true,
       postfastApiKey: true, googleApiKey: true,
       larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
-      accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+      accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
   })
 
@@ -182,7 +183,7 @@ export async function POST(request: Request) {
   const brandWithRelations = await prisma.brand.findUnique({
     where: { id: brand.id },
     include: {
-      accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+      accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
   })
 
@@ -283,69 +284,18 @@ export async function PATCH(request: Request) {
   let larkFolderUrl: string | undefined = undefined
 
   // Auto-sync PostFast accounts when API key is present
-  let postfastSync: { synced: number; accounts: string[] } | undefined
+  let postfastSync: { synced: number; accounts: string[]; error?: string } | undefined
   const activeKey = updated.postfastApiKey
   if (activeKey) {
     try {
       const pfResult = await postfastFetchAccounts(activeKey)
-      if (pfResult.success && pfResult.accounts.length > 0) {
-        for (const acc of pfResult.accounts) {
-          await prisma.socialAccount.upsert({
-            where: { brandId_platformId_handle: { brandId, platformId: acc.platformId, handle: acc.handle } },
-            create: { brandId, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle },
-            update: { displayName: acc.displayName ?? acc.handle },
-          })
-        }
-
-        // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
-        // unless it's a direct Google Business Profile account.
-        try {
-          const postfastPlatformHandles = pfResult.accounts.map(acc => ({
-            platformId: acc.platformId,
-            handle: acc.handle
-          }))
-
-          const dbAccounts = await prisma.socialAccount.findMany({
-            where: { brandId },
-            select: { id: true, platformId: true, handle: true }
-          })
-
-          const brandInfo = await prisma.brand.findUnique({
-            where: { id: brandId },
-            select: { googlePreferOAuth: true, googleRefreshToken: true, googleLocationId: true }
-          })
-
-          const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
-
-          const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
-            if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
-              return false
-            }
-            const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
-              pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
-              pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
-            )
-            return !isMatched
-          })
-
-          if (accountsToDelete.length > 0) {
-            const idsToDelete = accountsToDelete.map((a: any) => a.id)
-            await prisma.socialAccount.deleteMany({
-              where: { id: { in: idsToDelete } }
-            })
-            console.log(`[Agent Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${brandId}`)
-          }
-        } catch (pruneErr) {
-          console.warn('[Agent] Failed to prune stale social accounts:', pruneErr)
-        }
-
-        postfastSync = {
-          synced: pfResult.accounts.length,
-          accounts: pfResult.accounts.map(a => `${a.platformId}:${a.handle}`),
-        }
-        console.log(`[Agent] PostFast sync: ${pfResult.accounts.length} accounts for brand ${brandId}`)
+      if (!pfResult.success) throw new Error(pfResult.error || 'PostFast account sync failed')
+      if (pfResult.success) {
+        const accounts = await syncSocialAccountBindings(brandId, pfResult.accounts)
+        postfastSync = { synced: accounts.length, accounts: accounts.map((account: any) => `${account.platformId}:${account.handle}`) }
       }
     } catch (e) {
+      postfastSync = { synced: 0, accounts: [], error: e instanceof Error ? e.message : 'PostFast account sync failed' }
       console.warn('[Agent] PostFast sync failed (non-fatal):', e)
     }
   }

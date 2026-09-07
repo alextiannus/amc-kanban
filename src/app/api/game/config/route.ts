@@ -70,7 +70,7 @@ export async function GET(request: Request) {
             googleBusinessUrl: true,
             googleReviewUrl: true,
             googleLinksMeta: true,
-            accounts: {
+            accounts: { where: { unboundAt: null },
               select: {
                 platformId: true,
                 profileUrl: true,
@@ -121,7 +121,7 @@ export async function GET(request: Request) {
               googleBusinessUrl: true,
               googleReviewUrl: true,
               googleLinksMeta: true,
-              accounts: {
+              accounts: { where: { unboundAt: null },
                 select: {
                   platformId: true,
                   profileUrl: true,

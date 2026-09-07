@@ -669,6 +669,19 @@ function BrandProfileContent({
   const [planEditorSaving, setPlanEditorSaving] = useState(false)
   const [editingSocialAccount, setEditingSocialAccount] = useState<EditableSocialAccount | null>(null)
   const [socialAccountSaving, setSocialAccountSaving] = useState(false)
+  const [socialAccountUnbinding, setSocialAccountUnbinding] = useState(false)
+  const [socialAccountError, setSocialAccountError] = useState('')
+  const socialAccountBusy = useRef(false)
+  const savedSocialAccount = useRef<EditableSocialAccount | null>(null)
+  const openSocialAccount = (account: EditableSocialAccount) => {
+    savedSocialAccount.current = { ...account }
+    setSocialAccountError('')
+    setEditingSocialAccount({ ...account })
+  }
+  const closeSocialAccount = () => {
+    if (!socialAccountBusy.current) setEditingSocialAccount(null)
+  }
+
 
   // Controlled vs Uncontrolled logic
   const activeBrandTone = brandTone !== undefined ? brandTone : localBrandTone
@@ -1297,7 +1310,9 @@ ${storeLines}
   }
 
   const handleSaveSocialAccount = async () => {
-    if (!editingSocialAccount) return
+    if (!editingSocialAccount || socialAccountBusy.current) return
+    socialAccountBusy.current = true
+    setSocialAccountError('')
     setSocialAccountSaving(true)
     try {
       const res = await fetch(`/api/brands/${brandId}/accounts/${editingSocialAccount.id}`, {
@@ -1318,7 +1333,34 @@ ${storeLines}
       console.error('Failed to save social account:', error)
       showToastVal('社交媒体账号保存失败', 'error')
     } finally {
+      socialAccountBusy.current = false
       setSocialAccountSaving(false)
+    }
+  }
+
+  const handleUnbindSocialAccount = async () => {
+    const account = savedSocialAccount.current
+    if (!account || socialAccountBusy.current) return
+    const identity = `${socialPlatformLabel(account.platformId)} · @${(account.handle || '').replace(/^@/, '')}`
+    if (!window.confirm(`确定解除当前品牌与 ${identity} 的绑定？历史内容将保留，PostFast 授权不受影响。`)) return
+    socialAccountBusy.current = true
+    setSocialAccountUnbinding(true)
+    setSocialAccountError('')
+    try {
+      const res = await fetch(`/api/brands/${brandId}/accounts/${account.id}/unbind`, { method: 'POST' })
+      const result = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(result.error || '解除绑定失败，请稍后重试。')
+      setEditingSocialAccount(null)
+      setBrandSettings(current => current ? { ...current, accounts: (current.accounts || []).filter(item => item.id !== account.id) } : current)
+      showToastVal('该渠道账号已解除绑定', 'success')
+      await loadAllConfig()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '解除绑定失败，请稍后重试。'
+      setSocialAccountError(message)
+      showToastVal(message, 'error')
+    } finally {
+      socialAccountBusy.current = false
+      setSocialAccountUnbinding(false)
     }
   }
 
@@ -2106,12 +2148,12 @@ ${storeLines}
                         role="button"
                         tabIndex={0}
                         onClick={(event) => {
-                          if (!shouldIgnoreEditableSurfaceClick(event.target)) setEditingSocialAccount(account)
+                          if (!shouldIgnoreEditableSurfaceClick(event.target)) openSocialAccount(account)
                         }}
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault()
-                            setEditingSocialAccount(account)
+                            openSocialAccount(account)
                           }
                         }}
                         className="flex cursor-pointer min-w-[220px] max-w-full flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 transition hover:border-blue-200 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-blue-800 dark:hover:bg-slate-900 sm:max-w-[320px]"
@@ -2137,7 +2179,7 @@ ${storeLines}
                               主页
                             </a>
                           )}
-                          <button type="button" onClick={() => setEditingSocialAccount(account)} className="font-bold text-slate-700 hover:text-blue-600 dark:text-slate-200">编辑</button>
+                          <button type="button" onClick={() => openSocialAccount(account)} className="font-bold text-slate-700 hover:text-blue-600 dark:text-slate-200">编辑</button>
                         </div>
                       </div>
                     )
@@ -3072,37 +3114,43 @@ ${storeLines}
       )}
       {editingSocialAccount && (
         <div className="fixed inset-0 z-50 flex justify-end">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setEditingSocialAccount(null)} />
-          <div className="relative z-10 flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-900">
+          <div className="absolute inset-0 bg-black/40" onClick={closeSocialAccount} />
+          <div role="dialog" aria-modal="true" aria-label="编辑社交媒体账号" className="relative z-10 flex h-full w-full max-w-md flex-col bg-white shadow-2xl dark:bg-slate-900">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
               <div>
                 <h3 className="text-sm font-black text-slate-900 dark:text-white">编辑社交媒体账号</h3>
                 <p className="mt-1 text-xs text-slate-400">{socialPlatformLabel(editingSocialAccount.platformId)}</p>
               </div>
-              <button type="button" onClick={() => setEditingSocialAccount(null)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
+              <button type="button" aria-label="关闭账号编辑" onClick={closeSocialAccount} disabled={socialAccountSaving || socialAccountUnbinding} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
               <label className="block space-y-1.5">
                 <span className="text-xs font-black text-slate-600 dark:text-slate-300">账号 handle</span>
-                <input value={editingSocialAccount.handle || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, handle: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                <input disabled={socialAccountSaving || socialAccountUnbinding} value={editingSocialAccount.handle || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, handle: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs font-black text-slate-600 dark:text-slate-300">展示名称</span>
-                <input value={editingSocialAccount.displayName || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, displayName: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                <input disabled={socialAccountSaving || socialAccountUnbinding} value={editingSocialAccount.displayName || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, displayName: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs font-black text-slate-600 dark:text-slate-300">主页链接</span>
-                <input value={editingSocialAccount.profileUrl || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, profileUrl: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+                <input disabled={socialAccountSaving || socialAccountUnbinding} value={editingSocialAccount.profileUrl || ''} onChange={event => setEditingSocialAccount(current => current ? { ...current, profileUrl: event.target.value } : current)} className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
               </label>
               <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-800 dark:bg-slate-950">
                 <span className="text-xs font-black text-slate-700 dark:text-slate-200">自动发布</span>
-                <input type="checkbox" checked={Boolean(editingSocialAccount.autoPilot)} onChange={event => setEditingSocialAccount(current => current ? { ...current, autoPilot: event.target.checked } : current)} className="h-4 w-4" />
+                <input disabled={socialAccountSaving || socialAccountUnbinding} type="checkbox" checked={Boolean(editingSocialAccount.autoPilot)} onChange={event => setEditingSocialAccount(current => current ? { ...current, autoPilot: event.target.checked } : current)} className="h-4 w-4" />
               </label>
             </div>
             <div className="border-t border-slate-200 p-4 dark:border-slate-800">
-              <button type="button" onClick={handleSaveSocialAccount} disabled={socialAccountSaving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900">
-                {socialAccountSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</> : <><Save className="h-3.5 w-3.5" /> 保存账号</>}
-              </button>
+              {socialAccountError && <p role="alert" className="mb-3 text-xs text-rose-600 dark:text-rose-400">{socialAccountError}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={handleUnbindSocialAccount} disabled={socialAccountSaving || socialAccountUnbinding} className="inline-flex shrink-0 items-center justify-center rounded-xl border border-rose-300 px-4 py-2.5 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950">
+                  {socialAccountUnbinding ? '解绑中…' : '解除绑定'}
+                </button>
+                <button type="button" onClick={handleSaveSocialAccount} disabled={socialAccountSaving || socialAccountUnbinding} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-xs font-bold text-white disabled:opacity-60 dark:bg-white dark:text-slate-900">
+                  {socialAccountSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> 保存中…</> : <><Save className="h-3.5 w-3.5" /> 保存账号</>}
+                </button>
+              </div>
             </div>
           </div>
         </div>

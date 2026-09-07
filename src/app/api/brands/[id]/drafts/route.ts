@@ -225,7 +225,7 @@ export async function POST(request: Request, { params }: Params) {
   if (accountId.startsWith('unconfigured_')) {
     const platformId = accountId.replace('unconfigured_', '')
     let placeholderAccount = await prisma.socialAccount.findFirst({
-      where: { brandId, platformId, handle: 'unconfigured' }
+      where: { unboundAt: null, brandId, platformId, handle: 'unconfigured' }
     })
     if (!placeholderAccount) {
       const getDisplayName = (pId: string) => {
@@ -250,7 +250,7 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const draftAccount = await prisma.socialAccount.findFirst({
-    where: { id: accountId, brandId },
+    where: { unboundAt: null, id: accountId, brandId },
     select: { platformId: true },
   })
   if (!draftAccount) return NextResponse.json({ error: 'accountId is invalid for this brand' }, { status: 400 })

@@ -23,6 +23,7 @@ export async function GET(request: Request) {
   const sessionUser = context.user
 
   const accountsSelect = {
+    where: { unboundAt: null },
     orderBy: { createdAt: 'asc' as const },
     select: {
       id: true, platformId: true, handle: true, displayName: true,

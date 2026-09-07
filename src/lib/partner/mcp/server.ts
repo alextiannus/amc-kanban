@@ -1,3 +1,5 @@
+import { localForProvider } from '@/lib/socialAccountIdentity'
+import { syncSocialAccountBindings, saveSocialAccount, assertAccountBound } from '@/lib/socialAccountBinding'
 /**
  * AI Marketing Crew — MCP Server definition
  *
@@ -124,7 +126,7 @@ function marketingPlanPeriodLabel(plan: NonNullable<BrandPlanWorkspaceData['annu
 async function ensureCalendarAccount(brandId: string, platform: string) {
   const platformId = normalizeCalendarPlatform(platform)
   const account = await prisma.socialAccount.findFirst({
-    where: { brandId, platformId },
+    where: { brandId, platformId, unboundAt: null },
     orderBy: { updatedAt: 'desc' },
   })
   if (account) return account
@@ -305,7 +307,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
             postfastApiKey: true,
             googlePlaceId: true,
             googleApiKey: true,
-            accounts: { select: { id: true, platformId: true, handle: true, displayName: true, autoPilot: true } },
+            accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, displayName: true, autoPilot: true } },
           },
         })
         if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
@@ -347,7 +349,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
               brand: {
                 select: {
                   id: true, name: true, description: true, location: true, timezone: true, autoPilot: true,
-                  accounts: { select: { id: true, platformId: true, handle: true, autoPilot: true } },
+                  accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
                 },
               },
             },
@@ -488,58 +490,13 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       if (input.postfastApiKey) {
         try {
           const pfResult = await postfastFetchAccounts(input.postfastApiKey)
-          if (pfResult.success && pfResult.accounts.length > 0) {
-            for (const acc of pfResult.accounts) {
-              await prisma.socialAccount.upsert({
-                where: { brandId_platformId_handle: { brandId, platformId: acc.platformId, handle: acc.handle } },
-                create: { brandId, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle },
-                update: { displayName: acc.displayName ?? acc.handle },
-              })
-            }
-
-            // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
-            // unless it's a direct Google Business Profile account.
-            try {
-              const postfastPlatformHandles = pfResult.accounts.map((acc: any) => ({
-                platformId: acc.platformId,
-                handle: acc.handle
-              }))
-
-              const dbAccounts = await prisma.socialAccount.findMany({
-                where: { brandId },
-                select: { id: true, platformId: true, handle: true }
-              })
-
-              const brandInfo = await prisma.brand.findUnique({
-                where: { id: brandId },
-                select: { googlePreferOAuth: true, googleRefreshToken: true, googleLocationId: true }
-              })
-
-              const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
-
-              const accountsToDelete = dbAccounts.filter((dbAcc: any) => {
-                if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
-                  return false
-                }
-                const isMatched = postfastPlatformHandles.some((pfAcc: any) => 
-                  pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
-                  pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
-                )
-                return !isMatched
-              })
-
-              if (accountsToDelete.length > 0) {
-                const idsToDelete = accountsToDelete.map((a: any) => a.id)
-                await prisma.socialAccount.deleteMany({
-                  where: { id: { in: idsToDelete } }
-                })
-                console.log(`[MCP Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${brandId}`)
-              }
-            } catch (pruneErr) {
-              console.warn('[MCP Sync] Failed to prune stale social accounts:', pruneErr)
-            }
+          if (!pfResult.success) throw new Error(pfResult.error || 'PostFast account sync failed')
+          if (pfResult.success) {
+            await syncSocialAccountBindings(brandId, pfResult.accounts)
           }
-        } catch { /* non-fatal — PostFast sync failure should not block brand update */ }
+        } catch (error) {
+          return { content: [{ type: 'text' as const, text: `Brand configuration saved, but account sync failed: ${error instanceof Error ? error.message : String(error)}` }], isError: true }
+        }
       }
 
       try {
@@ -806,10 +763,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
       if (!link) return { content: [{ type: 'text' as const, text: 'Error: Brand is outside this user permission scope' }], isError: true }
 
-      const account = await prisma.socialAccount.upsert({
-        where: { brandId_platformId_handle: { brandId, platformId, handle } },
-        create: { brandId, platformId, handle, displayName: displayName || handle, profileUrl: profileUrl || null, loginUsername: loginUsername || null, loginPassword: loginPassword || null },
-        update: { displayName: displayName || handle, profileUrl: profileUrl || null, loginUsername: loginUsername || null, loginPassword: loginPassword || null },
+      const account = await saveSocialAccount(brandId, {
+        platformId, handle, displayName: displayName || handle, profileUrl: profileUrl || null,
+        loginUsername: loginUsername || null, loginPassword: loginPassword || null,
       })
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, accountId: account.id, platformId, handle }) }] }
     }
@@ -870,32 +826,20 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     const result = await postfastFetchAccounts(key)
     if (!result.success) return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true }
 
-    const localAccounts = await prisma.socialAccount.findMany({
-      where: { brandId },
-      select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true },
-    })
-    const localByPlatformHandle = new Map<string, (typeof localAccounts)[number]>(localAccounts.map((account: (typeof localAccounts)[number]) => [
-      `${normalizeCalendarPlatform(account.platformId)}:${account.handle.toLowerCase()}`,
-      account,
-    ]))
-
-    const externalAccounts = Array.isArray(result.accounts) ? result.accounts as any[] : []
-    const accounts = externalAccounts.map((account: any) => {
-      const platformId = normalizeCalendarPlatform(String(account.platformId || account.platform || ''))
-      const handle = accountHandleFromExternal(account, platformId)
-      const local = localByPlatformHandle.get(`${platformId}:${handle.toLowerCase()}`)
-      return {
+    const localAccounts = await prisma.socialAccount.findMany({ where: { brandId } })
+    const accounts = result.accounts.flatMap((account: any) => {
+      const local = localForProvider<any>(localAccounts, account)
+      if (local?.unboundAt) return []
+      return [{
         ...account,
-        id: local?.id ?? `unconfigured_${platformId}`,
+        id: local?.id ?? `unconfigured_${account.platformId}`,
         localAccountId: local?.id ?? null,
         externalAccountId: account.id,
-        platformId,
-        handle,
-        displayName: local?.displayName || account.displayName || handle,
+        displayName: local?.displayName || account.displayName || account.handle,
         profileUrl: local?.profileUrl || account.profileUrl || null,
         followerCount: local?.followerCount ?? account.followerCount,
         mcpDraftReady: Boolean(local),
-      }
+      }]
     })
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: accounts.length, accounts }, null, 2) }] }
   }
@@ -1051,7 +995,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
     if (!brand.postfastApiKey) return { content: [{ type: 'text' as const, text: 'Error: Publishing backend not configured for this brand. Run update_brand_config first.' }], isError: true }
     const { postfastPublish } = await import('@/lib/integrations/postfast')
-    const result = await postfastPublish({ apiKey: brand.postfastApiKey, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId })
+    const result = await postfastPublish({ apiKey: brand.postfastApiKey, brandId, platform, caption, mediaStorageKeys, mediaUrls, hashtags, scheduledAt, accountId, gbpLocationId })
 
     if (!result.success) {
       const payload = result.code
@@ -1462,6 +1406,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         const { postfastPublish } = await import('@/lib/integrations/postfast')
         const result = await postfastPublish({
           apiKey: brand.postfastApiKey,
+          brandId,
           platform,
           caption,
           mediaUrls,
@@ -1647,8 +1592,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         } else {
           const localAccount = await prisma.socialAccount.findFirst({
             where: { id: resolvedAccountId, brandId },
-            select: { id: true },
+            select: { id: true, unboundAt: true },
           })
+          if (localAccount) assertAccountBound(localAccount)
           if (!localAccount) {
             const { key } = await getBrandPostfastKey(brandId)
             if (!key) {
@@ -1663,25 +1609,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
             if (!externalAccount) {
               return { content: [{ type: 'text' as const, text: 'Error: accountId was not found for this brand' }], isError: true }
             }
-            const platformId = normalizeCalendarPlatform(String(externalAccount.platformId || externalAccount.platform || ''))
-            const handle = accountHandleFromExternal(externalAccount, platformId)
-            const account = await prisma.socialAccount.upsert({
-              where: { brandId_platformId_handle: { brandId, platformId, handle } },
-              create: {
-                brandId,
-                platformId,
-                handle,
-                displayName: externalAccount.displayName || handle,
-                profileUrl: externalAccount.profileUrl || null,
-                followerCount: typeof externalAccount.followerCount === 'number' ? externalAccount.followerCount : null,
-              },
-              update: {
-                displayName: externalAccount.displayName || handle,
-                profileUrl: externalAccount.profileUrl || null,
-                followerCount: typeof externalAccount.followerCount === 'number' ? externalAccount.followerCount : undefined,
-              },
-              select: { id: true },
-            })
+            await syncSocialAccountBindings(brandId, result.accounts)
+            const account = await prisma.socialAccount.findFirst({ where: { brandId, postfastAccountId: externalAccount.id } })
+            assertAccountBound(account)
             resolvedAccountId = account.id
           }
         }

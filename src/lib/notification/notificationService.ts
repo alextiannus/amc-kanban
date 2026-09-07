@@ -43,7 +43,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
         status: { not: 'ARCHIVED' }
       },
       include: {
-        accounts: true,
+        accounts: { where: { unboundAt: null } },
         knowledge: true,
         subscriptions: {
           where: {
@@ -96,7 +96,7 @@ export async function syncSetupNotifications(userId: string): Promise<SetupNotif
         OR: queryOr
       },
       include: {
-        accounts: true,
+        accounts: { where: { unboundAt: null } },
         knowledge: true,
         subscriptions: {
           where: {

@@ -104,7 +104,7 @@ export async function POST(request: Request, { params }: Params) {
 
     // 1. Fetch brand accounts
     let accounts = await prisma.socialAccount.findMany({
-      where: { brandId }
+      where: { unboundAt: null, brandId }
     })
 
     const selectedCopywriters = copywritersFromIds(copywriterIds)
@@ -121,7 +121,7 @@ export async function POST(request: Request, { params }: Params) {
       if (!exists) {
         const handle = 'unconfigured'
         let placeholderAccount = await prisma.socialAccount.findFirst({
-          where: { brandId, platformId, handle }
+          where: { unboundAt: null, brandId, platformId, handle }
         })
         if (!placeholderAccount) {
           const getDisplayName = (pId: string) => {

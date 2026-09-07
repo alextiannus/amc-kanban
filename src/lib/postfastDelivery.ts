@@ -1,3 +1,4 @@
+import { lockAccountBinding, assertAccountBound } from '@/lib/socialAccountBinding'
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -109,6 +110,12 @@ export async function enqueuePostfastDelivery(input: {
     : undefined
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const accountId = input.publish.accountId
+    if (!accountId) throw new Error('Publishing requires a bound account.')
+    await lockAccountBinding(tx, accountId)
+    const account = await tx.socialAccount.findFirst({ where: { id: accountId, brandId: input.brandId } })
+    assertAccountBound(account)
+
     const concurrent = await tx.postfastDeliveryJob.findFirst({
       where: { draftId: input.draftId, status: { in: [...POSTFAST_DELIVERY_ACTIVE_STATUSES] } },
       orderBy: { createdAt: 'desc' },
@@ -595,6 +602,7 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
   const result = await postfastPublish({
     ...payload.publish,
     apiKey: brand.postfastApiKey,
+    brandId: brand.id,
     mediaItems: uploadedItems,
     mediaUrls: undefined,
     mediaStorageKeys: undefined,

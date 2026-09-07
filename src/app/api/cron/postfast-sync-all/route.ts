@@ -1,3 +1,4 @@
+import { syncSocialAccountBindings } from '@/lib/socialAccountBinding'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
@@ -13,11 +14,6 @@ import {
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
-
-export const GOOGLE_PLATFORM_ALIASES = [
-  'google', 'google_business_profile', 'googlebusinessprofile',
-  'google_my_business', 'googlemybusiness', 'google_maps', 'googlemaps', 'gbp', 'gmb',
-]
 
 /**
  * POST /api/cron/postfast-sync-all
@@ -233,62 +229,7 @@ export async function syncBrand(brand: {
     throw new Error(pfResult.error || 'Failed to fetch accounts from PostFast')
   }
 
-  let syncedAccounts: any[] = []
-  for (const acc of pfResult.accounts) {
-      if (!acc.platformId || !acc.handle) continue
-
-      if (acc.platformId === 'google') {
-        const existing = await prisma.socialAccount.findFirst({
-          where: { brandId: brand.id, platformId: { in: GOOGLE_PLATFORM_ALIASES } },
-          orderBy: { updatedAt: 'desc' },
-          select: { id: true },
-        })
-        if (existing) {
-          await prisma.socialAccount.update({
-            where: { id: existing.id },
-            data: { platformId: 'google', handle: acc.handle, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
-          })
-          continue
-        }
-      }
-
-      if (acc.profileUrl) {
-        const existingByProfile = await prisma.socialAccount.findFirst({
-          where: { brandId: brand.id, platformId: acc.platformId, profileUrl: acc.profileUrl },
-          select: { id: true },
-        })
-        if (existingByProfile) {
-          await prisma.socialAccount.update({
-            where: { id: existingByProfile.id },
-            data: { handle: acc.handle, displayName: acc.displayName ?? acc.handle, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
-          })
-          continue
-        }
-      }
-
-      await prisma.socialAccount.upsert({
-        where: { brandId_platformId_handle: { brandId: brand.id, platformId: acc.platformId, handle: acc.handle } },
-        create: { brandId: brand.id, platformId: acc.platformId, handle: acc.handle, displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
-        update: { displayName: acc.displayName ?? acc.handle, profileUrl: acc.profileUrl ?? null, followerCount: acc.followerCount ?? null, followerDelta: acc.followerDelta ?? 0, ratingScore: acc.ratingScore ?? null, snapshotAt: new Date() },
-      })
-    }
-
-    // Prune stale accounts
-    const postfastHandles = pfResult.accounts.map((a: any) => ({ platformId: a.platformId, handle: a.handle }))
-    const dbAccounts = await prisma.socialAccount.findMany({ where: { brandId: brand.id }, select: { id: true, platformId: true, handle: true } })
-    const isDirectGoogle = brand.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId
-    const toDelete = dbAccounts.filter((db: any) => {
-      if (db.platformId === 'google' && isDirectGoogle) return false
-      return !postfastHandles.some((pf: any) => pf.platformId.toLowerCase() === db.platformId.toLowerCase() && pf.handle.toLowerCase() === db.handle.toLowerCase())
-    })
-    if (toDelete.length > 0) {
-      await prisma.socialAccount.deleteMany({ where: { id: { in: toDelete.map((a: any) => a.id) } } })
-    }
-
-    syncedAccounts = await prisma.socialAccount.findMany({
-      where: { brandId: brand.id },
-      select: { id: true, platformId: true, handle: true, displayName: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true },
-    })
+  const syncedAccounts = await syncSocialAccountBindings(brand.id, pfResult.accounts)
 
   // 2. Build 7-day operations report
   let operationsReport: any = null

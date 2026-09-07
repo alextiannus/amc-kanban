@@ -109,6 +109,7 @@ export async function POST(request: Request, { params }: Params) {
       // Route to PostFast (supports 15+ platforms)
       const result = await postfastPublish({
         apiKey: brand.postfastApiKey,
+        brandId: brand.id,
         platform,
         caption,
         mediaStorageKeys,

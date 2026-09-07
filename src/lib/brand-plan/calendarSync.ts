@@ -140,7 +140,7 @@ function scheduledAtForDate(date: string) {
 
 async function ensurePlaceholderAccount(tx: Prisma.TransactionClient, brandId: string, platformSlug: string) {
   const existing = await tx.socialAccount.findFirst({
-    where: { brandId, platformId: platformSlug, handle: 'unconfigured' },
+    where: { unboundAt: null, brandId, platformId: platformSlug, handle: 'unconfigured' },
     select: { id: true },
   })
   if (existing) return existing.id

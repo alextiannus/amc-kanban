@@ -1,3 +1,4 @@
+import { syncSocialAccountBindings } from '@/lib/socialAccountBinding'
 import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
@@ -12,18 +13,6 @@ import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } 
 export const maxDuration = 60
 
 type Params = { params: Promise<{ id: string }> }
-
-const GOOGLE_PLATFORM_ALIASES = [
-  'google',
-  'google_business_profile',
-  'googlebusinessprofile',
-  'google_my_business',
-  'googlemybusiness',
-  'google_maps',
-  'googlemaps',
-  'gbp',
-  'gmb',
-]
 
 function maskKey(key: string | null) {
   if (!key) return null
@@ -175,170 +164,20 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // Auto-sync PostFast accounts when API key is present
   // Trigger: a postfastApiKey was just set, or the brand already has one
-  let postfastSync: { synced: number; accounts: string[] } | undefined
+  let postfastSync: { synced: number; accounts: string[]; error?: string } | undefined
   const activeKey = updated.postfastApiKey
-  if (activeKey && (body.postfastApiKey !== undefined || body.postfastApiKey === undefined)) {
+  if (activeKey) {
     try {
       const pfResult = await postfastFetchAccounts(activeKey)
-      if (pfResult.success && pfResult.accounts.length > 0) {
-        // Upsert each PostFast account into SocialAccount table
-        const syncResults = { success: 0, failed: 0, errors: [] as string[] }
-        for (const acc of pfResult.accounts) {
-          try {
-            // Validate required fields
-            if (!acc.platformId || !acc.handle) {
-              syncResults.failed++
-              const reason = `missing ${!acc.platformId ? 'platformId' : 'handle'}`
-              syncResults.errors.push(`${acc.platform}:${acc.id} - ${reason}`)
-              console.warn(`[Settings] Skipping account ${acc.platform}:${acc.id} - ${reason}`)
-              continue
-            }
-            
-            if (acc.platformId === 'google') {
-              const existingGoogle = await prisma.socialAccount.findFirst({
-                where: { brandId: id, platformId: { in: GOOGLE_PLATFORM_ALIASES } },
-                orderBy: { updatedAt: 'desc' },
-                select: { id: true },
-              })
-
-              if (existingGoogle) {
-                await prisma.socialAccount.update({
-                  where: { id: existingGoogle.id },
-                  data: {
-                    platformId: 'google',
-                    handle: acc.handle,
-                    displayName: acc.displayName ?? acc.handle,
-                    profileUrl: acc.profileUrl ?? null,
-                    followerCount: acc.followerCount ?? null,
-                    followerDelta: acc.followerDelta ?? 0,
-                    ratingScore: acc.ratingScore ?? null,
-                    snapshotAt: new Date(),
-                  },
-                })
-              } else {
-                await prisma.socialAccount.create({
-                  data: {
-                    brandId: id,
-                    platformId: 'google',
-                    handle: acc.handle,
-                    displayName: acc.displayName ?? acc.handle,
-                    profileUrl: acc.profileUrl ?? null,
-                    followerCount: acc.followerCount ?? null,
-                    followerDelta: acc.followerDelta ?? 0,
-                    ratingScore: acc.ratingScore ?? null,
-                    snapshotAt: new Date(),
-                  },
-                })
-              }
-            } else {
-                if (acc.profileUrl) {
-                  const existingByProfile = await prisma.socialAccount.findFirst({
-                    where: { brandId: id, platformId: acc.platformId, profileUrl: acc.profileUrl },
-                    select: { id: true },
-                  })
-                  if (existingByProfile) {
-                    await prisma.socialAccount.update({
-                      where: { id: existingByProfile.id },
-                      data: {
-                        handle: acc.handle,
-                        displayName: acc.displayName ?? acc.handle,
-                        followerCount: acc.followerCount ?? null,
-                        followerDelta: acc.followerDelta ?? 0,
-                        ratingScore: acc.ratingScore ?? null,
-                        snapshotAt: new Date(),
-                      },
-                    })
-                    syncResults.success++
-                    console.log(`[Settings] ✓ Synced ${acc.platformId}:${acc.handle}`)
-                    continue
-                  }
-                }
-
-              await prisma.socialAccount.upsert({
-                where: { brandId_platformId_handle: { brandId: id, platformId: acc.platformId, handle: acc.handle } },
-                create: {
-                  brandId: id,
-                  platformId: acc.platformId,
-                  handle: acc.handle,
-                  displayName: acc.displayName ?? acc.handle,
-                  profileUrl: acc.profileUrl ?? null,
-                  followerCount: acc.followerCount ?? null,
-                  followerDelta: acc.followerDelta ?? 0,
-                  ratingScore: acc.ratingScore ?? null,
-                  snapshotAt: new Date(),
-                },
-                update: {
-                  displayName: acc.displayName ?? acc.handle,
-                  profileUrl: acc.profileUrl ?? null,
-                  followerCount: acc.followerCount ?? null,
-                  followerDelta: acc.followerDelta ?? 0,
-                  ratingScore: acc.ratingScore ?? null,
-                  snapshotAt: new Date(),
-                },
-              })
-            }
-            syncResults.success++
-            console.log(`[Settings] ✓ Synced ${acc.platformId}:${acc.handle}`)
-          } catch (e: unknown) {
-            syncResults.failed++
-            const message = e instanceof Error ? e.message : String(e)
-            const errMsg = message.split('\n')[0] ?? message
-            syncResults.errors.push(`${acc.platformId}:${acc.handle} - ${errMsg}`)
-            console.error(`[Settings] ✗ Failed to sync ${acc.platformId}:${acc.handle}:`, errMsg)
-          }
-        }
-
-        // Prune stale accounts: delete any account that is not in the PostFast synced accounts list,
-        // unless it's a direct Google Business Profile account.
-        try {
-          const postfastPlatformHandles = pfResult.accounts.map((acc) => ({
-            platformId: acc.platformId,
-            handle: acc.handle
-          }))
-
-          const dbAccounts: Array<{ id: string; platformId: string; handle: string }> = await prisma.socialAccount.findMany({
-            where: { brandId: id },
-            select: { id: true, platformId: true, handle: true }
-          })
-
-          const brandInfo = await prisma.brand.findUnique({
-            where: { id },
-            select: { googlePreferOAuth: true, googleRefreshToken: true, googleLocationId: true }
-          })
-
-          const isDirectGoogleConfigured = brandInfo?.googlePreferOAuth && brandInfo?.googleRefreshToken && brandInfo?.googleLocationId
-
-          const accountsToDelete = dbAccounts.filter((dbAcc) => {
-            if (dbAcc.platformId === 'google' && isDirectGoogleConfigured) {
-              return false
-            }
-            const isMatched = postfastPlatformHandles.some((pfAcc) =>
-              pfAcc.platformId.toLowerCase() === dbAcc.platformId.toLowerCase() &&
-              pfAcc.handle.toLowerCase() === dbAcc.handle.toLowerCase()
-            )
-            return !isMatched
-          })
-
-          if (accountsToDelete.length > 0) {
-            const idsToDelete = accountsToDelete.map((account) => account.id)
-            await prisma.socialAccount.deleteMany({
-              where: { id: { in: idsToDelete } }
-            })
-            console.log(`[Settings Sync] Deleted ${accountsToDelete.length} stale social accounts for brand ${id}`)
-          }
-        } catch (pruneErr) {
-          console.warn('[Settings] Failed to prune stale social accounts:', pruneErr)
-        }
-
-        postfastSync = {
-          synced: syncResults.success,
-          accounts: pfResult.accounts.map((account) => `${account.platformId}:${account.handle}`),
-        }
-        console.log(`[Settings] PostFast sync complete: ${syncResults.success}/${pfResult.accounts.length} accounts synced for brand ${id}` + (syncResults.errors.length > 0 ? ` (${syncResults.failed} failed: ${syncResults.errors.join('; ')})` : ''))
+      if (!pfResult.success) throw new Error(pfResult.error || 'PostFast account sync failed')
+      if (pfResult.success) {
+        const accounts = await syncSocialAccountBindings(id, pfResult.accounts)
+        postfastSync = { synced: accounts.length, accounts: accounts.map((account: any) => `${account.platformId}:${account.handle}`) }
       } else if (!pfResult.success) {
         console.warn(`[Settings] PostFast account fetch failed: ${pfResult.error}`)
       }
     } catch (e) {
+      postfastSync = { synced: 0, accounts: [], error: e instanceof Error ? e.message : 'PostFast account sync failed' }
       console.warn('[Settings] PostFast sync failed (non-fatal):', e)
     }
   }

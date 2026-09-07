@@ -559,6 +559,8 @@ model SocialAccount {
   refreshToken String?
   expiresAt    DateTime?
   autoPilot    Boolean   @default(true)
+  unboundAt    DateTime?
+  postfastAccountId String?
 
   // Login credentials (loginPassword: admin-visible only in API responses)
   profileUrl    String? // public profile URL e.g. https://instagram.com/handle
@@ -578,6 +580,7 @@ model SocialAccount {
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, platformId, handle])
+  @@unique([brandId, postfastAccountId])
   @@index([brandId])
 }
 

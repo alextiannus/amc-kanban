@@ -69,7 +69,7 @@ export async function POST(request: Request) {
   let accountId: string | undefined = explicitAccountId || undefined
   if (!accountId && platformHint) {
     const found = await prisma.socialAccount.findFirst({
-      where: { brandId, platformId: { equals: platformHint, mode: 'insensitive' } },
+      where: { unboundAt: null, brandId, platformId: { equals: platformHint, mode: 'insensitive' } },
       select: { id: true },
     })
     if (found) accountId = found.id
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     }
 
     const draftAccount = await prisma.socialAccount.findFirst({
-      where: { id: accountId, brandId },
+      where: { unboundAt: null, id: accountId, brandId },
       select: { platformId: true },
     })
     if (!draftAccount) {
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
         }),
         accountId
           ? prisma.socialAccount.findFirst({
-              where: { id: accountId, brandId },
+              where: { unboundAt: null, id: accountId, brandId },
               select: { platformId: true, handle: true },
             })
           : Promise.resolve(null),
@@ -196,6 +196,7 @@ export async function POST(request: Request) {
 
         const publish = await postfastPublish({
           apiKey: brand.postfastApiKey,
+          brandId: brand.id,
           platform: platformName,
           caption: draft.caption,
           mediaItems,

@@ -23,7 +23,7 @@ export async function GET(_request: Request, { params }: Params) {
   const [brand, account] = await Promise.all([
     prisma.brand.findUnique({ where: { id: brandId }, select: { postfastApiKey: true } }),
     prisma.socialAccount.findFirst({
-      where: { id: accountId, brandId },
+      where: { unboundAt: null, id: accountId, brandId },
       select: { id: true, platformId: true, handle: true },
     }),
   ])

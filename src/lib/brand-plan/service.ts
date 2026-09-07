@@ -257,7 +257,7 @@ export async function loadBrandPlanBrand(brandId: string) {
         orderBy: { createdAt: 'desc' },
         take: 1,
       },
-      accounts: {
+      accounts: { where: { unboundAt: null },
         select: {
           id: true,
           platformId: true,

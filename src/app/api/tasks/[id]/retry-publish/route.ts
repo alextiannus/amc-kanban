@@ -129,6 +129,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // Attempt publish
   const publish = await postfastPublish({
     apiKey: brand.postfastApiKey,
+    brandId: brand.id,
     platform: platformName,
     accountId: draft.accountId || undefined,
     gbpLocationId: draft.gbpLocationId || undefined,

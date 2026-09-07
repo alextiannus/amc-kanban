@@ -132,7 +132,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (nextAutoPilot !== undefined) {
       await tx.socialAccount.updateMany({
-        where: { brandId: id },
+        where: { unboundAt: null, brandId: id },
         data: { autoPilot: nextAutoPilot },
       })
     }

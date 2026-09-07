@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { bindingTestDb } from './helpers/social-account-test-db.mts'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 const PORT = 4017
@@ -279,6 +280,14 @@ async function startMockPostFast() {
 
 async function main() {
   process.env.POSTFAST_BASE_URL = BASE_URL
+  const db = bindingTestDb()
+  db.reset({ brands: [{ id: 'brand', postfastApiKey: API_KEY }], drafts: [], audit: [], accounts: [
+    { id: 'local-instagram', postfastAccountId: 'pf_acc_instagram', platformId: 'instagram', handle: 'amc_store' },
+    { id: 'local-facebook', postfastAccountId: 'pf_acc_facebook', platformId: 'facebook', handle: 'amc_store_fb' },
+    { id: 'local-tiktok', postfastAccountId: 'pf_acc_video', platformId: 'tiktok', handle: '@video_store' },
+    { id: 'local-google', postfastAccountId: 'pf_acc_google', platformId: 'google', handle: 'amc_maps' },
+  ].map(account => ({ ...account, brandId: 'brand', unboundAt: null })) })
+  ;(globalThis as any).prisma = db.db
   const postfast = await import('../src/lib/integrations/postfast.ts')
   const publishMedia = await import('../src/lib/publishMedia.ts')
   const server = await startMockPostFast()
@@ -527,6 +536,15 @@ async function main() {
     })
     assert.equal(googlePublish.success, true)
     assert.equal(googlePublish.postId, 'pf_post_google_001')
+
+    const beforeUnboundPublish = seen.filter(r => r.method === 'POST' && r.url === '/social-posts').length
+    db.state().accounts.find((a: any) => a.id === 'local-google').unboundAt = new Date()
+    const unboundPublish = await postfast.postfastPublish({ apiKey: API_KEY, platform: 'google', accountId: 'pf_acc_google', caption: 'Must not publish', gbpLocationId: 'gbp_location_001' })
+    assert.equal(unboundPublish.code, 'ACCOUNT_UNBOUND')
+    const invalidSelection = await postfast.postfastPublish({ apiKey: API_KEY, platform: 'google', accountId: 'missing-account', caption: 'Must not fall back', gbpLocationId: 'gbp_location_001' })
+    assert.equal(invalidSelection.success, false)
+    assert.equal(seen.filter(r => r.method === 'POST' && r.url === '/social-posts').length, beforeUnboundPublish)
+    db.state().accounts.find((a: any) => a.id === 'local-google').unboundAt = null
 
     const missingGoogleLocation = await postfast.postfastPublish({
       apiKey: API_KEY,

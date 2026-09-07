@@ -1,3 +1,4 @@
+import { withBoundAccount, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { prisma } from '@/lib/prisma'
 import { isDirectPublishingEnabled } from '@/lib/systemConfig'
 import { publishGbpLocalPost, deleteGbpLocalPost } from './googleBusiness'
@@ -12,60 +13,63 @@ export async function directPublish(input: PostFastPublishInput): Promise<PostFa
     return { success: false, error: 'Direct publishing requires a specific accountId' }
   }
 
-  // Find the SocialAccount in the DB to fetch direct OAuth credentials
-  const account = await prisma.socialAccount.findUnique({
-    where: { id: accountId }
-  })
+  try {
+    return await withBoundAccount(accountId, async (account) => {
+      if (input.brandId && account.brandId !== input.brandId) throw new SocialAccountBindingError('账号不属于当前品牌。')
 
-  if (!account || !account.accessToken) {
-    return { 
-      success: false, 
-      error: `Direct publishing failed: No authorized SocialAccount credentials found in database for ID ${accountId}` 
-    }
-  }
+      if (!account || !account.accessToken) {
+        return {
+          success: false,
+          error: `Direct publishing failed: No authorized SocialAccount credentials found in database for ID ${accountId}`
+        }
+      }
 
-  const normPlatform = platform.toLowerCase().trim()
+      const normPlatform = platform.toLowerCase().trim()
 
-  if (normPlatform === 'google' || normPlatform === 'gbp' || normPlatform === 'gmb') {
-    // Google Business locationName is typically stored in the handle field
-    return publishGbpLocalPost({
-      accessToken: account.accessToken,
-      locationName: account.handle,
-      content: caption,
-      mediaUrls,
+      if (normPlatform === 'google' || normPlatform === 'gbp' || normPlatform === 'gmb') {
+        // Google Business locationName is typically stored in the handle field
+        return publishGbpLocalPost({
+          accessToken: account.accessToken,
+          locationName: account.handle,
+          content: caption,
+          mediaUrls,
+        })
+      }
+
+      if (normPlatform === 'facebook') {
+        // Facebook Page ID is stored in the handle field
+        return publishFacebookPost({
+          accessToken: account.accessToken,
+          pageId: account.handle,
+          content: caption,
+          mediaUrls,
+        })
+      }
+
+      if (normPlatform === 'instagram') {
+        // Instagram Business ID is stored in the handle field
+        return publishInstagramPost({
+          accessToken: account.accessToken,
+          instagramBusinessId: account.handle,
+          content: caption,
+          mediaUrl: mediaUrls[0] || '',
+          isVideo: mediaUrls[0]?.toLowerCase().endsWith('.mp4') || mediaUrls[0]?.includes('.mp4?'),
+        })
+      }
+
+      if (normPlatform === 'tiktok') {
+        return publishTiktokVideo({
+          accessToken: account.accessToken,
+          title: caption,
+          mediaUrl: mediaUrls[0] || '',
+        })
+      }
+
+      return { success: false, error: `Platform ${platform} is not yet supported in Direct API mode` }
     })
+  } catch (error) {
+    return { success: false, code: error instanceof SocialAccountBindingError ? error.code : 'ACCOUNT_BINDING_UNAVAILABLE', error: error instanceof Error ? error.message : '无法确认账号绑定状态。' }
   }
-
-  if (normPlatform === 'facebook') {
-    // Facebook Page ID is stored in the handle field
-    return publishFacebookPost({
-      accessToken: account.accessToken,
-      pageId: account.handle,
-      content: caption,
-      mediaUrls,
-    })
-  }
-
-  if (normPlatform === 'instagram') {
-    // Instagram Business ID is stored in the handle field
-    return publishInstagramPost({
-      accessToken: account.accessToken,
-      instagramBusinessId: account.handle,
-      content: caption,
-      mediaUrl: mediaUrls[0] || '',
-      isVideo: mediaUrls[0]?.toLowerCase().endsWith('.mp4') || mediaUrls[0]?.includes('.mp4?'),
-    })
-  }
-
-  if (normPlatform === 'tiktok') {
-    return publishTiktokVideo({
-      accessToken: account.accessToken,
-      title: caption,
-      mediaUrl: mediaUrls[0] || '',
-    })
-  }
-
-  return { success: false, error: `Platform ${platform} is not yet supported in Direct API mode` }
 }
 
 export async function publishPost(input: PostFastPublishInput): Promise<PostFastPublishResult> {

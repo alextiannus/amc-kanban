@@ -27,7 +27,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const brand = await prisma.brand.findFirst({
     where: { id },
     include: {
-      accounts: {
+      accounts: { where: { unboundAt: null },
         orderBy: { updatedAt: 'desc' },
         select: {
           id: true, platformId: true, handle: true, displayName: true,
@@ -169,7 +169,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (autoPilot !== undefined) {
     await prisma.socialAccount.updateMany({
-      where: { brandId: id },
+      where: { unboundAt: null, brandId: id },
       data: { autoPilot },
     })
   }

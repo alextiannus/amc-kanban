@@ -203,7 +203,7 @@ export async function publisherNode(state: any) {
   // 2. Fetch a real social account record for logging/publishing.
   // Missing accounts should remain explicit; do not create mock accounts.
   let socialAccount = await prisma.socialAccount.findFirst({
-    where: {
+    where: { unboundAt: null,
       brandId,
       platformId: dbPlatformId
     }
@@ -306,6 +306,7 @@ export async function publisherNode(state: any) {
 
       const publishRes = await postfastPublish({
         apiKey: brand.postfastApiKey,
+        brandId: brand.id,
         platform,
         caption,
         ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),

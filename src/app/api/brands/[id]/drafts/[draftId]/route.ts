@@ -190,7 +190,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (accountIdVal.startsWith('unconfigured_')) {
       const platformId = accountIdVal.replace('unconfigured_', '')
       let placeholderAccount = await prisma.socialAccount.findFirst({
-        where: { brandId, platformId, handle: 'unconfigured' }
+        where: { unboundAt: null, brandId, platformId, handle: 'unconfigured' }
       })
       if (!placeholderAccount) {
         const getDisplayName = (pId: string) => {
@@ -221,7 +221,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const nextAccountId = typeof body.accountId === 'string' ? body.accountId : existing.accountId
   const nextAccount = nextAccountId
     ? await prisma.socialAccount.findFirst({
-        where: { id: nextAccountId, brandId },
+        where: { unboundAt: null, id: nextAccountId, brandId },
         select: { platformId: true },
       })
     : null

@@ -1,3 +1,4 @@
+import { SocialAccountBindingError, providerForLocal } from '../socialAccountIdentity.ts'
 /**
  * PostFast Integration — Complete API wrapper
  * Covers: accounts, posts (CRUD + schedule), media upload, connect links, review replies.
@@ -229,6 +230,7 @@ export interface PostFastPublishInput {
   mediaUrls?: string[]          // public URLs (fallback)
   hashtags?: string[]
   scheduledAt?: string          // ISO 8601 UTC
+  brandId?: string              // scope provider IDs to their AMC brand
   accountId?: string            // specific account ID to post from
   gbpLocationId?: string         // required by PostFast for Google Business Profile posts
 }
@@ -279,6 +281,7 @@ export async function postfastFetchAccounts(apiKey: string, timeoutMs = 15_000):
 }> {
   const r = await pfFetch(apiKey, '/social-media/my-social-accounts', {}, timeoutMs)
   if (!r.ok) return { success: false, accounts: [], error: r.error }
+  if (!Array.isArray(r.data)) return { success: false, accounts: [], error: 'Invalid PostFast account list response.' }
 
   const raw: JsonRecord[] = Array.isArray(r.data) ? (r.data as JsonRecord[]) : []
   const accounts: PostFastAccount[] = raw.map(a => {
@@ -347,8 +350,7 @@ export async function postfastGetGBPLocations(apiKey: string, accountId: string,
 
 /**
  * Resolve an internal SocialAccount ID to the matching PostFast Google account,
- * then return its GBP locations. A platform-only fallback is allowed only when
- * the PostFast workspace contains exactly one Google account.
+ * then return its GBP locations. An explicit selection never falls back to another account.
  */
 export async function postfastGetGBPLocationsForInternalAccount(
   apiKey: string,
@@ -365,42 +367,13 @@ export async function postfastGetGBPLocationsForInternalAccount(
     return { success: false, locations: [], error: accountsResult.error || 'Unable to load PostFast accounts.' }
   }
 
-  let matchedAccount = accountsResult.accounts.find((account) => account.id === internalAccountId)
-  if (!matchedAccount) {
-    try {
-      const { prisma } = await import('@/lib/prisma')
-      const dbAccount = await prisma.socialAccount.findUnique({
-        where: { id: internalAccountId },
-        select: { platformId: true, handle: true },
-      })
-      if (!dbAccount || normalizePlatform(dbAccount.platformId) !== 'google') {
-        return { success: false, locations: [], error: 'The selected social account is not a Google Business account.' }
-      }
-      const targetHandle = normalizeHandle(dbAccount.handle)
-      matchedAccount = accountsResult.accounts.find((account) =>
-        normalizePlatform(account.platformId) === 'google' &&
-        targetHandle &&
-        normalizeHandle(account.handle) === targetHandle
-      )
-    } catch (error: unknown) {
-      return {
-        success: false,
-        locations: [],
-        error: error instanceof Error ? error.message : String(error),
-      }
-    }
-  }
-
-  if (!matchedAccount) {
-    const googleAccounts = accountsResult.accounts.filter((account) => normalizePlatform(account.platformId) === 'google')
-    if (googleAccounts.length === 1) matchedAccount = googleAccounts[0]
-    else if (googleAccounts.length > 1) {
-      return { success: false, locations: [], error: 'Multiple Google Business accounts are connected and the selected account could not be matched.' }
-    }
-  }
-
-  if (!matchedAccount || normalizePlatform(matchedAccount.platformId) !== 'google') {
-    return { success: false, locations: [], error: 'No matching Google Business account was found in PostFast.' }
+  let matchedAccount: PostFastAccount
+  try {
+    const { resolveLocalPublishAccount } = await import('../socialAccountBinding.ts')
+    const binding = await resolveLocalPublishAccount({ apiKey, accountId: internalAccountId, platform: 'google' }, accountsResult.accounts)
+    matchedAccount = binding.remote
+  } catch (error) {
+    return { success: false, locations: [], error: error instanceof Error ? error.message : '无法确认 Google 账号绑定。' }
   }
 
   const locationsResult = await postfastGetGBPLocations(apiKey, matchedAccount.id, timeoutMs)
@@ -454,6 +427,7 @@ export async function postfastListPosts(apiKey: string, options?: {
   platform?: string
   limit?: number
   page?: number
+  timeoutMs?: number
 }): Promise<{ success: boolean; posts: PostFastPost[]; total?: number; hasNextPage?: boolean; error?: string }> {
   const params = new URLSearchParams()
   if (options?.status) params.set('statuses', options.status.toUpperCase())  // API expects uppercase
@@ -461,10 +435,13 @@ export async function postfastListPosts(apiKey: string, options?: {
   if (options?.limit) params.set('limit', String(Math.min(options.limit, 50)))  // max 50 per request
   if (options?.page != null) params.set('page', String(options.page))
 
-  const r = await pfFetch(apiKey, `/social-posts?${params}`)
+  const r = await pfFetch(apiKey, `/social-posts?${params}`, {}, options?.timeoutMs)
   if (!r.ok) return { success: false, posts: [], error: r.error }
 
   const dataObj = asObject(r.data)
+  if (!Array.isArray(r.data) && !Array.isArray(dataObj.data) && !Array.isArray(dataObj.posts)) {
+    return { success: false, posts: [], error: 'Invalid PostFast post list response.' }
+  }
   const rawPosts: JsonRecord[] = Array.isArray(r.data)
     ? r.data as JsonRecord[]
     : (Array.isArray(dataObj.data) ? dataObj.data as JsonRecord[] : (Array.isArray(dataObj.posts) ? dataObj.posts as JsonRecord[] : []))
@@ -1150,48 +1127,15 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
     return { success: false, error: `无法获取 PostFast 账号列表: ${fetchError}` }
   }
 
-  let matchedAccount: PostFastAccount | undefined
-  let dbAccountForPublish: { platformId: string; handle: string | null } | null = null
-
-  if (input.accountId) {
-    // Try matching PostFast account ID directly
-    matchedAccount = accounts.find(a => a.id === input.accountId)
-
-    // If not found, look up internal SocialAccount CUID in DB
-    if (!matchedAccount) {
-      try {
-        const { prisma } = await import('@/lib/prisma')
-        const dbAccount = await prisma.socialAccount.findUnique({
-          where: { id: input.accountId },
-          select: { platformId: true, handle: true },
-        })
-        if (dbAccount) {
-          dbAccountForPublish = dbAccount
-          const targetPlatformId = normalizePlatform(dbAccount.platformId)
-          const targetHandle = normalizeHandle(dbAccount.handle)
-          matchedAccount = accounts.find(a =>
-            normalizePlatform(a.platformId) === targetPlatformId &&
-            normalizeHandle(a.handle) === targetHandle
-          )
-        }
-      } catch (e: unknown) {
-        console.error('Failed to look up social account in database:', e)
-      }
-    }
+  const { resolveLocalPublishAccount, withBoundAccount } = await import('../socialAccountBinding.ts')
+  let binding: Awaited<ReturnType<typeof resolveLocalPublishAccount>>
+  try {
+    binding = await resolveLocalPublishAccount(input, accounts)
+  } catch (error) {
+    return { success: false, code: error instanceof SocialAccountBindingError ? error.code : 'ACCOUNT_BINDING_UNAVAILABLE', error: error instanceof Error ? error.message : '无法确认账号绑定状态。' }
   }
-
-  // Fallback: match by platform name
-  if (!matchedAccount) {
-    const targetPlatformId = normalizePlatform(input.platform)
-    matchedAccount = accounts.find(a => a.platformId.toLowerCase() === targetPlatformId.toLowerCase())
-  }
-
-  if (!matchedAccount) {
-    return {
-      success: false,
-      error: `发布失败：未在 PostFast 中找到匹配 ${input.platform} 的社交账号，请先连接账号。`,
-    }
-  }
+  const matchedAccount = binding.remote
+  const dbAccountForPublish = binding.local
 
   const socialMediaId = matchedAccount.id
   const isGoogleBusinessPost = normalizePlatform(input.platform) === 'google' || normalizePlatform(matchedAccount.platformId) === 'google'
@@ -1372,10 +1316,18 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   })
   console.log(`[postfastPublish] REQUEST body: ${body}`)
 
-  const r = await pfFetch(input.apiKey, '/social-posts', {
-    method: 'POST',
-    body,
-  }, remainingTimeout(publishDeadlineAt, 6_000))
+  let r: Awaited<ReturnType<typeof pfFetch>>
+  try {
+    r = await withBoundAccount(binding.local.id, async (current) => {
+      // Recheck under the same lock used by unbind, after potentially slow uploads.
+      if (providerForLocal(current, accounts)?.id !== socialMediaId) throw new SocialAccountBindingError('账号绑定已变化，请刷新后重试。')
+      return pfFetch(input.apiKey, '/social-posts', {
+        method: 'POST', body,
+      }, remainingTimeout(publishDeadlineAt, 6_000))
+    })
+  } catch (error) {
+    return { success: false, code: error instanceof SocialAccountBindingError ? error.code : 'ACCOUNT_BINDING_UNAVAILABLE', error: error instanceof Error ? error.message : '无法确认账号绑定状态。' }
+  }
   console.log(`[postfastPublish] RESPONSE ok=${r.ok} status=${r.status} data=${JSON.stringify(r.data).slice(0, 300)}`)
   if (!r.ok) {
     if (r.status === 0) {

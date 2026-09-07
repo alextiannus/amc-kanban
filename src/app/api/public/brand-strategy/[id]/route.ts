@@ -100,7 +100,7 @@ export async function GET(_request: Request, { params }: Params) {
       where: { id, status: { not: 'ARCHIVED' } },
       include: {
         knowledge: true,
-        accounts: {
+        accounts: { where: { unboundAt: null },
           select: {
             platformId: true,
             handle: true,

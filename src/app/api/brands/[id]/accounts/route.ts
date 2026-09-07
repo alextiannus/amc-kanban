@@ -1,3 +1,4 @@
+import { saveSocialAccount, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -21,6 +22,7 @@ export async function GET(_request: Request, { params }: Params) {
   const accounts = await prisma.socialAccount.findMany({
     where: {
       brandId,
+      unboundAt: null,
       NOT: { handle: 'unconfigured' }
     },
     orderBy: { createdAt: 'asc' },
@@ -57,17 +59,19 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'platformId and handle required' }, { status: 400 })
   }
 
-  const account = await prisma.socialAccount.create({
-    data: {
-      brandId,
-      platformId,
-      handle: handle.trim(),
+  let account
+  try {
+    account = await saveSocialAccount(brandId, {
+      platformId, handle: handle.trim(),
       displayName: displayName?.trim() || null,
       profileUrl: profileUrl?.trim() || null,
       loginUsername: loginUsername?.trim() || null,
       loginPassword: loginPassword || null,
-    },
-  })
+    }, true, session.user.id)
+  } catch (error) {
+    if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    throw error
+  }
 
   const isAdmin = session.user.role === 'ADMIN'
   return NextResponse.json({

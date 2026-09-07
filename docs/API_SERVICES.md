@@ -10,6 +10,8 @@
 
 Agent 视角的连接与工作流手册见：[AGENT_CONNECTIVITY.md](AGENT_CONNECTIVITY.md)。
 
+品牌账号的单独解绑、排期阻塞与显式重绑契约见：[社交账号单独解绑](social-account-unbinding.md)。该操作保留第三方授权和历史记录，与旧的账号 DELETE 接口分开。
+
 设计原则：
 
 1. Dify-first：复杂工作流与知识库管理优先由 Dify 承载。
@@ -556,7 +558,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **229** 个 API 路径、**325** 个 HTTP 方法组合。
+共 **232** 个 API 路径、**329** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -619,6 +621,7 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/accounts` |
 | DELETE, PATCH | `/api/brands/{id}/accounts/{aid}` |
 | GET | `/api/brands/{id}/accounts/{aid}/gbp-locations` |
+| POST | `/api/brands/{id}/accounts/{aid}/unbind` |
 | GET | `/api/brands/{id}/actions` |
 | PATCH | `/api/brands/{id}/actions/{aid}/approve` |
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
@@ -670,7 +673,6 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/posts` |
 | GET, POST | `/api/brands/{id}/posts/publish` |
 | GET, PATCH | `/api/brands/{id}/profile` |
-| GET, POST | `/api/brands/{id}/promotion-execution` |
 | GET, POST | `/api/brands/{id}/promotion-strategy` |
 | GET | `/api/brands/{id}/research-report` |
 | GET, POST | `/api/brands/{id}/reviews` |
@@ -686,6 +688,9 @@ Permanent QR contract:
 | DELETE, GET, PATCH | `/api/brands/{id}/topics/{topicId}` |
 | GET | `/api/brands/{id}/usage-report` |
 | POST | `/api/brands/{id}/video-director` |
+| GET, POST | `/api/brands/{id}/voices` |
+| DELETE, PATCH | `/api/brands/{id}/voices/{voiceProfileId}` |
+| POST | `/api/brands/{id}/voices/{voiceProfileId}/preview` |
 | GET | `/api/client-config` |
 | POST | `/api/content/copy-scripts/recommend` |
 | POST | `/api/content/generate` |

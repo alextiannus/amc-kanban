@@ -1,3 +1,4 @@
+import { withBoundAccount, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { prisma } from '@/lib/prisma'
 import {
   postfastDeletePost,
@@ -99,12 +100,13 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   const draft = await prisma.contentDraft.findFirst({
     where: { id: input.draftId, brandId: input.brandId },
     include: {
-      account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+      account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true } },
       assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
       coverAsset: true,
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
+  if (draft.account?.unboundAt) return { ok: false as const, status: 409, code: 'ACCOUNT_UNBOUND', error: '该账号已解除绑定，请先选择有效的绑定账号。' }
   const immediatePublish = !!(input.immediatePublish || input.note === '立即发布')
 
   if (draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN && !input.confirmedUnknownResult) {
@@ -277,7 +279,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         where: { id: draft.id },
         data: { status: 'pending_review', rejectionNote: null },
         include: {
-          account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+          account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true } },
           assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
           coverAsset: true,
         },
@@ -342,7 +344,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         rejectionNote: null,
       },
       include: {
-        account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+        account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true } },
         assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
         coverAsset: true,
       },
@@ -449,6 +451,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         warnings: validationWarnings,
       })
     } catch (error: unknown) {
+      if (error instanceof SocialAccountBindingError) return { ok: false as const, status: error.status, code: error.code, error: error.message }
       if (error instanceof Error && error.message.includes('already publishing')) {
         return { ok: false as const, status: 409, error: '发布正在进行中，请稍候再试。' }
       }
@@ -457,7 +460,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     const queuedDraft = await prisma.contentDraft.findUniqueOrThrow({
       where: { id: draft.id },
       include: {
-        account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+        account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true } },
         assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
         coverAsset: true,
       },
@@ -477,18 +480,24 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   if (needsPublishingLock) {
-    const lockResult = await prisma.contentDraft.updateMany({
-      where: {
-        id: input.draftId,
-        brandId: input.brandId,
-        status: { not: 'publishing' },
-      },
-      data: {
-        status: 'publishing',
-        deliveryFailureCode: null,
-        deliveryFailureAt: null,
-      },
-    })
+    let lockResult: { count: number }
+    try {
+      lockResult = await withBoundAccount(draft.accountId!, async (_account, tx) => tx.contentDraft.updateMany({
+        where: {
+          id: input.draftId,
+          brandId: input.brandId,
+          status: { not: 'publishing' },
+        },
+        data: {
+          status: 'publishing',
+          deliveryFailureCode: null,
+          deliveryFailureAt: null,
+        },
+      }))
+    } catch (error) {
+      if (error instanceof SocialAccountBindingError) return { ok: false as const, status: error.status, code: error.code, error: error.message }
+      throw error
+    }
     if (lockResult.count === 0) {
       const activeJob = await findActivePostfastDeliveryJob(input.draftId)
       if (activeJob) {
@@ -510,6 +519,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   console.log(`[submitDraftForDelivery] Calling postfastPublish — platform: ${platformId}, scheduledAt: ${resolvedScheduledAt?.toISOString() ?? 'undefined (immediate)'}, immediatePublish: ${input.immediatePublish}, draftId: ${draft.id}`)
   const result = await postfastPublish({
     apiKey: brand.postfastApiKey,
+    brandId: brand.id,
     platform: platformId,
     accountId: draft.accountId || undefined,
     gbpLocationId: draft.gbpLocationId || undefined,
@@ -554,7 +564,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           agentNote: `发布失败：${result.error || 'unknown error'}`,
         },
     include: {
-      account: { select: { id: true, platformId: true, handle: true, displayName: true } },
+      account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true } },
       assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
       coverAsset: true,
     },
