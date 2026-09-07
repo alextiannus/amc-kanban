@@ -2,10 +2,39 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { buildPostfastPlanningFeedback } from '@/lib/postfastPlanningFeedback'
 
 type Params = { params: Promise<{ id: string }> }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+function emptyPostfastFeedback(windowDays: number) {
+  return {
+    generatedAt: new Date().toISOString(),
+    windowDays,
+    syncedAt: null,
+    followerMovement: [],
+    bestPerformingPosts: [],
+    failedOrUnknownPublishes: [],
+    unresolvedComments: 0,
+    unresolvedCommentThreads: [],
+    accountHealthIssues: [],
+    dashboard: {
+      needsThisWeek: [],
+      reconnectAccountCount: 0,
+      unresolvedCommentCount: 0,
+      thisMonthPublished: 0,
+      thisMonthScheduled: 0,
+    },
+    contentSignals: {
+      recentTopPostThemes: [],
+      weakPlatformSignals: [],
+      promptHints: [],
+    },
+    operationsReport: {},
+    accountsFromSnapshot: [],
+  }
+}
 
 function parseDateParam(value: string | null, fallback: Date, endOfDay = false) {
   if (!value) return fallback
@@ -153,6 +182,37 @@ function buildMarkdown(report: any) {
   lines.push(`| Workflow tasks completed | ${report.metrics.workflowTasksCompleted} |`)
   lines.push(`| User / AI activity log entries | ${report.metrics.activityLogEntries} |`)
   lines.push('')
+  lines.push(`## PostFast Feedback`)
+  lines.push('')
+  lines.push(`| Item | Value |`)
+  lines.push(`| --- | --- |`)
+  lines.push(`| Unresolved comments | ${report.postfastFeedback.unresolvedComments} |`)
+  lines.push(`| Account health issues | ${report.postfastFeedback.accountHealthIssues.length} |`)
+  lines.push(`| Failed / unknown publishes | ${report.postfastFeedback.failedOrUnknownPublishes.length} |`)
+  lines.push(`| This month published / scheduled | ${report.postfastFeedback.dashboard.thisMonthPublished} / ${report.postfastFeedback.dashboard.thisMonthScheduled} |`)
+  lines.push('')
+  lines.push(`### Follower Movement`)
+  lines.push('')
+  lines.push(`| Platform | Handle | Followers | Delta |`)
+  lines.push(`| --- | --- | ---: | ---: |`)
+  for (const item of report.postfastFeedback.followerMovement) {
+    lines.push(`| ${item.platform} | ${item.handle || '-'} | ${item.followerCount ?? '-'} | ${item.followerDelta ?? '-'} |`)
+  }
+  if (report.postfastFeedback.followerMovement.length === 0) {
+    lines.push(`| - | - | - | - |`)
+  }
+  lines.push('')
+  lines.push(`### Best Performing Posts`)
+  lines.push('')
+  lines.push(`| Platform | Theme | Interactions | Impressions | Link |`)
+  lines.push(`| --- | --- | ---: | ---: | --- |`)
+  for (const item of report.postfastFeedback.bestPerformingPosts) {
+    lines.push(`| ${item.platform} | ${String(item.theme || '-').replace(/\|/g, '/')} | ${item.interactions ?? 0} | ${item.impressions ?? 0} | ${item.postUrl || '-'} |`)
+  }
+  if (report.postfastFeedback.bestPerformingPosts.length === 0) {
+    lines.push(`| - | - | - | - | - |`)
+  }
+  lines.push('')
   lines.push(`## Content Activity Log`)
   lines.push('')
   lines.push(`| Date | Platform | Status | Content Summary | Hashtags |`)
@@ -288,6 +348,11 @@ export async function GET(req: Request, { params }: Params) {
     : []
 
   const subscription = brand.subscriptions[0]
+  const feedbackWindowDays = Math.max(7, Math.ceil((to.getTime() - from.getTime()) / DAY_MS))
+  const postfastFeedback = await buildPostfastPlanningFeedback(brandId, feedbackWindowDays).catch((error) => {
+    console.warn('[usage-report] PostFast feedback unavailable:', error instanceof Error ? error.message : error)
+    return emptyPostfastFeedback(feedbackWindowDays)
+  })
   const contentApprovedOrScheduled = drafts.filter((draft: any) =>
     ['approved', 'scheduled', 'publishing', 'published', 'done'].includes(String(draft.status).toLowerCase())
   ).length
@@ -349,6 +414,7 @@ export async function GET(req: Request, { params }: Params) {
       workflowTasksCompleted: completedWorkUnits.length,
       activityLogEntries: auditLogs.length,
     },
+    postfastFeedback,
     contentActivity,
     activityLog,
   }

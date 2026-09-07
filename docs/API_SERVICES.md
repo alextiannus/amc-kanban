@@ -184,6 +184,20 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 - 老板审批模式下的草稿审批。
 - 评论回复建议确认。
 - 人类输入请求。
+- PostFast Social Inbox 的评论回复、Instagram 私信回复与评论审核确认。
+
+## 3.7.1 PostFast Operations Service
+
+职责：同步账号连接健康度、粉丝历史、社媒评论会话和平台分析指标，并在已有 ActionItem 流程中执行人工确认的互动操作。
+
+接口：
+
+- `POST /api/integrations/postfast` actions: `list_accounts`、`list_posts`、`get_gbp_locations`、`search_places`、`get_follower_history`、`get_tiktok_sounds`、`list_inbox_conversations`、`get_inbox_items`
+- `POST /api/brands/:id/social-inbox/:conversationId/reply`
+- `POST /api/brands/:id/social-inbox/:conversationId/private-reply`
+- `POST /api/brands/:id/social-inbox/:conversationId/state`
+
+规则：所有写操作要求品牌写权限、PostFast 服务端能力字段和稳定幂等键；路径中的 `conversationId` 必须是当前品牌已同步的 PostFast 会话 ID，所有写入请求体还必须提供属于该会话的 `itemId`。`reply` 与 `private-reply` 还要求非空 `text` 和 `confirmed: true`；`state` 要求 `state`、`confirmed: true`，且 `state: DELETE` 时额外要求 `confirmDelete: true`。幂等键可通过 `Idempotency-Key` 请求头或 `idempotencyKey` 请求体字段提供。删除评论要求显式二次确认。Cron 同步只创建或刷新运营数据与 ActionItem，不自动执行外部互动。
 
 ## 3.8 Draft Service
 
@@ -558,7 +572,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **232** 个 API 路径、**329** 个 HTTP 方法组合。
+共 **237** 个 API 路径、**334** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -679,6 +693,11 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/scheduling/recommend` |
 | GET, PATCH | `/api/brands/{id}/settings` |
 | GET, PATCH | `/api/brands/{id}/sku-library` |
+| GET | `/api/brands/{id}/social-inbox` |
+| GET | `/api/brands/{id}/social-inbox/{conversationId}` |
+| POST | `/api/brands/{id}/social-inbox/{conversationId}/private-reply` |
+| POST | `/api/brands/{id}/social-inbox/{conversationId}/reply` |
+| POST | `/api/brands/{id}/social-inbox/{conversationId}/state` |
 | GET | `/api/brands/{id}/social-insight` |
 | GET, PATCH, POST | `/api/brands/{id}/subscription` |
 | POST | `/api/brands/{id}/subscription/confirm` |

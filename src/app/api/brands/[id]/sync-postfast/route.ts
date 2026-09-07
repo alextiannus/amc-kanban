@@ -4,6 +4,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
 import { syncBrand, syncViralCopyExperimentOutcomes } from '@/app/api/cron/postfast-sync-all/route'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
+import { buildPostfastPlanningFeedback } from '@/lib/postfastPlanningFeedback'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -51,13 +52,18 @@ export async function POST(request: Request, { params }: Params) {
 
     // 2. Perform PostFast sync (social accounts + operations report + analytics)
     const { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt } = await syncBrand(brand)
+    const baseSnapshot = { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt }
+    const planningFeedback = await buildPostfastPlanningFeedback(brand.id, 30, baseSnapshot).catch((feedbackErr) => {
+      console.warn('[sync-postfast] Planning feedback build failed (non-fatal):', feedbackErr)
+      return null
+    })
     const syncedAt = new Date()
 
     // 3. Update brand in database with the synced snapshot
     const updatedBrand = await prisma.brand.update({
       where: { id: brand.id },
       data: {
-        postfastSnapshot: { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt },
+        postfastSnapshot: planningFeedback ? { ...baseSnapshot, planningFeedback } : baseSnapshot,
         postfastSyncedAt: syncedAt,
       },
     })
@@ -81,6 +87,7 @@ export async function POST(request: Request, { params }: Params) {
       analyticsPostCount: analyticsPosts.length,
       draftStatusSync,
       experimentOutcomes,
+      planningFeedback,
     })
 
   } catch (error: any) {

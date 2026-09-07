@@ -6,7 +6,7 @@ export function bindingTestDb() {
   function matches(row: any, where: any): boolean {
     return Object.entries(where || {}).every(([key, value]: [string, any]) => {
       if (key === 'OR') return value.some((v: any) => matches(row, v))
-      if (key === 'drafts' || key === 'actionItems' || key === 'snapshots') return !(row[key]?.length)
+      if (key === 'drafts' || key === 'actionItems' || key === 'snapshots' || key === 'inboxConversations') return !(row[key]?.length)
       if (key === 'postfastDeliveryJobs') return row.jobs?.some((j: any) => matches(j, value.some)) || false
       if (value && typeof value === 'object' && 'in' in value) return value.in.includes(row[key])
       return row[key] === value || (value === null && row[key] == null)

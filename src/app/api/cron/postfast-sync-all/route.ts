@@ -1,16 +1,18 @@
 import { syncSocialAccountBindings } from '@/lib/socialAccountBinding'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { postfastFetchAccounts, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
+import { postfastFetchAccounts, postfastGetFollowerHistory, postfastListPosts, postfastGetAnalytics } from '@/lib/integrations/postfast'
 import { syncBrandDraftStatuses } from '@/lib/syncDraftStatuses'
 import { recordRemoteCopyScriptOutcome } from '@/lib/amc-content/remoteContentService'
 import { processPostfastDeliveryQueue } from '@/lib/postfastDelivery'
+import { syncPostfastInbox } from '@/lib/postfastInbox'
 import {
   persistInternalPublishedPosts,
   persistSocialAccountMetrics,
   persistSocialPosts,
   postfastHistoryInputs,
 } from '@/lib/socialInsightHistory'
+import { buildPostfastPlanningFeedback } from '@/lib/postfastPlanningFeedback'
 
 // Allow up to 5 minutes for the full batch across all brands
 export const maxDuration = 300
@@ -83,6 +85,7 @@ export async function POST(req: NextRequest) {
     googleLocationId: string | null
   }>
   const draftStatusResults: Array<{ brandId: string; checked?: number; updated?: number; error?: string }> = []
+  const inboxSyncResults: Array<{ brandId: string; conversations?: number; items?: number; actionItems?: number; error?: string }> = []
   for (const brand of configuredBrands) {
     if (!brand.postfastApiKey || Date.now() - startedAt.getTime() >= 270_000) break
     try {
@@ -90,6 +93,12 @@ export async function POST(req: NextRequest) {
       draftStatusResults.push({ brandId: brand.id, checked: syncResult.checked, updated: syncResult.updated })
     } catch (error: unknown) {
       draftStatusResults.push({ brandId: brand.id, error: error instanceof Error ? error.message : String(error) })
+    }
+    try {
+      const inbox = await syncPostfastInbox(brand.id, brand.postfastApiKey)
+      inboxSyncResults.push({ brandId: brand.id, ...inbox })
+    } catch (error: unknown) {
+      inboxSyncResults.push({ brandId: brand.id, error: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -122,11 +131,16 @@ export async function POST(req: NextRequest) {
     if (!brand.postfastApiKey) continue
     try {
       const { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt } = await syncBrand(brand)
+      const baseSnapshot = { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt }
+      const planningFeedback = await buildPostfastPlanningFeedback(brand.id, 30, baseSnapshot).catch((feedbackErr) => {
+        console.warn(`[PostFast Cron] Planning feedback build failed for brand ${brand.id} (non-fatal):`, feedbackErr)
+        return null
+      })
       const syncedAt = new Date()
       await prisma.brand.update({
         where: { id: brand.id },
         data: {
-          postfastSnapshot: { accounts: syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt },
+          postfastSnapshot: planningFeedback ? { ...baseSnapshot, planningFeedback } : baseSnapshot,
           postfastSyncedAt: syncedAt,
         },
       })
@@ -155,7 +169,7 @@ export async function POST(req: NextRequest) {
   const failed = results.filter(r => !r.ok).length
   console.log(`[PostFast Cron] Done — ${succeeded} succeeded, ${failed} failed in ${Date.now() - startedAt.getTime()}ms`)
 
-  return NextResponse.json({ ok: true, startedAt, deliveryQueue, draftStatusResults, fullSyncDeferred: false, succeeded, failed, results })
+  return NextResponse.json({ ok: true, startedAt, deliveryQueue, draftStatusResults, inboxSyncResults, fullSyncDeferred: false, succeeded, failed, results })
 }
 
 export async function syncViralCopyExperimentOutcomes(brandId: string, analyticsPosts: any[]) {
@@ -303,6 +317,16 @@ export async function syncBrand(brand: {
       raw: account,
     })), analyticsTo),
     persistInternalPublishedPosts(brand.id, analyticsTo),
+    Promise.all(pfResult.accounts.map(async (account) => {
+      const history = await postfastGetFollowerHistory(brand.postfastApiKey!, account.id)
+      if (!history.success) return
+      await Promise.all(history.history.map((point) => persistSocialAccountMetrics(brand.id, [{
+        platform: account.platformId,
+        handle: account.handle,
+        followerCount: point.followerCount,
+        raw: point,
+      }], new Date(point.capturedAt))))
+    })),
   ])
 
   return { syncedAccounts, operationsReport, analyticsPosts, analyticsUpdatedAt: analyticsTo.toISOString() }

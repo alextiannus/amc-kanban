@@ -15,6 +15,7 @@ export type CalendarCreativeItem = {
   matchedTags?: string[]
   aiTags?: string[]
   aiCaption?: string
+  postfastControls?: Record<string, unknown>
   productionFormats?: Array<'post' | 'video'>
 }
 
@@ -31,6 +32,7 @@ export type CalendarCreativeOption = {
   suggestedFolder: string
   aiTags: string[]
   aiCaption: string
+  postfastControls?: Record<string, unknown>
   productionFormats?: Array<'post' | 'video'>
   draftId?: string | null
 }
@@ -46,6 +48,10 @@ function stringList(value: unknown) {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
     : []
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
 function normalizePlatformSlug(value: unknown) {
@@ -130,6 +136,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     suggestedFolder: `创意素材/${suggestedFolder}`,
     aiTags,
     aiCaption,
+    postfastControls: objectValue(item.postfastControls),
     productionFormats: item.productionFormats,
   }
 }
@@ -191,6 +198,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
             status: CALENDAR_PLAN_UNIMPLEMENTED_STATUS,
             agentNote,
             creativeHooks: item.aiCaption,
+            postfastControls: item.postfastControls as Prisma.InputJsonValue | undefined,
             hashtags: item.aiTags.filter((tag) => !tag.includes(':')).slice(0, 12),
           },
         })
@@ -206,6 +214,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
             status: CALENDAR_PLAN_UNIMPLEMENTED_STATUS,
             agentNote,
             creativeHooks: item.aiCaption,
+            postfastControls: item.postfastControls as Prisma.InputJsonValue | undefined,
             hashtags: item.aiTags.filter((tag) => !tag.includes(':')).slice(0, 12),
           },
         })

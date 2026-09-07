@@ -67,6 +67,10 @@ export async function syncSocialAccountBindings(brandId: string, remotes: PostFa
         followerDelta: remote.followerDelta ?? 0,
         ratingScore: remote.ratingScore ?? null,
         snapshotAt: new Date(),
+        connectionStatus: remote.connectionStatus,
+        disabledReason: remote.disabledReason ?? null,
+        inboxCapable: remote.inboxCapable,
+        followerCountUpdatedAt: remote.followerCountUpdatedAt ? new Date(remote.followerCountUpdatedAt) : null,
       }
       if (local) {
         await lockAccountBinding(tx, local.id)
@@ -85,11 +89,12 @@ export async function syncSocialAccountBindings(brandId: string, remotes: PostFa
       if (local.unboundAt || (accountPlatform(local.platformId) === 'google' && brand?.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId)) continue
       if (providerForLocal(local, remotes)) continue
       await lockAccountBinding(tx, local.id)
-      await tx.socialAccount.deleteMany({ where: { id: local.id, unboundAt: null, drafts: { none: {} }, actionItems: { none: {} }, snapshots: { none: {} } } })
+      await tx.socialAccount.deleteMany({ where: { id: local.id, unboundAt: null, drafts: { none: {} }, actionItems: { none: {} }, snapshots: { none: {} }, inboxConversations: { none: {} } } })
     }
     return tx.socialAccount.findMany({ where: { brandId, unboundAt: null }, select: {
       id: true, platformId: true, handle: true, displayName: true, followerCount: true,
-      followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true, autoPilot: true,
+      followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true, autoPilot: true, postfastAccountId: true,
+      connectionStatus: true, disabledReason: true, inboxCapable: true, followerCountUpdatedAt: true,
     } })
   }, { timeout: 30_000 })
 }

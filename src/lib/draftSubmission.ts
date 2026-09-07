@@ -23,6 +23,11 @@ import {
 } from '@/lib/postfastDelivery'
 import { shouldQueuePostfastDelivery } from '@/lib/postfastDeliveryPolicy'
 
+function postfastControlsFromDraft(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  return value as Record<string, unknown>
+}
+
 type SubmitDraftInput = {
   brandId: string
   draftId: string
@@ -100,7 +105,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   const draft = await prisma.contentDraft.findFirst({
     where: { id: input.draftId, brandId: input.brandId },
     include: {
-      account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true } },
+      account: { select: { id: true, platformId: true, handle: true, displayName: true, unboundAt: true, connectionStatus: true, disabledReason: true } },
       assetRefs: { orderBy: { order: 'asc' }, include: { asset: true } },
       coverAsset: true,
     },
@@ -152,6 +157,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   const platformId = normalizePublishPlatform(draft.account.platformId)
+  if (draft.account.connectionStatus === 'DISABLED') {
+    return {
+      ok: false as const,
+      status: 422,
+      code: 'POSTFAST_ACCOUNT_DISABLED',
+      error: draft.account.disabledReason || '该社媒账号已被 PostFast 禁用，请重新连接后再发布。',
+    }
+  }
   if (platformId === 'google') {
     if (!draft.gbpLocationId) {
       return {
@@ -442,11 +455,15 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           platform: platformId,
           accountId: draft.accountId || undefined,
           gbpLocationId: draft.gbpLocationId || undefined,
+          instagramPublishType: draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY'
+            ? draft.instagramPublishType
+            : undefined,
           caption: draft.caption,
           mediaItems,
           coverImage,
           hashtags: draft.hashtags,
           scheduledAt: resolvedScheduledAt?.toISOString(),
+          ...postfastControlsFromDraft(draft.postfastControls),
         },
         warnings: validationWarnings,
       })
@@ -467,6 +484,13 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     })
     void persistDraftSnapshotToObs({ brandId: input.brandId, draftId: draft.id, data: queuedDraft }).catch((error) => {
       console.error('[submitDraftForDelivery] OBS queued snapshot failed:', error)
+    })
+    await writeAuditLog({
+      actor: { id: input.actorId, type: 'HUMAN' },
+      action: 'POSTFAST_DRAFT_PUBLISH_QUEUED',
+      resourceId: draft.id,
+      resourceType: 'ContentDraft',
+      metadata: { brandId: input.brandId, jobId: job.id, platform: platformId, accountId: draft.accountId, scheduled },
     })
     return {
       ok: true as const,
@@ -523,11 +547,15 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     platform: platformId,
     accountId: draft.accountId || undefined,
     gbpLocationId: draft.gbpLocationId || undefined,
+    instagramPublishType: draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY'
+      ? draft.instagramPublishType
+      : undefined,
     caption: draft.caption,
     mediaItems,
     coverImage,
     hashtags: draft.hashtags,
     scheduledAt: resolvedScheduledAt?.toISOString(),
+    ...postfastControlsFromDraft(draft.postfastControls),
   })
   console.log(`[submitDraftForDelivery] postfastPublish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
 
@@ -537,6 +565,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       ? {
           status: scheduled ? 'scheduled' : 'published',
           platformPostId: result.postId || null,
+          postUrl: result.url || null,
           publishedAt: scheduled ? null : new Date(),
           deliveryFailureCode: null,
           deliveryFailureAt: null,
@@ -585,6 +614,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     const { processDraftCuration } = await import('./feedbackService')
     processDraftCuration(input.brandId, draft.id, draft.caption).catch((err) => {
       console.error('[submitDraftForDelivery] feedback curation loop failed:', err)
+    })
+
+    await writeAuditLog({
+      actor: { id: input.actorId, type: 'HUMAN' },
+      action: 'POSTFAST_DRAFT_PUBLISH_SUCCEEDED',
+      resourceId: draft.id,
+      resourceType: 'ContentDraft',
+      metadata: { brandId: input.brandId, platform: platformId, accountId: draft.accountId, postId: result.postId, scheduled, scheduledAt: result.scheduledAt || resolvedScheduledAt?.toISOString() },
     })
   }
 

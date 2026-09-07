@@ -4,6 +4,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { buildBrandContext } from '@/lib/brandContextBuilder'
 import { prisma } from '@/lib/prisma'
 import { normalizeSkuLibrary } from '@/lib/sku-library/service'
+import { buildPostfastPlanningFeedback } from '@/lib/postfastPlanningFeedback'
 
 export const maxDuration = 30
 
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
   const ok = await canSessionAccessBrandProject(brandId, actorId, actorType, actorRole)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [brand, task, media, brandContext] = await Promise.all([
+  const [brand, task, media, brandContext, planningFeedback] = await Promise.all([
     prisma.brand.findUnique({
       where: { id: brandId },
       include: { knowledge: true },
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       : Promise.resolve(null),
     resolveMedia(brandId, body, new URL(request.url).origin),
     buildBrandContext(brandId),
+    buildPostfastPlanningFeedback(brandId).catch(() => null),
   ])
 
   if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
@@ -61,6 +63,21 @@ export async function POST(request: Request) {
     .map((item) => stringOrEmpty(item))
     .filter(Boolean)
     .slice(0, 20)
+  const feedbackSignals = planningFeedback ? planningFeedback.contentSignals : null
+  const feedbackWindowDays = planningFeedback?.windowDays ?? 30
+  const feedbackPromotionPlan = feedbackSignals && (feedbackSignals.promptHints.length || feedbackSignals.recentTopPostThemes.length || feedbackSignals.weakPlatformSignals.length)
+    ? {
+        period: `last ${feedbackWindowDays} days`,
+        direction: feedbackSignals.recentTopPostThemes.length
+          ? `Build on recent high-performing themes: ${feedbackSignals.recentTopPostThemes.join(' | ')}`
+          : undefined,
+        copywritingRequirements: feedbackSignals.promptHints.join(' '),
+        keyMessages: [
+          ...feedbackSignals.recentTopPostThemes,
+          ...feedbackSignals.weakPlatformSignals.map((platform) => `Weak platform needing extra care: ${platform}`),
+        ].slice(0, 6),
+      }
+    : undefined
 
   return NextResponse.json({
     brand: {
@@ -80,7 +97,7 @@ export async function POST(request: Request) {
       slang: normalizeRecord(brand.knowledge?.slangDict),
       menuItems: normalizeMenuItems(brand.knowledge?.menuItems),
       stores: normalizeStores(brand.knowledge?.stores),
-      promotionPlan: undefined,
+      promotionPlan: feedbackPromotionPlan,
     },
     briefDefaults: {
       industryVertical: optionalIndustryVertical(body.industryVertical),
@@ -89,7 +106,7 @@ export async function POST(request: Request) {
       mustMention: [],
       mustAvoid: brand.knowledge?.negPrompts ?? [],
       localProof: mediaProof,
-      promotionPlan: undefined,
+      promotionPlan: feedbackPromotionPlan,
     },
     media,
   })

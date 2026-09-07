@@ -6,12 +6,15 @@ import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
+import { sanitizePostFastDraftControls } from '@/lib/integrations/postfast'
 
 const DRAFT_SELECT = {
   id: true,
   brandId: true,
   accountId: true,
   gbpLocationId: true,
+  instagramPublishType: true,
+  postfastControls: true,
   caption: true,
   captionLang: true,
   mediaUrls: true,
@@ -96,6 +99,11 @@ function normalizeStringArray(value: unknown) {
 function isGooglePlatform(platformId?: string | null) {
   return ['google', 'google_business', 'google_maps', 'google_map', 'google_business_profile', 'google_my_business', 'gbp', 'gmb']
     .includes(String(platformId ?? '').toLowerCase().trim())
+}
+
+function optionalInstagramPublishType(value: unknown) {
+  if (value === undefined || value === null || value === '') return null
+  return value === 'TIMELINE' || value === 'REEL' || value === 'STORY' ? value : false
 }
 
 async function ensureAccess(request: Request, brandId: string) {
@@ -260,6 +268,12 @@ export async function POST(request: Request, { params }: Params) {
   const gbpLocationId = isGooglePlatform(draftAccount.platformId)
     ? optionalString(body.gbpLocationId)
     : null
+  const instagramPublishType = optionalInstagramPublishType(body.instagramPublishType)
+  if (instagramPublishType === false) {
+    return NextResponse.json({ error: 'instagramPublishType must be TIMELINE, REEL, STORY, or null' }, { status: 400 })
+  }
+  const parsedPostfastControls = sanitizePostFastDraftControls(body.postfastControls)
+  if (parsedPostfastControls.error) return NextResponse.json({ error: parsedPostfastControls.error }, { status: 400 })
 
   const assetIds = normalizeStringArray(body.assetIds)
   if (body.coverAssetId !== undefined && body.coverAssetId !== null && typeof body.coverAssetId !== 'string') {
@@ -302,6 +316,8 @@ export async function POST(request: Request, { params }: Params) {
         brandId,
         accountId,
         gbpLocationId,
+        instagramPublishType,
+        postfastControls: parsedPostfastControls.controls ?? null,
         caption,
         captionLang: typeof body.captionLang === 'string' && body.captionLang ? body.captionLang : 'en',
         mediaUrls: normalizeStringArray(body.mediaUrls),
