@@ -45,6 +45,7 @@ export type RemoteVideoCreatorRequest = {
   usageReport?: Record<string, unknown>
   scriptPresetId?: string
   scriptDraft?: unknown
+  generateScript?: boolean
   executionMode?: 'plan_only' | 'submit'
   projectId?: string
   referenceAnalysisAssetId?: string
@@ -259,6 +260,7 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
       usageReport: input.usageReport,
       scriptPresetId: input.scriptPresetId,
       scriptDraft: input.scriptDraft,
+      generateScript: input.generateScript,
       executionMode: input.executionMode || 'plan_only',
       projectId: input.projectId,
       referenceAnalysisAssetId: input.referenceAnalysisAssetId,

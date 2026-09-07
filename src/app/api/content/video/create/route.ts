@@ -88,6 +88,7 @@ export async function POST(request: Request) {
           usageReport: body.usageReport && typeof body.usageReport === 'object' ? body.usageReport : undefined,
           scriptPresetId: optionalString(body.scriptPresetId),
           scriptDraft: body.scriptDraft && typeof body.scriptDraft === 'object' ? body.scriptDraft : undefined,
+          generateScript: body.generateScript === true,
           executionMode: executionMode === 'submit' ? 'submit' : 'plan_only',
           projectId: optionalString(body.projectId),
           referenceAnalysisAssetId: optionalString(body.referenceAnalysisAssetId),
