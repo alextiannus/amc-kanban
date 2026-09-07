@@ -281,6 +281,21 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'postUrl must be an http(s) URL or null' }, { status: 400 })
   }
 
+  const hasPublishedAtUpdate = Object.prototype.hasOwnProperty.call(body, 'publishedAt')
+  let publishedAtUpdate: Date | undefined
+  if (hasPublishedAtUpdate) {
+    if (!['published', 'done'].includes(existing.status) || (nextStatus && !['published', 'done'].includes(nextStatus))) {
+      return NextResponse.json({ error: 'Only published posts can update publishedAt' }, { status: 400 })
+    }
+    const parsed = typeof body.publishedAt === 'string' && body.publishedAt.trim()
+      ? new Date(body.publishedAt)
+      : null
+    if (!parsed || Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now()) {
+      return NextResponse.json({ error: 'publishedAt must be a valid past date' }, { status: 400 })
+    }
+    publishedAtUpdate = parsed
+  }
+
   let platformPostIdUpdate: string | null | undefined = undefined
   const isScheduledOnPostfast = !!existing.platformPostId && !existing.publishedAt
 
@@ -336,6 +351,7 @@ export async function PATCH(request: Request, { params }: Params) {
         status: nextStatus,
         platformPostId: platformPostIdUpdate,
         postUrl: postUrlUpdate,
+        publishedAt: publishedAtUpdate,
         agentNote: typeof body.agentNote === 'string' ? body.agentNote : undefined,
         rejectionNote: nextStatus === 'pending_review' ? null : typeof body.rejectionNote === 'string' ? body.rejectionNote : undefined,
         creativeHooks: typeof body.creativeHooks === 'string' ? body.creativeHooks : undefined,
