@@ -7,6 +7,7 @@ import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/com
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
 import { sanitizePostFastDraftControls } from '@/lib/integrations/postfast'
+import { calendarDraftQuery } from '@/lib/calendarDraftQuery'
 
 const DRAFT_SELECT = {
   id: true,
@@ -136,6 +137,12 @@ export async function GET(request: Request, { params }: Params) {
   const url = new URL(request.url)
   const status = url.searchParams.get('status') || ''
   const q = (url.searchParams.get('q') || '').trim()
+  let calendar: ReturnType<typeof calendarDraftQuery>
+  try {
+    calendar = calendarDraftQuery(url.searchParams)
+  } catch {
+    return NextResponse.json({ error: 'Invalid calendar range or page' }, { status: 400 })
+  }
   if (status && !DRAFT_STATUSES.has(status)) {
     return NextResponse.json({ error: 'Invalid draft status' }, { status: 400 })
   }
@@ -144,6 +151,7 @@ export async function GET(request: Request, { params }: Params) {
     prisma.contentDraft.findMany({
       where: {
         brandId,
+        ...(calendar ? { AND: [calendar.where] } : {}),
         ...(status ? { status } : {}),
         ...(q ? {
           OR: [
@@ -153,12 +161,20 @@ export async function GET(request: Request, { params }: Params) {
         } : {}),
       },
       select: DRAFT_SELECT,
-      orderBy: { updatedAt: 'desc' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
       take: 100,
+      ...(calendar ? { skip: (calendar.page - 1) * calendar.pageSize } : {}),
     }),
     prisma.contentDraft.groupBy({
       by: ['status'],
-      where: { brandId },
+      where: {
+        brandId,
+        ...(calendar ? {
+          AND: [calendar.where],
+          ...(status ? { status } : {}),
+          ...(q ? { OR: [{ caption: { contains: q, mode: 'insensitive' } }, { hashtags: { has: q } }] } : {}),
+        } : {}),
+      },
       _count: { _all: true },
     }),
   ])
@@ -167,6 +183,20 @@ export async function GET(request: Request, { params }: Params) {
     countRows.map((item) => [item.status, item._count._all]),
   )
   counts.all = countRows.reduce((sum, item) => sum + item._count._all, 0)
+
+  // Month browsing reads stored records only; avoid external URL lookups per page.
+  if (calendar) {
+    return NextResponse.json({
+      drafts,
+      counts,
+      pagination: {
+        page: calendar.page,
+        pageSize: calendar.pageSize,
+        total: counts.all,
+        hasMore: calendar.page * calendar.pageSize < counts.all,
+      },
+    })
+  }
 
   // Dynamically resolve postUrl for published drafts that don't have it in the database
   const needsUrlResolution = drafts.some((d: any) => d.status === 'published' && d.platformPostId && !d.postUrl)
