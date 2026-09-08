@@ -14,6 +14,7 @@
  */
 
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastGetSignedUploadUrls, postfastUploadFile } from '@/lib/integrations/postfast'
@@ -380,28 +381,49 @@ export async function GET(request: Request, { params }: Params) {
   const query = (url.searchParams.get('q') || '').trim().toLowerCase()
   const queryDate = /^\d{4}-\d{2}-\d{2}$/.test(query) ? new Date(`${query}T00:00:00.000Z`) : null
   const folder = (url.searchParams.get('folder') || '').trim()
+  const paginated = url.searchParams.has('page') || url.searchParams.has('pageSize')
+  const page = Number(url.searchParams.get('page') ?? 1)
+  const pageSize = Number(url.searchParams.get('pageSize') ?? 12)
+  const usage = url.searchParams.get('usage') ?? 'all'
+  const mediaType = url.searchParams.get('mediaType')
+  if (paginated && (!Number.isSafeInteger(page) || page < 1 || page > 1_000_000 ||
+    !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100)) {
+    return NextResponse.json({ error: 'Invalid pagination: page must be 1–1000000 and pageSize must be 1–100' }, { status: 400 })
+  }
+  if (!['all', 'unused'].includes(usage) || (mediaType !== null && mediaType !== 'cover')) {
+    return NextResponse.json({ error: 'Invalid asset filter' }, { status: 400 })
+  }
 
-  const assets = await prisma.mediaAsset.findMany({
-    where: {
-      brandId,
-      ...(folder ? { aiCategory: folder } : {}),
-      ...(query ? {
-        OR: [
-          { filename: { contains: query, mode: 'insensitive' } },
-          { originalFilename: { contains: query, mode: 'insensitive' } },
-          { uploadedBy: { contains: query, mode: 'insensitive' } },
-          { videoProjectId: { contains: query, mode: 'insensitive' } },
-          { shootBatch: { is: { name: { contains: query, mode: 'insensitive' } } } },
-          ...(queryDate ? [{ captureDate: queryDate }] : []),
-          { aiCaption: { contains: query, mode: 'insensitive' } },
-          { aiTags: { has: query } },
-        ],
-      } : {}),
-    },
-    include: { shootBatch: true },
-    orderBy: { createdAt: 'desc' },
-    take: 200,
-  })
+  const where: Prisma.MediaAssetWhereInput = {
+    brandId,
+    ...(usage === 'unused' ? { usedCount: 0 } : {}),
+    ...(mediaType === 'cover' ? { OR: [
+      { mimeType: { equals: 'image/jpeg', mode: 'insensitive' as const } },
+      { mimeType: { equals: 'image/png', mode: 'insensitive' as const } },
+    ] } : {}),
+    ...(folder ? { aiCategory: folder } : {}),
+    ...(query ? {
+      AND: [{ OR: [
+        { filename: { contains: query, mode: 'insensitive' } },
+        { originalFilename: { contains: query, mode: 'insensitive' } },
+        { uploadedBy: { contains: query, mode: 'insensitive' } },
+        { videoProjectId: { contains: query, mode: 'insensitive' } },
+        { shootBatch: { is: { name: { contains: query, mode: 'insensitive' } } } },
+        ...(queryDate ? [{ captureDate: queryDate }] : []),
+        { aiCaption: { contains: query, mode: 'insensitive' } },
+        { aiTags: { has: query } },
+      ] }],
+    } : {}),
+  }
+  const [assets, total] = await Promise.all([
+    prisma.mediaAsset.findMany({
+      where,
+      include: { shootBatch: true },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      ...(paginated ? { skip: (page - 1) * pageSize, take: pageSize } : { take: 200 }),
+    }),
+    paginated ? prisma.mediaAsset.count({ where }) : Promise.resolve(0),
+  ])
 
   const dbFolders = await prisma.brandFolder.findMany({
     where: { brandId },
@@ -426,7 +448,11 @@ export async function GET(request: Request, { params }: Params) {
     })()
   }))
 
-  return NextResponse.json({ assets: mappedAssets, folders })
+  return NextResponse.json({
+    assets: mappedAssets,
+    folders,
+    ...(paginated ? { pagination: { page, pageSize, total, totalPages: Math.ceil(total / pageSize) } } : {}),
+  })
 }
 
 // PATCH /api/brands/[id]/assets

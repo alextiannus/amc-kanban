@@ -343,7 +343,12 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     *   如果 `sourceType === 'postfast'`，重写为 `/api/integrations/postfast/file/${brandId}/${url}`。
 *   在前端，移除了对非标准协议过滤的 `.filter(isPreviewable)`，当遇到不可解析的数据类型时退化为通用文件图标展位，避免资产“神秘消失”。
 
-### 8.3 批量上传健壮性设计 (Bulk Upload Protocol)
+### 8.3 草稿素材分页（本次开发，待部署）
+
+草稿素材选择接口（本次开发，待部署）：`GET /api/brands/{id}/assets?page=1&pageSize=12` 支持完整历史素材分页，响应增加 `pagination: { page, pageSize, total, totalPages }`。`page` 从 1 开始，`pageSize` 默认 12、最大 100；`usage=unused`、`mediaType=cover`（JPEG/PNG）、`folder`、`q` 在服务端分页前组合过滤。排序为 `createdAt DESC, id DESC`，继续保留品牌权限与 URL 重写。不带分页参数的调用仍返回最多 200 条及原有 `assets`、`folders` 格式。
+
+### 8.4 批量上传健壮性设计 (Bulk Upload Protocol)
+
 *   **前端上传队列**: 前端 `uploadFiles` 将选中的 `FileList` 转为数组，执行顺序循环上传。
 *   **单点故障隔离 (Error Isolation)**: 每一个文件的预签名获取、文件直传/备用 Base64 上传以及入库确认逻辑均用 `try/catch` 结构进行隔离。某个文件失败后，会把错误信息推入 `failedFiles` 错误收集栈，并不影响其他文件的继续上传。
 *   **进度感知**: 在上传循环体中，使用 `uploadProgress` 变量动态更新当前正在上传的索引 (如 `正在上传 (2/5)...`)，从而提升用户在传输大文件或多文件时的交互体验。

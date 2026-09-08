@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   X,
   Heart,
@@ -36,6 +36,9 @@ import {
   Image as ImageIcon
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
+import AssetPickerPagination from './AssetPickerPagination'
+import { useBrandAssetPage, type BrandPickerAsset } from '@/hooks/useBrandAssetPage'
+import { useI18n } from '@/lib/i18n'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter, platformAliases } from '@/lib/copywriters'
 import {
@@ -196,6 +199,7 @@ interface DraftItem {
       filename?: string | null
       url?: string | null
       type: string
+      mimeType?: string
     }
   }>
 }
@@ -327,7 +331,7 @@ export default function PostEditDrawer({
   const [generatedHooks, setGeneratedHooks] = useState<Array<{ visual: string; overlay: string; audio: string }>>([])
 
   // Media assets states
-  const [brandAssets, setBrandAssets] = useState<Array<{ id: string; url: string; filename?: string | null; mimeType: string; aiCategory?: string | null; sizeBytes?: number | null; usedCount?: number; createdAt?: string | Date }>>([])
+  const [brandAssets, setBrandAssets] = useState<BrandPickerAsset[]>([])
   const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
   const [mediaUrlsInput, setMediaUrlsInput] = useState('')
   const [newUrlInput, setNewUrlInput] = useState('')
@@ -336,7 +340,14 @@ export default function PostEditDrawer({
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const assetPageSize = 12
+  const { t } = useI18n()
+  useEffect(() => { setBrandAssets([]) }, [brandId, isOpen])
+  // Keep visited assets available for selected-cover previews and video metadata.
+  const rememberAssets = useCallback((assets: BrandPickerAsset[]) => {
+    setBrandAssets(current => [...new Map([...current, ...assets].map(asset => [asset.id, asset])).values()])
+  }, [])
+  const mediaPicker = useBrandAssetPage(brandId, isOpen, `usage=${assetTypeFilter}`, rememberAssets)
+  const coverPicker = useBrandAssetPage(brandId, isOpen, `mediaType=cover${coverAssetFilter === 'cover' ? `&folder=${encodeURIComponent('封面图')}` : ''}`, rememberAssets)
 
   // Comments / conversion states (For Published Posts)
   const [commentsList, setCommentsList] = useState<Comment[]>([])
@@ -371,30 +382,8 @@ export default function PostEditDrawer({
     !selectedGbpLocationId
   )
 
-  const filteredAssets = useMemo(() => {
-    const sorted = [...brandAssets].sort((a, b) => {
-      const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-      const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-      return tB - tA
-    })
-    return sorted.filter(asset => {
-      if (assetTypeFilter === 'unused') {
-        return (asset.usedCount ?? 0) === 0
-      }
-      return true
-    })
-  }, [brandAssets, assetTypeFilter])
-
-  const coverAssets = useMemo(() => {
-    return [...brandAssets]
-      .filter((asset) => ['image/jpeg', 'image/png'].includes((asset.mimeType || '').toLowerCase()))
-      .filter((asset) => coverAssetFilter === 'all' || asset.aiCategory === '封面图')
-      .sort((a, b) => {
-        const tA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-        const tB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-        return tB - tA
-      })
-  }, [brandAssets, coverAssetFilter])
+  const filteredAssets = mediaPicker.assets
+  const coverAssets = coverPicker.assets
 
   const selectedCoverAsset = useMemo(() => {
     if (!coverAssetId) return null
@@ -412,12 +401,14 @@ export default function PostEditDrawer({
     const isSingleVideo = attachedMedia.length === 1 && (() => {
       const media = attachedMedia[0]
       if (isVideoUrl(media.url)) return true
-      return media.type === 'asset' && brandAssets.find((asset) => asset.id === media.id)?.mimeType.startsWith('video/')
+      const mimeType = brandAssets.find((asset) => asset.id === media.id)?.mimeType
+        || selectedDraft?.assetRefs.find((ref) => ref.asset.id === media.id)?.asset.mimeType
+      return media.type === 'asset' && mimeType?.startsWith('video/')
     })()
     if (!isSingleVideo) return '图片帖发布时，封面将作为第一张图片。'
 
     return 'Instagram/Facebook 单视频将按 Reel 发布并使用自定义封面；其他平台会保留封面记录，但发布时不发送自定义封面。'
-  }, [attachedMedia, brandAssets])
+  }, [attachedMedia, brandAssets, selectedDraft?.assetRefs])
 
   // Load configuration & accounts
   useEffect(() => {
@@ -433,19 +424,7 @@ export default function PostEditDrawer({
         console.error('Failed to load accounts:', err)
       }
     }
-    const loadBrandAssets = async () => {
-      try {
-        const res = await fetch(`/api/brands/${brandId}/assets`)
-        if (res.ok) {
-          const json = await res.json()
-          setBrandAssets(json.assets || [])
-        }
-      } catch (err) {
-        console.error('Failed to load assets:', err)
-      }
-    }
     loadAccounts()
-    loadBrandAssets()
   }, [isOpen, brandId])
 
   useEffect(() => {
@@ -1510,12 +1489,9 @@ Return the output strictly in a valid JSON array format, containing:
       alert(actionType === 'video' ? 'AI 视频生成成功！已更新视频。' : 'AI 优化成功！已更新图片。')
       setActiveMediaOp(null)
       setMediaOpPrompt('')
-      // Reload assets list
-      const assetsRes = await fetch(`/api/brands/${brandId}/assets`)
-      if (assetsRes.ok) {
-        const json = await assetsRes.json()
-        setBrandAssets(json.assets || [])
-      }
+      rememberAssets([newAsset])
+      mediaPicker.reload()
+      coverPicker.reload()
     } catch (err: any) {
       alert(err.message || '操作失败')
     } finally {
@@ -1971,11 +1947,11 @@ Return the output strictly in a valid JSON array format, containing:
                         </button>
                       </div>
                     </div>
-                    {coverAssets.length === 0 ? (
-                      <p className="py-2 text-center text-[11px] italic text-slate-400">暂无可用 JPEG/PNG 图片，请先在素材库上传</p>
+                    {coverPicker.loading || coverPicker.error ? null : coverAssets.length === 0 ? (
+                      <p className="py-2 text-center text-[11px] italic text-slate-400">{t('暂无可用 JPEG/PNG 图片，请先在素材库上传', 'No JPEG/PNG images available. Upload images to the asset library first.')}</p>
                     ) : (
                       <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
-                        {coverAssets.slice(0, 12).map((asset) => {
+                        {coverAssets.map((asset) => {
                           const selected = coverAssetId === asset.id
                           return (
                             <button
@@ -1984,6 +1960,7 @@ Return the output strictly in a valid JSON array format, containing:
                               onClick={() => setCoverAssetId(selected ? null : asset.id)}
                               className={`relative aspect-square overflow-hidden rounded-md border bg-slate-100 transition-all hover:scale-[1.02] ${selected ? 'border-indigo-500 ring-2 ring-indigo-200 dark:ring-indigo-900' : 'border-slate-200 dark:border-slate-800'}`}
                               title={asset.filename || '封面图'}
+                              aria-pressed={selected}
                             >
                               <img src={asset.url} alt="" className="h-full w-full object-cover" />
                               {selected && (
@@ -1996,6 +1973,7 @@ Return the output strictly in a valid JSON array format, containing:
                         })}
                       </div>
                     )}
+                    <AssetPickerPagination picker={coverPicker} />
                   </div>
                 )}
               </div>
@@ -2206,16 +2184,19 @@ Return the output strictly in a valid JSON array format, containing:
                         </div>
                       </div>
 
-                      {filteredAssets.length === 0 ? (
-                        <p className="text-[11px] text-slate-400 italic text-center py-2">素材库暂空或全部被占用</p>
+                      {mediaPicker.loading || mediaPicker.error ? null : filteredAssets.length === 0 ? (
+                        <p className="text-[11px] text-slate-400 italic text-center py-2">{assetTypeFilter === 'unused' ? t('暂无未使用素材，可切换到全部素材', 'No unused assets. Switch to All assets.') : t('素材库暂无素材', 'No assets in the library.')}</p>
                       ) : (
                         <div className="grid grid-cols-4 gap-2">
-                          {filteredAssets.slice(0, assetPageSize).map((asset) => {
+                          {filteredAssets.map((asset) => {
                             const isSelected = attachedMedia.some(m => m.id === asset.id)
                             const isVid = asset.mimeType?.startsWith('video/')
                             return (
-                              <div
+                              <button
                                 key={asset.id}
+                                type="button"
+                                aria-label={asset.filename || t('选择素材', 'Select asset')}
+                                aria-pressed={isSelected}
                                 onClick={() => handleToggleAsset(asset)}
                                 className={`relative aspect-square rounded-md overflow-hidden bg-slate-55 border cursor-pointer group shadow-sm transition-all hover:scale-[1.02] ${
                                   isSelected ? 'border-emerald-500 ring-2 ring-emerald-105 dark:ring-emerald-950' : 'border-slate-200 dark:border-slate-800'
@@ -2241,11 +2222,12 @@ Return the output strictly in a valid JSON array format, containing:
                                     </span>
                                   </div>
                                 )}
-                              </div>
+                              </button>
                             )
                           })}
                         </div>
                       )}
+                      <AssetPickerPagination picker={mediaPicker} />
                     </div>
                   </div>
                 )}
