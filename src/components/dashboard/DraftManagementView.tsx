@@ -1830,13 +1830,13 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         </div>
 
         <div className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-col gap-3 border-b border-slate-200 p-3 dark:border-slate-800 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap gap-1">
+          <div className="grid grid-cols-1 gap-3 border-b border-slate-200 p-3 dark:border-slate-800 xl:grid-cols-2 xl:items-center">
+            <div className="flex min-w-0 flex-wrap gap-1">
               {TAB_CONFIG.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm font-black transition-colors ${activeTab === tab.key ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+                  className={`inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-md px-3 text-sm font-black transition-colors ${activeTab === tab.key ? 'bg-slate-950 text-white dark:bg-white dark:text-slate-950' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}
                 >
                   {tab.label}
                   <span className={`rounded px-1.5 py-0.5 text-[11px] ${activeTab === tab.key ? 'bg-white/15' : 'bg-slate-100 text-slate-400 dark:bg-slate-800'}`}>{tabCounts[tab.key] || 0}</span>
@@ -1844,7 +1844,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <FilterSelect icon={<Smartphone className="h-4 w-4" />} value={platformFilter} onChange={setPlatformFilter} options={[['all', '全部平台'], ...platformOptions.map((platform) => [platform, platformLabel(platform)] as [string, string])]} />
               <FilterSelect icon={<Users className="h-4 w-4" />} value={accountFilter} onChange={setAccountFilter} options={[['all', '全部账号'], ...accounts.map((account) => [account.id, account.displayName || account.handle || account.platformId] as [string, string])]} />
               <FilterSelect icon={<Tag className="h-4 w-4" />} value={tagFilter} onChange={setTagFilter} options={[['all', '全部标签'], ...tagOptions.map((tag) => [tag, `#${tag}`] as [string, string])]} />
@@ -1971,9 +1971,9 @@ Never include any markdown backticks, conversational preamble, or explanation ou
 }
 function FilterSelect({ icon, value, onChange, options }: { icon: React.ReactNode; value: string; onChange: (value: string) => void; options: Array<[string, string]> }) {
   return (
-    <label className="relative inline-flex h-9 items-center rounded-md border border-slate-200 bg-white pl-3 pr-8 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-      <span className="mr-2 text-slate-400">{icon}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className="appearance-none bg-transparent outline-none">
+    <label className="relative inline-flex h-9 w-40 min-w-0 max-w-full items-center rounded-md border border-slate-200 bg-white pl-3 pr-8 text-sm font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
+      <span className="mr-2 shrink-0 text-slate-400">{icon}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} aria-label={options[0]?.[1]} title={options.find(([optionValue]) => optionValue === value)?.[1]} className="w-full min-w-0 truncate appearance-none bg-transparent outline-none">
         {options.map(([optionValue, label]) => (
           <option key={optionValue} value={optionValue}>{label}</option>
         ))}
