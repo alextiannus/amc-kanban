@@ -1571,7 +1571,7 @@ export default function SystemTab({
                 {editingLLMConfig ? '编辑大模型连接配置' : '新增大模型连接配置'}
               </h2>
               <p className="text-xs text-slate-400 mt-1 font-medium">
-                配置外部大模型路由参数。系统会基于专属标签匹配特定创作任务，无法连接时将自动切换至备用模型。
+                {llmForm.provider === 'minimax' ? 'MiniMax 语音统一使用国内接口。上传、克隆和试听使用同一条配置；失败直接报错，不切换国际站或备用密钥。' : '配置外部大模型路由参数。系统会基于专属标签匹配特定创作任务，无法连接时将自动切换至备用模型。'}
               </p>
             </div>
 
@@ -1696,7 +1696,7 @@ export default function SystemTab({
                   <input
                     value={llmForm.baseUrl}
                     onChange={e => setLlmForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                    placeholder="Seedance 例: https://ark.ap-southeast.bytepluses.com (缺省则使用厂商默认端点)"
+                    placeholder={llmForm.provider === 'minimax' ? 'https://api.minimaxi.com/v1/t2a_v2（留空也使用此国内地址）' : 'Seedance 例: https://ark.ap-southeast.bytepluses.com (缺省则使用厂商默认端点)'}
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
                   />
                 </label>

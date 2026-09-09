@@ -13,6 +13,7 @@ export type BrandVoiceProfile = {
   role: BrandVoiceProfileRole
   provider: 'minimax'
   providerVoiceId: string
+  configId?: string
   sampleFileName?: string
   sampleMimeType?: string
   status: BrandVoiceProfileStatus
@@ -59,6 +60,7 @@ export function normalizeBrandVoiceProfiles(value: unknown, brandId: string): Br
       role: normalizeRole(record.role),
       provider: 'minimax',
       providerVoiceId,
+      configId: text(record.configId) || undefined,
       sampleFileName: text(record.sampleFileName) || undefined,
       sampleMimeType: text(record.sampleMimeType) || undefined,
       status,
@@ -112,6 +114,7 @@ export async function createBrandVoiceProfile(input: CreateBrandVoiceInput) {
     role,
     provider: 'minimax',
     providerVoiceId,
+    configId: config.id,
     sampleFileName: input.file.name || undefined,
     sampleMimeType: input.file.type || undefined,
     status: 'ready',
@@ -129,12 +132,11 @@ export async function createBrandVoiceProfile(input: CreateBrandVoiceInput) {
   await generateTtsAudio({
     text: DEFAULT_CLONE_TEXT,
     voiceId: providerVoiceId,
+    configId: config.id,
     brandId: input.brandId,
     actorId: input.actorId,
     actorType: input.actorType,
     actorRole: input.actorRole,
-  }).catch((error) => {
-    console.warn('[brand-voices] activation TTS failed after clone:', error)
   })
 
   return saveBrandVoiceProfile(input.brandId, profile, { makeDefaultIfFirst: true })
@@ -183,9 +185,11 @@ export async function previewBrandVoiceProfile(brandId: string, voiceProfileId: 
   const current = await listBrandVoiceProfiles(brandId)
   const profile = current.profiles.find((item) => item.id === voiceProfileId && item.status === 'ready')
   if (!profile) return null
+  if (!profile.configId) throw new Error('VOICE_REENROLL_REQUIRED: 请重新录入声音以绑定原 MiniMax 配置')
   const result = await generateTtsAudio({
     text: text(input.text) || DEFAULT_CLONE_TEXT,
     voiceId: profile.providerVoiceId,
+    configId: profile.configId,
     brandId,
     actorId: input.actorId,
     actorType: input.actorType,
@@ -237,6 +241,7 @@ async function uploadMiniMaxVoiceSource(config: TtsConfig, file: File): Promise<
   form.set('file', file, file.name || 'voice-sample.mp3')
   const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/files/upload'), {
     method: 'POST',
+    redirect: 'error',
     headers: { Authorization: `Bearer ${config.apiKey}` },
     body: form,
     signal: AbortSignal.timeout(60_000),
@@ -253,6 +258,7 @@ async function cloneMiniMaxVoice(config: TtsConfig, input: {
 }) {
   const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/voice_clone'), {
     method: 'POST',
+    redirect: 'error',
     headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
     body: miniMaxVoiceBody({
       file_id: input.fileId,

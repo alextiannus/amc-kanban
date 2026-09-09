@@ -7,7 +7,7 @@ import ts from 'typescript'
 import * as responseHelpers from '../src/lib/miniMaxVoiceResponse.ts'
 
 const require = createRequire(import.meta.url)
-const config = { id: 'test', apiKey: 'test-secret', baseUrl: 'https://api.minimax.io/v1/t2a_v2' }
+const config = { id: 'test', apiKey: 'test-secret', baseUrl: 'https://api.minimaxi.com/v1/t2a_v2' }
 const calls: any[] = []
 let rejected = true
 const modules: Record<string, any> = {
@@ -52,7 +52,6 @@ for (const [baseUrl, origin] of [
   [null, 'https://api.minimaxi.com'],
   ['', 'https://api.minimaxi.com'],
   ['https://api.minimaxi.com/v1/t2a_v2', 'https://api.minimaxi.com'],
-  ['https://api.minimax.io/v1/t2a_v2', 'https://api.minimax.io'],
 ] as const) {
   const selected = { ...config, baseUrl }
   const id = await service.uploadMiniMaxVoiceSource(selected, file)
@@ -64,3 +63,33 @@ const beforeInvalid = calls.length
 await assert.rejects(service.uploadMiniMaxVoiceSource({ ...config, baseUrl: 'invalid-address' }, file), /Invalid URL/)
 assert.equal(calls.length, beforeInvalid, 'Invalid configuration must not send the key to a fallback host')
 console.log('PASS: upload and cloning preserve configured region and share the domestic TTS default')
+
+await assert.rejects(service.uploadMiniMaxVoiceSource({ ...config, baseUrl: 'https://api.minimax.io/v1/t2a_v2' }, file), /DOMESTIC_ENDPOINT_REQUIRED/)
+assert.equal(calls.length, beforeInvalid, 'International configuration must fail before network access')
+assert.ok(calls.every(c => c.options.redirect === 'error'), 'No redirect may silently change the endpoint')
+
+let saved: any = null
+let failActivation = false
+const ttsCalls: any[] = []
+modules['@/lib/prisma'].prisma.brandKnowledge = {
+  findUnique: async () => saved,
+  upsert: async ({ create, update }: any) => { saved = saved ? { ...saved, ...update } : create; return saved },
+}
+modules['@/lib/ttsGeneration'].generateTtsAudio = async (input: any) => {
+  ttsCalls.push(input)
+  if (failActivation) throw new Error('activation rejected')
+  return { audio: Buffer.from('test') }
+}
+failActivation = true
+await assert.rejects(service.createBrandVoiceProfile({ brandId: 'test-brand', actorId: 'actor', file }), /activation rejected/)
+assert.equal(saved, null, 'Activation failure must not create a ready profile')
+failActivation = false
+const created = await service.createBrandVoiceProfile({ brandId: 'test-brand', actorId: 'actor', file })
+assert.equal(created.profile.configId, config.id)
+await service.previewBrandVoiceProfile('test-brand', created.profile.id, { actorId: 'actor' })
+assert.ok(ttsCalls.every(call => call.configId === config.id))
+delete saved.brandVoiceProfiles[0].configId
+const previews = ttsCalls.length
+await assert.rejects(service.previewBrandVoiceProfile('test-brand', created.profile.id, { actorId: 'actor' }), /REENROLL_REQUIRED/)
+assert.equal(ttsCalls.length, previews, 'Unbound legacy voices must not guess a configuration')
+console.log('PASS: activation and preview pin the clone configuration; activation failures remain errors')

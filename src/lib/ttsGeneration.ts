@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 
-import { DEFAULT_MINIMAX_TTS_ENDPOINT } from '@/lib/miniMaxEndpoints'
+import { miniMaxVoiceEndpoint } from '@/lib/miniMaxEndpoints'
 const DEFAULT_MINIMAX_TTS_MODEL = 'speech-2.8-hd'
 const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 const DEFAULT_TTS_TIMEOUT_MS = 12_000
@@ -85,7 +85,8 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
   const timeout = setTimeout(() => controller.abort(), ttsTimeout(config.timeoutMs))
 
   try {
-    const response = await fetch(config.baseUrl || DEFAULT_MINIMAX_TTS_ENDPOINT, {
+    const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/t2a_v2'), {
+      redirect: 'error',
       method: 'POST',
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
@@ -148,6 +149,7 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
 }
 
 export async function generateTtsAudio(input: {
+  configId?: string
   text: string
   voiceId?: string
   brandId?: string
@@ -157,31 +159,18 @@ export async function generateTtsAudio(input: {
   actorRole?: string
 }): Promise<TtsExecution> {
   const configs = await getActiveMiniMaxTtsConfigs()
-  if (!configs.length) throw new Error('TTS_MODEL_NOT_CONFIGURED')
-
-  const fallbackPath: string[] = []
-  let lastError: unknown = null
-
-  for (const config of configs) {
-    try {
-      const result = await callMiniMaxTts(config, input)
-      return {
-        audio: result.audio,
-        contentType: result.contentType,
-        provenance: {
-          profileId: config.id,
-          provider: config.provider,
-          modelName: config.modelName,
-          fallbackPath,
-          latencyMs: result.latencyMs,
-        },
-      }
-    } catch (error) {
-      lastError = error
-      fallbackPath.push(config.id)
-      console.warn(`[TTS] MiniMax profile ${config.id} failed:`, error)
-    }
+  const config = input.configId ? configs.find(c => c.id === input.configId) : configs[0]
+  if (!config) throw new Error(input.configId ? 'VOICE_CONFIG_UNAVAILABLE: Original MiniMax configuration is unavailable' : 'TTS_MODEL_NOT_CONFIGURED')
+  const result = await callMiniMaxTts(config, input)
+  return {
+    audio: result.audio,
+    contentType: result.contentType,
+    provenance: {
+      profileId: config.id,
+      provider: config.provider,
+      modelName: config.modelName,
+      fallbackPath: [],
+      latencyMs: result.latencyMs,
+    },
   }
-
-  throw lastError instanceof Error ? lastError : new Error('TTS generation failed')
 }

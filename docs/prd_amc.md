@@ -496,6 +496,7 @@ model LLMConfig {
 - `GEMINI_API_KEY` 环境变量 — 从未作为主要配置来源，不使用
 
 ### MiniMax TTS 配置说明
+- **服务端请求规则（修复待发布）**：统一使用国内 `https://api.minimaxi.com`。每次只使用已选择的一条启用配置；失败直接返回，不切换 API 域名或备用 Key。商家声音的上传、克隆、激活和试听固定使用原配置。
 - **服务**：MiniMax T2A v2
 - **模型**：`speech-2.8-turbo`
 - **默认音色**：`Chinese (Mandarin)_Warm_Bestie`
