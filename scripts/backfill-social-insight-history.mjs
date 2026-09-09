@@ -188,7 +188,7 @@ if (!process.env.DATABASE_URL) {
         await persistPost(brand.id, {
           source: 'internal', externalId: draft.platformPostId || draft.id, platform: draft.account?.platformId, handle: draft.account?.handle,
           caption: draft.caption, postUrl: draft.postUrl || draft.platformPostId, publishedAt,
-          contentType: undefined, mediaUrls: draft.mediaUrls, raw: { draftId: draft.id, manualHistorical: !draft.platformPostId },
+          contentType: undefined, mediaUrls: draft.mediaUrls, raw: { draftId: draft.id },
         }, new Date())
       }
 
