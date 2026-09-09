@@ -1,3 +1,4 @@
+import { miniMaxFileId, miniMaxVoiceBody, readMiniMaxVoiceResponse } from '@/lib/miniMaxVoiceResponse'
 import { prisma } from '@/lib/prisma'
 import { generateTtsAudio, getActiveMiniMaxTtsConfigs, type TtsConfig } from '@/lib/ttsGeneration'
 
@@ -229,7 +230,7 @@ async function persistBrandVoiceProfiles(brandId: string, profiles: BrandVoicePr
   }
 }
 
-async function uploadMiniMaxVoiceSource(config: TtsConfig, file: File): Promise<number> {
+async function uploadMiniMaxVoiceSource(config: TtsConfig, file: File): Promise<string> {
   const form = new FormData()
   form.set('purpose', 'voice_clone')
   form.set('file', file, file.name || 'voice-sample.mp3')
@@ -239,15 +240,12 @@ async function uploadMiniMaxVoiceSource(config: TtsConfig, file: File): Promise<
     body: form,
     signal: AbortSignal.timeout(60_000),
   })
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(payload?.base_resp?.status_msg || payload?.error || `MiniMax upload failed with ${response.status}`)
-  const fileId = Number(payload?.file?.file_id || payload?.file_id || payload?.data?.file_id)
-  if (!Number.isFinite(fileId) || fileId <= 0) throw new Error('MiniMax upload returned no file_id')
-  return fileId
+  const payload = await readMiniMaxVoiceResponse(response, 'upload', config.apiKey)
+  return miniMaxFileId(payload?.file?.file_id ?? payload?.file_id ?? payload?.data?.file_id)
 }
 
 async function cloneMiniMaxVoice(config: TtsConfig, input: {
-  fileId: number
+  fileId: string
   voiceId: string
   modelName: string
   sampleText: string
@@ -255,7 +253,7 @@ async function cloneMiniMaxVoice(config: TtsConfig, input: {
   const response = await fetch(endpointFromBase(config.baseUrl, '/v1/voice_clone', 'https://api.minimax.io/v1/voice_clone'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    body: miniMaxVoiceBody({
       file_id: input.fileId,
       voice_id: input.voiceId,
       text: input.sampleText,
@@ -268,11 +266,7 @@ async function cloneMiniMaxVoice(config: TtsConfig, input: {
     }),
     signal: AbortSignal.timeout(Math.max(60_000, Math.min(config.timeoutMs || 120_000, 180_000))),
   })
-  const payload = await response.json().catch(() => null)
-  const statusCode = payload?.base_resp?.status_code
-  if (!response.ok || statusCode !== 0) {
-    throw new Error(payload?.base_resp?.status_msg || payload?.error || `MiniMax voice clone failed with ${response.status}`)
-  }
+  await readMiniMaxVoiceResponse(response, 'clone', config.apiKey)
 }
 
 function endpointFromBase(baseUrl: string | null | undefined, path: string, fallback: string) {
