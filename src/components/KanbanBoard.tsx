@@ -62,7 +62,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   useEffect(() => {
     if (initialView === 'dashboard') {
       try {
-        const savedView = window.localStorage.getItem('amc.currentView') as BoardView | null
+        const requestedView = new URLSearchParams(window.location.search).get('tab')
+        const savedView = (requestedView === 'assets' ? 'assets' : window.localStorage.getItem('amc.currentView')) as BoardView | null
         const validViews: BoardView[] = ['dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
         if (savedView && validViews.includes(savedView)) {
           setTimeout(() => {
@@ -116,7 +117,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         if (list.length > 0) {
           let savedBrandId: string | null = null
           try {
-            savedBrandId = window.localStorage.getItem('dashboard.activeBrandId')
+            savedBrandId = new URLSearchParams(window.location.search).get('brandId') || window.localStorage.getItem('dashboard.activeBrandId')
           } catch (e) {
             console.error(e)
           }

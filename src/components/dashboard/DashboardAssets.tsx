@@ -1,5 +1,6 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
+import { useI18n } from '@/lib/i18n'
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import {
   Search,
@@ -191,6 +192,7 @@ interface DashboardAssetsProps {
 }
 
 export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavigateToDrafts, onBack }: DashboardAssetsProps) {
+  const { t } = useI18n()
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('unused')
   const [search, setSearch] = useState('')
@@ -211,8 +213,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [calendarCreatives, setCalendarCreatives] = useState<CalendarCreativeOption[]>([])
   const [selectedCreativeId, setSelectedCreativeId] = useState('')
   const [moveFolder, setMoveFolder] = useState('')
-  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', '已使用'])
-  const [selectedFolder, setSelectedFolder] = useState<string>('all')
+  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '已使用'])
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('folder') === 'AI视频' ? 'AI视频' : 'all')
   const [collapsedShootBatches, setCollapsedShootBatches] = useState<Set<string>>(() => new Set())
 
   const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
@@ -324,7 +326,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       if (res.ok) {
         const data = await res.json()
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        const defaults = ['产品', '环境', '活动', '封面图', '视频原片', '已使用']
+        const defaults = ['产品', '环境', '活动', '封面图', 'AI视频', '视频原片', '已使用']
         const customFolders = folderNames.filter((name: string) => !['素材库', ...defaults].includes(name))
         setFolders(['素材库', ...defaults, ...customFolders])
       }
@@ -364,7 +366,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!brandId) return
-    if (['素材库', '产品', '环境', '活动', '封面图', '视频原片', '已使用'].includes(folderName)) {
+    if (['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '视频原片', '已使用'].includes(folderName)) {
       alert('系统默认文件夹不可删除')
       return
     }
@@ -1651,7 +1653,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             >
               <option value="all">📁 全部文件夹</option>
               {folders.map(f => (
-                <option key={f} value={f}>📁 {f}</option>
+                <option key={f} value={f}>📁 {f === 'AI视频' ? t('AI视频', 'AI Videos') : f}</option>
               ))}
             </select>
             <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
@@ -2950,7 +2952,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 autoFocus
               >
                 <option value="">-- 选择文件夹 --</option>
-                {folders.map(f => <option key={f} value={f}>{f === '素材库' ? '根目录 (素材库)' : f}</option>)}
+                {folders.map(f => <option key={f} value={f}>{f === '素材库' ? '根目录 (素材库)' : f === 'AI视频' ? t('AI视频', 'AI Videos') : f}</option>)}
               </select>
               <button onClick={() => void handleFloatingFolderMove()} disabled={!floatingFolderSelect} className="px-2.5 py-1 bg-amber-500 disabled:bg-slate-200 text-white text-[11px] font-bold rounded-lg active:scale-95 cursor-pointer disabled:cursor-not-allowed">移动</button>
               <button onClick={() => setShowFloatingFolder(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-3.5 h-3.5" /></button>

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import crypto from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, getHuaweiObsPresignedPutUrl, makeBrandAssetKey, makeBrandVideoOriginalKey } from '@/lib/integrations/huaweiObs'
@@ -27,7 +28,42 @@ export async function POST(request: Request) {
   if (body.action === 'listShootBatches') return listShootBatches(brandId, body)
   if (body.action === 'presign') return presignAsset(brandId, body)
   if (body.action === 'confirm') return confirmAsset(brandId, actorId, body)
+  if (body.action === 'presignAiVideo' || body.action === 'confirmAiVideo') {
+    if (!['ADMIN', 'AMC_PRINCIPAL'].includes(actorRole)) return NextResponse.json({ error: 'Operator role required' }, { status: 403 })
+    return importAiVideo(brandId, actorId, body)
+  }
   return NextResponse.json({ error: 'Unsupported content asset action' }, { status: 400 })
+}
+
+async function importAiVideo(brandId: string, actorId: string, body: any) {
+  const projectId = text(body.videoProjectId)
+  const mediaId = text(body.mediaId)
+  if (!projectId || !mediaId) return NextResponse.json({ error: 'videoProjectId and mediaId are required' }, { status: 400 })
+  const digest = crypto.createHash('sha256').update(JSON.stringify([brandId, projectId, mediaId])).digest('hex')
+  const id = `aiv_${digest}`
+  const existing = await prisma.mediaAsset.findUnique({ where: { id } })
+  if (existing) return NextResponse.json({ ok: true, assetId: existing.id })
+  const key = `brands/${brandId}/assets/AI视频/${digest}.mp4`
+  const upload = getHuaweiObsPresignedPutUrl({ key, contentType: 'video/mp4' })
+  if (!upload) return NextResponse.json({ error: 'Huawei OBS is not configured' }, { status: 503 })
+  if (body.action === 'presignAiVideo') return NextResponse.json(upload)
+  try {
+    const filename = `${text(body.filename).replace(/\.mp4$/i, '').slice(0, 180) || projectId}.mp4`
+    const metadata = await inspectMediaUrl(upload.publicUrl, { filename, mimeType: 'video/mp4' })
+    assertUploadMedia(metadata, { filename })
+    assertProductionVideo(metadata, filename)
+    const asset = await prisma.mediaAsset.upsert({ where: { id }, update: {}, create: {
+      id, brandId, url: upload.publicUrl, filename, originalFilename: filename,
+      mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes,
+      width: metadata.width ?? null, height: metadata.height ?? null, technicalMetadata: metadata,
+      aiTags: [], aiCategory: 'AI视频', aiReady: true, uploadedBy: actorId,
+      sourceType: 'ai_video', videoProjectId: projectId, rightsStatus: 'owned',
+    } })
+    await prisma.brandFolder.createMany({ data: [{ brandId, name: 'AI视频' }], skipDuplicates: true })
+    return NextResponse.json({ ok: true, assetId: asset.id })
+  } catch (error) {
+    return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
+  }
 }
 
 async function listAssets(brandId: string, body: any, requestOrigin: string) {

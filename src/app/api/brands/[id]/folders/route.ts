@@ -5,8 +5,8 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
-const DEFAULT_FOLDERS = ['产品', '环境', '活动', '封面图', '视频原片']
-const RESERVED_FOLDERS = new Set(['素材库', 'raw', '产品', '环境', '活动', '封面图', '视频原片'])
+const DEFAULT_FOLDERS = ['产品', '环境', '活动', '封面图', '视频原片', 'AI视频']
+const RESERVED_FOLDERS = new Set(['素材库', 'raw', '产品', '环境', '活动', '封面图', '视频原片', 'AI视频'])
 
 async function checkAuth(request: Request, brandId: string) {
   const session = await getSession()
