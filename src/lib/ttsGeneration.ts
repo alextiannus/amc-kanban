@@ -4,11 +4,12 @@ import { miniMaxVoiceEndpoint } from '@/lib/miniMaxEndpoints'
 const DEFAULT_MINIMAX_TTS_MODEL = 'speech-2.8-hd'
 const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 const DEFAULT_TTS_TIMEOUT_MS = 12_000
-const MAX_TTS_TIMEOUT_MS = 20_000
+const MAX_TTS_TIMEOUT_MS = 120_000
 
 export type TtsExecution = {
   audio: Buffer
   contentType: string
+  durationSec?: number
   provenance: {
     profileId: string
     provider: string
@@ -79,7 +80,9 @@ export async function getActiveMiniMaxTtsConfigs(): Promise<TtsConfig[]> {
   }))
 }
 
-async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?: string }) {
+async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?: string; speed?: number; volume?: number; pitch?: number }) {
+  const speed = input.speed ?? 1, volume = input.volume ?? 1, pitch = input.pitch ?? 0
+  if (!Number.isFinite(speed) || speed < 0.5 || speed > 2 || !Number.isFinite(volume) || volume <= 0 || volume > 10 || !Number.isFinite(pitch) || pitch < -12 || pitch > 12) throw new Error('Invalid voice settings')
   const startedAt = Date.now()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), ttsTimeout(config.timeoutMs))
@@ -99,9 +102,9 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
         output_format: 'hex',
         voice_setting: {
           voice_id: input.voiceId || DEFAULT_MINIMAX_VOICE_ID,
-          speed: 1,
-          vol: 1,
-          pitch: 0,
+          speed,
+          vol: volume,
+          pitch,
         },
         audio_setting: {
           sample_rate: 32000,
@@ -133,8 +136,11 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
       throw new Error(`MiniMax TTS ${statusCode ?? 'unknown'}: ${statusMsg ?? 'empty audio'}`)
     }
 
+    const durationMs = Number(payload?.extra_info?.audio_length ?? payload?.data?.extra_info?.audio_length)
+    if (!/^(?:[0-9a-f]{2})+$/i.test(audioHex)) throw new Error('MiniMax TTS returned invalid audio')
     return {
       audio: Buffer.from(audioHex, 'hex'),
+      durationSec: Number.isFinite(durationMs) && durationMs > 0 ? durationMs / 1000 : undefined,
       contentType: 'audio/mpeg',
       latencyMs: Date.now() - startedAt,
     }
@@ -150,6 +156,9 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
 
 export async function generateTtsAudio(input: {
   configId?: string
+  speed?: number
+  volume?: number
+  pitch?: number
   text: string
   voiceId?: string
   brandId?: string
@@ -165,6 +174,7 @@ export async function generateTtsAudio(input: {
   return {
     audio: result.audio,
     contentType: result.contentType,
+    durationSec: result.durationSec,
     provenance: {
       profileId: config.id,
       provider: config.provider,

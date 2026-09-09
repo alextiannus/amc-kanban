@@ -22,6 +22,8 @@ To provide deterministic guardrails and consistency checks on content creation w
 
 ### 1.4 Ownership Boundary
 
+Merchant cloned-voice records remain Kanban-owned execution data. The authenticated internal content-brand-voices API exposes a brand-scoped safe catalog and resolves voice selections for Content video production (implemented locally, pending release). Content stores a non-secret selection snapshot, checks current authorization/status before synthesis, and never falls back to another account or voice. No voice credentials or unscoped cloned-voice catalog are exposed to the browser.
+
 Growth is the canonical merchant data and knowledge center. Merchant identity, classification, locations, menu/product facts, positioning, audience, channels, reputation, evidence and confirmed competitors are read from Growth by stable `Brand.growthBrandKey`.
 
 Confirmed Google Places data follows the same ownership boundary. Growth performs Place confirmation, collection, source attribution and freshness control, and exposes store-level Google action links through the authenticated Merchant 360 interface. Kanban does not call Places API for this sync; an explicit Growth sync caches each store's links in `BrandKnowledge.stores[].googleBusiness` and mirrors the current primary store into the legacy Brand Google fields for existing review and game flows. Cached values retain source and expiry metadata and must not be presented as current after expiry.

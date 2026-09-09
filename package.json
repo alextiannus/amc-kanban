@@ -32,6 +32,7 @@
     "test:historical-platform-repair": "tsx scripts/test-manual-historical-platform-repair.mts",
     "test:media-validation": "node --experimental-strip-types scripts/test-media-validation.mts",
     "test:minimax-llm-config": "node --experimental-strip-types scripts/test-minimax-llm-config.mts",
+    "test:content-brand-voices": "tsx scripts/test-content-brand-voices.mts",
     "media:backfill:dry-run": "node --experimental-strip-types scripts/backfill-media-technical-metadata.mts --dry-run",
     "media:backfill": "node --experimental-strip-types scripts/backfill-media-technical-metadata.mts --apply",
     "test:llm-routing-policy": "node --experimental-strip-types scripts/test-llm-routing-policy.mts",
