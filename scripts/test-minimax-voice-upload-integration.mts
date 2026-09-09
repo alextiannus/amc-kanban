@@ -34,6 +34,11 @@ runInNewContext(compiled, { module, exports: module.exports, require: (id: strin
         : '{"file":{"file_id":123456789012345681},"base_resp":{"status_code":0}}')
     }
     assert.ok(options.body.includes('"file_id":123456789012345681,'))
+    const body = JSON.parse(options.body)
+    for (const field of ['text_validation', 'accuracy', 'text', 'model', 'clone_prompt']) {
+      assert.ok(!(field in body), `${field} must not compare arbitrary recordings with a fixed sentence or synthesize a duplicate preview`)
+    }
+
     return new Response('{"base_resp":{"status_code":0}}')
   },
 })
@@ -44,7 +49,7 @@ assert.equal(calls.length, 1, 'Rejected uploads must not reach clone or persiste
 rejected = false
 const fileId = await service.uploadMiniMaxVoiceSource(config, file)
 assert.equal(fileId, '123456789012345681')
-await service.cloneMiniMaxVoice(config, { fileId, voiceId: 'test-voice', modelName: 'speech-2.8-hd', sampleText: 'test' })
+await service.cloneMiniMaxVoice(config, { fileId, voiceId: 'test-voice' })
 console.log('PASS: legacy enrollment propagates upload errors and preserves file ID through clone request')
 
 // An empty endpoint must use the same region as TTS, never the international fallback.
@@ -56,7 +61,7 @@ for (const [baseUrl, origin] of [
   const selected = { ...config, baseUrl }
   const id = await service.uploadMiniMaxVoiceSource(selected, file)
   assert.equal(calls.at(-1).url, `${origin}/v1/files/upload`)
-  await service.cloneMiniMaxVoice(selected, { fileId: id, voiceId: 'test-voice', modelName: 'speech-2.8-hd', sampleText: 'test' })
+  await service.cloneMiniMaxVoice(selected, { fileId: id, voiceId: 'test-voice' })
   assert.equal(calls.at(-1).url, `${origin}/v1/voice_clone`)
 }
 const beforeInvalid = calls.length
@@ -88,6 +93,7 @@ const created = await service.createBrandVoiceProfile({ brandId: 'test-brand', a
 assert.equal(created.profile.configId, config.id)
 await service.previewBrandVoiceProfile('test-brand', created.profile.id, { actorId: 'actor' })
 assert.ok(ttsCalls.every(call => call.configId === config.id))
+assert.ok(ttsCalls.every(call => typeof call.text === "string" && call.text.length > 0), "Preview text is sent only to the pinned TTS call")
 delete saved.brandVoiceProfiles[0].configId
 const previews = ttsCalls.length
 await assert.rejects(service.previewBrandVoiceProfile('test-brand', created.profile.id, { actorId: 'actor' }), /REENROLL_REQUIRED/)

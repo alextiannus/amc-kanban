@@ -103,8 +103,6 @@ export async function createBrandVoiceProfile(input: CreateBrandVoiceInput) {
   await cloneMiniMaxVoice(config, {
     fileId,
     voiceId: providerVoiceId,
-    modelName: config.modelName || 'speech-2.8-hd',
-    sampleText: DEFAULT_CLONE_TEXT,
   })
 
   const profile: BrandVoiceProfile = {
@@ -253,23 +251,18 @@ async function uploadMiniMaxVoiceSource(config: TtsConfig, file: File): Promise<
 async function cloneMiniMaxVoice(config: TtsConfig, input: {
   fileId: string
   voiceId: string
-  modelName: string
-  sampleText: string
 }) {
   const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/voice_clone'), {
     method: 'POST',
     redirect: 'error',
     headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+    // The recording has no verified transcript. Preview text belongs to the
+    // separate, pinned TTS call, never to ASR validation of this source audio.
     body: miniMaxVoiceBody({
       file_id: input.fileId,
       voice_id: input.voiceId,
-      text: input.sampleText,
-      text_validation: input.sampleText,
-      model: input.modelName,
-      accuracy: 0.7,
       need_noise_reduction: true,
       need_volume_normalization: true,
-      aigc_watermark: true,
     }),
     signal: AbortSignal.timeout(Math.max(60_000, Math.min(config.timeoutMs || 120_000, 180_000))),
   })
