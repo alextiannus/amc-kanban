@@ -323,24 +323,40 @@ export function reviewHistoryInputs(reviews: UnknownRecord[], source = 'apify'):
   }))
 }
 
-export async function persistInternalPublishedPosts(brandId: string, capturedAt = new Date()): Promise<number> {
-  const drafts = await prisma.contentDraft.findMany({
-    where: { brandId, status: 'published', platformPostId: { not: null } },
-    include: { account: { select: { platformId: true, handle: true } } },
-    orderBy: { createdAt: 'asc' },
-  })
-  return persistSocialPosts(brandId, drafts.map((draft: any) => ({
+function internalPublishedDraftInput(draft: {
+  id: string
+  platformPostId?: string | null
+  postUrl?: string | null
+  caption: string
+  publishedAt?: Date | null
+  scheduledAt?: Date | null
+  createdAt: Date
+  mediaUrls: string[]
+  hashtags: string[]
+  account?: { platformId?: string | null; handle?: string | null } | null
+}): SocialHistoryPostInput {
+  const publishedAt = draft.publishedAt ?? draft.scheduledAt ?? draft.createdAt
+  return {
     source: 'internal',
-    externalId: draft.platformPostId,
+    externalId: draft.platformPostId ?? draft.id,
     platform: draft.account?.platformId ?? 'unknown',
     handle: draft.account?.handle ?? null,
     caption: draft.caption,
-    postUrl: draft.postUrl ?? draft.platformPostId,
-    publishedAt: draft.scheduledAt ?? draft.createdAt,
+    postUrl: draft.postUrl ?? draft.platformPostId ?? null,
+    publishedAt,
     contentType: detectContentType(draft.caption, draft.mediaUrls, draft.hashtags),
     mediaUrls: draft.mediaUrls,
-    raw: { draftId: draft.id },
-  })), capturedAt)
+    raw: { draftId: draft.id, manualHistorical: !draft.platformPostId },
+  }
+}
+
+export async function persistInternalPublishedPosts(brandId: string, capturedAt = new Date()): Promise<number> {
+  const drafts = await prisma.contentDraft.findMany({
+    where: { brandId, status: { in: ['published', 'done'] } },
+    include: { account: { select: { platformId: true, handle: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  return persistSocialPosts(brandId, drafts.map(internalPublishedDraftInput), capturedAt)
 }
 
 export async function loadPersistedPosts(brandId: string, from: Date, to: Date, platform = 'all') {

@@ -3,10 +3,14 @@ import { createHash } from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
 
 const apply = process.argv.includes('--apply')
+const internalOnly = process.argv.includes('--internal-only')
 const brandArg = process.argv.find((value) => value.startsWith('--brand='))
 const brandId = brandArg?.slice('--brand='.length) || null
 const limitArg = process.argv.find((value) => value.startsWith('--limit='))
 const limit = Math.min(500, Math.max(1, Number(limitArg?.split('=')[1]) || 100))
+const fromArg = process.argv.find((value) => value.startsWith('--from='))
+const fromDate = fromArg ? new Date(fromArg.slice('--from='.length)) : new Date('2026-01-01T00:00:00.000Z')
+const validFromDate = Number.isNaN(fromDate.getTime()) ? new Date('2026-01-01T00:00:00.000Z') : fromDate
 
 if (!process.env.DATABASE_URL) {
   console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', skipped: true, reason: 'DATABASE_URL is not configured' }, null, 2))
@@ -156,8 +160,15 @@ if (!process.env.DATABASE_URL) {
         postfastSyncedAt: true,
         accounts: { select: { platformId: true, handle: true, followerCount: true, ratingScore: true, snapshotAt: true } },
         contents: {
-          where: { status: 'published', platformPostId: { not: null } },
-          select: { id: true, platformPostId: true, caption: true, postUrl: true, scheduledAt: true, createdAt: true, mediaUrls: true, account: { select: { platformId: true, handle: true } } },
+          where: {
+            status: { in: ['published', 'done'] },
+            OR: [
+              { publishedAt: { gte: validFromDate } },
+              { scheduledAt: { gte: validFromDate } },
+              { createdAt: { gte: validFromDate } },
+            ],
+          },
+          select: { id: true, platformPostId: true, caption: true, postUrl: true, publishedAt: true, scheduledAt: true, createdAt: true, mediaUrls: true, hashtags: true, account: { select: { platformId: true, handle: true } } },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -167,41 +178,49 @@ if (!process.env.DATABASE_URL) {
       counters.brands++
       const snapshot = brand.postfastSnapshot && typeof brand.postfastSnapshot === 'object' ? brand.postfastSnapshot : {}
       const snapshotAt = date(snapshot.analyticsUpdatedAt, brand.postfastSyncedAt || new Date())
-      for (const post of asArray(snapshot.analyticsPosts)) await persistPost(brand.id, postfastInput(post), snapshotAt)
-      for (const account of brand.accounts) await persistAccount(brand.id, { platform: account.platformId, handle: account.handle, followerCount: account.followerCount, ratingScore: account.ratingScore, raw: { source: 'social_account' } }, account.snapshotAt || snapshotAt)
-      for (const draft of brand.contents) await persistPost(brand.id, {
-        source: 'internal', externalId: draft.platformPostId, platform: draft.account?.platformId, handle: draft.account?.handle,
-        caption: draft.caption, postUrl: draft.postUrl || draft.platformPostId, publishedAt: draft.scheduledAt || draft.createdAt,
-        mediaUrls: draft.mediaUrls, raw: { draftId: draft.id },
-      }, new Date())
-
-      const logs = await prisma.auditLog.findMany({ where: { resourceId: brand.id, resourceType: 'ApifySync' }, orderBy: { timestamp: 'asc' }, select: { timestamp: true, metadata: true } })
-      for (const log of logs) {
-        const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata : {}
-        for (const key of ['instagramPosts', 'tiktokPosts', 'xiaohongshuPosts', 'facebookPosts']) {
-          for (const post of asArray(metadata[key])) await persistPost(brand.id, apifyPostInput(post), log.timestamp)
-        }
-        for (const review of asArray(metadata.googleReviews)) await persistReview(brand.id, reviewInput(review), log.timestamp)
-        for (const key of ['instagramProfiles', 'tiktokProfiles', 'facebookProfiles']) {
-          for (const profile of asArray(metadata[key])) await persistAccount(brand.id, {
-            platform: profile.platform, handle: profile.handle, followerCount: profile.followerCount,
-            followingCount: profile.followingCount, postCount: profile.postCount, raw: profile,
-          }, log.timestamp)
-        }
+      if (!internalOnly) {
+        for (const post of asArray(snapshot.analyticsPosts)) await persistPost(brand.id, postfastInput(post), snapshotAt)
+        for (const account of brand.accounts) await persistAccount(brand.id, { platform: account.platformId, handle: account.handle, followerCount: account.followerCount, ratingScore: account.ratingScore, raw: { source: 'social_account' } }, account.snapshotAt || snapshotAt)
+      }
+      for (const draft of brand.contents) {
+        const publishedAt = draft.publishedAt || draft.scheduledAt || draft.createdAt
+        if (publishedAt < validFromDate) continue
+        await persistPost(brand.id, {
+          source: 'internal', externalId: draft.platformPostId || draft.id, platform: draft.account?.platformId, handle: draft.account?.handle,
+          caption: draft.caption, postUrl: draft.postUrl || draft.platformPostId, publishedAt,
+          contentType: undefined, mediaUrls: draft.mediaUrls, raw: { draftId: draft.id, manualHistorical: !draft.platformPostId },
+        }, new Date())
       }
 
-      const reviewItems = await prisma.actionItem.findMany({ where: { brandId: brand.id, type: { in: ['sentiment_alert', 'apify_review'] } }, select: { id: true, payload: true, description: true, createdAt: true } })
-      for (const item of reviewItems) {
-        const payload = item.payload && typeof item.payload === 'object' ? item.payload : {}
-        await persistReview(brand.id, {
-          source: payload.source || 'database', externalId: item.id, platform: payload.platform || 'google',
-          reviewerName: payload.reviewerName, rating: payload.rating, text: payload.reviewText || item.description,
-          replyText: payload.replyText, reviewUrl: payload.reviewUrl, publishedAt: payload.publishedAt || item.createdAt,
-          raw: { actionItemId: item.id },
-        }, item.createdAt)
+      if (!internalOnly) {
+        const logs = await prisma.auditLog.findMany({ where: { resourceId: brand.id, resourceType: 'ApifySync' }, orderBy: { timestamp: 'asc' }, select: { timestamp: true, metadata: true } })
+        for (const log of logs) {
+          const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata : {}
+          for (const key of ['instagramPosts', 'tiktokPosts', 'xiaohongshuPosts', 'facebookPosts']) {
+            for (const post of asArray(metadata[key])) await persistPost(brand.id, apifyPostInput(post), log.timestamp)
+          }
+          for (const review of asArray(metadata.googleReviews)) await persistReview(brand.id, reviewInput(review), log.timestamp)
+          for (const key of ['instagramProfiles', 'tiktokProfiles', 'facebookProfiles']) {
+            for (const profile of asArray(metadata[key])) await persistAccount(brand.id, {
+              platform: profile.platform, handle: profile.handle, followerCount: profile.followerCount,
+              followingCount: profile.followingCount, postCount: profile.postCount, raw: profile,
+            }, log.timestamp)
+          }
+        }
+
+        const reviewItems = await prisma.actionItem.findMany({ where: { brandId: brand.id, type: { in: ['sentiment_alert', 'apify_review'] } }, select: { id: true, payload: true, description: true, createdAt: true } })
+        for (const item of reviewItems) {
+          const payload = item.payload && typeof item.payload === 'object' ? item.payload : {}
+          await persistReview(brand.id, {
+            source: payload.source || 'database', externalId: item.id, platform: payload.platform || 'google',
+            reviewerName: payload.reviewerName, rating: payload.rating, text: payload.reviewText || item.description,
+            replyText: payload.replyText, reviewUrl: payload.reviewUrl, publishedAt: payload.publishedAt || item.createdAt,
+            raw: { actionItemId: item.id },
+          }, item.createdAt)
+        }
       }
     }
-    console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', ...counters }, null, 2))
+    console.log(JSON.stringify({ mode: apply ? 'apply' : 'dry-run', internalOnly, from: validFromDate.toISOString(), ...counters }, null, 2))
   } finally {
     await prisma.$disconnect()
   }
