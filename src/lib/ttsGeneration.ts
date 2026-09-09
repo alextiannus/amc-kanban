@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 
-const DEFAULT_MINIMAX_TTS_ENDPOINT = 'https://api.minimaxi.com/v1/t2a_v2'
+import { DEFAULT_MINIMAX_TTS_ENDPOINT } from '@/lib/miniMaxEndpoints'
 const DEFAULT_MINIMAX_TTS_MODEL = 'speech-2.8-hd'
 const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 const DEFAULT_TTS_TIMEOUT_MS = 12_000

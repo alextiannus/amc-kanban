@@ -1,3 +1,4 @@
+import { miniMaxVoiceEndpoint } from '@/lib/miniMaxEndpoints'
 import { miniMaxFileId, miniMaxVoiceBody, readMiniMaxVoiceResponse } from '@/lib/miniMaxVoiceResponse'
 import { prisma } from '@/lib/prisma'
 import { generateTtsAudio, getActiveMiniMaxTtsConfigs, type TtsConfig } from '@/lib/ttsGeneration'
@@ -234,7 +235,7 @@ async function uploadMiniMaxVoiceSource(config: TtsConfig, file: File): Promise<
   const form = new FormData()
   form.set('purpose', 'voice_clone')
   form.set('file', file, file.name || 'voice-sample.mp3')
-  const response = await fetch(endpointFromBase(config.baseUrl, '/v1/files/upload', 'https://api.minimax.io/v1/files/upload'), {
+  const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/files/upload'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiKey}` },
     body: form,
@@ -250,7 +251,7 @@ async function cloneMiniMaxVoice(config: TtsConfig, input: {
   modelName: string
   sampleText: string
 }) {
-  const response = await fetch(endpointFromBase(config.baseUrl, '/v1/voice_clone', 'https://api.minimax.io/v1/voice_clone'), {
+  const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/voice_clone'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
     body: miniMaxVoiceBody({
@@ -267,17 +268,6 @@ async function cloneMiniMaxVoice(config: TtsConfig, input: {
     signal: AbortSignal.timeout(Math.max(60_000, Math.min(config.timeoutMs || 120_000, 180_000))),
   })
   await readMiniMaxVoiceResponse(response, 'clone', config.apiKey)
-}
-
-function endpointFromBase(baseUrl: string | null | undefined, path: string, fallback: string) {
-  try {
-    const url = new URL(baseUrl || fallback)
-    url.pathname = path
-    url.search = ''
-    return url.toString()
-  } catch {
-    return fallback
-  }
 }
 
 function validateAudioFile(file: File) {

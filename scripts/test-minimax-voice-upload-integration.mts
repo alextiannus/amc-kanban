@@ -1,3 +1,4 @@
+import * as miniMaxEndpoints from '../src/lib/miniMaxEndpoints.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
@@ -10,6 +11,7 @@ const config = { id: 'test', apiKey: 'test-secret', baseUrl: 'https://api.minima
 const calls: any[] = []
 let rejected = true
 const modules: Record<string, any> = {
+  '@/lib/miniMaxEndpoints': miniMaxEndpoints,
   '@/lib/miniMaxVoiceResponse': responseHelpers,
   '@/lib/prisma': { prisma: {} },
   '@/lib/ttsGeneration': { getActiveMiniMaxTtsConfigs: async () => [config] },
@@ -44,3 +46,21 @@ const fileId = await service.uploadMiniMaxVoiceSource(config, file)
 assert.equal(fileId, '123456789012345681')
 await service.cloneMiniMaxVoice(config, { fileId, voiceId: 'test-voice', modelName: 'speech-2.8-hd', sampleText: 'test' })
 console.log('PASS: legacy enrollment propagates upload errors and preserves file ID through clone request')
+
+// An empty endpoint must use the same region as TTS, never the international fallback.
+for (const [baseUrl, origin] of [
+  [null, 'https://api.minimaxi.com'],
+  ['', 'https://api.minimaxi.com'],
+  ['https://api.minimaxi.com/v1/t2a_v2', 'https://api.minimaxi.com'],
+  ['https://api.minimax.io/v1/t2a_v2', 'https://api.minimax.io'],
+] as const) {
+  const selected = { ...config, baseUrl }
+  const id = await service.uploadMiniMaxVoiceSource(selected, file)
+  assert.equal(calls.at(-1).url, `${origin}/v1/files/upload`)
+  await service.cloneMiniMaxVoice(selected, { fileId: id, voiceId: 'test-voice', modelName: 'speech-2.8-hd', sampleText: 'test' })
+  assert.equal(calls.at(-1).url, `${origin}/v1/voice_clone`)
+}
+const beforeInvalid = calls.length
+await assert.rejects(service.uploadMiniMaxVoiceSource({ ...config, baseUrl: 'invalid-address' }, file), /Invalid URL/)
+assert.equal(calls.length, beforeInvalid, 'Invalid configuration must not send the key to a fallback host')
+console.log('PASS: upload and cloning preserve configured region and share the domestic TTS default')

@@ -520,6 +520,7 @@ Body: { role: 'user' | 'assistant', content: string, action?: string, draftId?: 
 
 ## 商家声音上传响应处理（修复待发布）
 
+- 上传、克隆与 TTS 使用同一配置的 API 域名。Base URL 留空时统一使用国内站 `api.minimaxi.com`；显式填写的国内或国际地址保持其域名，非法地址直接报错，不能静默换站点。此默认地址一致性修复待发布。
 - 上传必须同时验证 HTTP 状态和 MiniMax `base_resp.status_code`。业务失败时返回上传阶段、供应商错误码和错误说明，不能被「没有 file_id」覆盖；不得输出密钥或完整响应。
 - 成功响应的 `file.file_id` 按十进制字符串无损保存，克隆请求仍按供应商要求发送 JSON 整数，避免大整数被 JavaScript 舍入或误判为非法。
 - 验收覆盖 HTTP 200 业务拒绝、非 JSON 响应、缺少文件 ID、字符串与大整数 ID，以及上传失败时不得继续克隆。真实录音与账号联调仍需部署后验收。
