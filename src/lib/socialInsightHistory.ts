@@ -377,6 +377,7 @@ export async function loadPersistedPosts(brandId: string, from: Date, to: Date, 
   })
   return rows.map((row: any) => {
     const metric = row.metrics[0]
+    const raw = row.raw && typeof row.raw === 'object' ? row.raw as UnknownRecord : {}
     const likes = metric?.likes ?? 0
     const comments = metric?.comments ?? 0
     const shares = metric?.shares ?? 0
@@ -402,6 +403,7 @@ export async function loadPersistedPosts(brandId: string, from: Date, to: Date, 
       impressions,
       reach,
       engRate: impressions > 0 ? Number(((interactions / impressions) * 100).toFixed(2)) : 0,
+      manualHistorical: raw.manualHistorical === true,
     }
   })
 }

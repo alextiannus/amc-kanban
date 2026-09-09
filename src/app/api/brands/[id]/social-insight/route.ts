@@ -106,6 +106,7 @@ export interface AnalyticsPost {
   impressions: number
   reach: number
   engRate: number
+  manualHistorical?: boolean
 }
 
 function normalizePostUrl(value?: string | null): string {
@@ -319,6 +320,7 @@ async function fetchInternalDrafts(
       mediaUrls: d.mediaUrls ?? [],
       scheduledAt: d.scheduledAt?.toISOString() ?? null,
       likes: 0, comments: 0, shares: 0, impressions: 0, reach: 0, engRate: 0,
+      manualHistorical: !d.platformPostId,
     }
   })
 }
@@ -572,6 +574,7 @@ export async function GET(req: Request, { params }: Params) {
     shares: post.shares,
     impressions: post.impressions,
     reach: post.reach,
+    raw: post.manualHistorical ? { manualHistorical: true } : undefined,
   }))
   const dbReviewHistoryInputs: SocialHistoryReviewInput[] = sentimentAlerts.map((item: any) => {
     const payload = item.payload && typeof item.payload === 'object' ? item.payload as Record<string, unknown> : {}
@@ -720,6 +723,7 @@ export async function GET(req: Request, { params }: Params) {
   // Only count posts that were actually published (have real engagement data or status=published)
   const publishedOnly   = posts.filter(p => p.status === 'published')
   const totalPosts      = publishedOnly.length
+  const manualHistoricalPosts = publishedOnly.filter((p) => p.manualHistorical).length
   // Engagement KPIs computed over all posts (PostFast/Apify have real metrics)
   const totalEngagement = posts.reduce((s, p) => s + p.likes + p.comments + p.shares, 0)
   const totalImpressions= posts.reduce((s, p) => s + p.impressions, 0)
@@ -731,7 +735,7 @@ export async function GET(req: Request, { params }: Params) {
   const platformIds = Array.from(new Set(posts.map(p => p.platform.toLowerCase())))
 
   function createEmptyDay(dateStr: string) {
-    const item: any = { date: dateStr, postCount: 0, engagement: 0, impressions: 0, reach: 0, likes: 0, engRate: 0 }
+    const item: any = { date: dateStr, postCount: 0, manualHistoricalPostCount: 0, engagement: 0, impressions: 0, reach: 0, likes: 0, engRate: 0 }
     for (const pf of platformIds) {
       item[`${pf}_postCount`] = 0
       item[`${pf}_engagement`] = 0
@@ -753,6 +757,7 @@ export async function GET(req: Request, { params }: Params) {
     }
     const e = dayMap.get(key)!
     e.postCount++
+    if (p.manualHistorical) e.manualHistoricalPostCount++
     e.engagement += interactions
     e.impressions += p.impressions
     e.reach += p.reach
@@ -808,6 +813,10 @@ export async function GET(req: Request, { params }: Params) {
   // ── Top Posts ────────────────────────────────────────────────────────────
   const topPosts = [...posts]
     .sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares) || new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
+    .slice(0, 15)
+  const manualHistoricalTopPosts = [...posts]
+    .filter((post) => post.manualHistorical)
+    .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime())
     .slice(0, 15)
 
   // ── Content Type Breakdown ───────────────────────────────────────────────
@@ -943,10 +952,11 @@ export async function GET(req: Request, { params }: Params) {
         ? 'Selected range begins before the earliest recoverable stored record.'
         : null,
     },
-    kpis: { totalPosts, totalEngagement, totalImpressions, avgReach, totalLikes, avgEngRate },
+    kpis: { totalPosts, manualHistoricalPosts, totalEngagement, totalImpressions, avgReach, totalLikes, avgEngRate },
     kpiTrends,
     timeSeries,
     topPosts,
+    manualHistoricalTopPosts,
     contentTypeBreakdown,
     accounts: accountsForRange,
     conversions: {
