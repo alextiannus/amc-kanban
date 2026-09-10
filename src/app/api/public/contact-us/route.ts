@@ -134,12 +134,22 @@ export async function POST(req: NextRequest) {
         })
       : { success: false, error: 'Duplicate submission within 24 hours' }
 
+    if (emailResult.success && emailResult.messageId) {
+      await db.salesLead.update({
+        where: { id: lead.id },
+        data: {
+          notes: `${notes}\nEmail message ID: ${emailResult.messageId}`,
+        },
+      })
+    }
+
     return NextResponse.json({
       ok: true,
       accepted: true,
       leadId: lead.id,
       reused: Boolean(existingLead),
       emailSent: emailResult.success,
+      emailMessageId: emailResult.success ? emailResult.messageId || null : null,
       emailError: emailResult.success ? null : emailResult.error || 'Email send failed',
     }, { status: existingLead ? 200 : 201 })
   } catch (err: any) {
