@@ -34,9 +34,10 @@ export async function GET(req: NextRequest) {
       orderBy: { id: 'asc' }
     })
 
-    // Auto-seed if database is empty
-    if (templates.length === 0) {
-      const seedData = Object.entries(DEFAULT_TEMPLATES).map(([id, t]) => ({
+    const existingIds = new Set(templates.map((template: { id: string }) => template.id))
+    const missingDefaultTemplates = Object.entries(DEFAULT_TEMPLATES)
+      .filter(([id]) => !existingIds.has(id))
+      .map(([id, t]) => ({
         id,
         name: t.name,
         description: t.description,
@@ -47,8 +48,10 @@ export async function GET(req: NextRequest) {
         updatedBy: 'System Seed'
       }))
 
+    // Auto-seed newly added defaults without overwriting templates edited in Admin.
+    if (missingDefaultTemplates.length > 0) {
       await prisma.messageTemplate.createMany({
-        data: seedData
+        data: missingDefaultTemplates
       })
 
       templates = await prisma.messageTemplate.findMany({

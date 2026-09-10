@@ -8,6 +8,7 @@ import {
 import EmailConfigPanel from './EmailConfigPanel'
 import SchedulerPanel from './SchedulerPanel'
 import MessageTemplatesPanel from './MessageTemplatesPanel'
+import ContactLeadsPanel from './ContactLeadsPanel'
 
 export interface SystemLog {
   id: string
@@ -64,6 +65,7 @@ export type SystemSettingsSection =
   | 'smtp'
   | 'scheduler'
   | 'templates'
+  | 'contact_leads'
   | 'audit'
 
 const SYSTEM_SECTION_COPY: Record<SystemSettingsSection, { title: string; description: string }> = {
@@ -94,6 +96,10 @@ const SYSTEM_SECTION_COPY: Record<SystemSettingsSection, { title: string; descri
   templates: {
     title: '消息模板管理',
     description: '维护系统通知、邮件和运营消息模板。',
+  },
+  contact_leads: {
+    title: '官网联系记录',
+    description: '查看 AMC official website Contact Us 表单提交的潜在客户线索。',
   },
   audit: {
     title: '系统审计日志',
@@ -1380,6 +1386,28 @@ export default function SystemTab({
           {sectionOpen('templates') && (
             <div className="px-6 pb-6 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <MessageTemplatesPanel />
+            </div>
+          )}
+        </div>
+        )}
+
+        {/* Section 6: Official Website Contact Leads */}
+        {showSection('contact_leads') && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => toggleSection('contact_leads')}
+            className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
+          >
+            <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
+              <Mail size={15} className="text-indigo-500" />
+              <span>官网联系记录 (Official Website Contact Leads)</span>
+            </span>
+          </button>
+
+          {sectionOpen('contact_leads') && (
+            <div className="px-6 pb-6 pt-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
+              <ContactLeadsPanel />
             </div>
           )}
         </div>
