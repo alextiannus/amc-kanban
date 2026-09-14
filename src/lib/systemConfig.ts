@@ -5,6 +5,13 @@ import { prisma } from './prisma.ts'
 const _keyCache: Record<string, { value: string | null; ts: number }> = {}
 const KEY_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+export async function getAssetAnalysisConfig() {
+  const config = await prisma.systemConfig.findUnique({ where: { id: 'default' } })
+  if (!config?.assetAnalysisEnabled) return null
+  if (!config.assetAnalysisGatewayUrl || !config.assetAnalysisGatewaySecret) throw new Error('Configure the image analysis gateway in Admin')
+  return { baseUrl: config.assetAnalysisGatewayUrl.replace(/\/+$/, ''), secret: config.assetAnalysisGatewaySecret }
+}
+
 function getCachedKey(name: string): string | null | undefined {
   const entry = _keyCache[name]
   if (entry && Date.now() - entry.ts < KEY_CACHE_TTL) return entry.value

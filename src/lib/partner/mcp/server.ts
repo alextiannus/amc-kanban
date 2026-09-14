@@ -1,3 +1,4 @@
+import { enqueueUploadedImage } from '@/lib/asset-analysis/service'
 import { localForProvider } from '@/lib/socialAccountIdentity'
 import { syncSocialAccountBindings, saveSocialAccount, assertAccountBound } from '@/lib/socialAccountBinding'
 /**
@@ -2001,6 +2002,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         },
       })
 
+      await enqueueUploadedImage(asset.id).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, assetId: asset.id, assetUrl, storageEngine, storageKey, asset }, null, 2) }] }
     }
   )

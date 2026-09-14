@@ -1,3 +1,4 @@
+import { triggerDesignerAutoTag } from '@/lib/designer'
 /**
  * Unified Asset Upload API
  * 
@@ -37,6 +38,8 @@ interface UploadAssetRequest {
   mimeType?: string      // e.g., 'image/jpeg', 'video/mp4'
   fileBase64?: string    // base64-encoded file data (no 'data:' prefix)
   imageUrl?: string     // optional direct URL to download
+  analysisBatchKey?: string
+  analysisLanguage?: string
   folder?: string
   aiCategory?: string
   aiTags?: string[]
@@ -190,6 +193,9 @@ export async function POST(request: Request, { params }: Params) {
         })
       }
 
+      await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
+
+
       return NextResponse.json({
         ok: true,
         assetId: asset.id,
@@ -271,6 +277,9 @@ export async function POST(request: Request, { params }: Params) {
         })
       }
 
+      await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
+
+
       return NextResponse.json({
         ok: true,
         assetId: asset.id,
@@ -320,6 +329,9 @@ export async function POST(request: Request, { params }: Params) {
         submittedBy: user.id,
       })
     }
+
+    await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
+
 
     return NextResponse.json({
       ok: true,
@@ -431,7 +443,7 @@ export async function GET(request: Request, { params }: Params) {
   })
   const dbFolderNames = dbFolders.map((f: any) => f.name)
   const assetFolderNames = assets.map((asset: any) => asset.aiCategory || '素材库')
-  const baseFolders = Array.from(new Set([...(dbFolderNames.length > 0 ? dbFolderNames : ['产品', '环境', '活动', '封面图']), 'AI视频']))
+  const baseFolders = dbFolderNames
   const folders = Array.from(new Set(['素材库', ...baseFolders, ...assetFolderNames]))
   const mappedAssets = assets.map((asset: any) => ({
     ...asset,

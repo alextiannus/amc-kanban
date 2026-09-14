@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ensureSystemConfig } from '@/lib/systemConfig'
+import { analysisGateway } from '@/lib/asset-analysis/gateway'
 import { isAmcOperator } from '@/lib/amcOperator'
 
 function maskKey(key: string | null | undefined): string | null {
@@ -48,6 +49,9 @@ export async function GET() {
   const config = await ensureSystemConfig()
   return NextResponse.json({
     id: config.id,
+    assetAnalysisEnabled: config.assetAnalysisEnabled,
+    assetAnalysisGatewayUrl: config.assetAnalysisGatewayUrl || '',
+    assetAnalysisGatewaySecret: maskPassword(config.assetAnalysisGatewaySecret),
     // Note: geminiApiKey and minimaxApiKey are retained in the DB schema but
     // are no longer managed here. AI keys are now in Admin → AI 模型配置 (LLMConfig).
     // SMTP
@@ -100,6 +104,23 @@ export async function PATCH(request: Request) {
 
   const current = await ensureSystemConfig()
 
+  const analysisUrl = resolveField(body, 'assetAnalysisGatewayUrl', current.assetAnalysisGatewayUrl)
+  const analysisSecret = resolveField(body, 'assetAnalysisGatewaySecret', current.assetAnalysisGatewaySecret)
+  if ('assetAnalysisEnabled' in body && typeof body.assetAnalysisEnabled !== 'boolean') return NextResponse.json({ error: 'Invalid analysis enabled flag' }, { status: 400 })
+  const analysisEnabled = body.assetAnalysisEnabled ?? current.assetAnalysisEnabled
+  if (analysisUrl) {
+    try { const url = new URL(analysisUrl); if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error() } catch { return NextResponse.json({ error: 'Image analysis gateway must be an HTTPS URL without credentials or query' }, { status: 400 }) }
+  }
+  if (analysisEnabled && ['assetAnalysisEnabled', 'assetAnalysisGatewayUrl', 'assetAnalysisGatewaySecret'].some(k => k in body)) {
+    const baseUrl = (analysisUrl === undefined ? current.assetAnalysisGatewayUrl : analysisUrl) || ''
+    const secret = (analysisSecret === undefined ? current.assetAnalysisGatewaySecret : analysisSecret) || ''
+    if (!baseUrl || !secret) return NextResponse.json({ error: 'Gateway URL and secret are required' }, { status: 400 })
+    try {
+      const capabilities = await analysisGateway({ baseUrl: baseUrl.replace(/\/+$/, ''), secret }, '/v1/capabilities')
+      if (!['asset_image_analysis', 'asset_category_summary'].every(task => capabilities.tasks?.some((entry: any) => entry.task === task && entry.configured && entry.models?.includes('doubao-seed-2.1-turbo')))) throw new Error('Publish image analysis capabilities to the gateway first')
+    } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 422 }) }
+  }
+
   // SMTP fields
   const nextSmtpHost      = resolveField(body, 'smtpHost', current.smtpHost)
   const nextSmtpPort      = resolveIntField(body, 'smtpPort', current.smtpPort)
@@ -128,6 +149,9 @@ export async function PATCH(request: Request) {
   const updated = await prisma.systemConfig.update({
     where: { id: 'default' },
     data: {
+      ...(analysisUrl !== undefined && { assetAnalysisGatewayUrl: analysisUrl }),
+      ...(analysisSecret !== undefined && { assetAnalysisGatewaySecret: analysisSecret }),
+      ...('assetAnalysisEnabled' in body && { assetAnalysisEnabled: analysisEnabled }),
       ...(nextSmtpHost     !== undefined && { smtpHost: nextSmtpHost }),
       ...(nextSmtpPort     !== undefined && { smtpPort: nextSmtpPort }),
       ...(nextSmtpUser     !== undefined && { smtpUser: nextSmtpUser }),
@@ -155,6 +179,7 @@ export async function PATCH(request: Request) {
   // Mask credentials in audit log
   const maskedOld = {
     ...current,
+    assetAnalysisGatewaySecret: maskPassword(current.assetAnalysisGatewaySecret),
     smtpPassword: maskPassword(current.smtpPassword),
     metaAppSecret: maskKey(current.metaAppSecret),
     googleClientSecret: maskKey(current.googleClientSecret),
@@ -162,6 +187,7 @@ export async function PATCH(request: Request) {
   }
   const maskedNew = {
     ...updated,
+    assetAnalysisGatewaySecret: maskPassword(updated.assetAnalysisGatewaySecret),
     smtpPassword: maskPassword(updated.smtpPassword),
     metaAppSecret: maskKey(updated.metaAppSecret),
     googleClientSecret: maskKey(updated.googleClientSecret),
@@ -183,6 +209,9 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({
     id: updated.id,
+    assetAnalysisEnabled: updated.assetAnalysisEnabled,
+    assetAnalysisGatewayUrl: updated.assetAnalysisGatewayUrl || '',
+    assetAnalysisGatewaySecret: maskPassword(updated.assetAnalysisGatewaySecret),
     // Note: geminiApiKey/minimaxApiKey remain in DB but are no longer managed here.
     // SMTP
     smtpHost: updated.smtpHost || '',

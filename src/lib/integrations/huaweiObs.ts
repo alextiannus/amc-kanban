@@ -134,6 +134,28 @@ export async function uploadHuaweiObsObject(input: {
   }
 }
 
+export function getHuaweiObsPrivateUrl(key: string, expiresInSeconds = 900): string {
+  const config = getHuaweiObsConfig()
+  if (!config) throw new Error('Huawei OBS is not configured')
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '')
+  const dateStamp = amzDate.slice(0, 8)
+  const host = `${config.bucket}.${config.endpoint}`
+  const objectPath = `/${encodeObjectKey(key)}`
+  const scope = `${dateStamp}/${config.region}/s3/aws4_request`
+  const params: Record<string, string> = {
+    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+    'X-Amz-Credential': `${config.accessKeyId}/${scope}`,
+    'X-Amz-Date': amzDate,
+    'X-Amz-Expires': String(expiresInSeconds),
+    'X-Amz-SignedHeaders': 'host',
+  }
+  const query = Object.keys(params).sort().map(k => `${encodePathSegment(k)}=${encodePathSegment(params[k])}`).join('&')
+  const canonical = ['GET', objectPath, query, `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n')
+  const toSign = ['AWS4-HMAC-SHA256', amzDate, scope, sha256Hex(canonical)].join('\n')
+  const signature = crypto.createHmac('sha256', signingKey(config.secretAccessKey, dateStamp, config.region)).update(toSign).digest('hex')
+  return `https://${host}${objectPath}?${query}&X-Amz-Signature=${signature}`
+}
+
 export async function deleteHuaweiObsObject(key: string) {
   const config = getHuaweiObsConfig()
   if (!config) return { ok: false as const, skipped: true as const, error: 'Huawei OBS is not configured' }

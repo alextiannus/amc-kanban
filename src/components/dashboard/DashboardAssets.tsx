@@ -43,6 +43,7 @@ import {
   Loader2,
   Sparkles
 } from 'lucide-react'
+import AssetAnalysisTools, { AssetInfoButton } from './AssetAnalysisTools'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
 function inferUploadMimeType(file: File) {
@@ -86,6 +87,8 @@ interface DashboardAsset {
   url: string
   filename: string | null
   mimeType: string
+  imageAnalysis?: { contentType?: string; needsReview?: boolean }
+  analysisTask?: { status: string; error?: string; batchId: string }
   aiTags: string[]
   aiCategory: string | null
   aiCaption: string | null
@@ -192,7 +195,8 @@ interface DashboardAssetsProps {
 }
 
 export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavigateToDrafts, onBack }: DashboardAssetsProps) {
-  const { t } = useI18n()
+  const { t, language } = useI18n()
+  const [infoAssetId, setInfoAssetId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState('all')
   const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('unused')
   const [search, setSearch] = useState('')
@@ -326,9 +330,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       if (res.ok) {
         const data = await res.json()
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        const defaults = ['产品', '环境', '活动', '封面图', 'AI视频', '视频原片', '已使用']
-        const customFolders = folderNames.filter((name: string) => !['素材库', ...defaults].includes(name))
-        setFolders(['素材库', ...defaults, ...customFolders])
+        setFolders(['素材库', '已使用', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
+        setSelectedFolder(current => ['all', '素材库', '已使用'].includes(current) || folderNames.includes(current) ? current : '素材库')
       }
     } catch (err) {
       console.error('Failed to load folders:', err)
@@ -366,7 +369,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
     e.stopPropagation()
     if (!brandId) return
-    if (['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '视频原片', '已使用'].includes(folderName)) {
+    if (['素材库', '封面图', 'AI视频', '视频原片', '已使用'].includes(folderName)) {
       alert('系统默认文件夹不可删除')
       return
     }
@@ -1212,6 +1215,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       setError('请先选择品牌再上传素材')
       return
     }
+    const analysisBatchKey = crypto.randomUUID()
     const fileList = Array.from(files)
     if (fileList.length === 0) return
 
@@ -1280,6 +1284,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 sizeBytes: file.size,
                 url: presignData.assetUrl,
                 key: presignData.key,
+                analysisBatchKey,
+                analysisLanguage: language,
                 folder: creativePayload.folder,
                 aiTags: creativePayload.aiTags,
                 aiCaption: creativePayload.aiCaption,
@@ -1327,7 +1333,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               filename: file.name,
               mimeType,
               fileBase64,
-              folder: creativePayload.folder,
+              analysisBatchKey,
+                analysisLanguage: language,
+                folder: creativePayload.folder,
               aiCategory: creativePayload.aiCategory,
               aiTags: creativePayload.aiTags,
               aiCaption: creativePayload.aiCaption,
@@ -1366,6 +1374,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         () => worker()
       )
       await Promise.all(workers)
+      await fetch(`/api/brands/${brandId}/asset-analysis`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'seal', batchKey: analysisBatchKey }) }).catch(() => {})
       
       await loadAssets()
       
@@ -1557,6 +1566,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.querySelector('dialog[open]')) return
       const activeEl = document.activeElement
       if (activeEl) {
         const tagName = activeEl.tagName.toUpperCase()
@@ -1599,7 +1609,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       <main className="flex-1 flex flex-col h-full overflow-hidden">
 
         {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
-        <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 flex items-center gap-2">
+        <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 flex flex-wrap items-center gap-2">
 
           {/* Back button — shown when embedded in amc-mm */}
           {onBack && (
@@ -1703,6 +1713,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
           </button>
 
+          <AssetAnalysisTools brandId={brandId} selected={selected} infoAsset={assets.find(a => a.id === infoAssetId) || null} closeInfo={() => setInfoAssetId(null)} onChanged={loadAssets} />
           {/* New folder button */}
           <button
             onClick={handleCreateFolder}
@@ -1820,12 +1831,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                         </div>
                       )}
 
-                      {/* Top-Right: Used Count Badge */}
-                      <div className="absolute top-2 right-2 z-10 bg-slate-950/70 dark:bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full select-none">
+                      {isImageAsset(asset) && <AssetInfoButton asset={asset} onClick={() => setInfoAssetId(asset.id)} />}
+                      {/* Bottom-right: Used Count Badge */}
+                      <div className="absolute bottom-2 right-2 z-10 bg-slate-950/70 dark:bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full select-none">
                         {asset.usedCount}
                       </div>
 
-                      {/* Top-Left: Checkbox hover overlay */}
+                      {/* Top-Right: Checkbox hover overlay */}
                       <div
                         onClick={(e) => toggleSelect(asset.id, e)}
                         onMouseDown={(e) => {
@@ -1836,7 +1848,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                           e.stopPropagation()
                           handleCheckboxTouchStart(asset.id)
                         }}
-                        className={`absolute top-2.5 left-2.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
+                        className={`absolute top-2.5 right-2.5 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
                           isSelected
                             ? 'bg-indigo-500 border-indigo-500 hover:bg-rose-600 hover:border-rose-600 scale-100 shadow-sm shadow-indigo-500/20 group/cb'
                             : isBatchSelectMode

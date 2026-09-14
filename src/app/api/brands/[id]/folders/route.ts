@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
+import { prisma } from '@/lib/asset-analysis/db'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 
 type Params = { params: Promise<{ id: string }> }
 
-const DEFAULT_FOLDERS = ['产品', '环境', '活动', '封面图', '视频原片', 'AI视频']
-const RESERVED_FOLDERS = new Set(['素材库', 'raw', '产品', '环境', '活动', '封面图', '视频原片', 'AI视频'])
+import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
+import { folderName as validateFolderName, PROTECTED_FOLDERS } from '@/lib/asset-analysis/policy'
+const RESERVED_FOLDERS = new Set(PROTECTED_FOLDERS)
 
 async function checkAuth(request: Request, brandId: string) {
   const session = await getSession()
@@ -51,17 +52,15 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   try {
-    await prisma.brandFolder.createMany({
-      data: DEFAULT_FOLDERS.map((name) => ({ brandId, name })),
-      skipDuplicates: true,
-    })
+    await ensureAssetFolders(brandId)
 
     const folders = await prisma.brandFolder.findMany({
       where: { brandId },
       orderBy: { createdAt: 'asc' },
     })
 
-    return NextResponse.json({ folders })
+    const counts = await prisma.mediaAsset.groupBy({ by: ['aiCategory'], where: { brandId }, _count: { _all: true } })
+    return NextResponse.json({ folders: folders.map(folder => ({ ...folder, assetCount: counts.find(c => c.aiCategory === folder.name)?._count._all || 0 })) })
   } catch (error) {
     console.error('[GET /api/brands/[id]/folders]', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -78,12 +77,14 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   try {
+    await ensureAssetFolders(brandId)
     const { name } = await request.json()
     if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json({ error: 'Folder name is required' }, { status: 400 })
     }
 
-    const folderName = name.trim()
+    let folderName: string
+    try { folderName = validateFolderName(name) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
 
     if (RESERVED_FOLDERS.has(folderName)) {
       return NextResponse.json({ error: 'Reserved folder name' }, { status: 400 })
@@ -123,6 +124,7 @@ export async function DELETE(request: Request, { params }: Params) {
   }
 
   try {
+    await ensureAssetFolders(brandId)
     const url = new URL(request.url)
     const folderId = url.searchParams.get('folderId')
     const name = url.searchParams.get('name')
@@ -131,7 +133,8 @@ export async function DELETE(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'folderId or name parameter is required' }, { status: 400 })
     }
 
-    const folder = await prisma.brandFolder.findFirst({
+    await prisma.$transaction(async tx => {
+    const folder = await tx.brandFolder.findFirst({
       where: {
         brandId,
         OR: [
@@ -142,15 +145,15 @@ export async function DELETE(request: Request, { params }: Params) {
     })
 
     if (!folder) {
-      return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+      throw Object.assign(new Error('Folder not found'), { status: 404 })
     }
 
     if (RESERVED_FOLDERS.has(folder.name)) {
-      return NextResponse.json({ error: 'System folders cannot be deleted' }, { status: 409 })
+      throw Object.assign(new Error('System folders cannot be deleted'), { status: 409 })
     }
 
-    // 1. Move all assets inside this folder back to root "素材库"
-    await prisma.mediaAsset.updateMany({
+    // Move assets and delete the folder in one transaction.
+    await tx.mediaAsset.updateMany({
       where: {
         brandId,
         aiCategory: folder.name,
@@ -161,13 +164,37 @@ export async function DELETE(request: Request, { params }: Params) {
     })
 
     // 2. Delete the folder record
-    await prisma.brandFolder.delete({
+    await tx.brandFolder.delete({
       where: { id: folder.id },
     })
 
+    }, { isolationLevel: 'Serializable' })
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch (error: any) {
     console.error('[DELETE /api/brands/[id]/folders]', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: error.status ? error.message : 'Folder changed; refresh and retry' }, { status: error.status || 409 })
+  }
+}
+
+export async function PATCH(request: Request, { params }: Params) {
+  const { id: brandId } = await params
+  const auth = await checkAuth(request, brandId)
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status })
+  try {
+    await ensureAssetFolders(brandId)
+    const body = await request.json()
+    if (typeof body.folderId !== 'string' || !body.folderId) throw new Error('folderId required')
+    const name = validateFolderName(body.name)
+    const folder = await prisma.$transaction(async tx => {
+      const existing = await tx.brandFolder.findFirst({ where: { id: body.folderId, brandId } })
+      if (!existing) throw new Error('Folder not found')
+      if (RESERVED_FOLDERS.has(existing.name)) throw new Error('System folders cannot be renamed')
+      const updated = await tx.brandFolder.update({ where: { id: existing.id }, data: { name } })
+      await tx.mediaAsset.updateMany({ where: { brandId, aiCategory: existing.name }, data: { aiCategory: name } })
+      return updated
+    }, { isolationLevel: 'Serializable' })
+    return NextResponse.json({ folder })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.code === 'P2002' ? 'Folder already exists' : error.message }, { status: 409 })
   }
 }

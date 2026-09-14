@@ -27,6 +27,8 @@ interface ConfirmUploadRequest {
   durationSeconds?: number
   url: string
   key: string
+  analysisBatchKey?: string
+  analysisLanguage?: string
   folder?: string
   aiTags?: string[]
   aiCaption?: string
@@ -150,7 +152,7 @@ async function createConfirmedAsset(input: {
     }
 
     if (asset.mimeType.startsWith('image/')) {
-      void triggerDesignerAutoTag(asset.id).catch((error) => {
+      await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch((error) => {
         console.error('[confirm-upload] Failed to auto-tag asset:', error)
       })
     }

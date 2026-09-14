@@ -1,5 +1,6 @@
 'use client'
 
+import AssetAnalysisConfig from './AssetAnalysisConfig'
 import React, { useEffect, useState, useRef } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
@@ -740,6 +741,7 @@ export default function SystemTab({
       {/* Accordion Panels */}
       <div className="space-y-4">
         {/* Section 1: LLM configs */}
+        {showSection('llm') && <AssetAnalysisConfig />}
         {showSection('llm') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
