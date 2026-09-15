@@ -151,6 +151,9 @@ async function startMockPostFast() {
 
     if (method === 'POST' && url === '/social-posts') {
       const post = body?.posts?.[0]
+      if (post.content.startsWith('AIGC test')) {
+        return json(res, 201, { postIds: ['pf_aigc_test'] })
+      }
       if (post.content === 'Facebook custom cover') {
         assert.equal(post.socialMediaId, 'pf_acc_facebook')
         assert.equal(body.controls.facebookContentType, 'REEL')
@@ -495,6 +498,31 @@ async function main() {
     assert.equal(tiktokCoverPublish.success, true)
     assert.equal(tiktokCoverPublish.postId, 'pf_post_tiktok_cover_001')
     assert.equal(tiktokCoverPublish.warnings?.some((warning) => warning.field === 'coverImage') ?? false, false)
+
+    assert.deepEqual(postfast.sanitizePostFastDraftControls(undefined), {})
+    for (const value of [true, false]) {
+      assert.deepEqual(postfast.sanitizePostFastDraftControls({ tiktokIsAigc: value, firstComment: 'Keep me' }).controls,
+        { tiktokIsAigc: value, firstComment: 'Keep me' })
+    }
+    for (const value of ['true', 1, null, {}, []]) {
+      assert.match(postfast.sanitizePostFastDraftControls({ tiktokIsAigc: value }).error || '', /must be boolean/)
+    }
+    for (const platform of ['tiktok', 'instagram', 'facebook']) {
+      for (const value of [true, false, undefined]) {
+        for (const schedule of [scheduledAt, undefined]) {
+          const result = await postfast.postfastPublish({
+            apiKey: API_KEY, platform,
+            accountId: platform === 'tiktok' ? 'pf_acc_video' : `pf_acc_${platform}`,
+            caption: 'AIGC test', tiktokIsAigc: value,
+            mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+            scheduledAt: schedule,
+          })
+          assert.equal(result.success, true)
+          const sent = seen.filter(r => r.url === '/social-posts').at(-1)!.body
+          assert.equal(sent.controls?.tiktokIsAigc, platform === 'tiktok' && value === true ? true : undefined)
+        }
+      }
+    }
 
     const imageCoverPublish = await postfast.postfastPublish({
       apiKey: API_KEY,

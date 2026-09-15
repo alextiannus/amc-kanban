@@ -35,6 +35,7 @@ import {
   Send,
   Image as ImageIcon
 } from 'lucide-react'
+import TiktokAigcControl from './TiktokAigcControl'
 import PostPreviewModal from './PostPreviewModal'
 import AssetPickerPagination from './AssetPickerPagination'
 import { useBrandAssetPage, type BrandPickerAsset } from '@/hooks/useBrandAssetPage'
@@ -169,6 +170,7 @@ interface DraftItem {
   scheduledAt?: string | null
   platformPostId?: string | null
   publishedAt?: string | null
+  postfastControls?: Record<string, unknown> | null
   postUrl?: string | null
   createdAt?: string | null
   updatedAt: string
@@ -301,6 +303,8 @@ export default function PostEditDrawer({
   
   // Loading & Action states
   const [loading, setLoading] = useState(false)
+  const [aigcBlocked, setAigcBlocked] = useState(false)
+  const [newAigcValue, setNewAigcValue] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const postUrlClickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -526,6 +530,7 @@ export default function PostEditDrawer({
     if (!isOpen) return
     if (!postId) {
       // Create mode: reset all states
+      setNewAigcValue(false)
       setSelectedDraft(null)
       setCaption('')
       setHashtags('')
@@ -803,6 +808,8 @@ export default function PostEditDrawer({
     }
   }
 
+  const isTiktokAccount = (accountId: string) => (accounts.find(a => a.id === accountId)?.platformId || accountId.replace('unconfigured_', '')).toLowerCase() === 'tiktok'
+
   const gbpLocationForAccount = (accountId?: string | null) => {
     if (!accountId) return null
     const account = accounts.find((item) => item.id === accountId)
@@ -819,6 +826,7 @@ export default function PostEditDrawer({
   }
 
   const saveDraft = async (nextStatus?: string, captionOverride?: string, accountIdsOverride?: string[]): Promise<DraftItem[] | null> => {
+    if (aigcBlocked) return null
     let activeCaption = captionOverride !== undefined ? captionOverride : caption
     if (!activeCaption.trim() && contentIdea.trim()) {
       activeCaption = contentIdea.trim()
@@ -890,6 +898,7 @@ export default function PostEditDrawer({
                   hashtags: parseTags(hashtags),
                   accountId: accId,
                   gbpLocationId: gbpLocationForAccount(accId),
+                  ...(isTiktokAccount(accId) ? { postfastControls: { tiktokIsAigc: selectedDraft.postfastControls?.tiktokIsAigc === true } } : {}),
                   scheduledAt: fromDateTimeLocal(scheduledAt),
                   agentNote: formattedAgentNote,
                   status: nextStatus || 'draft',
@@ -921,6 +930,7 @@ export default function PostEditDrawer({
                 hashtags: parseTags(hashtags),
                 accountId: accId,
                 gbpLocationId: gbpLocationForAccount(accId),
+                ...(isTiktokAccount(accId) ? { postfastControls: { tiktokIsAigc: newAigcValue } } : {}),
                 scheduledAt: fromDateTimeLocal(scheduledAt),
                 agentNote: formattedAgentNote,
                 status: nextStatus || 'draft',
@@ -1207,7 +1217,7 @@ export default function PostEditDrawer({
   }
 
   const handleSmartScheduleDirect = async () => {
-    if (!selectedDraft) return
+    if (!selectedDraft || aigcBlocked) return
     if (!ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
@@ -1273,7 +1283,7 @@ export default function PostEditDrawer({
   }
 
   const handlePublishNow = async () => {
-    if (!selectedDraft) return
+    if (!selectedDraft || aigcBlocked) return
     if (!ensureGoogleLocationReady()) return
     if (!confirm('确定要立即发布此帖文吗？')) return
     setSaving(true)
@@ -1317,7 +1327,7 @@ export default function PostEditDrawer({
   }
 
   const handleReschedule = async () => {
-    if (!selectedDraft) return
+    if (!selectedDraft || aigcBlocked) return
     if (!ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
@@ -1360,7 +1370,7 @@ export default function PostEditDrawer({
   }
 
   const handleReview = async (action: 'approve' | 'reject') => {
-    if (!selectedDraft) return
+    if (!selectedDraft || aigcBlocked) return
     if (action === 'approve' && !ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
@@ -1642,7 +1652,7 @@ Return the output strictly in a valid JSON array format, containing:
                       value={caption}
                       onChange={(event) => setCaption(event.target.value)}
                       placeholder="输入草稿正文..."
-                      disabled={isPublished}
+                      disabled={isPublished || aigcBlocked}
                       className="min-h-[160px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm leading-7 text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-550 disabled:cursor-not-allowed"
                     />
                   </div>
@@ -1652,7 +1662,7 @@ Return the output strictly in a valid JSON array format, containing:
                       value={hashtags}
                       onChange={(event) => setHashtags(event.target.value)}
                       placeholder="标签，用逗号分隔，例如 lunch, promo, weekend"
-                      disabled={isPublished}
+                      disabled={isPublished || aigcBlocked}
                       className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-550 disabled:cursor-not-allowed"
                     />
                   </div>
@@ -1789,7 +1799,7 @@ Return the output strictly in a valid JSON array format, containing:
                       <button
                         key={copywriter.id}
                         type="button"
-                        disabled={isPublished}
+                        disabled={isPublished || aigcBlocked}
                         title={title}
                         onClick={() => {
                           setSelectedAccountIds(prev =>
@@ -1826,6 +1836,23 @@ Return the output strictly in a valid JSON array format, containing:
                 </div>
               </div>
 
+              {selectedAccountIds.some(isTiktokAccount) && (
+                <TiktokAigcControl key={postId || 'new'}
+                  value={selectedDraft ? selectedDraft.postfastControls?.tiktokIsAigc === true : newAigcValue}
+                  readOnly={!!selectedDraft && (['publishing', 'published', 'done'].includes(selectedDraft.status) || !!selectedDraft.platformPostId || !!selectedDraft.publishedAt)}
+                  disabled={saving || loading || isAiGenerating} onBlockedChange={setAigcBlocked}
+                  onSave={async (value) => {
+                    if (!selectedDraft) { setNewAigcValue(value); return }
+                    const res = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}`, {
+                      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ postfastControls: { tiktokIsAigc: value } }),
+                    })
+                    const json = await res.json()
+                    if (!res.ok || json.draft?.postfastControls?.tiktokIsAigc !== value) throw new Error('Save failed')
+                    setSelectedDraft(json.draft)
+                    onSuccess()
+                  }} />
+              )}
               {selectedGoogleAccountId && (gbpLocationsLoading || !!gbpLocationsError || gbpLocations.length > 1) && (
                 <div className="space-y-2 rounded-md border border-blue-100 bg-blue-50/60 p-3 dark:border-blue-900/60 dark:bg-blue-950/20">
                   <div className="flex items-center justify-between gap-3">
@@ -1850,7 +1877,7 @@ Return the output strictly in a valid JSON array format, containing:
                   ) : gbpLocations.length > 1 ? (
                     <select
                       value={selectedGbpLocationId}
-                      disabled={isPublished}
+                      disabled={isPublished || aigcBlocked}
                       onChange={(event) => {
                         setSelectedGbpLocationId(event.target.value)
                         setError(null)
@@ -1874,7 +1901,7 @@ Return the output strictly in a valid JSON array format, containing:
                 <input
                   type="datetime-local"
                   value={scheduledAt}
-                  disabled={isPublished}
+                  disabled={isPublished || aigcBlocked}
                   onChange={(event) => setScheduledAt(event.target.value)}
                   className="h-11 w-full rounded-md border border-slate-200 bg-white px-4 text-sm text-slate-850 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-550 disabled:cursor-not-allowed"
                 />
@@ -1888,7 +1915,7 @@ Return the output strictly in a valid JSON array format, containing:
                     value={agentNote}
                     onChange={(event) => setAgentNote(event.target.value)}
                     placeholder="协作备注 / 修改说明"
-                    disabled={isPublished}
+                    disabled={isPublished || aigcBlocked}
                     className="min-h-[80px] w-full rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 disabled:bg-slate-50 dark:disabled:bg-slate-900/50 disabled:text-slate-550 disabled:cursor-not-allowed"
                   />
                 </div>
@@ -2401,7 +2428,7 @@ Return the output strictly in a valid JSON array format, containing:
           {selectedDraft && !isPublished && (
             <button
               type="button"
-              disabled={saving}
+              disabled={aigcBlocked || saving}
               onClick={handleDiscard}
               className="rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950/30 flex items-center gap-1.5 mr-auto"
             >
@@ -2448,7 +2475,7 @@ Return the output strictly in a valid JSON array format, containing:
                   <button
                     type="button"
                     onClick={saveManualPostUrl}
-                    disabled={saving || (!manualPostUrl.trim() && !publishedPostUrl)}
+                    disabled={aigcBlocked || saving || (!manualPostUrl.trim() && !publishedPostUrl)}
                     className="flex w-11 items-center justify-center rounded-md bg-indigo-600 text-white disabled:opacity-40"
                     title="保存帖文链接"
                   >
@@ -2468,14 +2495,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating || googleLocationBlocked}
+                disabled={aigcBlocked || saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating || googleLocationBlocked}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 创作
               </button>
               <button
-                disabled={saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || googleLocationBlocked}
+                disabled={aigcBlocked || saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('draft')
                   if (saved) {
@@ -2490,7 +2517,7 @@ Return the output strictly in a valid JSON array format, containing:
               {selectedDraft && (
                 <button
                   type="button"
-                  disabled={saving || googleLocationBlocked}
+                  disabled={aigcBlocked || saving || googleLocationBlocked}
                   onClick={handleSmartScheduleDirect}
                   className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                 >
@@ -2502,14 +2529,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={saving || isAiGenerating || googleLocationBlocked}
+                disabled={aigcBlocked || saving || isAiGenerating || googleLocationBlocked}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 重新创作
               </button>
               <button
-                disabled={saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('pending_review')
                   if (saved) {
@@ -2523,14 +2550,14 @@ Return the output strictly in a valid JSON array format, containing:
                 保存
               </button>
               <button
-                disabled={saving || !reviewNote.trim()}
+                disabled={aigcBlocked || saving || !reviewNote.trim()}
                 onClick={() => handleReview('reject')}
                 className="inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
               >
                 <X className="h-4 w-4" /> 驳回
               </button>
               <button
-                disabled={saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || googleLocationBlocked}
                 onClick={() => handleReview('approve')}
                 className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
@@ -2540,7 +2567,7 @@ Return the output strictly in a valid JSON array format, containing:
           ) : isScheduled ? (
             <>
               <button
-                disabled={saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('scheduled')
                   if (saved) {
@@ -2555,7 +2582,7 @@ Return the output strictly in a valid JSON array format, containing:
               </button>
               <button
                 type="button"
-                disabled={saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || googleLocationBlocked}
                 onClick={handlePublishNow}
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-755 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
@@ -2563,7 +2590,7 @@ Return the output strictly in a valid JSON array format, containing:
               </button>
               <button
                 type="button"
-                disabled={saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || googleLocationBlocked}
                 onClick={handleReschedule}
                 className="inline-flex items-center gap-1.5 rounded-md bg-amber-500 hover:bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
