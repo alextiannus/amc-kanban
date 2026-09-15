@@ -1,6 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import { prisma } from '@/lib/prisma'
+import { StoreEntitlementError } from '@/lib/storeEntitlementPolicy'
 
 const PROFILE_SCHEMA_VERSION = '1.0.0'
 const PROFILE_KIND = 'amc-brand-profile'
@@ -15,6 +16,7 @@ const STORES_CONFIG_END = '<!-- AMC:BRAND_PROFILE:STORES_CONFIG:END -->'
 const PROFILE_DIR = path.join(process.cwd(), 'public/uploads/brand-profiles')
 
 type BrandSnapshot = {
+  knowledge?: { stores: unknown } | null
   id: string
   name: string
   description: string | null
@@ -181,6 +183,9 @@ function ensureManualSection(existing?: string) {
 }
 
 function buildStores(snapshot: BrandSnapshot) {
+  if (Array.isArray(snapshot.knowledge?.stores) && snapshot.knowledge.stores.length) {
+    return snapshot.knowledge.stores
+  }
   const googleLinksMeta = snapshot.googleLinksMeta && typeof snapshot.googleLinksMeta === 'object' && !Array.isArray(snapshot.googleLinksMeta)
     ? snapshot.googleLinksMeta as Record<string, unknown>
     : {}
@@ -263,7 +268,12 @@ ${snapshot.description || '（暂无，请在人工补充区完善品牌计划�
 - 内容调性与禁用项: 请在人工补充区的“设计与视觉规范”维护
 - 内容支柱与选题策略: 请在人工补充区的“内容策略”维护
 
-## 4. 扩展设计约定
+## 4. 门店资料（系统快照）
+\`\`\`json
+${JSON.stringify({ stores: buildStores(snapshot) }, null, 2)}
+\`\`\`
+
+## 5. 扩展设计约定
 - 本文件为“系统自动区块 + 人工补充区块”双区模型。
 - 系统刷新仅覆盖自动区块，人工补充区保持不变。
 - 推荐将新结构放入 JSON 的 ext 命名空间，避免破坏兼容性。
@@ -284,6 +294,7 @@ export async function loadBrandProfileSnapshot(brandId: string): Promise<BrandSn
   return prisma.brand.findUnique({
     where: { id: brandId },
     select: {
+      knowledge: { select: { stores: true } },
       id: true,
       name: true,
       description: true,
@@ -382,6 +393,29 @@ export async function writeBrandProfileMarkdown(brandId: string, markdown: strin
     relativePath: profileRelativePath(brandId),
     markdown,
   }
+}
+
+// Keep identifiers in the editable text so renaming a store cannot detach its
+// cached Google data or Growth identity on the next Markdown save.
+export function withStoreIdsInMarkdown(markdown: string, stores: Array<Record<string, unknown>>) {
+  let inBusiness = false
+  let index = 0
+  const result = markdown.split('\n').flatMap(line => {
+    if (/^##\s+/.test(line)) inBusiness = /^##\s+经营信息\s*$/.test(line.trim())
+    if (!inBusiness) return [line]
+    if (/<!--\s*AMC:STORE_ID:/.test(line)) return []
+    if (/^###\s+/.test(line) && index < stores.length) {
+      const store = stores[index++]
+      return [line, `<!-- AMC:STORE_ID:${store.storeId} -->`]
+    }
+    return [line]
+  }).join('\n')
+  const start = result.indexOf(STORES_CONFIG_START)
+  const end = result.indexOf(STORES_CONFIG_END, start)
+  if (start < 0 || end < 0) return result
+  return result.slice(0, start + STORES_CONFIG_START.length)
+    + '\n```json\n' + JSON.stringify({ stores }, null, 2) + '\n```\n'
+    + result.slice(end)
 }
 
 export async function readBrandProfileMarkdown(
@@ -499,6 +533,21 @@ export function parseEditableBrandContextFromMarkdown(markdown: string): ParsedE
     knowledge: {},
   }
 
+  // Legacy Profile files also expose a marked JSON store editor. It must go
+  // through the same persistence and quota checks as the visible store form.
+  const config = extractBetween(markdown, STORES_CONFIG_START, STORES_CONFIG_END)
+  let jsonStores: StoreDraft[] | undefined
+  if (config) {
+    try {
+      const match = config.match(/```json\s*([\s\S]*?)```/i)
+      const value = match ? JSON.parse(match[1]) : null
+      if (!value || !Array.isArray(value.stores)) throw new Error('invalid stores')
+      if (value.stores.length) jsonStores = value.stores
+    } catch {
+      throw new StoreEntitlementError('门店 JSON 配置格式错误', 'INVALID_STORES', 400)
+    }
+  }
+
   if (intro !== null) {
     parsed.brand.description = cleanMarkdownValue(intro)
   }
@@ -558,5 +607,11 @@ export function parseEditableBrandContextFromMarkdown(markdown: string): ParsedE
     }
   }
 
+  if (jsonStores) {
+    if (parsed.knowledge.stores?.length) {
+      throw new StoreEntitlementError('请只保留一种门店编辑格式：经营信息或门店 JSON 配置', 'AMBIGUOUS_STORES', 400)
+    }
+    parsed.knowledge.stores = jsonStores
+  }
   return parsed
 }

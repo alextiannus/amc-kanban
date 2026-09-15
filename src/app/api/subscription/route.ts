@@ -336,7 +336,11 @@ export async function GET(request: Request) {
   resolvedAgentId = brandAgent?.agent.id || resolvedAgentId
 
   const parsedStores = profileMarkdown?.markdown ? extractStoresFromMarkdown(profileMarkdown.markdown) : []
-  const stores = parsedStores.length
+  const storeKnowledge = await prisma.brandKnowledge.findUnique({ where: { brandId: brand.id }, select: { stores: true } })
+  const persistedStores = Array.isArray(storeKnowledge?.stores) ? storeKnowledge.stores : []
+  const stores = persistedStores.length
+    ? persistedStores
+    : parsedStores.length
     ? parsedStores
     : [
         {

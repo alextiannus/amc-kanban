@@ -1,3 +1,5 @@
+import { StoreEntitlementError } from '@/lib/storeEntitlementPolicy'
+import { prepareStoreWrite } from '@/lib/storeEntitlements'
 import { after, NextResponse } from 'next/server'
 import type { BrandKnowledge, Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -103,7 +105,7 @@ export async function GET(request: Request, { params }: Params) {
   return NextResponse.json(serializeKnowledge(knowledge))
 }
 
-export async function PATCH(request: Request, { params }: Params) {
+async function handlePATCH(request: Request, { params }: Params) {
   const session = await getSession()
   const { id: brandId } = await params
   let syncActor: { id: string; email?: string | null; type: string; roles: string[] }
@@ -185,9 +187,10 @@ export async function PATCH(request: Request, { params }: Params) {
   if (competitors !== undefined) updateData.competitors = competitors
   if (menuItems !== undefined) updateData.menuItems = menuItems
 
-  const growthDirtyPaths = growthPathsForKnowledgePatch(body)
+  let growthDirtyPaths = growthPathsForKnowledgePatch(body)
   const hasGrowthChanges = growthDirtyPaths.length > 0
   const knowledge = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    if (stores !== undefined) updateData.stores = await prepareStoreWrite(tx, brandId, stores)
     const saved = await tx.brandKnowledge.upsert({
       where: { brandId },
       update: updateData as Prisma.BrandKnowledgeUncheckedUpdateInput,
@@ -204,12 +207,13 @@ export async function PATCH(request: Request, { params }: Params) {
         reservationUrl: reservationUrl || '',
         orderingUrl: orderingUrl || '',
         deliveryUrls: deliveryUrls || [],
-        stores: stores || [],
+        stores: updateData.stores || [],
         market: market || '',
         district: district || '',
         competitors: competitors || [],
       } as Prisma.BrandKnowledgeUncheckedCreateInput,
     })
+    if (stores !== undefined) growthDirtyPaths = growthPathsForKnowledgePatch({ ...body, stores: updateData.stores })
     if (hasGrowthChanges) {
       await queueBrandGrowthSync({ brandId, dirtyPaths: growthDirtyPaths, actor: syncActor, tx })
     }
@@ -227,4 +231,11 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   return NextResponse.json({ ok: true, ...serializeKnowledge(knowledge) })
+}
+
+export async function PATCH(request: Request, context: Params) {
+  try { return await handlePATCH(request, context) } catch (error) {
+    if (error instanceof StoreEntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    throw error
+  }
 }

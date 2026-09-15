@@ -1,3 +1,5 @@
+import { StoreEntitlementError } from '@/lib/storeEntitlementPolicy'
+import { prepareStoreWrite } from '@/lib/storeEntitlements'
 import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -9,6 +11,7 @@ import {
   writeBrandProfileMarkdown,
   parseDescriptionFromMarkdown,
   parseEditableBrandContextFromMarkdown,
+  withStoreIdsInMarkdown,
 } from '@/lib/brandProfileMarkdown'
 import { requestGameShareDraftPoolRefill } from '@/lib/gameShareDraftPool'
 import { growthPathsForBrandPatch, growthPathsForKnowledgePatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
@@ -58,7 +61,7 @@ export async function GET(request: Request, { params }: Params) {
 
 // PATCH /api/brands/[id]/profile
 // Body: { markdown: string } OR { refresh: true }
-export async function PATCH(request: Request, { params }: Params) {
+async function handlePATCH(request: Request, { params }: Params) {
   const session = await getSession()
   const { id } = await params
   let syncActor: { id: string; email?: string | null; type: string; roles: string[] }
@@ -101,7 +104,7 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'markdown is required' }, { status: 400 })
   }
 
-  const saved = await writeBrandProfileMarkdown(id, body.markdown)
+  // Validate and commit store data before writing the profile file.
 
   // Extract editable context sections from saved markdown and update database.
   const parsedDesc = parseDescriptionFromMarkdown(body.markdown)
@@ -124,29 +127,15 @@ export async function PATCH(request: Request, { params }: Params) {
   if (parsedKnowledge.orderingUrl !== undefined) knowledgeUpdate.orderingUrl = parsedKnowledge.orderingUrl
   if (parsedKnowledge.stores !== undefined) knowledgeUpdate.stores = parsedKnowledge.stores
   const growthKnowledgePaths = growthPathsForKnowledgePatch(knowledgeUpdate)
-  const growthDirtyPaths = [...growthPathsForBrandPatch(brandUpdate), ...growthKnowledgePaths]
+  let growthDirtyPaths = [...growthPathsForBrandPatch(brandUpdate), ...growthKnowledgePaths]
 
   if (Object.keys(brandUpdate).length > 0 || Object.keys(knowledgeUpdate).length > 0) {
     updatedBrand = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      if (knowledgeUpdate.stores !== undefined) knowledgeUpdate.stores = await prepareStoreWrite(tx, id, knowledgeUpdate.stores)
       const savedBrand = Object.keys(brandUpdate).length > 0
         ? await tx.brand.update({ where: { id }, data: brandUpdate })
         : null
       if (Object.keys(knowledgeUpdate).length > 0) {
-        if (Array.isArray(knowledgeUpdate.stores)) {
-          const current = await tx.brandKnowledge.findUnique({ where: { brandId: id }, select: { stores: true } })
-          const existingStores = Array.isArray(current?.stores)
-            ? current.stores.flatMap((item) => item && typeof item === 'object' && !Array.isArray(item)
-                ? [{ ...(item as Record<string, unknown>) }]
-                : [])
-            : []
-          knowledgeUpdate.stores = knowledgeUpdate.stores.map((item) => {
-            if (!item || typeof item !== 'object' || Array.isArray(item)) return item
-            const store = item as Record<string, unknown>
-            const storeId = typeof store.storeId === 'string' ? store.storeId : ''
-            const existing = existingStores.find(candidate => candidate.storeId === storeId)
-            return existing ? { ...existing, ...store } : store
-          })
-        }
         await tx.brandKnowledge.upsert({
           where: { brandId: id },
           update: knowledgeUpdate,
@@ -160,6 +149,7 @@ export async function PATCH(request: Request, { params }: Params) {
           },
         })
       }
+      growthDirtyPaths = [...growthPathsForBrandPatch(brandUpdate), ...growthPathsForKnowledgePatch(knowledgeUpdate)]
       if (growthDirtyPaths.length) {
         await queueBrandGrowthSync({ brandId: id, dirtyPaths: growthDirtyPaths, actor: syncActor, tx })
       }
@@ -167,6 +157,10 @@ export async function PATCH(request: Request, { params }: Params) {
     })
     if (growthDirtyPaths.length) after(() => syncBrandGrowthState(id).then(() => undefined))
   }
+
+  const saved = await writeBrandProfileMarkdown(id, Array.isArray(knowledgeUpdate.stores)
+    ? withStoreIdsInMarkdown(body.markdown, knowledgeUpdate.stores)
+    : body.markdown)
 
   if (brandUpdate.description !== undefined) {
     after(async () => {
@@ -183,4 +177,11 @@ export async function PATCH(request: Request, { params }: Params) {
     markdown: saved.markdown,
     brand: updatedBrand,
   })
+}
+
+export async function PATCH(request: Request, context: Params) {
+  try { return await handlePATCH(request, context) } catch (error) {
+    if (error instanceof StoreEntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    throw error
+  }
 }
