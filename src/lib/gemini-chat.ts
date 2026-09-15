@@ -387,10 +387,10 @@ export async function callGeminiChat(
           return { reply: text || '', action: 'NONE' }
         }
       } 
-      else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim') {
+      else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'kopix') {
         // --- OpenAI-compatible (GLM5.2) Tool-Call Flow ---
         const defaultBase = provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'
-        const endpoint = `${baseUrl || defaultBase}/chat/completions`
+        const endpoint = `${(baseUrl || (provider === 'kopix' ? 'https://www.kopix.ai/v1' : defaultBase)).trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
 
         const messages: any[] = []
         if (systemPrompt) {
@@ -410,6 +410,7 @@ export async function callGeminiChat(
             model: modelName,
             messages,
             max_tokens: maxTokens,
+            ...(provider === 'kopix' ? { stream: false } : {}),
           }
 
           if (enableTools) {
@@ -548,4 +549,3 @@ export async function callGeminiChat(
   console.error('[callGeminiChat] All LLM configs failed')
   return { reply: '抱歉，AI 语音助手服务暂时不可用，请稍后再试。', action: 'NONE' }
 }
-

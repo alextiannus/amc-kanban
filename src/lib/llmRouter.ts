@@ -59,7 +59,7 @@ function supportsNativeJsonMode(provider: string) {
 function isLikelyTextChatConfig(config: { provider?: string | null; modelName?: string | null; displayName?: string | null }) {
   const provider = String(config.provider || '').toLowerCase()
   const label = `${config.modelName || ''} ${config.displayName || ''}`.toLowerCase()
-  if (!['openai', 'google', 'deepseek', 'anthropic', 'custom_shim', 'minimax'].includes(provider)) return false
+  if (!['openai', 'google', 'deepseek', 'anthropic', 'custom_shim', 'minimax', 'kopix'].includes(provider)) return false
   return !/(speech|tts|voice|audio|image|video|embedding|rerank)/i.test(label)
 }
 
@@ -151,13 +151,13 @@ async function executeSingleLLMCall(
         console.error(`[LLM Router] ${errorMsg}`)
       }
     }
-    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'minimax') {
+    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'kopix' || provider === 'minimax') {
       const defaultEndpoint = provider === 'deepseek'
         ? 'https://api.deepseek.com/v1'
         : provider === 'minimax'
         ? 'https://api.minimaxi.chat/v1'
         : 'https://api.openai.com/v1'
-      const endpoint = `${baseUrl || defaultEndpoint}/chat/completions`
+      const endpoint = `${(baseUrl || (provider === 'kopix' ? 'https://www.kopix.ai/v1' : defaultEndpoint)).trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -170,6 +170,7 @@ async function executeSingleLLMCall(
           model: modelName,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: maxTokens,
+          ...(provider === 'kopix' ? { stream: false } : {}),
           ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
           ...(options.jsonMode && supportsNativeJsonMode(provider) ? { response_format: { type: 'json_object' } } : {}),
         }),
@@ -182,9 +183,9 @@ async function executeSingleLLMCall(
         const errText = await response.text().catch(() => '')
         if (response.status === 429) {
           rateLimited = true
-          errorMsg = `CUSTOM_SHIM API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
+          errorMsg = `${provider.toUpperCase()} API quota/token limit exceeded (Rate limit / 429). Please check your billing or limit settings.`
         } else if (response.status === 400) {
-          errorMsg = `${provider.toUpperCase()} API error (400 Bad Request / Token limit exceeded). Details: ${errText.slice(0, 150)}`
+          errorMsg = `${provider.toUpperCase()} API error (400 Bad Request). Details: ${errText.slice(0, 150)}`
         } else {
           errorMsg = `${provider.toUpperCase()} API call failed with status ${response.status}: ${response.statusText}`
         }
@@ -355,18 +356,18 @@ async function executeSingleLLMChatCall(
         console.error(`[LLM Chat] ${errorMsg}`)
       }
     }
-    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'minimax') {
+    else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'kopix' || provider === 'minimax') {
       // OpenAI-compatible — works for GLM-4-Flash, DeepSeek, MiniMax, and any OpenAI-format endpoint
       const defaultBase = provider === 'deepseek'
         ? 'https://api.deepseek.com/v1'
         : provider === 'minimax'
         ? 'https://api.minimaxi.chat/v1'
         : 'https://api.openai.com/v1'
-      const endpoint = `${baseUrl || defaultBase}/chat/completions`
+      const endpoint = `${(baseUrl || (provider === 'kopix' ? 'https://www.kopix.ai/v1' : defaultBase)).trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ model: modelName, messages, max_tokens: maxTokens }),
+        body: JSON.stringify({ model: modelName, messages, max_tokens: maxTokens, ...(provider === 'kopix' ? { stream: false } : {}) }),
       })
       if (res.ok) {
         const json = await res.json()
@@ -742,7 +743,8 @@ export async function validateLLMConfig(
     apiKey,
     baseUrl,
     "Hello, are you online?",
-    10
+    provider === 'kopix' ? 1024 : 10,
+    provider === 'kopix' ? { timeoutMs: 45000 } : {}
   )
 
   if (result.text && !result.error) {

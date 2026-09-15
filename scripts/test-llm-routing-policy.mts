@@ -40,7 +40,7 @@ const baseUrl = `http://127.0.0.1:${address.port}`
 try {
   const jsonResult = await callLLMWithConfigs([
     {
-      provider: 'custom_shim',
+      provider: 'openai',
       modelName: 'fast-json',
       baseUrl,
       apiKey: 'fast-token',

@@ -1638,6 +1638,7 @@ export default function SystemTab({
                           deepseek: 'deepseek-chat',
                           minimax: 'speech-2.8-hd',
                           custom_shim: 'custom-model',
+                          kopix: 'glm-5.3',
                           seedance: 'dreamina-seedance-2-0-fast-260128',
                           fal: 'bytedance/seedance-2.0/image-to-video',
                           kieai: 'veo3_fast',
@@ -1650,6 +1651,7 @@ export default function SystemTab({
                           'deepseek-chat',
                           'speech-2.8-hd',
                           'custom-model',
+                          'glm-5.3',
                           'seedance-2.0-fast',
                           'seedance-2-0',
                           'dreamina-seedance-2-0-fast-260128',
@@ -1678,15 +1680,25 @@ export default function SystemTab({
                         return {
                           ...prev,
                           provider: newProvider,
-                          modelName,
+                          ...(newProvider === 'kopix' ? {
+                            baseUrl: 'https://www.kopix.ai/v1',
+                            displayName: 'Kopix GLM-5.3',
+                          } : {}),
+                          modelName: newProvider === 'kopix' ? 'glm-5.3' : modelName,
                           taskTagsStr,
                           capabilitiesStr,
+                          ...(newProvider === 'kopix' && !editingLLMConfig ? {
+                            isEnabled: false, isDefault: false, priority: 0,
+                            taskTagsStr: '', contentGenerationTypesStr: '', fallbackProfileIdsStr: '',
+                            capabilitiesStr: 'text_input, structured_json',
+                          } : {}),
                         }
                       })
                     }}
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
                   >
                     <option value="google">Google Gemini</option>
+                    <option value="kopix">Kopix</option>
                     <option value="openai">OpenAI compatible</option>
                     <option value="anthropic">Anthropic Claude</option>
                     <option value="deepseek">DeepSeek API</option>
