@@ -1,3 +1,4 @@
+import { currentBinding, signBinding } from './lib/global-text/policy'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
@@ -52,6 +53,13 @@ export default async function proxy(request: NextRequest) {
     pathname.startsWith('/uploads/') ||
     pathname.startsWith('/snapshots/')
   const isApiRoute = pathname.startsWith('/api')
+
+  // Bind API work once; gateway/admin endpoints manage their own signed snapshots.
+  if (isApiRoute && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/admin/')) {
+    try {
+      requestHeaders.set('x-amc-text-binding', signBinding(await currentBinding(request.headers.get('x-client-type') === 'mm' ? 'mm' : 'kanban')))
+    } catch { return NextResponse.json({ error: 'Text policy unavailable' }, { status: 503 }) }
+  }
 
   // Bypass API and public routes
   if (isApiRoute || isPublicPage) {

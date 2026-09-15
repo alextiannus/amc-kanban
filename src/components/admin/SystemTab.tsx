@@ -1,6 +1,7 @@
 'use client'
 
 import AssetAnalysisConfig from './AssetAnalysisConfig'
+import GlobalTextModel from './GlobalTextModel'
 import React, { useEffect, useState, useRef } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
@@ -741,6 +742,7 @@ export default function SystemTab({
       {/* Accordion Panels */}
       <div className="space-y-4">
         {/* Section 1: LLM configs */}
+        {showSection('llm') && <GlobalTextModel connections={llmConfigs} />}
         {showSection('llm') && <AssetAnalysisConfig />}
         {showSection('llm') && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
@@ -1601,7 +1603,7 @@ export default function SystemTab({
                 {editingLLMConfig ? '编辑大模型连接配置' : '新增大模型连接配置'}
               </h2>
               <p className="text-xs text-slate-400 mt-1 font-medium">
-                {llmForm.provider === 'minimax' ? 'MiniMax 语音统一使用国内接口。上传、克隆和试听使用同一条配置；失败直接报错，不切换国际站或备用密钥。' : '配置外部大模型路由参数。系统会基于专属标签匹配特定创作任务，无法连接时将自动切换至备用模型。'}
+                {llmForm.provider === 'minimax' ? 'MiniMax 语音统一使用国内接口。上传、克隆和试听使用同一条配置；失败直接报错，不切换国际站或备用密钥。' : '新增供应商可填写显示名称并选择兼容协议。全局文本策略启用后，纯文本统一使用全局选择，失败直接报错；策略关闭时才使用任务标签和备用路由。已被全局版本引用的连接须新建连接后再换密钥或地址。'}
               </p>
             </div>
 

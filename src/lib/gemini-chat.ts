@@ -1,3 +1,4 @@
+import { boundPolicy, connectionFor, executeBound } from './global-text/policy.ts'
 import { prisma } from './prisma'
 import { callLLMChat, type ChatMessage } from './llmRouter'
 
@@ -181,7 +182,8 @@ export async function callGeminiChat(
   // ── 1. Single DB query for all enabled LLM configs ────────────────────────────────────────
   // Previously: two serial queries (companion → defaults). Now: one query, filtered in JS.
   // This saves ~30-60ms on every voice-chat request.
-  const allConfigs = await prisma.lLMConfig.findMany({
+  const strictBinding = await boundPolicy()
+  const allConfigs = strictBinding.enabled ? [await connectionFor(strictBinding)] : await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,
       OR: [{ taskTags: { has: 'companion' } }, { isDefault: true }],
@@ -252,7 +254,7 @@ export async function callGeminiChat(
       let paymentData: any = null
       let quoteData: any = null
 
-      if (provider === 'google') {
+      if (!strictBinding.enabled && provider === 'google') {
         // --- Gemini Tool-Call Flow ---
         const contents: Array<{ role: string; parts: Array<any> }> = []
         if (systemPrompt) {
@@ -387,7 +389,7 @@ export async function callGeminiChat(
           return { reply: text || '', action: 'NONE' }
         }
       } 
-      else if (provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'kopix') {
+      else if (strictBinding.enabled || provider === 'openai' || provider === 'deepseek' || provider === 'custom_shim' || provider === 'kopix') {
         // --- OpenAI-compatible (GLM5.2) Tool-Call Flow ---
         const defaultBase = provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1'
         const endpoint = `${(baseUrl || (provider === 'kopix' ? 'https://www.kopix.ai/v1' : defaultBase)).trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
@@ -428,6 +430,10 @@ export async function callGeminiChat(
             }
           }
 
+          let message: any
+          if (strictBinding.enabled) {
+            message = (await executeBound(strictBinding, {task:'companion',messages,maxTokens,tools:body.tools,toolChoice:body.tool_choice})).message
+          } else {
           const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 
@@ -443,10 +449,13 @@ export async function callGeminiChat(
           }
 
           const json = await response.json()
-          const message = json.choices?.[0]?.message
+          message = json.choices?.[0]?.message
+
+          }
           if (!message) throw new Error('No message returned from OpenAI')
 
           if (message.tool_calls && message.tool_calls.length > 0) {
+            if (strictBinding.enabled && message.tool_calls.length > 1) throw new Error('Text provider returned parallel tools despite serial execution policy')
             const toolCall = message.tool_calls[0]
             const { name, arguments: rawArgs } = toolCall.function
             const action = TOOL_TO_ACTION[name] || 'NONE'
@@ -541,6 +550,7 @@ export async function callGeminiChat(
         }
       }
     } catch (err: any) {
+      if (strictBinding.enabled) throw err
       console.warn(`[callGeminiChat] Config ${config.displayName} failed:`, err)
     }
   }

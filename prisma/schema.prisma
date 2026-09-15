@@ -1445,6 +1445,8 @@ model SocialAccountSnapshot {
 }
 
 model LLMConfig {
+  globalTextRevisions GlobalTextRevision[]
+  globalTextValidations GlobalTextValidation[]
   id          String   @id @default(cuid())
   provider    String // "openai" | "anthropic" | "google" | "deepseek" | "custom_shim" | "minimax"
   displayName String // Page display name (e.g., "GPT-4o")
@@ -1849,4 +1851,51 @@ model Notification {
 
   @@index([userId])
   @@index([brandId])
+}
+
+model GlobalTextRevision {
+  version Int @id
+  enabled Boolean
+  connectionId String?
+  connection LLMConfig? @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  fingerprint String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  actorId String
+  policies GlobalTextPolicy[]
+  jobs GlobalTextJob[]
+}
+model GlobalTextPolicy {
+  id String @id
+  version Int
+  revision GlobalTextRevision @relation(fields: [version], references: [version])
+}
+model GlobalTextValidation {
+  id String @id
+  connectionId String
+  connection LLMConfig @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  fingerprint String
+  report Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model GlobalTextCall {
+  id String @id
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  source String
+  task String
+  version Int
+  connectionId String
+  provider String
+  targetModel String
+  responseModel String?
+  status String
+  latencyMs Int
+  error String?
+  @@index([createdAt(sort: Desc)], map: "GlobalTextCall_recent")
+}
+
+model GlobalTextJob {
+ id String @id
+ version Int
+ revision GlobalTextRevision @relation(fields: [version], references: [version])
+ createdAt DateTime @default(now()) @db.Timestamptz(6)
 }

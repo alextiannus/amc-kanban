@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { currentBinding, connectionFor } from '@/lib/global-text/policy'
 
 /**
  * GET /api/client-config
@@ -22,6 +23,11 @@ export async function GET() {
   // Return best enabled LLMConfig for any client-side metadata needs
   // (e.g. showing which AI model is active in UI). Keys are NOT included.
   try {
+    const policy=await currentBinding()
+    if(policy.enabled){
+      const c=await connectionFor(policy)
+      return NextResponse.json({llmConfig:{provider:c.provider,modelName:c.modelName,displayName:c.displayName},policyVersion:policy.version,strict:true},{headers:{'Cache-Control':'no-store'}})
+    }
     const configs = await prisma.lLMConfig.findMany({
       where: { isEnabled: true },
       orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
