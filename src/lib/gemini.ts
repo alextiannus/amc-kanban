@@ -29,6 +29,8 @@ export async function generateMultimodalText(
 ): Promise<string | null> {
   const central=await selectedExecution('image_understanding',['image_input'])
   if(central){
+    const limit=central.definition.maxTokensByTask?.image_understanding
+    if(limit)maxTokens=Math.min(maxTokens,limit)
     const started=Date.now();let completed=false,responseModel:string|undefined
     try{
     let url:string,headers:Record<string,string>,body:any

@@ -16,7 +16,7 @@ export async function validateSelection(selection:Selection){
     if(capability==='text')throw new Error('Pure text tasks cannot have exceptions')
     if(!model||!model.definition.capabilities.includes(capability))throw new Error('Media exception model lacks the task capability')
   }
-  const text=selectModel(runtime,'kanban','text','text')
+  const text=selectModel(runtime,'kanban','text','text',['text_input','structured_json'])
   await check('system.kanban',async()=>{
     const supported:Record<string,string[]>={image_understanding:['google','openai','custom_shim','kopix','deepseek'],video_generation:['seedance','kieai','minimax'],speech_synthesis:['minimax']}
     for(const [capability,protocols]of Object.entries(supported)){

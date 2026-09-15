@@ -12,6 +12,7 @@ export async function importLegacyModels(actorId:string){
   const image=old.filter(c=>c.isEnabled&&c.provider==='google').sort((a,b)=>b.priority-a.priority||new Date(b.updatedAt).getTime()-new Date(a.updatedAt).getTime())[0]
   const video=ordered.find(c=>['seedance','kieai','minimax','volcengine','fal'].includes(c.provider)&&(c.capabilities?.includes('video_output')||c.taskTags?.some((t:string)=>['video_generation','image_to_video'].includes(t))))
   const speech=ordered.find(c=>c.provider==='minimax'&&(c.taskTags?.some((t:string)=>['tts','tts_generation'].includes(t))||c.modelName?.startsWith('speech-')||c.baseUrl?.includes('/t2a')))
+  if(video?.provider==='minimax'&&!video.baseUrl){const record=records.find(r=>r.legacyId===`kanban:${video.id}`);if(record)record.baseUrl='https://api.minimax.io'}
   const kanbanRoutes=[{task:'image_understanding',row:image,inputs:['image_input']},{task:'video_generation',row:video,inputs:['video_output']},{task:'tts_generation',row:speech,inputs:['audio_output']}]
   for(const route of kanbanRoutes){const item=records.find(r=>r.legacyId===`kanban:${route.row?.id}`);if(item){item.tasks=[...new Set([...item.tasks,route.task])];item.capabilities=[...new Set([...item.capabilities,...route.inputs])];if(route.inputs.some(c=>!route.row.capabilities?.includes(c)))issues.push(`${item.legacyId}: retained existing ${route.task} usage; media capability requires business acceptance`)}}
   const token=process.env.CONTENT_SERVICE_INTERNAL_TOKEN,base=process.env.AMC_CONTENT_SERVICE_URL
