@@ -947,7 +947,8 @@ function BrandProfileContent({
         body: JSON.stringify({ markdown }),
       })
       if (!res.ok) {
-        showToastVal('保存品牌 Profile 失败，请重试', 'error')
+        const error = await res.json().catch(() => null)
+        showToastVal(error?.error || '保存品牌 Profile 失败，请重试', 'error')
         return
       }
       const data = await res.json()
@@ -1217,20 +1218,6 @@ ${storeLines}
         showToastVal(`${skuIssues[0].message}，请将名称、价格、人数和卖点分别填写`, 'error')
         return
       }
-      const settingsRes = await fetch(`/api/brands/${brandId}/settings`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: draftName,
-          description: draftDesc,
-          location: draftLocation,
-          address: draftAddress,
-          phone: draftPhone,
-          website: draftWebsite,
-        }),
-      })
-      if (!settingsRes.ok) throw new Error('brand_settings_save_failed')
-
       const knowledgeRes = await fetch(`/api/brands/${brandId}/knowledge`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1244,7 +1231,24 @@ ${storeLines}
           competitors: textLines(draftCompetitorsText),
         }),
       })
-      if (!knowledgeRes.ok) throw new Error('brand_knowledge_save_failed')
+      if (!knowledgeRes.ok) {
+        const error = await knowledgeRes.json().catch(() => null)
+        throw new Error(error?.error || '门店资料保存失败')
+      }
+
+      const settingsRes = await fetch(`/api/brands/${brandId}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: draftName,
+          description: draftDesc,
+          location: draftLocation,
+          address: draftAddress,
+          phone: draftPhone,
+          website: draftWebsite,
+        }),
+      })
+      if (!settingsRes.ok) throw new Error('brand_settings_save_failed')
 
       const skuRes = await fetch(`/api/brands/${brandId}/sku-library`, {
         method: 'PATCH',
@@ -1272,7 +1276,7 @@ ${storeLines}
       await loadBrandPlanWorkspace()
     } catch (error) {
       console.error('Failed to save brand plan editor:', error)
-      showToastVal('保存失败，请检查字段后重试', 'error')
+      showToastVal(error instanceof Error ? error.message : '保存失败，请检查字段后重试', 'error')
     } finally {
       setPlanEditorSaving(false)
     }
@@ -1722,7 +1726,7 @@ ${storeLines}
   const priorityMenuItems = sortSkuLibrary(draftMenuItems)
   const handleAddStore = () => {
     if (storeSlotCount >= storeLimit) {
-      showToastVal(`当前套餐最多支持 ${storeLimit} 家门店。请先购买多门店支持后再添加。`, 'info')
+      showToastVal(`当前支持 ${storeLimit} 家门店，请联系管理员调整额度或购买多门店支持。`, 'info')
       return
     }
     const currentStores = draftStores.length
@@ -2062,7 +2066,7 @@ ${storeLines}
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-black text-slate-900 dark:text-white">门店设置</h4>
-                    <p className="mt-1 text-xs font-semibold text-slate-400">当前套餐门店额度：{storeLimitText} 家</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-400">当前门店额度：{storeLimitText} 家</p>
                   </div>
                   <button type="button" onClick={handleAddStore} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:border-blue-300 dark:border-slate-700 dark:text-slate-200">
                     <Plus className="h-3.5 w-3.5" /> 添加门店
