@@ -1,4 +1,5 @@
 import { prisma } from './prisma.ts'
+import { assetAnalysisContentConfig } from './asset-analysis/content'
 
 // ── 内存缓存：避免每次语音对话都查 DB 获取 API Key ───────────────────────────
 // Gemini Key 几乎不会变，5 分钟缓存完全安全。
@@ -8,8 +9,7 @@ const KEY_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 export async function getAssetAnalysisConfig() {
   const config = await prisma.systemConfig.findUnique({ where: { id: 'default' } })
   if (!config?.assetAnalysisEnabled) return null
-  if (!config.assetAnalysisGatewayUrl || !config.assetAnalysisGatewaySecret) throw new Error('Configure the image analysis gateway in Admin')
-  return { baseUrl: config.assetAnalysisGatewayUrl.replace(/\/+$/, ''), secret: config.assetAnalysisGatewaySecret }
+  return assetAnalysisContentConfig()
 }
 
 function getCachedKey(name: string): string | null | undefined {

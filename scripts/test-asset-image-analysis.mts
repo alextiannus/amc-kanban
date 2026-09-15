@@ -74,8 +74,8 @@ function load(file: string, dependencies: Record<string, any>) {
 }
 const service = load('../src/lib/asset-analysis/service.ts', {
   'node:crypto': { randomUUID: () => `uuid-${++ids}` }, '@prisma/client': { Prisma: { DbNull: null } },
-  '@/lib/asset-analysis/db': { prisma: db }, '@/lib/systemConfig': { getAssetAnalysisConfig: async () => enabled ? { baseUrl: 'https://gateway', secret: 'test' } : null },
-  '@/lib/integrations/huaweiObs': { getHuaweiObsConfig: () => null }, './gateway': { analysisGateway: gateway }, './folders': { ensureAssetFolders: async () => {} }, './policy': policy,
+  '@/lib/asset-analysis/db': { prisma: db }, '@/lib/systemConfig': { getAssetAnalysisConfig: async () => enabled ? { baseUrl: 'https://content', token: 'test' } : null },
+  '@/lib/integrations/huaweiObs': { getHuaweiObsConfig: () => null }, './content': { analysisContent: gateway }, './folders': { ensureAssetFolders: async () => {} }, './policy': policy,
 })
 const addImage = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', mimeType: 'image/jpeg', url: `https://images.example/${id}.jpg`, aiCategory: '素材库', aiCaption: null, aiTags: ['排期发布', 'manual'], aiReady: false, imageAnalysis: null, updatedAt: stamp() })
 addImage('one'); addImage('two')
