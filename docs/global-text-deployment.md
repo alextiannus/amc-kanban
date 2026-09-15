@@ -10,9 +10,10 @@
 
    ```sh
    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f prisma/migrations/20260915160000_global_text_policy/migration.sql
+   npx prisma migrate resolve --applied 20260915160000_global_text_policy
    ```
 
-   初始版本为 0、`enabled=false`。不要以 `db push` 代替 SQL，后者不会创建保护触发器和初始策略。若使用完整 Prisma migration 流程，先确认历史迁移与生产一致，再执行 `prisma migrate deploy`；不要重复执行两种流程。
+   手工执行 SQL 后必须用 `migrate resolve --applied` 同步 Prisma 记录，否则下次部署会重复建表。初始版本为 0、`enabled=false`。不要以 `db push` 代替 SQL，后者不会创建保护触发器和初始策略。若使用完整 Prisma migration 流程，先确认历史迁移与生产一致，再执行 `prisma migrate deploy`；不要重复执行两种流程。生产数据库已于 2026-09-15 补齐 applied 记录，`migrate status` 确认 up to date。
 
 2. 发布 Kanban，然后发布 Content、MM。环境变量如下：
 
