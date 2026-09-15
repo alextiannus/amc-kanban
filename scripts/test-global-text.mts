@@ -14,6 +14,7 @@ const original={fetch:globalThis.fetch,query:prisma.$queryRawUnsafe,exec:prisma.
 prisma.lLMConfig.findUnique=async({where}:any)=>where.id==='one'?c:d
 prisma.lLMConfig.findMany=async()=>[]
 prisma.$queryRawUnsafe=async(sql:string,...args:any[])=>{
+ if(sql.includes('ModelPolicyState'))return [{version:null}]
  if(sql.includes('JOIN "GlobalTextRevision"'))return [revisions.find(r=>r.version===version)]
  if(sql.includes('FOR UPDATE'))return [{version}]
  if(sql.includes('GlobalTextValidation'))return [{fingerprint:fingerprint(d),report:{passed:true},createdAt:new Date()}]

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { jobBinding, signBinding } from '@/lib/global-text/policy'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/asset-analysis/db'
 import { getAssetAnalysisConfig } from '@/lib/systemConfig'
@@ -38,6 +39,7 @@ export async function createAnalysisBatch(input: { brandId: string; assetIds?: s
       context: JSON.stringify({ name: brand.name, description: brand.description || '' }), sealed: !input.upload || !input.batchKey,
     } })
     await tx.assetAnalysisItem.createMany({ data: assets.map(asset => ({ batchId: batch.id, assetId: asset.id, originalCategory: asset.aiCategory, originalUpdatedAt: asset.updatedAt })), skipDuplicates: true })
+    await tx.$executeRawUnsafe('INSERT INTO "ModelPolicyJob" (id,version) SELECT $1,version FROM "ModelPolicyState" WHERE id=$2 ON CONFLICT(id) DO NOTHING',`kanban:asset-batch:${batch.id}`,'default')
     return batch
   }, { timeout: 30_000 })
 }
@@ -81,7 +83,7 @@ async function processItem(item: any, batch: any, config: AssetAnalysisContentCo
       const generatedTags = untouched ? result.tags.filter(t => !(asset.aiTags.includes(t) && !(previous?.generatedTags || []).includes(t))) : (previous?.generatedTags || [])
       const updated = await tx.mediaAsset.update({ where: { id: asset.id }, data: {
         ...(untouched ? { aiCaption: previous?.captionEdited ? asset.aiCaption : result.caption, aiTags: previous?.tagsEdited ? asset.aiTags : mergeAnalysisTags(asset.aiTags, previous?.generatedTags || [], result.tags) } : {}),
-        imageAnalysis: { ...result, model: ANALYSIS_MODEL, resolvedModel: job.resolvedModel || ANALYSIS_MODEL, version: ANALYSIS_VERSION, analyzedAt: new Date().toISOString(), generatedTags: previous?.tagsEdited ? previous.generatedTags || [] : generatedTags, captionEdited: previous?.captionEdited || !untouched, tagsEdited: previous?.tagsEdited || !untouched },
+        imageAnalysis: { ...result, model: job.modelName || ANALYSIS_MODEL, resolvedModel: job.resolvedModel || job.modelName || ANALYSIS_MODEL, configurationVersion:job.configurationVersion??null, version: ANALYSIS_VERSION, analyzedAt: new Date().toISOString(), generatedTags: previous?.tagsEdited ? previous.generatedTags || [] : generatedTags, captionEdited: previous?.captionEdited || !untouched, tagsEdited: previous?.tagsEdited || !untouched },
       } })
       await tx.assetAnalysisItem.update({ where: { id: item.id }, data: { status: 'SUCCEEDED', result: result as any, error: null, originalUpdatedAt: untouched ? updated.updatedAt : item.originalUpdatedAt } })
     }, { isolationLevel: 'Serializable' })
@@ -133,8 +135,9 @@ export async function processAnalysisQueue() {
     const claimed = await prisma.assetAnalysisBatch.updateMany({ where: { id: batch.id, status: { in: pending }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, data: { leaseUntil: new Date(Date.now() + 300_000), status: 'RUNNING' } })
     if (!claimed.count) continue
     try {
+      const batchConfig={...config,modelBinding:signBinding(await jobBinding('kanban',`asset-batch:${batch.id}`))}
       const items = await prisma.assetAnalysisItem.findMany({ where: { batchId: batch.id, status: { in: pending } }, include: { asset: true }, take: 3, orderBy: { updatedAt: 'asc' } })
-      const results = await Promise.allSettled(items.map(item => processItem(item, batch, config)))
+      const results = await Promise.allSettled(items.map(item => processItem(item, batch, batchConfig)))
       const rejected = results.find(r => r.status === 'rejected')
       if (rejected?.status === 'rejected') throw rejected.reason
       const remaining = await prisma.assetAnalysisItem.count({ where: { batchId: batch.id, status: { in: pending } } })
@@ -143,7 +146,7 @@ export async function processAnalysisQueue() {
       const sealed = batch.sealed || !latest || latest.createdAt.getTime() < Date.now() - 600_000
       if (!remaining && sealed) {
         await prisma.assetAnalysisBatch.update({ where: { id: batch.id }, data: { sealed: true } })
-        await summarize(batch, config)
+        await summarize(batch, batchConfig)
       }
     } catch (error: any) {
       await prisma.assetAnalysisBatch.update({ where: { id: batch.id }, data: { error: error.message.slice(0, 500), ...(error.status === 409 ? { status: 'FAILED' } : {}) } })

@@ -12,7 +12,7 @@ export async function GET(request:Request){
     const incoming=request.headers.get('x-amc-text-binding')
     const b=incoming?{...verifyBinding(incoming),source}:params.get('jobId')?await jobBinding(source,params.get('jobId')!):await currentBinding(source)
     const c=b.enabled?await connectionFor(b):null
-    return NextResponse.json({protocolVersion:PROTOCOL_VERSION,binding:signBinding(b),enabled:b.enabled,version:b.version,connectionId:b.connectionId,target:c?{displayName:c.displayName,provider:c.provider,modelName:c.modelName}:null},{headers:{'Cache-Control':'no-store'}})
+    return NextResponse.json({protocolVersion:PROTOCOL_VERSION,binding:signBinding(b),enabled:b.enabled,version:b.version,modelRevision:b.modelRevision,connectionId:b.connectionId,target:c?{displayName:c.displayName,provider:c.provider,modelName:c.modelName}:null},{headers:{'Cache-Control':'no-store'}})
   }catch{return NextResponse.json({error:'Global text policy unavailable'},{status:503})}
 }
 export async function POST(request:Request){

@@ -1,3 +1,5 @@
+import { selectedExecution, withModels, recordExecution } from '@/lib/model-management/runtime'
+import { runtimeConfig } from '@/lib/model-management/registry'
 import { prisma } from '@/lib/prisma'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -11,6 +13,8 @@ import { makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/hua
 
 type VideoProviderConfig = {
   id: string
+  policyVersion?:number|null
+  connectionId?:string
   provider: string
   displayName: string
   modelName: string
@@ -59,14 +63,24 @@ type SubmitVideoInput = {
 
 const VIDEO_PROVIDERS = ['seedance', 'minimax', 'kieai', 'volcengine', 'fal']
 
+async function trackVideo(config:VideoProviderConfig,run:()=>Promise<VideoExecution>){
+  const started=Date.now();let result:VideoExecution|undefined
+  try{result=await run();return result}finally{
+    if(config.policyVersion!=null)await recordExecution({source:'kanban',task:'video_generation',version:config.policyVersion,modelId:config.id,connectionId:config.connectionId!,targetModel:config.modelName,status:result?(result.status==='completed'?'success':'submitted'):'failed',latencyMs:Date.now()-started})
+  }
+}
+
 export async function submitVideoGeneration(input: SubmitVideoInput): Promise<VideoExecution> {
   const config = await getVideoProviderConfig()
   const job = firstVideoJob(input)
   if (!job?.request?.prompt?.trim()) throw Object.assign(new Error('Video prompt is required'), { status: 400 })
 
-  if (config.provider === 'minimax') return submitMiniMax(config, job)
-  if (config.provider === 'seedance') return submitSeedanceArk(config, job)
-  if (config.provider === 'kieai') return submitKieMarket(config, job)
+  const run=config.provider==='minimax'?()=>submitMiniMax(config,job):config.provider==='seedance'?()=>submitSeedanceArk(config,job):config.provider==='kieai'?()=>submitKieMarket(config,job):null
+  if(run){
+    const result=await trackVideo(config,run)
+    if(config.policyVersion!=null){const pin=(id:string)=>`central:${config.policyVersion}:${encodeURIComponent(id)}`;return {...result,jobId:pin(result.jobId),providerTaskIds:result.providerTaskIds?.map(pin)}}
+    return result
+  }
 
   throw Object.assign(
     new Error(`Video provider ${config.provider} is configured but not supported by the AMC video production runner yet.`),
@@ -75,16 +89,12 @@ export async function submitVideoGeneration(input: SubmitVideoInput): Promise<Vi
 }
 
 export async function refreshVideoGeneration(input: { brandId: string; taskId: string; actorId: string }): Promise<VideoExecution> {
-  const parsed = parseProviderTaskId(input.taskId)
-  const config = await getVideoProviderConfig(parsed.provider)
+  const pinned=input.taskId.match(/^central:(\d+):(.+)$/)
+  const parsed = parseProviderTaskId(pinned?decodeURIComponent(pinned[2]):input.taskId)
+  const config = pinned?await withModels(await runtimeConfig({version:Number(pinned[1]),secrets:true}),()=>getVideoProviderConfig(parsed.provider)):await getVideoProviderConfig(parsed.provider,true)
 
-  const execution = config.provider === 'minimax'
-    ? await refreshMiniMax(config, parsed.taskId)
-    : config.provider === 'seedance'
-      ? await refreshSeedanceArk(config, parsed.taskId)
-      : config.provider === 'kieai'
-      ? await refreshKieMarket(config, parsed.taskId)
-      : null
+  const refresh=config.provider==='minimax'?()=>refreshMiniMax(config,parsed.taskId):config.provider==='seedance'?()=>refreshSeedanceArk(config,parsed.taskId):config.provider==='kieai'?()=>refreshKieMarket(config,parsed.taskId):null
+  let execution=refresh?await trackVideo(config,refresh):null
 
   if (!execution) {
     throw Object.assign(
@@ -92,6 +102,7 @@ export async function refreshVideoGeneration(input: { brandId: string; taskId: s
       { status: 501 },
     )
   }
+  if(pinned){const pin=(id:string)=>`central:${pinned[1]}:${encodeURIComponent(id)}`;execution={...execution,jobId:pin(execution.jobId),providerTaskIds:execution.providerTaskIds?.map(pin)}}
 
   if (execution.outputUrl) {
     const asset = await persistGeneratedVideoAsset({
@@ -385,7 +396,8 @@ function safeFilename(value: string): string {
   return value.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'ai-video-final'
 }
 
-async function getVideoProviderConfig(providerHint?: string): Promise<VideoProviderConfig> {
+async function getVideoProviderConfig(providerHint?: string,legacy=false): Promise<VideoProviderConfig> {
+  const central=legacy?null:await selectedExecution("video_generation",["video_output"]);if(central)return central
   const where = {
     isEnabled: true,
     OR: [

@@ -11,7 +11,7 @@ export async function resolveContentBrandVoice(brandId: string, id: string, expe
   if (!profile || profile.brandId !== brandId) return fail('VOICE_NOT_FOUND: Voice is outside this brand or does not exist', 404)
   if (profile.status !== 'ready' || !profile.consent?.confirmedByUserId) return fail('VOICE_UNAVAILABLE: Voice is not ready or consent is missing')
   if (!profile.configId) return fail('VOICE_REENROLL_REQUIRED: Voice has no original configuration')
-  const config = (await getActiveMiniMaxTtsConfigs()).find(c => c.id === profile.configId)
+  const config = (await getActiveMiniMaxTtsConfigs()).find(c => c.id === profile.configId || c.legacyId===`kanban:${profile.configId}`)
   if (!config?.apiKey?.trim()) return fail('VOICE_CONFIG_UNAVAILABLE: Original MiniMax configuration is unavailable')
   miniMaxVoiceEndpoint(config.baseUrl, '/v1/t2a_v2')
   const selection: MerchantVoiceSelection = { id: profile.id, brandId, label: profile.label, providerVoiceId: profile.providerVoiceId, configId: profile.configId }

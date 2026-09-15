@@ -1473,6 +1473,77 @@ model LLMConfig {
   @@index([priority])
 }
 
+model ModelConnection {
+  id String @id
+  previousId String?
+  previous ModelConnection? @relation("ConnectionVersions", fields: [previousId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  successors ModelConnection[] @relation("ConnectionVersions")
+  models ModelCatalogEntry[]
+  name String
+  protocol String
+  baseUrl String
+  encryptedSecret String
+  secretFingerprint String
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  actorId String
+}
+model ModelCatalogEntry {
+  id String @id
+  connectionId String
+  connection ModelConnection @relation(fields: [connectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  legacyId String?
+  definition Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  actorId String
+}
+model ModelPolicyRevision {
+  version Int @id @default(autoincrement())
+  configuration Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  actorId String
+  states ModelPolicyState[]
+  jobs ModelPolicyJob[]
+  operations ModelOperation[]
+}
+model ModelPolicyState {
+  id String @id
+  version Int?
+  revision ModelPolicyRevision? @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
+}
+model ModelPolicyValidation {
+  id String @id
+  fingerprint String
+  report Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model ModelPolicyJob {
+  id String @id
+  version Int?
+  revision ModelPolicyRevision? @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+model ModelExecutionLog {
+  id String @id
+  source String
+  task String
+  version Int
+  modelId String
+  connectionId String
+  targetModel String
+  responseModel String?
+  status String
+  latencyMs Int
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([createdAt(sort: Desc)], map: "ModelExecutionLog_recent")
+}
+model ModelOperation {
+  id String @id
+  version Int
+  revision ModelPolicyRevision @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
+  record Json
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
 model PromptTemplate {
   id          String   @id @default(cuid())
   taskKey     String   @unique

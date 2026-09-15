@@ -24,6 +24,7 @@ const matches = (row: any, where: any = {}): boolean => Object.entries(where).ev
 })
 const db: any = {
   $queryRaw: async () => [],
+  $executeRawUnsafe: async (sql:string,id:string) => {assert.match(sql,/ModelPolicyJob/);assert.match(id,/^kanban:asset-batch:/);return 1},
   $transaction: (fn: any) => {
     const result = txLock.then(async () => { const old = clone(rows); try { return await fn(db) } catch (e) { rows = old; throw e } })
     txLock = result.catch(() => {}); return result
@@ -56,6 +57,7 @@ const submitted: any[] = []
 const jobs = new Map<string, any>()
 let failAsset: string | undefined
 const gateway = async (_config: any, path: string, request?: any) => {
+  assert.match(_config.modelBinding,/^pinned:asset-batch:/)
   if (!request) return clone(jobs.get(path.split('/').pop()!))
   let job = jobs.get(request.idempotencyKey)
   if (!job) {
@@ -73,6 +75,7 @@ function load(file: string, dependencies: Record<string, any>) {
   return exports as any
 }
 const service = load('../src/lib/asset-analysis/service.ts', {
+  '@/lib/global-text/policy': {jobBinding:async (_source:string,id:string)=>id,signBinding:(id:string)=>`pinned:${id}`},
   'node:crypto': { randomUUID: () => `uuid-${++ids}` }, '@prisma/client': { Prisma: { DbNull: null } },
   '@/lib/asset-analysis/db': { prisma: db }, '@/lib/systemConfig': { getAssetAnalysisConfig: async () => enabled ? { baseUrl: 'https://content', token: 'test' } : null },
   '@/lib/integrations/huaweiObs': { getHuaweiObsConfig: () => null }, './content': { analysisContent: gateway }, './folders': { ensureAssetFolders: async () => {} }, './policy': policy,

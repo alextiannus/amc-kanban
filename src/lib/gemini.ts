@@ -1,5 +1,6 @@
 import { callLLM } from './llmRouter.ts'
 import { prisma } from './prisma'
+import { selectedExecution, recordExecution } from './model-management/runtime'
 
 /**
  * Call the best available LLM to generate text.
@@ -26,6 +27,26 @@ export async function generateMultimodalText(
   base64Data: string,
   maxTokens: number = 500
 ): Promise<string | null> {
+  const central=await selectedExecution('image_understanding',['image_input'])
+  if(central){
+    const started=Date.now();let completed=false,responseModel:string|undefined
+    try{
+    let url:string,headers:Record<string,string>,body:any
+    if(central.provider==='google'){
+      url=`${central.baseUrl.replace(/\/+$/,'')}/models/${encodeURIComponent(central.modelName)}:generateContent`;headers={'Content-Type':'application/json','x-goog-api-key':central.apiKey}
+      body={contents:[{parts:[{text:prompt},{inlineData:{mimeType,data:base64Data}}]}],generationConfig:{maxOutputTokens:maxTokens}}
+    }else if(['openai','custom_shim','kopix','deepseek'].includes(central.provider)){
+      url=`${central.baseUrl.replace(/\/+$/,'').replace(/\/chat\/completions$/,'')}/chat/completions`;headers={'Content-Type':'application/json',Authorization:`Bearer ${central.apiKey}`}
+      body={model:central.modelName,messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:`data:${mimeType};base64,${base64Data}`}}]}],max_tokens:maxTokens,stream:false}
+    }else throw new Error('Selected image understanding model has no Kanban adapter')
+    const response=await fetch(url,{method:'POST',headers,body:JSON.stringify(body),signal:AbortSignal.timeout(central.timeoutMs),cache:'no-store'})
+    if(!response.ok)throw new Error(`Central image model HTTP ${response.status}`)
+    const result=await response.json(),text=result.choices?.[0]?.message?.content||result.candidates?.[0]?.content?.parts?.find((p:any)=>p.text)?.text
+    if(!text)throw new Error('Central image model returned empty content')
+    completed=true;responseModel=result.model||result.modelVersion
+    return text
+    }finally{await recordExecution({source:'kanban',task:'image_understanding',version:central.policyVersion!,modelId:central.id,connectionId:central.connectionId,targetModel:central.modelName,responseModel,status:completed?'success':'failed',latencyMs:Date.now()-started})}
+  }
   // Look up Google config from LLMConfig — no SystemConfig dependency
   const googleConfig = await prisma.lLMConfig.findFirst({
     where: { isEnabled: true, provider: 'google' },

@@ -446,80 +446,9 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 ## 系统配置架构决策 (System Config Architecture)
 
+Current contract: [unified model management](unified-model-management.md). Kanban owns encrypted connections, model definitions and versioned selections. Text has one global default; media uses explicit task exceptions before capability defaults. Content and MM cannot maintain a second active selection after publication. Existing LLMConfig references and provider environment variables are migration inputs or historical-job compatibility only.
 
-### 核心原则：所有 AI 模型 API Key 统一存储在 `LLMConfig` 数据表，不写入 Render 环境变量，不使用 SystemConfig 旧字段
-
-**背景**：早期实现中，Gemini API Key 等凭证被放入 Render 服务的 Environment 变量中。随后迁移到 `SystemConfig.geminiApiKey` 数据库字段。**当前最终架构（2026-06 已全面生效）**：所有 AI 模型 Key 统一迁移至 `LLMConfig` 数据表，实现多供应商动态路由。
-
-**为何不再使用 Render 环境变量或 SystemConfig 的旧字段**：
-- 凭证更新需要重新部署（延迟高）
-- 多服务实例之间无法共享配置
-- 无审计追踪（无法知道谁在什么时间修改了哪个 Key）
-- 无法支持多供应商按任务标签、优先级动态路由
-
-### 当前 LLM 配置架构（LLMConfig 表）
-
-| 配置项 | 存储位置 | 访问方式 | 禁止位置 |
-|--------|----------|----------|----------|
-| 所有 AI 模型 Key（OpenAI、Claude、Gemini、DeepSeek 等） | `LLMConfig` 表（DB） | `llmRouter.ts` 按任务标签路由 | ❌ Render env / SystemConfig 旧字段 |
-| MiniMax TTS Key | `LLMConfig`（provider=`minimax`, taskTags=[`tts`]） | `llmRouter.ts` | ❌ SystemConfig.minimaxApiKey（废弃） |
-| 其他第三方服务 Key（PostFast、地图等） | 对应数据库配置字段 | 对应读取函数 | ❌ 业务代码硬编码 |
-
-**唯一例外**：`DATABASE_URL`、`JWT_SECRET`、`NEXTAUTH_SECRET`、`OBS_*` 等基础设施机密，仍放在 Render 环境变量中（这些无法从数据库读取，因为数据库连接本身依赖它们）。
-
-### LLMConfig 数据模型
-
-```prisma
-model LLMConfig {
-  id           String   @id @default(cuid())
-  provider     String   // "openai" | "anthropic" | "google" | "deepseek" | "minimax" | "custom_shim"
-  displayName  String   // 展示名称（如 "GPT-4o"、"DeepSeek-R1"）
-  modelName    String   // 实际模型 ID（如 "gpt-4o-2024-05-13"）
-  apiKey       String   // 加密存储的 API Key
-  baseUrl      String?  // 自定义代理 Endpoint（可选）
-  isEnabled    Boolean  @default(true)
-  isDefault    Boolean  @default(false)
-  priority     Int      @default(0)  // 数值越大优先级越高（高优先先尝试）
-  taskTags     String[] // 任务适用标签，如 ["copywriting", "reasoning", "tts"]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-```
-
-### 全局文本模型（开发中，未启用）
-
-详见 [全局文本模型](global-text-model.md)。严格策略统一 Kanban、Content、MM 的纯文本调用，优先于下面的任务与备用路由；策略关闭时恢复原行为。多模态和媒体生成保持独立。
-
-### Kopix 文本供应商
-
-- 标识 `kopix`，默认模型 `glm-5.3`，Base URL `https://www.kopix.ai/v1`；使用 OpenAI 兼容 Bearer 鉴权和非流式 Chat Completions。
-- 新增时默认禁用、非默认、优先级 0，任务标签和备用链为空，不迁移已有任务。
-- 密钥沿用 LLMConfig 后台配置和脱敏审计；保存前验证真实连通性，无模型权限时不保存。
-- 文本生成、多轮聊天和兼容工具调用入口支持 Kopix；不声明原生 JSON 模式，业务 JSON 和工具能力分别实测后使用。
-- Kopix 文本连接可选为全局策略目标；图片、视频、音频处理仍使用各自模型。全局启用须通过三系统预检。
-
-### 管理入口
-- **后台路径**：`/admin` → **AI 模型配置（LLMConfig）** 面板
-- **说明**：在此页面添加/启用/禁用各大模型供应商，配置 API Key、代理地址、优先级、任务标签
-- **路由逻辑**（`src/lib/llmRouter.ts`）：按 `taskTags`、`isEnabled`、`priority` 字段从 LLMConfig 表中动态选取最优模型，支持 Fallback 链
-
-### 废弃字段说明
-- `SystemConfig.geminiApiKey` — 字段保留但代码不再读取，**配置 Google 模型请在 LLMConfig 中添加 provider='google' 的条目**
-- `SystemConfig.minimaxApiKey` — 同上废弃，**TTS 请在 LLMConfig 添加 provider='minimax', taskTags=['tts']**
-- `getGeminiApiKey()` / `getMiniMaxApiKey()` — 函数保留（兼容旧数据迁移），新代码不得调用
-- `GEMINI_API_KEY` 环境变量 — 从未作为主要配置来源，不使用
-
-### MiniMax TTS 配置说明
-- **服务端请求规则**：统一使用国内 `https://api.minimaxi.com`。每次只使用已选择的一条启用配置；失败直接返回，不切换 API 域名或备用 Key。商家声音的上传、克隆、激活、试听和视频配音固定使用原配置。
-- **Content 商家配音（本地已实现，待发布）**：通过服务认证的 `/api/internal/content-brand-voices` 提供品牌声音列表、选择解析、试听和音频生成，再次检查操作者品牌权限。声音归属、授权、状态及配置绑定均由服务端验证；Content 保存选择快照及音频，凭据留在 Kanban。新视频默认选品牌默认声音，旧草稿不自动换声；停用或配置失效不得回退。无需新表或后台声音任务。
-- **服务**：MiniMax T2A v2
-- **模型**：`speech-2.8-turbo`
-- **默认音色**：`Chinese (Mandarin)_Warm_Bestie`
-- **代理接口**：`/api/mm/tts-proxy`
-- **降级策略**：MiniMax 不可用时，amc-mm 降级为浏览器 Web Speech API
-- **废弃项**：Azure Speech SDK、Speech Token API、Azure Key/Region 字段均不再使用
-
----
+Release sequence: Prisma migration, deploy without activation, inventory/import and resolve conflicts, preflight all systems, transactional publication, business acceptance, then drain historical jobs before removing obsolete credentials. Rollback publishes a historical selection as a new central version.
 
 ## 📋 Changelog
 
@@ -1672,56 +1601,9 @@ src/agents/skills/
 
 ## AI 模型路由架构（当前实现状态）
 
-> 已实现。2026-07-04 完成从 SystemConfig hardcode → LLMConfig 统一配置的迁移。
+Current contract: [unified model management](unified-model-management.md). Kanban owns encrypted connections, model definitions and versioned selections. Text has one global default; media uses explicit task exceptions before capability defaults. Content and MM cannot maintain a second active selection after publication. Existing LLMConfig references and provider environment variables are migration inputs or historical-job compatibility only.
 
-### 核心原则
-
-**所有 AI 模型调用统一通过 `LLMConfig` 表驱动，无任何 hardcode 模型或 API key。**
-
-- 不同场景（文案生成、语音伴侣、TTS、多模态）通过 `taskTags` 字段区分
-- 优先级由 `priority` 字段控制（数值越高越优先）
-- 断路器（Circuit Breaker）自动跳过 5 分钟内限流（429）的模型
-- Admin → AI 模型配置 是唯一的 key 管理入口
-
-### 路由路径
-
-| 场景 | taskTag | 调用路径 |
-|------|---------|---------|
-| 文案生成、评论回复 | `copywriting` | `callLLM('copywriting')` → `llmRouter.ts` |
-| AI 语音伴侣对话 | `companion` | `callLLMChat('companion')` → `llmRouter.ts` |
-| Growth V2 初级报告证据归纳 | `growth_report_analysis` | Growth → `/api/internal/llm-generate` → `callLLM()`；使用 JSON 模式、受控模型尝试次数和调用截止时间 |
-| 商家端 TTS 语音合成 | `tts` | `tts-proxy/route.ts` → `LLMConfig[tts]` → MiniMax T2A API |
-| 多模态图像分析 | `google` provider | `generateMultimodalText()` → `LLMConfig[provider=google]` |
-| 参考视频分析 | `reference_video_analysis` | AMC-Content 能力路由；要求 `video_input + structured_json`，或关键帧/ASR/OCR 预处理路径 |
-| 视频片段生成 | `video_generation` | AMC-Content 通用 Adapter；Seedance/Volcengine/Kie.ai/FAL 均为可选 profile，Kanban 仅调用 Content |
-| 品牌口播 | `tts_generation` | AMC-Content TTS Adapter；要求 `audio_output`，Kanban 不保存供应商密钥 |
-| 创意质量审核 | `creative_quality_review` | AMC-Content 事实、品牌、合规、权利与相似度复核 |
-| 管理后台 AI 建议 | `companion` | browser → `/api/llm/chat` → `callLLMChat` |
-
-### 关键文件
-
-```
-src/lib/llmRouter.ts        — 核心路由，callLLM() + callLLMChat()，含断路器
-src/lib/gemini-chat.ts      — 语音伴侣专用 chat，LLMConfig 驱动
-src/lib/gemini.ts           — generateText / generateMultimodalText（均走 LLMConfig）
-src/lib/gemini-direct.ts    — 浏览器端 LLM 调用封装（现已改为 POST /api/llm/chat）
-src/app/api/llm/chat/       — 通用服务端 LLM chat 端点，供前端组件调用
-src/app/api/mm/tts-proxy/   — MiniMax TTS 代理，key 来自 LLMConfig[tts]
-```
-
-### 已废弃（不再使用）
-
-- `SystemConfig.geminiApiKey` — 字段保留但代码不再读取，AI key 请配置在 LLMConfig
-- `SystemConfig.minimaxApiKey` — 同上，MiniMax TTS key 已迁移至 LLMConfig[tts]
-- 浏览器直调 Google Generative Language API — 已改为服务端路由
-
-### 配置管理
-
-Admin → AI 模型配置 页面：
-- 新增/编辑/删除 LLMConfig 记录
-- 调整 priority 控制使用顺序
-- 按 taskTags 为不同场景指定专用模型
-- 断路器状态查看（哪些模型当前被限流）
+Release sequence: Prisma migration, deploy without activation, inventory/import and resolve conflicts, preflight all systems, transactional publication, business acceptance, then drain historical jobs before removing obsolete credentials. Rollback publishes a historical selection as a new central version.
 
 ## Changelog v1.8.37 — 2026-07-05（密码重置与用户资料修复）
 

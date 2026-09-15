@@ -1,3 +1,4 @@
+import { selectedExecution, recordExecution } from '@/lib/model-management/runtime'
 import { prisma } from '@/lib/prisma'
 
 import { miniMaxVoiceEndpoint } from '@/lib/miniMaxEndpoints'
@@ -21,6 +22,9 @@ export type TtsExecution = {
 
 export type TtsConfig = {
   id: string
+  legacyId?:string
+  policyVersion?:number|null
+  connectionId?:string
   provider: string
   modelName: string
   apiKey: string
@@ -50,6 +54,7 @@ function ttsTimeout(configTimeoutMs: number | null | undefined) {
 }
 
 export async function getActiveMiniMaxTtsConfigs(): Promise<TtsConfig[]> {
+  const central=await selectedExecution("tts_generation",["audio_output"]);if(central){if(central.provider!=="minimax")throw new Error("Selected speech model has no Kanban TTS adapter");return [central]}
   const configs: MiniMaxTtsProfileCandidate[] = await prisma.lLMConfig.findMany({
     where: {
       isEnabled: true,
@@ -168,9 +173,10 @@ export async function generateTtsAudio(input: {
   actorRole?: string
 }): Promise<TtsExecution> {
   const configs = await getActiveMiniMaxTtsConfigs()
-  const config = input.configId ? configs.find(c => c.id === input.configId) : configs[0]
+  const config = input.configId ? configs.find(c => c.id === input.configId || c.legacyId===`kanban:${input.configId}`) : configs[0]
   if (!config) throw new Error(input.configId ? 'VOICE_CONFIG_UNAVAILABLE: Original MiniMax configuration is unavailable' : 'TTS_MODEL_NOT_CONFIGURED')
-  const result = await callMiniMaxTts(config, input)
+  const started=Date.now();let result:Awaited<ReturnType<typeof callMiniMaxTts>>|undefined
+  try{result=await callMiniMaxTts(config,input)}finally{if(config.policyVersion!=null)await recordExecution({source:'kanban',task:'tts_generation',version:config.policyVersion,modelId:config.id,connectionId:config.connectionId!,targetModel:config.modelName,status:result?'success':'failed',latencyMs:Date.now()-started})}
   return {
     audio: result.audio,
     contentType: result.contentType,

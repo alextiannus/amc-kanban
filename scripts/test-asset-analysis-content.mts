@@ -26,7 +26,8 @@ try {
   await analysisContent(config, '/v1/capabilities')
   assert.equal(calls.at(-1)!.url, 'https://content.test/v1/asset-analysis/capabilities')
   const payload = { clientJobId: 'item', idempotencyKey: 'old:key', taskType: 'asset_image_analysis' }
-  await analysisContent(config, '/v1/jobs', payload)
+  await analysisContent({...config,modelBinding:'signed-pinned-batch'}, '/v1/jobs', payload)
+  assert.equal(new Headers(calls.at(-1)!.init.headers).get('x-amc-text-binding'),'signed-pinned-batch')
   assert.equal(calls.at(-1)!.url, 'https://content.test/v1/asset-analysis/jobs')
   assert.equal(calls.at(-1)!.init.body, JSON.stringify(payload))
   await analysisContent(config, '/v1/jobs/' + encodeURIComponent('old:job/1'))

@@ -2,8 +2,10 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { prisma } from '../prisma.ts'
 import { complete, fingerprint, type Connection, type TextRequest } from './transport.ts'
+import { runtimeConfig, rejectLegacyModelWrite } from '../model-management/registry.ts'
+import { selectModel } from '../model-management/types.ts'
 
-export type Binding = { version:number; enabled:boolean; connectionId:string|null; fingerprint:string|null; source:string; expires:number; probe?:boolean }
+export type Binding = { version:number; enabled:boolean; connectionId:string|null; fingerprint:string|null; source:string; expires:number; probe?:boolean;modelRevision?:number|null }
 const scopes = new AsyncLocalStorage<{binding:Promise<Binding>}>()
 export const PROTOCOL_VERSION = 1
 function signingKey() { const key=process.env.JWT_SECRET || process.env.CONTENT_SERVICE_INTERNAL_TOKEN; if (!key) throw new Error('Global text signing secret is not configured'); return key }
@@ -21,17 +23,24 @@ export function verifyBinding(token:string):Binding {
   return binding
 }
 export async function currentBinding(source='kanban'):Promise<Binding> {
+  const models=await runtimeConfig()
+  if(models.active){
+    const model=selectModel(models,source,'text','text')
+    return {version:models.version!,modelRevision:models.version,enabled:true,connectionId:model.id,fingerprint:null,source,expires:Date.now()+7*24*3600_000}
+  }
   const rows:any[]=await prisma.$queryRawUnsafe('SELECT r.* FROM "GlobalTextPolicy" p JOIN "GlobalTextRevision" r ON r.version=p.version WHERE p.id=$1','default')
   if(!rows[0]) throw new Error('Global text policy migration is required')
-  return {...rows[0],source,expires:Date.now()+7*24*3600_000}
+  return {...rows[0],modelRevision:null,source,expires:Date.now()+7*24*3600_000}
 }
 export async function jobBinding(source:string,jobId:string):Promise<Binding>{
+  const models=await runtimeConfig({source,jobId})
+  if(models.active){const m=selectModel(models,source,'text','text');return {version:models.version!,modelRevision:models.version,enabled:true,connectionId:m.id,fingerprint:null,source,expires:Date.now()+7*24*3600_000}}
   if(!jobId||jobId.length>250)throw new Error('Invalid global text job ID')
   const id=`${source}:${jobId}`
   await prisma.$executeRawUnsafe('INSERT INTO "GlobalTextJob" (id,version) SELECT $1,version FROM "GlobalTextPolicy" WHERE id=$2 ON CONFLICT(id) DO NOTHING',id,'default')
   const rows:any[]=await prisma.$queryRawUnsafe('SELECT r.* FROM "GlobalTextJob" j JOIN "GlobalTextRevision" r ON r.version=j.version WHERE j.id=$1',id)
   if(!rows[0])throw new Error('Job policy unavailable')
-  return {...rows[0],source,expires:Date.now()+7*24*3600_000}
+  return {...rows[0],modelRevision:null,source,expires:Date.now()+7*24*3600_000}
 }
 export async function boundPolicy():Promise<Binding> {
   const scoped=scopes.getStore(); if(scoped) return scoped.binding
@@ -46,6 +55,11 @@ export async function withTextScope<T>(run:()=>Promise<T>, binding?:Binding):Pro
   return scopes.run({binding:binding?Promise.resolve(binding):currentBinding()},run)
 }
 export async function connectionFor(binding:Binding):Promise<Connection> {
+  if(typeof binding.modelRevision==='number'){
+    const models=await runtimeConfig({version:binding.modelRevision,secrets:true})
+    const model=selectModel(models,binding.source,'text','text')
+    return {id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:models.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs}
+  }
   if(!binding.enabled||!binding.connectionId)throw new Error('Global text policy is disabled')
   const c=await prisma.lLMConfig.findUnique({where:{id:binding.connectionId}}) as Connection|null
   if(!c||!c.apiKey||fingerprint(c)!==binding.fingerprint) throw new Error('Pinned text connection changed or is missing; no fallback allowed')
@@ -53,12 +67,21 @@ export async function connectionFor(binding:Binding):Promise<Connection> {
 }
 export async function executeBound(binding:Binding,input:TextRequest) {
   const c=await connectionFor(binding)
+  const runtime=typeof binding.modelRevision==='number'?await runtimeConfig({version:binding.modelRevision}):null
+  const model=runtime?selectModel(runtime,binding.source,'text','text'):null
+  if(model){
+    const limit=model.definition.maxTokensByTask?.[input.task||'text']||model.definition.maxTokensByTask?.text
+    input={...input,maxTokens:limit?Math.min(input.maxTokens||limit,limit):input.maxTokens,temperature:input.temperature??model.definition.temperature}
+  }
   const started=Date.now(); let result;let failure:string|null=null
   try { result=await complete(c,input);return {...result,policyVersion:binding.version,connectionId:c.id} }
   catch(e) { failure=e instanceof Error?e.message:'Text call failed';throw e }
   finally {
     // No prompt, output, key or upstream error body is persisted.
-    await prisma.$executeRawUnsafe('INSERT INTO "GlobalTextCall" (id,source,task,version,"connectionId",provider,"targetModel","responseModel",status,"latencyMs",error) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',randomUUID(),binding.source,String(input.task||'text').slice(0,100),binding.version,c.id,c.provider,c.modelName,result?.responseModel||null,failure?'failed':'success',Date.now()-started,failure)
+    if(typeof binding.modelRevision==='number'&&model){
+      const {recordExecution}=await import('../model-management/runtime.ts')
+      await recordExecution({source:binding.source,task:input.task||'text',version:binding.modelRevision,modelId:model.id,connectionId:model.connectionId,targetModel:c.modelName,responseModel:result?.responseModel||undefined,status:failure?'failed':'success',latencyMs:Date.now()-started})
+    } else await prisma.$executeRawUnsafe('INSERT INTO "GlobalTextCall" (id,source,task,version,"connectionId",provider,"targetModel","responseModel",status,"latencyMs",error) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',randomUUID(),binding.source,String(input.task||'text').slice(0,100),binding.version,c.id,c.provider,c.modelName,result?.responseModel||null,failure?'failed':'success',Date.now()-started,failure?'Provider request failed':null)
   }
 }
 export async function strictText(input:TextRequest) {
@@ -78,6 +101,7 @@ export async function policyOverview() {
   return {current:{version:current.version,enabled:current.enabled,connectionId:current.connectionId},revisions,validations,calls,protocolVersion:PROTOCOL_VERSION}
 }
 export async function applyPolicy(input:{expectedVersion:number;enabled:boolean;connectionId:string|null;validationId?:string},actorId:string) {
+  await rejectLegacyModelWrite()
   return prisma.$transaction(async(tx:any)=>{
     const rows=await tx.$queryRawUnsafe('SELECT version FROM "GlobalTextPolicy" WHERE id=$1 FOR UPDATE','default')
     if(rows[0]?.version!==input.expectedVersion)throw new Error('Configuration changed; reload before applying')

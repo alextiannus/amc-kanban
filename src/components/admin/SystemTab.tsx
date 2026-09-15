@@ -2,6 +2,7 @@
 
 import AssetAnalysisConfig from './AssetAnalysisConfig'
 import GlobalTextModel from './GlobalTextModel'
+import UnifiedModelManagement from './UnifiedModelManagement'
 import React, { useEffect, useState, useRef } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
@@ -301,6 +302,7 @@ export default function SystemTab({
 
   // MiniMax TTS test
   const [testingTts, setTestingTts] = useState(false)
+  const [unifiedModelsActive,setUnifiedModelsActive]=useState(false)
   const [ttsTestResult, setTtsTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [modelTaskRoutes, setModelTaskRoutes] = useState<ModelTaskRouteRecord[]>([])
   const [modelTaskServices, setModelTaskServices] = useState<Record<string, string>>({})
@@ -742,9 +744,10 @@ export default function SystemTab({
       {/* Accordion Panels */}
       <div className="space-y-4">
         {/* Section 1: LLM configs */}
-        {showSection('llm') && <GlobalTextModel connections={llmConfigs} />}
+        {showSection('llm') && <UnifiedModelManagement onActive={setUnifiedModelsActive} />}
+        {showSection('llm') && !unifiedModelsActive && <GlobalTextModel connections={llmConfigs} />}
         {showSection('llm') && <AssetAnalysisConfig />}
-        {showSection('llm') && (
+        {showSection('llm') && !unifiedModelsActive && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
           <button 
             onClick={() => toggleSection('llm')}
