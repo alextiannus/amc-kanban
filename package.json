@@ -17,6 +17,7 @@
     "start:direct": "node node_modules/next/dist/cli/next-start.js -p 3000",
     "lint": "eslint",
     "typecheck": "tsc --project tsconfig.check.json",
+    "test:store-entitlements": "node --experimental-strip-types scripts/test-store-entitlements.mts",
     "test:draft-asset-pagination": "node --experimental-strip-types scripts/test-draft-asset-pagination.mts",
     "test:calendar-drafts": "node --experimental-strip-types scripts/test-calendar-drafts.mts",
     "test:content-engine-integration": "node --experimental-strip-types scripts/test-content-engine-integration.mts",

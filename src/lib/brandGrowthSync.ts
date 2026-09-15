@@ -1,3 +1,4 @@
+import { prepareStoreWrite } from '@/lib/storeEntitlements'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -146,14 +147,16 @@ export async function seedInitialBrandStores(
   brandId: string,
   value: unknown,
   database: Prisma.TransactionClient | typeof prisma = prisma
-) {
-  const stores = Array.isArray(value)
+): Promise<boolean> {
+  let stores = Array.isArray(value)
     ? value.filter(isRecord).filter(store =>
         text(store.name) || text(store.address) || text(store.googlePlaceId)
         || text(store.phone) || numberOrNull(store.latitude) !== null || numberOrNull(store.longitude) !== null
       )
     : []
   if (!stores.length) return false
+  if (database === prisma) return prisma.$transaction((tx: Prisma.TransactionClient) => seedInitialBrandStores(brandId, value, tx))
+  stores = await prepareStoreWrite(database, brandId, stores)
   await database.brandKnowledge.upsert({
     where: { brandId },
     update: { stores: jsonValue(stores) },
@@ -165,7 +168,9 @@ export async function seedInitialBrandStores(
 export async function ensureStableBrandStores(
   brandId: string,
   database: Prisma.TransactionClient | typeof prisma = prisma
-) {
+): Promise<StoreRecord[]> {
+  if (database === prisma) return prisma.$transaction((tx: Prisma.TransactionClient) => ensureStableBrandStores(brandId, tx))
+  await database.$queryRaw`SELECT "id" FROM "Brand" WHERE "id" = ${brandId} FOR UPDATE`
   const brand = await database.brand.findUnique({
     where: { id: brandId },
     select: {
@@ -241,7 +246,7 @@ export async function ensureStableBrandStores(
     })
   }
 
-  const normalized = jsonValue(stores)
+  const normalized = jsonValue(await prepareStoreWrite(database, brandId, stores))
   if (stableJson(normalized) !== stableJson(brand.knowledge?.stores ?? null)) {
     await database.brandKnowledge.upsert({
       where: { brandId },
@@ -596,6 +601,7 @@ async function adoptGrowthValue(tx: Prisma.TransactionClient, brandId: string, c
   const match = conflict.path.match(/^stores\.([^.]+)\.([^.]+)$/)
   if (!match) return
   const [, storeId, field] = match
+  await tx.$queryRaw`SELECT "id" FROM "Brand" WHERE "id" = ${brandId} FOR UPDATE`
   const knowledge = await tx.brandKnowledge.findUnique({ where: { brandId }, select: { stores: true } })
   const stores: Record<string, unknown>[] = Array.isArray(knowledge?.stores)
     ? knowledge.stores.flatMap((item: unknown) => isRecord(item) ? [{ ...item }] : [])

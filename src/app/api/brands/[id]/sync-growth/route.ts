@@ -1,3 +1,5 @@
+import { prepareStoreWrite } from '@/lib/storeEntitlements'
+import { StoreEntitlementError } from '@/lib/storeEntitlementPolicy'
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -77,6 +79,7 @@ export async function POST(request: Request, { params }: Params) {
       ...data,
     })
   } catch (error) {
+    if (error instanceof StoreEntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     console.error('[sync-growth] canonical Growth read failed:', error)
     return NextResponse.json({
       error: 'Growth data center is temporarily unavailable',
@@ -271,11 +274,11 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
   if (competitors.length > 0) knowledgeUpdate.competitors = competitors
   if (publishingFreq) knowledgeUpdate.publishingFreq = publishingFreq
 
-  await prisma.$transaction([
-    ...(Object.keys(brandUpdate).length > 0
-      ? [prisma.brand.update({ where: { id: brandId }, data: brandUpdate })]
-      : []),
-    prisma.brandKnowledge.upsert({
+  await prisma.$transaction(async (tx: any) => {
+    const checkedStores = stores.length ? await prepareStoreWrite(tx, brandId, stores) : []
+    if (stores.length) knowledgeUpdate.stores = checkedStores
+    if (Object.keys(brandUpdate).length > 0) await tx.brand.update({ where: { id: brandId }, data: brandUpdate })
+    await tx.brandKnowledge.upsert({
       where: { brandId },
       update: knowledgeUpdate,
       create: {
@@ -291,7 +294,7 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
         reservationUrl: reservationUrl || '',
         orderingUrl: orderingUrl || '',
         deliveryUrls: deliveryUrls as any,
-        stores: stores as any,
+        stores: checkedStores as any,
         market,
         district,
         competitors,
@@ -300,8 +303,8 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
         promotionFocus: promotionFocus || null,
         publishingFreq,
       },
-    }),
-  ])
+    })
+  })
 
   return {
     brandFields: Object.keys(brandUpdate),

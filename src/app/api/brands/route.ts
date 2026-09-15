@@ -1,3 +1,4 @@
+import { assertStoreCount, normalizeStoreRecords, StoreEntitlementError } from '@/lib/storeEntitlementPolicy'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { isAmcOperator } from '@/lib/amcOperator'
@@ -138,6 +139,14 @@ export async function POST(request: Request) {
   const body = await request.json()
   const { name, description, location, timezone, industry, region, referenceCode, googlePlaceId, address, lat, lng, promoCode } = body
   const initialStores = Array.isArray(body.stores) ? body.stores : body.store && typeof body.store === 'object' ? [body.store] : []
+
+  try {
+    if (body.stores !== undefined) normalizeStoreRecords(body.stores)
+    assertStoreCount(initialStores.length, 0, 1)
+  } catch (error) {
+    if (error instanceof StoreEntitlementError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    throw error
+  }
 
   if (!name?.trim()) {
     return NextResponse.json({ error: 'name is required' }, { status: 400 })

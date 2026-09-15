@@ -342,6 +342,7 @@ model CrewMember {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
+  manualStoreLimit Int? // Administrator granted total capacity; independent of billing
   id             String         @id @default(cuid())
   growthBrandKey String?        @unique
   crew           MarketingCrew?

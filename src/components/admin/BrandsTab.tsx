@@ -5,6 +5,7 @@ import {
   Store, Save, RefreshCw, Users, Shield, MapPin, Tag, Cpu, Trash2, CreditCard, ToggleLeft, ToggleRight, Search, Plus, X, Calendar
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
+import StoreEntitlementsEditor from './StoreEntitlementsEditor'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
 
 export interface BrandRecord {
@@ -767,6 +768,8 @@ export default function BrandsTab({
                         </button>
                       </div>
                     </div>
+
+                    <StoreEntitlementsEditor key={editingBrand.id} brandId={editingBrand.id} />
 
                     {/* AI Agents binding */}
                     {(() => {

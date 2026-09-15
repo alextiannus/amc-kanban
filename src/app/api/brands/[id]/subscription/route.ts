@@ -1,3 +1,4 @@
+import { getStoreEntitlements } from '@/lib/storeEntitlements'
 import { NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -16,34 +17,6 @@ import {
 import { POST as humanPost } from '../../../subscription/route'
 
 type Params = { params: Promise<{ id: string }> }
-
-function getAddonQuantity(selectedAddons: unknown, addonId: string) {
-  if (!selectedAddons) return 0
-
-  if (Array.isArray(selectedAddons)) {
-    const addon = selectedAddons.find((item) =>
-      item && typeof item === 'object' && (item as { id?: unknown }).id === addonId
-    )
-    const quantity = addon && typeof addon === 'object' ? (addon as { quantity?: unknown }).quantity : 0
-    return typeof quantity === 'number' && Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0
-  }
-
-  if (typeof selectedAddons === 'object') {
-    const value = (selectedAddons as Record<string, unknown>)[addonId]
-    if (typeof value === 'number' && Number.isFinite(value)) return Math.max(0, Math.floor(value))
-    if (typeof value === 'boolean') return value ? 1 : 0
-    if (value && typeof value === 'object') {
-      const quantity = (value as { quantity?: unknown }).quantity
-      return typeof quantity === 'number' && Number.isFinite(quantity) ? Math.max(0, Math.floor(quantity)) : 0
-    }
-  }
-
-  return 0
-}
-
-function getStoreLimit(planId: string, selectedAddons: unknown) {
-  return 1 + getAddonQuantity(selectedAddons, 'multi_store')
-}
 
 function getSelectedAddonPricingInput(selectedAddons: unknown) {
   const addonIds: string[] = []
@@ -136,6 +109,8 @@ export async function GET(request: Request, { params }: Params) {
     orderBy: { createdAt: 'desc' },
   })
 
+  const storeEntitlements = await getStoreEntitlements(brandId)
+
   if (!subscription) {
     return NextResponse.json({
       plan_name: 'NONE',
@@ -148,8 +123,7 @@ export async function GET(request: Request, { params }: Params) {
       autopilot_eligible: false,
       status: 'EXPIRED',
       selectedAddons: {},
-      store_limit: 1,
-      multi_store_addon_quantity: 0,
+      ...storeEntitlements,
     })
   }
 
@@ -166,7 +140,7 @@ export async function GET(request: Request, { params }: Params) {
     included_services,
     monthly_content_quota,
     platform_coverage,
-    operations_strategy,
+    operations_strategy: { ...operations_strategy, storeLimit: storeEntitlements.store_limit },
     reply_sla: planId === 'essential' ? 'none' : '24h',
     ad_management: false,
     kol_management: planId !== 'essential',
@@ -175,8 +149,7 @@ export async function GET(request: Request, { params }: Params) {
     contract_end: subscription.contractEndDate?.toISOString() ?? null,
     status: subscription.status,
     selectedAddons: subscription.selectedAddons || {},
-    store_limit: getStoreLimit(planId, subscription.selectedAddons),
-    multi_store_addon_quantity: getAddonQuantity(subscription.selectedAddons, 'multi_store'),
+    ...storeEntitlements,
   })
 }
 
