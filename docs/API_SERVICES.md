@@ -826,3 +826,10 @@ Permanent QR contract:
 - 接口签发 60 秒、`aud=amc-growth`、带唯一 `jti` 的一次性票据并跳转 Growth callback。
 - `AMC_GROWTH_SSO_SECRET` 必须与 Growth 服务一致；响应和日志不得回显该 Secret。
 - 报告沉浸阅读使用 `returnTo=/dashboard/reports/versions/:id?view=standalone`，只保留 PDF/Markdown 下载和报告内容。`ADMIN`、`AMC_PRINCIPAL` 直接访问已有合法 Growth 版本 ID 的 Kanban `/dashboard/brands/:id/research-report` 时也重定向到该 SSO 入口；`fallback` 仅允许同一 Kanban 报告页。品牌用户、API Key 请求或无版本 ID 的历史报告继续本地渲染，不签发票据。
+# TikTok AI disclosure
+
+Draft create/PATCH accepts optional boolean `postfastControls.tiktokIsAigc`; reads return it in `postfastControls`. Omitted values default to off. Draft PATCH merges object keys with existing controls (explicit `null` retains the existing clear-all contract). Changes to TikTok disclosure are rejected with 409 while publishing, after a platform post ID exists, or after publication. Updating a stale controls snapshot returns 409; reload before retrying.
+
+Direct brand post creation accepts optional top-level `tiktokIsAigc`; partner MCP publishing accepts it inside `postfastControls`. The PostFast adapter emits `controls.tiktokIsAigc: true` only for TikTok and only when explicitly enabled. False/omitted values are not sent. Immediate, scheduled and queued delivery use the saved controls; no schema migration or historical backfill is needed. Deploy backend before frontend. Mock request verification does not establish the visible label on a real TikTok post.
+
+Regression commands: `npm run test:tiktok-aigc` (draft authorization, merge/readback, publication guards, queued snapshot/retry); `npm run test:postfast-integration` (outbound platform-specific payloads); `npm run test:postfast-delivery` (large-video transfer). Both Kanban and MM must pass `npm run typecheck`.

@@ -140,6 +140,7 @@ export async function PATCH(request: Request, { params }: Params) {
     where: { id: draftId, brandId },
     select: {
       id: true,
+      updatedAt: true,
       status: true,
       platformPostId: true,
       publishedAt: true,
@@ -165,6 +166,16 @@ export async function PATCH(request: Request, { params }: Params) {
   const hasPostfastControlsUpdate = Object.prototype.hasOwnProperty.call(body, 'postfastControls')
   const parsedPostfastControls = hasPostfastControlsUpdate ? sanitizePostFastDraftControls(body.postfastControls) : {}
   if (parsedPostfastControls.error) return NextResponse.json({ error: parsedPostfastControls.error }, { status: 400 })
+
+  const previousControls = existing.postfastControls && typeof existing.postfastControls === 'object' && !Array.isArray(existing.postfastControls)
+    ? existing.postfastControls as Record<string, unknown> : {}
+  const nextControls = parsedPostfastControls.controls
+    ? { ...previousControls, ...parsedPostfastControls.controls } : null
+  const aigcChanged = hasPostfastControlsUpdate
+    && (previousControls.tiktokIsAigc === true) !== (nextControls?.tiktokIsAigc === true)
+  if (aigcChanged && (['publishing', 'published', 'done'].includes(existing.status) || existing.platformPostId || existing.publishedAt)) {
+    return NextResponse.json({ error: 'TikTok AI disclosure is read-only after publishing has started.' }, { status: 409 })
+  }
 
   if (existing.status === 'publishing' && Object.prototype.hasOwnProperty.call(body, 'gbpLocationId')) {
     return NextResponse.json({ error: '发布正在进行中，Google Business 发布门店暂时不能修改。' }, { status: 409 })
@@ -336,14 +347,15 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const draft = await prisma.$transaction(async (tx: any) => {
     const updated = await tx.contentDraft.update({
-      where: { id: draftId },
+      // Prevent controls from overwriting a concurrent edit or publication transition.
+      where: { id: draftId, ...(hasPostfastControlsUpdate ? { updatedAt: existing.updatedAt } : {}) },
       data: {
         caption: typeof body.caption === 'string' ? body.caption.trim() : undefined,
         captionLang: typeof body.captionLang === 'string' ? body.captionLang : undefined,
         accountId: typeof body.accountId === 'string' ? body.accountId : undefined,
         gbpLocationId: gbpLocationIdUpdate,
         instagramPublishType: instagramPublishTypeUpdate,
-        postfastControls: hasPostfastControlsUpdate ? parsedPostfastControls.controls ?? null : undefined,
+        postfastControls: hasPostfastControlsUpdate ? nextControls : undefined,
         mediaUrls: Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined,
         coverAssetId: coverAssetIdUpdate,
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,
@@ -443,7 +455,12 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     return tx.contentDraft.findUniqueOrThrow({ where: { id: draftId }, select: DRAFT_SELECT })
+  }).catch((error: unknown) => {
+    if (hasPostfastControlsUpdate && (error as { code?: string })?.code === 'P2025') return null
+    throw error
   })
+
+  if (!draft) return NextResponse.json({ error: 'Draft changed while saving controls. Reload and retry.' }, { status: 409 })
 
   void persistDraftSnapshotToObs({ brandId, draftId: draft.id, data: draft }).catch((error) => {
     console.error('[PATCH /api/brands/:id/drafts/:draftId] OBS draft snapshot failed:', error)
