@@ -1960,6 +1960,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
         brandId={brandId}
         isOpen={!!quickPreviewDraftId}
         onClose={closeQuickPreview}
+        onUpdated={() => { void loadDrafts() }}
         onApprove={handleQuickApprove}
         onRegenerate={handleQuickRegenerate}
         onEdit={handleQuickEdit}

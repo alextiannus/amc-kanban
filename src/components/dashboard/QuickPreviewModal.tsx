@@ -1,4 +1,5 @@
 'use client'
+import TiktokAigcControl from './TiktokAigcControl'
 import React, { useState, useEffect } from 'react'
 import {
   X, Check, RefreshCw, Edit3, Trash2, ExternalLink,
@@ -25,6 +26,8 @@ export interface QuickPreviewDraft {
   } | null
   scheduledAt?: string | null
   publishedAt?: string | null
+  postfastControls?: Record<string, unknown> | null
+  platformPostId?: string | null
   postUrl?: string | null
   createdAt?: string | null
   updatedAt: string
@@ -53,6 +56,7 @@ interface QuickPreviewModalProps {
   brandId: string
   isOpen: boolean
   onClose: () => void
+  onUpdated: () => void
   onApprove: (draftId: string) => Promise<void>
   onRegenerate: (draftId: string) => Promise<void>
   onEdit: (draftId: string) => void
@@ -98,8 +102,11 @@ function allMedia(draft: QuickPreviewDraft): string[] {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function QuickPreviewModal({
-  draft, brandId, isOpen, onClose, onApprove, onRegenerate, onEdit, onDiscard, brandName = 'Your Brand',
+  draft, brandId, isOpen, onClose, onUpdated, onApprove, onRegenerate, onEdit, onDiscard, brandName = 'Your Brand',
 }: QuickPreviewModalProps) {
+  const [aigcBlocked, setAigcBlocked] = useState(false)
+  const [aigcValue, setAigcValue] = useState(false)
+  useEffect(() => { setAigcValue(draft?.postfastControls?.tiktokIsAigc === true) }, [draft?.id, draft?.postfastControls])
   const [mediaIndex, setMediaIndex] = useState(0)
   const [loading, setLoading] = useState<'approve' | 'regenerate' | 'discard' | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -124,6 +131,7 @@ export default function QuickPreviewModal({
   const canRegenerate = ['draft', 'pending_review', 'rejected', 'failed'].includes(draft.status)
 
   const handleApprove = async () => {
+    if (aigcBlocked || loading) return
     setLoading('approve'); setError(null)
     try { await onApprove(draft.id); onClose() }
     catch (e) { setError(e instanceof Error ? e.message : '操作失败') }
@@ -149,15 +157,15 @@ export default function QuickPreviewModal({
   const previewPost: PreviewPost = { caption: draft.caption, hashtags: draft.hashtags, mediaUrls: media }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/75 backdrop-blur-lg" onClick={onClose} />
 
       {/* Layout: phone left | actions right */}
-      <div className="relative z-10 flex items-start gap-7">
+      <div className="relative z-10 flex w-full max-w-sm items-start gap-7 sm:w-auto sm:max-w-none">
 
         {/* ── Phone Column ───────────────────────── */}
-        <div className="flex flex-col items-center gap-3 shrink-0">
+        <div className="hidden sm:flex flex-col items-center gap-3 shrink-0">
           {/* Platform pill */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r ${gradClass} shadow-lg`}>
             <span className="text-white text-xs font-black">{platformLabel(draft.account?.platformId)}</span>
@@ -173,7 +181,7 @@ export default function QuickPreviewModal({
 
         {/* ── Actions Panel ──────────────────────── */}
         <div
-          className="w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
+          className="w-full sm:w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
           style={{ maxHeight: '92vh' }}
         >
           {/* Header */}
@@ -189,6 +197,20 @@ export default function QuickPreviewModal({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {platform === 'tiktok' && <TiktokAigcControl key={draft.id} value={aigcValue}
+              readOnly={['publishing', 'published', 'done'].includes(draft.status) || !!draft.platformPostId || !!draft.publishedAt}
+              disabled={!!loading} onBlockedChange={setAigcBlocked}
+              onSave={async (value) => {
+                const res = await fetch(`/api/brands/${brandId}/drafts/${draft.id}`, {
+                  method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ postfastControls: { tiktokIsAigc: value } }),
+                })
+                const json = await res.json()
+                if (!res.ok || json.draft?.postfastControls?.tiktokIsAigc !== value) throw new Error('Save failed')
+                setAigcValue(value)
+                onUpdated()
+              }} />}
+
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">文案</p>
               <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-100 whitespace-pre-wrap line-clamp-6">
@@ -252,22 +274,22 @@ export default function QuickPreviewModal({
             )}
             <div className="grid grid-cols-2 gap-2">
               {canApprove && (
-                <button onClick={handleApprove} disabled={!!loading}
+                <button onClick={handleApprove} disabled={!!loading || aigcBlocked}
                   className="flex items-center justify-center gap-1.5 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-black disabled:opacity-50 transition-colors">
                   {loading === 'approve' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}确认发布
                 </button>
               )}
               {canRegenerate && (
-                <button onClick={handleRegenerate} disabled={!!loading}
+                <button onClick={handleRegenerate} disabled={!!loading || aigcBlocked}
                   className="flex items-center justify-center gap-1.5 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black disabled:opacity-50 transition-colors">
                   {loading === 'regenerate' ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}重新创作
                 </button>
               )}
-              <button onClick={() => { onEdit(draft.id); onClose() }} disabled={!!loading}
+              <button onClick={() => { onEdit(draft.id); onClose() }} disabled={!!loading || aigcBlocked}
                 className="flex items-center justify-center gap-1.5 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 text-slate-700 dark:text-slate-200 text-sm font-black disabled:opacity-50 transition-colors">
                 <Edit3 className="h-4 w-4" />手动修改
               </button>
-              <button onClick={handleDiscard} disabled={!!loading}
+              <button onClick={handleDiscard} disabled={!!loading || aigcBlocked}
                 className={`flex items-center justify-center gap-1.5 h-10 rounded-xl text-sm font-black disabled:opacity-50 transition-colors ${confirmDiscard ? 'bg-rose-600 hover:bg-rose-700 text-white border border-rose-600' : 'border border-rose-200 text-rose-600 hover:bg-rose-50'}`}>
                 {loading === 'discard' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 {confirmDiscard ? '确认放弃' : '放弃草稿'}

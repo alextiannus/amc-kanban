@@ -983,7 +983,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     postfastControls: z.object({
       firstComment: z.string().optional(), instagramLocationId: z.string().optional(), instagramLocationDisplayName: z.string().optional(),
       instagramIsAiGenerated: z.boolean().optional(), instagramPostToGrid: z.boolean().optional(), instagramTrialReelStrategy: z.enum(['SS_PERFORMANCE']).optional(),
-      tiktokMusicSoundId: z.string().optional(), tiktokMusicSoundName: z.string().optional(), tiktokAutoAddMusic: z.boolean().optional(),
+      tiktokMusicSoundId: z.string().optional(), tiktokMusicSoundName: z.string().optional(), tiktokAutoAddMusic: z.boolean().optional(), tiktokIsAigc: z.boolean().optional(),
       gbpTopicType: z.enum(['STANDARD', 'EVENT', 'OFFER']).optional(), gbpCallToActionType: z.enum(['BOOK', 'ORDER', 'SHOP', 'LEARN_MORE', 'SIGN_UP', 'CALL']).optional(), gbpCallToActionUrl: z.string().optional(),
       gbpEventTitle: z.string().optional(), gbpEventStartDate: z.string().optional(), gbpEventEndDate: z.string().optional(), gbpOfferCouponCode: z.string().optional(), gbpOfferRedeemUrl: z.string().optional(), gbpOfferTerms: z.string().optional(),
     }).optional().describe('Platform-specific publish controls; display-name fields are retained by the caller and not sent to PostFast.'),
