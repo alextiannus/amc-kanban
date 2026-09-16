@@ -18,12 +18,8 @@ const brandOwners: Array<{ email: string; brands: string[] }> = [
 ]
 
 const principalEmails = [
-  'alextiannus@gmail.com',
-  'lluuwww77@gmail.com',
-  'liwei@deliverychinatown.com',
-  'zhangyi@12eat.ai',
-  'aliciachen@deliverychinatown.com',
-  'iamgaoshanwudi@gmail.com',
+  'hanfengze83@gmail.com',
+  'luoyueling@12eat.ai',
 ]
 
 const systemAdminEmails = ['alextiannus@gmail.com']

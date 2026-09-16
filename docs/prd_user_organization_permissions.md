@@ -927,3 +927,5 @@ Growth SSO 是 Auth V2 的受限下游授权，不新增角色，也不改变品
 ## ImmediToday 员工映射与奖励（本次开发，待部署验证）
 
 公司品牌主理人仅小韩（Xiao Han）与罗月伶；李薇（Li Wei）为私域运营官。`AMC_PRINCIPAL` 是平台能力角色，品牌奖励来源必须是 Crew 中明确的 HUMAN PRINCIPAL 关系以及获准 ERP 员工映射，不能根据 AI_AGENT、商家 OWNER、编辑者或管理员权限推断。ImmediToday 再次验证员工名单、品牌角色、地点和订单所有权。撤销/转移会重新计算未发放奖励，保留已发放凭证。
+
+当前公司主理人名单同步清理 `AMC_PRINCIPAL`：仅保留已核验的小韩和罗月伶账号。其他员工的已有品牌 PRINCIPAL 成员关系降为 EDITOR，以保留协作并移除品牌奖励归属；迁移保存原角色与成员关系审计快照，管理员、商家 OWNER 和其他独立角色保留。

@@ -46,7 +46,7 @@ export async function syncSubscription(subscriptionId: string, config?: ImmediEr
     const hash = digest({ amount: input.amount, currency: input.currency, items, brandId: sub.brandId })
     if (row.reference) {
       if (row.payloadHash !== hash) throw new Error('The synchronized subscription value changed; amend the ERP order with review')
-      return row
+      return row.status === 'SYNCED' ? row : tx.immediErpSync.update({ where: { id: row.id }, data: { status: 'SYNCED', lastError: null, attempts: 0 } })
     }
     const order = await createSalesOrder(cfg, input)
     if (!order.ok || !order.erpOrderName) throw new Error(order.error || 'Missing ERP Sales Order receipt')
