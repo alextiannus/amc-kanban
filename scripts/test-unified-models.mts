@@ -15,6 +15,7 @@ process.env.MODEL_CONFIG_ENCRYPTION_KEY='ab'.repeat(32)
 
 const pg=new PGlite()
 await pg.exec(readFileSync(new URL('../prisma/migrations/20260916090000_unified_models/migration.sql',import.meta.url),'utf8'))
+await pg.exec(readFileSync(new URL('../prisma/migrations/20260916180000_model_management_draft/migration.sql',import.meta.url),'utf8'))
 const query=async(sql:string,...values:any[]) => (await pg.query(sql,values)).rows
 const exec=async(sql:string,...values:any[]) => (await pg.query(sql,values)).affectedRows
 const db:any={$queryRawUnsafe:query,$executeRawUnsafe:exec,auditLog:{create:async()=>({})}}

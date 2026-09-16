@@ -1971,3 +1971,13 @@ model GlobalTextJob {
  revision GlobalTextRevision @relation(fields: [version], references: [version])
  createdAt DateTime @default(now()) @db.Timestamptz(6)
 }
+
+model ModelManagementDraft {
+  id String @id @default("default")
+  revision Int @default(0)
+  baseVersion Int?
+  configuration Json
+  initializationReport Json?
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  actorId String
+}

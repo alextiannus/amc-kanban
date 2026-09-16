@@ -93,7 +93,7 @@
     "generate:service-terms-pdfs": "python3 scripts/generate-service-terms-pdfs.py",
     "postinstall": "node -e \"if(!process.env.RENDER && !process.env.CI) { require('child_process').execSync('npx prisma generate', {stdio:'inherit'}) }\"",
     "test:global-text": "tsx scripts/test-global-text.mts",
-    "test:unified-models": "tsx scripts/test-unified-models.mts"
+    "test:unified-models": "tsx scripts/test-unified-models.mts && tsx scripts/test-model-management-draft.mts && tsx scripts/test-model-management-api.mts"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",

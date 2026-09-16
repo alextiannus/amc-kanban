@@ -1,6 +1,7 @@
 export const CAPABILITIES = ['text','image_understanding','video_understanding','image_generation','video_generation','speech_recognition','speech_synthesis','music'] as const
 export type Capability = typeof CAPABILITIES[number]
 export type ModelDefinition = {
+  isEnabled?:boolean; previousModelId?:string;
   name:string; modelName:string; capabilities:Capability[]; inputCapabilities:string[];
   timeoutMs:number; maxRetries:number; temperature?:number; jsonMode?:boolean;
   maxTokensByTask?:Record<string,number>; videoConstraints?:Record<string,unknown>; costMetadata?:Record<string,unknown>;

@@ -1,9 +1,8 @@
 'use client'
 
 import AssetAnalysisConfig from './AssetAnalysisConfig'
-import GlobalTextModel from './GlobalTextModel'
 import UnifiedModelManagement from './UnifiedModelManagement'
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Shield, Key, Save, RefreshCw, Layers, ShieldCheck, Mail, CalendarClock, History, Settings,
   Sparkles, Plus, Trash2, Edit3, Loader2, Check, Clock, AlertTriangle, MessageSquare, Volume2, Info
@@ -73,8 +72,8 @@ export type SystemSettingsSection =
 
 const SYSTEM_SECTION_COPY: Record<SystemSettingsSection, { title: string; description: string }> = {
   llm: {
-    title: '模型路由配置',
-    description: '管理 Kanban 文本 LLM、MiniMax TTS 与视频任务的路由、超时、重试和 fallback 策略。',
+    title: '统一模型管理',
+    description: 'Kanban、Content、MM 共用模型连接和版本化配置。',
   },
   prompts: {
     title: 'Prompt 管理',
@@ -162,7 +161,7 @@ function formatSystemLogDetails(log: SystemLog) {
       const changes: string[] = [];
       const oldObj = log.oldValue || {};
       const newObj = log.newValue || {};
-      
+
       const allKeys = Array.from(new Set([...Object.keys(oldObj), ...Object.keys(newObj)]));
       for (const key of allKeys) {
         if (key === 'createdAt' || key === 'updatedAt' || key === 'id' || key === 'passwordHash' || key === 'temporaryPassword') continue;
@@ -281,13 +280,10 @@ export default function SystemTab({
     if (singleSectionMode) return
     setActiveAccordion(activeAccordion === key ? '' : key)
   }
-  
-  // LLM Config inner states
-  const [llmConfigModalOpen, setLlmConfigModalOpen] = useState(false)
-  const [editingLLMConfig, setEditingLLMConfig] = useState<LLMConfigRecord | null>(null)
-  const [savingLLMConfig, setSavingLLMConfig] = useState(false)
-  const [llmFormError, setLlmFormError] = useState<string | null>(null)
-  const [promptModalOpen, setPromptModalOpen] = useState(false)
+
+  // Prompt editor state
+
+const [promptModalOpen, setPromptModalOpen] = useState(false)
   const [editingPrompt, setEditingPrompt] = useState<PromptTemplateRecord | null>(null)
   const [savingPrompt, setSavingPrompt] = useState(false)
   const [promptFormError, setPromptFormError] = useState<string | null>(null)
@@ -300,14 +296,7 @@ export default function SystemTab({
     isEnabled: true,
   })
 
-  // MiniMax TTS test
-  const [testingTts, setTestingTts] = useState(false)
-  const [unifiedModelsActive,setUnifiedModelsActive]=useState(false)
-  const [ttsTestResult, setTtsTestResult] = useState<{ ok: boolean; msg: string } | null>(null)
-  const [modelTaskRoutes, setModelTaskRoutes] = useState<ModelTaskRouteRecord[]>([])
-  const [modelTaskServices, setModelTaskServices] = useState<Record<string, string>>({})
-  const ttsAudioRef = useRef<HTMLAudioElement | null>(null)
-  const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
+const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
   const [postfastKeysLoading, setPostfastKeysLoading] = useState(false)
   const [savingPostfastKeys, setSavingPostfastKeys] = useState(false)
   const [postfastForm, setPostfastForm] = useState({ label: '', tokensText: '', notes: '' })
@@ -388,177 +377,7 @@ export default function SystemTab({
     }
   }
 
-  const handleTestTts = async () => {
-    setTestingTts(true)
-    setTtsTestResult(null)
-    try {
-      const res = await fetch('/api/mm/tts-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: '你好！MiniMax 语音配置测试成功，语音合成功能正常！' }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
-        setTtsTestResult({ ok: false, msg: err?.error ?? `HTTP ${res.status}` })
-        return
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      ttsAudioRef.current = audio
-      audio.play()
-      audio.onended = () => URL.revokeObjectURL(url)
-      setTtsTestResult({ ok: true, msg: '✅ 语音合成成功，正在播放...' })
-    } catch (e: any) {
-      setTtsTestResult({ ok: false, msg: e?.message ?? '请求失败' })
-    } finally {
-      setTestingTts(false)
-    }
-  }
-
-  const [llmForm, setLlmForm] = useState({
-    provider: 'google',
-    displayName: '',
-    modelName: 'gemini-2.0-flash',
-    apiKey: '',
-    baseUrl: '',
-    isEnabled: true,
-    isDefault: false,
-    taskTagsStr: '',
-    contentGenerationTypesStr: '',
-    capabilitiesStr: 'text_input, structured_json',
-    priority: 0,
-    timeoutMs: 120000,
-    maxRetries: 1,
-    fallbackProfileIdsStr: '',
-    costMetadataStr: '',
-    secretRef: '',
-  })
-
-  const handleOpenNewLLM = () => {
-    setEditingLLMConfig(null)
-    setLlmForm({
-      provider: 'google',
-      displayName: '',
-      modelName: 'gemini-2.0-flash',
-      apiKey: '',
-      baseUrl: '',
-      isEnabled: true,
-      isDefault: false,
-      taskTagsStr: '',
-      contentGenerationTypesStr: '',
-      capabilitiesStr: 'text_input, structured_json',
-      priority: 0,
-      timeoutMs: 120000,
-      maxRetries: 1,
-      fallbackProfileIdsStr: '',
-      costMetadataStr: '',
-      secretRef: '',
-    })
-    setLlmFormError(null)
-    setLlmConfigModalOpen(true)
-  }
-
-  const handleOpenEditLLM = (config: LLMConfigRecord) => {
-    setEditingLLMConfig(config)
-    setLlmForm({
-      provider: config.provider,
-      displayName: config.displayName,
-      modelName: config.modelName,
-      apiKey: '',
-      baseUrl: config.baseUrl || '',
-      isEnabled: config.isEnabled,
-      isDefault: config.isDefault,
-      taskTagsStr: config.taskTags.join(', '),
-      contentGenerationTypesStr: (config.contentGenerationTypes || []).join(', '),
-      capabilitiesStr: (config.capabilities || []).join(', '),
-      priority: config.priority || 0,
-      timeoutMs: config.timeoutMs || 120000,
-      maxRetries: config.maxRetries || 0,
-      fallbackProfileIdsStr: (config.fallbackProfileIds || []).join(', '),
-      costMetadataStr: config.costMetadata ? JSON.stringify(config.costMetadata, null, 2) : '',
-      secretRef: config.secretRef || '',
-    })
-    setLlmFormError(null)
-    setLlmConfigModalOpen(true)
-  }
-
-  const handleSaveLLM = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSavingLLMConfig(true)
-    setLlmFormError(null)
-    try {
-      const url = editingLLMConfig 
-        ? `/api/admin/llm-configs/${editingLLMConfig.id}`
-        : '/api/admin/llm-configs'
-      const method = editingLLMConfig ? 'PATCH' : 'POST'
-      
-      const tags = llmForm.taskTagsStr
-        .split(',')
-        .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
-        .filter(Boolean)
-      const capabilities = llmForm.capabilitiesStr
-        .split(',')
-        .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
-        .filter(Boolean)
-      const contentGenerationTypes = llmForm.contentGenerationTypesStr
-        .split(',')
-        .map(t => t.trim().toLowerCase().replace(/[\s-]+/g, '_'))
-        .filter(Boolean)
-      const fallbackProfileIds = llmForm.fallbackProfileIdsStr
-        .split(',')
-        .map(t => t.trim())
-        .filter(Boolean)
-      let costMetadata: Record<string, unknown> | null = null
-      if (llmForm.costMetadataStr.trim()) costMetadata = JSON.parse(llmForm.costMetadataStr)
-
-      const body: any = {
-        provider: llmForm.provider,
-        displayName: llmForm.displayName,
-        modelName: llmForm.modelName,
-        baseUrl: llmForm.baseUrl || null,
-        isEnabled: llmForm.isEnabled,
-        isDefault: llmForm.isDefault,
-        taskTags: tags,
-        contentGenerationTypes,
-        capabilities,
-        priority: llmForm.priority,
-        timeoutMs: llmForm.timeoutMs,
-        maxRetries: llmForm.maxRetries,
-        fallbackProfileIds,
-        costMetadata,
-        secretRef: llmForm.secretRef || null,
-      }
-      
-      if (llmForm.apiKey.trim()) {
-        body.apiKey = llmForm.apiKey
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-
-      if (res.ok) {
-        setLlmConfigModalOpen(false)
-        setEditingLLMConfig(null)
-        setLlmFormError(null)
-        await onFetchLLMConfigs()
-        await onFetchSystemLogs()
-      } else {
-        const errData = await res.json().catch(() => ({}))
-        setLlmFormError(errData.error || '保存失败，请检查输入')
-      }
-    } catch (e) {
-      console.error(e)
-      setLlmFormError('发生未知网络错误，请稍后重试')
-    } finally {
-      setSavingLLMConfig(false)
-    }
-  }
-
-  const handleOpenNewPrompt = () => {
+const handleOpenNewPrompt = () => {
     setEditingPrompt(null)
     setPromptForm({
       taskKey: '',
@@ -656,24 +475,7 @@ export default function SystemTab({
     }
   }
 
-  const handleDeleteLLM = async (id: string) => {
-    if (!confirm('确定要删除这个大模型配置吗？此操作不可撤销。')) return
-    try {
-      const res = await fetch(`/api/admin/llm-configs/${id}`, {
-        method: 'DELETE',
-      })
-      if (res.ok) {
-        await onFetchLLMConfigs()
-        await onFetchSystemLogs()
-      } else {
-        alert('删除失败')
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  useEffect(() => {
+useEffect(() => {
     setActiveAccordion(section === 'audit' ? '' : (section || 'llm'))
   }, [section])
 
@@ -681,53 +483,14 @@ export default function SystemTab({
     if (activeAccordion === 'postfast' && postfastKeys.length === 0 && !postfastKeysLoading) {
       void fetchPostfastKeys()
     }
-    if (activeAccordion === 'llm') {
-      void fetch('/api/admin/model-tasks').then(async (response) => {
-        if (!response.ok) return
-        const data = await response.json()
-        setModelTaskRoutes(Array.isArray(data.items) ? data.items : [])
-        setModelTaskServices(data.services || {})
-      }).catch(() => undefined)
-    }
+
     if (activeAccordion === 'prompts') {
       void onFetchPromptTemplates()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeAccordion])
 
-  const handleToggleLLMEnabled = async (config: LLMConfigRecord) => {
-    try {
-      const res = await fetch(`/api/admin/llm-configs/${config.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isEnabled: !config.isEnabled }),
-      })
-      if (res.ok) {
-        await onFetchLLMConfigs()
-        await onFetchSystemLogs()
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  const handleToggleLLMDefault = async (config: LLMConfigRecord) => {
-    try {
-      const res = await fetch(`/api/admin/llm-configs/${config.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isDefault: !config.isDefault }),
-      })
-      if (res.ok) {
-        await onFetchLLMConfigs()
-        await onFetchSystemLogs()
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }
-
-  return (
+return (
     <div className="space-y-6 animate-in fade-in duration-200 font-sans">
       {/* Tab Header */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between gap-4">
@@ -743,128 +506,8 @@ export default function SystemTab({
 
       {/* Accordion Panels */}
       <div className="space-y-4">
-        {/* Section 1: LLM configs */}
-        {showSection('llm') && <UnifiedModelManagement onActive={setUnifiedModelsActive} />}
-        {showSection('llm') && !unifiedModelsActive && <GlobalTextModel connections={llmConfigs} />}
+        {showSection('llm') && <UnifiedModelManagement />}
         {showSection('llm') && <AssetAnalysisConfig />}
-        {showSection('llm') && !unifiedModelsActive && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <button 
-            onClick={() => toggleSection('llm')}
-            className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-all focus:outline-none"
-          >
-            <span className="text-sm font-black text-slate-850 dark:text-slate-100 flex items-center gap-2">
-              <Sparkles size={15} className="text-indigo-500" />
-              <span>Kanban 模型配置与多路容灾路由</span>
-            </span>
-            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-950/20 px-2.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-900/30">
-              Kanban 模型：{llmConfigs.length} 路由
-            </span>
-          </button>
-
-          {sectionOpen('llm') && (
-            <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
-              <div className="flex justify-between items-start gap-4 pt-2">
-                <div className="space-y-1">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 font-bold">
-                    这里显示 Kanban 的文本 LLM、MiniMax TTS 与视频模型路由；MM 语音试听会直接使用已启用的 MiniMax TTS 配置。
-                  </p>
-                  <a
-                    href="/admin/content-lab"
-                    className="inline-flex text-[11px] font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
-                  >
-                    打开 amc-content Content Lab 查看内容与视频执行侧配置
-                  </a>
-                </div>
-                <button
-                  onClick={handleOpenNewLLM}
-                  className="inline-flex items-center gap-1 bg-blue-650 hover:bg-blue-700 text-white px-3 py-1.5 rounded-xl text-xs font-black transition-all shadow-sm cursor-pointer"
-                >
-                  <Plus size={12} />
-                  <span>添加模型路由</span>
-                </button>
-              </div>
-
-              {llmConfigsLoading ? (
-                <div className="p-8 text-center text-xs text-slate-450">加载模型配置中...</div>
-              ) : llmConfigs.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl">
-                  暂无 AI 模型配置。请在 AI 模型配置 中添加至少一个模型。
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                  {llmConfigs.map((config) => (
-                    <div 
-                      key={config.id}
-                      className={`p-4 rounded-xl border flex flex-col justify-between gap-3 bg-slate-50/50 dark:bg-slate-950/10 ${
-                        config.isEnabled ? 'border-slate-200 dark:border-slate-800' : 'border-slate-150/60 dark:border-slate-850 opacity-60'
-                      }`}
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="text-xs font-black text-slate-850 dark:text-white leading-tight">{config.displayName}</p>
-                            <p className="text-[9px] text-slate-400 font-mono mt-0.5">{config.provider} / {config.modelName}</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {config.isDefault && <span className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded font-black border border-blue-100">默认</span>}
-                            <button 
-                              onClick={() => handleToggleLLMEnabled(config)}
-                              className={`text-[9px] px-1.5 py-0.5 rounded font-black border ${
-                                config.isEnabled 
-                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
-                                  : 'bg-slate-100 text-slate-500 border-slate-200'
-                              }`}
-                            >
-                              {config.isEnabled ? '开' : '关'}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="text-[10px] text-slate-450 space-y-0.5 pt-1 font-medium">
-                          {config.baseUrl && <p className="truncate"><span className="text-slate-400">端点:</span> {config.baseUrl}</p>}
-                          <p><span className="text-slate-400">秘钥:</span> {config.apiKey ? `••••••••${config.apiKey.slice(-4)}` : '继承全局'}</p>
-                          {config.taskTags.length > 0 && (
-                            <p className="flex items-center gap-1 flex-wrap"><span className="text-slate-400">标签:</span> 
-                              {config.taskTags.map(t => <span key={t} className="bg-indigo-50/50 text-indigo-600 px-1 rounded text-[8px] border border-indigo-100">{t}</span>)}
-                            </p>
-                          )}
-                          {(config.contentGenerationTypes || []).length > 0 && (
-                            <p className="flex items-center gap-1 flex-wrap"><span className="text-slate-400">内容:</span>
-                              {config.contentGenerationTypes.map(type => <span key={type} className="bg-amber-50/70 text-amber-700 px-1 rounded text-[8px] border border-amber-100">{type}</span>)}
-                            </p>
-                          )}
-                          {(config.capabilities || []).length > 0 && (
-                            <p className="flex items-center gap-1 flex-wrap"><span className="text-slate-400">能力:</span>
-                              {config.capabilities.map(capability => <span key={capability} className="bg-cyan-50/60 text-cyan-700 px-1 rounded text-[8px] border border-cyan-100">{capability}</span>)}
-                            </p>
-                          )}
-                          <p><span className="text-slate-400">路由:</span> priority {config.priority} · timeout {config.timeoutMs}ms · retry {config.maxRetries}</p>
-                          {(config.fallbackProfileIds || []).length > 0 && <p className="truncate"><span className="text-slate-400">Fallback:</span> {config.fallbackProfileIds.join(' → ')}</p>}
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between items-center border-t border-slate-100 dark:border-slate-800/80 pt-2 text-[10px]">
-                        <span className="text-slate-400 font-mono">{new Date(config.createdAt).toLocaleDateString('zh-CN')}</span>
-                        <div className="flex items-center gap-1.5">
-                          <button 
-                            onClick={() => handleToggleLLMDefault(config)}
-                            className="px-1.5 py-0.5 rounded border text-[9px] font-bold bg-white hover:bg-slate-50 text-slate-650"
-                          >
-                            默认
-                          </button>
-                          <button onClick={() => handleOpenEditLLM(config)} className="p-1 text-slate-400 hover:text-indigo-500"><Edit3 size={12} /></button>
-                          <button onClick={() => handleDeleteLLM(config.id)} className="p-1 text-slate-400 hover:text-rose-500"><Trash2 size={12} /></button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-        )}
 
         {/* Section 2: Prompt templates */}
         {showSection('prompts') && (
@@ -1169,7 +812,7 @@ export default function SystemTab({
 
           {sectionOpen('direct_oauth') && (
             <div className="px-6 pb-6 pt-1 space-y-6 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
-              
+
               {/* Toggle Switch */}
               <div className="flex items-center justify-between pt-4 border-b border-slate-100 dark:border-slate-800/80 pb-4">
                 <div>
@@ -1455,7 +1098,7 @@ export default function SystemTab({
                 const displayActor = log.actorName || log.actorId || '系统后台';
                 const displayResource = `${log.resourceType}:${log.resourceId.slice(0, 8)}...`;
                 const details = formatSystemLogDetails(log);
-                
+
                 return (
                   <tr key={log.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-850/10 transition-colors">
                     <td className="px-4 py-2.5 font-mono text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleString('zh-CN')}</td>
@@ -1597,265 +1240,6 @@ export default function SystemTab({
         </div>
       )}
 
-      {/* LLM Config Modal Dialog */}
-      {llmConfigModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl p-6 border border-slate-200 dark:border-slate-800 space-y-5 scrollbar-thin">
-            <div>
-              <h2 className="text-base font-black text-slate-900 dark:text-white">
-                {editingLLMConfig ? '编辑大模型连接配置' : '新增大模型连接配置'}
-              </h2>
-              <p className="text-xs text-slate-400 mt-1 font-medium">
-                {llmForm.provider === 'minimax' ? 'MiniMax 语音统一使用国内接口。上传、克隆和试听使用同一条配置；失败直接报错，不切换国际站或备用密钥。' : '新增供应商可填写显示名称并选择兼容协议。全局文本策略启用后，纯文本统一使用全局选择，失败直接报错；策略关闭时才使用任务标签和备用路由。已被全局版本引用的连接须新建连接后再换密钥或地址。'}
-              </p>
-            </div>
-
-            <form onSubmit={handleSaveLLM} className="space-y-4">
-              {llmFormError && (
-                <div className="p-3 text-xs bg-rose-50 dark:bg-rose-955/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 rounded-xl leading-relaxed animate-in fade-in duration-150">
-                  {llmFormError}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">配置显示名称</span>
-                  <input
-                    required
-                    value={llmForm.displayName}
-                    onChange={e => setLlmForm(prev => ({ ...prev, displayName: e.target.value }))}
-                    placeholder="例: OpenAI GPT-4o 生产链路 / 备用文案创作"
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <label className="space-y-1.5 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">厂商协议 (Provider)</span>
-                  <select
-                    value={llmForm.provider}
-                    onChange={e => {
-                      const newProvider = e.target.value
-                      setLlmForm(prev => {
-                        const defaults: Record<string, string> = {
-                          google: 'gemini-2.0-flash',
-                          openai: 'gpt-4o',
-                          anthropic: 'claude-3-5-sonnet-20241022',
-                          deepseek: 'deepseek-chat',
-                          minimax: 'speech-2.8-hd',
-                          custom_shim: 'custom-model',
-                          kopix: 'glm-5.3',
-                          seedance: 'dreamina-seedance-2-0-fast-260128',
-                          fal: 'bytedance/seedance-2.0/image-to-video',
-                          kieai: 'veo3_fast',
-                          volcengine: 'seedance-2.0',
-                        }
-                        const currentDefaults = [
-                          'gemini-2.0-flash',
-                          'gpt-4o',
-                          'claude-3-5-sonnet-20241022',
-                          'deepseek-chat',
-                          'speech-2.8-hd',
-                          'custom-model',
-                          'glm-5.3',
-                          'seedance-2.0-fast',
-                          'seedance-2-0',
-                          'dreamina-seedance-2-0-fast-260128',
-                          'dreamina-seedance-2-0-260128',
-                          'bytedance/seedance-2.0/image-to-video',
-                          'veo3_fast',
-                          'seedance-2.0',
-                          ''
-                        ]
-                        const modelName = (!prev.modelName || currentDefaults.includes(prev.modelName))
-                          ? (defaults[newProvider] || '')
-                          : prev.modelName
-
-                        const taskTagsStr = newProvider === 'minimax' && !prev.taskTagsStr.trim()
-                          ? 'tts_generation'
-                          : ['seedance', 'fal', 'kieai', 'volcengine'].includes(newProvider) && !prev.taskTagsStr.trim()
-                            ? 'video_generation'
-                            : prev.taskTagsStr
-                        const capabilitiesStr = ['seedance', 'fal', 'kieai', 'volcengine'].includes(newProvider)
-                          && (!prev.capabilitiesStr.trim() || prev.capabilitiesStr === 'text_input, structured_json')
-                          ? 'video_output, reference_video, reference_image, reference_audio'
-                          : newProvider === 'minimax' && (!prev.capabilitiesStr.trim() || prev.capabilitiesStr === 'text_input, structured_json')
-                            ? 'text_input, audio_output'
-                            : prev.capabilitiesStr
-
-                        return {
-                          ...prev,
-                          provider: newProvider,
-                          ...(newProvider === 'kopix' ? {
-                            baseUrl: 'https://www.kopix.ai/v1',
-                            displayName: 'Kopix GLM-5.3',
-                          } : {}),
-                          modelName: newProvider === 'kopix' ? 'glm-5.3' : modelName,
-                          taskTagsStr,
-                          capabilitiesStr,
-                          ...(newProvider === 'kopix' && !editingLLMConfig ? {
-                            isEnabled: false, isDefault: false, priority: 0,
-                            taskTagsStr: '', contentGenerationTypesStr: '', fallbackProfileIdsStr: '',
-                            capabilitiesStr: 'text_input, structured_json',
-                          } : {}),
-                        }
-                      })
-                    }}
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  >
-                    <option value="google">Google Gemini</option>
-                    <option value="kopix">Kopix</option>
-                    <option value="openai">OpenAI compatible</option>
-                    <option value="anthropic">Anthropic Claude</option>
-                    <option value="deepseek">DeepSeek API</option>
-                    <option value="minimax">MiniMax TTS / Chat</option>
-                    <option value="seedance">Seedance Video</option>
-                    <option value="fal">Fal Video</option>
-                    <option value="kieai">Kie.ai Video</option>
-                    <option value="volcengine">Volcengine Video</option>
-                    <option value="custom_shim">自定义格式 (Shim)</option>
-                  </select>
-                </label>
-
-                <label className="space-y-1.5 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">模型标识 (Model Name)</span>
-                  <input
-                    required
-                    value={llmForm.modelName}
-                    onChange={e => setLlmForm(prev => ({ ...prev, modelName: e.target.value }))}
-                    placeholder="例: gemini-2.0-flash"
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">API Key (私有秘钥)</span>
-                  <input
-                    type="password"
-                    value={llmForm.apiKey}
-                    onChange={e => setLlmForm(prev => ({ ...prev, apiKey: e.target.value }))}
-                    placeholder={editingLLMConfig ? "•••••••••••••••• (留空保持原秘钥)" : "请输入对接 API Key"}
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">代理根地址 (API Base URL)</span>
-                  <input
-                    value={llmForm.baseUrl}
-                    onChange={e => setLlmForm(prev => ({ ...prev, baseUrl: e.target.value }))}
-                    placeholder={llmForm.provider === 'minimax' ? 'https://api.minimaxi.com/v1/t2a_v2（留空也使用此国内地址）' : 'Seedance 例: https://ark.ap-southeast.bytepluses.com (缺省则使用厂商默认端点)'}
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">专属任务标签 (Task Tags)</span>
-                  <input
-                    value={llmForm.taskTagsStr}
-                    onChange={e => setLlmForm(prev => ({ ...prev, taskTagsStr: e.target.value }))}
-                    placeholder="英文逗号分隔，例如: copywriting, companion, video_generation, image_to_video"
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">适用内容生成类型</span>
-                  <input
-                    value={llmForm.contentGenerationTypesStr}
-                    onChange={e => setLlmForm(prev => ({ ...prev, contentGenerationTypesStr: e.target.value }))}
-                    placeholder="英文逗号分隔，例如: marketing_plan, instagram_content, tiktok_content, google_map_content"
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">能力标签 (Capabilities)</span>
-                  <input
-                    value={llmForm.capabilitiesStr}
-                    onChange={e => setLlmForm(prev => ({ ...prev, capabilitiesStr: e.target.value }))}
-                    placeholder="video_output, reference_video, reference_image"
-                    className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-505"
-                  />
-                </label>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-2">
-                  <label className="space-y-1.5 block">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Priority</span>
-                    <input type="number" value={llmForm.priority} onChange={e => setLlmForm(prev => ({ ...prev, priority: Number(e.target.value) }))} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
-                  </label>
-                  <label className="space-y-1.5 block">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Timeout ms</span>
-                    <input type="number" min={1000} value={llmForm.timeoutMs} onChange={e => setLlmForm(prev => ({ ...prev, timeoutMs: Number(e.target.value) }))} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
-                  </label>
-                  <label className="space-y-1.5 block">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Max retries</span>
-                    <input type="number" min={0} max={5} value={llmForm.maxRetries} onChange={e => setLlmForm(prev => ({ ...prev, maxRetries: Number(e.target.value) }))} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
-                  </label>
-                </div>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Fallback profile IDs</span>
-                  <input value={llmForm.fallbackProfileIdsStr} onChange={e => setLlmForm(prev => ({ ...prev, fallbackProfileIdsStr: e.target.value }))} placeholder="逗号分隔的 LLMConfig ID" className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Cost metadata (JSON)</span>
-                  <textarea value={llmForm.costMetadataStr} onChange={e => setLlmForm(prev => ({ ...prev, costMetadataStr: e.target.value }))} placeholder='{"currency":"USD","perSecond":0.02}' rows={3} className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
-                </label>
-
-                <label className="space-y-1.5 md:col-span-2 block">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Secret reference</span>
-                  <input value={llmForm.secretRef} onChange={e => setLlmForm(prev => ({ ...prev, secretRef: e.target.value }))} placeholder="内部密钥引用标识；不填写真实 key" className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white" />
-                </label>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-950/20 p-3 space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-[11px] font-black text-slate-700 dark:text-slate-200">统一任务路由状态</p>
-                  <p className="text-[9px] text-slate-400">Content: {modelTaskServices.amcContent || 'loading'} · Kanban: {modelTaskServices.amcKanban || 'loading'}</p>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {modelTaskRoutes.map((route) => (
-                    <div key={route.task} className="rounded-lg border border-slate-100 dark:border-slate-800 p-2 text-[9px] text-slate-500">
-                      <p className="font-bold text-slate-700 dark:text-slate-200">{route.task} <span className="font-normal text-slate-400">· {route.executionDomain}</span></p>
-                      <p>primary: {route.primaryModelName || route.primaryProfileId || 'unconfigured'}</p>
-                      <p>fallback: {route.fallbackProfileIds?.join(' → ') || 'none'}</p>
-                      <p>requires: {route.requiredCapabilities?.join(' + ') || 'none'}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLlmConfigModalOpen(false)
-                    setEditingLLMConfig(null)
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-550 dark:text-slate-350 hover:bg-slate-105 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-750 bg-white dark:bg-slate-900 cursor-pointer"
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  disabled={savingLLMConfig}
-                  className="px-5 py-2 rounded-xl text-xs font-black bg-blue-650 hover:bg-blue-700 text-white disabled:opacity-50 shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  {savingLLMConfig ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>保存中...</span>
-                    </>
-                  ) : (
-                    <span>保存大模型</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
