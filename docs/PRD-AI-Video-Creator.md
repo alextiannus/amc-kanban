@@ -176,7 +176,7 @@ AMC-Content：
 
 AMC-Content 的“视频生产”工作台有两个入口。`image_only` 保持“选择创意、脚本与分镜、图片与声音、视频生成、合成下载”五步不变；`hybrid_footage` 使用“选择创意、脚本与分镜、实拍素材与匹配、声音设置、视频生成、合成下载”六步。实拍步骤展示批次、后台分析状态、至多 3 个候选、评分理由、制作方案草稿、人工逐镜确认和补拍清单。Content Lab 的“模型与路由”对 `ADMIN` 可编辑、对 `AMC_PRINCIPAL` 只读；API Key 仍只存在 AMC-Content 的服务端配置。
 
-Kanban 左侧“视频生产”仅向 `ADMIN`、`AMC_PRINCIPAL`展示，通过短期签名跳转并传递已授权的当前商家；Kanban 不保存或执行视频/TTS 配置。
+Kanban 左侧“视频生产”仅向 `ADMIN`、`AMC_PRINCIPAL`展示，通过短期签名跳转至 AMC-Content `/admin/video-making`，并传递已授权的当前商家；AMC-Content `/admin/video-production` 的爆款复刻工作台仍有独立入口。Kanban 不保存或执行视频/TTS 配置。
 
 ## 7. 验收
 
