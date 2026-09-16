@@ -33,6 +33,12 @@ globalThis.fetch=async(url,init)=>{
  return Response.json({model:'glm-5.3-resolved',choices:[{message:{role:'assistant',content:'OK'}}]})
 }
 try{
+ const providerFetch=globalThis.fetch
+ for(const content of ['', '{"partial":']){
+   globalThis.fetch=async()=>Response.json({choices:[{finish_reason:'length',message:{role:'assistant',content}}]})
+   await assert.rejects(()=>complete(c,{messages:[{role:'user',content:'test'}],maxTokens:460}),/output token limit reached/)
+ }
+ globalThis.fetch=providerFetch
  await withTextScope(async()=>{
    const first=await callLLM('unmapped_task','Hello',1500,{allowAnyFallback:true,allowSystemFallback:true})
    assert.equal(first.modelName,'glm-5.3')

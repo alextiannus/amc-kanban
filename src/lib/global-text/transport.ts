@@ -57,6 +57,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
   const data = await response.json()
+  if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw new Error('Text provider output token limit reached')
   let message: Message
   if (protocol === 'openai') message = data.choices?.[0]?.message
   else if (protocol === 'anthropic') message = {role:'assistant',content:(data.content||[]).filter((v:any)=>v.type==='text').map((v:any)=>v.text).join(''),tool_calls:(data.content||[]).filter((v:any)=>v.type==='tool_use').map((v:any)=>({id:v.id,type:'function',function:{name:v.name,arguments:JSON.stringify(v.input)}}))}
