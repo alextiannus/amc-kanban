@@ -8,7 +8,8 @@ export async function validateSelection(selection:Selection){
   if(!selection?.defaults?.text||!selection.exceptions||typeof selection.exceptions!=='object')throw new Error('A global text model and media exception map are required')
   if(Object.keys(selection.defaults).some(c=>!(CAPABILITIES as readonly string[]).includes(c)))throw new Error('Unknown default capability')
   const runtime=await configurationRuntime(selection,-1,true),checks:Record<string,boolean>={},errors:Record<string,string>={}
-  async function check(name:string,run:()=>Promise<boolean>){try{checks[name]=await run()}catch(e){checks[name]=false;errors[name]=e instanceof Error?e.message:'Validation failed'}}
+  async function check(name:string,run:()=>Promise<boolean>,failureReason='Validation response did not satisfy the required check'){try{checks[name]=await run();if(!checks[name]&&!errors[name])errors[name]=failureReason}catch(e){checks[name]=false;errors[name]=e instanceof Error?e.message:'Validation failed'}}
+  const failedTextChecks=()=>['text','json','conversation','tools','body_composition'].filter(k=>checks[k]===false)
   for(const capability of Object.keys(selection.defaults))selectModel(runtime,'kanban',capability,capability as any)
   for(const [key,id]of Object.entries(selection.exceptions)){
     if(!/^(kanban|content|mm):[a-z_]+(?::[a-z_]+)?$/.test(key))throw new Error('Invalid media task exception')
@@ -28,7 +29,7 @@ export async function validateSelection(selection:Selection){
     const result=await complete(connection,{task:'body_composition',messages:[{role:'system',content:'Return valid JSON only with a non-empty caption string and a hashtags array. No markdown.'},{role:'user',content:'Write an Instagram caption for a neighbourhood cafe weekday lunch. Use a warm practical tone, a short call to action and three relevant hashtags. Do not invent prices, discounts or opening hours. Keep the caption under 80 words.'}],maxTokens})
     const value=JSON.parse(result.text!);return typeof value.caption==='string'&&!!value.caption.trim()&&Array.isArray(value.hashtags)
   })
-  await check('conversation',async()=>{const code=randomUUID();return (await complete(connection,{messages:[{role:'user',content:code},{role:'assistant',content:'Remembered'},{role:'user',content:'Repeat the exact code only.'}],maxTokens:1024})).text?.trim()===code})
+  await check('conversation',async()=>{const code=randomUUID();return (await complete(connection,{messages:[{role:'user',content:code},{role:'assistant',content:'Remembered'},{role:'user',content:'Repeat the exact code only.'}],maxTokens:1024})).text?.trim()===code},'Conversation response did not exactly repeat the verification code')
   await check('tools',async()=>{
     const tools=[{type:'function',function:{name:'echo_probe',parameters:{type:'object',properties:{value:{type:'string'}},required:['value']}}}]
     const messages=[{role:'user',content:'Call echo_probe with value test.'}]
@@ -50,12 +51,19 @@ export async function validateSelection(selection:Selection){
       if(data.tasks.some((t:any)=>t.version!==runtime.version||t.executor!=='content'))throw new Error('Content media preflight configuration version or executor mismatch')
       tasks.push(...data.tasks)
       checks['system.kanban']=data.protocolVersion===2&&['text','json','conversation','tools'].every(k=>checks[k])&&checks.body_composition!==false&&data.tasks.filter((t:any)=>t.source==='kanban').every((t:any)=>t.passed)
-      if(!checks['system.kanban'])errors['system.kanban']=data.tasks.filter((t:any)=>t.source==='kanban'&&!t.passed).map((t:any)=>`${t.task}: ${t.error}`).join('; ')
+      if(!checks['system.kanban'])errors['system.kanban']=[
+        ...(failedTextChecks().length?[`Kanban text preflight failed: ${failedTextChecks().join(', ')}`]:[]),
+        ...(data.protocolVersion!==2?['Content media preflight protocol version mismatch']:[]),
+        ...data.tasks.filter((t:any)=>t.source==='kanban'&&!t.passed).map((t:any)=>`Content media task ${t.task}: ${t.error||'Validation failed'}`),
+      ].join('; ')
       if(!data.success)errors['system.content']=data.tasks.filter((t:any)=>!t.passed).map((t:any)=>`${t.source}:${t.task}: ${t.error}`).join('; ')
     }
     return data.protocolVersion===2&&data.success===true
   })
-  if(!checks['system.kanban']&&!errors['system.kanban'])errors['system.kanban']='Kanban media delegation to Content has not passed preflight'
+  if(!checks['system.kanban']&&!errors['system.kanban'])errors['system.kanban']=[
+    ...(failedTextChecks().length?[`Kanban text preflight failed: ${failedTextChecks().join(', ')}`]:[]),
+    `Kanban media delegation preflight unavailable: ${errors['system.content']||'Content returned no valid delegation result'}`,
+  ].join('; ')
   const id=randomUUID(),report={checks,errors,tasks,models:runtime.models!.map(m=>({id:m.id,connectionId:m.connectionId,modelName:m.definition.modelName})),passed:Object.values(checks).every(Boolean)}
   await prisma.$executeRawUnsafe('INSERT INTO "ModelPolicyValidation" (id,fingerprint,report) VALUES ($1,$2,$3::jsonb)',id,configurationFingerprint(selection),JSON.stringify(report))
   return {id,...report}
