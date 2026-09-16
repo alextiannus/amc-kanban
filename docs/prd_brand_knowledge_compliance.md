@@ -1,5 +1,7 @@
 # Brand Knowledge Compliance Validation PRD & Design Doc
 
+Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
+
 This document details the product requirements and technical design for the Brand Knowledge Compliance validation features implemented in the AI Marketing Crew (AMC) dashboard.
 
 ---

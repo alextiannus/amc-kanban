@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ensureSystemConfig } from '@/lib/systemConfig'
+import { analysisContent, assetAnalysisContentConfig } from '@/lib/asset-analysis/content'
 import { isAmcOperator } from '@/lib/amcOperator'
 
 function maskKey(key: string | null | undefined): string | null {
@@ -48,6 +49,7 @@ export async function GET() {
   const config = await ensureSystemConfig()
   return NextResponse.json({
     id: config.id,
+    assetAnalysisEnabled: config.assetAnalysisEnabled,
     // Note: geminiApiKey and minimaxApiKey are retained in the DB schema but
     // are no longer managed here. AI keys are now in Admin → AI 模型配置 (LLMConfig).
     // SMTP
@@ -100,6 +102,15 @@ export async function PATCH(request: Request) {
 
   const current = await ensureSystemConfig()
 
+  if ('assetAnalysisEnabled' in body && typeof body.assetAnalysisEnabled !== 'boolean') return NextResponse.json({ error: 'Invalid analysis enabled flag' }, { status: 400 })
+  const analysisEnabled = body.assetAnalysisEnabled ?? current.assetAnalysisEnabled
+  if (analysisEnabled && 'assetAnalysisEnabled' in body) {
+    try {
+      const capabilities = await analysisContent(assetAnalysisContentConfig(), '/v1/capabilities')
+      if (!['asset_image_analysis', 'asset_category_summary'].every(task => capabilities.tasks?.some((entry: any) => entry.task === task && entry.configured && entry.models?.includes('doubao-seed-2.1-turbo')))) throw new Error('Content image analysis is not ready; check its CN gateway capabilities')
+    } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 422 }) }
+  }
+
   // SMTP fields
   const nextSmtpHost      = resolveField(body, 'smtpHost', current.smtpHost)
   const nextSmtpPort      = resolveIntField(body, 'smtpPort', current.smtpPort)
@@ -128,6 +139,7 @@ export async function PATCH(request: Request) {
   const updated = await prisma.systemConfig.update({
     where: { id: 'default' },
     data: {
+      ...('assetAnalysisEnabled' in body && { assetAnalysisEnabled: analysisEnabled }),
       ...(nextSmtpHost     !== undefined && { smtpHost: nextSmtpHost }),
       ...(nextSmtpPort     !== undefined && { smtpPort: nextSmtpPort }),
       ...(nextSmtpUser     !== undefined && { smtpUser: nextSmtpUser }),
@@ -155,6 +167,8 @@ export async function PATCH(request: Request) {
   // Mask credentials in audit log
   const maskedOld = {
     ...current,
+    assetAnalysisGatewayUrl: undefined,
+    assetAnalysisGatewaySecret: undefined,
     smtpPassword: maskPassword(current.smtpPassword),
     metaAppSecret: maskKey(current.metaAppSecret),
     googleClientSecret: maskKey(current.googleClientSecret),
@@ -162,6 +176,8 @@ export async function PATCH(request: Request) {
   }
   const maskedNew = {
     ...updated,
+    assetAnalysisGatewayUrl: undefined,
+    assetAnalysisGatewaySecret: undefined,
     smtpPassword: maskPassword(updated.smtpPassword),
     metaAppSecret: maskKey(updated.metaAppSecret),
     googleClientSecret: maskKey(updated.googleClientSecret),
@@ -183,6 +199,7 @@ export async function PATCH(request: Request) {
 
   return NextResponse.json({
     id: updated.id,
+    assetAnalysisEnabled: updated.assetAnalysisEnabled,
     // Note: geminiApiKey/minimaxApiKey remain in DB but are no longer managed here.
     // SMTP
     smtpHost: updated.smtpHost || '',

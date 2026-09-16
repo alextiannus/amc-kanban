@@ -343,6 +343,8 @@ model CrewMember {
 
 model Brand {
   manualStoreLimit Int? // Administrator granted total capacity; independent of billing
+  assetFoldersInitialized Boolean @default(false)
+  assetAnalysisBatches AssetAnalysisBatch[]
   id             String         @id @default(cuid())
   growthBrandKey String?        @unique
   crew           MarketingCrew?
@@ -746,6 +748,8 @@ model PostfastInboxItem {
 }
 
 model MediaAsset {
+  imageAnalysis Json?
+  analysisItems AssetAnalysisItem[]
   id                String    @id @default(cuid())
   brandId           String
   brand             Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -808,6 +812,7 @@ model VideoShootBatch {
 }
 
 model VideoProductionJob {
+  voiceoverState Json?
   id              String   @id
   brandId         String
   brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -1309,6 +1314,48 @@ model SchoolItem {
   updatedAt DateTime @updatedAt
 }
 
+model AssetAnalysisBatch {
+  id String @id @default(cuid())
+  brandId String
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  batchKey String
+  language String @default("zh")
+  industry String
+  context String
+  status String @default("QUEUED")
+  sealed Boolean @default(true)
+  summaryJobId String?
+  summaryRequest Json?
+  groups Json?
+  error String?
+  leaseUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items AssetAnalysisItem[]
+  @@unique([brandId, batchKey])
+  @@index([status, leaseUntil])
+}
+
+model AssetAnalysisItem {
+  id String @id @default(cuid())
+  batchId String
+  batch AssetAnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  assetId String
+  asset MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  status String @default("QUEUED")
+  attempt Int @default(0)
+  gatewayJobId String?
+  gatewayRequest Json?
+  result Json?
+  originalCategory String?
+  originalUpdatedAt DateTime
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([batchId, assetId])
+  @@index([assetId, status])
+}
+
 model BrandFolder {
   id        String   @id @default(cuid())
   brandId   String
@@ -1335,6 +1382,9 @@ model BrandAgentCheckpoint {
 }
 
 model SystemConfig {
+  assetAnalysisEnabled Boolean @default(false)
+  assetAnalysisGatewayUrl String?
+  assetAnalysisGatewaySecret String?
   id            String  @id @default("default")
   geminiApiKey  String?
   minimaxApiKey String? // MiniMax LLM API key (chat completions, OpenAI-compatible)
@@ -1801,4 +1851,21 @@ model Notification {
 
   @@index([userId])
   @@index([brandId])
+}
+
+model VoiceTask {
+  id String @id
+  brandId String
+  kind String
+  requestKey String
+  status String @default("queued")
+  payload Json
+  result Json?
+  error String?
+  leaseToken String?
+  leaseUntil DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([brandId, kind, requestKey])
+  @@index([status, leaseUntil])
 }

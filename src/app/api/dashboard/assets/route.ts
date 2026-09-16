@@ -111,6 +111,7 @@ export async function GET(request: Request) {
       where: { brandId: { in: scopedBrandIds } },
       include: {
         brand: { select: { id: true, name: true } },
+        analysisItems: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, error: true, batchId: true } },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
@@ -134,6 +135,8 @@ export async function GET(request: Request) {
     })(),
     filename: asset.filename,
     mimeType: asset.mimeType,
+    imageAnalysis: asset.imageAnalysis,
+    analysisTask: asset.analysisItems[0] || null,
     aiTags: asset.aiTags,
     aiCategory: asset.aiCategory,
     aiCaption: asset.aiCaption,

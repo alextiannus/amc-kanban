@@ -1,5 +1,7 @@
 # AMC-MM 品牌主端产品需求文档 (PRD)
 
+Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
+
 ## 店内抽奖固定二维码（当前规则）
 
 - 每个品牌固定使用 `https://amc-kanban.immedi.ai/game/{brandId}`，二维码不包含奖品 ID、配置 ID、时间戳或版本。
@@ -518,3 +520,13 @@ Body: { role: 'user' | 'assistant', content: string, action?: string, draftId?: 
 
 *文档回写时间：2026-06-27（历史持久化决策更新）*  
 *基于讨论结论整理，后续变更请更新此文档*
+
+
+## 商家声音上传响应处理（修复待发布）
+
+- 商家声音统一使用国内 MiniMax `https://api.minimaxi.com`。Base URL 留空等同于该国内地址；其他域名、非法地址或跳转直接报错。上传、克隆、激活和试听使用同一配置，失败不换国际站、不尝试另一把 Key。国内单配置限制待发布。
+- 任意录音不发送 `text_validation` 或 `accuracy`，不能将固定试听文案或页面朗读提示当作真实录音原文。克隆请求只提交文件 ID、声音 ID 和音频处理选项；克隆后的试听文本通过原配置的 TTS 单独合成。ASR 参数修复待发布。
+- 新录入声音保存克隆配置 ID；激活失败直接返回错误，不保存为可用。试听必须使用原配置；旧记录缺少配置绑定时提示重新录入，不能猜测配置。
+- 上传必须同时验证 HTTP 状态和 MiniMax `base_resp.status_code`。业务失败时返回上传阶段、供应商错误码和错误说明，不能被「没有 file_id」覆盖；不得输出密钥或完整响应。
+- 成功响应的 `file.file_id` 按十进制字符串无损保存，克隆请求仍按供应商要求发送 JSON 整数，避免大整数被 JavaScript 舍入或误判为非法。
+- 验收覆盖 HTTP 200 业务拒绝、非 JSON 响应、缺少文件 ID、字符串与大整数 ID，以及上传失败时不得继续克隆。真实录音与账号联调仍需部署后验收。

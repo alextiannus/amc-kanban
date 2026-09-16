@@ -87,6 +87,7 @@ export async function POST(request: Request) {
         plan: jsonOrNull(body.plan),
         sceneExecutions: jsonOrNull(body.sceneExecutions),
         finalExecution: jsonOrNull(body.finalExecution),
+        voiceoverState: voiceoverState(body),
         error: optionalText(body.error),
         createdBy: actor.id,
       },
@@ -109,6 +110,7 @@ export async function POST(request: Request) {
         plan: jsonOrNull(body.plan),
         sceneExecutions: jsonOrNull(body.sceneExecutions),
         finalExecution: jsonOrNull(body.finalExecution),
+        voiceoverState: voiceoverState(body),
         error: optionalText(body.error),
       },
     })
@@ -122,6 +124,7 @@ export async function POST(request: Request) {
 
 function serializeJob(job: any) {
   return {
+    ...(job.voiceoverState || {}),
     id: job.id,
     brandId: job.brandId,
     creativeId: job.creativeId,
@@ -180,4 +183,9 @@ function stringArray(value: unknown): string[] {
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function voiceoverState(body: any) {
+  const fields = ['voiceSelection', 'voiceTaskId', 'awaitingVoiceover', 'voiceoverRequired', 'voiceoverVoiceId', 'brandVoiceProfileId', 'brandVoiceLabel', 'musicUrl', 'selectedMusicPrompt', 'script']
+  return Object.fromEntries(fields.filter(key => body[key] !== undefined).map(key => [key, body[key]]))
 }

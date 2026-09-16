@@ -136,6 +136,9 @@ async function handlePATCH(request: Request, { params }: Params) {
   }
 
   const body = await request.json().catch(() => ({}))
+  if ('brandVoiceProfiles' in body || 'defaultBrandVoiceProfileId' in body) {
+    return NextResponse.json({ error: 'Use the dedicated brand voice endpoints to manage voices' }, { status: 409 })
+  }
 
   const identityKeys = [
     'brandTone',

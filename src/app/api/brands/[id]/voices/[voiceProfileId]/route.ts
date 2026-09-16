@@ -16,9 +16,11 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
-  const result = await updateBrandVoiceProfile(brandId, voiceProfileId, body)
-  if (!result) return NextResponse.json({ error: 'Voice profile not found' }, { status: 404 })
-  return NextResponse.json(result)
+  try {
+    return NextResponse.json(await updateBrandVoiceProfile(brandId, voiceProfileId, body))
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || 'Voice update failed' }, { status: error.status || 502 })
+  }
 }
 
 export async function DELETE(_request: Request, { params }: Params) {

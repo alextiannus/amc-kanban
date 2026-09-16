@@ -45,6 +45,7 @@ export async function POST(request: Request, { params }: Params) {
   try {
     const result = await createBrandVoiceProfile({
       brandId,
+      requestKey: String(form.get('requestKey') || ''),
       file,
       label: typeof form.get('label') === 'string' ? String(form.get('label')) : '',
       role: typeof form.get('role') === 'string' ? String(form.get('role')) : '',
@@ -53,10 +54,10 @@ export async function POST(request: Request, { params }: Params) {
       actorType: session.user.type ?? 'HUMAN',
       actorRole: session.user.role,
     })
-    return NextResponse.json(result, { status: 201 })
+    return NextResponse.json(result, { status: 202 })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Voice clone failed'
-    const status = message === 'TTS_MODEL_NOT_CONFIGURED' ? 503 : 502
+    const status = (error as { status?: number }).status || (message.startsWith('VOICE_AUDIO_') ? 400 : message === 'TTS_MODEL_NOT_CONFIGURED' ? 503 : 502)
     return NextResponse.json({ error: message }, { status })
   }
 }

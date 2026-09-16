@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 
-const DEFAULT_MINIMAX_TTS_ENDPOINT = 'https://api.minimaxi.com/v1/t2a_v2'
+import { miniMaxVoiceEndpoint } from '@/lib/miniMaxEndpoints'
 const DEFAULT_MINIMAX_TTS_MODEL = 'speech-2.8-hd'
 const DEFAULT_MINIMAX_VOICE_ID = 'Chinese (Mandarin)_Warm_Bestie'
 const DEFAULT_TTS_TIMEOUT_MS = 12_000
@@ -85,7 +85,8 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
   const timeout = setTimeout(() => controller.abort(), ttsTimeout(config.timeoutMs))
 
   try {
-    const response = await fetch(config.baseUrl || DEFAULT_MINIMAX_TTS_ENDPOINT, {
+    const response = await fetch(miniMaxVoiceEndpoint(config.baseUrl, '/v1/t2a_v2'), {
+      redirect: 'error',
       method: 'POST',
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
@@ -148,6 +149,8 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
 }
 
 export async function generateTtsAudio(input: {
+  configId?: string
+  activateVoice?: boolean
   text: string
   voiceId?: string
   brandId?: string
@@ -156,32 +159,28 @@ export async function generateTtsAudio(input: {
   actorType?: string
   actorRole?: string
 }): Promise<TtsExecution> {
-  const configs = await getActiveMiniMaxTtsConfigs()
-  if (!configs.length) throw new Error('TTS_MODEL_NOT_CONFIGURED')
-
-  const fallbackPath: string[] = []
-  let lastError: unknown = null
-
-  for (const config of configs) {
-    try {
-      const result = await callMiniMaxTts(config, input)
-      return {
-        audio: result.audio,
-        contentType: result.contentType,
-        provenance: {
-          profileId: config.id,
-          provider: config.provider,
-          modelName: config.modelName,
-          fallbackPath,
-          latencyMs: result.latencyMs,
-        },
-      }
-    } catch (error) {
-      lastError = error
-      fallbackPath.push(config.id)
-      console.warn(`[TTS] MiniMax profile ${config.id} failed:`, error)
+  if (input.voiceId?.startsWith('amc_')) {
+    if (!input.brandId || !input.configId) throw new Error('Merchant voices require a verified brand and configuration')
+    const knowledge = await prisma.brandKnowledge.findUnique({ where: { brandId: input.brandId }, select: { brandVoiceProfiles: true } })
+    const profiles = Array.isArray(knowledge?.brandVoiceProfiles) ? knowledge.brandVoiceProfiles : []
+    const profile = profiles.find((p: any) => p.providerVoiceId === input.voiceId && p.brandId === input.brandId && p.configId === input.configId) as any
+    if (!profile || !profile.consent?.confirmedByUserId || (profile.status !== 'ready' && !(input.activateVoice && profile.status === 'processing'))) {
+      throw new Error('Merchant voice is not available for this brand')
     }
   }
-
-  throw lastError instanceof Error ? lastError : new Error('TTS generation failed')
+  const configs = await getActiveMiniMaxTtsConfigs()
+  const config = input.configId ? configs.find(c => c.id === input.configId) : configs[0]
+  if (!config) throw new Error(input.configId ? 'VOICE_CONFIG_UNAVAILABLE: Original MiniMax configuration is unavailable' : 'TTS_MODEL_NOT_CONFIGURED')
+  const result = await callMiniMaxTts(config, input)
+  return {
+    audio: result.audio,
+    contentType: result.contentType,
+    provenance: {
+      profileId: config.id,
+      provider: config.provider,
+      modelName: config.modelName,
+      fallbackPath: [],
+      latencyMs: result.latencyMs,
+    },
+  }
 }

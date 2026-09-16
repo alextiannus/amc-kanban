@@ -26,12 +26,13 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
-  const existing = await prisma.mediaAsset.findFirst({ where: { id: assetId, brandId }, select: { id: true } })
+  const existing = await prisma.mediaAsset.findFirst({ where: { id: assetId, brandId }, select: { id: true, imageAnalysis: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const asset = await prisma.mediaAsset.update({
     where: { id: assetId },
     data: {
+      ...(typeof body.aiCaption === 'string' || Array.isArray(body.aiTags) ? { imageAnalysis: { ...(existing.imageAnalysis as object || {}), ...(typeof body.aiCaption === 'string' ? { captionEdited: true } : {}), ...(Array.isArray(body.aiTags) ? { tagsEdited: true, generatedTags: [] } : {}) } } : {}),
       filename: typeof body.filename === 'string' ? body.filename.trim() || null : undefined,
       aiCategory: typeof body.folder === 'string' ? body.folder.trim() || '素材库' : typeof body.aiCategory === 'string' ? body.aiCategory.trim() || '素材库' : undefined,
       aiCaption: typeof body.aiCaption === 'string' ? body.aiCaption.trim() || null : undefined,
@@ -52,7 +53,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
   // Trigger platform Designer auto-tagging in the background
   if (body.triggerAiTagging === true && asset.mimeType.startsWith('image/')) {
-    void triggerDesignerAutoTag(asset.id).catch((err) => {
+    await triggerDesignerAutoTag(asset.id).catch((err) => {
       console.error('[Asset PATCH] Failed to auto-tag asset in background:', err)
     })
   }
