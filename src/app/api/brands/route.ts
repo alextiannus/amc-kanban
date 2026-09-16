@@ -360,6 +360,7 @@ export async function POST(request: Request) {
       // Create PENDING subscription — Admin activates after offline payment
       const subscription = await tx.brandSubscription.create({
         data: {
+          currency: 'SGD',
           brandId: brand.id,
           createdById: sessionUser.id,
           planId,

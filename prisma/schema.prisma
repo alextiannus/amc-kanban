@@ -1414,6 +1414,8 @@ model SystemConfig {
   immediErpApiKey     String?  // Bearer token (imx_...)
   immediErpBaseUrl    String?  // e.g. https://today.immedi.ai/external/v1
   immediErpEnabled    Boolean? @default(false)
+  immediErpEmployeeMap Json? // AMC user ID/email -> verified ERP employee ID
+  immediErpCostCenter String?
   immediErpItemCodeMap Json?   // { planId: "ERP-ITEM-CODE", ... } override map
 
   createdAt DateTime @default(now())
@@ -1980,4 +1982,21 @@ model ModelManagementDraft {
   initializationReport Json?
   updatedAt DateTime @default(now()) @db.Timestamptz(6)
   actorId String
+}
+
+model ImmediErpSync {
+  id String @id
+  kind String
+  sourceId String
+  payloadHash String?
+  revision Int @default(0)
+  status String @default("PENDING")
+  reference String?
+  lastError String?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([kind, sourceId])
+  @@index([status, nextAttemptAt])
 }

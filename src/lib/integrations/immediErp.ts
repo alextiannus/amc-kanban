@@ -28,12 +28,20 @@ const DEFAULT_ITEM_CODE_MAP: Record<string, string> = {
   // Subscription plans
   starter:           'AMC-STARTER',
   essential:         'AMC-ESSENTIAL',
-  advanced:          'AMC-ADVANCED',
+  booster:           'AMC-BOOSTER',
   // Add-ons
-  multi_store:       'AMC-ADDON-MULTISTORE',
-  onsite_photo:      'AMC-ADDON-PHOTO',
+  multi_store:       'AMC-MULTI-STORE-MONTHLY',
+  xiaohongshu_ops: 'AMC-XIAOHONGSHU-MONTHLY',
+  meituan_dianping_setup: 'AMC-MEITUAN-DIANPING-ANNUAL',
+  meituan_dianping_ops: 'AMC-MEITUAN-DIANPING-OPS-MONTHLY',
+  twelveeat_delivery_setup: 'AMC-12EAT-LAUNCH',
+  twelveeat_delivery_ops: 'AMC-12EAT-OPS-MONTHLY',
+  grab_foodpanda_ops: 'AMC-GRAB-FOODPANDA-OPS-MONTHLY',
+  youtube_ops: 'AMC-YOUTUBE-MONTHLY',
+  short_video_six: 'AMC-SHORT-VIDEO-6',
+  onsite_photo:      'AMC-ON-SITE-SHOOT',
   kol_light:         'AMC-ADDON-KOL-LIGHT',
-  influencer_visit:  'AMC-ADDON-KOL-PRO',
+  influencer_visit:  'AMC-INFLUENCER-VISIT-12',
   dianping_ops:      'AMC-ADDON-DIANPING',
   ordering_site:     'AMC-ADDON-ORDERING',
 }
@@ -43,6 +51,8 @@ const DEFAULT_ITEM_CODE_MAP: Record<string, string> = {
 export interface ImmediErpConfig {
   apiKey: string
   baseUrl: string
+  employeeMap?: Record<string, string>
+  costCenter?: string
   itemCodeMap: Record<string, string>
 }
 
@@ -62,6 +72,8 @@ export async function getImmediErpConfig(): Promise<ImmediErpConfig | null> {
         ? (config.immediErpItemCodeMap as Record<string, string>)
         : {}
     return {
+      employeeMap: (config.immediErpEmployeeMap || {}) as Record<string, string>,
+      costCenter: config.immediErpCostCenter || 'Main - IMD',
       apiKey: config.immediErpApiKey,
       baseUrl: (config.immediErpBaseUrl || DEFAULT_BASE_URL).replace(/\/$/, ''),
       itemCodeMap: { ...DEFAULT_ITEM_CODE_MAP, ...overrideMap },
@@ -78,6 +90,7 @@ export interface ErpOrderItem {
   quantity:  number
   rate:      number
   amount:    number
+  cost_center?: string
 }
 
 export interface CreateSalesOrderParams {
@@ -130,7 +143,7 @@ interface FetchOptions {
   idempotencyKey?:  string
 }
 
-async function erpPost<T>(
+export async function erpPost<T>(
   opts:       FetchOptions,
   retries   = 3,
   delayMs   = 800
@@ -145,12 +158,12 @@ async function erpPost<T>(
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res  = await fetch(url, { method: 'POST', headers, body: JSON.stringify(opts.body) })
+      const res  = await fetch(url, { method: 'POST', headers, body: JSON.stringify(opts.body), signal: AbortSignal.timeout(45_000), redirect: 'error' })
       const text = await res.text()
       let data: T
       try { data = JSON.parse(text) as T } catch { data = { raw: text } as unknown as T }
 
-      // 409 = idempotent duplicate — not an error
+      // Conflicts are returned to the caller and never treated as success.
       if (res.status === 409) return { status: 409, data }
 
       // 5xx → retry with exponential backoff
@@ -192,9 +205,10 @@ export async function createSalesOrder(
           contact_name:  params.contact_name,
           company_name:  params.company_name,
           // ERP requires at least mobile_no or email to create/link a CRM Lead
-          ...(params.mobile_no ? { mobile_no: params.mobile_no } : { mobile_no: '+65 0000 0000' }),
-          ...(params.email     ? { email:     params.email     } : {}),
-          items:         params.items,
+          ...(params.mobile_no ? { mobile_no: params.mobile_no } : {}),
+          ...(params.email     ? { email_id:  params.email     } : {}),
+          items:         params.items.map(item => ({ ...item, cost_center: item.cost_center || cfg.costCenter || 'Main - IMD' })),
+          business_unit: DEFAULT_BUSINESS_UNIT,
           amount:        params.amount,
           currency:      params.currency || 'SGD',
           sales_date:    params.sales_date,
@@ -205,16 +219,11 @@ export async function createSalesOrder(
       }
     )
 
-    if (status === 409) {
-      const existing = (data as Record<string, unknown>)?.data as Record<string, unknown> | undefined
-      return { ok: true, erpOrderName: existing?.name as string | undefined, alreadyExists: true }
-    }
-
     if (status === 201 || status === 200) {
-      const d    = data as Record<string, unknown>
-      const name = ((d?.data as Record<string, unknown>)?.salesOrder as Record<string, unknown>)?.name
-        ?? (d?.name as string | undefined)
-      return { ok: true, erpOrderName: name as string | undefined }
+      const result = data.result as Record<string, unknown> | undefined
+      const order = result?.salesOrder as Record<string, unknown> | undefined
+      if (typeof order?.name === 'string' && order.name) return { ok: true, erpOrderName: order.name }
+      return { ok: false, error: 'ERP response did not contain a verified Sales Order reference', status }
     }
 
     console.error(`[immediErp] Sales Order creation failed: status=${status}`, data)
@@ -282,53 +291,7 @@ export interface SubscriptionSummary {
   selectedAddons?: unknown
 }
 
-export function buildOrderItems(
-  sub: SubscriptionSummary,
-  cfg: ImmediErpConfig
-): ErpOrderItem[] {
-  const items: ErpOrderItem[] = []
-  const map = cfg.itemCodeMap
-
-  // Parse addons
-  const addons: SelectedAddon[] = []
-  if (Array.isArray(sub.selectedAddons)) {
-    for (const a of sub.selectedAddons) {
-      if (a && typeof a === 'object' && typeof (a as Record<string, unknown>).id === 'string') {
-        addons.push(a as SelectedAddon)
-      }
-    }
-  }
-
-  // Plan base total
-  const oneTimeTotal      = addons.filter((a) => a.pricing === 'one_time').reduce((s, a) => s + a.usd * (a.quantity ?? 1), 0)
-  const monthlyAddonsTotal = addons.filter((a) => a.pricing === 'monthly').reduce((s, a) => s + a.usd * (a.quantity ?? 1), 0)
-  const planBaseMonthly   = (sub.totalDueUsd - oneTimeTotal - monthlyAddonsTotal * sub.durationMonths) / sub.durationMonths
-  const planBaseTotal     = Math.round(planBaseMonthly * sub.durationMonths)
-
-  const planCode = map[sub.planId] || `AMC-${sub.planId.toUpperCase()}`
-  if (planBaseTotal > 0) {
-    items.push({
-      item_code: planCode,
-      quantity:  sub.durationMonths,
-      rate:      Math.round(planBaseMonthly),
-      amount:    planBaseTotal,
-    })
-  }
-
-  // Addon items
-  for (const addon of addons) {
-    const addonCode = map[addon.id] || `AMC-ADDON-${addon.id.toUpperCase().replace(/_/g, '-')}`
-    const qty = addon.quantity ?? 1
-    if (addon.pricing === 'one_time') {
-      items.push({ item_code: addonCode, quantity: qty, rate: addon.usd, amount: addon.usd * qty })
-    } else {
-      const total = addon.usd * qty * sub.durationMonths
-      items.push({ item_code: addonCode, quantity: sub.durationMonths, rate: addon.usd * qty, amount: total })
-    }
-  }
-
-  return items
-}
+export { buildOrderItems } from './immediErpContract'
 
 // ── Orchestrator ───────────────────────────────────────────────────────────
 
@@ -344,90 +307,13 @@ export interface ErpOnboardingInput {
 }
 
 /**
- * Full onboarding flow triggered after subscription activation (fire-and-forget).
- * 1. Create draft Sales Order in ERP
- * 2. Create Finance Collection Confirmation Task (due 3 days, High)
- * 3. Create Client Follow-up Task (due 7 days, Medium)
- * 4. Create Sales Payment Follow-up Task for salesperson (due = trial end, High)
+ * Compatibility entry point for durable subscription synchronization.
  *
- * Never throws — call with .catch(console.error).
+ * The worker persists failures and retries without relying on this call.
  */
 export async function triggerErpOnboardingFlow(input: ErpOnboardingInput): Promise<void> {
-  const { subscription, brandName } = input
-  const salesperson = input.salespersonName || input.salespersonEmail || null
-
-  const cfg = await getImmediErpConfig()
-  if (!cfg) return  // ERP disabled or not configured — silently skip
-
-  const today        = new Date()
-  const salesDate    = today.toISOString().slice(0, 10)
-  const deliveryDate = new Date(today)
-  deliveryDate.setMonth(deliveryDate.getMonth() + subscription.durationMonths)
-  const deliveryDateStr = deliveryDate.toISOString().slice(0, 10)
-
-  const items = buildOrderItems(subscription, cfg)
-
-  console.log(`[immediErp] Triggering onboarding for sub=${subscription.id}, brand=${brandName}, salesperson=${salesperson ?? 'none'}`)
-
-  // ── Step 1: Sales Order ────────────────────────────────────────────────
-  const orderResult = await createSalesOrder(cfg, {
-    idempotencyKey: `amc-sub-${subscription.id}`,
-    contact_name:   input.contactName || brandName,
-    company_name:   input.companyName || brandName,
-    mobile_no:      input.mobileNo || null,
-    items,
-    amount:         subscription.totalDueUsd,
-    currency:       'SGD',
-    sales_date:     salesDate,
-    delivery_date:  deliveryDateStr,
-  })
-
-  const orderRef = orderResult.erpOrderName ? ` · ${orderResult.erpOrderName}` : ''
-  if (!orderResult.ok && !orderResult.alreadyExists) {
-    console.error(`[immediErp] Sales Order failed for sub=${subscription.id}:`, orderResult.error)
-  } else {
-    console.log(`[immediErp] Sales Order: ok=${orderResult.ok}, name=${orderResult.erpOrderName}, duplicate=${orderResult.alreadyExists}`)
-  }
-
-  // ── Step 2: Finance Collection Task (due 3 days) ───────────────────────
-  const financeDate = new Date(today)
-  financeDate.setDate(financeDate.getDate() + 3)
-  const financeDateStr = `${financeDate.toISOString().slice(0, 10)} 18:00:00`
-
-  const financeTask = await createErpTask(cfg, {
-    subject:       `[AMC] 收款确认 · ${brandName} · ${subscription.planName}${orderRef}`,
-    description:   `订阅 ID: ${subscription.id}\n品牌: ${brandName}\n方案: ${subscription.planName}（${subscription.durationMonths} 个月）\n金额: SGD ${subscription.totalDueUsd.toLocaleString()}\nSales Order: ${orderResult.erpOrderName || '（创建失败，请手动核查）'}${salesperson ? `\n负责销售: ${salesperson}` : ''}\n\n请在 3 个工作日内确认收款并在 ERP 中提交收款记录。`,
-    priority:      'High',
-    exp_end_date:  financeDateStr,
-  })
-  console.log(`[immediErp] Finance task: ok=${financeTask.ok}, name=${financeTask.erpTaskName}`)
-
-  // ── Step 3: Client Follow-up Task (due 7 days) ─────────────────────────
-  const followUpDate = new Date(today)
-  followUpDate.setDate(followUpDate.getDate() + 7)
-  const followUpDateStr = `${followUpDate.toISOString().slice(0, 10)} 10:00:00`
-
-  const followUpTask = await createErpTask(cfg, {
-    subject:      `[AMC] 客户跟进 · ${brandName} · 已开通 ${subscription.planName}`,
-    description:  `客户 ${brandName} 已成功开通 ${subscription.planName} 方案（${subscription.durationMonths} 个月）。${salesperson ? `\n负责销售: ${salesperson}` : ''}\n\n请在 7 天内完成以下跟进：\n1. 确认客户已收到开通确认邮件\n2. 安排品牌入驻说明会/培训\n3. 确认 AI 团队分配情况\n4. 收集客户初始需求与资料\n\n订阅 ID: ${subscription.id}\nSales Order: ${orderResult.erpOrderName || '待核查'}`,
-    priority:     'Medium',
-    exp_end_date: followUpDateStr,
-  })
-  console.log(`[immediErp] Follow-up task: ok=${followUpTask.ok}, name=${followUpTask.erpTaskName}`)
-
-  // ── Step 4: Sales Payment Follow-up Task (due = trial end = 5 days) ────
-  // Assigned to the salesperson so they can track whether payment has been made
-  // before the trial expires.
-  const paymentDueDate = input.trialEndsAt ?? (() => {
-    const d = new Date(today); d.setDate(d.getDate() + 5); return d
-  })()
-  const paymentDueDateStr = `${paymentDueDate.toISOString().slice(0, 10)} 18:00:00`
-
-  const salesFollowUpTask = await createErpTask(cfg, {
-    subject:      `[AMC] 跟进付款 · ${brandName} · 试用期结束前${salesperson ? ` · 负责: ${salesperson}` : ''}`,
-    description:  `客户 ${brandName} 已进入 5 天免费试用期，请在试用期结束前（${paymentDueDate.toISOString().slice(0, 10)}）确认收款。\n\n方案: ${subscription.planName}（${subscription.durationMonths} 个月）\n金额: SGD ${subscription.totalDueUsd.toLocaleString()}\n${salesperson ? `负责销售: ${salesperson}` : ''}${input.salespersonEmail ? `\n联系邮件: ${input.salespersonEmail}` : ''}\nSales Order: ${orderResult.erpOrderName || '待核查'}\n\n⚠️ 试用期届满后未收款的品牌将暂停发布权限。`,
-    priority:     'High',
-    exp_end_date: paymentDueDateStr,
-  })
-  console.log(`[immediErp] Sales payment follow-up task: ok=${salesFollowUpTask.ok}, name=${salesFollowUpTask.erpTaskName}`)
+  // The persisted subscription is the durable source. The minute worker recovers
+  // failed/interrupted calls and covers every creation path, including renewals.
+  const { syncSubscription } = await import('./immediErpWorker')
+  await syncSubscription(input.subscription.id)
 }

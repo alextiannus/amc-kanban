@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
 
       const subscription = await tx.brandSubscription.create({
         data: {
+          currency: 'SGD',
           planId: normalizedPlanId,
           planName: selectedPlan.name,
           durationMonths,

@@ -203,6 +203,7 @@ export async function POST(request: NextRequest) {
     console.log(`[MM-Sub] creating BrandSubscription (${Date.now() - t0}ms since start)`)
     const pendingSub = await prisma.brandSubscription.create({
       data: {
+          currency: 'SGD',
         brandId,
         planId: selectedPlan.id,
         planName: selectedPlan.name,
