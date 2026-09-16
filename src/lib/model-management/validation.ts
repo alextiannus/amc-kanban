@@ -3,6 +3,7 @@ import { prisma } from '../prisma.ts'
 import { complete } from '../global-text/transport.ts'
 import { configurationRuntime, configurationFingerprint } from './registry.ts'
 import { CAPABILITIES, capabilityFor, selectModel, type Selection } from './types.ts'
+import { EXECUTION_CONTRACT_VERSION } from './executionContract.ts'
 export async function validateSelection(selection:Selection){
   if(!selection?.defaults?.text||!selection.exceptions||typeof selection.exceptions!=='object')throw new Error('A global text model and media exception map are required')
   if(Object.keys(selection.defaults).some(c=>!(CAPABILITIES as readonly string[]).includes(c)))throw new Error('Unknown default capability')
@@ -17,15 +18,8 @@ export async function validateSelection(selection:Selection){
     if(!model||!model.definition.capabilities.includes(capability))throw new Error('Media exception model lacks the task capability')
   }
   const text=selectModel(runtime,'kanban','text','text',['text_input','structured_json'])
-  await check('system.kanban',async()=>{
-    const supported:Record<string,string[]>={image_understanding:['google','openai','custom_shim','kopix','deepseek'],video_generation:['seedance','kieai','minimax'],speech_synthesis:['minimax']}
-    for(const [capability,protocols]of Object.entries(supported)){
-      if(!selection.defaults[capability as keyof Selection['defaults']]&&!Object.keys(selection.exceptions).some(key=>key.startsWith('kanban:')&&capabilityFor(key.split(':')[1])===capability))continue
-      const m=selectModel(runtime,'kanban',capability==='speech_synthesis'?'tts_generation':capability,capability as any)
-      if(!protocols.includes(m.protocol))throw new Error(`Kanban has no ${capability} adapter for ${m.protocol}; configure its task exception`)
-    }
-    return true
-  })
+  const tasks:any[]=[]
+  checks['system.kanban']=false
   const connection={id:text.id,provider:text.protocol,displayName:text.definition.name,modelName:text.definition.modelName,baseUrl:text.baseUrl,apiKey:runtime.secrets![text.secretRef],timeoutMs:30000}
   await check('text',async()=>!!(await complete(connection,{messages:[{role:'user',content:'Reply OK'}],maxTokens:1024})).text)
   await check('json',async()=>JSON.parse((await complete(connection,{messages:[{role:'user',content:'Return only JSON: {"ok":true}'}],maxTokens:1024})).text!).ok===true)
@@ -43,11 +37,21 @@ export async function validateSelection(selection:Selection){
     ['mm',process.env.AMC_MM_SERVICE_URL||'https://amc-mm.immedi.ai','/api/internal/models/preflight'],
   ])await check(`system.${source}`,async()=>{
     if(!base||!process.env.CONTENT_SERVICE_INTERNAL_TOKEN)throw new Error('Service URL or internal token missing')
-    const r=await fetch(`${base.replace(/\/+$/,'')}${path}`,{method:'POST',headers:{'Content-Type':'application/json','x-content-service-token':process.env.CONTENT_SERVICE_INTERNAL_TOKEN},body:JSON.stringify(runtime),signal:AbortSignal.timeout(60000),cache:'no-store'})
+    const r=await fetch(`${base.replace(/\/+$/,'')}${path}`,{method:'POST',headers:{'Content-Type':'application/json','x-content-service-token':process.env.CONTENT_SERVICE_INTERNAL_TOKEN},body:JSON.stringify({...runtime,executionContractVersion:EXECUTION_CONTRACT_VERSION}),signal:AbortSignal.timeout(60000),cache:'no-store'})
     if(!r.ok)throw new Error(`${source} preflight HTTP ${r.status}`)
-    const data=await r.json();return data.protocolVersion===2&&data.success===true
+    const data=await r.json()
+    if(source==='content'){
+      if(data.executionContractVersion!==EXECUTION_CONTRACT_VERSION||data.delegatedMedia!==true||!Array.isArray(data.tasks))throw new Error('Content delegated media contract is unavailable; deploy Content first')
+      if(data.tasks.some((t:any)=>t.version!==runtime.version||t.executor!=='content'))throw new Error('Content media preflight configuration version or executor mismatch')
+      tasks.push(...data.tasks)
+      checks['system.kanban']=data.protocolVersion===2&&['text','json','conversation','tools'].every(k=>checks[k])&&data.tasks.filter((t:any)=>t.source==='kanban').every((t:any)=>t.passed)
+      if(!checks['system.kanban'])errors['system.kanban']=data.tasks.filter((t:any)=>t.source==='kanban'&&!t.passed).map((t:any)=>`${t.task}: ${t.error}`).join('; ')
+      if(!data.success)errors['system.content']=data.tasks.filter((t:any)=>!t.passed).map((t:any)=>`${t.source}:${t.task}: ${t.error}`).join('; ')
+    }
+    return data.protocolVersion===2&&data.success===true
   })
-  const id=randomUUID(),report={checks,errors,models:runtime.models!.map(m=>({id:m.id,connectionId:m.connectionId,modelName:m.definition.modelName})),passed:Object.values(checks).every(Boolean)}
+  if(!checks['system.kanban']&&!errors['system.kanban'])errors['system.kanban']='Kanban media delegation to Content has not passed preflight'
+  const id=randomUUID(),report={checks,errors,tasks,models:runtime.models!.map(m=>({id:m.id,connectionId:m.connectionId,modelName:m.definition.modelName})),passed:Object.values(checks).every(Boolean)}
   await prisma.$executeRawUnsafe('INSERT INTO "ModelPolicyValidation" (id,fingerprint,report) VALUES ($1,$2,$3::jsonb)',id,configurationFingerprint(selection),JSON.stringify(report))
   return {id,...report}
 }

@@ -5,6 +5,7 @@ const profile = { id: 'voice-a', brandId: 'brand-a', providerVoiceId: 'clone-a',
   consent: { confirmedByUserId: 'operator', confirmedAt: '2026-09-09', scope: 'brand_content' } }
 const mockPrisma: any = {
   $extends() { return this },
+  $queryRawUnsafe: async (sql: string) => sql.includes('GlobalTextPolicy') ? [{ version: 1, enabled: false, connectionId: null }] : [{ version: null }],
   user: { findFirst: async ({ where }: any) => where.id.in[0] === 'operator' && JSON.stringify(where).includes('brand-a') ? { id: 'operator' } : null },
   brandKnowledge: { findUnique: async ({ where }: any) => ({ brandVoiceProfiles: where.brandId === 'brand-a'
     ? [{ ...profile, status: disabled ? 'disabled' : 'ready', consent: consent ? profile.consent : {} }] : [], defaultBrandVoiceProfileId: 'voice-a' }) },
@@ -35,7 +36,7 @@ assert.equal((await request({ action: 'list' }, 'wrong')).status, 401)
 assert.equal((await request({ action: 'list', actorId: 'outsider' })).status, 404)
 assert.equal((await request({ action: 'list', brandId: 'brand-b' })).status, 404)
 const listed = await (await request({ action: 'list' })).json()
-assert.equal(listed.items[0].usable, true)
+assert.equal(listed.items[0].usable, true, listed.items[0].error)
 assert.equal(listed.items[0].isDefault, true)
 assert(!JSON.stringify(listed).includes('config-a'))
 assert(!JSON.stringify(listed).includes('clone-a'))

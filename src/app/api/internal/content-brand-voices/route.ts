@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     if (body.action === 'resolve') return NextResponse.json({ selection: await resolveContentBrandVoice(brandId, body.brandVoiceProfileId, body.expected) })
     if (body.action === 'preview' || body.action === 'generate') {
       return NextResponse.json(await generateContentBrandVoice({ brandId, actorId, actorRole,
+        idempotencyKey: typeof body.idempotencyKey==='string' ? body.idempotencyKey : request.headers.get('idempotency-key') || undefined,
         brandVoiceProfileId: body.brandVoiceProfileId, text: typeof body.text === 'string' ? body.text : '',
         expected: body.expected, speed: body.speed, volume: body.volume, pitch: body.pitch }))
     }

@@ -1527,6 +1527,7 @@ model ModelPolicyJob {
 model ModelExecutionLog {
   id String @id
   source String
+  executor String?
   task String
   version Int
   modelId String
@@ -1972,6 +1973,21 @@ model GlobalTextJob {
  version Int
  revision GlobalTextRevision @relation(fields: [version], references: [version])
  createdAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model ModelDelegatedJob {
+  id String @id
+  source String
+  brandId String
+  actorId String
+  task String
+  platform String?
+  version Int
+  inputHash String
+  contentJobId String?
+  status String @default("pending")
+  createdAt DateTime @default(now()) @db.Timestamptz
+  updatedAt DateTime @default(now()) @db.Timestamptz
 }
 
 model ModelManagementDraft {

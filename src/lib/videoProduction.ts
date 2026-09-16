@@ -1,4 +1,5 @@
 import { selectedExecution, withModels, recordExecution } from '@/lib/model-management/runtime'
+import { delegateMedia, queryDelegatedMedia, delegatedVideoResult } from '@/lib/model-management/delegatedMedia'
 import { runtimeConfig } from '@/lib/model-management/registry'
 import { prisma } from '@/lib/prisma'
 import { spawn } from 'node:child_process'
@@ -48,6 +49,7 @@ type SeedanceJob = {
 }
 
 type SubmitVideoInput = {
+  idempotencyKey?: string
   brandId: string
   actorId: string
   creatorType?: string
@@ -55,6 +57,7 @@ type SubmitVideoInput = {
   plan?: {
     title?: string
     seedanceJobs?: SeedanceJob[]
+    videoGenerationJobs?: unknown[]
   }
   seedanceJobs?: SeedanceJob[]
   assetIds?: string[]
@@ -71,6 +74,8 @@ async function trackVideo(config:VideoProviderConfig,run:()=>Promise<VideoExecut
 }
 
 export async function submitVideoGeneration(input: SubmitVideoInput): Promise<VideoExecution> {
+  const delegated=await delegateMedia('video_generation',input)
+  if(delegated)return delegatedVideoResult(delegated)
   const config = await getVideoProviderConfig()
   const job = firstVideoJob(input)
   if (!job?.request?.prompt?.trim()) throw Object.assign(new Error('Video prompt is required'), { status: 400 })
@@ -89,6 +94,11 @@ export async function submitVideoGeneration(input: SubmitVideoInput): Promise<Vi
 }
 
 export async function refreshVideoGeneration(input: { brandId: string; taskId: string; actorId: string }): Promise<VideoExecution> {
+  if(input.taskId.startsWith('delegate:')){
+    const execution=delegatedVideoResult(await queryDelegatedMedia(input))
+    if(execution.outputUrl){const asset=await persistGeneratedVideoAsset({brandId:input.brandId,actorId:input.actorId,url:execution.outputUrl,sourceType:'ai_video',tags:['AI视频','分镜视频',execution.provider],caption:`Content generated video ${input.taskId}`});return {...execution,asset}}
+    return execution
+  }
   const pinned=input.taskId.match(/^central:(\d+):(.+)$/)
   const parsed = parseProviderTaskId(pinned?decodeURIComponent(pinned[2]):input.taskId)
   const config = pinned?await withModels(await runtimeConfig({version:Number(pinned[1]),secrets:true}),()=>getVideoProviderConfig(parsed.provider)):await getVideoProviderConfig(parsed.provider,true)

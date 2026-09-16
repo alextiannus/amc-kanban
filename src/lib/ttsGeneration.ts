@@ -160,6 +160,8 @@ async function callMiniMaxTts(config: TtsConfig, input: { text: string; voiceId?
 }
 
 export async function generateTtsAudio(input: {
+  idempotencyKey?: string
+  platform?: string
   configId?: string
   speed?: number
   volume?: number
@@ -172,6 +174,12 @@ export async function generateTtsAudio(input: {
   actorType?: string
   actorRole?: string
 }): Promise<TtsExecution> {
+  const {delegateMedia}=await import('./model-management/delegatedMedia')
+  const delegated=await delegateMedia('tts_generation',input)
+  if(delegated){
+    if(!delegated.result.audioBase64)throw Object.assign(new Error('TTS task is still processing or its outcome is unknown; retry the same request'),{status:503})
+    return {audio:Buffer.from(delegated.result.audioBase64,'base64'),contentType:delegated.result.contentType,durationSec:delegated.result.durationSec,provenance:delegated.result.provenance}
+  }
   const configs = await getActiveMiniMaxTtsConfigs()
   const config = input.configId ? configs.find(c => c.id === input.configId || c.legacyId===`kanban:${input.configId}`) : configs[0]
   if (!config) throw new Error(input.configId ? 'VOICE_CONFIG_UNAVAILABLE: Original MiniMax configuration is unavailable' : 'TTS_MODEL_NOT_CONFIGURED')

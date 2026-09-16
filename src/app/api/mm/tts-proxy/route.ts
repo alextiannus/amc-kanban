@@ -8,9 +8,8 @@ export const maxDuration = 60
 const MAX_TEXT_LENGTH = 600
 
 /**
- * Server-side TTS proxy. Kanban executes against the active MiniMax TTS
- * LLMConfig profile so MM voice previews use the same database-backed model
- * routing as production voice generation.
+ * Authenticated TTS proxy. Unified jobs execute on Content with a pinned
+ * central selection; pre-publication requests retain the legacy route.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession()
@@ -34,6 +33,7 @@ export async function POST(req: NextRequest) {
     const result = await generateTtsAudio({
       text,
       voiceId,
+      idempotencyKey: req.headers.get('idempotency-key') || undefined,
       actorId: session.user.id,
       actorType: session.user.type ?? 'HUMAN',
       actorRole: session.user.role,

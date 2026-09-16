@@ -33,6 +33,7 @@ export async function listContentBrandVoices(brandId: string) {
 }
 
 export async function generateContentBrandVoice(input: {
+  idempotencyKey?: string
   brandId: string; brandVoiceProfileId: string; text: string; actorId: string; actorRole: string;
   expected?: MerchantVoiceSelection; speed?: number; volume?: number; pitch?: number
 }) {

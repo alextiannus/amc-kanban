@@ -6,7 +6,7 @@ Status: code implementation and local validation. Production migration, import, 
 
 Kanban `/admin` system settings is the configuration authority. Connections contain a vendor name, protocol, endpoint and encrypted credential. Immutable catalog entries share connection versions. Policy revisions select capability defaults and media task exceptions.
 
-Text uses one default in Kanban, Content and MM. Media chooses a source/task/platform exception, a source/task exception, then its capability default. Missing configuration, incompatible capabilities and provider errors fail explicitly. CN Gateway's internal provider keys and implementations stay in the gateway.
+Text uses one default in Kanban, Content and MM. Media chooses a source/task/platform exception, a source/task exception, then its capability default. Missing configuration, incompatible capabilities and provider errors fail explicitly. CN Gateway's internal provider keys and implementations stay in the gateway. Kanban executes text and delegates new unified video/TTS jobs to Content. Content owns media adapters, including CN Gateway; origin remains Kanban when matching exceptions. Growth's independent OpenAI branch is outside this change.
 
 Production provider connections require HTTPS. The existing `cn_gateway` execution protocol also accepts HTTP to preserve the deployed gateway: requests retain timestamp/nonce/HMAC authentication and gateway-internal provider keys stay on the gateway. This exception does not apply to OpenAI-compatible or other provider protocols. HTTP does not encrypt request or response content. Import validation still rejects embedded URL credentials and non-HTTP(S) schemes.
 
@@ -23,7 +23,8 @@ The admin has three shared-state tabs: usage configuration (default), model cata
 - ModelManagementDraft: persistent candidate selection, initialization issues, base policy version and CAS revision.
 - ModelPolicyJob: durable version binding, including pre-activation jobs with null central versions.
 - ModelOperation: asset analysis claim, upstream references and result, without credentials.
-- ModelExecutionLog: system, task, connection, target model, reported response model, version, status and latency.
+- ModelDelegatedJob: immutable origin, ownership, task, input hash, central version and Content task reference. Content atomically claims the same delegation ID before provider execution.
+- ModelExecutionLog: origin system, executor, task, connection, target model, reported response model, version, status and latency.
 
 Set MODEL_CONFIG_ENCRYPTION_KEY on Kanban to 64 hexadecimal characters representing a random 32-byte infrastructure key. Back it up securely. Changing it without re-encryption makes historical connections unreadable. Provider-key rotation creates new connection/catalog versions; old jobs retain the old connection.
 
@@ -32,7 +33,7 @@ Internal model-runtime endpoints require CONTENT_SERVICE_INTERNAL_TOKEN and prot
 ## Release
 
 1. Run `npx prisma migrate deploy`, then `npx prisma migrate status`. Do not create these tables through db push or separately execute migration SQL. If an operator already executed the exact migration manually, verify schema equality before `migrate resolve --applied`.
-2. Deploy all three consumers with the central pointer still null. Existing routing continues during staging.
+2. Deploy Content delegation endpoints and its schema first, then Kanban with Prisma migration 20260916190000_delegated_media. Keep the current central policy unchanged. Pre-publication calls and previously submitted legacy video IDs retain their original execution/query paths.
 3. Configure Kanban's encryption key, service URLs, and the same CONTENT_SERVICE_INTERNAL_TOKEN in all three systems. Content needs AMC_KANBAN_INTERNAL_URL; MM needs its existing Kanban origin. MM preflight HTTP 401 means shared authentication failed.
 4. In the single model management panel, click Initialize existing configuration and review the persisted, redacted report and nonblocking pending records. Disabled models with credentials enter the catalog without becoming selected. Deploy the updated Content export before reinitializing to classify optional unconfigured tasks. Resolve active-route conflicts, selected-model missing credentials and capability warnings before activation. Import does not activate. Basic video has its own content:basic_video_generation exception. Existing asset analysis retains its CN Gateway connection.
 5. Select Kopix glm-5.3 for text and review media defaults/exceptions. Run real text/JSON/conversation/tool checks and three-system preflight. Media preflight checks adapters, declared limits and advertised gateway capabilities; it does not replace live media business acceptance.
@@ -44,3 +45,11 @@ Voice identities belong to provider accounts. Selecting a different account can 
 ## Local verification
 
 Kanban/Content: `npm run test:unified-models` (includes draft transactions and full catalog export). All three: `npm run test:global-text`. Content: full `npm run test:integration` plus relevant media lifecycle tests. Run type checks and production builds. Tests use local policies and mock transports; Kanban registry tests execute the actual migration and transactions in PGlite. Passing tests does not establish production activation.
+
+## Delegated media contract (implementation; production acceptance pending)
+
+POST `/v1/internal/media/submit` and `/v1/internal/media/query` require `x-content-service-token` plus a signed `x-amc-text-binding`. Bodies carry `id`, `source: kanban`, `brandId`, `actorId`, `task` (video_generation or tts_generation), optional `platform`, `version`, `inputHash`, and submit-only `input`. No supplier credential is accepted. Content verifies the signature through Kanban runtime and resolves the exact revision. Public Kanban video/TTS response shapes stay unchanged. Video query IDs beginning with `delegate:` resolve the persisted record; legacy IDs keep the old query path.
+
+Public video and TTS callers may supply `Idempotency-Key` (internal JSON also accepts `idempotencyKey`). Keep that key for retries and use a new key for intentional regeneration. Without a caller key, identical inputs share a claim within one policy version; a request after publication binds the new version. A repeated explicit idempotency key with changed input returns 409. Kanban queries before submission and again after submission timeout; Content atomically claims each ID. Ambiguous upstream outcomes are retained for query/reconciliation and never blindly resubmitted. TTS audio is retained as the authenticated task result so retries return the same bytes. Polling/retries use the original version and origin/platform exception; key rotation never changes an existing task.
+
+A mirrored, versioned execution contract defines supported tasks, protocols and required inputs for routing, candidate filtering and preflight. Content validates every configured default and exception; Kanban validates text and the Content contract. Gateway capability checks are task-specific: audio references for video do not imply standalone transcription. Preflight is non-generating for media and does not prove provider billing credentials or real media success; run small image/video/TTS acceptance after deployment before calling the rollout verified. Restoring a historical selection changes only the draft until the administrator publishes.
