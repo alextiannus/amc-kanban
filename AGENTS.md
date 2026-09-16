@@ -7,9 +7,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- BEGIN:system-config-rules -->
 # API Key & Model Configuration - database-backed Admin configuration
 
-AI model credentials MUST use LLMConfig through /admin AI model configuration.
+AI model credentials MUST use encrypted ModelConnection versions and ModelCatalogEntry through the single /admin model management interface. LLMConfig is a migration input and historical-job compatibility source after central activation.
 Do not add AI keys to Render environment variables or legacy SystemConfig fields.
-Reuse the existing model configuration API, masked responses and AuditLog.
+Reuse /api/admin/models, masked responses and AuditLog. Save edits to ModelManagementDraft with revision checks; only validated publication changes the active policy.
 Other third-party service credentials use their existing database-backed settings.
 Infrastructure secrets (DATABASE_URL, session secrets and OBS credentials) retain their existing configuration.
 
