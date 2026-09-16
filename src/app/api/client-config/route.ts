@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { currentBinding, connectionFor } from '@/lib/global-text/policy'
+import { runtimeConfig } from '@/lib/model-management/registry'
 
 /**
  * GET /api/client-config
@@ -22,6 +24,16 @@ export async function GET() {
   // Return best enabled LLMConfig for any client-side metadata needs
   // (e.g. showing which AI model is active in UI). Keys are NOT included.
   try {
+    const policy=await currentBinding()
+    if(typeof policy.modelRevision==='number'){
+      const runtime=await runtimeConfig({version:policy.modelRevision})
+      const model=runtime.models!.find(m=>m.id===runtime.selection!.defaults.text)!
+      return NextResponse.json({llmConfig:{provider:model.connectionName,modelName:model.definition.modelName,displayName:model.definition.name},policyVersion:runtime.version,strict:true,centralModels:{version:runtime.version,defaults:runtime.selection!.defaults,models:runtime.models!.map(m=>({id:m.id,name:m.definition.name,modelName:m.definition.modelName,provider:m.connectionName,capabilities:m.definition.capabilities}))},managementPath:'/admin?tab=system'},{headers:{'Cache-Control':'no-store'}})
+    }
+    if(policy.enabled){
+      const c=await connectionFor(policy)
+      return NextResponse.json({llmConfig:{provider:c.provider,modelName:c.modelName,displayName:c.displayName},policyVersion:policy.version,strict:true},{headers:{'Cache-Control':'no-store'}})
+    }
     const configs = await prisma.lLMConfig.findMany({
       where: { isEnabled: true },
       orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
@@ -37,7 +49,7 @@ export async function GET() {
       )
     }
   } catch (err) {
-    console.warn('[client-config] LLMConfig query failed:', err)
+    return NextResponse.json({error:'Central model configuration unavailable'},{status:503,headers:{'Cache-Control':'no-store'}})
   }
 
   return NextResponse.json({ llmConfig: null }, { headers: { 'Cache-Control': 'no-store' } })

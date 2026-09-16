@@ -517,6 +517,7 @@ export async function POST(request: Request) {
 
   const pending = await prisma.brandSubscription.create({
     data: {
+          currency: 'SGD',
       brandId,
       planId: selectedPlan.id,
       planName: selectedPlan.name,

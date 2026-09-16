@@ -81,6 +81,8 @@ export async function GET() {
     immediErpApiKeyConfigured: !!config.immediErpApiKey,
     immediErpBaseUrl: config.immediErpBaseUrl || 'https://today.immedi.ai/external/v1',
     immediErpItemCodeMap: config.immediErpItemCodeMap ?? null,
+    immediErpEmployeeMap: config.immediErpEmployeeMap ?? null,
+    immediErpCostCenter: config.immediErpCostCenter ?? null,
     createdAt: config.createdAt,
     updatedAt: config.updatedAt,
   })
@@ -134,6 +136,8 @@ export async function PATCH(request: Request) {
   const nextImmediErpEnabled  = resolveBoolField(body, 'immediErpEnabled', current.immediErpEnabled)
   const nextImmediErpApiKey   = resolveField(body, 'immediErpApiKey', current.immediErpApiKey)
   const nextImmediErpBaseUrl  = resolveField(body, 'immediErpBaseUrl', current.immediErpBaseUrl)
+  const nextImmediErpEmployeeMap = 'immediErpEmployeeMap' in body ? body.immediErpEmployeeMap : undefined
+  const nextImmediErpCostCenter = resolveField(body, 'immediErpCostCenter', current.immediErpCostCenter)
   const nextImmediErpItemCodeMap = 'immediErpItemCodeMap' in body ? body.immediErpItemCodeMap : undefined
 
   const updated = await prisma.systemConfig.update({
@@ -160,6 +164,8 @@ export async function PATCH(request: Request) {
       ...(nextImmediErpEnabled  !== undefined && { immediErpEnabled:  nextImmediErpEnabled  }),
       ...(nextImmediErpApiKey   !== undefined && { immediErpApiKey:   nextImmediErpApiKey   }),
       ...(nextImmediErpBaseUrl  !== undefined && { immediErpBaseUrl:  nextImmediErpBaseUrl  }),
+      ...(nextImmediErpEmployeeMap !== undefined && { immediErpEmployeeMap: nextImmediErpEmployeeMap }),
+      ...(nextImmediErpCostCenter !== undefined && { immediErpCostCenter: nextImmediErpCostCenter }),
       ...(nextImmediErpItemCodeMap !== undefined && { immediErpItemCodeMap: nextImmediErpItemCodeMap }),
     },
   })
@@ -230,6 +236,8 @@ export async function PATCH(request: Request) {
     immediErpApiKeyConfigured: !!updated.immediErpApiKey,
     immediErpBaseUrl: updated.immediErpBaseUrl || 'https://today.immedi.ai/external/v1',
     immediErpItemCodeMap: updated.immediErpItemCodeMap ?? null,
+    immediErpEmployeeMap: updated.immediErpEmployeeMap ?? null,
+    immediErpCostCenter: updated.immediErpCostCenter ?? null,
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
   })

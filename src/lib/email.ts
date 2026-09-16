@@ -417,6 +417,73 @@ export const DEFAULT_TEMPLATES = {
 如有疑问请联系客服，本邮件由系统自动发出。
 `.trim()
   },
+  CONTACT_US_TRIAL_INVITE: {
+    name: 'Contact Us 试用邀请邮件',
+    description: '潜在客户提交官网 Contact Us 表单后，邀请对方免费试用 AMCMM 的欢迎邮件',
+    placeholders: 'nickname,appUrl,trialLink,senderName',
+    subject: 'Welcome to AMCMM — your free trial is ready',
+    html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Welcome to AMCMM</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .container { max-width: 560px; margin: 40px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 2px 16px rgba(0,0,0,0.08); }
+    .header { background: #111827; padding: 30px 40px; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 22px; font-weight: 700; }
+    .header p { margin: 6px 0 0; color: rgba(255,255,255,0.72); font-size: 13px; }
+    .body { padding: 32px 40px; }
+    .body p { color: #374151; font-size: 15px; line-height: 1.65; margin: 0 0 16px; }
+    .cta { display: inline-block; margin: 12px 0 24px; padding: 13px 24px; background: #4f46e5; color: #ffffff !important; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; }
+    .link-box { background: #f1f5f9; border-radius: 10px; padding: 14px 16px; margin: 4px 0 20px; word-break: break-all; font-size: 13px; color: #475569; }
+    .footer { padding: 20px 40px; border-top: 1px solid #e2e8f0; }
+    .footer p { font-size: 12px; color: #94a3b8; margin: 0; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Welcome to AMCMM</h1>
+      <p>AI Marketing Crew merchant workspace</p>
+    </div>
+    <div class="body">
+      <p>Hi {{nickname}},</p>
+      <p>Thanks for reaching out to us. I saw your contact form submission and thought your business could be a strong fit for AMCMM.</p>
+      <p>AMCMM helps restaurants and retail brands manage their marketing more clearly, from brand planning and content ideas to publishing support and performance visibility.</p>
+      <p>We would be happy to set you up with a free trial so you can explore the product with your own brand context.</p>
+      <a href="{{trialLink}}" class="cta">Start your free trial</a>
+      <p>You can also access AMCMM here:</p>
+      <div class="link-box">{{appUrl}}</div>
+      <p>If you are open to it, I can help you get started with a quick onboarding walkthrough and show how AMCMM could support your current marketing workflow.</p>
+      <p>Best,<br/>{{senderName}}</p>
+    </div>
+    <div class="footer">
+      <p>AI Marketing Crew (AMC)</p>
+    </div>
+  </div>
+</body>
+</html>`,
+    text: `
+Hi {{nickname}},
+
+Thanks for reaching out to us. I saw your contact form submission and thought your business could be a strong fit for AMCMM.
+
+AMCMM helps restaurants and retail brands manage their marketing more clearly, from brand planning and content ideas to publishing support and performance visibility.
+
+We would be happy to set you up with a free trial so you can explore the product with your own brand context.
+
+Start here: {{trialLink}}
+
+You can also access AMCMM here: {{appUrl}}
+
+If you are open to it, I can help you get started with a quick onboarding walkthrough and show how AMCMM could support your current marketing workflow.
+
+Best,
+{{senderName}}
+`.trim()
+  },
   SUBSCRIPTION_SUCCESS: {
     name: '订阅成功确认邮件',
     description: '商户成功订阅新品牌或升级套餐时的邮件通知',
@@ -644,6 +711,56 @@ export async function sendBrandOnboardingWelcomeEmail(params: {
     html: interpolateTemplate(formattedHtml, vars) + agreementHtml,
     text: interpolateTemplate(formattedText, vars) + agreementText,
     attachments: buildServiceTermsPdfAttachments(),
+  })
+}
+
+/**
+ * Contact Us 潜在客户试用邀请邮件
+ */
+export async function sendContactUsTrialInviteEmail(params: {
+  to: string
+  nickname: string
+  trialLink?: string
+  appUrl?: string
+  senderName?: string
+}): Promise<EmailResult> {
+  const {
+    to,
+    nickname,
+    trialLink = 'https://amc-mm.immedi.ai',
+    appUrl = 'https://amc-mm.immedi.ai',
+    senderName = 'AMC Team',
+  } = params
+
+  let subject = DEFAULT_TEMPLATES.CONTACT_US_TRIAL_INVITE.subject
+  let html = DEFAULT_TEMPLATES.CONTACT_US_TRIAL_INVITE.html
+  let text = DEFAULT_TEMPLATES.CONTACT_US_TRIAL_INVITE.text
+
+  try {
+    const dbTemplate = await prisma.messageTemplate.findUnique({
+      where: { id: 'CONTACT_US_TRIAL_INVITE' }
+    })
+    if (dbTemplate) {
+      subject = dbTemplate.subject
+      html = dbTemplate.html
+      text = dbTemplate.text || ''
+    }
+  } catch (err) {
+    console.error('[email] Failed to fetch CONTACT_US_TRIAL_INVITE template from DB:', err)
+  }
+
+  const vars = {
+    nickname,
+    trialLink,
+    appUrl,
+    senderName,
+  }
+
+  return sendEmail({
+    to,
+    subject: interpolateTemplate(subject, vars),
+    html: interpolateTemplate(html, vars),
+    text: interpolateTemplate(text, vars),
   })
 }
 

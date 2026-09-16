@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     const execution = await submitVideoGeneration({
       brandId,
       actorId,
+      idempotencyKey: stringOrEmpty(body.idempotencyKey) || request.headers.get('idempotency-key') || undefined,
       plan: {
         ...plan,
         seedanceJobs: Array.isArray(body.seedanceJobs) ? body.seedanceJobs : plan.seedanceJobs,

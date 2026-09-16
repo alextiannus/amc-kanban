@@ -1,0 +1,61 @@
+# Unified model management
+
+Status: code implementation and local validation. Production migration, import, activation and business acceptance are separate release steps.
+
+## Contract
+
+Kanban `/admin` system settings is the configuration authority. Connections contain a vendor name, protocol, endpoint and encrypted credential. Immutable catalog entries share connection versions. Policy revisions select capability defaults and media task exceptions.
+
+Text uses one default in Kanban, Content and MM. Unified body composition requests 2048 output tokens, subject to the central model limit, instead of legacy platform caps of 260-460; business prompts still control copy length. This budget includes provider reasoning and JSON overhead. GLM-5.3 body_composition/quality_rewrite tasks default to reasoning_effort=low because the model otherwise defaults to max and can exhaust the budget before generating copy. A versioned model definition may override this using reasoningEffort (low/high/max) in the model editor parameters. Other models and tasks retain their defaults. Preflight includes a GLM-5.3 caption/hashtags JSON probe using the actual body task settings. Truncated OpenAI-compatible responses fail explicitly; Content displays only allowlisted gateway error reasons, never raw upstream bodies. Media chooses a source/task/platform exception, a source/task exception, then its capability default. Missing configuration, incompatible capabilities and provider errors fail explicitly. CN Gateway's internal provider keys and implementations stay in the gateway. Kanban executes text and delegates new unified video/TTS jobs to Content. Content owns media adapters, including CN Gateway; origin remains Kanban when matching exceptions. Growth's independent OpenAI branch is outside this change.
+
+Production provider connections require HTTPS. The existing `cn_gateway` execution protocol also accepts HTTP to preserve the deployed gateway: requests retain timestamp/nonce/HMAC authentication and gateway-internal provider keys stay on the gateway. This exception does not apply to OpenAI-compatible or other provider protocols. HTTP does not encrypt request or response content. Import validation still rejects embedded URL credentials and non-HTTP(S) schemes.
+
+After activation Content's model page is read-only, MM displays effective central metadata, and old model write APIs are locked. Restoring a selection publishes a historical selection as a new central version. There is no decentralized-mode restore switch. Prompts, language, assets, voice identities and parsing remain business settings.
+
+## Records and credentials
+
+Status badges retain text and symbols alongside color in light and dark themes: green for passed, red for failed, blue for current use, amber for draft use and gray for inactive/history/unverified. Current use and history are shown independently when a superseded model is still referenced by the published policy. These indicators do not change routing or publication checks.
+
+Preflight reports text response validation separately from Content media delegation. A conversation recall mismatch blocks publication and identifies that failed text check; it must not be reported as a media delegation failure when the media tasks passed. Boolean probe failures retain an explicit reason without storing model output.
+
+Output-limit failures include bounded diagnostics: the actual sent token limit and reasoning effort, provider-reported completion/reasoning token counts, final content character count, a request ID and Render commit SHA when available. Content forwards only allowlisted numeric/enum/identifier fields. These diagnostics do not contain prompts, generated text, reasoning text, URLs or credentials. A pushed commit alone is not proof of the deployed gateway version.
+
+The admin has three shared-state tabs: usage configuration (default), model catalog, and diagnostics/records. Usage compares live selections with the saved draft and keeps preflight/publication in a sticky action bar. The catalog retains cards and the version editor, with search, provider/capability/status filters and 12 models per page. Historical records are available on demand. Diagnostics group repeated platform errors without losing original text; raw JSON and nonblocking pending records are collapsed. Tab navigation does not write configuration or invalidate a fresh proof; draft mutations still invalidate it. Historical preflight results never enable publication. Initialization is an explicit server operation, imports enabled and disabled legacy models, and saves a durable draft. Opening the page is read-only. Saving a model creates an immutable version and updates only the draft; publication remains a separate validated action. Initialization issues remain visible until a successful re-import. Unused legacy models missing credentials/endpoints are preserved as redacted pending records in the draft report, without placeholder connections, and do not block publication. Unconfigured optional reference audio transcription and subtitle OCR tasks are also pending; explicit broken mappings still block. Missing credentials for selected media routes or Kopix glm-5.3, service export failures and route conflicts remain blocking. Pending records are excluded from automatic selections and require configuration and validation before use. Draft updates use revision comparisons to prevent lost edits. The UI and draft workflow are implemented; deployment and production initialization/publication remain separate operator actions.
+
+- ModelConnection: immutable AES-GCM encrypted connection versions.
+- ModelCatalogEntry: immutable model definitions and legacy references.
+- ModelPolicyRevision/ModelPolicyState: history and transactional current pointer.
+- ModelPolicyValidation: candidate fingerprint and preflight result; publication requires matching successful validation within 30 minutes and the expected current version.
+- ModelManagementDraft: persistent candidate selection, initialization issues, base policy version and CAS revision.
+- ModelPolicyJob: durable version binding, including pre-activation jobs with null central versions.
+- ModelOperation: asset analysis claim, upstream references and result, without credentials.
+- ModelDelegatedJob: immutable origin, ownership, task, input hash, central version and Content task reference. Content atomically claims the same delegation ID before provider execution.
+- ModelExecutionLog: origin system, executor, task, connection, target model, reported response model, version, status and latency.
+
+Set MODEL_CONFIG_ENCRYPTION_KEY on Kanban to 64 hexadecimal characters representing a random 32-byte infrastructure key. Back it up securely. Changing it without re-encryption makes historical connections unreadable. Provider-key rotation creates new connection/catalog versions; old jobs retain the old connection.
+
+Internal model-runtime endpoints require CONTENT_SERVICE_INTERNAL_TOKEN and protocol version 2. Credentials are delivered only to authenticated backends. Public metadata is an allowlist without secrets. Jobs store references, never provider keys. Content uses bounded, expiring in-memory credential caching.
+
+## Release
+
+1. Run `npx prisma migrate deploy`, then `npx prisma migrate status`. Do not create these tables through db push or separately execute migration SQL. If an operator already executed the exact migration manually, verify schema equality before `migrate resolve --applied`.
+2. Deploy Content delegation endpoints and its schema first, then Kanban with Prisma migration 20260916190000_delegated_media. Keep the current central policy unchanged. Pre-publication calls and previously submitted legacy video IDs retain their original execution/query paths.
+3. Configure Kanban's encryption key, service URLs, and the same CONTENT_SERVICE_INTERNAL_TOKEN in all three systems. Content needs AMC_KANBAN_INTERNAL_URL; MM needs its existing Kanban origin. MM preflight HTTP 401 means shared authentication failed.
+4. In the single model management panel, click Initialize existing configuration and review the persisted, redacted report and nonblocking pending records. Disabled models with credentials enter the catalog without becoming selected. Deploy the updated Content export before reinitializing to classify optional unconfigured tasks. Resolve active-route conflicts, selected-model missing credentials and capability warnings before activation. Import does not activate. Basic video has its own content:basic_video_generation exception. Existing asset analysis retains its CN Gateway connection.
+5. Select Kopix glm-5.3 for text and review media defaults/exceptions. Run real text/JSON/conversation/tool checks and three-system preflight. Media preflight checks adapters, declared limits and advertised gateway capabilities; it does not replace live media business acceptance.
+6. Publish with version comparison. Start a new text request in each system and a minimal business task for every enabled media capability; inspect actual results and versioned logs. A response model name is provider-reported metadata, not independent proof of the underlying weights.
+7. Retain historical connection versions and legacy media secrets until the in-flight inventory drains. Then remove obsolete deployment variables. Do not remove gateway-internal provider keys.
+
+Voice identities belong to provider accounts. Selecting a different account can require enrolling the voice again. Unsupported private protocols, authentication formats and media executors require adapters; declaring a capability alone cannot create an executor.
+
+## Local verification
+
+Kanban/Content: `npm run test:unified-models` (includes draft transactions and full catalog export). All three: `npm run test:global-text`. Content: full `npm run test:integration` plus relevant media lifecycle tests. Run type checks and production builds. Tests use local policies and mock transports; Kanban registry tests execute the actual migration and transactions in PGlite. Passing tests does not establish production activation.
+
+## Delegated media contract (implementation; production acceptance pending)
+
+POST `/v1/internal/media/submit` and `/v1/internal/media/query` require `x-content-service-token` plus a signed `x-amc-text-binding`. Bodies carry `id`, `source: kanban`, `brandId`, `actorId`, `task` (video_generation or tts_generation), optional `platform`, `version`, `inputHash`, and submit-only `input`. No supplier credential is accepted. Content verifies the signature through Kanban runtime and resolves the exact revision. Public Kanban video/TTS response shapes stay unchanged. Video query IDs beginning with `delegate:` resolve the persisted record; legacy IDs keep the old query path.
+
+Public video and TTS callers may supply `Idempotency-Key` (internal JSON also accepts `idempotencyKey`). Keep that key for retries and use a new key for intentional regeneration. Without a caller key, identical inputs share a claim within one policy version; a request after publication binds the new version. A repeated explicit idempotency key with changed input returns 409. Kanban queries before submission and again after submission timeout; Content atomically claims each ID. Ambiguous upstream outcomes are retained for query/reconciliation and never blindly resubmitted. TTS audio is retained as the authenticated task result so retries return the same bytes. Polling/retries use the original version and origin/platform exception; key rotation never changes an existing task.
+
+A mirrored, versioned execution contract defines supported tasks, protocols and required inputs for routing, candidate filtering and preflight. Content validates every configured default and exception; Kanban validates text and the Content contract. Gateway capability checks are task-specific: audio references for video do not imply standalone transcription. Preflight is non-generating for media and does not prove provider billing credentials or real media success; run small image/video/TTS acceptance after deployment before calling the rollout verified. Restoring a historical selection changes only the draft until the administrator publishes.

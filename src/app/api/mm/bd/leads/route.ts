@@ -25,11 +25,15 @@ export async function GET(req: NextRequest) {
     const expiryLimit = new Date()
     expiryLimit.setDate(expiryLimit.getDate() - 90)
 
+    const includeAll = isAdmin && req.nextUrl.searchParams.get('includeAll') === 'true'
+    const source = req.nextUrl.searchParams.get('source')
+
     const dbLeads = await prisma.salesLead.findMany({
-      where: { 
-        bdUserId: session.user.id,
+      where: {
+        ...(isAdmin ? {} : { bdUserId: session.user.id }),
         status: { not: 'ONBOARDED' },
-        createdAt: { gte: expiryLimit }
+        ...(includeAll ? {} : { createdAt: { gte: expiryLimit } }),
+        ...(source === 'officialWebsite' ? { notes: { contains: 'Source: amc-official-website-contact-us' } } : {})
       },
       orderBy: { createdAt: 'desc' }
     })

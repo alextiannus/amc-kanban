@@ -1,3 +1,4 @@
+import { rejectLegacyModelWrite } from '@/lib/model-management/registry'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -38,6 +39,7 @@ export async function PATCH(request: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isAmcOperator(session.user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  try {await rejectLegacyModelWrite()} catch {return NextResponse.json({error:"MODEL_CONFIGURATION_MOVED: use unified model management"},{status:409})}
 
   const actorId = typeof session.user.id === 'string' ? session.user.id : null
   if (!actorId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -203,6 +205,7 @@ export async function DELETE(request: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   if (!isAmcOperator(session.user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  try {await rejectLegacyModelWrite()} catch {return NextResponse.json({error:"MODEL_CONFIGURATION_MOVED: use unified model management"},{status:409})}
 
   const actorId = typeof session.user.id === 'string' ? session.user.id : null
   if (!actorId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

@@ -1,4 +1,4 @@
-export type AssetAnalysisContentConfig = { baseUrl: string; token: string }
+export type AssetAnalysisContentConfig = { baseUrl: string; token: string; modelBinding?:string }
 
 export function assetAnalysisContentConfig(): AssetAnalysisContentConfig {
   const isLocal = process.env.NODE_ENV !== 'production'
@@ -19,7 +19,7 @@ export async function analysisContent(config: AssetAnalysisContentConfig, path: 
   else throw new Error('Unsupported image analysis operation')
   const response = await fetch(config.baseUrl + endpoint, {
     method: payload === undefined ? 'GET' : 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${config.token}` },
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${config.token}`, ...(config.modelBinding?{'x-amc-text-binding':config.modelBinding}:{}) },
     ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
     cache: 'no-store', signal: AbortSignal.timeout(30_000),
   })

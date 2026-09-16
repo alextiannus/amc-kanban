@@ -107,6 +107,7 @@ export async function POST(request: Request) {
     if (executionMode === 'submit') {
       if (suppliedPlan) {
         execution = await submitVideoGeneration({
+          idempotencyKey: optionalString(body.idempotencyKey) || request.headers.get('idempotency-key') || undefined,
           brandId,
           actorId: actor.id,
           creatorType,

@@ -1,3 +1,4 @@
+import { strictText } from './global-text/policy.ts'
 import { prisma } from './prisma.ts'
 import type { ResolvedContentModelProfile } from './amc-content/types.ts'
 
@@ -253,6 +254,7 @@ export async function callLLMWithContentModelProfile(
   prompt: string,
   maxTokens: number,
 ): Promise<LLMCallResult> {
+  const strict = await strictText({task:'content_profile',messages:[{role:'user',content:prompt}],maxTokens,temperature:profile.temperature}); if(strict)return strict;
   const provider = profile.provider.provider
   const modelName = process.env[`AMC_CONTENT_MODEL_${profile.id.toUpperCase()}_MODEL`] || profile.modelName
   const baseUrl = process.env[profile.provider.baseUrlEnv || ''] || profile.provider.baseUrl || null
@@ -430,6 +432,7 @@ export async function callLLMChat(
   messages: ChatMessage[],
   maxTokens = 500,
 ): Promise<LLMChatResult> {
+  const strict = await strictText({task:taskTag,messages,maxTokens}); if(strict)return strict;
   // 1. Task-tagged configs sorted by priority
   const matchingConfigs = await prisma.lLMConfig.findMany({
     where: {
@@ -638,6 +641,7 @@ export async function callLLM(
   maxTokens: number = 1000,
   options: LLMCallOptions = {},
 ): Promise<LLMCallResult> {
+  const strict = await strictText({task:taskTag,messages:[...(options.jsonMode?[{role:'system',content:'Return valid JSON only, without markdown fences.'}]:[]),{role:'user',content:prompt}],maxTokens,temperature:options.temperature,signal:options.signal,timeoutMs:Math.min(options.deadlineMs||110000,options.attemptTimeoutMs?.[0]||110000)}); if(strict)return strict;
   // 1. Fetch all matching enabled configurations, sorted by priority DESC
   const matchingConfigs = await prisma.lLMConfig.findMany({
     where: {

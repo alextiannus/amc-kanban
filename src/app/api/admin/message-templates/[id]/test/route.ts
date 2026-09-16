@@ -70,9 +70,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       temporaryPassword: 'TestTemporaryPassword123!',
       invitationLink: 'https://amc-mm.immedi.ai/invite/mock-token-abc',
       mmInviteLink: 'https://amc-mm.immedi.ai/invite/mock-token-abc',
+      trialLink: 'https://amc-mm.immedi.ai',
+      appUrl: 'https://amc-mm.immedi.ai',
       brandName: '锦江川菜馆（静安店）',
       planName: 'Booster · 增长战役版',
-      adminEmail: 'support@amc.immedi.ai'
+      adminEmail: 'support@amc.immedi.ai',
+      senderName: 'AMC Team'
     }
 
     // Parse conditional planName blocks

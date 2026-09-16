@@ -1,3 +1,4 @@
+import { boundPolicy, signBinding } from '../global-text/policy.ts'
 import type {
   ContentGenerationRequest,
   ContentGenerationResult,
@@ -84,6 +85,7 @@ export async function tryGenerateWithRemoteContentService(
   }
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
     || (isLocal ? 'local-service-token' : undefined)
+  headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   if (input.actorId) headers['x-amc-actor-id'] = input.actorId
   if (input.actorType) headers['x-amc-actor-type'] = input.actorType
@@ -164,6 +166,7 @@ export async function recommendRemoteCopyScripts(input: {
   if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') return []
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : undefined)
+  headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   const response = await fetch(`${baseUrl}/v1/copy-scripts/recommend`, {
     method: 'POST', headers, body: JSON.stringify(input), cache: 'no-store',
@@ -210,6 +213,7 @@ async function callRemoteContentJson<T>(path: string, body: unknown): Promise<T>
   if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') throw new Error('AMC content service is not configured')
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : undefined)
+  headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   const response = await fetch(`${baseUrl}${path}`, { method: 'POST', headers, body: JSON.stringify(body), cache: 'no-store' })
   const data = await response.json().catch(() => null)
@@ -234,6 +238,7 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
   }
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
     || (isLocal ? 'local-service-token' : undefined)
+  headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   if (input.actorId) headers['x-amc-actor-id'] = input.actorId
   if (input.actorType) headers['x-amc-actor-type'] = input.actorType
@@ -347,6 +352,7 @@ async function callRemoteVideoJson(
   if (!baseUrl || process.env.AMC_CONTENT_REMOTE_ENABLED === 'false') throw new Error('AMC content service is not configured for video execution')
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : undefined)
+  headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   if (actor.actorId) headers['x-amc-actor-id'] = actor.actorId
   if (actor.actorType) headers['x-amc-actor-type'] = actor.actorType
@@ -374,6 +380,7 @@ export async function fetchRemoteContentCatalog(options: { videoIdea?: string; v
   const headers: Record<string, string> = {}
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()
     || (isLocal ? 'local-service-token' : undefined)
+  headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
 
   const url = new URL(`${baseUrl}/v1/platforms`)

@@ -78,6 +78,8 @@ const modules: Record<string, any> = {
   '@/lib/miniMaxEndpoints': miniMaxEndpoints,
   '@/lib/miniMaxVoiceResponse': miniMaxVoiceResponse,
   '@/lib/prisma': { prisma: db },
+  '@/lib/model-management/runtime': { selectedExecution: async () => null, recordExecution: async () => {} },
+  './model-management/delegatedMedia': { delegateMedia: async () => null },
   '@/lib/voiceAudioValidation': { inspectVoiceAudio, measureAudioDuration: async () => 1, MAX_VOICE_BYTES: 20_000_000 },
   '@/lib/ttsGeneration': {
     getActiveMiniMaxTtsConfigs: async () => [config],

@@ -7,5 +7,7 @@ export async function register() {
     startVoiceTaskWorker()
     const { startAssetAnalysisWorker } = await import('./lib/asset-analysis/worker')
     startAssetAnalysisWorker()
+    const { startImmediErpWorker } = await import('./lib/integrations/immediErpWorker')
+    startImmediErpWorker()
   }
 }

@@ -205,7 +205,7 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 *   **知识库建设**：
     *   **爆品素材、参考视频与脚本库**：`amc-content` 维护按平台隔离的原始爆品素材，并通过人工入池、文本特征提取、参考视频多模态拆解、确定性聚类和 AI 脚本合成生成候选脚本。文本脚本延续“至少 3 条素材、2 个不同商家或来源账号且人工发布”的生产门槛；参考视频则输出带时间码证据的拆解卡，沉淀 Hook、AIDA、镜头、声音、CTA、可迁移结构、不可迁移事实和禁止复制元素。竞品视频只允许人工录入，且发送给生成模型前必须由 `ADMIN` 或 `AMC_PRINCIPAL` 确认 `generation_reference` 权利用途。
     *   **Kanban 脚本选择与版本固定**：文案创作按品牌、平台、市场、行业、品类、语言和主题推荐最多 5 个已发布脚本，运营可手工切换或明确选择“不使用爆品脚本”。草稿保存固定脚本版本，重新生成继续使用该版本；无匹配脚本时回退现有 Copywriter + RAG。品牌事实、合规和平台规则优先于脚本，脚本优先于普通 RAG 灵感。
-    *   **爆款脚本驱动的视频资产链**：新视频项目只选择状态为 `ready`、类型为视频且时间轴非空的已拆解创意，支持 `productionMode=image_only|hybrid_footage`。两种模式均依次版本化 `CreativeSourceSnapshot`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`MaterialSelection`、`GeneratedClip` / `VoiceoverTrack` 和 `FinalVideo`；实拍混剪另版本化 `SourceVideoAnalysis`、`SourceClipSet`、`ShotMatchSet`。创意时间轴确定性原样导入；爆品参考视频只学习脚本结构，永不作为新成片素材。
+    *   **爆款脚本驱动的视频资产链**：基于爆款脚本的新视频项目只选择状态为 `ready`、类型为视频且时间轴非空的已拆解创意，支持 `productionMode=image_only|hybrid_footage`。两种模式均依次版本化 `CreativeSourceSnapshot`、`ScriptPackage`、`Storyboard`、`PromptBundle`、`MaterialSelection`、`GeneratedClip` / `VoiceoverTrack` 和 `FinalVideo`；实拍混剪另版本化 `SourceVideoAnalysis`、`SourceClipSet`、`ShotMatchSet`。创意时间轴确定性原样导入；爆品参考视频只学习脚本结构，永不作为新成片素材。
     *   **实拍混剪与逐镜生产**：Kanban 品牌素材库提供不可删除、不可重命名的系统目录“视频原片”，目录内以拍摄批次分组。新上传原片保留原始文件名并记录 `shootBatchId`、项目/创意/拆解版本、拍摄日期、上传人和权利状态；删除视频项目只解除关联，不删除原片。Content 只匹配当前项目明确加入的原片，后台用 FFprobe、FFmpeg 场景检测和多模态时间线分析切分；按语义 40%、景别运镜 20%、时长节奏 15%、画质方向 15%、连续性 10% 评分，展示至多 3 个候选。每镜必须人工确认 `direct_clip|reference_to_video|image_to_video|unresolved`；未解决镜头生成补拍清单并阻止最终合成。
     *   **混合合成与独立声音层**：图生视频每镜选择 1–4 张有序品牌图片；视频生视频必须把已确认片段真实作为 `reference_video` 转发到支持能力的 Ark Video，不能静默忽略；直接实拍执行裁切、调速、转码和安全裁幅。三种来源可混合排序，字幕由 FFmpeg 叠加，MiniMax TTS 支持项目默认音色、分镜覆盖、试听和语速/音量/音调，最终固定输出 9:16、4:5、1:1。完整规范见 [`PRD-AI-Video-Creator.md`](./PRD-AI-Video-Creator.md)。
     *   **通用敏感词与合规词库**：针对各个国家的广告法和平台规则进行内容安全过滤。
@@ -450,75 +450,9 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 ## 系统配置架构决策 (System Config Architecture)
 
+Current contract: [unified model management](unified-model-management.md). Kanban owns encrypted connections, model definitions and versioned selections through usage, catalog and diagnostics tabs sharing one draft, with searchable paginated cards and the existing editor. Explicit initialization imports configured enabled/disabled models into a persistent draft; unused models missing credentials and unconfigured optional transcription/OCR tasks remain nonblocking pending records. Selected media dependency failures still block publication. Saving a model does not publish it. Text has one global default executed by Kanban. After unified publication, Kanban video and TTS delegate to Content, preserving origin, platform, idempotency and configuration revision; historical video IDs keep their original query path. Content validates and executes media, including CN Gateway. Media uses origin/task/platform exceptions, then origin/task exceptions, then capability defaults. Audio references do not imply standalone transcription. Growth direct OpenAI is outside this rollout. Content and MM cannot maintain a second active selection after publication. Existing LLMConfig references and provider environment variables are migration inputs or historical-job compatibility only.
 
-### 核心原则：所有 AI 模型 API Key 统一存储在 `LLMConfig` 数据表，不写入 Render 环境变量，不使用 SystemConfig 旧字段
-
-**背景**：早期实现中，Gemini API Key 等凭证被放入 Render 服务的 Environment 变量中。随后迁移到 `SystemConfig.geminiApiKey` 数据库字段。**当前最终架构（2026-06 已全面生效）**：所有 AI 模型 Key 统一迁移至 `LLMConfig` 数据表，实现多供应商动态路由。
-
-**为何不再使用 Render 环境变量或 SystemConfig 的旧字段**：
-- 凭证更新需要重新部署（延迟高）
-- 多服务实例之间无法共享配置
-- 无审计追踪（无法知道谁在什么时间修改了哪个 Key）
-- 无法支持多供应商按任务标签、优先级动态路由
-
-### 当前 LLM 配置架构（LLMConfig 表）
-
-| 配置项 | 存储位置 | 访问方式 | 禁止位置 |
-|--------|----------|----------|----------|
-| 所有 AI 模型 Key（OpenAI、Claude、Gemini、DeepSeek 等） | `LLMConfig` 表（DB） | `llmRouter.ts` 按任务标签路由 | ❌ Render env / SystemConfig 旧字段 |
-| MiniMax TTS Key | `LLMConfig`（provider=`minimax`, taskTags=[`tts`]） | `llmRouter.ts` | ❌ SystemConfig.minimaxApiKey（废弃） |
-| 其他第三方服务 Key（PostFast、地图等） | 对应数据库配置字段 | 对应读取函数 | ❌ 业务代码硬编码 |
-
-**唯一例外**：`DATABASE_URL`、`JWT_SECRET`、`NEXTAUTH_SECRET`、`OBS_*` 等基础设施机密，仍放在 Render 环境变量中（这些无法从数据库读取，因为数据库连接本身依赖它们）。
-
-### LLMConfig 数据模型
-
-```prisma
-model LLMConfig {
-  id           String   @id @default(cuid())
-  provider     String   // "openai" | "anthropic" | "google" | "deepseek" | "minimax" | "custom_shim"
-  displayName  String   // 展示名称（如 "GPT-4o"、"DeepSeek-R1"）
-  modelName    String   // 实际模型 ID（如 "gpt-4o-2024-05-13"）
-  apiKey       String   // 加密存储的 API Key
-  baseUrl      String?  // 自定义代理 Endpoint（可选）
-  isEnabled    Boolean  @default(true)
-  isDefault    Boolean  @default(false)
-  priority     Int      @default(0)  // 数值越大优先级越高（高优先先尝试）
-  taskTags     String[] // 任务适用标签，如 ["copywriting", "reasoning", "tts"]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-```
-
-### Kopix 文本供应商
-
-- 标识 `kopix`，默认模型 `glm-5.3`，Base URL `https://www.kopix.ai/v1`；使用 OpenAI 兼容 Bearer 鉴权和非流式 Chat Completions。
-- 新增时默认禁用、非默认、优先级 0，任务标签和备用链为空，不迁移已有任务。
-- 密钥沿用 LLMConfig 后台配置和脱敏审计；保存前验证真实连通性，无模型权限时不保存。
-- 文本生成、多轮聊天和兼容工具调用入口支持 Kopix；不声明原生 JSON 模式，业务 JSON 和工具能力分别实测后使用。
-- 不涉及视频、图片或 AMC-Content；代码部署后保存禁用记录，生产启用和路由切换不属于本次交付。
-
-### 管理入口
-- **后台路径**：`/admin` → **AI 模型配置（LLMConfig）** 面板
-- **说明**：在此页面添加/启用/禁用各大模型供应商，配置 API Key、代理地址、优先级、任务标签
-- **路由逻辑**（`src/lib/llmRouter.ts`）：按 `taskTags`、`isEnabled`、`priority` 字段从 LLMConfig 表中动态选取最优模型，支持 Fallback 链
-
-### 废弃字段说明
-- `SystemConfig.geminiApiKey` — 字段保留但代码不再读取，**配置 Google 模型请在 LLMConfig 中添加 provider='google' 的条目**
-- `SystemConfig.minimaxApiKey` — 同上废弃，**TTS 请在 LLMConfig 添加 provider='minimax', taskTags=['tts']**
-- `getGeminiApiKey()` / `getMiniMaxApiKey()` — 函数保留（兼容旧数据迁移），新代码不得调用
-- `GEMINI_API_KEY` 环境变量 — 从未作为主要配置来源，不使用
-
-### MiniMax TTS 配置说明
-- **服务端请求规则（修复待发布）**：统一使用国内 `https://api.minimaxi.com`。每次只使用已选择的一条启用配置；失败直接返回，不切换 API 域名或备用 Key。商家声音的上传、克隆、激活和试听固定使用原配置。
-- **服务**：MiniMax T2A v2
-- **模型**：`speech-2.8-turbo`
-- **默认音色**：`Chinese (Mandarin)_Warm_Bestie`
-- **代理接口**：`/api/mm/tts-proxy`
-- **降级策略**：MiniMax 不可用时，amc-mm 降级为浏览器 Web Speech API
-- **废弃项**：Azure Speech SDK、Speech Token API、Azure Key/Region 字段均不再使用
-
----
+Release sequence: Content delegation deployment, Kanban Prisma migration and consumer deployment without activation, inventory/import and resolve conflicts, preflight all systems, transactional publication, business acceptance, then drain historical jobs before removing obsolete credentials. Rollback publishes a historical selection as a new central version.
 
 ## 📋 Changelog
 
@@ -1671,56 +1605,9 @@ src/agents/skills/
 
 ## AI 模型路由架构（当前实现状态）
 
-> 已实现。2026-07-04 完成从 SystemConfig hardcode → LLMConfig 统一配置的迁移。
+Current contract: [unified model management](unified-model-management.md). Kanban owns encrypted connections, model definitions and versioned selections through usage, catalog and diagnostics tabs sharing one draft, with searchable paginated cards and the existing editor. Explicit initialization imports configured enabled/disabled models into a persistent draft; unused models missing credentials and unconfigured optional transcription/OCR tasks remain nonblocking pending records. Selected media dependency failures still block publication. Saving a model does not publish it. Text has one global default executed by Kanban. After unified publication, Kanban video and TTS delegate to Content, preserving origin, platform, idempotency and configuration revision; historical video IDs keep their original query path. Content validates and executes media, including CN Gateway. Media uses origin/task/platform exceptions, then origin/task exceptions, then capability defaults. Audio references do not imply standalone transcription. Growth direct OpenAI is outside this rollout. Content and MM cannot maintain a second active selection after publication. Existing LLMConfig references and provider environment variables are migration inputs or historical-job compatibility only.
 
-### 核心原则
-
-**所有 AI 模型调用统一通过 `LLMConfig` 表驱动，无任何 hardcode 模型或 API key。**
-
-- 不同场景（文案生成、语音伴侣、TTS、多模态）通过 `taskTags` 字段区分
-- 优先级由 `priority` 字段控制（数值越高越优先）
-- 断路器（Circuit Breaker）自动跳过 5 分钟内限流（429）的模型
-- Admin → AI 模型配置 是唯一的 key 管理入口
-
-### 路由路径
-
-| 场景 | taskTag | 调用路径 |
-|------|---------|---------|
-| 文案生成、评论回复 | `copywriting` | `callLLM('copywriting')` → `llmRouter.ts` |
-| AI 语音伴侣对话 | `companion` | `callLLMChat('companion')` → `llmRouter.ts` |
-| Growth V2 初级报告证据归纳 | `growth_report_analysis` | Growth → `/api/internal/llm-generate` → `callLLM()`；使用 JSON 模式、受控模型尝试次数和调用截止时间 |
-| 商家端 TTS 语音合成 | `tts` | `tts-proxy/route.ts` → `LLMConfig[tts]` → MiniMax T2A API |
-| 多模态图像分析 | `google` provider | `generateMultimodalText()` → `LLMConfig[provider=google]` |
-| 参考视频分析 | `reference_video_analysis` | AMC-Content 能力路由；要求 `video_input + structured_json`，或关键帧/ASR/OCR 预处理路径 |
-| 视频片段生成 | `video_generation` | AMC-Content 通用 Adapter；Seedance/Volcengine/Kie.ai/FAL 均为可选 profile，Kanban 仅调用 Content |
-| 品牌口播 | `tts_generation` | AMC-Content TTS Adapter；要求 `audio_output`，Kanban 不保存供应商密钥 |
-| 创意质量审核 | `creative_quality_review` | AMC-Content 事实、品牌、合规、权利与相似度复核 |
-| 管理后台 AI 建议 | `companion` | browser → `/api/llm/chat` → `callLLMChat` |
-
-### 关键文件
-
-```
-src/lib/llmRouter.ts        — 核心路由，callLLM() + callLLMChat()，含断路器
-src/lib/gemini-chat.ts      — 语音伴侣专用 chat，LLMConfig 驱动
-src/lib/gemini.ts           — generateText / generateMultimodalText（均走 LLMConfig）
-src/lib/gemini-direct.ts    — 浏览器端 LLM 调用封装（现已改为 POST /api/llm/chat）
-src/app/api/llm/chat/       — 通用服务端 LLM chat 端点，供前端组件调用
-src/app/api/mm/tts-proxy/   — MiniMax TTS 代理，key 来自 LLMConfig[tts]
-```
-
-### 已废弃（不再使用）
-
-- `SystemConfig.geminiApiKey` — 字段保留但代码不再读取，AI key 请配置在 LLMConfig
-- `SystemConfig.minimaxApiKey` — 同上，MiniMax TTS key 已迁移至 LLMConfig[tts]
-- 浏览器直调 Google Generative Language API — 已改为服务端路由
-
-### 配置管理
-
-Admin → AI 模型配置 页面：
-- 新增/编辑/删除 LLMConfig 记录
-- 调整 priority 控制使用顺序
-- 按 taskTags 为不同场景指定专用模型
-- 断路器状态查看（哪些模型当前被限流）
+Release sequence: Content delegation deployment, Kanban Prisma migration and consumer deployment without activation, inventory/import and resolve conflicts, preflight all systems, transactional publication, business acceptance, then drain historical jobs before removing obsolete credentials. Rollback publishes a historical selection as a new central version.
 
 ## Changelog v1.8.37 — 2026-07-05（密码重置与用户资料修复）
 
@@ -1845,3 +1732,27 @@ Admin → AI 模型配置 页面：
 所有门店写入使用统一校验，超额历史数据可修改、减少但不可增加；降低额度不删除门店。保留稳定标识和 Google 元数据，拒绝时不写 Markdown 或发送 Growth 同步。门店消失不代表删除 Growth 记录。独立门店账号、任务、员工权限和经营报表不属于本期。
 
 验收：默认 1 家、授权 3 家、付费权益优先、撤销后资料保留、接口和 Markdown 无法绕过、账单不变及审计可查。发布顺序：数据库迁移、应用发布、管理员及品牌页面验证。
+
+## 自由视频生成（已部署，2026-09-15）
+
+未选择标准模板时，AMC-MM 与 Content 接受纯文字创意、图片、视频或图片与视频混合参考，不要求选择图片、主参考图或套用标准模板。MM 不自动把首个素材设置为主参考图；Content 自由生成不自动锁定首帧，忽略旧客户端误传的视频主参考或已失效主参考值，保留完整已选素材和原始顺序。用户在 Content 显式指定有效图片作为首帧时才采用该设置；切换到自由模式清除模板遗留首帧设置。取消或更换首帧时须清理系统生成的中英文旧首帧指令；标准模板之间切换保留仍有效的手选首帧。MM 提交的每份参考素材必须含素材 ID，只有 URL 或无效记录时明确报错，不能丢弃参考后按纯文字生成。标准模板保持既有主参考图校验。素材归属、可读取性、模型支持的格式/容量、鉴权与费用确认继续有效。
+
+验收：单视频（含旧客户端将视频设为主参考）、视频在前的混合参考、仅图片、纯文字、模板切换均可进入正确生成路径；自由生成无隐式首帧要求；显式图片首帧和标准模板校验仍有效；跨品牌或失效素材不得绕过权限与可用性验证。生产案例后续修复（已部署）：MM 在估价前持久化 Content 草稿 ID；参考视频处理未完成属于等待状态，后续轮询复用草稿并在准备完成后估价、确认、生成，失败保留具体错误。已提交或结果不明的模型任务不得自动重复提交。原视频未被脚本模型直接观看时，脚本不得猜测产品、人物服饰或场景；保留原片的要求必须直接引用原片。原生视频分析的关键帧证据没有可持久化图片地址时，使用同一时间码表示，继续验证证据和完整时间轴。自由模式必须按已选顺序保留完整视频参考，不以语义分数剔除人物或后半段。仅按模型真实视频数量、单条和累计时长校验；超限时明确提示，不静默裁取或退为纯文字。标准模板继续使用片段匹配。参考策略参与指纹，旧的局部片段不可复用为整片。以同一生产素材和创意走通参考处理、生成、合成作为验收。
+
+生产验证（2026-09-15）：AI Marketing Crew 原生产草稿 `basic_video_d449c7a2-0715-474d-b56d-52dcd8a9b709` 已完成完整 23.5 秒视频参考准备并成功提交 15 秒生成任务。供应商任务 `tsk-giqwjutsh2xndv8u` 随后返回 `InputVideoSensitiveContentDetected.PrivacyInformation`（输入视频可能包含真人），项目与分段已同步为失败。尚未产出最终视频，合成与素材库入库未通过此案例验收；需供应商支持的真人素材使用流程解除该外部阻塞，不能将自由模式理解为绕过供应商限制。
+
+终端错误反馈（已部署，2026-09-15）：供应商真人参考限制必须显示明确中文原因、供应商限制来源和可执行建议，不能只显示通用失败或建议原样重试。Content 从当前选中失败分段提取错误并向 MM 返回用户可读信息；后台保留原始供应商错误。历史失败任务重新打开时刷新错误信息，禁止借此自动重提生成。MM 失败详情完整显示错误，后台任务提示也可读取原因。验收覆盖真实 PrivacyInformation 报错、分段先于项目状态失败、历史任务及无错误详情回退。
+
+错误反馈验证：Content `c766b02`、MM `e608854` 已在生产上线；原案例读取返回完整中文真人素材限制原因与处理建议，任务总数仍为 1。实际 Content 响应与 MM 路由回归测试覆盖即时分段失败、历史失败刷新、不重复提交和查询失败时保留已知错误；两端类型检查通过。
+
+## ImmediToday 订单与品牌归属同步（本次开发，待部署验证）
+
+AMC Kanban 是订阅和 Crew 分配事实源；ImmediToday 是销售订单、ERP Project 和奖励规则的事实源。每笔新订阅在事务提交后进入持久化同步，统一覆盖 Admin、MM、BD、线上及线下入口，不依赖浏览器支付回跳或一次性后台 Promise。新品牌订阅在客户/品牌关联完成前保持待同步；失败保存原因并自动重试。
+
+每笔订阅以 `amc-sub-{subscriptionId}` 生成唯一 Sales Order，保存 ERP 编号后才视为成功。不得把任意 HTTP 409 当成成功，不得伪造手机号，不得把货币或金额悄悄改写。订单使用真实套餐行、数量、折扣后金额与成本中心；正式提交仍需满足 ERP 现有成本与利润审核要求，不凭订阅激活伪造审核或收款证据。
+
+品牌 Crew 的 HUMAN PRINCIPAL 关系同步为同一 ERP Project 的当前归属。公司品牌主理人仅小韩与罗月伶（用户称罗月玲）；李薇为私域运营官。AMC 用户 ID/邮箱必须显式映射至 ERP 员工 ID，不按昵称猜测。新增、转移和撤销归属均重算现有规则对应的待确认奖励，不自动标记已发放。未完成身份、地点、SKU 或奖励规则映射时保留可重试错误。
+
+数据库 `ImmediErpSync` 保存订阅/品牌同步状态、输入指纹、修订号、ERP 引用、最近错误和重试时间。后台每分钟扫描所有部署后新增订阅及品牌归属变化，并逐条重试；同一数据库事务持有 advisory lock，防止多实例并发。凭据继续使用数据库 SystemConfig，员工与套餐服务映射同样由数据库配置。
+
+当前公司主理人名单同步清理 `AMC_PRINCIPAL`：仅保留已核验的小韩和罗月伶账号。其他员工的已有品牌 PRINCIPAL 成员关系降为 EDITOR，以保留协作并移除品牌奖励归属；迁移保存原角色与成员关系审计快照，管理员、商家 OWNER 和其他独立角色保留。

@@ -25,6 +25,7 @@ const SYSTEM_ADMIN_TABS: SystemAdminTab[] = [
   'system-smtp',
   'system-scheduler',
   'system-templates',
+  'system-contact_leads',
   'system-audit',
 ]
 
@@ -716,6 +717,7 @@ function AdminPageInner() {
         { id: 'system-smtp' as const, label: '邮件网关设置', icon: Mail },
         { id: 'system-scheduler' as const, label: '定时任务与巡检', icon: CalendarClock },
         { id: 'system-templates' as const, label: '消息模板管理', icon: MessageSquare },
+        { id: 'system-contact_leads' as const, label: '官网联系记录', icon: Mail },
         { id: 'system-audit' as const, label: '系统审计日志', icon: History },
       ]
     }

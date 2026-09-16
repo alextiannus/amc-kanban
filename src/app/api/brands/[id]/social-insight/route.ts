@@ -277,8 +277,8 @@ async function fetchPostfastPosts(
   }
 }
 
-// ── Fetch published internal posts (have been posted to a platform) ──────────
-// Only includes posts with a real platformPostId — no drafts, pending, or scheduled.
+// ── Fetch published internal posts from the publishing calendar ──────────────
+// Includes manual historical records that may not have a provider post ID.
 async function fetchInternalDrafts(
   brandId: string,
   from: Date,
@@ -288,10 +288,9 @@ async function fetchInternalDrafts(
   const published = await prisma.contentDraft.findMany({
     where: {
       brandId,
-      // Must have a platform post ID confirming it was actually published
-      platformPostId: { not: null },
-      status: 'published',
+      status: { in: ['published', 'done'] },
       OR: [
+        { publishedAt: { gte: from, lte: to } },
         { createdAt: { gte: from, lte: to } },
         { scheduledAt: { gte: from, lte: to } },
       ],
@@ -300,25 +299,28 @@ async function fetchInternalDrafts(
         : {}),
     },
     include: { account: { select: { platformId: true, handle: true } } },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ publishedAt: 'desc' }, { scheduledAt: 'desc' }, { createdAt: 'desc' }],
     take: 500,
   })
 
-  return published.map((d: any) => ({
-    id: d.id,
-    source: 'internal',
-    platform: d.account?.platformId ?? 'unknown',
-    handle: d.account?.handle ?? '',
-    caption: d.caption,
-    postUrl: d.platformPostId ?? null,
-    publishedAt: (d.scheduledAt ?? d.createdAt).toISOString(),
-    contentType: detectContentType(d.caption, d.mediaUrls ?? [], d.hashtags ?? []),
-    status: 'published',
-    hashtags: d.hashtags ?? [],
-    mediaUrls: d.mediaUrls ?? [],
-    scheduledAt: d.scheduledAt?.toISOString() ?? null,
-    likes: 0, comments: 0, shares: 0, impressions: 0, reach: 0, engRate: 0,
-  }))
+  return published.map((d: any) => {
+    const publishedAt = d.publishedAt ?? d.scheduledAt ?? d.createdAt
+    return {
+      id: d.platformPostId ? `internal_${d.platformPostId}` : `internal_draft_${d.id}`,
+      source: 'internal',
+      platform: d.account?.platformId ?? 'unknown',
+      handle: d.account?.handle ?? '',
+      caption: d.caption,
+      postUrl: d.postUrl ?? d.platformPostId ?? null,
+      publishedAt: publishedAt.toISOString(),
+      contentType: detectContentType(d.caption, d.mediaUrls ?? [], d.hashtags ?? []),
+      status: 'published',
+      hashtags: d.hashtags ?? [],
+      mediaUrls: d.mediaUrls ?? [],
+      scheduledAt: d.scheduledAt?.toISOString() ?? null,
+      likes: 0, comments: 0, shares: 0, impressions: 0, reach: 0, engRate: 0,
+    }
+  })
 }
 
 // ── Fetch real Google reviews (GBP OAuth first, Places fallback) ─────────────
