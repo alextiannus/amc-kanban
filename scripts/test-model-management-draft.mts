@@ -46,6 +46,18 @@ try{
   await importLegacyModels('admin',draft.revision)
   assert.equal((await overview()).models.length,3,'repeat initialization is idempotent')
   assert.equal((await overview()).connections.length,1)
+  legacy.push({...legacy[1],id:'unused-no-key',apiKey:'',isEnabled:true})
+  const optionalImport=await importLegacyModels('admin',(await readDraft()).revision)
+  assert.equal(optionalImport.result.complete,true)
+  assert.ok(optionalImport.result.pending.some((p:any)=>p.legacyId==='kanban:unused-no-key'))
+  assert.equal((await overview()).models.length,3,'pending records must not create fake credentials or selectable models')
+  assert.ok((await readDraft()).initializationReport.pending.length,'pending records survive reload')
+  legacy.pop()
+  legacy.push({...legacy[0],id:'required-no-key',provider:'minimax',modelName:'speech-fixture',apiKey:'',capabilities:['audio_output'],taskTags:['tts_generation']})
+  const requiredImport=await importLegacyModels('admin',(await readDraft()).revision)
+  assert.equal(requiredImport.result.complete,false,'selected media model missing a key must still block')
+  assert.ok(requiredImport.result.issues.some((s:string)=>s.includes('required-no-key')))
+  legacy.pop()
   const oldNodeEnv=process.env.NODE_ENV
   try{
     ;(process.env as any).NODE_ENV='production'

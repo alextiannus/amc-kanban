@@ -27,10 +27,20 @@ async function importRecords(actorId:string,client:any){
     records.push(...contentReport.models);issues.push(...contentReport.issues)
     }catch(e){contentReport=null;issues.push(e instanceof Error?e.message:'Content export unavailable')}
   }else issues.push('Content export unavailable: configure the service URL and internal token')
+  const pending:any[]=(contentReport?.pending||[]).map((p:any)=>({kind:'task',task:p.task,platform:p.platform,reason:'Optional task is not configured; excluded from publication'}))
+  const requiredModels=new Set<string>([
+    ...kanbanRoutes.filter(r=>r.row).map(r=>`kanban:${r.row.id}`),
+    ...(contentReport?.routes||[]).filter((r:any)=>r.capability!=='text').map((r:any)=>`content:${r.profileId}`),
+  ])
   const connections=new Map<string,string>()
   for(const item of records){
     item.secret=item.secret?.trim();item.baseUrl=item.baseUrl?.trim().replace(/\/+$/,'')
-    if(!item.secret||!item.baseUrl){issues.push(`${item.legacyId}: missing credential or explicit endpoint`);continue}
+    if(!item.secret||!item.baseUrl){
+      const required=requiredModels.has(item.legacyId)||(item.isEnabled!==false&&item.modelName==='glm-5.3'&&['kopix','openai','custom_shim'].includes(item.protocol))
+      if(required)issues.push(`${item.legacyId}: missing credential or explicit endpoint`)
+      else pending.push({kind:'model',legacyId:item.legacyId,name:item.name,modelName:item.modelName,reason:'Missing credential or endpoint; unused legacy model excluded from publication'})
+      continue
+    }
     // Configuration validation must not roll back every valid import or leave a
     // stale report behind. Do this before any writes, including connection reuse.
     try{validateConnection({name:item.name,protocol:item.protocol,baseUrl:item.baseUrl,secret:item.secret})}
@@ -68,7 +78,7 @@ async function importRecords(actorId:string,client:any){
   const batches=await client.assetAnalysisBatch.findMany({where:{status:{in:['QUEUED','RUNNING','FAILED']}},select:{id:true,status:true}})
   for(const batch of batches)await client.$executeRawUnsafe('INSERT INTO "ModelPolicyJob" (id,version) VALUES ($1,NULL) ON CONFLICT(id) DO NOTHING',`kanban:asset-batch:${batch.id}`)
   if(!selection.defaults.text)issues.push('Kopix glm-5.3 text connection is missing')
-  return {selection,issues,mapping,inFlight:{...contentReport?.inFlight,kanbanAssetBatches:batches},importedModels:Object.keys(mapping).length,connections:connections.size}
+  return {selection,issues,pending,mapping,inFlight:{...contentReport?.inFlight,kanbanAssetBatches:batches},importedModels:Object.keys(mapping).length,connections:connections.size}
 }
 
 export async function importLegacyModels(actorId:string,expectedRevision:number){
