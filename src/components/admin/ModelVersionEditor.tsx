@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { modelCapabilityLabels } from './UnifiedModelManagement'
+import { modelCapabilityLabels } from './modelManagementView'
 
 const field='w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm'
 const protocols=['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance']
