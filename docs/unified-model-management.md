@@ -14,6 +14,8 @@ After activation Content's model page is read-only, MM displays effective centra
 
 ## Records and credentials
 
+Status badges retain text and symbols alongside color in light and dark themes: green for passed, red for failed, blue for current use, amber for draft use and gray for inactive/history/unverified. Current use and history are shown independently when a superseded model is still referenced by the published policy. These indicators do not change routing or publication checks.
+
 Preflight reports text response validation separately from Content media delegation. A conversation recall mismatch blocks publication and identifies that failed text check; it must not be reported as a media delegation failure when the media tasks passed. Boolean probe failures retain an explicit reason without storing model output.
 
 Output-limit failures include bounded diagnostics: the actual sent token limit and reasoning effort, provider-reported completion/reasoning token counts, final content character count, a request ID and Render commit SHA when available. Content forwards only allowlisted numeric/enum/identifier fields. These diagnostics do not contain prompts, generated text, reasoning text, URLs or credentials. A pushed commit alone is not proof of the deployed gateway version.
