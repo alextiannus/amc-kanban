@@ -5,6 +5,16 @@ export type Message = { role: string; content?: any; tool_calls?: any[]; tool_ca
 export type TextRequest = { messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
 export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number }
 
+export class TextOutputLimitError extends Error {
+  constructor(readonly diagnostics: {
+    finishReason: 'length'; maxTokens: number; reasoningEffort: 'low'|'high'|'max'|'unspecified';
+    completionTokens: number|null; reasoningTokens: number|null; contentChars: number;
+  }) { super('Text provider output token limit reached'); this.name='TextOutputLimitError' }
+}
+function tokenCount(value: unknown): number|null {
+  return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0&&value<=100000000?value:null
+}
+
 export function protocolOf(provider: string) {
   if (['openai', 'deepseek', 'custom_shim', 'kopix', 'minimax'].includes(provider)) return 'openai'
   if (['google', 'anthropic'].includes(provider)) return provider
@@ -62,7 +72,12 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
   const data = await response.json()
-  if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw new Error('Text provider output token limit reached')
+  if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw new TextOutputLimitError({
+    finishReason:'length', maxTokens, reasoningEffort:body.reasoning_effort||'unspecified',
+    completionTokens:tokenCount(data.usage?.completion_tokens),
+    reasoningTokens:tokenCount(data.usage?.completion_tokens_details?.reasoning_tokens),
+    contentChars:typeof data.choices[0].message?.content==='string'?data.choices[0].message.content.length:0,
+  })
   let message: Message
   if (protocol === 'openai') message = data.choices?.[0]?.message
   else if (protocol === 'anthropic') message = {role:'assistant',content:(data.content||[]).filter((v:any)=>v.type==='text').map((v:any)=>v.text).join(''),tool_calls:(data.content||[]).filter((v:any)=>v.type==='tool_use').map((v:any)=>({id:v.id,type:'function',function:{name:v.name,arguments:JSON.stringify(v.input)}}))}

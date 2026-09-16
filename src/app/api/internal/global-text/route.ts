@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { randomUUID } from 'node:crypto'
+import { TextOutputLimitError } from '@/lib/global-text/transport'
 import { currentBinding, jobBinding, signBinding, verifyBinding, executeBound, connectionFor, PROTOCOL_VERSION } from '@/lib/global-text/policy'
 export const maxDuration=120
 export const dynamic='force-dynamic'
@@ -22,5 +24,13 @@ export async function POST(request:Request){
     if(!binding.enabled)return NextResponse.json({error:'Bound policy is disabled'},{status:409})
     const result=await executeBound(binding,{messages:body.messages,maxTokens:body.maxTokens,temperature:body.temperature,tools:body.tools,toolChoice:body.toolChoice,task:body.task,timeoutMs:body.timeoutMs,signal:request.signal})
     return NextResponse.json({...result,protocolVersion:PROTOCOL_VERSION})
-  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Global text call failed'},{status:502})}
+  }catch(error){
+    if(error instanceof TextOutputLimitError){
+      const commit=process.env.RENDER_GIT_COMMIT||''
+      const diagnostics={...error.diagnostics,requestId:randomUUID(),gatewayCommit:/^[a-f0-9]{7,40}$/i.test(commit)?commit:null}
+      console.error(JSON.stringify({event:'global_text_output_limit',...diagnostics}))
+      return NextResponse.json({error:error.message,diagnostics},{status:502})
+    }
+    return NextResponse.json({error:error instanceof Error?error.message:'Global text call failed'},{status:502})
+  }
 }

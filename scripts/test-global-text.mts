@@ -89,6 +89,37 @@ try{
  const beforeInvalid=requests.length
  assert.equal((await gateway.POST(new Request('http://localhost/api/internal/global-text',{method:'POST',headers:{'x-content-service-token':'test-service-token'},body:JSON.stringify({binding:'invalid'})}))).status,502)
  assert.equal(requests.length,beforeInvalid)
+ const previousCommit=process.env.RENDER_GIT_COMMIT
+ const previousError=console.error
+ const diagnosticLogs:string[]=[]
+ try {
+   process.env.RENDER_GIT_COMMIT='a'.repeat(40)
+   console.error=(line)=>{diagnosticLogs.push(String(line))}
+   globalThis.fetch=async(_url,init)=>{
+     const sent=JSON.parse(String(init?.body))
+     assert.equal(sent.reasoning_effort,'low')
+     assert.equal(sent.max_tokens,2048)
+     return Response.json({usage:{completion_tokens:2048,completion_tokens_details:{reasoning_tokens:2030}},choices:[{finish_reason:'length',message:{content:'partial-secret',reasoning_content:'private-reasoning'}}]})
+   }
+   const failed=await gateway.POST(new Request('http://localhost/api/internal/global-text',{method:'POST',headers:{'x-content-service-token':'test-service-token'},body:JSON.stringify({binding:signBinding(binding),task:'body_composition',maxTokens:2048,messages:[{role:'user',content:'private-prompt'}]})}))
+   assert.equal(failed.status,502)
+   const data=await failed.json()
+   assert.equal(data.error,'Text provider output token limit reached')
+   assert.equal(data.diagnostics.reasoningEffort,'low')
+   assert.equal(data.diagnostics.maxTokens,2048)
+   assert.equal(data.diagnostics.reasoningTokens,2030)
+   assert.equal(data.diagnostics.completionTokens,2048)
+   assert.equal(data.diagnostics.contentChars,14)
+   assert.equal(data.diagnostics.gatewayCommit,'a'.repeat(40))
+   assert.match(data.diagnostics.requestId,/^[a-f0-9-]{36}$/)
+   assert.equal(JSON.parse(diagnosticLogs[0]).requestId,data.diagnostics.requestId)
+   assert.doesNotMatch(JSON.stringify([data,diagnosticLogs]),/partial-secret|private-reasoning|private-prompt|test-only/)
+   globalThis.fetch=async()=>Response.json({usage:{completion_tokens:'secret',completion_tokens_details:{reasoning_tokens:-1}},choices:[{finish_reason:'length',message:{}}]})
+   await assert.rejects(()=>complete(c,{messages:[{role:'user',content:'test'}]}),(error:any)=>error.diagnostics.completionTokens===null&&error.diagnostics.reasoningTokens===null&&error.diagnostics.reasoningEffort==='unspecified')
+ }finally{
+   console.error=previousError
+   if(previousCommit===undefined)delete process.env.RENDER_GIT_COMMIT;else process.env.RENDER_GIT_COMMIT=previousCommit
+ }
  globalThis.fetch=async()=>Response.json({choices:[{message:{role:'assistant',content:''}}]})
  await assert.rejects(()=>complete(c,{messages:[{role:'user',content:'hello'}]}),/empty response/)
  globalThis.fetch=async(_url,init)=>new Promise((_resolve,reject)=>{
