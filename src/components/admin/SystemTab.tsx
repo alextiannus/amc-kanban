@@ -492,8 +492,8 @@ useEffect(() => {
 
 return (
     <div className="space-y-6 animate-in fade-in duration-200 font-sans">
-      {/* Tab Header */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between gap-4">
+      {/* Model management owns its own single header. */}
+      {section !== 'llm' && <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
             <Settings size={18} className="text-blue-500" /> {headerCopy.title}
@@ -504,6 +504,7 @@ return (
         </div>
       </div>
 
+      }
       {/* Accordion Panels */}
       <div className="space-y-4">
         {showSection('llm') && <UnifiedModelManagement />}
