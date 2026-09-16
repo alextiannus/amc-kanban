@@ -39,6 +39,17 @@ try{
    await assert.rejects(()=>complete(c,{messages:[{role:'user',content:'test'}],maxTokens:460}),/output token limit reached/)
  }
  globalThis.fetch=providerFetch
+ await complete(c,{task:'body_composition',messages:[{role:'user',content:'copy'}],maxTokens:2048})
+ assert.equal(requests.at(-1).body.reasoning_effort,'low')
+ assert.equal(requests.at(-1).body.max_tokens,2048)
+ await complete({...c,provider:'openai'},{task:'quality_rewrite',messages:[{role:'user',content:'copy'}]})
+ assert.equal(requests.at(-1).body.reasoning_effort,'low','GLM behavior does not depend on vendor name')
+ await complete({...c,reasoningEffort:'high'},{task:'body_composition',messages:[{role:'user',content:'copy'}]})
+ assert.equal(requests.at(-1).body.reasoning_effort,'high','immutable central definition overrides the task default')
+ await complete(c,{task:'marketing_plan',messages:[{role:'user',content:'plan'}]})
+ assert.equal(requests.at(-1).body.reasoning_effort,undefined,'other tasks retain model defaults')
+ await complete({...c,modelName:'other-model'},{task:'body_composition',messages:[{role:'user',content:'copy'}]})
+ assert.equal(requests.at(-1).body.reasoning_effort,undefined)
  await withTextScope(async()=>{
    const first=await callLLM('unmapped_task','Hello',1500,{allowAnyFallback:true,allowSystemFallback:true})
    assert.equal(first.modelName,'glm-5.3')

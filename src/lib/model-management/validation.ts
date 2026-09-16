@@ -20,9 +20,14 @@ export async function validateSelection(selection:Selection){
   const text=selectModel(runtime,'kanban','text','text',['text_input','structured_json'])
   const tasks:any[]=[]
   checks['system.kanban']=false
-  const connection={id:text.id,provider:text.protocol,displayName:text.definition.name,modelName:text.definition.modelName,baseUrl:text.baseUrl,apiKey:runtime.secrets![text.secretRef],timeoutMs:30000}
+  const connection={id:text.id,provider:text.protocol,displayName:text.definition.name,modelName:text.definition.modelName,baseUrl:text.baseUrl,apiKey:runtime.secrets![text.secretRef],timeoutMs:30000,reasoningEffort:text.definition.reasoningEffort}
   await check('text',async()=>!!(await complete(connection,{messages:[{role:'user',content:'Reply OK'}],maxTokens:1024})).text)
   await check('json',async()=>JSON.parse((await complete(connection,{messages:[{role:'user',content:'Return only JSON: {"ok":true}'}],maxTokens:1024})).text!).ok===true)
+  if(/^glm-5\.3(?:$|-)/i.test(connection.modelName))await check('body_composition',async()=>{
+    const maxTokens=Math.min(2048,text.definition.maxTokensByTask?.body_composition||text.definition.maxTokensByTask?.text||2048)
+    const result=await complete(connection,{task:'body_composition',messages:[{role:'system',content:'Return valid JSON only with a non-empty caption string and a hashtags array. No markdown.'},{role:'user',content:'Write an Instagram caption for a neighbourhood cafe weekday lunch. Use a warm practical tone, a short call to action and three relevant hashtags. Do not invent prices, discounts or opening hours. Keep the caption under 80 words.'}],maxTokens})
+    const value=JSON.parse(result.text!);return typeof value.caption==='string'&&!!value.caption.trim()&&Array.isArray(value.hashtags)
+  })
   await check('conversation',async()=>{const code=randomUUID();return (await complete(connection,{messages:[{role:'user',content:code},{role:'assistant',content:'Remembered'},{role:'user',content:'Repeat the exact code only.'}],maxTokens:1024})).text?.trim()===code})
   await check('tools',async()=>{
     const tools=[{type:'function',function:{name:'echo_probe',parameters:{type:'object',properties:{value:{type:'string'}},required:['value']}}}]
@@ -44,7 +49,7 @@ export async function validateSelection(selection:Selection){
       if(data.executionContractVersion!==EXECUTION_CONTRACT_VERSION||data.delegatedMedia!==true||!Array.isArray(data.tasks))throw new Error('Content delegated media contract is unavailable; deploy Content first')
       if(data.tasks.some((t:any)=>t.version!==runtime.version||t.executor!=='content'))throw new Error('Content media preflight configuration version or executor mismatch')
       tasks.push(...data.tasks)
-      checks['system.kanban']=data.protocolVersion===2&&['text','json','conversation','tools'].every(k=>checks[k])&&data.tasks.filter((t:any)=>t.source==='kanban').every((t:any)=>t.passed)
+      checks['system.kanban']=data.protocolVersion===2&&['text','json','conversation','tools'].every(k=>checks[k])&&checks.body_composition!==false&&data.tasks.filter((t:any)=>t.source==='kanban').every((t:any)=>t.passed)
       if(!checks['system.kanban'])errors['system.kanban']=data.tasks.filter((t:any)=>t.source==='kanban'&&!t.passed).map((t:any)=>`${t.task}: ${t.error}`).join('; ')
       if(!data.success)errors['system.content']=data.tasks.filter((t:any)=>!t.passed).map((t:any)=>`${t.source}:${t.task}: ${t.error}`).join('; ')
     }

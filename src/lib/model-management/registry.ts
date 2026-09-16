@@ -54,11 +54,12 @@ export async function createConnection(input:{name:string;protocol:string;baseUr
 export async function createModel(input:{connectionId:string;legacyId?:string;definition:ModelDefinition},actorId:string,client:any=db){
   const raw=input.definition
   if(raw?.isEnabled!==undefined&&typeof raw.isEnabled!=='boolean')throw new Error('Invalid model availability')
-  const d:ModelDefinition=raw&&{isEnabled:raw.isEnabled??true,previousModelId:raw.previousModelId,name:raw.name,modelName:raw.modelName,capabilities:raw.capabilities,inputCapabilities:raw.inputCapabilities,timeoutMs:raw.timeoutMs,maxRetries:raw.maxRetries,temperature:raw.temperature,jsonMode:raw.jsonMode,maxTokensByTask:raw.maxTokensByTask,videoConstraints:raw.videoConstraints,costMetadata:raw.costMetadata}
+  const d:ModelDefinition=raw&&{isEnabled:raw.isEnabled??true,previousModelId:raw.previousModelId,name:raw.name,modelName:raw.modelName,capabilities:raw.capabilities,inputCapabilities:raw.inputCapabilities,timeoutMs:raw.timeoutMs,maxRetries:raw.maxRetries,temperature:raw.temperature,jsonMode:raw.jsonMode,maxTokensByTask:raw.maxTokensByTask,reasoningEffort:raw.reasoningEffort,videoConstraints:raw.videoConstraints,costMetadata:raw.costMetadata}
   if(!d?.name||!d.modelName||!Array.isArray(d.capabilities)||!d.capabilities.length||d.capabilities.some(c=>!CAPABILITIES.includes(c)))throw new Error('Model name and declared capabilities are required')
   if(!Number.isFinite(d.timeoutMs)||d.timeoutMs<1000||d.timeoutMs>600000)throw new Error('Invalid model timeout')
   if(!Array.isArray(d.inputCapabilities)||!Number.isInteger(d.maxRetries)||d.maxRetries<0||d.maxRetries>3)throw new Error('Invalid model parameters')
   if(Object.values(d.maxTokensByTask||{}).some(n=>!Number.isInteger(n)||n<1||n>1000000))throw new Error('Invalid output token limits')
+  if(d.reasoningEffort!==undefined&&!['low','high','max'].includes(d.reasoningEffort))throw new Error('Invalid reasoning effort')
   if(/"(?:apiKey|secret|token|authorization|password)"\s*:/i.test(JSON.stringify(d)))throw new Error('Credentials belong in provider connections only')
   const id=randomUUID()
   await client.$executeRawUnsafe('INSERT INTO "ModelCatalogEntry" (id,"connectionId","legacyId",definition,"actorId") VALUES ($1,$2,$3,$4::jsonb,$5)',id,input.connectionId,input.legacyId||null,JSON.stringify(d),actorId)

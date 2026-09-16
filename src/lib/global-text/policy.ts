@@ -58,7 +58,7 @@ export async function connectionFor(binding:Binding):Promise<Connection> {
   if(typeof binding.modelRevision==='number'){
     const models=await runtimeConfig({version:binding.modelRevision,secrets:true})
     const model=selectModel(models,binding.source,'text','text')
-    return {id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:models.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs}
+    return {id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:models.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort}
   }
   if(!binding.enabled||!binding.connectionId)throw new Error('Global text policy is disabled')
   const c=await prisma.lLMConfig.findUnique({where:{id:binding.connectionId}}) as Connection|null

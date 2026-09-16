@@ -13,7 +13,7 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
   const [enabled,setEnabled]=useState(d?.isEnabled!==false),[capabilities,setCapabilities]=useState<string[]>(d?.capabilities||['text'])
   const [inputs,setInputs]=useState<string>((d?.inputCapabilities||['text_input','structured_json']).join(', '))
   const [timeout,setTimeoutValue]=useState(d?.timeoutMs||120000),[retries,setRetries]=useState(d?.maxRetries||0)
-  const [parameters,setParameters]=useState(JSON.stringify({temperature:d?.temperature,jsonMode:d?.jsonMode,maxTokensByTask:d?.maxTokensByTask||{},videoConstraints:d?.videoConstraints,costMetadata:d?.costMetadata},null,2))
+  const [parameters,setParameters]=useState(JSON.stringify({temperature:d?.temperature,jsonMode:d?.jsonMode,maxTokensByTask:d?.maxTokensByTask||{},reasoningEffort:d?.reasoningEffort,videoConstraints:d?.videoConstraints,costMetadata:d?.costMetadata},null,2))
   const [localError,setLocalError]=useState('')
   const dialog=useRef<HTMLDialogElement>(null)
   useEffect(()=>{dialog.current?.showModal();return ()=>dialog.current?.close()},[])

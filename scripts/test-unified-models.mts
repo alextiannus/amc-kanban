@@ -39,6 +39,9 @@ try{
  const c1=await createConnection({name:'Supplier A',protocol:'openai',baseUrl:'https://a.example/v1',secret:'fixture-key'},'admin')
  const text={name:'Text',modelName:'glm-5.3',capabilities:['text'],inputCapabilities:['text_input','structured_json'],timeoutMs:1000,maxRetries:0} as any
  const m1=await createModel({connectionId:c1.id,definition:text},'admin')
+ await assert.rejects(()=>createModel({connectionId:c1.id,definition:{...text,reasoningEffort:'invalid'} as any},'admin'),/Invalid reasoning effort/)
+ const reasoned=await createModel({connectionId:c1.id,definition:{...text,reasoningEffort:'low'}},'admin')
+ assert.equal((await query('SELECT definition FROM "ModelCatalogEntry" WHERE id=$1',reasoned.id))[0].definition.reasoningEffort,'low')
  const image=await createModel({connectionId:c1.id,definition:{...text,name:'Vision',modelName:'vision',capabilities:['image_understanding'],inputCapabilities:['image_input','structured_json']}},'admin')
  const selection={defaults:{text:m1.id,image_understanding:image.id},exceptions:{'content:asset_image_analysis':image.id}}
  const first=await publish(selection,null,await validation(selection),'admin')

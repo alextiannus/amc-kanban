@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 
-export type Connection = { id: string; provider: string; displayName: string; modelName: string; baseUrl: string | null; apiKey: string; timeoutMs?: number | null }
+export type Connection = { id: string; provider: string; displayName: string; modelName: string; baseUrl: string | null; apiKey: string; timeoutMs?: number | null; reasoningEffort?: 'low'|'high'|'max' }
 export type Message = { role: string; content?: any; tool_calls?: any[]; tool_call_id?: string }
 export type TextRequest = { messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
 export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number }
@@ -23,16 +23,21 @@ export function assertTextRequest(input: TextRequest) {
 export async function complete(c: Connection, input: TextRequest): Promise<Completion> {
   assertTextRequest(input)
   const protocol = protocolOf(c.provider)
+  if(c.reasoningEffort && protocol!=='openai')throw new Error('Reasoning effort requires an OpenAI-compatible text protocol')
   const started = Date.now()
   const headers: Record<string,string> = { 'Content-Type': 'application/json' }
   const maxTokens = Math.max(1, Math.min(64000, Math.floor(input.maxTokens || 2048)))
   let url: string
   let body: any
   if (protocol === 'openai') {
+    // GLM-5.3 defaults to max reasoning, which can consume the entire short-copy
+    // output budget before emitting JSON. Explicit central settings take priority.
+    const reasoningEffort=c.reasoningEffort ?? (/^glm-5\.3(?:$|-)/i.test(c.modelName)&&['body_composition','quality_rewrite'].includes(input.task||'')?'low':undefined)
     const base = c.baseUrl || ({ kopix:'https://www.kopix.ai/v1', deepseek:'https://api.deepseek.com/v1', minimax:'https://api.minimaxi.chat/v1' } as Record<string,string>)[c.provider] || 'https://api.openai.com/v1'
     url = `${base.trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
     headers.Authorization = `Bearer ${c.apiKey}`
     body = { model:c.modelName, messages:input.messages, max_tokens:maxTokens, stream:false,
+      ...(reasoningEffort ? {reasoning_effort:reasoningEffort} : {}),
       ...(input.temperature !== undefined ? { temperature:input.temperature } : {}),
       ...(input.tools?.length ? { tools:input.tools, tool_choice:input.toolChoice || 'auto', parallel_tool_calls:false } : {}) }
   } else if (protocol === 'anthropic') {

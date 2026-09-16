@@ -5,6 +5,7 @@ export type ModelDefinition = {
   name:string; modelName:string; capabilities:Capability[]; inputCapabilities:string[];
   timeoutMs:number; maxRetries:number; temperature?:number; jsonMode?:boolean;
   maxTokensByTask?:Record<string,number>; videoConstraints?:Record<string,unknown>; costMetadata?:Record<string,unknown>;
+  reasoningEffort?:'low'|'high'|'max';
 }
 export type Selection = {defaults:Partial<Record<Capability,string>>; exceptions:Record<string,string>}
 export type CatalogModel = {id:string;connectionId:string;legacyId?:string;definition:ModelDefinition}
