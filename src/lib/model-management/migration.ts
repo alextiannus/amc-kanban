@@ -1,5 +1,5 @@
 import { prisma } from '../prisma.ts'
-import { createConnection, createModel } from './registry.ts'
+import { createConnection, createModel, validateConnection } from './registry.ts'
 import { changeDraft } from './draft.ts'
 import { secretFingerprint } from './secrets.ts'
 import { capabilityFor, type Selection } from './types.ts'
@@ -31,6 +31,15 @@ async function importRecords(actorId:string,client:any){
   for(const item of records){
     item.secret=item.secret?.trim();item.baseUrl=item.baseUrl?.trim().replace(/\/+$/,'')
     if(!item.secret||!item.baseUrl){issues.push(`${item.legacyId}: missing credential or explicit endpoint`);continue}
+    // Configuration validation must not roll back every valid import or leave a
+    // stale report behind. Do this before any writes, including connection reuse.
+    try{validateConnection({name:item.name,protocol:item.protocol,baseUrl:item.baseUrl,secret:item.secret})}
+    catch(error){
+      const reason=error instanceof Error?error.message:'Invalid connection'
+      const safeReasons=['Connection name and credential are required','Unsupported model protocol','Invalid provider URL','Production model connections require HTTPS']
+      issues.push(`${item.legacyId}: ${safeReasons.includes(reason)?reason:'Invalid provider URL'}${reason==='Production model connections require HTTPS'?'; configure an HTTPS endpoint in the source service, then initialize again':''}`)
+      continue
+    }
     const identity=secretFingerprint(JSON.stringify([item.protocol,item.baseUrl.replace(/\/+$/,''),item.secret]))
     let connectionId=connections.get(identity)
     if(!connectionId){

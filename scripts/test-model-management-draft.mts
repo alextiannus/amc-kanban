@@ -46,6 +46,23 @@ try{
   await importLegacyModels('admin',draft.revision)
   assert.equal((await overview()).models.length,3,'repeat initialization is idempotent')
   assert.equal((await overview()).connections.length,1)
+  const oldNodeEnv=process.env.NODE_ENV
+  try{
+    ;(process.env as any).NODE_ENV='production'
+    legacy.push({...legacy[1],id:'http-disabled',baseUrl:'http://gateway.fixture',displayName:'Legacy HTTP'})
+    const report=await importLegacyModels('admin',(await readDraft()).revision)
+    assert.equal(report.result.complete,false)
+    assert.ok(report.result.issues.some((issue:string)=>issue.includes('kanban:http-disabled')&&issue.includes('HTTPS')))
+    assert.equal((await overview()).models.length,3,'invalid HTTP record must not roll back valid imports')
+    assert.equal((await runtimeConfig()).active,false)
+    const blockedDraft=await readDraft()
+    await assert.rejects(()=>publishDraft(blockedDraft.revision,'invalid','admin'),/initialization issues/)
+  }finally{
+    legacy.pop()
+    if(oldNodeEnv===undefined)delete (process.env as any).NODE_ENV;else (process.env as any).NODE_ENV=oldNodeEnv
+  }
+  await importLegacyModels('admin',(await readDraft()).revision)
+  assert.equal((await readDraft()).initializationReport.complete,true,'retry clears resolved import issues')
   for(const status of [401,404]){
     exportStatus=status;draft=await readDraft()
     const report=await importLegacyModels('admin',draft.revision)

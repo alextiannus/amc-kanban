@@ -35,12 +35,16 @@ export async function configurationRuntime(selection:Selection,version:number,se
   }
   return {protocolVersion:2,version,active:true,selection,models,...(secrets?{secrets:credentials}:{})}
 }
-export async function createConnection(input:{name:string;protocol:string;baseUrl:string;secret:string;previousId?:string},actorId:string,client:any=db){
+export function validateConnection(input:{name:string;protocol:string;baseUrl:string;secret:string}){
   if(!input.name?.trim()||!input.secret?.trim())throw new Error('Connection name and credential are required')
   input={...input,baseUrl:input.baseUrl?.trim()}
   if(!['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance'].includes(input.protocol))throw new Error('Unsupported model protocol')
   const url=new URL(input.baseUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Invalid provider URL')
   if(process.env.NODE_ENV==='production'&&url.protocol!=='https:')throw new Error('Production model connections require HTTPS')
+}
+export async function createConnection(input:{name:string;protocol:string;baseUrl:string;secret:string;previousId?:string},actorId:string,client:any=db){
+  validateConnection(input)
+  input={...input,baseUrl:input.baseUrl.trim()}
   const id=randomUUID()
   await client.$executeRawUnsafe('INSERT INTO "ModelConnection" (id,"previousId",name,protocol,"baseUrl","encryptedSecret","secretFingerprint","actorId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',id,input.previousId||null,input.name.trim(),input.protocol,input.baseUrl.replace(/\/+$/,''),encryptSecret(input.secret.trim()),secretFingerprint(input.secret.trim()),actorId)
   return {id}
