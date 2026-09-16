@@ -22,7 +22,16 @@ const db:any={$queryRawUnsafe:query,$executeRawUnsafe:exec,auditLog:{create:asyn
 db.$transaction=(run:any)=>pg.transaction(async tx=>run({...db,$queryRawUnsafe:async(sql:string,...values:any[])=>(await tx.query(sql,values)).rows,$executeRawUnsafe:async(sql:string,...values:any[])=>(await tx.query(sql,values)).affectedRows}))
 db.$extends=()=>db
 ;(globalThis as any).prisma=db
-const {createConnection,createModel,runtimeConfig,publish,configurationFingerprint,rejectLegacyModelWrite,overview}=await import('../src/lib/model-management/registry.ts')
+const {createConnection,createModel,runtimeConfig,publish,configurationFingerprint,rejectLegacyModelWrite,overview,validateConnection}=await import('../src/lib/model-management/registry.ts')
+const priorNodeEnv=process.env.NODE_ENV
+try{
+ ;(process.env as any).NODE_ENV='production'
+ const gateway={name:'Existing gateway',protocol:'cn_gateway',baseUrl:'http://gateway.fixture:8080',secret:'fixture-key'}
+ assert.doesNotThrow(()=>validateConnection(gateway))
+ for(const protocol of ['openai','kopix','custom_shim','minimax'])assert.throws(()=>validateConnection({...gateway,protocol}),/HTTPS/)
+ assert.throws(()=>validateConnection({...gateway,baseUrl:'http://user:password@gateway.fixture'}),/Invalid provider URL/)
+ assert.throws(()=>validateConnection({...gateway,baseUrl:'file:///gateway'}),/Invalid provider URL/)
+}finally{if(priorNodeEnv===undefined)delete (process.env as any).NODE_ENV;else (process.env as any).NODE_ENV=priorNodeEnv}
 async function validation(selection:any){const id=crypto.randomUUID();await exec('INSERT INTO "ModelPolicyValidation" (id,fingerprint,report) VALUES ($1,$2,$3::jsonb)',id,configurationFingerprint(selection),JSON.stringify({passed:true}));return id}
 try{
  assert.equal((await runtimeConfig()).active,false)

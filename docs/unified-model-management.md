@@ -8,6 +8,8 @@ Kanban `/admin` system settings is the configuration authority. Connections cont
 
 Text uses one default in Kanban, Content and MM. Media chooses a source/task/platform exception, a source/task exception, then its capability default. Missing configuration, incompatible capabilities and provider errors fail explicitly. CN Gateway's internal provider keys and implementations stay in the gateway.
 
+Production provider connections require HTTPS. The existing `cn_gateway` execution protocol also accepts HTTP to preserve the deployed gateway: requests retain timestamp/nonce/HMAC authentication and gateway-internal provider keys stay on the gateway. This exception does not apply to OpenAI-compatible or other provider protocols. HTTP does not encrypt request or response content. Import validation still rejects embedded URL credentials and non-HTTP(S) schemes.
+
 After activation Content's model page is read-only, MM displays effective central metadata, and old model write APIs are locked. Restoring a selection publishes a historical selection as a new central version. There is no decentralized-mode restore switch. Prompts, language, assets, voice identities and parsing remain business settings.
 
 ## Records and credentials
