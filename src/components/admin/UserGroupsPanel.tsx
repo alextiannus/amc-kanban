@@ -1,239 +1,36 @@
-'use client'
-
-import React, { useState } from 'react'
-import { 
-  Users, Shield, User, Bot, Plus, Trash2, PlusCircle, Search
-} from 'lucide-react'
-import { type UserRecord } from './UsersTab'
-import type { AppRole } from '@/lib/permissions'
+﻿'use client'
+import { useEffect, useState } from 'react'
+import type { UserRecord } from './UsersTab'
+import type { RoleDefinition } from '@/lib/role-permissions/contract'
 import RolePermissionEditor from './RolePermissionEditor'
-
-interface UserGroupsPanelProps {
-  users: UserRecord[]
-  loading: boolean
-  onViewAccess: (role: AppRole) => void
-  actionLoading: Record<string, string>
-  onRoleToggle: (user: UserRecord) => Promise<void>
-  onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
-}
-
-interface GroupDef {
-  id: 'admins' | 'principals' | 'owners' | 'bd' | 'researchers'
-  name: string
-  description: string
-  roleType: 'system' | 'business'
-  systemRole?: 'ADMIN'
-  businessRole?: 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD' | 'RESEARCHER'
-}
-
-const GROUPS: GroupDef[] = [
-  {
-    id: 'admins',
-    name: '系统管理员组 (System Administrators)',
-    description: '拥有 AMC 平台最高管理权限，可修改全局大模型秘钥、SMTP 邮件设置、调试巡检器以及对其他用户授权。',
-    roleType: 'system',
-    systemRole: 'ADMIN'
-  },
-  {
-    id: 'principals',
-    name: '平台运营主理人组 (AMC Principals)',
-    description: '负责多个托管品牌的一站式代运营专员。可管理其代管范围内的全部 AI 员工、查看发帖计划与工作日志。',
-    roleType: 'business',
-    businessRole: 'AMC_PRINCIPAL'
-  },
-  {
-    id: 'owners',
-    name: '托管品牌业主组 (Brand Owners)',
-    description: '商户的资产所有者。仅能查看其下辖的品牌策划、审批 AI 生成的推文/活动，以及接收异常提醒。',
-    roleType: 'business',
-    businessRole: 'BRAND_OWNER'
-  },
-  {
-    id: 'bd',
-    name: '商务拓展组 (Business Development - BD)',
-    description: '负责对接商户、协助商户入驻和跟进服务的商务发展角色。',
-    roleType: 'business',
-    businessRole: 'BD'
-  },
-  {
-    id: 'researchers',
-    name: '研究员组 (Researchers)',
-    description: '参与内容素材与脚本研究。具体可见菜单、入口限制与规则冲突请查看权限总览。',
-    roleType: 'business',
-    businessRole: 'RESEARCHER'
-  }
-]
-
-export default function UserGroupsPanel({
-  users,
-  loading,
-  actionLoading,
-  onRoleToggle,
-  onToggleBusinessRole,
-  onViewAccess,
-}: UserGroupsPanelProps) {
-  const [selectedGroupId, setSelectedGroupId] = useState<'admins' | 'principals' | 'owners' | 'bd' | 'researchers'>('admins')
-  const [addingUserId, setAddingUserId] = useState('')
-
-  const activeGroup = GROUPS.find(g => g.id === selectedGroupId)!
-
-  // Helper check membership
-  const getGroupMembers = (group: GroupDef) => {
-    return users.filter(u => {
-      if (u.type !== 'HUMAN') return false
-      if (group.roleType === 'system') {
-        return u.role === group.systemRole
-      } else {
-        return u.businessRoles?.some(r => r.role === group.businessRole)
-      }
-    })
-  }
-
-  const getNonGroupMembers = (group: GroupDef) => {
-    return users.filter(u => {
-      if (u.type !== 'HUMAN') return false
-      if (group.roleType === 'system') {
-        return u.role !== group.systemRole
-      } else {
-        return !u.businessRoles?.some(r => r.role === group.businessRole)
-      }
-    })
-  }
-
-  const groupMembers = getGroupMembers(activeGroup)
-  const nonGroupMembers = getNonGroupMembers(activeGroup)
-
-  const handleAddMember = async () => {
-    if (!addingUserId) return
-    const user = users.find(u => u.id === addingUserId)
-    if (!user) return
-
-    if (activeGroup.roleType === 'system') {
-      await onRoleToggle(user)
-    } else if (activeGroup.businessRole) {
-      onToggleBusinessRole(user, activeGroup.businessRole)
-    }
-    setAddingUserId('')
-  }
-
-  const handleRemoveMember = async (user: UserRecord) => {
-    if (!confirm(`确认要将 ${user.nickname || user.email} 移出该用户组吗？`)) return
-
-    if (activeGroup.roleType === 'system') {
-      await onRoleToggle(user)
-    } else if (activeGroup.businessRole) {
-      onToggleBusinessRole(user, activeGroup.businessRole)
-    }
-  }
-
-  return (<div className="space-y-6">
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
-      {/* Left List of Groups */}
-      <div className="lg:col-span-1 space-y-3">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-205 dark:border-slate-800 p-4 shadow-sm">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-3">系统预设用户组 (Pre-defined Groups)</h3>
-          <div className="space-y-1">
-            {GROUPS.map((group) => {
-              const members = getGroupMembers(group)
-              const isSelected = selectedGroupId === group.id
-              return (
-                <button
-                  key={group.id}
-                  onClick={() => { setSelectedGroupId(group.id); setAddingUserId('') }}
-                  className={`w-full flex items-center justify-between p-3.5 rounded-xl text-left transition-all border cursor-pointer ${
-                    isSelected
-                      ? 'bg-blue-650 text-white border-blue-600 shadow-sm'
-                      : 'bg-white hover:bg-slate-50 border-slate-150 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-350 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div>
-                    <p className="text-xs font-black leading-snug">{group.name.split(' (')[0]}</p>
-                    <p className={`text-[9px] mt-0.5 ${isSelected ? 'text-blue-200' : 'text-slate-400'}`}>{group.name.split(' (')[1]?.replace(')', '')}</p>
-                  </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    isSelected ? 'bg-blue-700/50 border-blue-500/30' : 'bg-slate-50 border-slate-150 text-slate-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
-                  }`}>
-                    {members.length} 人
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Right List of Members in Selected Group */}
-      <div className="lg:col-span-2 space-y-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-205 dark:border-slate-800 p-6 shadow-sm space-y-5">
-          <div className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
-              <Users size={16} className="text-blue-500" />
-              <span>{activeGroup.name}</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-medium">
-              {activeGroup.description}
-            </p>
-            <button type="button" className="mt-3 rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-600" onClick={() => onViewAccess(activeGroup.systemRole || activeGroup.businessRole!)}>查看权限</button>
-            {activeGroup.businessRole && <button type="button" className="ml-2 mt-3 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white" onClick={() => document.getElementById('role-permission-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>编辑功能权限</button>}
-          </div>
-
-          {/* Add member box */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-955/30 p-4 flex flex-col sm:flex-row items-end sm:items-center justify-between gap-3">
-            <div className="space-y-1 flex-1 w-full min-w-0">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">将成员加入该用户组</span>
-              <select
-                value={addingUserId}
-                onChange={e => setAddingUserId(e.target.value)}
-                className="w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 dark:text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="">-- 选择非数组成员 --</option>
-                {nonGroupMembers.map(user => (
-                  <option key={user.id} value={user.id}>{user.nickname ? `${user.nickname} (${user.email})` : user.email}</option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={handleAddMember}
-              disabled={!addingUserId}
-              className="inline-flex items-center gap-1 bg-blue-650 hover:bg-blue-700 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm cursor-pointer whitespace-nowrap"
-            >
-              <PlusCircle size={12} />
-              <span>确认加入用户组</span>
-            </button>
-          </div>
-
-          {/* Members list */}
-          <div className="space-y-2">
-            <h4 className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">组成员列表 ({groupMembers.length})</h4>
-            {groupMembers.length === 0 ? (
-              <p className="text-xs text-slate-400 py-6 border border-dashed rounded-xl text-center">暂无分组成员。可通过上方选择成员并添加至用户组。</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {groupMembers.map((member) => (
-                  <div 
-                    key={member.id}
-                    className="p-3.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shadow-inner hover:border-slate-250 transition-all"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-xs font-black text-slate-800 dark:text-white truncate">{member.nickname || '新成员'}</p>
-                      <p className="text-[9px] text-slate-400 font-mono truncate mt-0.5">{member.email}</p>
-                    </div>
-                    <button
-                      onClick={() => handleRemoveMember(member)}
-                      className="p-1 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-955/20 transition-all cursor-pointer flex-shrink-0"
-                      title="移出用户组"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-    {activeGroup.businessRole && <RolePermissionEditor key={activeGroup.businessRole} role={activeGroup.businessRole} affectedUsers={groupMembers.length} />}
-    </div>
-  )
+type BusinessRole = 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER'
+type Props = { users: UserRecord[]; loading: boolean; actionLoading: Record<string,string>; onViewAccess: (role: string) => void; onRoleToggle: (user: UserRecord) => Promise<void>; onToggleBusinessRole: (user: UserRecord, role: BusinessRole) => void; onRefresh: () => Promise<void> }
+export default function UserGroupsPanel({ users, onViewAccess, onRoleToggle, onToggleBusinessRole, onRefresh }: Props) {
+ const [roles,setRoles]=useState<RoleDefinition[]>([]), [selected,setSelected]=useState('ADMIN'), [search,setSearch]=useState('')
+ const [ready,setReady]=useState(false), [error,setError]=useState(''), [busy,setBusy]=useState(false), [adding,setAdding]=useState('')
+ const [form,setForm]=useState<null | {mode:'create'|'edit';name:string;description:string;copyFrom:string}>(null)
+ const [dirty,setDirty]=useState(false)
+ async function load(){const r=await fetch('/api/admin/roles',{cache:'no-store'});const data=await r.json();if(!r.ok)throw Error(data.error);setRoles(data.roles);setReady(data.contentReady)}
+ useEffect(()=>{load().catch(e=>setError(e.message))},[])
+ useEffect(()=>{if(!dirty)return;const guard=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue=''};window.addEventListener('beforeunload',guard);return()=>window.removeEventListener('beforeunload',guard)},[dirty])
+ const role=roles.find(r=>r.id===selected)
+ const members=users.filter(u=>u.type==='HUMAN'&&(selected==='ADMIN'?u.role==='ADMIN':u.businessRoles.some(r=>r.role===selected)))
+ function leave(){if(dirty&&!window.confirm('放弃当前未保存的权限修改？'))return false;setDirty(false);return true}
+ async function action(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ async function request(url:string,method:string,body?:unknown){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await r.json();if(!r.ok)throw Error(data.error);return data}
+ async function saveForm(){if(!form)return;await action(async()=>{const data=await request(form.mode==='create'?'/api/admin/roles':`/api/admin/roles/${selected}`,form.mode==='create'?'POST':'PATCH',{name:form.name,description:form.description,...(form.mode==='create'?{...(form.copyFrom?{copyFrom:form.copyFrom}:{})}:{expectedVersion:role?.version})});await load();setSelected(data.id);setForm(null)})}
+ async function member(user:UserRecord,present:boolean){if(!role)return;await action(async()=>{if(role.builtIn){if(selected==='ADMIN')await onRoleToggle(user);else await onToggleBusinessRole(user,selected as BusinessRole)}else await request(`/api/admin/roles/${selected}/members/${user.id}`,present?'PUT':'DELETE');await onRefresh();await load();setAdding('')})}
+ return <div className="space-y-4">
+  <div className="flex flex-wrap gap-3 items-center"><h3 className="font-bold">用户组与角色</h3><input aria-label="搜索角色组" placeholder="搜索角色组" value={search} onChange={e=>setSearch(e.target.value)} className="border rounded-lg p-2 text-sm bg-transparent"/><button disabled={busy||!ready} className="ml-auto rounded-lg bg-blue-600 text-white px-4 py-2 disabled:opacity-40" onClick={()=>{if(leave())setForm({mode:'create',name:'',description:'',copyFrom:''})}}>新增角色组</button><button onClick={()=>action(load)} disabled={busy}>刷新角色</button></div>
+  {!ready&&<p className="text-sm text-amber-700">Content 权限协议 2 未就绪，暂不能创建、启用或添加成员。</p>}
+  {error&&<p role="alert" className="text-red-600">{error}</p>}
+  {form&&<section aria-label={form.mode==='create'?'新增角色组':'编辑角色资料'} className="border rounded-xl bg-white dark:bg-slate-900 p-4 space-y-3"><h4 className="font-bold">{form.mode==='create'?'新增角色组':'编辑角色资料'}</h4><label className="block">名称<input aria-label="角色名称" maxLength={60} value={form.name} onChange={e=>setForm({...form,name:e.target.value})} className="ml-2 border rounded p-2 bg-transparent"/></label><label className="block">说明<textarea aria-label="角色说明" maxLength={500} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} className="ml-2 border rounded p-2 bg-transparent"/></label>{form.mode==='create'&&<label className="block">初始权限<select aria-label="复制角色权限" value={form.copyFrom} onChange={e=>setForm({...form,copyFrom:e.target.value})} className="ml-2 border rounded p-2 dark:bg-slate-900"><option value="">空白（无权限）</option>{roles.filter(r=>r.enabled&&r.id!=='ADMIN').map(r=><option value={r.id} key={r.id}>复制 {r.name}</option>)}</select><p className="text-xs text-slate-500 mt-2">复制当前权限，之后独立维护；不复制成员或品牌授权。</p></label>}<button disabled={busy||!form.name.trim()} onClick={saveForm} className="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-40">{busy?'保存中…':'保存角色'}</button><button disabled={busy} onClick={()=>setForm(null)} className="ml-3">取消</button></section>}
+  <div className="grid lg:grid-cols-[280px_minmax(0,1fr)] gap-4"><aside className="border rounded-xl p-3 space-y-4">{[true,false].map(builtIn=><section key={String(builtIn)}><h4 className="text-xs text-slate-500 mb-2">{builtIn?'系统预设':'自定义角色'}</h4>{roles.filter(r=>r.builtIn===builtIn&&r.name.toLowerCase().includes(search.toLowerCase())).map(r=><button key={r.id} disabled={busy} onClick={()=>{if(leave()){setSelected(r.id);setAdding('');setForm(null)}}} className={`w-full text-left rounded-lg p-3 text-sm ${r.id===selected?'bg-blue-600 text-white':'hover:bg-slate-100'}`}>{r.name} {!r.enabled&&'（已停用）'}<span className="float-right">{r.id==='ADMIN'?users.filter(u=>u.role==='ADMIN'&&u.type==='HUMAN').length:r.memberCount||0} 人</span></button>)}</section>)}</aside>
+   <section className="border rounded-xl p-4 space-y-4">{role?<><h3 className="font-bold">{role.name} {!role.enabled&&'（已停用，不参与授权）'}</h3><p className="text-sm text-slate-500">{role.description||'功能权限与品牌授权分别管理。'}</p><div className="flex flex-wrap gap-3"><button className="text-blue-600" onClick={()=>{if(leave())onViewAccess(role.id)}}>查看权限</button>{!role.builtIn&&<><button disabled={busy} onClick={()=>setForm({mode:'edit',name:role.name,description:role.description,copyFrom:''})}>编辑名称和说明</button><button disabled={busy||(!role.enabled&&!ready)} onClick={()=>{if(window.confirm(`${role.enabled?'停用':'重新启用'}“${role.name}”，影响 ${role.memberCount||0} 个直接成员及其已有委托账号。${role.enabled?'保留成员和配置，不再授予权限。':'将恢复该角色授权。'}`))action(async()=>{await request(`/api/admin/roles/${role.id}`,'PATCH',{enabled:!role.enabled,expectedVersion:role.version});await load();await onRefresh()})}}>{role.enabled?'停用角色':'重新启用'}</button></>}</div>
+   <div className="flex gap-2"><select aria-label="选择新增成员" value={adding} onChange={e=>setAdding(e.target.value)} className="border rounded p-2 min-w-0 flex-1 dark:bg-slate-900"><option value="">选择非本组成员</option>{users.filter(u=>u.type==='HUMAN'&&!members.some(m=>m.id===u.id)).map(u=><option key={u.id} value={u.id}>{u.nickname||u.email} · {u.email}</option>)}</select><button disabled={busy||!adding||!role.enabled||(!role.builtIn&&!ready)} onClick={()=>member(users.find(u=>u.id===adding)!,true)} className="rounded bg-blue-600 text-white px-3 disabled:opacity-40">加入成员</button></div>
+   <h4 className="text-sm">组成员（{members.length}）</h4>{members.length?members.map(u=><div key={u.id} className="flex justify-between gap-3 border rounded p-3 text-sm"><span>{u.nickname||u.email}<span className="block text-xs text-slate-500">{u.email}</span></span><button disabled={busy} onClick={()=>{if(window.confirm(`将 ${u.nickname||u.email} 移出该角色？`))member(u,false)}} className="text-red-600">移除</button></div>):<p className="text-sm text-slate-500">暂无成员，创建角色不会自动加入账号。</p>}
+   </>:<p>正在加载角色…</p>}</section>
+  </div>
+  {role&&role.id!=='ADMIN'&&<><p className="text-sm">{!role.enabled?'以下为保存的配置，角色停用期间不参与授权。':'以下权限适用于该角色全部有效成员。'}</p><RolePermissionEditor key={role.id} role={role.id} affectedUsers={members.length} onDirtyChange={setDirty}/></>}
+ </div>
 }

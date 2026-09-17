@@ -1,5 +1,5 @@
 import { readPolicies } from '../role-permissions/store.ts'
-import { POLICY_ROLES, effectiveGrants, PERMISSION_MODULES } from '../role-permissions/contract.ts'
+import { effectiveGrants, PERMISSION_MODULES } from '../role-permissions/contract.ts'
 import { prisma } from '../prisma.ts'
 
 /**
@@ -32,7 +32,7 @@ export async function canUserAccessBrand(
   action: string = 'READ',
 ): Promise<boolean> {
   const { policies } = await readPolicies()
-  const allowedRoles = ['ADMIN', ...POLICY_ROLES.filter(role => PERMISSION_MODULES.some(module => module.scope === '已授权品牌' && module.actions.some(op => (action === 'READ' ? op === 'read' : op !== 'read') && effectiveGrants([role], policies).includes(module.id + '.' + op))))]
+  const allowedRoles = ['ADMIN', ...Object.keys(policies).filter(role => PERMISSION_MODULES.some(module => module.scope === '已授权品牌' && module.actions.some(op => (action === 'READ' ? op === 'read' : op !== 'read') && effectiveGrants([role], policies).includes(module.id + '.' + op))))]
 
   const queryUserIds = [userId]
 

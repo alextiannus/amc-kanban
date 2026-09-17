@@ -1,5 +1,6 @@
 // Versioned wire contract. Keep byte-identical with amc-content/src/permissionContract.ts.
-export const PERMISSION_PROTOCOL = 1
+export const PERMISSION_PROTOCOL = 2
+export type RoleDefinition = { id: string; name: string; description: string; builtIn: boolean; enabled: boolean; version: number; memberCount?: number }
 export const POLICY_ROLES = ['AMC_PRINCIPAL', 'BRAND_OWNER', 'BD', 'RESEARCHER'] as const
 export type PolicyRole = typeof POLICY_ROLES[number]
 export type PermissionModule = { id: string; system: 'kanban' | 'content'; label: string; scope: string; actions: string[]; defaults: Partial<Record<PolicyRole, string[]>> }

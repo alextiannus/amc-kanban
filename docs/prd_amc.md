@@ -4,7 +4,9 @@ Merchant voiceover current implementation contract (pending deployment): [mercha
 
 ## 用户角色权限配置（实施中，待部署验收）
 
-在 Kanban 权限总览按角色查看 Kanban、Content 功能，并在当前页编辑四个业务角色的模块与操作权限；用户组详情保留编辑入口。总览默认主理人，直接展示菜单、页面、操作及品牌条件，账号诊断和角色对比为次级视图。本轮展示改造已完成本地实现与验证，未发布。多角色取并集，ADMIN 系统权限固定；平台共享库保持共享，品牌范围独立限制。数据库策略同时用于菜单、页面与接口。Content 实时验证当前授权，服务异常不回退放行。详细规范见 [用户权限 PRD](./prd_user_organization_permissions.md#6-capability-模型)。
+自定义角色组已完成本地实现与测试，未迁移生产、未发布。新增 RoleDefinition 目录并关联现有成员与策略，名称大小写不敏感唯一，标识服务端生成。启用角色权限取并集，业务身份与功能角色分离，不自动获得品牌、Crew 主理人或管理员身份。管理使用管理员会话 GET/POST /api/admin/roles、PATCH /api/admin/roles/[roleId]、PUT/DELETE /api/admin/roles/[roleId]/members/[userId]；版本冲突与事务审计保留。Content 权限协议升级为 2，实时校验有效角色及品牌；两服务就绪才开放创建。总览支持可搜索自定义角色和最多五角色对比，账号诊断展示已分配与有效角色。迁移预检未知角色，不自动清理；不支持永久删除、个人覆盖或角色嵌套。
+
+在 Kanban 权限总览按角色查看 Kanban、Content 功能，并在当前页编辑预设及自定义业务角色的模块与操作权限；用户组详情保留编辑入口。总览默认主理人，直接展示菜单、页面、操作及品牌条件，账号诊断和角色对比为次级视图。本轮展示改造已完成本地实现与验证，未发布。多角色取并集，ADMIN 系统权限固定；平台共享库保持共享，品牌范围独立限制。数据库策略同时用于菜单、页面与接口。Content 实时验证当前授权，服务异常不回退放行。详细规范见 [用户权限 PRD](./prd_user_organization_permissions.md#6-capability-模型)。
 
 ## 店内抽奖“一店一码”（当前规则）
 
@@ -734,7 +736,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 
 ### Kanban 角色权限（动态配置）
 
-以下为初始化业务参考；四个业务角色的实际菜单与操作按数据库授权计算。ADMIN、Growth 和未开放功能保持固定规则。
+以下为初始化业务参考；预设及自定义业务角色的实际菜单与操作按数据库授权计算。ADMIN、Growth 和未开放功能保持固定规则。
 
 | 菜单 | Admin | 主理人 | BD | 品牌主 |
 |------|:-----:|:------:|:--:|:------:|

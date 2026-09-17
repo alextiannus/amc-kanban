@@ -1,7 +1,7 @@
 import { ACTION_LABELS, MENU_PERMISSIONS, PERMISSION_MODULES, permissionSources } from './contract.ts'
 import { check, entryStatus, type AccessEntry, type Context } from '../access-overview/types.ts'
-export function describePolicy(rows: AccessEntry[], context: Context, policies: Record<string, string[]>, contentReady: boolean): AccessEntry[] {
-  const sources = permissionSources(context.roles, policies)
+export function describePolicy(rows: AccessEntry[], context: Context, policies: Record<string, string[]>, contentReady: boolean, roleNames: Record<string, string> = {}): AccessEntry[] {
+  const sources = permissionSources(context.permissionRoleIds || context.roles, policies)
   const used = new Set<string>()
   function apply(row: AccessEntry, moduleId: string): AccessEntry {
     const module = PERMISSION_MODULES.find(m => m.id === moduleId)
@@ -10,12 +10,12 @@ export function describePolicy(rows: AccessEntry[], context: Context, policies: 
     const read = context.active !== false && Boolean(sources[`${module.id}.read`])
     const ready = context.active === false || row.system !== 'content' || contentReady
     const scoped = module.scope === '已授权品牌' && !context.roles.includes('ADMIN')
-    const menu = !ready ? check('unknown', 'Content 权限执行版本尚未核实') : check(read ? 'allowed' : 'denied', context.active === false ? '账号已停用' : read ? `授权来源：${sources[`${module.id}.read`].join('、')}` : '全部角色均未授予模块查看权限')
+    const menu = !ready ? check('unknown', 'Content 权限执行版本尚未核实') : check(read ? 'allowed' : 'denied', context.active === false ? '账号已停用' : read ? `授权来源：${sources[`${module.id}.read`].map(id => roleNames[id] || id).join('、')}` : '全部角色均未授予模块查看权限')
     const page = menu.state !== 'allowed' ? menu : scoped && context.brandScope !== 'allowed' ? check(context.brandScope === 'denied' ? 'denied' : 'conditional', context.brandScope === 'denied' ? '没有该品牌授权' : '需要选择已授权品牌') : menu
     const displayedMenu = row.menu.state === 'na' ? row.menu : menu
     return { ...row, moduleId: module.id, parentId: `module:${module.id}`, menu: displayedMenu, page, status: entryStatus(displayedMenu, page), scope: module.scope, notes: ['多角色授权取并集；接口仍校验品牌范围、业务状态和资源归属。'], sources: ['RolePermissionPolicy', 'role-permissions/contract'], operations: module.actions.map(action => {
       const key = `${module.id}.${action}`, granted = read && Boolean(sources[key])
-      return { actionId: action, label: ACTION_LABELS[action] || action, source: key, ...(!ready ? check('unknown', 'Content 权限服务未核实') : !granted ? check('denied', context.active === false ? '账号已停用' : '全部角色均未授予此操作') : scoped && context.brandScope !== 'allowed' ? page : check('allowed', `授权来源：${sources[key].join('、')}；仍需业务对象校验`)) }
+      return { actionId: action, label: ACTION_LABELS[action] || action, source: key, ...(!ready ? check('unknown', 'Content 权限服务未核实') : !granted ? check('denied', context.active === false ? '账号已停用' : '全部角色均未授予此操作') : scoped && context.brandScope !== 'allowed' ? page : check('allowed', `授权来源：${sources[key].map(id => roleNames[id] || id).join('、')}；仍需业务对象校验`)) }
     }) }
   }
   const result = rows.map(row => {

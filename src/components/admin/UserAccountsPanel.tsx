@@ -245,6 +245,7 @@ export default function UserAccountsPanel({
         {roles.has('BRAND_OWNER') && <span className="admin-badge admin-badge-green">品牌主</span>}
         {roles.has('BD') && <span className="admin-badge admin-badge-amber">BD</span>}
         {roles.has('RESEARCHER') && <span className="admin-badge admin-badge-slate">Researcher</span>}
+        {user.businessRoles?.filter(r => r.definition && !r.definition.builtIn).map(r => <span key={r.role} className="admin-badge admin-badge-slate">{r.definition!.name}{!r.definition!.enabled && '（已停用）'}</span>)}
         {user.role !== 'ADMIN' && roles.size === 0 && <span className="text-slate-400">普通成员</span>}
       </div>
     )

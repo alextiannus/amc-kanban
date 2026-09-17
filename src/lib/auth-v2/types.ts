@@ -11,6 +11,7 @@ export type AuthPrincipal = {
   email?: string
   actorType: ActorType
   globalRoles: GlobalRole[]
+  permissionRoleIds?: string[]
   authVersion: number
   credentialId?: string
   source: AuthSource
@@ -70,6 +71,7 @@ export function principalFromUser(
     email: user.email,
     actorType: normalizeActorType(user.type),
     globalRoles: normalizeGlobalRoles(roles, legacyRole),
+    permissionRoleIds: Array.from(new Set([...roles.map(entry => entry.role), ...normalizeGlobalRoles(roles, legacyRole)])),
     authVersion: user.authVersion,
     credentialId,
     source,

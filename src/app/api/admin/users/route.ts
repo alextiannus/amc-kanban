@@ -33,7 +33,7 @@ export async function GET() {
         driveFolder: true,
         chatLink: true,
         createdAt: true,
-        businessRoles: { select: { role: true } },
+        businessRoles: { select: { role: true, definition: { select: { name: true, enabled: true, builtIn: true } } } },
         permittedAgents: {
           include: {
             agent: {

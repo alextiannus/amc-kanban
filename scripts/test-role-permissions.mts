@@ -50,6 +50,7 @@ await pg.exec('CREATE TABLE test_audit (value jsonb NOT NULL)')
 let failAudit = false
 const db: any = {
   $transaction: (fn: any) => pg.transaction(async sql => fn({
+    roleDefinition: { findUnique: async ({where}: any) => POLICY_ROLES.includes(where.id) ? {id:where.id} : null },
     rolePermissionPolicy: {
       findUnique: async ({ where }: any) => (await sql.query('SELECT * FROM "RolePermissionPolicy" WHERE role=$1', [where.role])).rows[0] || null,
       create: async ({ data }: any) => sql.query('INSERT INTO "RolePermissionPolicy" (role,grants,version) VALUES ($1,$2::jsonb,$3)', [data.role, JSON.stringify(data.grants), data.version]),

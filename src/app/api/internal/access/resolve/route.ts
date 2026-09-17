@@ -24,8 +24,10 @@ export async function POST(request: Request) {
     if (!user || user.status !== 'ACTIVE' || identity.authVersion !== undefined && user.authVersion !== identity.authVersion) return Response.json({ error: 'Identity revoked' }, { status: 401 })
     const principal = principalFromUser(user, 'session')
     if (identity.brandId && !await canAccessBrandScope(principal, identity.brandId)) return Response.json({ error: '没有该品牌授权' }, { status: 403 })
-    const { policies, versions } = await readPolicies()
+    const { policies, versions, roles: catalog } = await readPolicies()
+    const assignedRoleIds = principal.permissionRoleIds || principal.globalRoles
+    const roleIds = assignedRoleIds.filter(id => catalog.some(role => role.id === id && role.enabled))
     const scope = principal.globalRoles.includes('ADMIN') ? null : await loadUserOverview(prisma, user.id, undefined, canAccessBrandScope)
-    return Response.json({ protocolVersion: PERMISSION_PROTOCOL, userId: user.id, roles: principal.globalRoles, brandId: identity.brandId, brandIds: scope?.brands.map(brand => brand.id) || [], grants: effectiveGrants(principal.globalRoles, policies), sources: permissionSources(principal.globalRoles, policies), versions }, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json({ protocolVersion: PERMISSION_PROTOCOL, userId: user.id, roles: roleIds, assignedRoleIds, brandId: identity.brandId, brandIds: scope?.brands.map(brand => brand.id) || [], grants: effectiveGrants(roleIds, policies), sources: permissionSources(roleIds, policies), versions }, { headers: { 'Cache-Control': 'no-store' } })
   } catch { return Response.json({ error: 'Permission service unavailable' }, { status: 503 }) }
 }

@@ -56,8 +56,8 @@ export async function loadUserOverview(db: UserReader, id: string, selectedBrand
     brandScope = active && exists && await canAccessBrand(principal, selectedBrandId) ? 'allowed' : 'denied'
   }
   const roleSources = ['菜单与服务端均使用 principalFromUser 当前角色；操作来源见各项权限']
-  if (!explicitMenuRoles.length) roleSources.push('无显式角色；不会从默认看板角色推导权限。')
+  if (!user.businessRoles.length) roleSources.push('无显式角色；不会从默认看板角色推导权限。')
   if (principal.linkedHumanUserId) roleSources.push(`服务端还会合并关联账号角色：${principal.linkedHumanUserId}`)
-  const detail: NonNullable<Overview['user']> = { id: user.id, email: user.email, nickname: user.nickname, status: user.status, roles: principal.globalRoles, menuRoles: principal.globalRoles, roleSources }
-  return { context: { roles: principal.globalRoles, menuRoles: principal.globalRoles, accountRoles: explicitMenuRoles, active, brandScope } satisfies Context, user: detail, brands, selectedBrandId }
+  const detail: NonNullable<Overview['user']> = { id: user.id, email: user.email, nickname: user.nickname, status: user.status, roles: principal.globalRoles, assignedRoleIds: principal.permissionRoleIds || principal.globalRoles, menuRoles: principal.globalRoles, roleSources }
+  return { context: { roles: principal.globalRoles, permissionRoleIds: principal.permissionRoleIds, menuRoles: principal.globalRoles, accountRoles: explicitMenuRoles, active, brandScope } satisfies Context, user: detail, brands, selectedBrandId }
 }

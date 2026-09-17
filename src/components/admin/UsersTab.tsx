@@ -23,7 +23,8 @@ export interface UserRecord {
   chatLink?: string | null
   driveFolder?: string | null
   businessRoles: Array<{
-    role: string // 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER'
+    role: string
+    definition?: { name: string; enabled: boolean; builtIn: boolean }
   }>
   ownedBrands: Array<{
     brand: { id: string; name: string; status: string }
@@ -86,7 +87,7 @@ export default function UsersTab({
   savingPerms,
 }: UsersTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('humans')
-  const [accessTarget, setAccessTarget] = useState<{ userId?: string; role?: AppRole }>({})
+  const [accessTarget, setAccessTarget] = useState<{ userId?: string; role?: string }>({})
   const [editingHumanUser, setEditingHumanUser] = useState<UserRecord | null>(null)
 
   const humans = users.filter(u => u.type === 'HUMAN')
@@ -106,7 +107,7 @@ export default function UsersTab({
             <Users size={18} className="text-blue-500" /> 用户与权限管理中心 (Identity & Access Control)
           </h2>
           <p className={`text-xs text-slate-500 dark:text-slate-400 mt-1 ${subTab === 'access' ? 'hidden' : ''}`}>
-            管理成员与五类角色，查看 Kanban、Content 菜单及操作权限，并执行主理人委托与品牌资产分配授权。
+            管理成员、预设及自定义角色，查看 Kanban、Content 菜单及操作权限，并执行主理人委托与品牌资产分配授权。
           </p>
         </div>
         <button 
@@ -167,7 +168,7 @@ export default function UsersTab({
       )}
 
       {subTab === 'groups' && (
-        <UserGroupsPanel 
+        <UserGroupsPanel onRefresh={onFetchUsers}
           users={users}
           loading={loading}
           actionLoading={actionLoading}

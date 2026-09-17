@@ -1,3 +1,4 @@
+import { PERMISSION_PROTOCOL, type RoleDefinition } from '../role-permissions/contract.ts'
 import { describePolicy } from '../role-permissions/describe.ts'
 import { describeKanban, finalizeEntries } from './catalog.ts'
 import { selectContentRole } from './entry-rules.ts'
@@ -55,19 +56,24 @@ export function describeContent(context: Context, remote: RemoteContent): Access
   return finalizeEntries(rows, context)
 }
 
-export function buildOverview(remote: RemoteContent, context?: Context, policies?: Record<string, string[]>): Overview {
+export function buildOverview(remote: RemoteContent, context?: Context, policies?: Record<string, string[]>, catalog?: RoleDefinition[]): Overview {
   const result: Overview = {
     contractVersion: CONTRACT_VERSION, ruleVersion: RULE_VERSION, generatedAt: new Date().toISOString(),
     evidence: '根据当前服务代码与最新账号关系计算；未登录被查看账号，未验证浏览器旧会话、业务对象、订阅或第三方服务状态。',
     content: remote.snapshot ? { state: 'available', ruleVersion: remote.snapshot.ruleVersion } : { state: 'unavailable', reason: remote.reason || 'Content 未核实' },
-    roles: ROLES, conflicts: [],
+    roles: catalog?.map(role => role.id) || ROLES, roleCatalog: catalog, conflicts: [],
   }
   const evaluate = (value: Context) => [...describeKanban(value), ...describeContent(value, remote)]
   if (context) result.entries = evaluate(context)
-  else result.matrix = Object.fromEntries(ROLES.map(role => [role, evaluate({ roles: [role], brandScope: 'unselected' })])) as Record<(typeof ROLES)[number], AccessEntry[]>
+  else result.matrix = Object.fromEntries(result.roles.map(role => [role, evaluate({ roles: ROLES.filter(id => id === role), permissionRoleIds: [role], brandScope: 'unselected' })])) as Record<(typeof ROLES)[number], AccessEntry[]>
+  const roleNames = Object.fromEntries((catalog || []).map(role => [role.id, role.name]))
   if (policies) {
-    if (result.entries && context) result.entries = describePolicy(result.entries, context, policies, remote.snapshot?.permissionProtocol === 1)
-    if (result.matrix) for (const role of ROLES) result.matrix[role] = describePolicy(result.matrix[role], {roles: [role], brandScope: 'unselected'}, policies, Boolean(remote.snapshot))
+    if (result.entries && context) result.entries = describePolicy(result.entries, context, policies, remote.snapshot?.permissionProtocol === PERMISSION_PROTOCOL, roleNames)
+    if (result.matrix) for (const role of result.roles) result.matrix[role] = describePolicy(result.matrix[role], {roles: ROLES.filter(id => id === role), permissionRoleIds: [role], brandScope: 'unselected'}, policies, remote.snapshot?.permissionProtocol === PERMISSION_PROTOCOL)
+  }
+  if (result.matrix && catalog) for (const role of catalog.filter(role => !role.enabled)) {
+    const denied = check('denied', '角色已停用，不参与授权；保存的配置可在编辑中查看')
+    result.matrix[role.id] = result.matrix[role.id].map(row => ({ ...row, menu: row.menu.state === 'na' ? row.menu : denied, page: denied, status: 'denied', operations: row.operations.map(op => ({ ...op, ...denied })) }))
   }
   const rows = result.entries || Object.values(result.matrix || {}).flat()
   result.conflicts = Array.from(new Set(rows.filter(row => row.status === 'conflict').map(row => `${row.label}：${row.menu.reason}；${row.page.reason}`)))

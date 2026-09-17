@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       user: {
         id: user.id,
         email: user.email,
+        authVersion: user.authVersion,
         role: user.role,
         type: user.type ?? 'HUMAN',  // AI_AGENT or HUMAN — used for brand access control
       }

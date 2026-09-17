@@ -1,4 +1,5 @@
-import { grantsFor } from '@/lib/role-permissions/store'
+import { readPolicies } from '@/lib/role-permissions/store'
+import { effectiveGrants } from '@/lib/role-permissions/contract'
 import { authenticateCurrentSession } from '@/lib/auth-v2'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
@@ -50,7 +51,11 @@ export async function GET() {
 
   const principal = await authenticateCurrentSession()
   if (!principal) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const permissions = await grantsFor(principal)
+  const snapshot = await readPolicies()
+  const assigned = principal.permissionRoleIds || principal.globalRoles
+  const permissionRoles = snapshot.roles.filter(role => assigned.includes(role.id))
+  const effectiveRoleIds = permissionRoles.filter(role => role.enabled).map(role => role.id)
+  const permissions = effectiveGrants(effectiveRoleIds, snapshot.policies)
   return NextResponse.json({
     ...user,
     status: undefined,
@@ -58,6 +63,6 @@ export async function GET() {
     businessRoles: undefined,
     dashboardRole,
     userRoles: principal.globalRoles,
-    permissions,
+    permissions, permissionRoles, effectiveRoleIds,
   }, { headers: { 'Cache-Control': 'no-store' } })
 }

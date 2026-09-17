@@ -1,6 +1,6 @@
 # Kanban / Content 角色权限管理
 
-状态：本地实现与验证中，未迁移生产数据库、未部署。权限执行协议 permissionProtocol=1；目录协议 contractVersion=1。角色策略版本按角色独立递增。
+状态：本地实现与验证中，未迁移生产数据库、未部署。权限执行协议 permissionProtocol=2；目录协议 contractVersion=1。角色策略版本按角色独立递增。
 
 ## 使用方式
 
@@ -64,3 +64,13 @@ Content 调用内部解析接口使用现有 x-content-service-token。浏览器
 - 数据库迁移仅在本地 PGlite 验证；生产迁移、部署、真实账号联调尚未执行。
 
 本轮功能清单展示改造：本地类型检查、权限总览及角色权限回归通过；本地浏览器使用实际 React 组件、实际分组计算与模拟接口验证默认角色、操作展开、保存刷新、查看依赖、未保存离开、409 保留修改、品牌切换、账号停用、服务离线、空状态、抽屉 Escape 和 390px 窄屏。尚未部署或使用线上账号验证。
+
+## 自定义角色组（本地实现，未发布）
+
+在用户组与角色顶部点击“新增角色组”，填写名称与说明，默认空白或复制启用业务角色。复制后独立维护，不复制成员或品牌。创建后自动选中，继续配置权限、添加成员；支持改名、说明、停用和恢复。停用保留成员及策略，停止授予权限；恢复重新授予。预设角色不可重命名、停用或删除，ADMIN 不可复制。自定义角色不产生品牌主理人、业主或管理员身份，品牌范围仍独立校验。
+
+RoleDefinition 关联已有 UserBusinessRole 和 RolePermissionPolicy。新增管理员网页会话 GET/POST /api/admin/roles、PATCH /api/admin/roles/[roleId]、PUT/DELETE /api/admin/roles/[roleId]/members/[userId]；名称规范化唯一、成员幂等、修改版本检查及原子审计。总览新增 roleCatalog，账号诊断区分 assignedRoleIds 与有效 roles；auth/me 增加 permissionRoles、effectiveRoleIds。预设业务身份 globalRoles 保持原语义，permissionRoleIds 用于功能授权，未知角色不授权。
+
+权限协议为 2（功能目录 contractVersion 仍为 1）。需先预检历史未知角色，再执行 Kanban 迁移 20260917120000_custom_role_definitions，协调两服务部署。迁移遇到未登记标识直接中止，不清理历史数据；创建、恢复启用、添加自定义角色成员与权限保存要求 Content 协议就绪。协议不符时 Content 拒绝受保护操作。停用和移除仍可执行，避免服务异常阻止撤权。不得回退旧服务绕过撤权。
+
+本地验证：PGlite 执行真实迁移和角色事务服务，覆盖未知历史预检、创建与复制、重名、停用保留、恢复、成员幂等、版本冲突、审计回滚、内置身份隔离。Content HTTP 测试验证仅自定义角色及同令牌撤权/恢复；完整集成测试和构建通过。浏览器使用实际 React 组件及模拟接口验证创建、复制、自动选中、成员添加、权限保存、停用恢复及自定义角色对比。生产迁移、两服务部署版本和真实账号验证尚未执行。

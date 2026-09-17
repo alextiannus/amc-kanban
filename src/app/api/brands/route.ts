@@ -13,6 +13,7 @@ import { createMarketingCrew, addCrewMember } from '@/lib/user-management/crew'
 import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } from '@/lib/brandGrowthSync'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 import { SUBSCRIPTION_PLANS, calculatePricing, getAllowedDurationsForPlan } from '@/lib/subscription/catalog'
+import { allows } from '@/lib/role-permissions/store'
 
 // GET /api/brands — list brands for the logged-in user
 export async function GET(request: Request) {
@@ -269,7 +270,7 @@ export async function POST(request: Request) {
   // ── Wizard path: AMC_PRINCIPAL or BD creates a brand on behalf of a merchant ──
   const roleNames = context.principal.globalRoles
   const isAdminUser = roleNames.includes('ADMIN')
-  const canWizardCreate = isAdminUser || roleNames.includes('AMC_PRINCIPAL') || roleNames.includes('BD')
+  const canWizardCreate = await allows(context.principal, 'brand.create')
 
   if (canWizardCreate) {
     const ownerEmail = typeof body.ownerEmail === 'string' ? body.ownerEmail.trim().toLowerCase() : ''
