@@ -1,3 +1,6 @@
+import { MCP_PERMISSIONS } from '@/lib/role-permissions/mcp'
+import { allows } from '@/lib/role-permissions/store'
+import { principalFromUser } from '@/lib/auth-v2/types'
 import { enqueueUploadedImage } from '@/lib/asset-analysis/service'
 import { localForProvider } from '@/lib/socialAccountIdentity'
 import { syncSocialAccountBindings, saveSocialAccount, assertAccountBound } from '@/lib/socialAccountBinding'
@@ -7,7 +10,7 @@ import { syncSocialAccountBindings, saveSocialAccount, assertAccountBound } from
  * Personal MCP capabilities exposed as tools for the connected user.
  * Uses WebStandardStreamableHTTPServerTransport (Web Fetch API compatible).
  *
- * NOTE: server.tool() takes a raw ZodRawShape (plain object of zod types),
+ * NOTE: registerTool() takes a raw ZodRawShape (plain object of zod types),
  * NOT a z.object(). The SDK wraps it internally.
  */
 
@@ -287,8 +290,26 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return agent
   }
 
+  const registerTool: typeof server.tool = ((...args: any[]) => {
+    const callback = args[args.length - 1]
+    const name = args[0] as string
+    args[args.length - 1] = async (...input: any[]) => {
+      try {
+        const authenticated = agentApiKey ? await authenticateApiKey(agentApiKey) : await resolvePrincipal()
+        if (!authenticated) throw new Error('Invalid credential')
+        const user = await prisma.user.findUnique({where:{id:authenticated.userId},include:{businessRoles:true,owner:{include:{businessRoles:true}}}})
+        if (!user || user.status !== 'ACTIVE' || user.authVersion !== authenticated.authVersion) throw new Error('Identity revoked')
+        const current = principalFromUser(user, authenticated.source)
+        const permission = MCP_PERMISSIONS[name]
+        if (permission && !await allows(current, permission)) throw new Error('Permission denied: '+permission)
+        return await callback(...input)
+      } catch(error) { return {content:[{type:'text',text:error instanceof Error ? error.message : 'Permission unavailable'}],isError:true} }
+    }
+    return (server.tool as any)(...args)
+  }) as typeof server.tool
+
   // ── get_brand_config ────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'get_brand_config',
     'Get brand config and linked social accounts for brands this personal MCP user can access.',
     {
@@ -363,7 +384,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── get_brand_profile_markdown ─────────────────────────────────────────
-  server.tool(
+  registerTool(
     'get_brand_profile_markdown',
     'Read brand profile markdown for AI pre-read context. Contains brand basics, positioning, multi-store structure, and social platform config.',
     {
@@ -385,7 +406,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── refresh_brand_profile_markdown ─────────────────────────────────────
-  server.tool(
+  registerTool(
     'refresh_brand_profile_markdown',
     'Regenerate brand profile markdown auto section from latest system data while preserving manual section.',
     {
@@ -411,7 +432,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── update_brand_profile_markdown ──────────────────────────────────────
-  server.tool(
+  registerTool(
     'update_brand_profile_markdown',
     'Write full brand context markdown for this brand. Use this for long-form brand context; brand-config does not support brandContext field.',
     {
@@ -437,7 +458,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── update_brand_config ─────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'update_brand_config',
     'Create or update brand profile and integration credentials. Write interview results and brand description here.',
     {
@@ -512,7 +533,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── get_agent_profile ───────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'get_agent_profile',
     'Get this user\'s own profile from AI Marketing Crew.',
     {},
@@ -527,7 +548,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── update_agent_profile ────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'update_agent_profile',
     'Update agent nickname, avatar, introduction, themeColor, workflow, or insights.',
     {
@@ -570,7 +591,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── list_tasks ──────────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'list_tasks',
     'List Kanban work units. Filter by brandId, status, or tasks assigned to this user.',
     {
@@ -605,7 +626,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── create_task ─────────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'create_task',
     'Create a new Kanban work unit to log work items, content drafts, or action items.',
     {
@@ -659,7 +680,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── update_task ─────────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'update_task',
     'Update an existing work unit — status, description, title, or priority.',
     {
@@ -738,11 +759,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: true, taskId }) }] }
   }
 
-  server.tool('board_delete_task', 'Delete a work unit task assigned to this user.', deleteTaskSchema, deleteTaskHandler)
-  server.tool('delete_task', '[Compatibility alias] Use board_delete_task.', deleteTaskSchema, deleteTaskHandler)
+  registerTool('board_delete_task', 'Delete a work unit task assigned to this user.', deleteTaskSchema, deleteTaskHandler)
+  registerTool('delete_task', '[Compatibility alias] Use board_delete_task.', deleteTaskSchema, deleteTaskHandler)
 
   // ── update_accounts ─────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'update_accounts',
     'Add or update a social media account for a brand.',
     {
@@ -774,7 +795,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── post_action_item ────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'post_action_item',
     'Submit an action item (alert or content pending review) to the brand dashboard.',
     {
@@ -846,9 +867,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, count: accounts.length, accounts }, null, 2) }] }
   }
 
-  server.tool('board_list_social_accounts', 'List all connected social accounts for this brand via the board backend.', listAccountsSchema, listAccountsHandler)
-  server.tool('list_accounts', '[Compatibility alias] Use board_list_social_accounts.', listAccountsSchema, listAccountsHandler)
-  server.tool('postfast_list_accounts', '[Deprecated alias] Use board_list_social_accounts.', listAccountsSchema, listAccountsHandler)
+  registerTool('board_list_social_accounts', 'List all connected social accounts for this brand via the board backend.', listAccountsSchema, listAccountsHandler)
+  registerTool('list_accounts', '[Compatibility alias] Use board_list_social_accounts.', listAccountsSchema, listAccountsHandler)
+  registerTool('postfast_list_accounts', '[Deprecated alias] Use board_list_social_accounts.', listAccountsSchema, listAccountsHandler)
 
   const listPostsSchema = {
     brandId: z.string(),
@@ -872,8 +893,8 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, total: result.total, posts: result.posts }, null, 2) }] }
   }
 
-  server.tool('board_list_published_content', 'List scheduled/published content for this brand via the board backend.', listPostsSchema, listPostsHandler)
-  server.tool('postfast_list_posts', '[Deprecated alias] Use board_list_published_content.', listPostsSchema, listPostsHandler)
+  registerTool('board_list_published_content', 'List scheduled/published content for this brand via the board backend.', listPostsSchema, listPostsHandler)
+  registerTool('postfast_list_posts', '[Deprecated alias] Use board_list_published_content.', listPostsSchema, listPostsHandler)
 
   const deletePostSchema = {
     brandId: z.string(),
@@ -895,8 +916,8 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, deleted: true, postId }) }] }
   }
 
-  server.tool('board_delete_scheduled_content', 'Delete a scheduled content item via the board backend.', deletePostSchema, deletePostHandler)
-  server.tool('postfast_delete_post', '[Deprecated alias] Use board_delete_scheduled_content.', deletePostSchema, deletePostHandler)
+  registerTool('board_delete_scheduled_content', 'Delete a scheduled content item via the board backend.', deletePostSchema, deletePostHandler)
+  registerTool('postfast_delete_post', '[Deprecated alias] Use board_delete_scheduled_content.', deletePostSchema, deletePostHandler)
 
   const uploadMediaSchema = {
     brandId: z.string(),
@@ -936,9 +957,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, storageKey: slot.storageKey, fileToken: slot.fileToken, filename, mimeType, tip: 'Pass storageKey in board_publish_content.mediaStorageKeys' }) }] }
   }
 
-  server.tool('board_upload_media', 'Upload media through board backend and return storageKey for publish.', uploadMediaSchema, uploadMediaHandler)
-  server.tool('upload_asset', '[Compatibility alias] Use board_upload_media.', uploadMediaSchema, uploadMediaHandler)
-  server.tool('postfast_upload_media', '[Deprecated alias] Use board_upload_media.', uploadMediaSchema, uploadMediaHandler)
+  registerTool('board_upload_media', 'Upload media through board backend and return storageKey for publish.', uploadMediaSchema, uploadMediaHandler)
+  registerTool('upload_asset', '[Compatibility alias] Use board_upload_media.', uploadMediaSchema, uploadMediaHandler)
+  registerTool('postfast_upload_media', '[Deprecated alias] Use board_upload_media.', uploadMediaSchema, uploadMediaHandler)
 
   const connectLinkSchema = {
     brandId: z.string(),
@@ -964,9 +985,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, connectUrl: result.connectUrl, tip: 'Share this URL with the brand owner to connect their accounts' }) }] }
   }
 
-  server.tool('board_generate_account_connect_link', 'Generate a secure account-connect URL through board backend.', connectLinkSchema, connectLinkHandler)
-  server.tool('connect_account', '[Compatibility alias] Use board_generate_account_connect_link.', connectLinkSchema, connectLinkHandler)
-  server.tool('postfast_generate_connect_link', '[Deprecated alias] Use board_generate_account_connect_link.', connectLinkSchema, connectLinkHandler)
+  registerTool('board_generate_account_connect_link', 'Generate a secure account-connect URL through board backend.', connectLinkSchema, connectLinkHandler)
+  registerTool('connect_account', '[Compatibility alias] Use board_generate_account_connect_link.', connectLinkSchema, connectLinkHandler)
+  registerTool('postfast_generate_connect_link', '[Deprecated alias] Use board_generate_account_connect_link.', connectLinkSchema, connectLinkHandler)
 
   const publishContentSchema = {
     brandId: z.string().describe('Brand ID — backend credentials are loaded automatically.'),
@@ -1058,9 +1079,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: responseContent }
   }
 
-  server.tool('publish', 'Publish or schedule content through board backend using stored brand config.', publishContentSchema, publishContentHandler)
-  server.tool('board_publish_content', 'Publish or schedule content through board backend using stored brand config.', publishContentSchema, publishContentHandler)
-  server.tool('postfast_publish', '[Deprecated alias] Use publish.', publishContentSchema, publishContentHandler)
+  registerTool('publish', 'Publish or schedule content through board backend using stored brand config.', publishContentSchema, publishContentHandler)
+  registerTool('board_publish_content', 'Publish or schedule content through board backend using stored brand config.', publishContentSchema, publishContentHandler)
+  registerTool('postfast_publish', '[Deprecated alias] Use publish.', publishContentSchema, publishContentHandler)
 
   const replyReviewSchema = {
     brandId: z.string(),
@@ -1125,12 +1146,12 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, reviewId, platform, replied: true }) }] }
   }
 
-  server.tool('board_reply_review', 'Reply to a review through board backend using stored brand config.', replyReviewSchema, replyReviewHandler)
-  server.tool('reply_review', '[Compatibility alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
-  server.tool('postfast_reply_review', '[Deprecated alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
+  registerTool('board_reply_review', 'Reply to a review through board backend using stored brand config.', replyReviewSchema, replyReviewHandler)
+  registerTool('reply_review', '[Compatibility alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
+  registerTool('postfast_reply_review', '[Deprecated alias] Use board_reply_review.', replyReviewSchema, replyReviewHandler)
 
   // ── google_get_reviews ──────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'google_get_reviews',
     'Fetch the latest Google Business reviews for a brand. Returns reviewer, rating, comment, and existing reply.',
     {
@@ -1184,7 +1205,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       return { content: [{ type: 'text' as const, text: 'Error: Google Business Profile (OAuth) or Google API Key + Place ID is not configured for this brand.' }], isError: true }
     }
   )
-  server.tool(
+  registerTool(
     'get_reviews',
     '[Compatibility alias] Use google_get_reviews. Currently returns Google reviews only.',
     {
@@ -1238,7 +1259,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── google_reply_review ─────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'google_reply_review',
     'Post a reply to a Google Business review. Uses direct Google API if OAuth is configured, otherwise PostFast.',
     {
@@ -1299,7 +1320,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── execute_brand_action ─────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'execute_brand_action',
     'Execute a unified marketing or customer care action for a brand (replies, posts, notifications).',
     {
@@ -1502,7 +1523,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Hot Topics tools ───────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'board_list_topics',
     'List brand Hot Topics markdown documents. Use before content planning to avoid duplicate research and reuse research-agent findings.',
     {
@@ -1524,7 +1545,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_get_topic',
     'Read one Hot Topics markdown document by ID.',
     {
@@ -1544,7 +1565,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_save_topic',
     'Create or update a Hot Topics markdown research document for a brand. Intended for users running research workflows.',
     {
@@ -1572,7 +1593,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_archive_topic',
     'Archive a Hot Topics research document. This is a soft delete.',
     {
@@ -1593,7 +1614,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Draft workflow tools ───────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'board_list_drafts',
     'List content drafts for a brand. Use status filters to find pending, scheduled, failed, or draft items.',
     {
@@ -1628,7 +1649,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_save_draft',
     'Create or update a brand content draft. Save first. To schedule content, call board_get_schedule_recommendation BEFORE board_submit_draft — never set a time yourself. Agents must NOT hardcode scheduledAt.',
     {
@@ -1797,7 +1818,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_submit_draft',
     'Submit a saved draft. Auto-pilot brands publish/schedule directly; boss-approval brands create a pending review ActionItem.',
     {
@@ -1824,7 +1845,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Scheduling recommendation tool ─────────────────────────────────────────
-  server.tool(
+  registerTool(
     'board_get_schedule_recommendation',
     'Get the recommended publish time for a brand on a given platform. MUST be called before board_submit_draft when scheduling content. Uses the unified smart scheduling algorithm (respects minimum gap between posts, preferred time slots). Do NOT hardcode scheduledAt — always use this tool.',
     {
@@ -1859,7 +1880,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Asset library tools ────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'board_list_assets',
     'List brand media assets from the board asset library.',
     {
@@ -1889,7 +1910,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_upload_asset',
     'Upload an asset into the board asset library by providing base64 data OR a direct image URL. Production requires Huawei OBS; development can use local fallback.',
     {
@@ -2008,7 +2029,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Additional Asset & Draft tools ──────────────────────────────────────
-  server.tool(
+  registerTool(
     'board_get_asset',
     'Retrieve metadata and URL of a specific media asset from the brand\'s asset library by asset ID.',
     {
@@ -2030,7 +2051,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_update_asset',
     'Edit/update properties of a brand media asset, such as its name, category (folder), caption, tags, or ready status.',
     {
@@ -2070,7 +2091,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_delete_asset',
     'Delete a brand media asset completely from the database and disk storage.',
     {
@@ -2109,7 +2130,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_get_draft',
     'Read the details of a single content draft by its ID.',
     {
@@ -2135,7 +2156,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'board_delete_draft',
     'Delete a content draft from the database. If scheduled, cancels the scheduling on PostFast first.',
     {
@@ -2175,7 +2196,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
   // ── v2.0 Onboarding & Skill Tools ────────────────────────────────────────
 
-  server.tool(
+  registerTool(
     'get_brand_subscription',
     'Get brand subscription details and included services.',
     {
@@ -2245,7 +2266,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── Brand planning tools ───────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'get_brand_marketing_plan',
     'Read the current brand marketing plan workspace, including research report, annual plan, publishing calendar, and merchant interview.',
     {
@@ -2263,7 +2284,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'generate_brand_research_report',
     'Generate or refresh the brand research report used as the baseline for marketing planning.',
     {
@@ -2284,7 +2305,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'save_brand_merchant_interview',
     'Save principal or merchant interview notes before plan generation.',
     {
@@ -2315,7 +2336,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'generate_brand_marketing_plan',
     'Generate the annual/rolling marketing plan for a brand from the latest research and interview context.',
     {
@@ -2336,7 +2357,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'generate_brand_publishing_calendar',
     'Generate a month publishing calendar from the current brand marketing plan.',
     {
@@ -2365,7 +2386,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'create_content_drafts_from_calendar',
     'Create publish-ready content drafts from existing publishing calendar items. Each platform is generated and written independently.',
     {
@@ -2398,7 +2419,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'run_brand_planning_workflow',
     'Run the full brand planning workflow: verify access, optionally refresh research, generate marketing plan, generate publishing calendar, and optionally create content drafts.',
     {
@@ -2478,7 +2499,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'create_tasks',
     'Batch create Kanban tasks.',
     {
@@ -2546,7 +2567,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'get_brand_analytics',
     'Get brand historical analytics (likes, comments, engagement, time-series).',
     {
@@ -2578,7 +2599,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'get_social_insights',
     'Get live brand social insights (sentiment, keywords, conversions, trends, top posts).',
     {
@@ -2610,7 +2631,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'get_brand_reviews',
     'Fetch the latest Google Maps / GBP reviews for a brand.',
     {
@@ -2638,7 +2659,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'list_brand_assets',
     'List brand media assets from the board asset library.',
     {
@@ -2668,7 +2689,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'save_agent_insights',
     'Save agent self-learning insights.',
     {
@@ -2697,7 +2718,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'create_require_input_task',
     'Create a task on Kanban that requires human input or review.',
     {
@@ -2754,7 +2775,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'save_local_document',
     'Save a marketing report or strategy document locally as a Markdown file.',
     {
@@ -2786,7 +2807,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'sync_to_kanban',
     'Synchronize a local document to the Kanban board as a completed task.',
     {
@@ -2817,7 +2838,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'write_daily_memory',
     'Save daily memory markdown file for a brand.',
     {
@@ -2848,7 +2869,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'read_daily_memory',
     'Read daily memory markdown files for a brand.',
     {
@@ -2878,7 +2899,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'get_platform_benchmarks',
     'Get platform-level benchmarks by category and location.',
     {
@@ -2909,7 +2930,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'google_get_place_info',
     'Get Google Place profile details for a brand location.',
     {
@@ -2936,7 +2957,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
 
-  server.tool(
+  registerTool(
     'fetch_public_social_profile',
     'Fetch public social media profile stats (followers, posts, engagement).',
     {
@@ -2966,7 +2987,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── list_faqs ────────────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'list_faqs',
     'List all FAQ / Q&A items in the AMC Learning Center.',
     {},
@@ -2986,7 +3007,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── add_faq ─────────────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'add_faq',
     'Add a new Q&A item to the AMC Learning Center FAQ list.',
     {
@@ -3011,7 +3032,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── delete_faq ──────────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'delete_faq',
     'Delete a Q&A item from the AMC Learning Center FAQ list.',
     {
@@ -3033,7 +3054,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── list_school_items ───────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'list_school_items',
     'List all AMC School items (courses, cases, and calendar events).',
     {},
@@ -3053,7 +3074,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── add_school_item ──────────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'add_school_item',
     'Add a new Course, Case, Calendar Event, or Article to the AMC School.',
     {
@@ -3104,7 +3125,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   )
 
   // ── delete_school_item ───────────────────────────────────────────────────
-  server.tool(
+  registerTool(
     'delete_school_item',
     'Delete a School item (Course, Case, or Calendar Event) by its ID.',
     {
@@ -3125,7 +3146,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
   )
   // ── submit_knowledge_template ───────────────────────────────────────────
-  server.tool(
+  registerTool(
     'submit_knowledge_template',
     'Submit a copywriting template, content idea, video script blueprint, or prompt rule to the AMC Knowledge Base.',
     {

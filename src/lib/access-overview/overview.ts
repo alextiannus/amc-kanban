@@ -1,8 +1,9 @@
+import { describePolicy } from '../role-permissions/describe.ts'
 import { describeKanban, finalizeEntries } from './catalog.ts'
 import { selectContentRole } from './entry-rules.ts'
 import { check, CONTRACT_VERSION, RULE_VERSION, ROLES, entryStatus, type AccessEntry, type Context, type Overview } from './types.ts'
 
-export type ContentSnapshot = { contractVersion: number; ruleVersion: string; roles: Record<string, AccessEntry[]> }
+export type ContentSnapshot = { permissionProtocol?: number; contractVersion: number; ruleVersion: string; roles: Record<string, AccessEntry[]> }
 export type RemoteContent = { snapshot?: ContentSnapshot; reason?: string }
 const fallbackFeatures = [
   ['dashboard', '控制台'], ['video-making', '视频制作'], ['video-production', '爆款复刻'], ['inspiration-library', '灵感星链 / 爆品脚本'],
@@ -28,7 +29,7 @@ export function parseContentSnapshot(data: unknown): ContentSnapshot | null {
       && Array.isArray(row.notes) && row.notes.every(item => typeof item === 'string')
       && Array.isArray(row.sources) && row.sources.every(item => typeof item === 'string'))) return null
   }
-  return { contractVersion: value.contractVersion, ruleVersion: value.ruleVersion, roles: Object.fromEntries(ROLES.map(role => [role, value.roles[role].map(row => ({
+  return { permissionProtocol: value.permissionProtocol, contractVersion: value.contractVersion, ruleVersion: value.ruleVersion, roles: Object.fromEntries(ROLES.map(role => [role, value.roles[role].map(row => ({
     id: row.id, system: row.system, group: row.group, label: row.label, href: row.href, aliases: row.aliases,
     menu: { state: row.menu.state, reason: row.menu.reason }, page: { state: row.page.state, reason: row.page.reason },
     operations: row.operations.map(op => ({ label: op.label, state: op.state, reason: op.reason, source: op.source })),
@@ -54,7 +55,7 @@ export function describeContent(context: Context, remote: RemoteContent): Access
   return finalizeEntries(rows, context)
 }
 
-export function buildOverview(remote: RemoteContent, context?: Context): Overview {
+export function buildOverview(remote: RemoteContent, context?: Context, policies?: Record<string, string[]>): Overview {
   const result: Overview = {
     contractVersion: CONTRACT_VERSION, ruleVersion: RULE_VERSION, generatedAt: new Date().toISOString(),
     evidence: '根据当前服务代码与最新账号关系计算；未登录被查看账号，未验证浏览器旧会话、业务对象、订阅或第三方服务状态。',
@@ -64,6 +65,10 @@ export function buildOverview(remote: RemoteContent, context?: Context): Overvie
   const evaluate = (value: Context) => [...describeKanban(value), ...describeContent(value, remote)]
   if (context) result.entries = evaluate(context)
   else result.matrix = Object.fromEntries(ROLES.map(role => [role, evaluate({ roles: [role], brandScope: 'unselected' })])) as Record<(typeof ROLES)[number], AccessEntry[]>
+  if (policies) {
+    if (result.entries && context) result.entries = describePolicy(result.entries, context, policies, remote.snapshot?.permissionProtocol === 1)
+    if (result.matrix) for (const role of ROLES) result.matrix[role] = describePolicy(result.matrix[role], {roles: [role], brandScope: 'unselected'}, policies, Boolean(remote.snapshot))
+  }
   const rows = result.entries || Object.values(result.matrix || {}).flat()
   result.conflicts = Array.from(new Set(rows.filter(row => row.status === 'conflict').map(row => `${row.label}：${row.menu.reason}；${row.page.reason}`)))
   return result

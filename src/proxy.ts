@@ -2,6 +2,9 @@ import { currentBinding, signBinding } from './lib/global-text/policy'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { jwtVerify } from 'jose'
+import { authenticateRequest } from './lib/auth-v2/authenticate'
+import { allows } from './lib/role-permissions/store'
+import { kanbanRoutePermission } from './lib/role-permissions/routes'
 
 async function hasValidSession(request: NextRequest): Promise<boolean> {
   const session = request.cookies.get('session')?.value
@@ -26,6 +29,15 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 
 export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  const publicGameConfig = pathname === '/api/game/config' && request.method === 'GET' && request.nextUrl.searchParams.get('public') === 'true'
+  const permission = publicGameConfig ? null : kanbanRoutePermission(pathname, request.method)
+  if (permission) {
+    try {
+      const principal = await authenticateRequest(request)
+      if (!principal) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      if (!await allows(principal, permission)) return NextResponse.json({ error: '当前角色未获授权', permission }, { status: 403 })
+    } catch { return NextResponse.json({ error: '权限服务暂不可用' }, { status: 503 }) }
+  }
   const requestHeaders = new Headers(request.headers)
   const requestId = requestHeaders.get('x-amc-request-id') || crypto.randomUUID()
   requestHeaders.set('x-amc-request-id', requestId)
@@ -55,7 +67,7 @@ export default async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api')
 
   // Bind API work once; gateway/admin endpoints manage their own signed snapshots.
-  if (isApiRoute && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
+  if (isApiRoute && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
     try {
       requestHeaders.set('x-amc-text-binding', signBinding(await currentBinding(request.headers.get('x-client-type') === 'mm' ? 'mm' : 'kanban')))
     } catch { return NextResponse.json({ error: 'Text policy unavailable' }, { status: 503 }) }

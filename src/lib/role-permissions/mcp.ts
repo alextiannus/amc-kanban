@@ -1,0 +1,21 @@
+// Aliases share the same gate; no tool can bypass a revoked business action.
+export const MCP_PERMISSIONS: Record<string, string> = Object.fromEntries([
+  ['brand.read', ['get_brand_config', 'get_brand_profile_markdown', 'board_list_social_accounts', 'list_accounts', 'postfast_list_accounts', 'board_list_topics', 'board_get_topic', 'get_brand_marketing_plan']],
+  ['brand.update', ['refresh_brand_profile_markdown', 'update_brand_profile_markdown', 'update_brand_config', 'update_accounts', 'board_generate_account_connect_link', 'connect_account', 'postfast_generate_connect_link', 'board_save_topic', 'board_archive_topic', 'generate_brand_research_report', 'save_brand_merchant_interview', 'generate_brand_marketing_plan', 'run_brand_planning_workflow']],
+  ['draft.read', ['list_tasks', 'board_list_drafts', 'board_get_draft', 'board_list_published_content', 'postfast_list_posts']],
+  ['draft.create', ['create_task', 'create_tasks', 'create_content_drafts_from_calendar']],
+  ['draft.update', ['update_task', 'delete_task', 'board_delete_task', 'board_save_draft', 'board_delete_draft']],
+  ['draft.submit', ['board_submit_draft']],
+  ['content.schedule', ['generate_brand_publishing_calendar', 'board_get_schedule_recommendation']],
+  ['content.publish', ['publish', 'board_publish_content', 'postfast_publish', 'board_delete_scheduled_content', 'postfast_delete_post']],
+  ['asset.read', ['board_list_assets', 'board_get_asset', 'list_brand_assets']],
+  ['asset.create', ['board_upload_media', 'upload_asset', 'postfast_upload_media', 'board_upload_asset']],
+  ['asset.update', ['board_update_asset']],
+  ['asset.archive', ['board_delete_asset']],
+  ['review.read', ['google_get_reviews', 'get_reviews', 'get_brand_reviews']],
+  ['review.reply', ['board_reply_review', 'reply_review', 'postfast_reply_review', 'google_reply_review']],
+  ['action_item.create', ['post_action_item', 'create_require_input_task']],
+  ['action_item.resolve', ['execute_brand_action']],
+  ['subscription.read', ['get_brand_subscription']],
+  ['analytics.read', ['get_brand_analytics', 'get_social_insights']],
+].flatMap(([permission, names]) => (names as string[]).map(name => [name, permission as string])))

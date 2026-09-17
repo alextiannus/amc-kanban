@@ -20,6 +20,8 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { getAgentFromKey } from '@/lib/partner/mcp/server'
 import { prisma } from '@/lib/prisma'
+import { authenticateRequest } from '@/lib/auth-v2'
+import { allows } from '@/lib/role-permissions/store'
 import {
   postfastTestConnection,
   postfastFetchAccounts,
@@ -126,6 +128,9 @@ export async function POST(request: Request) {
   const { brandId, action, ...params } = body
   if (!brandId) return NextResponse.json({ error: 'brandId required' }, { status: 400 })
   if (!action) return NextResponse.json({ error: 'action required' }, { status: 400 })
+  const principal = await authenticateRequest(request)
+  const permission = action === 'delete_post' ? 'content.publish' : action === 'generate_connect_link' ? 'brand.update' : action === 'list_posts' ? 'draft.read' : action === 'get_follower_history' ? 'analytics.read' : ['list_inbox_conversations', 'get_inbox_items'].includes(action) ? 'review.read' : 'brand.read'
+  if (!principal || !await allows(principal, permission)) return NextResponse.json({ error: 'Permission denied', permission }, { status: 403 })
 
   const apiKey = await getBrandApiKey(brandId, access)
   if (!apiKey) {

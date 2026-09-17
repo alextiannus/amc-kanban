@@ -23,6 +23,7 @@ interface MainLayoutProps {
     role: string
     dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
     userRoles?: string[]
+    permissions?: string[]
     nickname?: string | null
     avatar?: string | null
   } | null
@@ -84,6 +85,7 @@ export default function MainLayout({
       {/* ── Desktop Sidebar ─────────────────────────────────────────── */}
       <Sidebar
         userRoles={userRoles}
+        permissions={user?.permissions || []}
         currentView={currentView}
         setCurrentView={setCurrentView}
         brands={brands}
@@ -108,6 +110,7 @@ export default function MainLayout({
       >
         <Sidebar
           userRoles={userRoles}
+        permissions={user?.permissions || []}
           currentView={currentView}
           setCurrentView={(v) => { setCurrentView(v); setMobileSidebarOpen(false) }}
           brands={brands}

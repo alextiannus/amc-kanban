@@ -71,8 +71,8 @@ user.status = 'ACTIVE'
 user.businessRoles = []
 const noRole = await loadUserOverview(db, user.id, undefined, authorize)
 assert.deepEqual(noRole!.context.roles, [])
-assert.deepEqual(noRole!.context.menuRoles, ['AMC_PRINCIPAL'], 'preserve the actual legacy sidebar fallback, do not invent backend grants')
-assert.equal(buildOverview({}, noRole!.context).entries!.find(row => row.id === 'kanban:amc-content-roles')!.status, 'conflict')
+assert.deepEqual(noRole!.context.menuRoles, [], 'no-role accounts do not inherit a dashboard fallback')
+assert.equal(buildOverview({}, noRole!.context).entries!.find(row => row.id === 'kanban:amc-content-roles')!.status, 'denied')
 user.status = 'DISABLED'
 
 const admin = principalFromUser({ ...user, status: 'ACTIVE', role: 'ADMIN' }, 'session')

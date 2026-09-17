@@ -50,6 +50,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     role: string
     dashboardRole?: 'ADMIN' | 'BRAND_OWNER' | 'BRAND_DIRECTOR'
     userRoles?: string[]
+    permissions?: string[]
     nickname?: string | null
     avatar?: string | null
   } | null>(null)
@@ -92,7 +93,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [showSystemLog, setShowSystemLog] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
   const userRoles = resolveRoles(user)
-  const canAccessAnalytics = canAccessView(userRoles, 'socialInsight')
+  const canAccessAnalytics = canAccessView(userRoles, 'socialInsight', user?.permissions || [])
 
   useEffect(() => {
     if (activeBrand?.id) {
@@ -252,7 +253,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       onShowSettings={() => setShowSettings(true)}
       onShowSystemLog={() => setShowSystemLog(true)}
     >
-      {currentView === 'calendar' ? (
+      {!canAccessView(userRoles, currentView, user?.permissions || []) ? <div className="p-10 text-slate-500">当前角色未获授权，请选择其他菜单或联系管理员。</div> : currentView === 'calendar' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <DashboardCalendar
             key={activeBrand?.id ?? 'no-brand'}

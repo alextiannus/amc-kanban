@@ -78,6 +78,14 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
+model RolePermissionPolicy {
+  role        String   @id
+  grants      Json
+  version     Int      @default(1)
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
 model UserBusinessRole {
   id        String   @id @default(cuid())
   userId    String

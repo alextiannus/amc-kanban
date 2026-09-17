@@ -41,6 +41,7 @@ function NavIcon({ name, size = 16 }: { name: string; size?: number }) {
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface SidebarProps {
   userRoles: AppRole[]
+  permissions?: string[]
   currentView: BoardView
   setCurrentView: (view: BoardView) => void
   brands: Brand[]
@@ -222,6 +223,7 @@ function InlineBrandSwitcher({
 // ─── Main Sidebar ─────────────────────────────────────────────────────────────
 export default function Sidebar({
   userRoles,
+  permissions,
   currentView,
   setCurrentView,
   brands,
@@ -277,7 +279,7 @@ export default function Sidebar({
     })
   }
 
-  const menuGroups: MenuGroupDef[] = getMenuGroups(userRoles)
+  const menuGroups: MenuGroupDef[] = getMenuGroups(userRoles, permissions)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
 
   const toggleGroup = (label: string) => {
@@ -302,7 +304,7 @@ export default function Sidebar({
     if (item.comingSoon) return
     if (item.href) {
       let targetUrl = item.href
-      if (item.id === 'video-production' && activeBrand?.id) {
+      if ((item.id === 'video-production' || item.id.startsWith('content.')) && activeBrand?.id) {
         const separator = targetUrl.includes('?') ? '&' : '?'
         targetUrl = `${targetUrl}${separator}brandId=${encodeURIComponent(activeBrand.id)}`
       }

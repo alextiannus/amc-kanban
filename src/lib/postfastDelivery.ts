@@ -1,3 +1,5 @@
+import { requireActorPermission } from './role-permissions/delegation'
+import { PolicyError } from './role-permissions/store'
 import { lockAccountBinding, assertAccountBound } from '@/lib/socialAccountBinding'
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
@@ -516,6 +518,15 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
   if (!payload || payload.version !== 1 || !payload.publish || !Array.isArray(payload.publish.mediaItems)) {
     await markPermanentFailure(job, 'POSTFAST_JOB_PAYLOAD_INVALID', 'The saved delivery snapshot is invalid.')
     return 'failed' as const
+  }
+  try {
+    await requireActorPermission(payload.actorId, 'content.publish', job.brandId)
+  } catch (error) {
+    if (error instanceof PolicyError && error.status === 403) {
+      await markPermanentFailure(job, 'ACCESS_REVOKED', error.message)
+      return 'failed' as const
+    }
+    return queueRetry(job, 'PERMISSION_UNAVAILABLE', 'Permission service unavailable; no publish was attempted.')
   }
   const brand = await prisma.brand.findUnique({ where: { id: job.brandId }, select: { postfastApiKey: true } })
   if (!brand?.postfastApiKey) {

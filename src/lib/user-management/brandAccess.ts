@@ -1,7 +1,6 @@
+import { readPolicies } from '../role-permissions/store.ts'
+import { POLICY_ROLES, effectiveGrants, PERMISSION_MODULES } from '../role-permissions/contract.ts'
 import { prisma } from '../prisma.ts'
-
-const READ_ROLES = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD']
-const WRITE_ROLES = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER']
 
 /**
  * Direct Crew membership only. Organization inheritance is intentionally not
@@ -32,7 +31,8 @@ export async function canUserAccessBrand(
   userId: string,
   action: string = 'READ',
 ): Promise<boolean> {
-  const allowedRoles = action === 'READ' ? READ_ROLES : WRITE_ROLES
+  const { policies } = await readPolicies()
+  const allowedRoles = ['ADMIN', ...POLICY_ROLES.filter(role => PERMISSION_MODULES.some(module => module.scope === '已授权品牌' && module.actions.some(op => (action === 'READ' ? op === 'read' : op !== 'read') && effectiveGrants([role], policies).includes(module.id + '.' + op))))]
 
   const queryUserIds = [userId]
 

@@ -1,3 +1,5 @@
+import { grantsFor } from '@/lib/role-permissions/store'
+import { authenticateCurrentSession } from '@/lib/auth-v2'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
@@ -46,12 +48,16 @@ export async function GET() {
   })
   const dashboardRole = getLegacyDashboardRole(userRoles)
 
+  const principal = await authenticateCurrentSession()
+  if (!principal) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const permissions = await grantsFor(principal)
   return NextResponse.json({
     ...user,
     status: undefined,
     authVersion: undefined,
     businessRoles: undefined,
     dashboardRole,
-    userRoles,
-  })
+    userRoles: principal.globalRoles,
+    permissions,
+  }, { headers: { 'Cache-Control': 'no-store' } })
 }

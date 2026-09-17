@@ -39,7 +39,7 @@ export async function loadUserOverview(db: UserReader, id: string, selectedBrand
   const active = user.status === 'ACTIVE'
   const membershipSelect = { role: true, source: true, crew: { select: { brand: { select: { id: true, name: true } } } } }
   let brands: BrandOption[] = []
-  if (active && hasCapability(principal.globalRoles, 'brand.read')) {
+  if (active) {
     if (principal.globalRoles.includes('ADMIN')) {
       brands = (await db.brand.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } })).map(brand => ({ ...brand, sources: ['ADMIN 全局品牌范围'] }))
     } else {
@@ -55,9 +55,9 @@ export async function loadUserOverview(db: UserReader, id: string, selectedBrand
     const exists = await db.brand.findUnique({ where: { id: selectedBrandId }, select: { id: true } })
     brandScope = active && exists && await canAccessBrand(principal, selectedBrandId) ? 'allowed' : 'denied'
   }
-  const roleSources = ['菜单：账号显式角色 + legacy ADMIN；服务端：principalFromUser 当前兼容规则']
-  if (!explicitMenuRoles.length) roleSources.push('规则冲突：无显式角色时，auth/me 的 BRAND_DIRECTOR 回退被 Sidebar 解析为主理人菜单；服务端没有因此获得主理人角色。')
+  const roleSources = ['菜单与服务端均使用 principalFromUser 当前角色；操作来源见各项权限']
+  if (!explicitMenuRoles.length) roleSources.push('无显式角色；不会从默认看板角色推导权限。')
   if (principal.linkedHumanUserId) roleSources.push(`服务端还会合并关联账号角色：${principal.linkedHumanUserId}`)
-  const detail: NonNullable<Overview['user']> = { id: user.id, email: user.email, nickname: user.nickname, status: user.status, roles: principal.globalRoles, menuRoles, roleSources }
-  return { context: { roles: principal.globalRoles, menuRoles, accountRoles: explicitMenuRoles, active, brandScope } satisfies Context, user: detail, brands, selectedBrandId }
+  const detail: NonNullable<Overview['user']> = { id: user.id, email: user.email, nickname: user.nickname, status: user.status, roles: principal.globalRoles, menuRoles: principal.globalRoles, roleSources }
+  return { context: { roles: principal.globalRoles, menuRoles: principal.globalRoles, accountRoles: explicitMenuRoles, active, brandScope } satisfies Context, user: detail, brands, selectedBrandId }
 }

@@ -2,6 +2,7 @@
  * permissions.ts — Centralized role resolution & menu configuration
  */
 
+import { MENU_PERMISSIONS, PERMISSION_MODULES } from './role-permissions/contract.ts'
 export type AppRole = 'ADMIN' | 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD' | 'RESEARCHER'
 
 export type BoardView =
@@ -24,7 +25,7 @@ export interface UserInfo {
 /** Resolve AppRoles from the user object returned by /api/auth/me */
 export function resolveRoles(user: UserInfo | null): AppRole[] {
   if (!user) return []
-  if (user.userRoles && user.userRoles.length > 0) {
+  if (user.userRoles) {
     const valid: AppRole[] = ['ADMIN', 'AMC_PRINCIPAL', 'BRAND_OWNER', 'BD', 'RESEARCHER']
     return user.userRoles.filter((r): r is AppRole => valid.includes(r as AppRole))
   }
@@ -35,7 +36,8 @@ export function resolveRoles(user: UserInfo | null): AppRole[] {
 }
 
 /** Check whether a set of roles can navigate to a given view */
-export function canAccessView(roles: AppRole[], view: BoardView): boolean {
+export function canAccessView(roles: AppRole[], view: BoardView, grants?: string[]): boolean {
+  if (grants) return roles.includes('ADMIN') || Boolean(MENU_PERMISSIONS[view] && grants.includes(MENU_PERMISSIONS[view]))
   const isAdmin = roles.includes('ADMIN')
   const isPrincipal = roles.includes('AMC_PRINCIPAL')
   const isOwner = roles.includes('BRAND_OWNER')
@@ -89,7 +91,13 @@ export type MenuGroupDef = {
  * Return the ordered sidebar menu groups for the given roles.
  * Order: 主理人 → 内容中心 → 知识增长中心 → 品牌主 → BD → Admin
  */
-export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
+export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef[] {
+  if (grants && !roles.includes('ADMIN')) return [...getMenuGroups(['ADMIN']), {groupLabel: 'Content 更多功能', items: PERMISSION_MODULES.filter(m => m.system === 'content' && !['content.video-making','content.inspiration-library','content.content-lab'].includes(m.id) && grants.includes(m.id + '.read')).map(m => ({id:m.id, view:'managementOverview' as BoardView, label:m.label, icon:'FileText',href:'/admin/content/'+m.id.slice(8)}))}].map(group => ({ ...group, items: group.items.filter(item => {
+    if (item.id.startsWith('content.')) return grants.includes(item.id + '.read')
+    if (item.id === 'amc-growth') return roles.includes('AMC_PRINCIPAL')
+    if ('comingSoon' in item && item.comingSoon) return roles.includes('BD')
+    return Boolean(MENU_PERMISSIONS[item.id] && grants.includes(MENU_PERMISSIONS[item.id]))
+  }) })).filter(group => group.items.length > 0)
   const isAdmin     = roles.includes('ADMIN')
   const isPrincipal = roles.includes('AMC_PRINCIPAL')
   const isOwner     = roles.includes('BRAND_OWNER')

@@ -2,9 +2,9 @@
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
-## 用户权限总览（本地已实现，待上线验收）
+## 用户角色权限配置（实施中，待部署验收）
 
-管理中心提供 Kanban、Content 五角色菜单矩阵与具体账号权限诊断，区分菜单可见、页面入口、业务操作和品牌范围；支持从账号及角色详情进入。权限解释以现有规则为依据，冲突明确标注，不修改授权。Content 内部只读描述接口不可用或版本不匹配时显示“未核实”。详细接口、限制与验收以 [用户权限 PRD](./prd_user_organization_permissions.md#权限总览与账号诊断本地已实现未上线验收) 为准。
+在 Kanban 用户组详情统一编辑 Kanban、Content 四个业务角色的模块与操作权限。多角色取并集，ADMIN 系统权限固定；平台共享库保持共享，品牌范围独立限制。数据库策略同时用于菜单、页面与接口，权限总览保留为诊断。Content 实时验证当前授权，服务异常不回退放行。详细规范见 [用户权限 PRD](./prd_user_organization_permissions.md#6-capability-模型)。
 
 ## 店内抽奖“一店一码”（当前规则）
 
@@ -732,7 +732,9 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 
 第一阶段 Capability 在代码中集中、类型安全地定义，不建设可在 Admin UI 任意编辑的动态权限引擎。完整数据模型、迁移、API Key、性能与回滚要求见 [`prd_user_organization_permissions.md`](./prd_user_organization_permissions.md)。
 
-### amc-kanban 菜单可见性矩阵（确认版）
+### Kanban 角色权限（动态配置）
+
+以下为初始化业务参考；四个业务角色的实际菜单与操作按数据库授权计算。ADMIN、Growth 和未开放功能保持固定规则。
 
 | 菜单 | Admin | 主理人 | BD | 品牌主 |
 |------|:-----:|:------:|:--:|:------:|

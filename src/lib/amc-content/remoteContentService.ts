@@ -1,3 +1,4 @@
+import { actorIdentity } from '../role-permissions/delegation.ts'
 import { boundPolicy, signBinding } from '../global-text/policy.ts'
 import type {
   ContentGenerationRequest,
@@ -88,6 +89,7 @@ export async function tryGenerateWithRemoteContentService(
   headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   if (input.actorId) headers['x-amc-actor-id'] = input.actorId
+  if (input.actorId) headers['x-amc-access-identity'] = await actorIdentity(input.actorId, 'draft.create', input.brandId)
   if (input.actorType) headers['x-amc-actor-type'] = input.actorType
   if (input.actorRole) headers['x-amc-actor-role'] = input.actorRole
 
@@ -241,6 +243,7 @@ export async function createRemoteVideoPlan(input: RemoteVideoCreatorRequest): P
   headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   if (input.actorId) headers['x-amc-actor-id'] = input.actorId
+  if (input.actorId) headers['x-amc-access-identity'] = await actorIdentity(input.actorId, 'content.video-making.generate', input.brandId)
   if (input.actorType) headers['x-amc-actor-type'] = input.actorType
   if (input.actorRole) headers['x-amc-actor-role'] = input.actorRole
 
@@ -355,6 +358,7 @@ async function callRemoteVideoJson(
   headers['x-amc-text-binding'] = signBinding(await boundPolicy())
   if (token) headers.authorization = `Bearer ${token}`
   if (actor.actorId) headers['x-amc-actor-id'] = actor.actorId
+  if (actor.actorId) headers['x-amc-access-identity'] = await actorIdentity(actor.actorId, 'content.video-making.generate', (body as {brandId?:string})?.brandId)
   if (actor.actorType) headers['x-amc-actor-type'] = actor.actorType
   if (actor.actorRole) headers['x-amc-actor-role'] = actor.actorRole
   const response = await fetch(`${baseUrl}${path}`, {

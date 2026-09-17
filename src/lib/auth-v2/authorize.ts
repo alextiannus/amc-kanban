@@ -1,7 +1,8 @@
 import { prisma } from '../prisma.ts'
 import { AuthorizationError } from './errors.ts'
-import { hasCapability, type Capability } from './capabilities.ts'
+import type { Capability } from './capabilities.ts'
 import type { AuthPrincipal } from './types.ts'
+import { allows } from '../role-permissions/store.ts'
 
 export function isAdmin(principal: AuthPrincipal): boolean {
   return principal.globalRoles.includes('ADMIN')
@@ -12,7 +13,11 @@ export async function canAccessBrand(
   brandId: string,
   capability: Capability = 'brand.read',
 ): Promise<boolean> {
-  if (!hasCapability(principal.globalRoles, capability)) return false
+  if (!await allows(principal, capability)) return false
+  return canAccessBrandScope(principal, brandId)
+}
+
+export async function canAccessBrandScope(principal: AuthPrincipal, brandId: string): Promise<boolean> {
   if (isAdmin(principal)) return true
 
   const user = await prisma.user.findFirst({
@@ -56,6 +61,6 @@ export async function requireCapability(
 ): Promise<void> {
   const allowed = scope?.brandId
     ? await canAccessBrand(principal, scope.brandId, capability)
-    : hasCapability(principal.globalRoles, capability)
+    : await allows(principal, capability)
   if (!allowed) throw new AuthorizationError()
 }

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
 import type { AppRole } from '@/lib/permissions'
+import RolePermissionEditor from './RolePermissionEditor'
 
 interface UserGroupsPanelProps {
   users: UserRecord[]
@@ -125,7 +126,7 @@ export default function UserGroupsPanel({
     }
   }
 
-  return (
+  return (<div className="space-y-6">
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
       {/* Left List of Groups */}
       <div className="lg:col-span-1 space-y-3">
@@ -173,6 +174,7 @@ export default function UserGroupsPanel({
               {activeGroup.description}
             </p>
             <button type="button" className="mt-3 rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-600" onClick={() => onViewAccess(activeGroup.systemRole || activeGroup.businessRole!)}>查看权限</button>
+            {activeGroup.businessRole && <button type="button" className="ml-2 mt-3 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white" onClick={() => document.getElementById('role-permission-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>编辑功能权限</button>}
           </div>
 
           {/* Add member box */}
@@ -230,6 +232,8 @@ export default function UserGroupsPanel({
           </div>
         </div>
       </div>
+    </div>
+    {activeGroup.businessRole && <RolePermissionEditor key={activeGroup.businessRole} role={activeGroup.businessRole} affectedUsers={groupMembers.length} />}
     </div>
   )
 }
