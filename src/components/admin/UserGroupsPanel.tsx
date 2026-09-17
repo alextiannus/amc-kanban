@@ -5,10 +5,12 @@ import {
   Users, Shield, User, Bot, Plus, Trash2, PlusCircle, Search
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
+import type { AppRole } from '@/lib/permissions'
 
 interface UserGroupsPanelProps {
   users: UserRecord[]
   loading: boolean
+  onViewAccess: (role: AppRole) => void
   actionLoading: Record<string, string>
   onRoleToggle: (user: UserRecord) => Promise<void>
   onToggleBusinessRole: (user: UserRecord, roleName: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => void
@@ -55,7 +57,7 @@ const GROUPS: GroupDef[] = [
   {
     id: 'researchers',
     name: '研究员组 (Researchers)',
-    description: '负责查看内容角色库与增长研究系统，只展示连接到 amc-content 和 amc-growth 的主菜单。',
+    description: '参与内容素材与脚本研究。具体可见菜单、入口限制与规则冲突请查看权限总览。',
     roleType: 'business',
     businessRole: 'RESEARCHER'
   }
@@ -66,7 +68,8 @@ export default function UserGroupsPanel({
   loading,
   actionLoading,
   onRoleToggle,
-  onToggleBusinessRole
+  onToggleBusinessRole,
+  onViewAccess,
 }: UserGroupsPanelProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<'admins' | 'principals' | 'owners' | 'bd' | 'researchers'>('admins')
   const [addingUserId, setAddingUserId] = useState('')
@@ -169,6 +172,7 @@ export default function UserGroupsPanel({
             <p className="text-xs text-slate-400 mt-1.5 leading-relaxed font-medium">
               {activeGroup.description}
             </p>
+            <button type="button" className="mt-3 rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-600" onClick={() => onViewAccess(activeGroup.systemRole || activeGroup.businessRole!)}>查看权限</button>
           </div>
 
           {/* Add member box */}

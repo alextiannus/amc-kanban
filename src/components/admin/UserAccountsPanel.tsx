@@ -30,6 +30,7 @@ interface UserAccountsPanelProps {
   onResetPassword: (user: UserRecord) => Promise<void>
   onDeleteUser: (user: UserRecord) => Promise<void>
   onEditUser: (user: UserRecord) => void
+  onViewAccess: (user: UserRecord) => void
   onFetchUsers?: () => Promise<void>
   onSavePermissions?: (humanId: string, agentIds: string[]) => Promise<void>
   savingPerms?: boolean
@@ -53,6 +54,7 @@ export default function UserAccountsPanel({
   onResetPassword,
   onDeleteUser,
   onEditUser,
+  onViewAccess,
   onFetchUsers,
   onSavePermissions,
   savingPerms = false,
@@ -442,6 +444,7 @@ export default function UserAccountsPanel({
                               <button onClick={() => onEditUser(user)} className="admin-icon-button" title="编辑成员详情">
                                 <Edit3 size={14} />
                               </button>
+                              <button type="button" onClick={() => onViewAccess(user)} className="rounded-lg border border-slate-200 px-2 py-1 text-xs whitespace-nowrap text-blue-600" title="查看菜单与操作权限">查看权限</button>
                               <button
                                 onClick={() => handleOpenPermissions(user)}
                                 className="admin-icon-button"

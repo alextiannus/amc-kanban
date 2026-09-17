@@ -2,6 +2,10 @@
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
+## 用户权限总览（本地已实现，待上线验收）
+
+管理中心提供 Kanban、Content 五角色菜单矩阵与具体账号权限诊断，区分菜单可见、页面入口、业务操作和品牌范围；支持从账号及角色详情进入。权限解释以现有规则为依据，冲突明确标注，不修改授权。Content 内部只读描述接口不可用或版本不匹配时显示“未核实”。详细接口、限制与验收以 [用户权限 PRD](./prd_user_organization_permissions.md#权限总览与账号诊断本地已实现未上线验收) 为准。
+
 ## 店内抽奖“一店一码”（当前规则）
 
 - 每个品牌的扫码入口永久固定为 `https://amc-kanban.immedi.ai/game/{brandId}`，不把奖品、配置、活动版本或时间写入二维码。

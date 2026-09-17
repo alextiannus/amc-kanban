@@ -7,6 +7,8 @@ import {
 import UserAccountsPanel from './UserAccountsPanel'
 import UserGroupsPanel from './UserGroupsPanel'
 import EditUserModal from './EditUserModal'
+import AccessOverviewPanel from './AccessOverviewPanel'
+import type { AppRole } from '@/lib/permissions'
 
 export interface UserRecord {
   id: string
@@ -67,7 +69,7 @@ interface UsersTabProps {
   savingPerms: boolean
 }
 
-type SubTab = 'humans' | 'groups'
+type SubTab = 'humans' | 'groups' | 'access'
 
 export default function UsersTab({
   users,
@@ -84,6 +86,7 @@ export default function UsersTab({
   savingPerms,
 }: UsersTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('humans')
+  const [accessTarget, setAccessTarget] = useState<{ userId?: string; role?: AppRole }>({})
   const [editingHumanUser, setEditingHumanUser] = useState<UserRecord | null>(null)
 
   const humans = users.filter(u => u.type === 'HUMAN')
@@ -103,7 +106,7 @@ export default function UsersTab({
             <Users size={18} className="text-blue-500" /> 用户与权限管理中心 (Identity & Access Control)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            在此管理系统内的人类成员，划分预设用户组角色（Admin/Principal/Owner），并执行主理人委托与品牌资产分配授权。
+            管理成员与五类角色，查看 Kanban、Content 菜单及操作权限，并执行主理人委托与品牌资产分配授权。
           </p>
         </div>
         <button 
@@ -140,6 +143,7 @@ export default function UsersTab({
           <Users size={14} />
           <span>用户组与角色</span>
         </button>
+        <button type="button" onClick={() => { setAccessTarget({}); setSubTab('access') }} className={`px-4 py-2.5 text-xs font-black border-b-2 whitespace-nowrap ${subTab === 'access' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>权限总览</button>
       </div>
 
       {/* Render selected sub-panel */}
@@ -155,6 +159,7 @@ export default function UsersTab({
           onResetPassword={onResetPassword}
           onDeleteUser={onDeleteUser}
           onEditUser={setEditingHumanUser}
+          onViewAccess={user => { setAccessTarget({ userId: user.id }); setSubTab('access') }}
           onFetchUsers={onFetchUsers}
           onSavePermissions={onSavePermissions}
           savingPerms={savingPerms}
@@ -168,8 +173,10 @@ export default function UsersTab({
           actionLoading={actionLoading}
           onRoleToggle={onRoleToggle}
           onToggleBusinessRole={onToggleBusinessRole}
+          onViewAccess={role => { setAccessTarget({ role }); setSubTab('access') }}
         />
       )}
+      {subTab === 'access' && <AccessOverviewPanel key={`${accessTarget.userId || ''}:${accessTarget.role || ''}`} users={humans} initialUserId={accessTarget.userId} initialRole={accessTarget.role} />}
       {/* Edit Human User Modal */}
       {editingHumanUser && (
         <EditUserModal 

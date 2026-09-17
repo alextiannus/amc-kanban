@@ -2,6 +2,7 @@ import { createHmac } from 'crypto'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { authenticateCurrentSession, canAccessBrand } from '@/lib/auth-v2'
+import { selectContentRole } from '@/lib/access-overview/entry-rules'
 
 type VideoProductionPageProps = {
   searchParams: Promise<{ brandId?: string | string[] }>
@@ -18,9 +19,7 @@ type LabTokenPayload = {
 export default async function VideoProductionEntryPage({ searchParams }: VideoProductionPageProps) {
   const principal = await authenticateCurrentSession()
   if (!principal) redirect('/')
-  const role = principal.globalRoles.includes('ADMIN')
-    ? 'ADMIN'
-    : principal.globalRoles.includes('AMC_PRINCIPAL') ? 'AMC_PRINCIPAL' : null
+  const role = selectContentRole(principal.globalRoles)
   if (!role) redirect('/admin')
 
   const params = await searchParams

@@ -2,6 +2,7 @@ import { createHmac } from 'crypto'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
+import { selectContentRole } from '@/lib/access-overview/entry-rules'
 
 type LabTokenPayload = {
   sub: string
@@ -14,10 +15,7 @@ export default async function ViralCopyScriptsEntryPage() {
   const session = await getSession()
   if (!session?.user?.id) redirect('/')
   const roles = session.user.userRoles || []
-  const role = session.user.role === 'ADMIN' || roles.includes('ADMIN')
-    ? 'ADMIN'
-    : roles.includes('AMC_PRINCIPAL') ? 'AMC_PRINCIPAL'
-      : roles.includes('RESEARCHER') ? 'RESEARCHER' : null
+  const role = selectContentRole(session.user.role === 'ADMIN' ? ['ADMIN', ...roles] : roles, true)
   if (!role) redirect('/admin')
 
   const isLocal = process.env.NODE_ENV !== 'production'

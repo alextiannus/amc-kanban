@@ -6,6 +6,7 @@
     "node": "20.x"
   },
   "scripts": {
+    "test:access-overview": "tsx scripts/test-access-overview.mts",
     "dev": "next dev",
     "build": "next build",
     "growth:backfill-links:dry-run": "node scripts/backfill-growth-brand-links.mjs",
