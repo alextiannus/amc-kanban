@@ -1,8 +1,10 @@
-'use client'
+﻿'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react'
+import { RefreshCw, Search } from 'lucide-react'
 import { ROLE_LABELS, ROLES, STATE_LABELS, type AccessEntry, type Overview, type State } from '@/lib/access-overview/types'
+import RolePermissionEditor, { type PermissionEditorHandle } from './RolePermissionEditor'
+import { groupAccessEntries, matchesAccessGroup, type ModuleGroup } from '@/lib/access-overview/presentation'
 import type { AppRole } from '@/lib/permissions'
 
 type Props = {
@@ -36,91 +38,124 @@ function EntryDetail({ entry }: { entry: AccessEntry }) {
   </section>
 }
 
+function Modal({ children, title, onClose, drawer = false }: { children: ReactNode; title: string; onClose: () => void; drawer?: boolean }) {
+  const ref = useRef<HTMLDialogElement>(null)
+  useEffect(() => { const previous = document.activeElement as HTMLElement | null; ref.current?.showModal(); return () => { previous?.focus() } }, [])
+  return <dialog ref={ref} aria-label={title} onCancel={e => { e.preventDefault(); onClose() }} className={`bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-200 backdrop:bg-black/30 p-5 ${drawer ? 'fixed inset-y-0 left-auto right-0 m-0 h-dvh max-h-dvh w-full max-w-lg' : 'rounded-xl w-[min(95vw,440px)]'}`}>
+    <div className="flex items-center justify-between mb-4"><h2 className="font-bold">{title}</h2><button aria-label="关闭对话框" onClick={onClose} className="rounded border px-3 py-1">关闭</button></div>{children}
+  </dialog>
+}
+function Checks({ entry }: { entry: AccessEntry }) {
+  return <div className="flex flex-wrap gap-2 text-xs"><span>菜单 <Badge state={entry.menu.state} /></span><span>页面 <Badge state={entry.page.state} /></span></div>
+}
+function Operations({ entry }: { entry: AccessEntry }) {
+  return <div className="flex flex-wrap gap-1.5">{entry.operations.length ? entry.operations.map((op, i) => <span key={`${op.actionId || op.label}:${i}`} title={op.reason} className={`rounded border px-2 py-1 text-xs ${tones[op.state]}`}>{op.label}：{STATE_LABELS[op.state]}</span>) : <span className="text-xs text-slate-500">{entry.page.state === 'unknown' ? '操作未核实' : '操作不适用'}</span>}</div>
+}
+function ModuleRow({ group, query, onDetail }: { group: ModuleGroup; query: string; onDetail: (entry: AccessEntry) => void }) {
+  const [expanded, setExpanded] = useState(false)
+  const searching = Boolean(query.trim())
+  const open = expanded || searching
+  const entry = group.primary
+  const abnormal = group.entries.filter(e => [e.status, ...e.operations.map(op => op.state)].some(s => ['unknown', 'conflict'].includes(s)))
+  return <article className="border-t border-slate-200 dark:border-slate-700" aria-label={group.label}>
+    <div className="grid gap-3 p-3 lg:grid-cols-[minmax(140px,1fr)_210px_minmax(240px,2fr)_minmax(160px,1fr)] lg:items-start">
+      <div><button className="text-left font-semibold text-sm" aria-expanded={open} onClick={() => setExpanded(!expanded)}>{open ? '▾' : '▸'} {group.label}</button><p className="text-[11px] text-slate-500 mt-1">{group.fixed ? '固定入口' : '功能模块'} · {group.entries.length} 个入口{searching ? ' · 搜索已展开' : ''}</p></div>
+      <Checks entry={entry} /><Operations entry={entry} />
+      <div className="text-xs leading-5"><p>{entry.scope}</p>{entry.page.state !== 'allowed' && <p className="text-slate-500">{entry.page.reason}</p>}{abnormal.length > 0 && <p className="text-amber-700">{abnormal.length} 个入口存在冲突或未核实</p>}<button className="text-blue-600 underline" onClick={() => onDetail(entry)}>完整原因</button></div>
+    </div>
+    {open && <div className="mx-3 mb-3 rounded-lg bg-slate-50 dark:bg-slate-800 p-3 space-y-3">{group.entries.map(child => <div key={child.id} className="border-l-2 border-slate-200 pl-3 space-y-1">
+      <button className="text-sm text-blue-700 text-left" onClick={() => onDetail(child)}>{child.system === 'kanban' ? 'Kanban' : 'Content'} / {child.label}</button><Checks entry={child} /><Operations entry={child} />
+      <p className="text-xs text-slate-500">{child.page.reason}</p>{child.href && <p className="text-xs break-all text-slate-500">{child.href}</p>}{child.aliases?.map(alias => <p key={alias} className="text-xs break-all text-slate-500">旧地址：{alias}（同一入口规则）</p>)}
+    </div>)}</div>}
+  </article>
+}
 export default function AccessOverviewPanel({ users, initialUserId, initialRole }: Props) {
-  const [mode, setMode] = useState<'roles' | 'user'>(initialUserId ? 'user' : 'roles')
+  const [mode, setMode] = useState<'roles' | 'user' | 'compare'>(initialUserId ? 'user' : 'roles')
   const [userId, setUserId] = useState(initialUserId || '')
   const [userSearch, setUserSearch] = useState('')
-  const [roleFilter, setRoleFilter] = useState<AppRole | ''>(initialRole || '')
+  const [role, setRole] = useState<AppRole>(initialRole || 'AMC_PRINCIPAL')
   const [brandId, setBrandId] = useState('')
   const [query, setQuery] = useState('')
+  const [system, setSystem] = useState('all')
   const [filter, setFilter] = useState('all')
   const [revision, setRevision] = useState(0)
+  const [editing, setEditing] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [pending, setPending] = useState<{ run: () => void } | null>(null)
+  const [leaving, setLeaving] = useState(false)
+  const [leaveError, setLeaveError] = useState('')
+  const [notice, setNotice] = useState('')
+  const root = useRef<HTMLDivElement>(null)
+  const editor = useRef<PermissionEditorHandle>(null)
+  const replay = useRef(false)
   const [resource, setResource] = useState<{ key: string; data?: Overview; error?: string } | null>(null)
-  const [selection, setSelection] = useState<{ id: string; role?: AppRole; key: string } | null>(null)
-  const requestKey = JSON.stringify([mode, userId, brandId, revision])
+  const [selection, setSelection] = useState<{ entry: AccessEntry; label: string } | null>(null)
+  const requestKey = JSON.stringify([mode === 'user' ? 'user' : 'roles', userId, brandId, revision])
   const current = resource?.key === requestKey ? resource : null
-  const data = current?.data
-  const error = current?.error
+  const data = current?.data, error = current?.error
   const loading = !(mode === 'user' && !userId) && !current
-
+  function navigate(run: () => void) {
+    if (saving) { setNotice('正在保存权限，请稍候。'); return }
+    if (dirty) { setLeaveError(''); setPending({ run }); return }
+    setEditing(false); setSelection(null); run()
+  }
+  useEffect(() => {
+    if (!dirty) return
+    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    const outside = (event: MouseEvent) => {
+      if (replay.current || root.current?.contains(event.target as Node)) return
+      const target = (event.target as Element).closest?.('a,button,[role="tab"]') as HTMLElement | null
+      if (!target) return
+      event.preventDefault(); event.stopPropagation()
+      if (saving) { setNotice('正在保存权限，请稍候。'); return }
+      setLeaveError(''); setPending({ run: () => { replay.current = true; target.click(); replay.current = false } })
+    }
+    window.addEventListener('beforeunload', unload); document.addEventListener('click', outside, true)
+    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', outside, true) }
+  }, [dirty, saving])
   useEffect(() => {
     const controller = new AbortController()
     if (mode === 'user' && !userId) return () => controller.abort()
-    const endpoint = mode === 'roles' ? '/api/admin/access-overview'
-      : `/api/admin/users/${encodeURIComponent(userId)}/access-overview${brandId ? `?brandId=${encodeURIComponent(brandId)}` : ''}`
+    const endpoint = mode !== 'user' ? '/api/admin/access-overview' : `/api/admin/users/${encodeURIComponent(userId)}/access-overview${brandId ? `?brandId=${encodeURIComponent(brandId)}` : ''}`
     fetch(endpoint, { cache: 'no-store', signal: controller.signal }).then(async response => {
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || '权限信息读取失败')
+      const payload = await response.json(); if (!response.ok) throw new Error(payload.error || '权限信息读取失败')
       if (!controller.signal.aborted) setResource({ key: requestKey, data: payload })
     }).catch(err => { if (!controller.signal.aborted) setResource({ key: requestKey, error: err.message || '网络异常，请重试' }) })
     return () => controller.abort()
   }, [mode, userId, brandId, requestKey])
-
-  const columns = roleFilter ? [roleFilter] : ROLES
-  const rows = data?.entries || data?.matrix?.ADMIN || []
-  const visibleRows = rows.filter(row => {
-    const matchesText = `${row.label} ${row.group} ${row.system}`.toLowerCase().includes(query.toLowerCase())
-    const values = mode === 'user' ? [row] : columns.flatMap(role => data?.matrix?.[role].find(entry => entry.id === row.id) || [])
-    return matchesText && (filter === 'all' || values.some(entry => filter === 'conflict' ? entry.status === 'conflict' : ['allowed', 'conditional'].includes(entry.status)))
-  })
-  const selectedEntry = selection?.key === requestKey ? (mode === 'user' ? data?.entries : data?.matrix?.[selection.role || 'ADMIN'])?.find(row => row.id === selection.id) : null
-  const matchedUsers = useMemo(() => users.filter(user => `${user.email} ${user.nickname || ''}`.toLowerCase().includes(userSearch.toLowerCase()) || user.id === userId), [users, userSearch, userId])
-
-  return <div className="space-y-5 text-slate-800 dark:text-slate-200">
-    <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-      <h2 className="flex items-center gap-2 font-bold"><ShieldCheck size={18} />权限总览</h2>
-      <p className="mt-2 text-xs leading-6 text-slate-600">只读查询当前规则。分别查看菜单、入口、操作与品牌范围；点击状态查看原因。不会切换账号或修改授权。</p>
-    </div>
-    <div className="flex flex-wrap items-center gap-2">
-      {([['roles', '角色权限矩阵'], ['user', '账号权限诊断']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={mode === value} onClick={() => setMode(value)} className={`rounded-lg border px-4 py-2 text-sm ${mode === value ? 'bg-blue-600 text-white border-blue-600' : 'border-slate-200'}`}>{label}</button>)}
-      <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="ml-auto flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm disabled:opacity-50"><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />刷新权限</button>
-    </div>
-    <div className="flex flex-wrap gap-3">
-      {mode === 'roles' ? <label className="text-xs">角色<select aria-label="筛选角色" className="ml-2 rounded-lg border p-2 dark:bg-slate-900" value={roleFilter} onChange={e => setRoleFilter(e.target.value as AppRole | '')}><option value="">全部五种角色</option>{ROLES.map(role => <option key={role} value={role}>{ROLE_LABELS[role]} ({role})</option>)}</select></label>
-        : <><label className="text-xs">搜索账号<input className="ml-2 rounded-lg border p-2 dark:bg-slate-900" value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="姓名或邮箱" /></label>
-          <select aria-label="选择账号" className="max-w-full rounded-lg border p-2 text-sm dark:bg-slate-900" value={userId} onChange={e => { setUserId(e.target.value); setBrandId('') }}><option value="">请选择账号</option>{matchedUsers.map(user => <option key={user.id} value={user.id}>{user.nickname || user.email} · {user.email}</option>)}</select></>}
-    </div>
-    {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}<button className="ml-4 underline" onClick={() => setRevision(value => value + 1)}>重试</button></div>}
-    {loading && <p role="status" className="p-6 text-center text-sm text-slate-500">正在读取最新角色与授权关系…</p>}
-    {!loading && mode === 'user' && !userId && <p className="p-6 text-sm text-slate-500">选择账号后，查看实际角色、授权品牌及受限原因。</p>}
-    {data && <>
-      <p className="text-xs leading-6 text-slate-500">{data.evidence}<br />Kanban 规则 {data.ruleVersion} · Content {data.content.ruleVersion || '未核实'} · 查询时间 {new Date(data.generatedAt).toLocaleString()}</p>
-      {data.content.state === 'unavailable' && <p role="status" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{data.content.reason}。Kanban 结果仍可查看。</p>}
-      {data.user && <section aria-label="账号授权信息" className="space-y-3 rounded-xl border border-slate-200 p-4 text-sm">
-        <p className="font-bold">{data.user.nickname || data.user.email} · {data.user.email} · {data.user.status}</p>
-        <p>菜单角色：{data.user.menuRoles.map(role => ROLE_LABELS[role]).join('、') || '无角色'}<br />服务端角色：{data.user.roles.map(role => ROLE_LABELS[role]).join('、') || '无角色'}</p>
-        {data.user.roleSources.map(source => <p key={source} className="text-xs text-slate-500">{source}</p>)}
-        {[...data.user.roles].sort().join() !== [...data.user.menuRoles].sort().join() && <p className="text-amber-700">菜单角色与服务端角色不同，已按各自实际规则计算。</p>}
-        <label>品牌范围<select aria-label="选择品牌" className="ml-2 max-w-full rounded-lg border p-2 dark:bg-slate-900" value={brandId} onChange={e => setBrandId(e.target.value)}><option value="">未选择品牌（查看条件）</option>{data.brands?.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
-        {!data.brands?.length && <p className="text-xs text-slate-500">当前没有有效可访问品牌。</p>}
-        {brandId && <p className="text-xs text-slate-500">授权来源：{data.brands?.find(brand => brand.id === brandId)?.sources.join('；') || '品牌授权已失效，请重新选择'}</p>}
-        <details className="text-xs"><summary className="cursor-pointer">全部授权品牌及来源（{data.brands?.length || 0}）</summary><ul className="mt-2 space-y-2">{data.brands?.map(brand => <li key={brand.id}>{brand.name}：{brand.sources.join('；')}</li>)}</ul></details>
-      </section>}
-      <div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3"><Search size={14} /><input aria-label="搜索菜单" className="bg-transparent py-2 text-sm outline-none" placeholder="搜索菜单、分组或系统" value={query} onChange={e => setQuery(e.target.value)} /></label>
-        <select aria-label="筛选状态" className="rounded-lg border p-2 text-sm dark:bg-slate-900" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">全部状态</option><option value="available">仅看可用（含条件）</option><option value="conflict">仅看冲突</option></select>
-        <span className="text-xs text-slate-500">{visibleRows.length} 个菜单 / 入口</span>
-      </div>
-      <div className={`grid gap-4 ${selectedEntry ? 'xl:grid-cols-[minmax(0,1fr)_340px]' : ''}`}>
-        <div className="min-w-0 overflow-x-auto rounded-xl border border-slate-200">
-          <table className="w-full text-left text-sm"><caption className="sr-only">{mode === 'roles' ? '角色菜单权限矩阵' : '账号菜单权限'}</caption><thead className="bg-slate-50 dark:bg-slate-800"><tr><th className="p-3">系统 / 菜单</th>{mode === 'roles' ? columns.map(role => <th className="p-3 whitespace-nowrap" key={role}>{ROLE_LABELS[role]}</th>) : <><th className="p-3">结果</th><th className="p-3">原因</th></>}</tr></thead>
-            <tbody>{visibleRows.map(row => <tr key={row.id} className="border-t border-slate-100 dark:border-slate-800"><td className="p-3 min-w-44"><span className="block text-[10px] text-slate-500">{row.system === 'kanban' ? 'Kanban' : 'Content'} / {row.group}</span><span className="font-medium">{row.label}</span></td>
-              {mode === 'roles' ? columns.map(role => { const entry = data.matrix?.[role].find(item => item.id === row.id); return <td className="p-3" key={role}>{entry && <button aria-label={`${ROLE_LABELS[role]}：${row.label}权限详情`} className="rounded-md focus:ring-2 focus:ring-blue-500" onClick={() => setSelection({ id: row.id, role, key: requestKey })}><Badge state={entry.status} /></button>}</td> })
-                : <><td className="p-3"><button aria-label={`${row.label}权限详情`} onClick={() => setSelection({ id: row.id, key: requestKey })}><Badge state={row.status} /></button></td><td className="p-3 text-xs leading-6 text-slate-500">{row.page.reason}</td></>}
-            </tr>)}</tbody></table>
-          {!visibleRows.length && <p className="p-8 text-center text-sm text-slate-500">没有符合筛选条件的菜单。</p>}
-        </div>
-        {selectedEntry && <div><div className="mb-2 flex justify-between text-xs text-slate-500"><span>{selection?.role ? ROLE_LABELS[selection.role] : '当前账号'}</span><button onClick={() => setSelection(null)}>关闭详情</button></div><EntryDetail entry={selectedEntry} /></div>}
-      </div>
+  const roleGroups = useMemo(() => Object.fromEntries(ROLES.map(value => [value, groupAccessEntries(data?.matrix?.[value] || [])])) as Record<AppRole, ModuleGroup[]>, [data])
+  const groups = mode === 'user' ? groupAccessEntries(data?.entries || []) : roleGroups[mode === 'compare' ? 'ADMIN' : role]
+  const visible = groups.filter(group => mode !== 'compare' ? matchesAccessGroup(group, system, query, filter) : ROLES.some(value => {
+    const other = roleGroups[value].find(g => g.id === group.id)
+    return other && matchesAccessGroup(other, system, query, filter)
+  }))
+  const matchedUsers = users.filter(user => `${user.email} ${user.nickname || ''}`.toLowerCase().includes(userSearch.toLowerCase()) || user.id === userId)
+  function saved() { setDirty(false); setEditing(false); setSelection(null); setRevision(v => v + 1); setNotice('权限已保存，已重新查询当前规则。') }
+  function detail(entry: AccessEntry, label = mode === 'user' ? '当前账号' : ROLE_LABELS[role]) { setSelection({ entry, label }) }
+  function renderGroups(items: ModuleGroup[]) {
+    if (mode === 'compare') return <div className="max-h-[65vh] overflow-auto"><table className="w-full text-left text-xs"><caption className="sr-only">五角色权限对比</caption><thead className="sticky top-0 z-20 bg-slate-100 dark:bg-slate-800"><tr><th className="sticky left-0 z-30 bg-slate-100 dark:bg-slate-800 p-3 min-w-40">功能模块</th>{ROLES.map(value => <th key={value} className="p-3 whitespace-nowrap">{ROLE_LABELS[value]}</th>)}</tr></thead><tbody>{items.map(group => <tr key={group.id} className="border-t"><th className="sticky left-0 z-10 bg-white dark:bg-slate-900 p-3">{group.label}</th>{ROLES.map(value => { const other = roleGroups[value].find(g => g.id === group.id); return <td key={value} className="p-3 min-w-32">{other ? <button className="text-left space-y-1" onClick={() => detail(other.primary, ROLE_LABELS[value])}><Checks entry={other.primary} /><span className="block">{other.primary.operations.filter(op => ['allowed', 'conditional'].includes(op.state)).length}/{other.primary.operations.length} 项操作允许或有条件</span>{other.entries.some(e => ['unknown', 'conflict'].includes(e.status)) && <span className="text-amber-700">存在异常入口</span>}</button> : '未核实'}</td> })}</tr>)}</tbody></table></div>
+    return <><div className="hidden lg:grid lg:grid-cols-[minmax(140px,1fr)_210px_minmax(240px,2fr)_minmax(160px,1fr)] gap-3 px-3 py-2 text-xs text-slate-500 bg-slate-50 dark:bg-slate-800"><span>功能模块 / 子页面</span><span>菜单 / 页面</span><span>操作权限</span><span>数据范围与限制</span></div>{items.map(group => <ModuleRow key={group.id} group={group} query={query} onDetail={entry => detail(entry)} />)}</>
+  }
+  return <div ref={root} className="space-y-3 text-slate-800 dark:text-slate-200">
+    <div className="flex flex-wrap items-center gap-2">{([['roles', '按角色看功能'], ['user', '账号权限诊断'], ['compare', '角色对比']] as const).map(([value, label]) => <button key={value} aria-pressed={mode === value} onClick={() => navigate(() => setMode(value))} className={`rounded-lg px-3 py-2 text-sm ${mode === value ? 'bg-blue-600 text-white' : 'border border-slate-200'}`}>{label}</button>)}<button disabled={loading} onClick={() => navigate(() => { setRevision(v => v + 1); setNotice('') })} className="ml-auto flex gap-1 items-center text-xs border rounded-lg px-3 py-2"><RefreshCw size={14} />刷新权限</button></div>
+    {mode === 'roles' && <div className="flex flex-wrap items-center gap-2">{ROLES.map(value => <button key={value} aria-pressed={role === value} onClick={() => { if (value !== role) navigate(() => { setRole(value); setNotice('') }) }} className={`rounded-full px-4 py-1.5 text-sm border ${role === value ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-slate-200'}`}>{ROLE_LABELS[value]}</button>)}<span className="ml-auto">{role === 'ADMIN' ? <span className="text-xs text-slate-500">系统固定权限</span> : <button disabled={editing || loading || !data} onClick={() => { setEditing(true); setSelection(null); setNotice('') }} className="rounded-lg bg-blue-600 px-3 py-2 text-xs text-white disabled:opacity-50">编辑此角色权限</button>}</span></div>}
+    {mode === 'user' && <div className="flex flex-wrap gap-2"><input aria-label="搜索账号" className="border rounded-lg p-2 text-sm bg-transparent" placeholder="姓名或邮箱" value={userSearch} onChange={e => setUserSearch(e.target.value)} /><select aria-label="选择账号" className="border rounded-lg p-2 text-sm max-w-full dark:bg-slate-900" value={userId} onChange={e => { setUserId(e.target.value); setBrandId(''); setSelection(null) }}><option value="">请选择账号</option>{matchedUsers.map(user => <option key={user.id} value={user.id}>{user.nickname || user.email} · {user.email}</option>)}</select></div>}
+    <div className="flex flex-wrap items-center gap-2"><select aria-label="筛选系统" value={system} onChange={e => setSystem(e.target.value)} className="border rounded-lg p-2 text-sm dark:bg-slate-900"><option value="all">全部系统</option><option value="kanban">Kanban</option><option value="content">Content</option></select><label className="flex items-center gap-2 border rounded-lg px-2"><Search size={14} /><input aria-label="搜索菜单" placeholder="搜索模块、子页面或地址" value={query} onChange={e => setQuery(e.target.value)} className="bg-transparent py-2 text-sm w-52 max-w-full outline-none" /></label><select aria-label="筛选状态" disabled={editing} value={filter} onChange={e => setFilter(e.target.value)} className="border rounded-lg p-2 text-sm dark:bg-slate-900"><option value="all">全部状态</option><option value="available">可访问（含条件）</option><option value="denied">禁止</option><option value="conditional">有条件</option><option value="anomaly">异常（冲突 / 未核实）</option></select>{!editing && data && <span className="text-xs text-slate-500">{system === 'all' ? '全部系统' : system === 'kanban' ? 'Kanban' : 'Content'}{query ? ` · 搜索“${query}”` : ''} · {visible.filter(g => !g.fixed).length} 个功能模块 / {visible.filter(g => g.fixed && !g.comingSoon).length} 个固定入口 / {visible.filter(g => g.comingSoon).length} 项待开放</span>}</div>
+    <p className="text-xs text-slate-500">{mode === 'user' ? '结合当前账号与所选品牌计算；这里只查看，不修改个人授权。' : '角色规则；有条件的功能仍需账号具备品牌授权。'}</p>
+    {notice && <p role="status" className="text-sm text-green-700">{notice}</p>}
+    {error && <div role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}<button className="ml-3 underline" onClick={() => setRevision(v => v + 1)}>重试</button></div>}
+    {loading && <p role="status" className="py-6 text-sm text-slate-500">正在读取最新角色与授权关系…</p>}
+    {mode === 'user' && !userId && <p className="p-6 text-sm">选择账号后查看实际权限及限制原因。</p>}
+    {data?.content.state === 'unavailable' && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Content 未核实：{data.content.reason}。Kanban 结果仍可查看。</p>}
+    {data?.user && <section aria-label="账号授权信息" className="border rounded-lg p-3 text-sm space-y-2"><p className="font-semibold">{data.user.nickname || data.user.email} · {data.user.email} · {data.user.status}</p><p>角色：{data.user.roles.map(r => ROLE_LABELS[r]).join('、') || '无角色'}</p>{[...data.user.roles].sort().join() !== [...data.user.menuRoles].sort().join() && <p className="text-amber-700">菜单角色：{data.user.menuRoles.map(r => ROLE_LABELS[r]).join('、') || '无角色'}；与服务端角色不同，按各自规则计算。</p>}<label>品牌 <select aria-label="选择品牌" className="border rounded p-1 max-w-full dark:bg-slate-900" value={brandId} onChange={e => { setBrandId(e.target.value); setSelection(null) }}><option value="">未选择品牌（查看条件）</option>{data.brands?.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}{brandId && !data.brands?.some(b => b.id === brandId) && <option value={brandId}>授权已失效，请重新选择</option>}</select></label>{!data.brands?.length && <p className="text-xs">当前没有有效可访问品牌。</p>}{brandId && <p className="text-xs">授权来源：{data.brands?.find(b => b.id === brandId)?.sources.join('；') || '授权已失效'}</p>}<details className="text-xs"><summary>角色与全部品牌授权来源</summary>{data.user.roleSources.map(s => <p key={s}>{s}</p>)}{data.brands?.map(b => <p key={b.id}>{b.name}：{b.sources.join('；')}</p>)}</details></section>}
+    {editing ? <RolePermissionEditor key={role} role={role} system={system} search={query} onDirtyChange={setDirty} onSavingChange={setSaving} onSaved={saved} onCancel={() => { setDirty(false); setEditing(false) }} editorRef={editor} /> : data && <>
+      {(['kanban', 'content'] as const).map(s => { const items = visible.filter(g => g.system === s && !g.comingSoon); return items.length > 0 && <details key={s} open className="rounded-xl border border-slate-200 overflow-hidden dark:border-slate-700"><summary className="cursor-pointer px-3 py-2 bg-slate-100 dark:bg-slate-800 text-sm font-bold">{s === 'kanban' ? 'Kanban' : 'Content'} · {items.length} 项</summary>{renderGroups(items.filter(g => !g.fixed))}{items.some(g => g.fixed) && <details open={Boolean(query) || undefined}><summary className="px-3 py-2 text-xs cursor-pointer">固定入口（{items.filter(g => g.fixed).length}）</summary>{renderGroups(items.filter(g => g.fixed))}</details>}</details> })}
+      {visible.some(g => g.comingSoon) && <details open={Boolean(query) || undefined} className="border rounded-xl"><summary className="p-3 text-sm cursor-pointer">待开放（{visible.filter(g => g.comingSoon).length}）</summary>{renderGroups(visible.filter(g => g.comingSoon))}</details>}
+      {!visible.length && <p className="p-8 text-center text-sm text-slate-500">没有符合筛选条件的模块或入口。</p>}
     </>}
+    {data && <details className="text-xs text-slate-500"><summary className="cursor-pointer">查询详情 · {new Date(data.generatedAt).toLocaleString()}</summary><p className="mt-2">{data.evidence}</p><p>Kanban {data.ruleVersion} · Content {data.content.ruleVersion || '未核实'}</p><p>角色策略版本：{Object.entries(data.policyVersions || {}).map(([key, version]) => `${ROLE_LABELS[key as AppRole] || key} ${version}`).join(' · ') || '未返回'}</p></details>}
+    {selection && <Modal title={`${selection.label} · 权限详情`} drawer onClose={() => setSelection(null)}><EntryDetail entry={selection.entry} /></Modal>}
+    {pending && <Modal title="存在未保存的权限修改" onClose={() => { if (!leaving) setPending(null) }}><p className="text-sm mb-4">保存后继续，或放弃本次修改。</p>{leaveError && <p role="alert" className="text-red-600 text-sm mb-3">{leaveError}</p>}<div className="flex flex-wrap gap-2"><button disabled={leaving} className="rounded bg-blue-600 text-white px-3 py-2" onClick={async () => { setLeaving(true); const ok = await editor.current?.save(); setLeaving(false); if (ok) { const run = pending.run; setPending(null); setDirty(false); setEditing(false); run() } else setLeaveError('保存未完成，请返回编辑区处理错误。修改仍已保留。') }}>保存并继续</button><button disabled={leaving} className="border rounded px-3 py-2" onClick={() => { const run = pending.run; setPending(null); setDirty(false); setEditing(false); run() }}>放弃修改</button><button disabled={leaving} className="border rounded px-3 py-2" onClick={() => setPending(null)}>继续编辑</button></div></Modal>}
   </div>
 }

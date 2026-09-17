@@ -4,7 +4,7 @@ Merchant voiceover current implementation contract (pending deployment): [mercha
 
 ## 用户角色权限配置（实施中，待部署验收）
 
-在 Kanban 用户组详情统一编辑 Kanban、Content 四个业务角色的模块与操作权限。多角色取并集，ADMIN 系统权限固定；平台共享库保持共享，品牌范围独立限制。数据库策略同时用于菜单、页面与接口，权限总览保留为诊断。Content 实时验证当前授权，服务异常不回退放行。详细规范见 [用户权限 PRD](./prd_user_organization_permissions.md#6-capability-模型)。
+在 Kanban 权限总览按角色查看 Kanban、Content 功能，并在当前页编辑四个业务角色的模块与操作权限；用户组详情保留编辑入口。总览默认主理人，直接展示菜单、页面、操作及品牌条件，账号诊断和角色对比为次级视图。本轮展示改造已完成本地实现与验证，未发布。多角色取并集，ADMIN 系统权限固定；平台共享库保持共享，品牌范围独立限制。数据库策略同时用于菜单、页面与接口。Content 实时验证当前授权，服务异常不回退放行。详细规范见 [用户权限 PRD](./prd_user_organization_permissions.md#6-capability-模型)。
 
 ## 店内抽奖“一店一码”（当前规则）
 

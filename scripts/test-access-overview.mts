@@ -7,6 +7,27 @@ import { buildOverview, fetchContentOverview, parseContentSnapshot } from '../sr
 import { loadUserOverview, type UserReader } from '../src/lib/access-overview/users.ts'
 import { handleOverview } from '../src/lib/access-overview/handler.ts'
 import { principalFromUser } from '../src/lib/auth-v2/types.ts'
+import { groupAccessEntries, matchesAccessGroup } from '../src/lib/access-overview/presentation.ts'
+import { POLICY_ROLES, defaultGrants } from '../src/lib/role-permissions/contract.ts'
+
+const policyMap = Object.fromEntries(POLICY_ROLES.map(role => [role, defaultGrants(role)]))
+const presentation = buildOverview({ reason: 'offline' }, undefined, policyMap)
+const groups = groupAccessEntries(presentation.matrix!.AMC_PRINCIPAL)
+const video = groups.find(group => group.id === 'module:content.video-making')!
+assert.equal(video.system, 'content')
+assert.equal(video.primary.id, 'content:video-making')
+assert.ok(video.entries.some(entry => entry.id === 'kanban:video-production'))
+assert.equal(groups.filter(group => group.id === video.id).length, 1, 'cross-service entrances count once')
+assert.ok(matchesAccessGroup(video, 'content', '/admin/video-production', 'anomaly'))
+assert.equal(matchesAccessGroup(video, 'kanban', '', 'all'), false)
+assert.equal(matchesAccessGroup(video, 'content', '', 'available'), true, 'a conditional Kanban entrance is retained while Content is unverified')
+assert.ok(groups.some(group => group.comingSoon))
+assert.ok(groups.some(group => group.fixed && !group.comingSoon))
+assert.equal(groups.find(group => group.id === 'module:subscription')!.primary.menu.state, 'na', 'a function without a menu stays not applicable')
+assert.ok(video.primary.operations.every(op => op.actionId))
+const beforeGrouping = JSON.stringify(presentation.matrix!.AMC_PRINCIPAL)
+groupAccessEntries(presentation.matrix!.AMC_PRINCIPAL)
+assert.equal(JSON.stringify(presentation.matrix!.AMC_PRINCIPAL), beforeGrouping, 'presentation must not mutate authorization')
 
 for (let mask = 0; mask < 32; mask++) {
   const roles = ROLES.filter((_, index) => mask & (1 << index))

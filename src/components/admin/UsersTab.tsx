@@ -98,14 +98,14 @@ export default function UsersTab({
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-3 animate-in fade-in duration-200">
       {/* Module Title */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 ${subTab === 'access' ? 'p-3' : 'p-6'} shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4`}>
         <div>
           <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
             <Users size={18} className="text-blue-500" /> 用户与权限管理中心 (Identity & Access Control)
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          <p className={`text-xs text-slate-500 dark:text-slate-400 mt-1 ${subTab === 'access' ? 'hidden' : ''}`}>
             管理成员与五类角色，查看 Kanban、Content 菜单及操作权限，并执行主理人委托与品牌资产分配授权。
           </p>
         </div>
