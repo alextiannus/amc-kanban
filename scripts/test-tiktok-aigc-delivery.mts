@@ -7,7 +7,11 @@ let job: any
 let fail = true
 const requests: any[] = []
 const db: any = {
-  brand: { findUnique: async () => ({ id: 'brand', postfastApiKey: 'mock' }) },
+  brand: { findUnique: async ({ where, select }: any) => {
+    const row: any = { id: 'brand', postfastApiKey: 'mock' }
+    assert.equal(where.id, row.id)
+    return Object.fromEntries(Object.keys(select).filter(key => select[key]).map(key => [key, row[key]]))
+  } },
   socialAccount: { findFirst: async () => ({ id: 'account', unboundAt: null }) },
   contentDraft: { updateMany: async () => ({ count: 1 }), update: async ({ data }: any) => ({ id: 'draft', ...data }) },
   actionItem: { updateMany: async () => ({ count: 1 }) },
@@ -19,6 +23,11 @@ const db: any = {
   $transaction: async (task: any) => typeof task === 'function' ? task(db) : Promise.all(task),
 }
 const deps: Record<string, any> = {
+  './role-permissions/delegation': { requireActorPermission: async (_actorId: string, permission: string, brandId: string) => {
+    assert.equal(permission, 'content.publish')
+    assert.equal(brandId, 'brand')
+  } },
+  './role-permissions/store': { PolicyError: class extends Error {} },
   'node:crypto': { createHash, randomUUID },
   '@/lib/prisma': { prisma: db },
   '@/lib/socialAccountBinding': { lockAccountBinding: async () => {}, assertAccountBound: () => {} },
@@ -60,8 +69,10 @@ for (const enabled of [true, false, undefined]) {
     assert.equal(await loaded.exports.processClaimedJob(job, Date.now() + 120000), 'retried')
     assert.equal(job.payload.publish.tiktokIsAigc, enabled)
     fail = false
+    job.payload.publish.brandId = 'stale-brand' // The persisted job scope overrides an old payload.
     assert.equal(await loaded.exports.processClaimedJob(job, Date.now() + 120000), 'succeeded')
     for (const input of requests.slice(-2)) {
+      assert.equal(input.brandId, 'brand', 'initial and retried delivery must retain the job brand')
       assert.equal(input.tiktokIsAigc, enabled)
       assert.equal(input.firstComment, 'Preserved')
       assert.equal(input.mediaItems[0].storageKey, 'video/already-uploaded')

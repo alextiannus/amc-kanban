@@ -144,6 +144,7 @@ Kanban 登录后的品牌订阅门禁使用已授权品牌列表中的有效订�
 - TikTok 草稿支持手动「AI 生成的内容」开关，默认关闭，历史记录不回填。复用 `postfastControls.tiktokIsAigc`；仅开启时向 PostFast 发送 `controls.tiktokIsAigc: true`，即时、定时及后台重试保持一致。MM 预览和 Kanban 编辑、审核入口独立保存此设置，保存中或失败时禁止发布；发布中、已提交平台排期及已发布记录只读。关闭开关须保存 `false`，不得清除其他发布设置。不自动识别素材来源，不支持远端标签修改。上线须后端先于前端，真实标签显示仍需实际发帖验证。
 
 - PostFast 是已连接社媒账号的发布、账号状态、评论收件箱和平台指标来源；所有数据以 `brandId` 隔离，并沿用既有 Capability + Crew 授权。
+- 发布账号匹配排除 `ARCHIVED` 品牌；归档数据仅保留历史，不参与按 PostFast 配置查找当前品牌。指定品牌时不得回退到同配置的其他品牌；未指定品牌且仍有多个非归档品牌时继续拒绝歧义匹配。大视频后台建帖和重试必须使用任务自身的 `brandId`，兼容缺少品牌字段的旧任务快照。（本地修复，待部署。）
 - 账号同步保存 `connectionStatus`、`disabledReason`、`inboxCapable` 和品牌内唯一的 PostFast 账号 ID。连接失效只暂停对应渠道的发布，不删除既有草稿或排期；仅已持久化且属于当前品牌的 PostFast 账号 ID 可用于门店、粉丝历史和 TikTok 音乐查询。
 - Social Inbox 覆盖 Instagram、TikTok、Facebook 和 Threads 评论。会话必须通过其 PostFast `socialMediaId` 关联到持久化的品牌账号，禁止按平台猜测账号。系统只把未读或需处置会话转化为 `ActionItem`，并在已同步的会话不再未读或需处置时统一关闭对应待办；回复建议可由 AI 生成，但对外发送、Instagram 私信回复、隐藏、取消隐藏和删除均须人类确认。删除属于不可逆操作，界面必须二次确认。
 - 评论操作必须使用 PostFast 返回的 `canReply`、`canPrivateReply`、`maxReplyLength`、`maxPrivateReplyLengthBytes` 和窗口状态，禁止用 AMC 平台硬编码绕过能力限制。会话和评论 ID 必须先在当前品牌持久化，禁止透传任意提供方 ID；成功的人类回复和审核动作必须审计。回复重试必须携带稳定的幂等键，未完成保留在短租约后才可安全重试。

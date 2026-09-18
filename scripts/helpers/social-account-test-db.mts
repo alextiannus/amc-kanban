@@ -9,6 +9,7 @@ export function bindingTestDb() {
       if (key === 'drafts' || key === 'actionItems' || key === 'snapshots' || key === 'inboxConversations') return !(row[key]?.length)
       if (key === 'postfastDeliveryJobs') return row.jobs?.some((j: any) => matches(j, value.some)) || false
       if (value && typeof value === 'object' && 'in' in value) return value.in.includes(row[key])
+      if (value && typeof value === 'object' && 'not' in value) return row[key] !== value.not
       return row[key] === value || (value === null && row[key] == null)
     })
   }

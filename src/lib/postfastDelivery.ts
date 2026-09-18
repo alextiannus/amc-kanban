@@ -613,7 +613,7 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
   const result = await postfastPublish({
     ...payload.publish,
     apiKey: brand.postfastApiKey,
-    brandId: brand.id,
+    brandId: job.brandId,
     mediaItems: uploadedItems,
     mediaUrls: undefined,
     mediaStorageKeys: undefined,

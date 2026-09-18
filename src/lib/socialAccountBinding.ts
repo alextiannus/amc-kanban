@@ -100,7 +100,7 @@ export async function syncSocialAccountBindings(brandId: string, remotes: PostFa
 }
 
 export async function resolveLocalPublishAccount(input: { apiKey: string; platform: string; accountId?: string; brandId?: string }, remotes: PostFastAccount[]) {
-  const brands = await prisma.brand.findMany({ where: { postfastApiKey: input.apiKey, ...(input.brandId ? { id: input.brandId } : {}) }, select: { id: true } })
+  const brands = await prisma.brand.findMany({ where: { postfastApiKey: input.apiKey, status: { not: 'ARCHIVED' }, ...(input.brandId ? { id: input.brandId } : {}) }, select: { id: true } })
   const brand = uniqueAccount<{ id: string }>(brands)
   if (!brand) throw new SocialAccountBindingError('找不到当前品牌的有效账号配置。')
   const locals = await prisma.socialAccount.findMany({ where: { brandId: brand.id } })

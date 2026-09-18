@@ -33,7 +33,7 @@ function reset() {
   remoteFailure = false; posts = []; pages = 0; pageMode = 'normal'
   test.reset({
     accounts: [local('a', 'google_maps', 'xiang wanwan', { drafts: ['historical'], snapshots: ['metrics'] }), local('b', 'google', 'correct store'), local('c', 'tiktok', 'other')],
-    brands: [{ id: 'brand', postfastApiKey: 'test-key' }],
+    brands: [{ id: 'brand', postfastApiKey: 'test-key', status: 'ACTIVE' }],
     drafts: [{ id: 'history', brandId: 'brand', accountId: 'a', status: 'published' }], audit: [],
   })
 }
@@ -61,6 +61,19 @@ try {
   assert.equal(test.state().audit.length, 1)
   remoteFailure = false
   const pf = remotes.map(a => ({ id: a.id, platform: a.platform, platformId: accountPlatform(a.platform), handle: a.platformUsername }))
+  // Archived brands may retain the same provider key for historical records.
+  reset()
+  test.state().brands.push({ id: 'old-brand', postfastApiKey: 'test-key', status: 'ARCHIVED' })
+  const input = { apiKey: 'test-key', platform: 'google', accountId: 'a' }
+  assert.equal((await binding.resolveLocalPublishAccount(input, pf)).local.id, 'a')
+  assert.equal((await binding.resolveLocalPublishAccount({ ...input, brandId: 'brand' }, pf)).local.id, 'a')
+  await rejectsCode(() => binding.resolveLocalPublishAccount({ ...input, brandId: 'old-brand' }, pf), 'ACCOUNT_BINDING_CONFLICT')
+  await rejectsCode(() => binding.resolveLocalPublishAccount({ ...input, brandId: 'missing-brand' }, pf), 'ACCOUNT_BINDING_CONFLICT')
+  test.state().brands.push({ id: 'other-brand', postfastApiKey: 'test-key', status: 'ACTIVE' })
+  await rejectsCode(() => binding.resolveLocalPublishAccount(input, pf), 'ACCOUNT_IDENTITY_AMBIGUOUS')
+  assert.equal((await binding.resolveLocalPublishAccount({ ...input, brandId: 'brand' }, pf)).local.id, 'a')
+  reset()
+  await binding.unbindSocialAccount('brand', 'a', 'operator')
   const synced = await binding.syncSocialAccountBindings('brand', pf)
   assert.deepEqual(synced.map((a: any) => a.id).sort(), ['b', 'c'])
   assert(test.state().accounts.find((a: any) => a.id === 'a').unboundAt)
