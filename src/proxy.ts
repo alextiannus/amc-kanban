@@ -67,7 +67,7 @@ export default async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api')
 
   // Bind API work once; gateway/admin endpoints manage their own signed snapshots.
-  if (isApiRoute && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
+  if (isApiRoute && pathname !== '/api/content/access-identity' && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
     try {
       requestHeaders.set('x-amc-text-binding', signBinding(await currentBinding(request.headers.get('x-client-type') === 'mm' ? 'mm' : 'kanban')))
     } catch { return NextResponse.json({ error: 'Text policy unavailable' }, { status: 503 }) }

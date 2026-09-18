@@ -1,5 +1,6 @@
 /** HTTP checks supplement, never replace, resource ownership checks. */
 export function kanbanRoutePermission(path: string, method: string): string | null {
+  if (path === '/api/content/access-identity') return 'content.video-making.read'
   const read = ['GET', 'HEAD'].includes(method)
   if (path === '/api/subscription' || path.startsWith('/api/subscription/')) return `subscription.${read ? 'read' : 'manage'}`
   if (path === '/api/agents' || /^\/api\/agents\/[^/]+$/.test(path) && !['register', 'profile', 'keys'].includes(path.split('/').pop()!)) return `agent.${read ? 'read' : 'manage'}`
