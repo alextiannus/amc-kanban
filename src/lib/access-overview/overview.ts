@@ -1,4 +1,4 @@
-import { PERMISSION_PROTOCOL, type RoleDefinition } from '../role-permissions/contract.ts'
+import { PERMISSION_PROTOCOL, effectiveGrants, type RoleDefinition } from '../role-permissions/contract.ts'
 import { describePolicy } from '../role-permissions/describe.ts'
 import { describeKanban, finalizeEntries } from './catalog.ts'
 import { selectContentRole } from './entry-rules.ts'
@@ -63,7 +63,10 @@ export function buildOverview(remote: RemoteContent, context?: Context, policies
     content: remote.snapshot ? { state: 'available', ruleVersion: remote.snapshot.ruleVersion } : { state: 'unavailable', reason: remote.reason || 'Content 未核实' },
     roles: catalog?.map(role => role.id) || ROLES, roleCatalog: catalog, conflicts: [],
   }
-  const evaluate = (value: Context) => [...describeKanban(value), ...describeContent(value, remote)]
+  const evaluate = (value: Context) => {
+    const current = policies ? { ...value, grants: effectiveGrants(value.permissionRoleIds || value.roles, policies) } : value
+    return [...describeKanban(current), ...describeContent(current, remote)]
+  }
   if (context) result.entries = evaluate(context)
   else result.matrix = Object.fromEntries(result.roles.map(role => [role, evaluate({ roles: ROLES.filter(id => id === role), permissionRoleIds: [role], brandScope: 'unselected' })])) as Record<(typeof ROLES)[number], AccessEntry[]>
   const roleNames = Object.fromEntries((catalog || []).map(role => [role.id, role.name]))

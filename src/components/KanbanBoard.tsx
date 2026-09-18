@@ -16,7 +16,7 @@ import DraftManagementView from './dashboard/DraftManagementView'
 import DataAnalysisView from './dashboard/DataAnalysisView'
 import AgentLogsView from './dashboard/AgentLogsView'
 
-import { resolveRoles, canAccessView, type BoardView } from '@/lib/permissions'
+import { resolveRoles, canAccessView, getMenuGroups, type BoardView } from '@/lib/permissions'
 import { hasActiveBrandSubscription, needsBrandSubscriptionGate } from '@/lib/subscription/kanbanGate'
 
 interface Brand {
@@ -89,7 +89,14 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
   const [subscriptionCheckError, setSubscriptionCheckError] = useState(false)
   const userRoles = resolveRoles(user)
+  const menus = user ? getMenuGroups(userRoles, user.permissions || []) : []
+  const localViews = menus.flatMap(group => group.items.filter(item => !item.href && !item.comingSoon).map(item => item.view))
   const canAccessAnalytics = canAccessView(userRoles, 'socialInsight', user?.permissions || [])
+
+  useEffect(() => {
+    if (!user || !localViews.length || localViews.includes(currentView)) return
+    setCurrentView(localViews[0])
+  }, [user, currentView, localViews.join(',')])
 
   useEffect(() => {
     if (activeBrand?.id) {
@@ -235,7 +242,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       onShowSettings={() => setShowSettings(true)}
       onShowSystemLog={() => setShowSystemLog(true)}
     >
-      {!canAccessView(userRoles, currentView, user?.permissions || []) ? <div className="p-10 text-slate-500">当前角色未获授权，请选择其他菜单或联系管理员。</div> : currentView === 'calendar' ? (
+      {!localViews.length ? <div className="p-10 text-slate-500">{menus.length ? '请从左侧菜单选择已授权功能。' : '当前账号没有可访问功能，请联系管理员分配角色权限。'}</div> : !localViews.includes(currentView) || !canAccessView(userRoles, currentView, user?.permissions || []) ? <div className="p-10 text-slate-500">正在切换到可访问页面…</div> : currentView === 'calendar' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <DashboardCalendar
             key={activeBrand?.id ?? 'no-brand'}

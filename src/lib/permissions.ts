@@ -92,12 +92,18 @@ export type MenuGroupDef = {
  * Order: 主理人 → 内容中心 → 知识增长中心 → 品牌主 → BD → Admin
  */
 export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef[] {
-  if (grants && !roles.includes('ADMIN')) return [...getMenuGroups(['ADMIN']), {groupLabel: 'Content 更多功能', items: PERMISSION_MODULES.filter(m => m.system === 'content' && !['content.video-making','content.inspiration-library','content.content-lab'].includes(m.id) && grants.includes(m.id + '.read')).map(m => ({id:m.id, view:'managementOverview' as BoardView, label:m.label, icon:'FileText',href:'/admin/content/'+m.id.slice(8)}))}].map(group => ({ ...group, items: group.items.filter(item => {
-    if (item.id.startsWith('content.')) return grants.includes(item.id + '.read')
-    if (item.id === 'amc-growth') return roles.includes('AMC_PRINCIPAL')
-    if ('comingSoon' in item && item.comingSoon) return roles.includes('BD')
-    return Boolean(MENU_PERMISSIONS[item.id] && grants.includes(MENU_PERMISSIONS[item.id]))
-  }) })).filter(group => group.items.length > 0)
+  if (grants) {
+    const admin = roles.includes('ADMIN')
+    const groups = getMenuGroups(['ADMIN'])
+    groups.push({ groupLabel: 'Content 更多功能', items: PERMISSION_MODULES.filter(m => m.system === 'content' && !['content.video-making', 'content.inspiration-library', 'content.content-lab'].includes(m.id)).map(m => ({ id: m.id, view: 'managementOverview' as BoardView, label: m.label, icon: 'FileText', href: '/admin/content/' + m.id.slice(8) })) })
+    return groups.map(group => ({ ...group, items: group.items.filter(item => {
+      if (item.comingSoon || item.id === 'managementOverview') return false
+      if (item.id === 'user-management' || item.id === 'admin') return admin
+      if (item.id === 'amc-growth') return admin || roles.includes('AMC_PRINCIPAL')
+      const key = item.id.startsWith('content.') ? item.id + '.read' : MENU_PERMISSIONS[item.id]
+      return Boolean(key && (admin || grants.includes(key)))
+    }) })).filter(group => group.items.length > 0)
+  }
   const isAdmin     = roles.includes('ADMIN')
   const isPrincipal = roles.includes('AMC_PRINCIPAL')
   const isOwner     = roles.includes('BRAND_OWNER')
@@ -175,13 +181,15 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
     })
   }
 
+  // A role with work_log.read may use logs without being an administrator.
+  if (isAdmin || isPrincipal || isOwner) groups.push({ groupLabel: '工作区', items: [{ id: 'logs', view: 'logs', label: '工作日志', icon: 'Activity' }] })
+
   // ── 4. Admin 系统 ─────────────────────────────────────────────────
   if (isAdmin) {
     groups.push({
       groupLabel: 'Admin',
       items: [
         { id: 'user-management', view: 'dashboard', label: '用户管理', icon: 'Users', href: '/admin?tab=users' },
-        { id: 'logs',    view: 'logs',    label: '工作日志',   icon: 'Activity' },
         { id: 'admin',   view: 'dashboard', label: 'Admin 控制台', icon: 'Shield', href: '/admin' },
       ],
     })

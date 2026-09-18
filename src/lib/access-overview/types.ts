@@ -14,7 +14,7 @@ export type AccessEntry = {
   menu: Check; page: Check; operations: Operation[]; scope: string; sources: string[]; status: State; notes: string[]
 }
 export type BrandScope = 'unselected' | 'allowed' | 'denied'
-export type Context = { roles: AppRole[]; permissionRoleIds?: string[]; menuRoles?: AppRole[]; accountRoles?: AppRole[]; active?: boolean; brandScope?: BrandScope }
+export type Context = { roles: AppRole[]; permissionRoleIds?: string[]; grants?: string[]; menuRoles?: AppRole[]; accountRoles?: AppRole[]; active?: boolean; brandScope?: BrandScope }
 export type BrandOption = { id: string; name: string; sources: string[] }
 export type Overview = {
   contractVersion: number; ruleVersion: string; generatedAt: string

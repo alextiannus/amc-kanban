@@ -27,7 +27,7 @@ export function describeKanban(context: Context): AccessEntry[] {
   const { roles } = context
   const menuRoles = context.menuRoles || roles
   const accountRoles = context.accountRoles || menuRoles
-  const visible = new Set(getMenuGroups(menuRoles).flatMap(group => group.items.map(item => item.id)))
+  const visible = new Set(getMenuGroups(menuRoles, context.grants).flatMap(group => group.items.map(item => item.id)))
   const all = new Map<string, { item: MenuItemDef; group: string }>()
   for (const role of ROLES) for (const group of getMenuGroups([role])) for (const item of group.items) {
     if (!all.has(item.id)) all.set(item.id, { item, group: group.groupLabel || '主导航' })
@@ -39,6 +39,7 @@ export function describeKanban(context: Context): AccessEntry[] {
     if (item.comingSoon) page = check('comingSoon', '尚未实现')
     else if (item.id === 'managementOverview') page = check('comingSoon', '当前页面为开发中占位，尚无跨品牌汇总功能')
     else if (['user-management', 'admin'].includes(item.id)) page = check(menuRoles.includes('ADMIN') ? 'allowed' : 'denied', '后台页面读取 auth/me 角色，仅管理员可进入')
+    else if (item.id === 'logs' && context.grants) page = check(context.grants.includes('work_log.read') || menuRoles.includes('ADMIN') ? 'allowed' : 'denied', '看板视图需要 work_log.read；数据接口另行鉴权')
     else if (['video-production', 'viral-copy-scripts', 'amc-content-roles'].includes(item.id)) {
       const role = selectContentRole(roles, item.id === 'viral-copy-scripts')
       page = !role ? check('denied', 'Kanban 签名入口不允许此角色')
@@ -60,9 +61,9 @@ export function describeKanban(context: Context): AccessEntry[] {
     if (!operations.length && !item.href && !item.comingSoon && item.id !== 'managementOverview') operations.push({ label: '模块数据与操作', ...check('unknown', '菜单与视图已核对；此模块操作需按实际数据接口检查'), source: 'src/components/KanbanBoard.tsx' })
     return { id: `kanban:${item.id}`, system: 'kanban', label: item.label, group, href: item.href || '/board',
       menu, page, operations, scope: BRAND_IDS.has(item.id) || item.id === 'video-production' ? '已授权品牌' : '平台 / 角色范围',
-      status: (item.id === 'logs' && !visible.has(item.id) && canAccessView(menuRoles, 'logs')) || (item.id === 'dataAnalysis' && !visible.has(item.id) && canAccessView(menuRoles, 'socialInsight')) ? 'conflict' : entryStatus(menu, page), sources: ['src/lib/permissions.ts', item.href?.startsWith('/admin/') ? `src/app${item.href}/page.tsx` : 'src/components/KanbanBoard.tsx'],
+      status: item.id === 'dataAnalysis' && !visible.has(item.id) && canAccessView(menuRoles, 'socialInsight') ? 'conflict' : entryStatus(menu, page), sources: ['src/lib/permissions.ts', item.href?.startsWith('/admin/') ? `src/app${item.href}/page.tsx` : 'src/components/KanbanBoard.tsx'],
       aliases: item.id === 'viral-copy-scripts' ? ['/admin/inspiration-library'] : undefined,
-      notes: item.id === 'logs' ? ['工作日志菜单仅管理员可见，但 canAccessView 允许主理人和品牌主；页面组件没有统一视图拦截，实际数据由 API 鉴权。']
+      notes: item.id === 'logs' ? ['工作日志在工作区显示；需要 work_log.read，数据接口仍独立鉴权。']
         : item.id === 'dataAnalysis' ? ['菜单仅管理员和主理人可见，但实际页面复用了 socialInsight 检查，品牌主也通过该页面检查；此处按实际代码展示。']
           : !item.href && !item.comingSoon ? ['看板主要通过内部视图切换，不是独立 URL。可挂载页面不代表数据接口放行。'] : [],
     }
