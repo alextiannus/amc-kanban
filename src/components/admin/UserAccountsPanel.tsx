@@ -18,8 +18,11 @@ import {
   Bot,
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
+import type { RoleDefinition } from '@/lib/role-permissions/contract'
 
 interface UserAccountsPanelProps {
+  roleCatalog: RoleDefinition[]
+  roleCatalogError: boolean
   users: UserRecord[]
   loading: boolean
   creating: boolean
@@ -44,6 +47,8 @@ type UserDraft = {
 }
 
 export default function UserAccountsPanel({
+  roleCatalog,
+  roleCatalogError,
   users,
   loading,
   creating,
@@ -113,11 +118,11 @@ export default function UserAccountsPanel({
       nickname: user.nickname || '',
       email: user.email || '',
       role: user.role || 'USER',
-      businessRoles: (user.businessRoles || []).map((r) => r.role),
+      businessRoles: (user.businessRoles || []).map((r) => r.role).filter(id => id !== 'ADMIN'),
     })
   }, [editingUserId, users])
 
-  const toggleDraftBusinessRole = (role: 'BRAND_OWNER' | 'AMC_PRINCIPAL' | 'BD' | 'RESEARCHER') => {
+  const toggleDraftBusinessRole = (role: string) => {
     setDraft((prev) => ({
       ...prev,
       businessRoles: prev.businessRoles.includes(role)
@@ -128,6 +133,7 @@ export default function UserAccountsPanel({
 
   const handleSaveDraft = async () => {
     if (!editingUserId || !draft.email.trim()) return
+    if (roleCatalogError || !roleCatalog.length) { alert('角色目录不可用，请刷新后重试'); return }
     setSavingId(editingUserId)
     try {
       const res = await fetch(`/api/admin/users/${editingUserId}`, {
@@ -354,38 +360,11 @@ export default function UserAccountsPanel({
                       <td>
                         {isEditing ? (
                           <div className="flex flex-wrap gap-2">
-                            <label className="admin-check">
-                              <input
-                                type="checkbox"
-                                checked={draft.businessRoles.includes('BRAND_OWNER')}
-                                onChange={() => toggleDraftBusinessRole('BRAND_OWNER')}
-                              />
-                              <span>品牌主</span>
-                            </label>
-                            <label className="admin-check">
-                              <input
-                                type="checkbox"
-                                checked={draft.businessRoles.includes('AMC_PRINCIPAL')}
-                                onChange={() => toggleDraftBusinessRole('AMC_PRINCIPAL')}
-                              />
-                              <span>主理人</span>
-                            </label>
-                            <label className="admin-check">
-                              <input
-                                type="checkbox"
-                                checked={draft.businessRoles.includes('BD')}
-                                onChange={() => toggleDraftBusinessRole('BD')}
-                              />
-                              <span>BD</span>
-                            </label>
-                            <label className="admin-check">
-                              <input
-                                type="checkbox"
-                                checked={draft.businessRoles.includes('RESEARCHER')}
-                                onChange={() => toggleDraftBusinessRole('RESEARCHER')}
-                              />
-                              <span>Researcher</span>
-                            </label>
+                            {roleCatalog.filter(item => item.id !== 'ADMIN').map(item => <label key={item.id} className="admin-check">
+                              <input type="checkbox" checked={draft.businessRoles.includes(item.id)} disabled={!item.enabled && !draft.businessRoles.includes(item.id)} onChange={() => toggleDraftBusinessRole(item.id)} />
+                              <span>{item.name}{!item.enabled && '（已停用）'}</span>
+                            </label>)}
+                            {roleCatalogError && <span className="text-red-600 text-xs">角色目录加载失败</span>}
                           </div>
                         ) : (
                           <div className="space-y-1">

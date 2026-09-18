@@ -9,6 +9,7 @@ import UserGroupsPanel from './UserGroupsPanel'
 import EditUserModal from './EditUserModal'
 import AccessOverviewPanel from './AccessOverviewPanel'
 import type { AppRole } from '@/lib/permissions'
+import type { RoleDefinition } from '@/lib/role-permissions/contract'
 
 export interface UserRecord {
   id: string
@@ -89,6 +90,22 @@ export default function UsersTab({
   const [subTab, setSubTab] = useState<SubTab>('humans')
   const [accessTarget, setAccessTarget] = useState<{ userId?: string; role?: string }>({})
   const [editingHumanUser, setEditingHumanUser] = useState<UserRecord | null>(null)
+  const [roleCatalog, setRoleCatalog] = useState<RoleDefinition[]>([])
+  const [roleCatalogError, setRoleCatalogError] = useState(false)
+
+  React.useEffect(() => {
+    if (subTab !== 'humans') return
+    let active = true
+    setRoleCatalogError(false)
+    fetch('/api/admin/roles', { cache: 'no-store' })
+      .then(async response => {
+        if (!response.ok) throw new Error('角色目录不可用')
+        return response.json()
+      })
+      .then(data => { if (active) setRoleCatalog(data.roles) })
+      .catch(() => { if (active) setRoleCatalogError(true) })
+    return () => { active = false }
+  }, [subTab])
 
   const humans = users.filter(u => u.type === 'HUMAN')
 
@@ -150,6 +167,8 @@ export default function UsersTab({
       {/* Render selected sub-panel */}
       {subTab === 'humans' && (
         <UserAccountsPanel 
+          roleCatalog={roleCatalog}
+          roleCatalogError={roleCatalogError}
           users={users}
           loading={loading}
           creating={creating}
@@ -182,6 +201,8 @@ export default function UsersTab({
       {editingHumanUser && (
         <EditUserModal 
           user={editingHumanUser}
+          roleCatalog={roleCatalog}
+          roleCatalogError={roleCatalogError}
           onClose={() => setEditingHumanUser(null)}
           onSaved={handleEditHumanUserSave}
         />

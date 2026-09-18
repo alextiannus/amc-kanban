@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { X, Save, AlertCircle, CheckCircle2 } from 'lucide-react'
+import type { RoleDefinition } from '@/lib/role-permissions/contract'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,13 +23,15 @@ interface EditableUser {
 
 interface EditUserModalProps {
   user: EditableUser | null
+  roleCatalog?: RoleDefinition[]
+  roleCatalogError?: boolean
   onClose: () => void
   onSaved: (updated: EditableUser) => void
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function EditUserModal({ user, onClose, onSaved }: EditUserModalProps) {
+export default function EditUserModal({ user, roleCatalog, roleCatalogError, onClose, onSaved }: EditUserModalProps) {
   const [email, setEmail] = useState('')
   const [nickname, setNickname] = useState('')
   const [role, setRole] = useState<'ADMIN' | 'USER'>('USER')
@@ -36,13 +39,27 @@ export default function EditUserModal({ user, onClose, onSaved }: EditUserModalP
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [fetchedCatalog, setFetchedCatalog] = useState<RoleDefinition[]>([])
+  const [fetchError, setFetchError] = useState(false)
+  const catalog = roleCatalog ?? fetchedCatalog
+  const catalogError = roleCatalogError || fetchError
+
+  useEffect(() => {
+    if (!user || roleCatalog) return
+    let active = true
+    fetch('/api/admin/roles', { cache: 'no-store' })
+      .then(async response => { if (!response.ok) throw new Error('角色目录不可用'); return response.json() })
+      .then(data => { if (active) setFetchedCatalog(data.roles) })
+      .catch(() => { if (active) setFetchError(true) })
+    return () => { active = false }
+  }, [user, roleCatalog])
 
   useEffect(() => {
     if (user) {
       setEmail(user.email)
       setNickname(user.nickname ?? '')
       setRole((user.role === 'ADMIN' ? 'ADMIN' : 'USER') as 'ADMIN' | 'USER')
-      setBusinessRoles((user.businessRoles || []).map((item) => item.role))
+      setBusinessRoles((user.businessRoles || []).map((item) => item.role).filter(id => id !== 'ADMIN'))
       setError(null)
       setSuccess(false)
     }
@@ -54,6 +71,7 @@ export default function EditUserModal({ user, onClose, onSaved }: EditUserModalP
     setError(null)
     setSuccess(false)
 
+    if (catalogError || !catalog.length) { setError('角色目录不可用，请刷新后重试'); return }
     if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError('请输入有效的邮箱地址')
       return
@@ -190,29 +208,26 @@ export default function EditUserModal({ user, onClose, onSaved }: EditUserModalP
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
                 业务角色
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  ['BRAND_OWNER', '品牌主'],
-                  ['AMC_PRINCIPAL', '主理人'],
-                  ['BD', 'BD'],
-                  ['RESEARCHER', 'Researcher'],
-                ].map(([value, label]) => (
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                {catalog.filter(item => item.id !== 'ADMIN').map(item => (
                   <label
-                    key={value}
+                    key={item.id}
                     className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-650 dark:border-slate-700 dark:text-slate-300"
                   >
                     <input
                       type="checkbox"
-                      checked={businessRoles.includes(value)}
+                      checked={businessRoles.includes(item.id)}
+                      disabled={!item.enabled && !businessRoles.includes(item.id)}
                       onChange={() => setBusinessRoles((prev) => (
-                        prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]
+                        prev.includes(item.id) ? prev.filter((value) => value !== item.id) : [...prev, item.id]
                       ))}
                       className="accent-blue-600"
                     />
-                    <span>{label}</span>
+                    <span>{item.name}{!item.enabled && '（已停用）'}</span>
                   </label>
                 ))}
               </div>
+              {catalogError && <p className="text-xs text-red-600">角色目录加载失败，请刷新页面。</p>}
             </div>
           )}
 
@@ -243,7 +258,7 @@ export default function EditUserModal({ user, onClose, onSaved }: EditUserModalP
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || catalogError || !catalog.length}
             className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition"
           >
             {saving ? (

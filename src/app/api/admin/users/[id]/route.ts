@@ -4,6 +4,8 @@ import { getSession } from '@/lib/auth'
 import crypto from 'crypto'
 import { sendResetPasswordLinkEmail } from '@/lib/email'
 import type { Prisma } from '@prisma/client'
+import { planUserRoleAssignments, RoleAssignmentError } from '@/lib/role-permissions/user-assignments'
+import { contentPolicyReady } from '@/lib/role-permissions/readiness'
 import {
   apiKeyPrefix,
   createApiKeyToken,
@@ -64,11 +66,27 @@ export async function PATCH(request: Request, { params }: Params) {
       data.authVersion = { increment: 1 }
     }
 
-    const validBusinessRoles = ['BRAND_OWNER', 'AMC_PRINCIPAL', 'BD', 'RESEARCHER'] as const
-    type ValidBusinessRole = (typeof validBusinessRoles)[number]
-    const nextBusinessRoles = Array.isArray(body.businessRoles)
-      ? Array.from(new Set((body.businessRoles as unknown[]).filter((role): role is ValidBusinessRole => typeof role === 'string' && validBusinessRoles.includes(role as ValidBusinessRole))))
-      : null
+    if ('businessRoles' in body && !Array.isArray(body.businessRoles)) {
+      return NextResponse.json({ error: '角色列表无效' }, { status: 400 })
+    }
+    const nextBusinessRoles = Array.isArray(body.businessRoles) ? body.businessRoles : null
+    let roleChanges: ReturnType<typeof planUserRoleAssignments> | null = null
+    if (nextBusinessRoles) {
+      if (target.type !== 'HUMAN') return NextResponse.json({ error: '只能给人类账号分配角色' }, { status: 400 })
+      const [existing, catalog] = await Promise.all([
+        prisma.userBusinessRole.findMany({ where: { userId: id }, select: { role: true } }),
+        prisma.roleDefinition.findMany({ select: { id: true, enabled: true, builtIn: true } }),
+      ])
+      try {
+        roleChanges = planUserRoleAssignments(nextBusinessRoles, existing.map((item: { role: string }) => item.role), catalog)
+      } catch (error) {
+        if (error instanceof RoleAssignmentError) return NextResponse.json({ error: error.message }, { status: error.status })
+        throw error
+      }
+      if (roleChanges.needsContent && !await contentPolicyReady()) {
+        return NextResponse.json({ error: 'Content 权限协议 2 尚未就绪' }, { status: 503 })
+      }
+    }
 
     const updated = await prisma.$transaction(async (tx: any) => {
       const user = Object.keys(data).length
@@ -82,11 +100,11 @@ export async function PATCH(request: Request, { params }: Params) {
             select: { id: true, email: true, nickname: true, role: true, type: true },
           })
 
-      if (nextBusinessRoles) {
-        await tx.userBusinessRole.deleteMany({ where: { userId: id, role: { in: [...validBusinessRoles] } } })
-        if (nextBusinessRoles.length > 0) {
+      if (roleChanges && (roleChanges.add.length || roleChanges.remove.length)) {
+        if (roleChanges.remove.length) await tx.userBusinessRole.deleteMany({ where: { userId: id, role: { in: roleChanges.remove } } })
+        if (roleChanges.add.length > 0) {
           await tx.userBusinessRole.createMany({
-            data: nextBusinessRoles.map((role) => ({ userId: id, role })),
+            data: roleChanges.add.map((role) => ({ userId: id, role })),
             skipDuplicates: true,
           })
         }
@@ -94,6 +112,12 @@ export async function PATCH(request: Request, { params }: Params) {
           where: { id },
           data: { authVersion: { increment: 1 } },
         })
+        await tx.auditLog.create({ data: {
+          actorId: session.user.id, actorType: 'HUMAN', action: 'role.member.update',
+          resourceType: 'User', resourceId: id,
+          oldValue: { roles: roleChanges.previous },
+          newValue: { roles: roleChanges.requested },
+        } })
       }
 
       if ('role' in body) {
