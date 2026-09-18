@@ -17,6 +17,7 @@ import DataAnalysisView from './dashboard/DataAnalysisView'
 import AgentLogsView from './dashboard/AgentLogsView'
 
 import { resolveRoles, canAccessView, type BoardView } from '@/lib/permissions'
+import { hasActiveBrandSubscription, needsBrandSubscriptionGate } from '@/lib/subscription/kanbanGate'
 
 interface Brand {
   id: string
@@ -34,12 +35,6 @@ interface Brand {
 
 function isActiveBrand(brand: Brand) {
   return !brand.status || brand.status === 'ACTIVE'
-}
-
-function isEffectiveActiveSubscription(subscription?: { status?: string; contractEndDate?: string | null } | null) {
-  if (subscription?.status !== 'ACTIVE') return false
-  if (!subscription.contractEndDate) return true
-  return new Date(subscription.contractEndDate).getTime() > Date.now()
 }
 
 export default function KanbanBoard({ initialView = 'dashboard' }: { initialView?: BoardView }) {
@@ -92,6 +87,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
   const [subscriptionCheckMs, setSubscriptionCheckMs] = useState<number>(Date.now())
   const [showSystemLog, setShowSystemLog] = useState(false)
   const [subscriptionActive, setSubscriptionActive] = useState<boolean | null>(null)
+  const [subscriptionCheckError, setSubscriptionCheckError] = useState(false)
   const userRoles = resolveRoles(user)
   const canAccessAnalytics = canAccessView(userRoles, 'socialInsight', user?.permissions || [])
 
@@ -108,9 +104,9 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     }
   }, [activeBrand?.id])
 
-  const fetchBrands = async () => {
+  const fetchBrands = async (): Promise<Brand[] | null> => {
     try {
-      const res = await fetch('/api/brands?assignedOnly=true')
+      const res = await fetch('/api/brands?assignedOnly=true', { signal: AbortSignal.timeout(10000) })
       if (res.ok) {
         const payload: Brand[] = await res.json()
         const list = payload.filter(isActiveBrand)
@@ -127,15 +123,18 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         } else {
           setActiveBrand(null)
         }
+        return list
       }
+      if (res.status === 401) router.push('/')
     } catch (e) {
       console.error('[KanbanBoard] fetchBrands error', e)
     }
+    return null
   }
 
   const fetchUser = async () => {
     try {
-      const res = await fetch('/api/auth/me')
+      const res = await fetch('/api/auth/me', { signal: AbortSignal.timeout(10000) })
       if (res.ok) {
         const data = await res.json()
         setUser(data)
@@ -151,32 +150,17 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
 
   const fetchSubscriptionState = async () => {
     setSubscriptionCheckMs(Date.now())
-    try {
-      const res = await fetch('/api/subscription')
-      if (!res.ok) {
-        if (res.status === 401) {
-          router.push('/')
-          return
-        }
-        // On API error, don't permanently block — reset to null so user can retry
-        setSubscriptionActive(null)
-        return
-      }
-
-      const data = await res.json()
-      setSubscriptionActive(isEffectiveActiveSubscription(data?.latestSubscription))
-    } catch (e) {
-      console.error('[KanbanBoard] fetchSubscriptionState error', e)
-      // Network error — don't permanently block the UI
-      setSubscriptionActive(null)
-    }
+    setSubscriptionCheckError(false)
+    const list = await fetchBrands()
+    if (!list) { setSubscriptionCheckError(true); return }
+    setSubscriptionActive(list.length === 0 || hasActiveBrandSubscription(list))
   }
 
-  // After user is loaded, bypass subscription gate for ADMIN / AMC_PRINCIPAL roles
+  // Non-brand capabilities do not depend on brand subscriptions.
   useEffect(() => {
     if (!user) return
     const roles = resolveRoles(user)
-    if (roles.includes('ADMIN') || roles.includes('AMC_PRINCIPAL')) {
+    if (!needsBrandSubscriptionGate(roles, user.permissions || [])) {
       setSubscriptionActive(true)
     }
   }, [user])
@@ -185,13 +169,11 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     queueMicrotask(async () => {
       // Fetch user first — role determines whether subscription check is needed
       const fetchedUser = await fetchUser()
-      void fetchBrands()
-
-      // If the user is ADMIN or AMC_PRINCIPAL, bypass subscription gate immediately
-      // so they never see the "订阅未激活" screen due to a race condition.
+      if (!fetchedUser) { setSubscriptionCheckError(true); return }
       const fetchedRoles = resolveRoles(fetchedUser)
-      if (fetchedRoles.includes('ADMIN') || fetchedRoles.includes('AMC_PRINCIPAL')) {
+      if (!needsBrandSubscriptionGate(fetchedRoles, fetchedUser.permissions || [])) {
         setSubscriptionActive(true)
+        void fetchBrands()
       } else {
         void fetchSubscriptionState()
       }
@@ -227,9 +209,9 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-slate-500 dark:text-slate-400">
-          <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
-          <p className="text-sm font-medium">检查订阅状态...</p>
-          {elapsed > 8000 && (
+          {!subscriptionCheckError && <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />}
+          <p className="text-sm font-medium">{subscriptionCheckError ? '订阅状态暂时无法确认' : '检查订阅状态...'}</p>
+          {(subscriptionCheckError || elapsed > 8000) && (
             <button
               onClick={() => { setSubscriptionActive(null); void fetchSubscriptionState() }}
               className="px-4 py-2 text-sm font-medium rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
