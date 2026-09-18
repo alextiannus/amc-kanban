@@ -4,6 +4,8 @@ Merchant voiceover current implementation contract (pending deployment): [mercha
 
 ## 用户角色权限配置（实施中，待部署验收）
 
+角色新增、成员变更与权限保存的浏览器写入请求按 Kanban 对外域名校验 Origin；代理内部请求地址不作为生产环境的可信域名。跨站 Origin 仍返回 403。
+
 用户组布局调整（待部署）：成员管理与角色权限分开显示，成员支持搜索和每页 10 人分页，添加成员使用搜索弹窗；桌面角色列表独立滚动，窄屏使用选择器。授权逻辑保持不变。
 
 自定义角色组已完成本地实现与测试，未迁移生产、未发布。新增 RoleDefinition 目录并关联现有成员与策略，名称大小写不敏感唯一，标识服务端生成。启用角色权限取并集，业务身份与功能角色分离，不自动获得品牌、Crew 主理人或管理员身份。管理使用管理员会话 GET/POST /api/admin/roles、PATCH /api/admin/roles/[roleId]、PUT/DELETE /api/admin/roles/[roleId]/members/[userId]；版本冲突与事务审计保留。Content 权限协议升级为 2，实时校验有效角色及品牌；两服务就绪才开放创建。总览支持可搜索自定义角色和最多五角色对比，账号诊断展示已分配与有效角色。迁移预检未知角色，不自动清理；不支持永久删除、个人覆盖或角色嵌套。

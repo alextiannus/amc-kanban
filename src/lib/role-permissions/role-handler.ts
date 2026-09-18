@@ -3,14 +3,14 @@ import { PolicyError } from './store'
 import { contentPolicyReady } from './readiness'
 import { requireRoleAdmin } from './roles'
 import type { AuthPrincipal } from '../auth-v2/types'
+import { allowedRoleWriteOrigin } from './request-origin'
 export async function roleRequest(request: Request, action: (actor: AuthPrincipal) => Promise<unknown>, needsContent = false) {
   const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
   try {
     const actor = await authenticateCurrentSession()
     if (!actor) return json({ error: 'Unauthorized' }, 401)
     requireRoleAdmin(actor)
-    const origin = request.headers.get('origin')
-    if (request.method !== 'GET' && origin && origin !== new URL(request.url).origin) return json({ error: 'Forbidden origin' }, 403)
+    if (request.method !== 'GET' && !allowedRoleWriteOrigin(request)) return json({ error: 'Forbidden origin' }, 403)
     if (needsContent && !await contentPolicyReady()) return json({ error: 'Content 权限协议 2 尚未就绪' }, 503)
     return json(await action(actor))
   } catch (e) {
