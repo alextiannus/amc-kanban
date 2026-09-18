@@ -30,7 +30,10 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const publicGameConfig = pathname === '/api/game/config' && request.method === 'GET' && request.nextUrl.searchParams.get('public') === 'true'
-  const permission = publicGameConfig ? null : kanbanRoutePermission(pathname, request.method)
+  // The identity handler authenticates the current session (not API keys), checks
+  // brand scope and live video grants, and returns no-store structured errors.
+  const contentIdentity = pathname === '/api/content/access-identity'
+  const permission = publicGameConfig || contentIdentity ? null : kanbanRoutePermission(pathname, request.method)
   if (permission) {
     try {
       const principal = await authenticateRequest(request)
@@ -67,7 +70,7 @@ export default async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api')
 
   // Bind API work once; gateway/admin endpoints manage their own signed snapshots.
-  if (isApiRoute && pathname !== '/api/content/access-identity' && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
+  if (isApiRoute && !contentIdentity && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
     try {
       requestHeaders.set('x-amc-text-binding', signBinding(await currentBinding(request.headers.get('x-client-type') === 'mm' ? 'mm' : 'kanban')))
     } catch { return NextResponse.json({ error: 'Text policy unavailable' }, { status: 503 }) }
