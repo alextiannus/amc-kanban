@@ -55,7 +55,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 - GET /api/brand-operations：仅登录会话；ADMIN 查看有订阅且选定订阅未免收费用的非归档品牌，AMC_PRINCIPAL 需 brand.read + analytics.read 并按有效 Crew/组织继承范围筛选。查询参数 q、status、principalId（支持 unassigned）、sort（expiry/published/name）、page；每页 25 行。返回 rows、total、page、pageSize、summary、period、canManage、principalOptions；candidates 仅管理员返回。
 - 订阅优先选当前生效合约，否则最近创建记录；选定合约 feeWaived=true 的品牌从列表、汇总及筛选候选中排除，不回退历史收费记录。待激活、失败、取消和到期的非免收订阅仍保留。字段只含套餐与合约摘要，不返回支付链接、账单或服务凭据。
 - monthlyPublished 为新加坡时间本月 1 日零点至查询时刻的成功发布 ContentDraft 数，各平台独立记录分别计数、包含人工补录；不统计排期、失败或编辑。
-- PATCH /api/brand-operations/{brandId}/principal：仅 ADMIN 会话，校验 Origin；请求 principalId、expectedVersion。启用且显式 AMC_PRINCIPAL 的候选可设为唯一当前主理人，OWNER 不可被覆盖；旧主理人直接关系停用，其他成员不变。事务内写入 BRAND_PRINCIPAL_CHANGED 审计，Crew.updatedAt 由现有 ERP worker 扫描。并发成员变更返回 409，资格无效 400，无目标品牌 404，未登录 401，越权 403，服务异常 503。响应 no-store，不新增 API Key/MCP 能力，也不依赖 AI 文本策略服务。
+- PATCH /api/brand-operations/{brandId}/principal：当前看板隐藏修改入口；接口保留，仅 ADMIN 会话，校验 Origin；请求 principalId、expectedVersion。启用且显式 AMC_PRINCIPAL 的候选可设为唯一当前主理人，OWNER 不可被覆盖；旧主理人直接关系停用，其他成员不变。事务内写入 BRAND_PRINCIPAL_CHANGED 审计，Crew.updatedAt 由现有 ERP worker 扫描。并发成员变更返回 409，资格无效 400，无目标品牌 404，未登录 401，越权 403，服务异常 503。响应 no-store，不新增 API Key/MCP 能力，也不依赖 AI 文本策略服务。
 
 ## 3.1 Auth Service
 
