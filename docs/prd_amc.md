@@ -152,7 +152,7 @@ Kanban 登录后的品牌订阅门禁使用已授权品牌列表中的有效订�
 3. **全局运营看板 (Global Operation Overview)**
    * 老板可以在 Dashboard 上拥有一个全局视角，一目了然地看到所有自媒体账号的健康状态和当下的运营动作。
 
-### PostFast key 解绑与待分配池（本次修复，本地已实现，待部署）
+### PostFast key 解绑与待分配池（已部署，2026-09-20）
 
 - Admin 的已分配 key 提供“解绑并回池”，确认中展示品牌名称；未分配 key 的“退役”单独保留，不再把解绑显示为删除。
 - `PATCH /api/admin/postfast-keys` 接受 `{id, action: "release", expectedBrandId, expectedUpdatedAt}`，沿用 key 池管理员授权。服务端核对列表返回的 key.updatedAt 版本、分配关系和品牌实际 key，避免旧页面解除其他品牌的新分配。
