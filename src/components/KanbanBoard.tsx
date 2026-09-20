@@ -13,6 +13,7 @@ import SystemLogModal from './layout/SystemLogModal'
 import GameSettingsDashboard from './dashboard/GameSettingsDashboard'
 import DashboardAssets from './dashboard/DashboardAssets'
 import DraftManagementView from './dashboard/DraftManagementView'
+import BrandOperationsView from './dashboard/BrandOperationsView'
 import DataAnalysisView from './dashboard/DataAnalysisView'
 import AgentLogsView from './dashboard/AgentLogsView'
 
@@ -59,7 +60,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     if (initialView === 'dashboard') {
       try {
         const requestedView = new URLSearchParams(window.location.search).get('tab')
-        const savedView = (requestedView === 'assets' ? 'assets' : window.localStorage.getItem('amc.currentView')) as BoardView | null
+        const savedView = (['assets', 'managementOverview'].includes(requestedView || '') ? requestedView : window.localStorage.getItem('amc.currentView')) as BoardView | null
         const validViews: BoardView[] = ['dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
         if (savedView && validViews.includes(savedView)) {
           setTimeout(() => {
@@ -300,18 +301,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           <AgentLogsView brandId={activeBrand?.id} />
         </div>
       ) : currentView === 'managementOverview' ? (
-        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full p-4 md:p-8">
-          {/* TODO: ManagementOverviewDashboard — multi-brand summary for Admin/Principal */}
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-blue-600 flex items-center justify-center">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-slate-800 dark:text-white">主理人总览</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-xs">跨品牌汇总看板正在开发中，将展示所有代运营品牌的运营状态和数据摘要。</p>
-            </div>
-          </div>
-        </div>
+        <BrandOperationsView />
       ) : (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
           <MobileLayout>

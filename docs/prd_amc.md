@@ -2,6 +2,19 @@
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
+## 品牌运营看板（已完成本地实现与验证，待部署）
+
+主菜单「主理人」分组的 managementOverview 从占位页改为「品牌运营看板」，位于账号快照前。管理员查看全部非归档且至少有一笔 BrandSubscription 的品牌；主理人须具有 analytics.read 与 brand.read，仅查看有效 Crew 或组织继承范围。品牌主、BD、研究员不因其他菜单权限获得该入口。此为运营摘要，不开放账单明细或订阅修改权限。
+
+- 每品牌一行：名称、位置、品牌状态、套餐、订阅状态、合约开始/结束时间、品牌主、品牌主理人、本月发布次数、最近发布时间。缺失日期明确显示未设置。
+- 实际订阅指数据库真实关联记录，包括免费授权、待激活、失败、取消、到期，排除无记录品牌。优先展示当前生效 ACTIVE 合约，否则展示最近创建的订阅；不能因续约草稿覆盖仍生效合约。ACTIVE 根据开始/结束日期区分未开始与已到期。支持搜索、状态/主理人筛选、到期/本月发布排序及分页。
+- 本月为 Asia/Singapore 本月 1 日 00:00 至查询时刻；按 ContentDraft.status=published 且 publishedAt 在区间内的记录计数，每条记录一次，各平台独立记录分别计数，人工补录计入，排期、失败、编辑不计。页面展示统计日期与口径；零次与查询失败明确区分。
+- 品牌主取有效 Crew OWNER，主理人取有效 Crew PRINCIPAL，支持显示历史多主理人；不从旧 BrandAgent 或 ownerId 推断。只有管理员网页会话可以更换为一个启用且有显式 AMC_PRINCIPAL 角色的人选；候选不按昵称硬编码。不能覆盖 OWNER；原 PRINCIPAL 停用以撤销直接授权，其他成员保持不变。管理员在品牌行选择新人选并保存，保存前显示撤销原主理人直接授权的说明。
+- 更换在同一事务完成资格检查、当前 Crew 版本校验、Crew 更新、AuditLog 前后快照；并发变更返回 409，要求刷新。沿用 Crew.updatedAt 的 ERP 后台扫描，不在浏览器保存请求内发送 ERP 网络操作或宣称同步成功。独立 OWNER、组织继承或管理员权限不随直接主理人撤销而消失。
+- 列表及保存请求最长等待 15 秒；超时返回可重试提示。保存结果不确定时先刷新确认现状，不直接重复提交；筛选人选在查询失败和当前人选不再匹配时保持可见，与实际筛选条件一致。
+- 接口：GET /api/brand-operations 返回分页数据、汇总、统计周期与管理员候选；PATCH /api/brand-operations/[brandId]/principal 接受 principalId、expectedVersion。会话认证、服务端品牌范围、管理员写入、Origin 检查与 no-store 响应均必须执行，不开放 MCP/API Key 新入口。
+- 验收覆盖无订阅、免费订阅、续约待激活、过期、取消、无主理人、多主理人、月边界、品牌隔离、非管理员拒绝、OWNER 保护、无效候选、事务回滚及并发冲突；生产发布另行记录。本地已通过类型检查、菜单与权限总览回归、统计/服务测试、PostgreSQL 事务回滚测试、模拟 API 的桌面/手机交互验证；未连接生产数据库、未发布。
+
 ## 用户角色权限配置（实施中，待部署验收）
 
 Kanban 侧栏以 `/api/auth/me` 的有效权限和实际管理员身份决定可见入口；Content 跳转也要求对应模块查看权限。已撤权的本地看板视图自动切到首个可访问视图，无本地视图时显示导航提示或无权限空状态。Content 导航在权限查询前隐藏，查询失败时保持隐藏；实际页面和接口仍由服务端鉴权。本项为本地实现目标，线上需按代表账号复核。
@@ -723,8 +736,8 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 **Q5 — 代理商 (AGENT) 角色预留**  
 ✅ 结论：代理商具有"更高级管理人员的看板"权限，同时叠加其他角色（类似能管理旗下的 BD 和品牌主群体）。具体设计待 Phase 3。
 
-**Q6 — 高级管理人员看板（缺失功能）**  
-🆕 确认缺少：当前缺少一个面向 ADMIN/代理商的**跨品牌管理总览看板**（品牌数量、运营状态、收入汇总、BD 业绩等）。作为独立功能模块规划。
+**Q6 — 跨品牌管理看板**
+品牌运营看板已完成本地实现，汇总实际订阅品牌、合约、负责人和本月发布次数，管理员可更换主理人；收入、BD 业绩与代理商汇总仍属待规划模块。
 
 ### 技术方案决策：显式角色 + Capability + Crew 数据范围
 
@@ -757,7 +770,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 | 素材库 | ✅ | ✅ | ❌ | ✅ |
 | 数据分析 | ✅ | ✅ | ❌ | ✅（仅自己） |
 | 店内活动 | ✅ | ✅ | ❌ | ✅ |
-| Principal 总览 | ✅ | ✅ | ❌ | ❌ |
+| 品牌运营看板 | ✅ 全部，可更换主理人 | ✅ 授权品牌，只读 | ❌ | ❌ |
 | 管理看板（高级总览） | ✅ | ❌ | 📅 BD 汇总版 | ❌ |
 | BD 工作台（线索/收入） | ❌ | ❌ | 📅 | ❌ |
 | Admin 后台 | ✅ | ❌ | ❌ | ❌ |
@@ -799,13 +812,13 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 | `src/components/layout/Sidebar.tsx` | 新建 | 侧边栏组件，按角色动态渲染菜单分组，支持折叠/展开，BD coming-soon 占位 |
 | `src/components/layout/MainLayout.tsx` | 重构 | 布局从 `flex-col`（顶部导航）改为 `flex-row`（左侧导航），移动端改为抽屉式侧边栏 |
 | `src/components/layout/UserMenu.tsx` | 简化 | 只保留用户信息 + 设置中心 + 退出，其余菜单项已迁移至 Sidebar |
-| `src/components/KanbanBoard.tsx` | 更新 | 使用 `permissions.ts` 中的 `BoardView` 类型，新增 `managementOverview` 视图（占位） |
+| `src/components/KanbanBoard.tsx` | 更新 | 使用 `permissions.ts` 中的 `BoardView` 类型，`managementOverview` 改为品牌运营看板（本次实现，待发布） |
 
 ### 侧边栏菜单分组结构
 
 | 分组 | 菜单项 | 可见角色 |
 |------|--------|---------|
-| 主理人 | 主理人总览、账号快照、素材执行 | Admin、主理人 |
+| 主理人 | 品牌运营看板、账号快照 | Admin、主理人；看板需 brand.read + analytics.read，品牌范围独立校验 |
 | 内容中心 | 爆品素材库、视频生产、爆品脚本、AI 角色库 | Admin、主理人；Researcher 可见除视频生产外的三项 |
 | 知识增长中心 | 品牌灵感、推广计划、知识库 | Admin、主理人 |
 | 品牌主 | 品牌故事、发布日历、发布内容、素材库、店内活动、数据分析 | Admin、主理人、品牌主 |

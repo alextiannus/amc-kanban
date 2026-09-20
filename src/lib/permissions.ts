@@ -2,6 +2,7 @@
  * permissions.ts — Centralized role resolution & menu configuration
  */
 
+import { canReadOperations } from './brand-operations/policy.ts'
 import { MENU_PERMISSIONS, PERMISSION_MODULES } from './role-permissions/contract.ts'
 export type AppRole = 'ADMIN' | 'AMC_PRINCIPAL' | 'BRAND_OWNER' | 'BD' | 'RESEARCHER'
 
@@ -37,6 +38,7 @@ export function resolveRoles(user: UserInfo | null): AppRole[] {
 
 /** Check whether a set of roles can navigate to a given view */
 export function canAccessView(roles: AppRole[], view: BoardView, grants?: string[]): boolean {
+  if (view === 'managementOverview') return canReadOperations(roles, grants ?? ['brand.read', 'analytics.read'])
   if (grants) return roles.includes('ADMIN') || Boolean(MENU_PERMISSIONS[view] && grants.includes(MENU_PERMISSIONS[view]))
   const isAdmin = roles.includes('ADMIN')
   const isPrincipal = roles.includes('AMC_PRINCIPAL')
@@ -53,8 +55,6 @@ export function canAccessView(roles: AppRole[], view: BoardView, grants?: string
       return isAdmin || isPrincipal || isOwner
     case 'dataAnalysis':
       return isAdmin || isPrincipal
-    case 'managementOverview':
-      return isAdmin || isPrincipal || isResearcher
     case 'logs':
       return isAdmin || isPrincipal || isOwner
     default:
@@ -97,7 +97,8 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
     const groups = getMenuGroups(['ADMIN'])
     groups.push({ groupLabel: 'Content 更多功能', items: PERMISSION_MODULES.filter(m => m.system === 'content' && !['content.video-making', 'content.inspiration-library', 'content.content-lab'].includes(m.id)).map(m => ({ id: m.id, view: 'managementOverview' as BoardView, label: m.label, icon: 'FileText', href: '/admin/content/' + m.id.slice(8) })) })
     return groups.map(group => ({ ...group, items: group.items.filter(item => {
-      if (item.comingSoon || item.id === 'managementOverview') return false
+      if (item.comingSoon) return false
+      if (item.id === 'managementOverview') return canReadOperations(roles, grants)
       if (item.id === 'user-management' || item.id === 'admin') return admin
       if (item.id === 'amc-growth') return admin || roles.includes('AMC_PRINCIPAL')
       const key = item.id.startsWith('content.') ? item.id + '.read' : MENU_PERMISSIONS[item.id]
@@ -131,7 +132,7 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
     groups.push({
       groupLabel: '主理人',
       items: [
-        { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
+        { id: 'managementOverview', view: 'managementOverview', label: '品牌运营看板', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
       ],
     })

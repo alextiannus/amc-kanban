@@ -40,7 +40,7 @@ const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
   socialInsight: { zh: '数据分析', en: 'Growth Analytics' },
   dataAnalysis: { zh: '账号快照', en: 'Account Snapshot' },
   logs: { zh: '工作日志', en: 'Work Logs' },
-  managementOverview: { zh: '主理人总览', en: 'Principal Overview' },
+  managementOverview: { zh: '品牌运营看板', en: 'Brand Operations' },
 }
 
 export default function MainLayout({

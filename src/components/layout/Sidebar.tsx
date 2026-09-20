@@ -67,7 +67,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   'BD 商务': 'BD',
   'Researcher': 'Researcher',
   '即将上线': 'Coming Soon',
-  '主理人总览': 'Principal Overview',
+  '品牌运营看板': 'Brand Operations',
   '账号快照': 'Account Snapshot',
   '知识库': 'Knowledge Base',
   '品牌灵感': 'Brand Inspiration',

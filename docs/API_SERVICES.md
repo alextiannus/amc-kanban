@@ -50,6 +50,13 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 ## 3. API Service Domains
 
+### 品牌运营看板（本地已实现，待部署）
+
+- GET /api/brand-operations：仅登录会话；ADMIN 查看全部有订阅的非归档品牌，AMC_PRINCIPAL 需 brand.read + analytics.read 并按有效 Crew/组织继承范围筛选。查询参数 q、status、principalId（支持 unassigned）、sort（expiry/published/name）、page；每页 25 行。返回 rows、total、page、pageSize、summary、period、canManage、principalOptions；candidates 仅管理员返回。
+- 订阅优先选当前生效合约，否则最近创建记录；免费、待激活、失败、取消和到期记录均属于真实订阅。字段只含套餐与合约摘要，不返回支付链接、账单或服务凭据。
+- monthlyPublished 为新加坡时间本月 1 日零点至查询时刻的成功发布 ContentDraft 数，各平台独立记录分别计数、包含人工补录；不统计排期、失败或编辑。
+- PATCH /api/brand-operations/{brandId}/principal：仅 ADMIN 会话，校验 Origin；请求 principalId、expectedVersion。启用且显式 AMC_PRINCIPAL 的候选可设为唯一当前主理人，OWNER 不可被覆盖；旧主理人直接关系停用，其他成员不变。事务内写入 BRAND_PRINCIPAL_CHANGED 审计，Crew.updatedAt 由现有 ERP worker 扫描。并发成员变更返回 409，资格无效 400，无目标品牌 404，未登录 401，越权 403，服务异常 503。响应 no-store，不新增 API Key/MCP 能力，也不依赖 AI 文本策略服务。
+
 ## 3.1 Auth Service
 
 职责：登录、登出、当前用户、注册。
@@ -572,12 +579,13 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **238** 个 API 路径、**335** 个 HTTP 方法组合。
+共 **259** 个 API 路径、**369** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
 | 方法 | 路径 |
 | --- | --- |
+| GET | `/api/admin/access-overview` |
 | GET, PATCH | `/api/admin/agent-assignment-pool/config` |
 | GET, POST | `/api/admin/agent-assignment-pool/members` |
 | DELETE, PATCH | `/api/admin/agent-assignment-pool/members/{agentId}` |
@@ -585,9 +593,11 @@ Permanent QR contract:
 | GET | `/api/admin/brand-credentials` |
 | GET | `/api/admin/brands` |
 | DELETE, PATCH | `/api/admin/brands/{id}` |
+| GET, PATCH | `/api/admin/brands/{id}/store-entitlements` |
 | PATCH | `/api/admin/companion-messages/{id}/annotate` |
 | GET | `/api/admin/debug/avatar` |
 | POST | `/api/admin/email/test` |
+| GET, POST | `/api/admin/global-text` |
 | POST | `/api/admin/integrations/immedi-erp/test` |
 | GET, POST | `/api/admin/llm-configs` |
 | DELETE, PATCH | `/api/admin/llm-configs/{id}` |
@@ -596,15 +606,22 @@ Permanent QR contract:
 | PATCH | `/api/admin/message-templates/{id}` |
 | POST | `/api/admin/message-templates/{id}/test` |
 | GET | `/api/admin/model-tasks` |
+| GET, POST | `/api/admin/models` |
 | POST | `/api/admin/permissions` |
 | GET, PATCH, POST | `/api/admin/postfast-keys` |
 | GET, POST | `/api/admin/prompt-templates` |
 | DELETE, PATCH | `/api/admin/prompt-templates/{id}` |
+| GET | `/api/admin/role-permissions` |
+| PUT | `/api/admin/role-permissions/{role}` |
+| GET, POST | `/api/admin/roles` |
+| PATCH | `/api/admin/roles/{roleId}` |
+| DELETE, PUT | `/api/admin/roles/{roleId}/members/{userId}` |
 | PATCH | `/api/admin/subscriptions/{id}` |
 | POST | `/api/admin/sync-draft-statuses` |
 | GET, PATCH | `/api/admin/system-config` |
 | GET, POST | `/api/admin/users` |
 | DELETE, PATCH | `/api/admin/users/{id}` |
+| GET | `/api/admin/users/{id}/access-overview` |
 | POST | `/api/agent-assignment/resolve` |
 | PATCH | `/api/agent/accounts` |
 | PATCH, POST | `/api/agent/action-items` |
@@ -630,6 +647,8 @@ Permanent QR contract:
 | POST | `/api/auth/register` |
 | GET, POST | `/api/auth/reset-password` |
 | GET | `/api/auth/verify-token` |
+| GET | `/api/brand-operations` |
+| PATCH | `/api/brand-operations/{brandId}/principal` |
 | GET, POST | `/api/brands` |
 | DELETE, GET, PATCH | `/api/brands/{id}` |
 | GET, POST | `/api/brands/{id}/accounts` |
@@ -642,6 +661,7 @@ Permanent QR contract:
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
 | GET | `/api/brands/{id}/analytics` |
 | GET, POST | `/api/brands/{id}/apify-sync` |
+| GET, PATCH, POST | `/api/brands/{id}/asset-analysis` |
 | GET, PATCH, POST | `/api/brands/{id}/assets` |
 | DELETE, PATCH | `/api/brands/{id}/assets/{assetId}` |
 | POST | `/api/brands/{id}/assets/{assetId}/design` |
@@ -671,7 +691,7 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/drafts/{draftId}/trigger-copywriter` |
 | POST | `/api/brands/{id}/drafts/batch-trigger-copywriter` |
 | POST | `/api/brands/{id}/drafts/sync-statuses` |
-| DELETE, GET, POST | `/api/brands/{id}/folders` |
+| DELETE, GET, PATCH, POST | `/api/brands/{id}/folders` |
 | GET, POST | `/api/brands/{id}/growth-sync` |
 | GET, PATCH | `/api/brands/{id}/identity` |
 | POST | `/api/brands/{id}/identity/{field}/sync` |
@@ -707,10 +727,12 @@ Permanent QR contract:
 | DELETE, GET, PATCH | `/api/brands/{id}/topics/{topicId}` |
 | GET | `/api/brands/{id}/usage-report` |
 | POST | `/api/brands/{id}/video-director` |
+| GET, POST | `/api/brands/{id}/voiceover-tasks` |
 | GET, POST | `/api/brands/{id}/voices` |
 | DELETE, PATCH | `/api/brands/{id}/voices/{voiceProfileId}` |
 | POST | `/api/brands/{id}/voices/{voiceProfileId}/preview` |
 | GET | `/api/client-config` |
+| POST | `/api/content/access-identity` |
 | POST | `/api/content/copy-scripts/recommend` |
 | POST | `/api/content/generate` |
 | POST | `/api/content/video/assemble` |
@@ -720,6 +742,7 @@ Permanent QR contract:
 | POST | `/api/content/video/status` |
 | POST | `/api/copywriter/generate-hooks` |
 | POST | `/api/cron/apify-sync-all` |
+| POST | `/api/cron/asset-analysis` |
 | POST | `/api/cron/brand-identity-sync` |
 | POST | `/api/cron/game-share-draft-pool` |
 | POST | `/api/cron/growth-sync` |
@@ -762,13 +785,17 @@ Permanent QR contract:
 | GET | `/api/integrations/social/public-profile` |
 | GET | `/api/integrations/status` |
 | POST | `/api/integrations/stripe/webhook` |
+| POST | `/api/internal/access/resolve` |
 | POST | `/api/internal/content-assets` |
 | POST | `/api/internal/content-brand-voices` |
 | POST | `/api/internal/content-context` |
 | POST | `/api/internal/content-lab-admin` |
 | POST | `/api/internal/content-log` |
+| GET, POST | `/api/internal/global-text` |
 | POST | `/api/internal/llm-generate` |
 | POST | `/api/internal/menu-service` |
+| GET, POST | `/api/internal/model-operations` |
+| GET, POST | `/api/internal/model-runtime` |
 | POST | `/api/internal/video-generate` |
 | POST | `/api/internal/video-performance` |
 | GET, POST | `/api/invite/{token}` |
@@ -800,6 +827,7 @@ Permanent QR contract:
 | POST | `/api/promo/validate` |
 | OPTIONS, POST | `/api/public/brand-intelligence-intake` |
 | GET | `/api/public/brand-strategy/{id}` |
+| OPTIONS, POST | `/api/public/contact-us` |
 | OPTIONS, POST | `/api/public/ecosystem-partners` |
 | GET | `/api/public/snapshots` |
 | POST | `/api/researcher/capture-snapshots` |

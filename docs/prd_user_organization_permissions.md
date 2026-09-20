@@ -160,6 +160,12 @@ unique(crewId, userId)
 - `AgentPermission`
 - `Brand.ownerId` 的授权用途
 
+### 品牌运营看板权限（已完成本地实现与验证，待部署）
+
+主菜单 managementOverview 显示品牌运营看板。ADMIN 可读全部有实际订阅的非归档品牌并更换主理人；AMC_PRINCIPAL 同时具有 brand.read、analytics.read 时，仅可读当前 Crew/组织继承授权范围。运营订阅摘要不包含账单、凭据或订阅编辑能力。
+
+变更只接受管理员会话和可信 Origin；事务内校验启用的显式 AMC_PRINCIPAL 候选、保护 OWNER、比较完整 Crew 成员版本并保存前后 AuditLog。旧 PRINCIPAL 停用，新人选设为 PRINCIPAL，其他成员不变；组织继承、OWNER 与 ADMIN 权限仍独立生效。并发请求返回 409，ERP 复用后台 Crew.updatedAt 扫描。详细数据与本月发布统计口径见主 PRD「品牌运营看板」。
+
 ### 5.4 组织继承
 
 组织继承规则：

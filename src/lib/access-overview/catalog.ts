@@ -37,7 +37,7 @@ export function describeKanban(context: Context): AccessEntry[] {
       : check(visible.has(item.id) ? 'allowed' : 'denied', visible.has(item.id) ? '当前角色组合可以看到此菜单' : '当前角色组合不显示此菜单')
     let page: Check
     if (item.comingSoon) page = check('comingSoon', '尚未实现')
-    else if (item.id === 'managementOverview') page = check('comingSoon', '当前页面为开发中占位，尚无跨品牌汇总功能')
+    else if (item.id === 'managementOverview') page = check(canAccessView(menuRoles, 'managementOverview', context.grants) ? 'allowed' : 'denied', '管理员或具备 brand.read 与 analytics.read 的主理人；服务端按 Crew 与组织继承筛选订阅品牌')
     else if (['user-management', 'admin'].includes(item.id)) page = check(menuRoles.includes('ADMIN') ? 'allowed' : 'denied', '后台页面读取 auth/me 角色，仅管理员可进入')
     else if (item.id === 'logs' && context.grants) page = check(context.grants.includes('work_log.read') || menuRoles.includes('ADMIN') ? 'allowed' : 'denied', '看板视图需要 work_log.read；数据接口另行鉴权')
     else if (['video-production', 'viral-copy-scripts', 'amc-content-roles'].includes(item.id)) {
@@ -58,6 +58,7 @@ export function describeKanban(context: Context): AccessEntry[] {
           : check('conditional', `${capability} 能力允许；还需品牌范围、接口及业务对象检查，未执行操作`)
       return { ...result, label, source: `src/lib/auth-v2/capabilities.ts#${capability}` }
     })
+    if (item.id === 'managementOverview') operations.push({ label: '更换品牌主理人', ...check(menuRoles.includes('ADMIN') ? 'allowed' : 'denied', '仅管理员会话；候选资格、Crew 版本与 OWNER 保护在事务内检查'), source: 'src/lib/brand-operations/service.ts' })
     if (!operations.length && !item.href && !item.comingSoon && item.id !== 'managementOverview') operations.push({ label: '模块数据与操作', ...check('unknown', '菜单与视图已核对；此模块操作需按实际数据接口检查'), source: 'src/components/KanbanBoard.tsx' })
     return { id: `kanban:${item.id}`, system: 'kanban', label: item.label, group, href: item.href || '/board',
       menu, page, operations, scope: BRAND_IDS.has(item.id) || item.id === 'video-production' ? '已授权品牌' : '平台 / 角色范围',

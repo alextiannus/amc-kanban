@@ -52,7 +52,7 @@ export function canAccessView(roles: AppRole[], view: BoardView): boolean {
     case 'dataAnalysis':
       return isAdmin || isPrincipal
     case 'managementOverview':
-      return isAdmin || isPrincipal || isResearcher
+      return isAdmin || isPrincipal
     case 'logs':
       return isAdmin || isPrincipal || isOwner
     default:
@@ -117,7 +117,7 @@ export function getMenuGroups(roles: AppRole[]): MenuGroupDef[] {
     groups.push({
       groupLabel: '主理人',
       items: [
-        { id: 'managementOverview', view: 'managementOverview', label: '主理人总览', icon: 'Users' },
+        { id: 'managementOverview', view: 'managementOverview', label: '品牌运营看板', icon: 'Users' },
         { id: 'dataAnalysis',       view: 'dataAnalysis',       label: '账号快照',   icon: 'Camera' },
       ],
     })
