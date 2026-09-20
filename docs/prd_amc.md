@@ -2,7 +2,7 @@
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
-## 品牌运营看板（已完成本地实现与验证，待部署）
+## 品牌运营看板（已部署，2026-09-20）
 
 主菜单「主理人」分组的 managementOverview 从占位页改为「品牌运营看板」，位于账号快照前。管理员查看全部非归档且至少有一笔 BrandSubscription 的品牌；主理人须具有 analytics.read 与 brand.read，仅查看有效 Crew 或组织继承范围。品牌主、BD、研究员不因其他菜单权限获得该入口。此为运营摘要，不开放账单明细或订阅修改权限。
 
@@ -13,7 +13,7 @@ Merchant voiceover current implementation contract (pending deployment): [mercha
 - 更换在同一事务完成资格检查、当前 Crew 版本校验、Crew 更新、AuditLog 前后快照；并发变更返回 409，要求刷新。沿用 Crew.updatedAt 的 ERP 后台扫描，不在浏览器保存请求内发送 ERP 网络操作或宣称同步成功。独立 OWNER、组织继承或管理员权限不随直接主理人撤销而消失。
 - 列表及保存请求最长等待 15 秒；超时返回可重试提示。保存结果不确定时先刷新确认现状，不直接重复提交；筛选人选在查询失败和当前人选不再匹配时保持可见，与实际筛选条件一致。
 - 接口：GET /api/brand-operations 返回分页数据、汇总、统计周期与管理员候选；PATCH /api/brand-operations/[brandId]/principal 接受 principalId、expectedVersion。会话认证、服务端品牌范围、管理员写入、Origin 检查与 no-store 响应均必须执行，不开放 MCP/API Key 新入口。
-- 验收覆盖无订阅、免费订阅、续约待激活、过期、取消、无主理人、多主理人、月边界、品牌隔离、非管理员拒绝、OWNER 保护、无效候选、事务回滚及并发冲突；生产发布另行记录。本地已通过类型检查、菜单与权限总览回归、统计/服务测试、PostgreSQL 事务回滚测试、模拟 API 的桌面/手机交互验证；未连接生产数据库、未发布。
+- 验收覆盖无订阅、免费订阅、续约待激活、过期、取消、无主理人、多主理人、月边界、品牌隔离、非管理员拒绝、OWNER 保护、无效候选、事务回滚及并发冲突；本地已通过类型检查、菜单与权限总览回归、统计/服务测试、PostgreSQL 事务回滚测试、模拟 API 的桌面/手机交互验证；生产提交 `9c8fc4ef` 已在 Render 新加坡服务上线；正式域名首页与新接口登录保护检查通过，详情见 [发布验证](brand-operations-release.md)。
 
 ## 用户角色权限配置（实施中，待部署验收）
 
@@ -737,7 +737,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 ✅ 结论：代理商具有"更高级管理人员的看板"权限，同时叠加其他角色（类似能管理旗下的 BD 和品牌主群体）。具体设计待 Phase 3。
 
 **Q6 — 跨品牌管理看板**
-品牌运营看板已完成本地实现，汇总实际订阅品牌、合约、负责人和本月发布次数，管理员可更换主理人；收入、BD 业绩与代理商汇总仍属待规划模块。
+品牌运营看板已部署，汇总实际订阅品牌、合约、负责人和本月发布次数，管理员可更换主理人；收入、BD 业绩与代理商汇总仍属待规划模块。
 
 ### 技术方案决策：显式角色 + Capability + Crew 数据范围
 
@@ -812,7 +812,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 | `src/components/layout/Sidebar.tsx` | 新建 | 侧边栏组件，按角色动态渲染菜单分组，支持折叠/展开，BD coming-soon 占位 |
 | `src/components/layout/MainLayout.tsx` | 重构 | 布局从 `flex-col`（顶部导航）改为 `flex-row`（左侧导航），移动端改为抽屉式侧边栏 |
 | `src/components/layout/UserMenu.tsx` | 简化 | 只保留用户信息 + 设置中心 + 退出，其余菜单项已迁移至 Sidebar |
-| `src/components/KanbanBoard.tsx` | 更新 | 使用 `permissions.ts` 中的 `BoardView` 类型，`managementOverview` 改为品牌运营看板（本次实现，待发布） |
+| `src/components/KanbanBoard.tsx` | 更新 | 使用 `permissions.ts` 中的 `BoardView` 类型，`managementOverview` 展示已部署的品牌运营看板 |
 
 ### 侧边栏菜单分组结构
 

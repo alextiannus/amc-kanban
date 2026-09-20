@@ -50,7 +50,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 ## 3. API Service Domains
 
-### 品牌运营看板（本地已实现，待部署）
+### 品牌运营看板（已部署，2026-09-20）
 
 - GET /api/brand-operations：仅登录会话；ADMIN 查看全部有订阅的非归档品牌，AMC_PRINCIPAL 需 brand.read + analytics.read 并按有效 Crew/组织继承范围筛选。查询参数 q、status、principalId（支持 unassigned）、sort（expiry/published/name）、page；每页 25 行。返回 rows、total、page、pageSize、summary、period、canManage、principalOptions；candidates 仅管理员返回。
 - 订阅优先选当前生效合约，否则最近创建记录；免费、待激活、失败、取消和到期记录均属于真实订阅。字段只含套餐与合约摘要，不返回支付链接、账单或服务凭据。

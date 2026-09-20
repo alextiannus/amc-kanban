@@ -160,7 +160,7 @@ unique(crewId, userId)
 - `AgentPermission`
 - `Brand.ownerId` 的授权用途
 
-### 品牌运营看板权限（已完成本地实现与验证，待部署）
+### 品牌运营看板权限（已部署，2026-09-20）
 
 主菜单 managementOverview 显示品牌运营看板。ADMIN 可读全部有实际订阅的非归档品牌并更换主理人；AMC_PRINCIPAL 同时具有 brand.read、analytics.read 时，仅可读当前 Crew/组织继承授权范围。运营订阅摘要不包含账单、凭据或订阅编辑能力。
 
