@@ -9,7 +9,7 @@ const now = new Date('2026-09-20T10:00:00Z')
 assert.equal(monthWindow(now).start.toISOString(), '2026-08-31T16:00:00.000Z')
 assert.equal(monthWindow(new Date('2026-09-30T16:00:00Z')).start.toISOString(), '2026-09-30T16:00:00.000Z')
 assert.equal(monthWindow(new Date('2026-12-31T16:00:00Z')).start.toISOString(), '2026-12-31T16:00:00.000Z')
-const sub = (id: string, status = 'ACTIVE', createdAt = '2026-08-01', end: string | null = '2026-10-01') => ({ id, status, createdAt, planName: 'Essential', feeWaived: true, contractStartDate: '2026-08-01', contractEndDate: end })
+const sub = (id: string, status = 'ACTIVE', createdAt = '2026-08-01', end: string | null = '2026-10-01') => ({ id, status, createdAt, planName: 'Essential', feeWaived: false, contractStartDate: '2026-08-01', contractEndDate: end })
 assert.equal(selectSubscription([sub('active'), sub('renewal', 'PENDING', '2026-09-19')], now).id, 'active')
 assert.equal(subscriptionState(sub('expired', 'ACTIVE', '2026-01-01', now.toISOString()), now), 'EXPIRED')
 assert.equal(subscriptionState({ ...sub('future'), contractStartDate: '2026-10-01', contractEndDate: '2027-01-01' }, now), 'UPCOMING')
@@ -85,12 +85,19 @@ try {
 // timezone edges, pending renewals, brand scope, pagination and payload minimization.
 const person = (id: string) => ({ id, nickname: id, email: id+'@example.test' })
 const fixtures = Array.from({length: 28}, (_, i) => ({ id: 'b'+String(i).padStart(2,'0'), name: 'Brand '+i, location: 'Singapore', status: i===27?'ARCHIVED':'ACTIVE', subscriptions: i===26?[]:[sub('s'+i)], crew: { members: [{id:'m'+i,userId:'p',role:'PRINCIPAL',active:true,updatedAt:now,user:person('p')}] } }))
-fixtures[0].subscriptions.push(sub('renewal','PENDING','2026-09-19'))
+fixtures[0].subscriptions.push({ ...sub('renewal','PENDING','2026-09-19'), feeWaived: true })
+fixtures[1].subscriptions.push({ ...sub('old-free','ACTIVE','2026-01-01','2026-07-01'), feeWaived: true })
+for (const [id, subscriptions] of [
+  ['waived-only', [{ ...sub('free'), feeWaived: true }]],
+  ['waived-current', [sub('old-paid','ACTIVE','2026-01-01','2026-07-01'), { ...sub('current-free'), feeWaived: true }, sub('paid-renewal','PENDING','2026-09-19')]],
+  ['waived-latest', [sub('expired-paid','ACTIVE','2026-01-01','2026-07-01'), { ...sub('latest-free','CANCELLED','2026-09-01'), feeWaived: true }]],
+] as const) fixtures.push({ ...fixtures[0], id, name: id, subscriptions: [...subscriptions], crew: { members: [{ ...fixtures[0].crew.members[0], user: person('waived-principal') }] } })
 const drafts = [
   ['b00','published','2026-08-31T15:59:59Z'], ['b00','published','2026-08-31T16:00:00Z'],
   ['b00','published',now.toISOString()], ['b00','published','2026-10-01T00:00:00Z'],
   ['b00','failed','2026-09-10T00:00:00Z'], ['b00','scheduled','2026-09-10T00:00:00Z'],
   ['b01','published','2026-09-10T00:00:00Z'],
+  ['waived-current','published','2026-09-10T00:00:00Z'],
 ]
 const readDb: any = {
   user: { findMany: async ({select}: any) => select.crewMemberships ? [{crewMemberships:[{crew:{brandId:'b00'}}],organizationsJoined:[{owner:{crewMemberships:[{crew:{brandId:'b01'}}]}}]}] : [person('p')] },
@@ -108,6 +115,11 @@ const result = await listOperations(admin,new URLSearchParams(),readDb,now)
 assert.equal(result.total,26); assert.equal(result.rows.length,25)
 assert.equal(result.rows[0].monthlyPublished,2); assert.equal(result.rows[0].subscription.id,'s0')
 assert.equal(result.summary.monthlyPublished,3)
+assert.equal(result.summary.brands,26)
+assert.equal(result.summary.active,26)
+assert.equal(result.summary.expiring,26)
+assert(!result.principalOptions.some(p => p.id === 'waived-principal'))
+assert.equal((await listOperations(admin,new URLSearchParams('q=waived'),readDb,now)).total,0)
 assert.equal((await listOperations(admin,new URLSearchParams('page=2'),readDb,now)).rows.length,1)
 assert.equal((await listOperations(admin,new URLSearchParams('q=Brand%2025'),readDb,now)).total,1)
 assert.equal((await listOperations(admin,new URLSearchParams('status=PENDING'),readDb,now)).total,0)

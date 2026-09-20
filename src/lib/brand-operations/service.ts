@@ -28,11 +28,13 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
       ...u.crewMemberships.map(m => m.crew.brandId), ...u.organizationsJoined.flatMap(o => o.owner.crewMemberships.map(m => m.crew.brandId)),
     ]))]
   }
-  const brands: BrandRow[] = await db.brand.findMany({ where: { status: { not: 'ARCHIVED' }, subscriptions: { some: {} }, ...(scope ? { id: { in: scope } } : {}) }, select: {
+  const subscribedBrands: BrandRow[] = await db.brand.findMany({ where: { status: { not: 'ARCHIVED' }, subscriptions: { some: {} }, ...(scope ? { id: { in: scope } } : {}) }, select: {
     id: true, name: true, location: true, status: true,
     subscriptions: { select: { id: true, planName: true, status: true, feeWaived: true, contractStartDate: true, contractEndDate: true, createdAt: true } },
     crew: { select: { members: { select: memberSelect } } },
   } })
+  // Select the current contract first: historical paid records must not revive a waived brand.
+  const brands = subscribedBrands.filter(b => !selectSubscription(b.subscriptions, now).feeWaived)
   const ids = brands.map(b => b.id)
   const period = monthWindow(now)
   type Count = { brandId: string; _count: { _all: number }; _max?: { publishedAt: Date | null } }
