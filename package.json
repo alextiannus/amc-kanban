@@ -98,7 +98,8 @@
     "test:immedi-erp": "node --import tsx --test scripts/test-immedi-erp.mts",
     "test:role-permissions": "tsx scripts/test-role-permissions.mts && tsx scripts/test-custom-roles.mts",
     "test:content-access-identity": "tsx scripts/test-content-access-identity.mts",
-    "test:brand-operations": "node --import tsx scripts/test-brand-operations.mts"
+    "test:brand-operations": "node --import tsx scripts/test-brand-operations.mts",
+    "test:postfast-key-release": "node --experimental-strip-types scripts/test-postfast-key-release.mts"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",

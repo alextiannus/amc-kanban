@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { isAmcOperator } from '@/lib/amcOperator'
+import { releasePostfastPoolKey } from '@/lib/postfastKeyRelease'
+import { SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import {
   createPostfastPoolKeys,
   maskPostfastApiKey,
@@ -109,6 +111,20 @@ export async function PATCH(request: Request) {
   const id = typeof (body as any).id === 'string' ? (body as any).id.trim() : ''
   if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
+  if (body.action !== undefined) {
+    if (body.action !== 'release' || typeof body.expectedBrandId !== 'string' || !body.expectedBrandId.trim() || typeof body.expectedUpdatedAt !== 'string' || !Number.isFinite(Date.parse(body.expectedUpdatedAt)) || body.status !== undefined) {
+      return NextResponse.json({ error: '解绑需提供 action: release、expectedBrandId 和 expectedUpdatedAt，不能同时修改 status。' }, { status: 400 })
+    }
+    try {
+      const key = await releasePostfastPoolKey({ id, expectedBrandId: body.expectedBrandId.trim(), expectedUpdatedAt: new Date(body.expectedUpdatedAt).toISOString(), actorId: auth.session.user.id })
+      return NextResponse.json({ key })
+    } catch (error: unknown) {
+      if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+      if (error && typeof error === 'object' && 'code' in error && (error.code === 'P2034' || error.code === 'P2028')) return NextResponse.json({ error: '配置正在更新，请刷新列表后重试。' }, { status: 409 })
+      return NextResponse.json({ error: '解绑回池失败，绑定未修改，请稍后重试。' }, { status: 500 })
+    }
+  }
+
   const current = await (prisma as any).postfastApiKeyPool.findUnique({ where: { id } })
   if (!current) return NextResponse.json({ error: 'PostFast key not found' }, { status: 404 })
 
@@ -116,12 +132,12 @@ export async function PATCH(request: Request) {
   if (status !== undefined && !isPostfastKeyStatus(status)) {
     return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
   }
-  if (current.status === 'ASSIGNED' && status && status !== current.status) {
-    return NextResponse.json({ error: '已分配的 key 不能直接删除或改状态，请先更换该品牌的 PostFast 配置，或解除占用后再操作。' }, { status: 400 })
+  if (status && status !== current.status && (current.status === 'ASSIGNED' || current.assignedBrandId || status === 'ASSIGNED')) {
+    return NextResponse.json({ error: '已分配的 key 请使用“解绑并回池”；不能通过修改状态创建或解除分配。' }, { status: 400 })
   }
 
   const updated = await (prisma as any).postfastApiKeyPool.update({
-    where: { id },
+    where: { id, updatedAt: current.updatedAt, status: current.status, assignedBrandId: current.assignedBrandId },
     data: {
       ...(typeof (body as any).label === 'string' ? { label: (body as any).label.trim() || null } : {}),
       ...(typeof (body as any).notes === 'string' ? { notes: (body as any).notes.trim() || null } : {}),

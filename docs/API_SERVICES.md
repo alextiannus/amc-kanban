@@ -318,6 +318,11 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 - AMC Agent 可写入和读取被绑定品牌的 TopicFeed。
 - 后续建议同步到 Dify dataset，作为品牌研究知识库。
 
+## PostFast key 池管理员解绑（本次修复，本地已实现，待部署）
+
+`PATCH /api/admin/postfast-keys`：`{ "id": "<keyId>", "action": "release", "expectedBrandId": "<brandId>", "expectedUpdatedAt": "<key.updatedAt>" }`。
+沿用管理员 Session 授权（401/403）；成功返回脱敏 `{key}`，库存变为 `AVAILABLE`。已回池重试成功；分配关系变更、工作区仍有社媒账号、本地发布任务或远端排期返回 409；PostFast 状态无法确认返回 503。清空品牌 key 和 Connect Link/同步缓存并原子记录审计，保留历史数据。不调用 PostFast 删除或撤销授权接口。通用 `status` 更新不能代替解绑，也不能制造无品牌的 `ASSIGNED` 状态。
+
 ## 3.11 Social Account Service
 
 职责：品牌社媒账号连接、补录、管理。

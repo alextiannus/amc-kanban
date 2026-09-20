@@ -33,6 +33,10 @@ This PRD consolidates the design, execution, and integration routes for each pla
 
 ## 3. Platform Architecture & Implementation
 
+### 3.0 PostFast key pool release (implemented locally, pending deployment)
+
+Admin offers a separate “解绑并回池” action for assigned keys. It clears the matching brand configuration and returns the retained key to `AVAILABLE`; retirement remains a separate action for unassigned inventory. Release requires an empty provider workspace and no pending local delivery or remote scheduled posts. Provider failures preserve the binding. Assignment checks, brand cleanup, inventory release and masked audit are atomic; historical records remain. See [main PRD](./prd_amc.md) for acceptance criteria.
+
 ### 3.1 Google Business Profile (GBP / Google Maps)
 *   **Content Publishing**: 
     *   *Implementation*: Handled by `createGoogleGBPLocalPost` in `google.ts` utilizing direct OAuth2 tokens, or fallback to PostFast's S3-signed media upload + publish endpoints.

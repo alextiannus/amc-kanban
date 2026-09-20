@@ -81,7 +81,7 @@ const SYSTEM_SECTION_COPY: Record<SystemSettingsSection, { title: string; descri
   },
   postfast: {
     title: 'PostFast Key 池',
-    description: '管理预配置 PostFast API Key 的库存、分配状态和退役操作。',
+    description: '管理 PostFast API Key 的库存、品牌解绑回池和退役。',
   },
   direct_oauth: {
     title: '社媒直连配置',
@@ -190,6 +190,7 @@ type ModelTaskRouteRecord = {
 }
 
 interface PostfastKeyRecord {
+  updatedAt: string
   id: string
   label: string | null
   maskedKey: string | null
@@ -297,6 +298,7 @@ const [promptModalOpen, setPromptModalOpen] = useState(false)
   })
 
 const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
+  const [releasingPostfastKeyId, setReleasingPostfastKeyId] = useState<string | null>(null)
   const [postfastKeysLoading, setPostfastKeysLoading] = useState(false)
   const [savingPostfastKeys, setSavingPostfastKeys] = useState(false)
   const [postfastForm, setPostfastForm] = useState({ label: '', tokensText: '', notes: '' })
@@ -305,7 +307,7 @@ const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
   const fetchPostfastKeys = async () => {
     setPostfastKeysLoading(true)
     try {
-      const res = await fetch('/api/admin/postfast-keys')
+      const res = await fetch('/api/admin/postfast-keys', { signal: AbortSignal.timeout(15_000) })
       if (res.ok) {
         const data = await res.json()
         setPostfastKeys(data.keys || [])
@@ -345,10 +347,39 @@ const [postfastKeys, setPostfastKeys] = useState<PostfastKeyRecord[]>([])
     }
   }
 
+  const handleReleasePostfastKey = async (key: PostfastKeyRecord) => {
+    if (releasingPostfastKeyId || !key.assignedBrandId) return
+    const brandName = key.assignedBrand?.name || key.assignedBrandId
+    if (!confirm(`确认解除「${brandName}」的 PostFast key 绑定并返回待分配池？品牌将停止使用该 key，历史记录保留。若 PostFast 仍连接社媒账号或有未完成发布，请先处理。`)) return
+    setReleasingPostfastKeyId(key.id)
+    setPostfastMessage(null)
+    try {
+      const res = await fetch('/api/admin/postfast-keys', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: key.id, action: 'release', expectedBrandId: key.assignedBrandId, expectedUpdatedAt: key.updatedAt }),
+        signal: AbortSignal.timeout(30_000),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setPostfastMessage({ ok: false, text: data.error || '解绑回池失败，请稍后重试' })
+        return
+      }
+      setPostfastMessage({ ok: true, text: `已解除「${brandName}」的 PostFast key 绑定，key 已返回待分配池。` })
+      await fetchPostfastKeys()
+      void onFetchSystemLogs().catch(console.error)
+    } catch (e) {
+      console.error(e)
+      setPostfastMessage({ ok: false, text: '请求超时或网络错误，结果尚未确认，请刷新列表确认状态后重试' })
+    } finally {
+      setReleasingPostfastKeyId(null)
+    }
+  }
+
   const handleRetirePostfastKey = async (key: PostfastKeyRecord) => {
     if (key.status === 'ASSIGNED') {
       const brandName = key.assignedBrand?.name || key.assignedBrandId || '当前品牌'
-      const message = `不能删除：这个 PostFast key 已分配给「${brandName}」。请先更换该品牌的 PostFast 配置，或解除占用后再退役。`
+      const message = `这个 PostFast key 已分配给「${brandName}」，请使用“解绑并回池”。`
       setPostfastMessage({ ok: false, text: message })
       alert(message)
       return
@@ -696,7 +727,7 @@ return (
                   </label>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[10px] text-slate-400 leading-relaxed">
-                      新品牌创建时会自动领取一个 AVAILABLE key，并写入品牌 PostFast 配置；列表仅显示掩码和分配关系。
+                      新品牌自动领取 AVAILABLE key。已分配 key 可“解绑并回池”；“退役”表示停止使用，不会返回待分配池。
                     </p>
                     <button
                       type="submit"
@@ -726,7 +757,7 @@ return (
                     <col className="w-[120px]" />
                     <col className="w-[260px]" />
                     <col className="w-[190px]" />
-                    <col className="w-[110px]" />
+                    <col className="w-[150px]" />
                   </colgroup>
                   <thead>
                     <tr>
@@ -773,15 +804,28 @@ return (
                             <p className="text-[10px] text-slate-400 truncate">{key.notes || new Date(key.createdAt).toLocaleDateString('zh-CN')}</p>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleRetirePostfastKey(key)}
-                              disabled={key.status === 'RETIRED'}
-                              className="inline-flex items-center justify-center p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 hover:border-rose-200 disabled:opacity-40 disabled:hover:text-slate-500 disabled:hover:border-slate-200 cursor-pointer"
-                              title={key.status === 'ASSIGNED' ? '不能删除：已分配给品牌，点击查看原因' : key.status === 'RETIRED' ? '已退役' : '标记为退役'}
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {key.status === 'ASSIGNED' ? (
+                              <button
+                                type="button"
+                                onClick={() => handleReleasePostfastKey(key)}
+                                disabled={!!releasingPostfastKeyId}
+                                className="inline-flex items-center gap-1 rounded-lg border border-amber-200 px-2 py-1.5 text-amber-700 disabled:opacity-40 cursor-pointer"
+                              >
+                                {releasingPostfastKeyId === key.id && <Loader2 size={13} className="animate-spin" />}
+                                {releasingPostfastKeyId === key.id ? '解绑中…' : '解绑并回池'}
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleRetirePostfastKey(key)}
+                                disabled={key.status === 'RETIRED' || !!releasingPostfastKeyId}
+                                className="inline-flex items-center gap-1 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-rose-600 disabled:opacity-40 cursor-pointer"
+                                title={key.status === 'RETIRED' ? '已退役' : '标记为退役，不返回待分配池'}
+                              >
+                                <Trash2 size={13} />
+                                {key.status === 'RETIRED' ? '已退役' : '退役'}
+                              </button>
+                            )}
                           </td>
                         </tr>
                       )

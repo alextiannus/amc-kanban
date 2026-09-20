@@ -32,7 +32,7 @@ export async function lockAccountBinding(tx: any, accountId: string) {
   if (!rows[0]?.locked) throw new SocialAccountBindingError('该账号正在同步或发布，请稍后重试。', 409, 'ACCOUNT_BUSY')
 }
 
-async function lockBrandSync(tx: any, brandId: string) {
+export async function lockBrandSync(tx: any, brandId: string) {
   const rows = await tx.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(${`social-account-sync:${brandId}`}, 0)) AS locked`
   if (!rows[0]?.locked) throw new SocialAccountBindingError('账号绑定正在更新，请稍后重试。', 409, 'ACCOUNT_BUSY')
 }
