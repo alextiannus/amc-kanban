@@ -60,7 +60,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
     if (initialView === 'dashboard') {
       try {
         const requestedView = new URLSearchParams(window.location.search).get('tab')
-        const savedView = (['assets', 'managementOverview'].includes(requestedView || '') ? requestedView : window.localStorage.getItem('amc.currentView')) as BoardView | null
+        const savedView = (['assets', 'managementOverview', 'dashboard'].includes(requestedView || '') ? requestedView : window.localStorage.getItem('amc.currentView')) as BoardView | null
         const validViews: BoardView[] = ['dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
         if (savedView && validViews.includes(savedView)) {
           setTimeout(() => {
@@ -120,14 +120,16 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
         const list = payload.filter(isActiveBrand)
         setBrands(list)
         if (list.length > 0) {
+          let requestedBrandId: string | null = null
           let savedBrandId: string | null = null
           try {
-            savedBrandId = new URLSearchParams(window.location.search).get('brandId') || window.localStorage.getItem('dashboard.activeBrandId')
+            requestedBrandId = new URLSearchParams(window.location.search).get('brandId')
+            savedBrandId = requestedBrandId || window.localStorage.getItem('dashboard.activeBrandId')
           } catch (e) {
             console.error(e)
           }
           const savedBrand = list.find(b => b.id === savedBrandId)
-          setActiveBrand(prev => (prev && list.some(b => b.id === prev.id) ? prev : savedBrand ?? list[0]))
+          setActiveBrand(prev => (prev && list.some(b => b.id === prev.id) ? prev : savedBrand ?? (requestedBrandId ? null : list[0])))
         } else {
           setActiveBrand(null)
         }

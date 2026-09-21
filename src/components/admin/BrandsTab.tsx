@@ -24,6 +24,7 @@ export interface BrandRecord {
 }
 
 interface BrandsTabProps {
+  initialBrandId?: string | null
   brands: BrandRecord[]
   brandsLoading: boolean
   humans: UserRecord[]
@@ -48,6 +49,7 @@ interface BrandsTabProps {
 }
 
 export default function BrandsTab({
+  initialBrandId,
   brands,
   brandsLoading,
   humans,
@@ -69,7 +71,7 @@ export default function BrandsTab({
   onCreatePoolMember
 }: BrandsTabProps) {
   const [subTab, setSubTab] = useState<'brands' | 'pool'>('brands')
-  const [editingBrandId, setEditingBrandId] = useState<string | null>(null)
+  const [editingBrandId, setEditingBrandId] = useState<string | null>(initialBrandId || null)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PENDING' | 'FAILED' | 'CANCELLED'>('ALL')
   const [poolSearchTerm, setPoolSearchTerm] = useState('')
@@ -770,6 +772,7 @@ export default function BrandsTab({
                       </div>
                     </div>
 
+                    <BrandPrincipalEditor key={editingBrand.id} brandId={editingBrand.id} />
                     <StoreEntitlementsEditor key={editingBrand.id} brandId={editingBrand.id} />
 
                     {/* AI Agents binding */}
@@ -917,8 +920,6 @@ export default function BrandsTab({
                         </button>
                       )
                     })()}
-
-                    <BrandPrincipalEditor key={editingBrand.id} brandId={editingBrand.id} />
 
                     {/* Action buttons */}
                     <div className="flex items-center gap-3">

@@ -1114,7 +1114,9 @@ function AdminPageInner() {
         )}
 
         {activeAdminTab === 'brands' && (
-          <BrandsTab 
+          <BrandsTab
+            key={searchParams.get('brandId') || 'brand-list'}
+            initialBrandId={searchParams.get('brandId')}
             brands={brands}
             brandsLoading={brandsLoading}
             humans={humans}
