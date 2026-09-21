@@ -84,33 +84,36 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
 
 export async function changePrincipal(actor: AuthPrincipal, brandId: string, input: unknown, db = prisma, fromCrew = false) {
   if (actor.source !== 'session' || !actor.globalRoles.includes('ADMIN')) throw new OperationsError('Forbidden', 403)
+  return db.$transaction((tx: typeof prisma) => changePrincipalInTransaction(actor, brandId, input, tx, fromCrew), { isolationLevel: 'Serializable' })
+}
+
+export async function changePrincipalInTransaction(actor: Pick<AuthPrincipal, 'source' | 'globalRoles' | 'userId' | 'actorType' | 'email'>, brandId: string, input: unknown, tx: typeof prisma, fromCrew = false) {
+  if (actor.source !== 'session' || !actor.globalRoles.includes('ADMIN')) throw new OperationsError('Forbidden', 403)
   const body = input as { principalId?: unknown; expectedVersion?: unknown } | null
   if (!body || typeof body.principalId !== 'string' || !body.principalId || typeof body.expectedVersion !== 'string' || !body.expectedVersion) throw new OperationsError('请选择主理人并刷新品牌数据', 400)
   const principalId = body.principalId
-  return db.$transaction(async (tx: typeof prisma) => {
-    const brand = await tx.brand.findFirst({ where: { id: brandId, status: { not: 'ARCHIVED' }, ...(fromCrew ? {} : { subscriptions: { some: {} } }) }, select: { id: true, crew: { select: { id: true, members: { select: memberSelect } } } } })
-    if (!brand) throw new OperationsError('品牌不存在或没有订阅', 404)
-    const members: Member[] = brand.crew?.members || []
-    if (assignmentVersion(members) !== body.expectedVersion) throw new OperationsError('品牌成员已变更，请刷新后重试', 409)
-    if (fromCrew && !members.some(m => m.userId === principalId && m.active)) throw new OperationsError('请先将该成员加入品牌团队并保存', 400)
-    const candidate = await tx.user.findFirst({ where: { id: principalId, status: 'ACTIVE', type: 'HUMAN', ...(fromCrew ? {} : { businessRoles: { some: { role: 'AMC_PRINCIPAL' } } }) }, select: { id: true } })
-    if (!candidate) throw new OperationsError('该用户不是可指派的启用人类主理人', 400)
-    if (members.some(m => m.userId === principalId && m.role === 'OWNER')) throw new OperationsError('不能将品牌主改为主理人', 400)
-    const crew = brand.crew || await tx.marketingCrew.create({ data: { brandId }, select: { id: true } })
-    const previous = members.filter(m => m.active && m.role === 'PRINCIPAL')
-    if (previous.length === 1 && previous[0].userId === principalId) return { ok: true }
-    await tx.crewMember.updateMany({ where: { crewId: crew.id, active: true, role: 'PRINCIPAL', userId: { not: principalId } }, data: { role: 'EDITOR' } })
-    await tx.crewMember.upsert({ where: { crewId_userId: { crewId: crew.id, userId: principalId } },
-      create: { crewId: crew.id, userId: principalId, role: 'PRINCIPAL', active: true, source: 'DIRECT' },
-      update: { role: 'PRINCIPAL', active: true, source: 'DIRECT' },
-    })
-    await tx.auditLog.create({ data: { actorId: actor.userId, actorType: actor.actorType, actorName: actor.email || null,
-      action: 'BRAND_PRINCIPAL_CHANGED', resourceType: 'Brand', resourceId: brandId,
-      oldValue: { members: members.map(m => ({ userId: m.userId, role: m.role, active: m.active })) },
-      newValue: { principalIds: [principalId], previousPrincipalIds: previous.filter(m => m.userId !== principalId).map(m => m.userId) },
-    } })
-    return { ok: true }
-  }, { isolationLevel: 'Serializable' })
+  const brand = await tx.brand.findFirst({ where: { id: brandId, status: { not: 'ARCHIVED' }, ...(fromCrew ? {} : { subscriptions: { some: {} } }) }, select: { id: true, crew: { select: { id: true, members: { select: memberSelect } } } } })
+  if (!brand) throw new OperationsError('品牌不存在或没有订阅', 404)
+  const members: Member[] = brand.crew?.members || []
+  if (assignmentVersion(members) !== body.expectedVersion) throw new OperationsError('品牌成员已变更，请刷新后重试', 409)
+  if (fromCrew && !members.some(m => m.userId === principalId && m.active)) throw new OperationsError('请先将该成员加入品牌团队并保存', 400)
+  const candidate = await tx.user.findFirst({ where: { id: principalId, status: 'ACTIVE', type: 'HUMAN', ...(fromCrew ? {} : { businessRoles: { some: { role: 'AMC_PRINCIPAL' } } }) }, select: { id: true } })
+  if (!candidate) throw new OperationsError('该用户不是可指派的启用人类主理人', 400)
+  if (members.some(m => m.userId === principalId && m.role === 'OWNER')) throw new OperationsError('不能将品牌主改为主理人', 400)
+  const crew = brand.crew || await tx.marketingCrew.create({ data: { brandId }, select: { id: true } })
+  const previous = members.filter(m => m.active && m.role === 'PRINCIPAL')
+  if (previous.length === 1 && previous[0].userId === principalId) return { ok: true }
+  await tx.crewMember.updateMany({ where: { crewId: crew.id, active: true, role: 'PRINCIPAL', userId: { not: principalId } }, data: { role: 'EDITOR' } })
+  await tx.crewMember.upsert({ where: { crewId_userId: { crewId: crew.id, userId: principalId } },
+    create: { crewId: crew.id, userId: principalId, role: 'PRINCIPAL', active: true, source: 'DIRECT' },
+    update: { role: 'PRINCIPAL', active: true, source: 'DIRECT' },
+  })
+  await tx.auditLog.create({ data: { actorId: actor.userId, actorType: actor.actorType, actorName: actor.email || null,
+    action: 'BRAND_PRINCIPAL_CHANGED', resourceType: 'Brand', resourceId: brandId,
+    oldValue: { members: members.map(m => ({ userId: m.userId, role: m.role, active: m.active })) },
+    newValue: { principalIds: [principalId], previousPrincipalIds: previous.filter(m => m.userId !== principalId).map(m => m.userId) },
+  } })
+  return { ok: true }
 }
 
 export async function getPrincipalTeam(brandId: string, db = prisma) {

@@ -9,6 +9,7 @@ import {
 
 // Import Tab Components
 import UsersTab, { type UserRecord } from '@/components/admin/UsersTab'
+import { buildAdminBrandPatch } from '@/lib/admin-brand-patch'
 import BrandsTab, { type BrandRecord } from '@/components/admin/BrandsTab'
 import SystemTab, { type LLMConfigRecord, type PromptTemplateRecord, type SystemSettingsSection } from '@/components/admin/SystemTab'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
@@ -103,7 +104,7 @@ function AdminPageInner() {
   const [poolDrafts, setPoolDrafts] = useState<Record<string, { capacity: number; priority: number; industries: string; regions: string }>>({})
   
   // Brand draft states
-  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[] }>>({})
+  const [brandDrafts, setBrandDrafts] = useState<Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[]; principalId?: string; principalVersion?: string }>>({})
 
   // LLM Config state
   const [llmConfigs, setLlmConfigs] = useState<LLMConfigRecord[]>([])
@@ -458,11 +459,7 @@ function AdminPageInner() {
   const handleSaveBrandDraft = async (brand: BrandRecord) => {
     const draft = brandDrafts[brand.id]
     if (!draft) return
-    const normalizedDraft = {
-      ...draft,
-      planId: ['starter', 'essential', 'booster'].includes(draft.planId) ? draft.planId : 'essential',
-      durationMonths: 12,
-    }
+    const normalizedDraft = buildAdminBrandPatch(brand, draft)
     setActionLoading(p => ({ ...p, [brand.id + '_brand']: '1' }))
     try {
       const res = await fetch(`/api/admin/brands/${brand.id}`, {

@@ -59,6 +59,8 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 ### Admin 品牌主理人指派（已部署，2026-09-21）
 
+主理人统一保存（待发布）：选择只更新品牌表单草稿，不调用独立指派接口。PATCH /api/admin/brands/{id} 接受可选 principalId 与 principalVersion，在品牌、团队、订阅和审计的同一串行化事务中校验并保存；缺少版本、候选无效或冲突均不允许部分提交。旧独立接口仅兼容保留，界面没有指派按钮。
+
 - GET /api/admin/brands/{id}/principal：管理员会话，返回真实 Crew 的当前主理人、启用人类非 OWNER 候选与成员版本。
 - PATCH 同路径：请求 principalId、expectedVersion；校验管理员会话、Origin、真实团队成员资格、用户状态和类型及成员版本，原子更新唯一 PRINCIPAL、降级原负责人为 EDITOR 并审计。无订阅或免收品牌同样支持。错误 400/401/403/404/409，异常 503，响应 no-store。客户页面不变。
 - Admin 品牌列表以 Crew 成员作为团队名单；普通品牌保存保留现有团队角色，移除当前主理人返回 409，先指派替代者再移除。

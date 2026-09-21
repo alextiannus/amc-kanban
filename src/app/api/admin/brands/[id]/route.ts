@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calculatePricing, getAllowedDurationsForPlan, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
-import { OperationsError } from '@/lib/brand-operations/service'
+import { allowedRoleWriteOrigin } from '@/lib/role-permissions/request-origin'
+import { OperationsError, changePrincipalInTransaction } from '@/lib/brand-operations/service'
 import { operationsFailure } from '@/lib/brand-operations/http'
 import { addCrewMember } from '@/lib/user-management/crew'
 import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
@@ -98,6 +99,11 @@ export async function PATCH(request: Request, { params }: Params) {
 
   try {
   const updated = await prisma.$transaction(async (tx: any) => {
+    if (body.principalId !== undefined) {
+      if (!allowedRoleWriteOrigin(request)) throw new OperationsError('Forbidden', 403)
+      if (resolvedOwnerId && resolvedOwnerId === body.principalId) throw new OperationsError('不能将品牌主改为主理人', 400)
+      await changePrincipalInTransaction({ userId: session.user.id, email: session.user.email, actorType: 'HUMAN', source: 'session', globalRoles: ['ADMIN'] }, id, { principalId: body.principalId, expectedVersion: body.principalVersion }, tx, true)
+    }
     const brand = await tx.brand.update({
       where: { id },
       data: {

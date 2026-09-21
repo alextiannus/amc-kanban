@@ -30,7 +30,7 @@ interface BrandsTabProps {
   brandsLoading: boolean
   humans: UserRecord[]
   agents: UserRecord[]
-  brandDrafts: Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[] }>
+  brandDrafts: Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[]; principalId?: string; principalVersion?: string }>
   actionLoading: Record<string, string>
   onUpdateBrandDraft: (brandId: string, patch: any) => void
   onSaveBrandDraft: (brand: BrandRecord) => Promise<boolean | void>
@@ -777,7 +777,7 @@ export default function BrandsTab({
                       </div>
                     </div>
 
-                    <BrandPrincipalEditor key={editingBrand.id} brandId={editingBrand.id} />
+                    <BrandPrincipalEditor key={editingBrand.id} brandId={editingBrand.id} principalId={draft.principalId} disabled={isSaving} onChange={(principalId, principalVersion) => onUpdateBrandDraft(editingBrand.id, { principalId, principalVersion })} onReset={() => onUpdateBrandDraft(editingBrand.id, { principalId: undefined, principalVersion: undefined })} />
                     <StoreEntitlementsEditor key={editingBrand.id} brandId={editingBrand.id} />
 
                     {/* AI Agents binding */}
