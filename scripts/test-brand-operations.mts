@@ -25,12 +25,13 @@ for (const roles of [['ADMIN'], ['AMC_PRINCIPAL'], ['BRAND_OWNER'], ['BD'], ['RE
 // Actual PostgreSQL transaction semantics test the assignment + audit rollback.
 const pg = new PGlite()
 await pg.exec(`
-CREATE TABLE users (id text PRIMARY KEY, status text, eligible boolean);
+CREATE TABLE users (id text PRIMARY KEY, status text, eligible boolean, type text DEFAULT 'HUMAN');
 CREATE TABLE brands (id text PRIMARY KEY, status text, subscribed boolean);
 CREATE TABLE crews (id text PRIMARY KEY, "brandId" text UNIQUE);
 CREATE TABLE members (id text PRIMARY KEY, "crewId" text, "userId" text, role text, active boolean, "updatedAt" timestamptz DEFAULT now(), UNIQUE("crewId", "userId"));
 CREATE TABLE audit (data jsonb);
-INSERT INTO users VALUES ('owner','ACTIVE',true),('old','ACTIVE',true),('next','ACTIVE',true),('disabled','DISABLED',true),('invalid','ACTIVE',false);
+INSERT INTO users (id,status,eligible) VALUES ('owner','ACTIVE',true),('old','ACTIVE',true),('next','ACTIVE',true),('disabled','DISABLED',true),('invalid','ACTIVE',false),('editor','ACTIVE',false),('bot','ACTIVE',true);
+UPDATE users SET type='AI_AGENT' WHERE id='bot';
 INSERT INTO brands VALUES ('brand','ACTIVE',true),('none','ACTIVE',false),('archive','ARCHIVED',true);
 INSERT INTO crews VALUES ('crew','brand');
 INSERT INTO members (id,"crewId","userId",role,active) VALUES ('m1','crew','owner','OWNER',true),('m2','crew','old','PRINCIPAL',true),('m3','crew','editor','EDITOR',true),('m4','crew','viewer','VIEWER',true);
@@ -40,16 +41,16 @@ function adapter(sql: any): any {
   const one = async (q: string, args: any[]) => (await sql.query(q, args)).rows[0] || null
   return {
     brand: { findFirst: async ({where}: any) => {
-      const b = await one('SELECT * FROM brands WHERE id=$1 AND status<>$2 AND subscribed=true', [where.id, where.status.not])
+      const b = await one('SELECT * FROM brands WHERE id=$1 AND status<>$2' + (where.subscriptions ? ' AND subscribed=true' : ''), [where.id, where.status.not])
       if (!b) return null
       b.crew = await one('SELECT * FROM crews WHERE "brandId"=$1', [b.id])
       if (b.crew) b.crew.members = (await sql.query('SELECT * FROM members WHERE "crewId"=$1', [b.crew.id])).rows
       return b
     } },
-    user: { findFirst: ({where}: any) => one('SELECT id FROM users WHERE id=$1 AND status=$2 AND eligible=true', [where.id, where.status]) },
+    user: { findFirst: ({where}: any) => one('SELECT id FROM users WHERE id=$1 AND status=$2 AND type=$3' + (where.businessRoles ? ' AND eligible=true' : ''), [where.id, where.status, where.type]) },
     marketingCrew: { create: ({data}: any) => one('INSERT INTO crews VALUES ($1,$2) RETURNING *', ['crew-'+data.brandId, data.brandId]) },
     crewMember: {
-      updateMany: async ({where}: any) => sql.query('UPDATE members SET active=false,"updatedAt"=now() WHERE "crewId"=$1 AND active=true AND role=$2 AND "userId"<>$3', [where.crewId, where.role, where.userId.not]),
+      updateMany: async ({where}: any) => sql.query(`UPDATE members SET role='EDITOR',"updatedAt"=now() WHERE "crewId"=$1 AND active=true AND role=$2 AND "userId"<>$3`, [where.crewId, where.role, where.userId.not]),
       upsert: ({create: d}: any) => one('INSERT INTO members (id,"crewId","userId",role,active) VALUES ($1,$2,$3,$4,true) ON CONFLICT ("crewId","userId") DO UPDATE SET role=EXCLUDED.role,active=true,"updatedAt"=now() RETURNING *', ['m-'+d.userId,d.crewId,d.userId,d.role]),
     },
     auditLog: { create: async ({data}: any) => { if (failAudit) throw new Error('audit unavailable'); await sql.query('INSERT INTO audit VALUES ($1)', [JSON.stringify(data)]) } },
@@ -64,7 +65,7 @@ try {
   const input = { principalId: 'next', expectedVersion: version }
   for (const actor of [{...admin,globalRoles:['AMC_PRINCIPAL']},{...admin,source:'api_key'}]) await assert.rejects(changePrincipal(actor,'brand',input,db), /Forbidden/)
   for (const id of ['none','archive','missing']) await assert.rejects(changePrincipal(admin,id,input,db), /不存在或没有订阅/)
-  for (const id of ['disabled','invalid','missing']) await assert.rejects(changePrincipal(admin,'brand',{...input,principalId:id},db), /不是启用/)
+  for (const id of ['disabled','invalid','missing']) await assert.rejects(changePrincipal(admin,'brand',{...input,principalId:id},db), /不是可指派/)
   await assert.rejects(changePrincipal(admin,'brand',{...input,principalId:'owner'},db), /品牌主/)
   await assert.rejects(changePrincipal(admin,'brand',{...input,expectedVersion:'stale'},db), /已变更/)
   await assert.rejects(changePrincipal(admin,'brand',null,db), /请选择/)
@@ -74,11 +75,24 @@ try {
   failAudit = false
   await changePrincipal(admin,'brand',input,db)
   const after = await memberRows()
-  assert.equal(after.find(m=>m.userId==='old').active, false)
+  assert.equal(after.find(m=>m.userId==='old').active, true)
+  assert.equal(after.find(m=>m.userId==='old').role, 'EDITOR')
   assert.equal(after.find(m=>m.userId==='next').role, 'PRINCIPAL')
   assert.deepEqual(after.filter(m=>['owner','editor','viewer'].includes(m.userId)), before.filter(m=>['owner','editor','viewer'].includes(m.userId)))
   assert.equal((await pg.query('SELECT * FROM audit')).rows.length, 1)
   await assert.rejects(changePrincipal(admin,'brand',input,db), /已变更/, 'second writer must refresh rather than overwrite')
+  // Admin team assignment accepts an active human editor without a global principal role.
+  const teamInput = { principalId: 'editor', expectedVersion: assignmentVersion(await memberRows()) }
+  await changePrincipal(admin,'brand',teamInput,db,true)
+  assert.equal((await memberRows()).find(m=>m.userId==='editor').role,'PRINCIPAL')
+  const latestVersion = assignmentVersion(await memberRows())
+  await assert.rejects(changePrincipal(admin,'brand',{principalId:'invalid',expectedVersion:latestVersion},db,true), /先将该成员加入/)
+  await pg.query(`INSERT INTO members (id,"crewId","userId",role,active) VALUES ('mb','crew','bot','EDITOR',true),('md','crew','disabled','EDITOR',true)`)
+  const versionWithInvalid = assignmentVersion(await memberRows())
+  for (const principalId of ['bot','disabled']) await assert.rejects(changePrincipal(admin,'brand',{principalId,expectedVersion:versionWithInvalid},db,true), /不是可指派/)
+  await pg.query(`UPDATE brands SET subscribed=false WHERE id='brand'`)
+  await changePrincipal(admin,'brand',{principalId:'old',expectedVersion:versionWithInvalid},db,true)
+  assert.equal((await memberRows()).find(m=>m.userId==='old').role,'PRINCIPAL')
 } finally { await pg.close() }
 
 // Exercise the production read pipeline with bounded query fixtures, including

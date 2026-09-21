@@ -162,9 +162,9 @@ unique(crewId, userId)
 
 ### 品牌运营看板权限（已部署，2026-09-20）
 
-主菜单 managementOverview 显示品牌运营看板。ADMIN 可读全部有实际订阅的非归档品牌并更换主理人；AMC_PRINCIPAL 同时具有 brand.read、analytics.read 时，仅可读当前 Crew/组织继承授权范围。运营订阅摘要不包含账单、凭据或订阅编辑能力。
+主菜单 managementOverview 显示品牌运营看板。ADMIN 可读选定订阅未免收费用的非归档品牌，看板只读展示主理人，指派入口位于 Admin 品牌管理；AMC_PRINCIPAL 同时具有 brand.read、analytics.read 时，仅可读当前 Crew/组织继承授权范围。运营订阅摘要不包含账单、凭据或订阅编辑能力。
 
-变更只接受管理员会话和可信 Origin；事务内校验启用的显式 AMC_PRINCIPAL 候选、保护 OWNER、比较完整 Crew 成员版本并保存前后 AuditLog。旧 PRINCIPAL 停用，新人选设为 PRINCIPAL，其他成员不变；组织继承、OWNER 与 ADMIN 权限仍独立生效。并发请求返回 409，ERP 复用后台 Crew.updatedAt 扫描。详细数据与本月发布统计口径见主 PRD「品牌运营看板」。
+变更只接受管理员会话和可信 Origin；Admin 品牌管理事务内校验有效 Crew 中启用的人类非 OWNER 候选（不授予全局角色）；旧运营接口仍校验显式 AMC_PRINCIPAL 候选、保护 OWNER、比较完整 Crew 成员版本并保存前后 AuditLog。旧 PRINCIPAL 降为 EDITOR 并保留团队身份，新人选设为 PRINCIPAL，其他成员不变；组织继承、OWNER 与 ADMIN 权限仍独立生效。并发请求返回 409，ERP 复用后台 Crew.updatedAt 扫描。详细数据与本月发布统计口径见主 PRD「品牌运营看板」。
 
 ### 5.4 组织继承
 
@@ -966,3 +966,7 @@ Growth SSO 是 Auth V2 的受限下游授权，不新增角色，也不改变品
 公司品牌主理人仅小韩（Xiao Han）与罗月伶；李薇（Li Wei）为私域运营官。`AMC_PRINCIPAL` 是平台能力角色，品牌奖励来源必须是 Crew 中明确的 HUMAN PRINCIPAL 关系以及获准 ERP 员工映射，不能根据 AI_AGENT、商家 OWNER、编辑者或管理员权限推断。ImmediToday 再次验证员工名单、品牌角色、地点和订单所有权。撤销/转移会重新计算未发放奖励，保留已发放凭证。
 
 当前公司主理人名单同步清理 `AMC_PRINCIPAL`：仅保留已核验的小韩和罗月伶账号。其他员工的已有品牌 PRINCIPAL 成员关系降为 EDITOR，以保留协作并移除品牌奖励归属；迁移保存原角色与成员关系审计快照，管理员、商家 OWNER 和其他独立角色保留。
+
+### Admin 品牌运营主理人（待发布）
+
+Admin 专属 GET/PATCH /api/admin/brands/{id}/principal 支持品牌团队内的运营主理人指派，无订阅和免收订阅品牌同样可管理；版本冲突返回 409、非团队候选拒绝。客户页面本次不调整。

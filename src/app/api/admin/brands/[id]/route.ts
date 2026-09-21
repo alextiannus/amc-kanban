@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calculatePricing, getAllowedDurationsForPlan, SUBSCRIPTION_PLANS, type PlanId } from '@/lib/subscription/catalog'
+import { OperationsError } from '@/lib/brand-operations/service'
+import { operationsFailure } from '@/lib/brand-operations/http'
 import { addCrewMember } from '@/lib/user-management/crew'
 import { reclaimPostfastKeyForBrandIfUnused } from '@/lib/postfastKeyPool'
 import { growthPathsForBrandPatch, queueBrandGrowthSync, syncBrandGrowthState } from '@/lib/brandGrowthSync'
@@ -94,6 +96,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
   }
 
+  try {
   const updated = await prisma.$transaction(async (tx: any) => {
     const brand = await tx.brand.update({
       where: { id },
@@ -148,6 +151,8 @@ export async function PATCH(request: Request, { params }: Params) {
       const currentBrand = await tx.brand.findUnique({ where: { id }, select: { ownerId: true } })
       const ownerId = currentBrand?.ownerId
 
+      const members = await tx.crewMember.findMany({ where: { crewId: crew.id, active: true }, select: { userId: true, role: true } })
+      if (members.some((m: { userId: string; role: string }) => m.role === 'PRINCIPAL' && !nextAgentIds.includes(m.userId))) throw new OperationsError('请先指派其他品牌主理人，再移除当前负责人；如团队已变更请刷新品牌列表', 409)
       const keepUserIds = [...nextAgentIds]
       if (ownerId) keepUserIds.push(ownerId)
 
@@ -163,7 +168,7 @@ export async function PATCH(request: Request, { params }: Params) {
 
       // Human and AMC Agent users share the same Crew membership path.
       for (const agentId of nextAgentIds) {
-        await addCrewMember(crew.id, agentId, 'EDITOR', tx)
+        await addCrewMember(crew.id, agentId, members.find((m: { userId: string }) => m.userId === agentId)?.role || 'EDITOR', tx)
       }
     }
 
@@ -220,7 +225,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
 
     return brand
-  })
+  }, { isolationLevel: 'Serializable' })
 
   if (growthDirtyPaths.length) await syncBrandGrowthState(id)
 
@@ -234,6 +239,7 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   return NextResponse.json({ ok: true, brand: updated })
+  } catch (error) { return operationsFailure(error) }
 }
 
 export async function DELETE(

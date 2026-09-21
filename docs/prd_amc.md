@@ -9,7 +9,8 @@ Merchant voiceover current implementation contract (pending deployment): [mercha
 - 每品牌一行，表格内容尽量单行、紧凑行高，窄屏在表格内部横向滚动。第一列仅显示品牌名与国家，不展示城市、详细位置或品牌状态。国家从 Brand.location 中明确的国家名称或代码识别，无法确认显示 —，不从默认时区推断。其他列保留套餐与订阅状态、合约结束时间、品牌主、品牌主理人、本月发布次数、最近发布时间；合约开始日期和联系人邮箱放入悬停提示。长名称单行截断并提供完整提示。此 UI 调整已于 2026-09-21（Asia/Singapore）随版本 `045242d7` 部署。
 - 实际订阅指数据库真实关联记录，保留待激活、失败、取消、到期记录，排除无记录品牌。优先选择当前生效 ACTIVE 合约，否则选择最近创建的订阅；选定订阅 feeWaived=true 的品牌不进入列表、汇总、主理人筛选或发布次数统计，不得回退历史收费合约使其重新入选。历史免收记录不排除当前收费品牌，免收续约草稿也不覆盖仍生效收费合约。免收排除规则已于 2026-09-20 随版本 `1cf5b07e` 发布。ACTIVE 根据开始/结束日期区分未开始与已到期。支持搜索、状态/主理人筛选、到期/本月发布排序及分页。
 - 本月为 Asia/Singapore 本月 1 日 00:00 至查询时刻；按 ContentDraft.status=published 且 publishedAt 在区间内的记录计数，每条记录一次，各平台独立记录分别计数，人工补录计入，排期、失败、编辑不计。页面展示统计日期与口径；零次与查询失败明确区分。
-- 品牌主取有效 Crew OWNER，主理人取有效 Crew PRINCIPAL，支持显示历史多主理人；不从旧 BrandAgent 或 ownerId 推断。只有管理员网页会话可以更换为一个启用且有显式 AMC_PRINCIPAL 角色的人选；候选不按昵称硬编码。不能覆盖 OWNER；原 PRINCIPAL 停用以撤销直接授权，其他成员保持不变。当前看板隐藏所有用户的主理人修改入口和弹窗，仅展示主理人；保留已有受管理员鉴权保护的更换接口，不改变角色授权。
+- 品牌主取有效 Crew OWNER，主理人取有效 Crew PRINCIPAL，支持显示历史多主理人；不从旧 BrandAgent 或 ownerId 推断。Admin 品牌管理可从当前品牌已保存的有效 Crew 人类成员中指派唯一运营主理人，排除 OWNER、AI 和停用用户；此操作不自动授予全局 AMC_PRINCIPAL 角色。不能覆盖 OWNER；原 PRINCIPAL 降为 EDITOR 并保留团队身份，其他成员保持不变。当前看板隐藏所有用户的主理人修改入口和弹窗，仅展示主理人；保留已有受管理员鉴权保护的更换接口，不改变角色授权。
+- Admin 指派为本地实现目标，待发布。客户页面本次不变；品牌管理的「品牌主」只指客户/业主，「品牌主理人」指负责日常运营及客户对接的人。保存其他品牌资料或团队名单不得隐式降级主理人；移除当前主理人前须先指派替代者。
 - 更换在同一事务完成资格检查、当前 Crew 版本校验、Crew 更新、AuditLog 前后快照；并发变更返回 409，要求刷新。沿用 Crew.updatedAt 的 ERP 后台扫描，不在浏览器保存请求内发送 ERP 网络操作或宣称同步成功。独立 OWNER、组织继承或管理员权限不随直接主理人撤销而消失。
 - 列表及保存请求最长等待 15 秒；超时返回可重试提示。保存结果不确定时先刷新确认现状，不直接重复提交；筛选人选在查询失败和当前人选不再匹配时保持可见，与实际筛选条件一致。
 - 接口：GET /api/brand-operations 返回分页数据、汇总、统计周期与管理员候选；PATCH /api/brand-operations/[brandId]/principal 接受 principalId、expectedVersion。会话认证、服务端品牌范围、管理员写入、Origin 检查与 no-store 响应均必须执行，不开放 MCP/API Key 新入口。
@@ -1380,7 +1381,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 - **过滤与显示升级**：支持按全部、ACTIVE、PENDING、FAILED、CANCELLED 五种状态对托管品牌进行列表筛选和彩药丸徽章状态展示。
 
 ### 2. 品牌主下拉列表过滤修复
-- **独立人选集**：将“主理人/业主 (Brand Owner)”下拉选择框的数据源，从过滤后的 `filteredHumans`（排除了纯品牌主身份的用户）改回 unfiltered `humans` 全量人类用户。
+- **独立人选集**：将“品牌主 / 客户业主 (Brand Owner)”下拉选择框的数据源，从过滤后的 `filteredHumans`（排除了纯品牌主身份的用户）改回 unfiltered `humans` 全量人类用户。
 - **防止空置错误**：解决之前因纯品牌主身份用户被过滤隐藏，导致下拉框无法回显已绑定业主的 ID，从而渲染为“未设置”的显示及保存 Bug。
 - **Crew 成员隔离保留**：继续在 "AI Marketing Crew" 成员列表中保留 `filteredHumans` 的规则，确保运营层面的 AI 员工和督导团队中不会混入其他商家的纯业主账号。
 

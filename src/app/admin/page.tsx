@@ -473,11 +473,14 @@ function AdminPageInner() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         alert(data.error || '保存品牌失败')
-        return
+        return false
       }
       await Promise.all([fetchBrands(), fetchUsers()])
+      return true
     } catch (e) {
       console.error(e)
+      alert('保存品牌失败，请刷新后重试')
+      return false
     } finally {
       setActionLoading(p => { const n = { ...p }; delete n[brand.id + '_brand']; return n })
     }

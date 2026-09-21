@@ -29,6 +29,7 @@ export async function GET() {
         },
         orderBy: { createdAt: 'asc' },
       },
+      crew: { select: { members: { where: { active: true, role: { not: 'OWNER' } }, select: { userId: true, role: true, user: { select: { id: true, email: true, nickname: true } } } } } },
       brandAgents: {
         where: { active: true },
         select: {
@@ -64,5 +65,5 @@ export async function GET() {
     orderBy: [{ status: 'asc' }, { updatedAt: 'desc' }],
   })
 
-  return NextResponse.json(brands)
+  return NextResponse.json(brands.map(({ crew, ...brand }: typeof brands[number]) => ({ ...brand, brandAgents: crew ? crew.members.map((m: { userId: string; role: string; user: { id: string; email: string; nickname: string | null } }) => ({ agentId: m.userId, role: m.role, agent: m.user })) : brand.brandAgents })))
 }

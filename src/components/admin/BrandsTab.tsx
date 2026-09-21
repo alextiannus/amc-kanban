@@ -5,6 +5,7 @@ import {
   Store, Save, RefreshCw, Users, Shield, MapPin, Tag, Cpu, Trash2, CreditCard, ToggleLeft, ToggleRight, Search, Plus, X, Calendar
 } from 'lucide-react'
 import { type UserRecord } from './UsersTab'
+import BrandPrincipalEditor from './BrandPrincipalEditor'
 import StoreEntitlementsEditor from './StoreEntitlementsEditor'
 import { type AssignmentPoolConfig, type AssignmentPoolMember, type AssignmentDecision } from '@/components/shared/types'
 
@@ -30,7 +31,7 @@ interface BrandsTabProps {
   brandDrafts: Record<string, { name: string; location: string; timezone: string; status: string; ownerUserId: string; planId: string; subscriptionStatus: string; durationMonths: number; feeWaived: boolean; agentIds: string[] }>
   actionLoading: Record<string, string>
   onUpdateBrandDraft: (brandId: string, patch: any) => void
-  onSaveBrandDraft: (brand: BrandRecord) => Promise<void>
+  onSaveBrandDraft: (brand: BrandRecord) => Promise<boolean | void>
   onFetchBrands: () => Promise<void>
   onCreateBrand: (params: { brandName: string; ownerEmail: string; planId: string; durationMonths: number; location?: string; timezone?: string }) => Promise<{ ok: boolean; error?: string }>
 
@@ -682,14 +683,14 @@ export default function BrandsTab({
                         <span className="text-[10px] font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest block">💳 商业授权与订阅 (Billing & Subscriptions)</span>
                       </div>
                       <label className="space-y-1.5 block">
-                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">主理人/业主 (Brand Owner)</span>
+                        <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block">品牌主 / 客户业主 (Brand Owner)</span>
                         <select 
                           value={draft.ownerUserId} 
                           onChange={e => onUpdateBrandDraft(editingBrand.id, { ownerUserId: e.target.value })} 
                           className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-955 px-3 py-2.5 text-sm dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                         >
                           <option value="">未设置</option>
-                          <optgroup label="人类主理人 (Humans)">
+                          <optgroup label="人类用户 (Humans)">
                             {humans.map((human) => (
                               <option key={human.id} value={human.id}>
                                 {human.nickname ? `${human.nickname} (${human.email})` : human.email}
@@ -917,6 +918,8 @@ export default function BrandsTab({
                       )
                     })()}
 
+                    <BrandPrincipalEditor key={editingBrand.id} brandId={editingBrand.id} />
+
                     {/* Action buttons */}
                     <div className="flex items-center gap-3">
                       <button
@@ -929,8 +932,7 @@ export default function BrandsTab({
                       <button 
                         type="button"
                         onClick={async () => {
-                          await onSaveBrandDraft(editingBrand)
-                          setEditingBrandId(null)
+                          if (await onSaveBrandDraft(editingBrand) !== false) setEditingBrandId(null)
                         }} 
                         disabled={isSaving} 
                         className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
