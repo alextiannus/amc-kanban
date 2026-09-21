@@ -57,7 +57,7 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 - monthlyPublished 为新加坡时间本月 1 日零点至查询时刻的成功发布 ContentDraft 数，各平台独立记录分别计数、包含人工补录；不统计排期、失败或编辑。
 - PATCH /api/brand-operations/{brandId}/principal：当前看板隐藏修改入口；接口保留，仅 ADMIN 会话，校验 Origin；请求 principalId、expectedVersion。启用且显式 AMC_PRINCIPAL 的候选可设为唯一当前主理人，OWNER 不可被覆盖；旧主理人降为 EDITOR 并保留团队关系，其他成员不变。事务内写入 BRAND_PRINCIPAL_CHANGED 审计，Crew.updatedAt 由现有 ERP worker 扫描。并发成员变更返回 409，资格无效 400，无目标品牌 404，未登录 401，越权 403，服务异常 503。响应 no-store，不新增 API Key/MCP 能力，也不依赖 AI 文本策略服务。
 
-### Admin 品牌主理人指派（待发布）
+### Admin 品牌主理人指派（已部署，2026-09-21）
 
 - GET /api/admin/brands/{id}/principal：管理员会话，返回真实 Crew 的当前主理人、启用人类非 OWNER 候选与成员版本。
 - PATCH 同路径：请求 principalId、expectedVersion；校验管理员会话、Origin、真实团队成员资格、用户状态和类型及成员版本，原子更新唯一 PRINCIPAL、降级原负责人为 EDITOR 并审计。无订阅或免收品牌同样支持。错误 400/401/403/404/409，异常 503，响应 no-store。客户页面不变。
