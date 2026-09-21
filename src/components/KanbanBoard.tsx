@@ -317,7 +317,8 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
             }>
               <BrandProfileView 
                 key={activeBrand?.id ?? 'no-brand'} 
-                brand={activeBrand ?? undefined} 
+                brand={activeBrand ?? undefined}
+                onClose={typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('returnTo') === 'managementOverview' ? () => { setCurrentView('managementOverview'); router.replace('/board?tab=managementOverview') } : undefined}
                 onUpdate={(updated) => {
                   setActiveBrand(updated)
                   setBrands(prev => prev.map(b => b.id === updated.id ? { ...b, name: updated.name } : b))

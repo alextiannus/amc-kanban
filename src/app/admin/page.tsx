@@ -1117,6 +1117,7 @@ function AdminPageInner() {
           <BrandsTab
             key={searchParams.get('brandId') || 'brand-list'}
             initialBrandId={searchParams.get('brandId')}
+            onEditorClose={searchParams.get('returnTo') === 'managementOverview' ? () => router.replace('/board?tab=managementOverview') : undefined}
             brands={brands}
             brandsLoading={brandsLoading}
             humans={humans}

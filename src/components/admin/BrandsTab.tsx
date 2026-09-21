@@ -25,6 +25,7 @@ export interface BrandRecord {
 
 interface BrandsTabProps {
   initialBrandId?: string | null
+  onEditorClose?: () => void
   brands: BrandRecord[]
   brandsLoading: boolean
   humans: UserRecord[]
@@ -50,6 +51,7 @@ interface BrandsTabProps {
 
 export default function BrandsTab({
   initialBrandId,
+  onEditorClose,
   brands,
   brandsLoading,
   humans,
@@ -72,6 +74,7 @@ export default function BrandsTab({
 }: BrandsTabProps) {
   const [subTab, setSubTab] = useState<'brands' | 'pool'>('brands')
   const [editingBrandId, setEditingBrandId] = useState<string | null>(initialBrandId || null)
+  const closeBrandEditor = () => { setEditingBrandId(null); onEditorClose?.() }
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'PENDING' | 'FAILED' | 'CANCELLED'>('ALL')
   const [poolSearchTerm, setPoolSearchTerm] = useState('')
@@ -630,8 +633,10 @@ export default function BrandsTab({
                         <span className="flex items-center gap-1"><Tag size={11} /> 待审核事项: {editingBrand._count.actionItems} 个</span>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => setEditingBrandId(null)}
+                    <button
+                      aria-label="关闭品牌编辑"
+                      disabled={isSaving}
+                      onClick={closeBrandEditor}
                       className="p-1 rounded-lg text-slate-405 hover:text-slate-850 dark:hover:text-slate-200 transition-all cursor-pointer font-bold"
                     >
                       <X size={18} />
@@ -925,7 +930,8 @@ export default function BrandsTab({
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => setEditingBrandId(null)}
+                        disabled={isSaving}
+                        onClick={closeBrandEditor}
                         className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-350 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs cursor-pointer transition-colors"
                       >
                         取消
@@ -933,7 +939,7 @@ export default function BrandsTab({
                       <button 
                         type="button"
                         onClick={async () => {
-                          if (await onSaveBrandDraft(editingBrand) !== false) setEditingBrandId(null)
+                          if (await onSaveBrandDraft(editingBrand) !== false) closeBrandEditor()
                         }} 
                         disabled={isSaving} 
                         className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-650 hover:bg-blue-700 disabled:opacity-50 text-white font-extrabold text-xs transition-all shadow-sm cursor-pointer"
