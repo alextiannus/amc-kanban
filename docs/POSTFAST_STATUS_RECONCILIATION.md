@@ -32,7 +32,7 @@ npm run postfast:repair-statuses
 3. 执行 apply，再连续执行两次 dry-run；第二次不得重复产生同一状态更新。
 4. 验证“发布失败”和“发布中”页签计数，并抽查 `12Eat 唐人街外卖`、`Super Rola`。
 
-### PostFast 账号授权失效与改期（本地修复与验证完成，待发布）
+### PostFast 账号授权失效与改期（2026-09-23 已发布，`e3b48224`）
 
 PostFast connectionStatus=DISABLED、disabledReason=TOKEN_REVOKED 表示社交账号授权已撤销，不是 AMC 登录会话失效。发布界面应说明账号与恢复步骤，要求账号持有人在品牌设置重新连接；不得伪造恢复状态或自动反复重试。账号是否可发布以 PostFast 最新状态为准，重新连接后的 CONNECTED 不应被本地旧状态阻挡。普通草稿保存和送审仍可进行。
 
