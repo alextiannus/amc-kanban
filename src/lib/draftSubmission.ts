@@ -1,3 +1,4 @@
+import { checkPostfastPublishAccount } from '@/lib/postfastPublishAccount'
 import { withBoundAccount, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { prisma } from '@/lib/prisma'
 import {
@@ -157,14 +158,6 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   const platformId = normalizePublishPlatform(draft.account.platformId)
-  if (draft.account.connectionStatus === 'DISABLED') {
-    return {
-      ok: false as const,
-      status: 422,
-      code: 'POSTFAST_ACCOUNT_DISABLED',
-      error: draft.account.disabledReason || '该社媒账号已被 PostFast 禁用，请重新连接后再发布。',
-    }
-  }
   if (platformId === 'google') {
     if (!draft.gbpLocationId) {
       return {
@@ -235,6 +228,11 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
   if (!draft.accountId) {
     return { ok: false as const, status: 400, error: '请先为草稿选择发布账号（确定发布平台）。' }
+  }
+
+  if (shouldValidateForPublish && brand.postfastApiKey) {
+    const health = await checkPostfastPublishAccount({ apiKey: brand.postfastApiKey, brandId: brand.id, accountId: draft.accountId, platform: platformId })
+    if (!health.success) return { ok: false as const, status: health.status, code: health.code, error: health.error }
   }
 
   // 已经排期的post，一定要先确认之前的排期成功取消掉，否则不要安排新的发布避免重复

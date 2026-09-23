@@ -1,3 +1,4 @@
+import { checkPostfastPublishAccount } from '@/lib/postfastPublishAccount'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -325,6 +326,10 @@ export async function PATCH(request: Request, { params }: Params) {
       select: { postfastApiKey: true, timezone: true }
     })
     if (brand?.postfastApiKey) {
+      if (scheduledAtChanged || gbpLocationChanged) {
+        const health = await checkPostfastPublishAccount({ apiKey: brand.postfastApiKey, brandId, accountId: nextAccountId || undefined, platform: nextAccount.platformId })
+        if (!health.success) return NextResponse.json({ ok: false, code: health.code, error: health.error }, { status: health.status })
+      }
       const { postfastDeletePost } = await import('@/lib/integrations/postfast')
       const cancelResult = await postfastDeletePost(brand.postfastApiKey, existing.platformPostId!)
       if (cancelResult.success) {
@@ -488,12 +493,14 @@ export async function PATCH(request: Request, { params }: Params) {
         )
       } else {
         console.warn(`[PATCH Draft] Re-submit to PostFast failed after reschedule: ${resubmitResult.error}`)
-        // Return the DB-updated draft even if PostFast re-submission failed
-        return NextResponse.json({ ok: true, draft, rescheduled: false, resubmitError: resubmitResult.error })
+        // Report delivery failure and the latest persisted state; never imply the schedule succeeded.
+        const currentDraft = await prisma.contentDraft.findUnique({ where: { id: draftId }, select: DRAFT_SELECT })
+        return NextResponse.json({ ...resubmitResult, draft: currentDraft || draft, rescheduled: false, resubmitError: resubmitResult.error }, { status: resubmitResult.status })
       }
     } catch (err: any) {
       console.error('[PATCH Draft] Re-submit to PostFast threw:', err)
-      return NextResponse.json({ ok: true, draft, rescheduled: false, resubmitError: err?.message })
+      const currentDraft = await prisma.contentDraft.findUnique({ where: { id: draftId }, select: DRAFT_SELECT })
+      return NextResponse.json({ ok: false, draft: currentDraft || draft, rescheduled: false, error: '旧排期已取消，但新的排期未确认成功，请刷新草稿状态后处理。', resubmitError: err?.message }, { status: 502 })
     }
   }
 

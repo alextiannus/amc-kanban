@@ -1404,27 +1404,12 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
   }
   if (publishDeadlineAt - Date.now() < 2_000) return postfastPublishTimeout()
 
-  // 1. Fetch connected accounts from PostFast to resolve the PostFast account ID (socialMediaId)
-  const { success: fetchSuccess, accounts, error: fetchError } = await postfastFetchAccounts(
-    input.apiKey,
-    remainingTimeout(publishDeadlineAt, 5_000),
-  )
-  if (!fetchSuccess) {
-    if (Date.now() >= publishDeadlineAt - 250) return postfastPublishTimeout()
-    return { success: false, error: `无法获取 PostFast 账号列表: ${fetchError}` }
-  }
-
-  const { resolveLocalPublishAccount, withBoundAccount } = await import('../socialAccountBinding.ts')
-  let binding: Awaited<ReturnType<typeof resolveLocalPublishAccount>>
-  try {
-    binding = await resolveLocalPublishAccount(input, accounts)
-  } catch (error) {
-    return { success: false, code: error instanceof SocialAccountBindingError ? error.code : 'ACCOUNT_BINDING_UNAVAILABLE', error: error instanceof Error ? error.message : '无法确认账号绑定状态。' }
-  }
+  const { checkPostfastPublishAccount } = await import('../postfastPublishAccount.ts')
+  const accountCheck = await checkPostfastPublishAccount(input, remainingTimeout(publishDeadlineAt, 5_000))
+  if (!accountCheck.success) return { success: false, code: accountCheck.code, error: accountCheck.error }
+  const { binding, accounts } = accountCheck
   const matchedAccount = binding.remote
-  if (matchedAccount.connectionStatus === 'DISABLED') {
-    return { success: false, code: 'POSTFAST_ACCOUNT_DISABLED', error: matchedAccount.disabledReason || 'The selected PostFast account is disabled. Reconnect it before publishing.' }
-  }
+  const { withBoundAccount } = await import('../socialAccountBinding.ts')
   const dbAccountForPublish = binding.local
 
   const socialMediaId = matchedAccount.id

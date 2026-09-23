@@ -1,4 +1,5 @@
 'use client'
+import { postfastAccountHealthError } from '@/lib/postfastAccountHealth'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import PostPreviewModal from './PostPreviewModal'
 import PostEditDrawer from './PostEditDrawer'
@@ -2026,6 +2027,7 @@ ${contentIdea || 'No details provided.'}`
   const formatTime = (value: string) => new Date(value).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 
   const expiredAccounts = brandDetails?.accounts?.filter((acc: any) => {
+    if (postfastAccountHealthError(acc)) return true
     if (!acc.expiresAt) return false
     return new Date(acc.expiresAt) < new Date()
   }) || []
@@ -2232,9 +2234,9 @@ ${contentIdea || 'No details provided.'}`
                   <div key={acc.id} className="bg-amber-50 dark:bg-amber-955/20 border border-amber-200/50 dark:border-amber-900/30 p-3 rounded-xl flex gap-2 text-amber-700 dark:text-amber-400">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div className="text-[10px]">
-                      <p className="font-extrabold leading-tight">{normalizePlatformLabel(acc.platformId)} 授权过期</p>
-                      <p className="mt-1 opacity-90">账号 {acc.handle} 的 AccessToken 已失效，排期将无法自动发布。</p>
-                      <button onClick={() => alert('请前往设置重新连接')} className="mt-1.5 font-black underline hover:no-underline text-[9px]">去重新授权</button>
+                      <p className="font-extrabold leading-tight">{normalizePlatformLabel(acc.platformId)} 发布连接异常</p>
+                      <p className="mt-1 opacity-90">{postfastAccountHealthError(acc)?.error || `账号 ${acc.handle} 的发布授权已过期，请重新连接。`}</p>
+                      <a href={`/board?tab=dashboard&brandId=${encodeURIComponent(activeBrandId)}`} className="mt-1.5 inline-block font-black underline hover:no-underline text-[9px]">前往品牌设置</a>
                     </div>
                   </div>
                 ))}
