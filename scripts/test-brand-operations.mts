@@ -3,9 +3,13 @@ import { PGlite } from '@electric-sql/pglite'
 import { monthWindow, selectSubscription, subscriptionState, canReadOperations } from '../src/lib/brand-operations/policy.ts'
 import { canAccessView, getMenuGroups } from '../src/lib/permissions.ts'
 process.env.DATABASE_URL = 'postgresql://test:test@127.0.0.1:1/test'
-const { changePrincipal, assignmentVersion, listOperations } = await import('../src/lib/brand-operations/service.ts')
+const { changePrincipal, assignmentVersion, listOperations, accountHealth } = await import('../src/lib/brand-operations/service.ts')
 
 const now = new Date('2026-09-20T10:00:00Z')
+const healthyAccount = { id:'a1', platformId:'instagram', handle:'brand', displayName:'Brand', profileUrl:'https://instagram.com/brand', followerCount:1200, followerDelta:25, ratingScore:4.8, snapshotAt:now, connectionStatus:'CONNECTED', disabledReason:null }
+assert.deepEqual(accountHealth([healthyAccount], 4), { totalAccounts:1, linkedAccounts:1, followers:1200, followerDelta:25, disabledAccounts:0, healthScore:100, healthStatus:'HEALTHY' })
+assert.deepEqual(accountHealth([{...healthyAccount,profileUrl:null,followerDelta:-2,connectionStatus:'DISABLED'}],0), { totalAccounts:1, linkedAccounts:0, followers:1200, followerDelta:-2, disabledAccounts:1, healthScore:0, healthStatus:'ATTENTION' })
+assert.equal(accountHealth([], 0).healthScore, 0)
 assert.equal(monthWindow(now).start.toISOString(), '2026-08-31T16:00:00.000Z')
 assert.equal(monthWindow(new Date('2026-09-30T16:00:00Z')).start.toISOString(), '2026-09-30T16:00:00.000Z')
 assert.equal(monthWindow(new Date('2026-12-31T16:00:00Z')).start.toISOString(), '2026-12-31T16:00:00.000Z')

@@ -24,7 +24,7 @@ export async function fetchOperationsJson<T>(url: string, init: RequestInit = {}
   } catch (error) {
     if (error instanceof OperationsRequestError || init.signal?.aborted) throw error
     const message = write
-      ? (options.en ? 'The result could not be confirmed. Refresh the list before making another change.' : '无法确认保存结果，请先刷新列表核对当前主理人后再操作。')
+      ? (options.en ? 'The result could not be confirmed. Refresh the list before making another change.' : '无法确认保存结果，请先刷新列表核对当前数据后再操作。')
       : timedOut
         ? (options.en ? 'Loading timed out. Please retry.' : '加载超时，请重试。')
         : (options.en ? 'Could not load data. Please retry.' : '数据加载失败，请重试。')

@@ -162,7 +162,7 @@ unique(crewId, userId)
 
 ### 品牌运营看板权限（已部署，2026-09-20）
 
-主菜单 managementOverview 显示品牌运营看板。ADMIN 可读选定订阅未免收费用的非归档品牌，看板只读展示主理人，指派入口位于 Admin 品牌管理；AMC_PRINCIPAL 同时具有 brand.read、analytics.read 时，仅可读当前 Crew/组织继承授权范围。运营订阅摘要不包含账单、凭据或订阅编辑能力。
+主菜单 managementOverview 显示品牌运营看板。ADMIN 可读选定订阅未免收费用的非归档品牌，看板只读展示主理人，指派入口位于 Admin 品牌管理；AMC_PRINCIPAL 同时具有 brand.read、analytics.read 时，仅可读当前 Crew/组织继承授权范围。运营订阅摘要不包含账单、凭据或订阅编辑能力。两类用户均可查看授权品牌的账号运营指标并打开已配置的公开主页链接；只有 ADMIN 在看板显示账号资料补录入口，服务端仍以品牌写权限复核，主理人保持只读。
 
 变更只接受管理员会话和可信 Origin；Admin 品牌管理事务内校验有效 Crew 中启用的人类非 OWNER 候选（不授予全局角色）；旧运营接口仍校验显式 AMC_PRINCIPAL 候选、保护 OWNER、比较完整 Crew 成员版本并保存前后 AuditLog。旧 PRINCIPAL 降为 EDITOR 并保留团队身份，新人选设为 PRINCIPAL，其他成员不变；组织继承、OWNER 与 ADMIN 权限仍独立生效。并发请求返回 409，ERP 复用后台 Crew.updatedAt 扫描。详细数据与本月发布统计口径见主 PRD「品牌运营看板」。
 

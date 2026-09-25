@@ -52,9 +52,11 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 ### 品牌运营看板（已部署，2026-09-20）
 
-- GET /api/brand-operations：仅登录会话；ADMIN 查看有订阅且选定订阅未免收费用的非归档品牌，AMC_PRINCIPAL 需 brand.read + analytics.read 并按有效 Crew/组织继承范围筛选。查询参数 q、status、principalId（支持 unassigned）、sort（expiry/published/name）、page；每页 25 行。返回 rows、total、page、pageSize、summary、period、canManage、principalOptions；candidates 仅管理员返回。
+- GET /api/brand-operations：仅登录会话；ADMIN 查看有订阅且选定订阅未免收费用的非归档品牌，AMC_PRINCIPAL 需 brand.read + analytics.read 并按有效 Crew/组织继承范围筛选。查询参数 q、status、principalId（支持 unassigned）、sort（expiry/published/name）、page；每页 25 行。返回 rows、total、page、pageSize、summary、period、canManage、principalOptions；candidates 仅管理员返回。每个 row 包含当前绑定 socialAccounts 及 accountSummary；账号字段限定为公开运营指标和资料（平台、handle、displayName、profileUrl、连接状态、粉丝、净增、评分、快照、本月发布和最近发布），不返回 token 或登录凭据。
 - 订阅优先选当前生效合约，否则最近创建记录；选定合约 feeWaived=true 的品牌从列表、汇总及筛选候选中排除，不回退历史收费记录。待激活、失败、取消和到期的非免收订阅仍保留。字段只含套餐与合约摘要，不返回支付链接、账单或服务凭据。
 - monthlyPublished 为新加坡时间本月 1 日零点至查询时刻的成功发布 ContentDraft 数，各平台独立记录分别计数、包含人工补录；不统计排期、失败或编辑。
+- accountSummary 提供 totalAccounts、linkedAccounts、followers、followerDelta、disabledAccounts、healthScore 与 healthStatus。健康分由连接正常率 30%、链接完整率 15%、每账号本月 4 条发布目标 40%、粉丝趋势 15% 构成；无账号为 0 分。summary 额外提供 accounts、linkedAccounts、attentionBrands、followers 与 followerDelta。
+- PATCH /api/brands/{brandId}/accounts/{accountId}：现有品牌账号编辑接口用于管理员在运营看板补充 handle、displayName、profileUrl；继续执行品牌写权限，并校验可信 Origin。空 displayName/profileUrl 写为 null，handle 不允许空白；响应不向看板暴露登录凭据。
 - PATCH /api/brand-operations/{brandId}/principal：当前看板隐藏修改入口；接口保留，仅 ADMIN 会话，校验 Origin；请求 principalId、expectedVersion。启用且显式 AMC_PRINCIPAL 的候选可设为唯一当前主理人，OWNER 不可被覆盖；旧主理人降为 EDITOR 并保留团队关系，其他成员不变。事务内写入 BRAND_PRINCIPAL_CHANGED 审计，Crew.updatedAt 由现有 ERP worker 扫描。并发成员变更返回 409，资格无效 400，无目标品牌 404，未登录 401，越权 403，服务异常 503。响应 no-store，不新增 API Key/MCP 能力，也不依赖 AI 文本策略服务。
 
 ### Admin 品牌主理人指派（已部署，2026-09-21）

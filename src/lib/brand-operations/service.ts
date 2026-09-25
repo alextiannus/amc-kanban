@@ -8,12 +8,33 @@ export class OperationsError extends Error {
 }
 type Person = { id: string; nickname: string | null; email: string }
 type Member = { id: string; userId: string; role: string; active: boolean; updatedAt: Date; user: Person }
-type BrandRow = { id: string; name: string; location: string | null; status: string; subscriptions: SubscriptionSummary[]; crew: { members: Member[] } | null }
+type Account = { id: string; platformId: string; handle: string; displayName: string | null; profileUrl: string | null; followerCount: number | null; followerDelta: number | null; ratingScore: number | null; snapshotAt: Date | null; connectionStatus: string; disabledReason: string | null }
+type BrandRow = { id: string; name: string; location: string | null; status: string; subscriptions: SubscriptionSummary[]; crew: { members: Member[] } | null; socialAccounts: Account[] }
 const personSelect = { id: true, nickname: true, email: true }
 const memberSelect = { id: true, userId: true, role: true, active: true, updatedAt: true, user: { select: personSelect } }
 export const assignmentVersion = (members: Member[]) => createHash('sha256').update(JSON.stringify(
   members.map(m => [m.id, m.userId, m.role, m.active, new Date(m.updatedAt).toISOString()]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))),
 )).digest('hex')
+
+const hasPublicProfile = (value: string | null) => {
+  if (!value) return false
+  try { return ['http:', 'https:'].includes(new URL(value).protocol) } catch { return false }
+}
+const accountConnected = (account: Account) => !account.disabledReason && !['DISABLED', 'DISCONNECTED', 'ERROR', 'EXPIRED'].includes(account.connectionStatus.toUpperCase())
+export function accountHealth(accounts: Account[], monthlyPublished: number) {
+  if (!accounts.length) return { totalAccounts: 0, linkedAccounts: 0, followers: 0, followerDelta: 0, disabledAccounts: 0, healthScore: 0, healthStatus: 'ATTENTION' as const }
+  const linkedAccounts = accounts.filter(a => hasPublicProfile(a.profileUrl)).length
+  const disabledAccounts = accounts.filter(a => !accountConnected(a)).length
+  const followerDelta = accounts.reduce((sum, a) => sum + (a.followerDelta || 0), 0)
+  const connection = ((accounts.length - disabledAccounts) / accounts.length) * 30
+  const links = (linkedAccounts / accounts.length) * 15
+  const activity = Math.min(1, monthlyPublished / (accounts.length * 4)) * 40
+  const trend = followerDelta > 0 ? 15 : followerDelta < 0 ? 0 : 8
+  const healthScore = Math.round(connection + links + activity + trend)
+  return { totalAccounts: accounts.length, linkedAccounts,
+    followers: accounts.reduce((sum, a) => sum + (a.followerCount || 0), 0), followerDelta, disabledAccounts, healthScore,
+    healthStatus: healthScore < 60 || disabledAccounts > 0 ? 'ATTENTION' as const : 'HEALTHY' as const }
+}
 
 export async function listOperations(actor: AuthPrincipal, params: URLSearchParams, db = prisma, now = new Date()) {
   const admin = actor.globalRoles.includes('ADMIN')
@@ -32,28 +53,38 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
     id: true, name: true, location: true, status: true,
     subscriptions: { select: { id: true, planName: true, status: true, feeWaived: true, contractStartDate: true, contractEndDate: true, createdAt: true } },
     crew: { select: { members: { select: memberSelect } } },
+    socialAccounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, connectionStatus: true, disabledReason: true }, orderBy: [{ platformId: 'asc' }, { id: 'asc' }] },
   } })
   // Select the current contract first: historical paid records must not revive a waived brand.
   const brands = subscribedBrands.filter(b => !selectSubscription(b.subscriptions, now).feeWaived)
   const ids = brands.map(b => b.id)
   const period = monthWindow(now)
-  type Count = { brandId: string; _count: { _all: number }; _max?: { publishedAt: Date | null } }
-  const [monthly, latest, candidates]: [Count[], Count[], Person[]] = await Promise.all([
+  type Count = { brandId: string; accountId?: string | null; _count: { _all: number }; _max?: { publishedAt: Date | null } }
+  type AccountCount = { accountId: string | null; _count?: { _all: number }; _max?: { publishedAt: Date | null } }
+  const accountIds = brands.flatMap(b => (b.socialAccounts || []).map(a => a.id))
+  const [monthly, latest, accountMonthly, accountLatest, candidates]: [Count[], Count[], AccountCount[], AccountCount[], Person[]] = await Promise.all([
     ids.length ? db.contentDraft.groupBy({ by: ['brandId'], where: { brandId: { in: ids }, status: 'published', publishedAt: { gte: period.start, lte: period.end } }, _count: { _all: true } }) : [],
     ids.length ? db.contentDraft.groupBy({ by: ['brandId'], where: { brandId: { in: ids }, status: 'published', publishedAt: { lte: now } }, _max: { publishedAt: true } }) : [],
+    accountIds.length ? db.contentDraft.groupBy({ by: ['accountId'], where: { accountId: { in: accountIds }, status: 'published', publishedAt: { gte: period.start, lte: period.end } }, _count: { _all: true } }) : [],
+    accountIds.length ? db.contentDraft.groupBy({ by: ['accountId'], where: { accountId: { in: accountIds }, status: 'published', publishedAt: { lte: now } }, _max: { publishedAt: true } }) : [],
     admin ? db.user.findMany({ where: { status: 'ACTIVE', businessRoles: { some: { role: 'AMC_PRINCIPAL' } } }, select: personSelect, orderBy: [{ nickname: 'asc' }, { id: 'asc' }] }) : [],
   ])
   const counts = new Map(monthly.map(r => [r.brandId, r._count._all]))
   const dates = new Map(latest.map(r => [r.brandId, r._max?.publishedAt || null]))
+  const accountCounts = new Map(accountMonthly.filter(r => r.accountId).map(r => [r.accountId as string, r._count?._all || 0]))
+  const accountDates = new Map(accountLatest.filter(r => r.accountId).map(r => [r.accountId as string, r._max?.publishedAt || null]))
   const all = brands.map(b => {
     const sub = selectSubscription(b.subscriptions, now)
     const members = b.crew?.members || []
+    const socialAccounts = (b.socialAccounts || []).map(account => ({ ...account, monthlyPublished: accountCounts.get(account.id) || 0, lastPublishedAt: accountDates.get(account.id) || null }))
+    const monthlyPublished = counts.get(b.id) || 0
     return { id: b.id, name: b.name, location: b.location, status: b.status,
       subscription: { ...sub, effectiveStatus: subscriptionState(sub, now) },
       owners: members.filter(m => m.active && m.role === 'OWNER').map(m => m.user),
       principals: members.filter(m => m.active && m.role === 'PRINCIPAL').map(m => m.user),
       assignmentVersion: admin ? assignmentVersion(members) : undefined,
-      monthlyPublished: counts.get(b.id) || 0, lastPublishedAt: dates.get(b.id) || null,
+      socialAccounts, accountSummary: accountHealth(b.socialAccounts || [], monthlyPublished),
+      monthlyPublished, lastPublishedAt: dates.get(b.id) || null,
     }
   })
   const principalOptions = [...new Map(all.flatMap(b => b.principals).map(p => [p.id, p])).values()]
@@ -62,7 +93,7 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
   const principalId = params.get('principalId') || ''
   const rows = all.filter(b => (!status || b.subscription.effectiveStatus === status) &&
     (!principalId || (principalId === 'unassigned' ? !b.principals.length : b.principals.some(p => p.id === principalId))) &&
-    (!query || [b.name, b.location, b.subscription.planName, ...[...b.owners, ...b.principals].flatMap(p => [p.nickname, p.email])].some(v => v?.toLocaleLowerCase().includes(query))))
+    (!query || [b.name, b.location, b.subscription.planName, ...[...b.owners, ...b.principals].flatMap(p => [p.nickname, p.email]), ...b.socialAccounts.flatMap(a => [a.platformId, a.handle, a.displayName])].some(v => v?.toLocaleLowerCase().includes(query))))
   const sort = params.get('sort') || 'expiry'
   rows.sort((a, b) => {
     if (sort === 'published') return b.monthlyPublished - a.monthlyPublished || a.id.localeCompare(b.id)
@@ -78,7 +109,12 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
     period: { start: period.start.toISOString(), end: period.end.toISOString(), timezone: 'Asia/Singapore' },
     summary: { brands: all.length, active: all.filter(b => b.subscription.effectiveStatus === 'ACTIVE').length,
       expiring: all.filter(b => b.subscription.effectiveStatus === 'ACTIVE' && b.subscription.contractEndDate && new Date(b.subscription.contractEndDate).getTime() <= now.getTime() + 30 * 86400_000).length,
-      monthlyPublished: all.reduce((sum, b) => sum + b.monthlyPublished, 0) },
+      monthlyPublished: all.reduce((sum, b) => sum + b.monthlyPublished, 0),
+      accounts: all.reduce((sum, b) => sum + b.accountSummary.totalAccounts, 0),
+      linkedAccounts: all.reduce((sum, b) => sum + b.accountSummary.linkedAccounts, 0),
+      attentionBrands: all.filter(b => b.accountSummary.healthStatus === 'ATTENTION').length,
+      followers: all.reduce((sum, b) => sum + b.accountSummary.followers, 0),
+      followerDelta: all.reduce((sum, b) => sum + b.accountSummary.followerDelta, 0) },
   }
 }
 
