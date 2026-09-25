@@ -9,7 +9,7 @@ export class OperationsError extends Error {
 type Person = { id: string; nickname: string | null; email: string }
 type Member = { id: string; userId: string; role: string; active: boolean; updatedAt: Date; user: Person }
 type Account = { id: string; platformId: string; handle: string; displayName: string | null; profileUrl: string | null; followerCount: number | null; followerDelta: number | null; ratingScore: number | null; snapshotAt: Date | null; connectionStatus: string; disabledReason: string | null }
-type BrandRow = { id: string; name: string; location: string | null; status: string; subscriptions: SubscriptionSummary[]; crew: { members: Member[] } | null; socialAccounts: Account[] }
+type BrandRow = { id: string; name: string; location: string | null; status: string; subscriptions: SubscriptionSummary[]; crew: { members: Member[] } | null; accounts: Account[] }
 const personSelect = { id: true, nickname: true, email: true }
 const memberSelect = { id: true, userId: true, role: true, active: true, updatedAt: true, user: { select: personSelect } }
 export const assignmentVersion = (members: Member[]) => createHash('sha256').update(JSON.stringify(
@@ -53,7 +53,7 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
     id: true, name: true, location: true, status: true,
     subscriptions: { select: { id: true, planName: true, status: true, feeWaived: true, contractStartDate: true, contractEndDate: true, createdAt: true } },
     crew: { select: { members: { select: memberSelect } } },
-    socialAccounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, connectionStatus: true, disabledReason: true }, orderBy: [{ platformId: 'asc' }, { id: 'asc' }] },
+    accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, connectionStatus: true, disabledReason: true }, orderBy: [{ platformId: 'asc' }, { id: 'asc' }] },
   } })
   // Select the current contract first: historical paid records must not revive a waived brand.
   const brands = subscribedBrands.filter(b => !selectSubscription(b.subscriptions, now).feeWaived)
@@ -61,7 +61,7 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
   const period = monthWindow(now)
   type Count = { brandId: string; accountId?: string | null; _count: { _all: number }; _max?: { publishedAt: Date | null } }
   type AccountCount = { accountId: string | null; _count?: { _all: number }; _max?: { publishedAt: Date | null } }
-  const accountIds = brands.flatMap(b => (b.socialAccounts || []).map(a => a.id))
+  const accountIds = brands.flatMap(b => (b.accounts || []).map(a => a.id))
   const [monthly, latest, accountMonthly, accountLatest, candidates]: [Count[], Count[], AccountCount[], AccountCount[], Person[]] = await Promise.all([
     ids.length ? db.contentDraft.groupBy({ by: ['brandId'], where: { brandId: { in: ids }, status: 'published', publishedAt: { gte: period.start, lte: period.end } }, _count: { _all: true } }) : [],
     ids.length ? db.contentDraft.groupBy({ by: ['brandId'], where: { brandId: { in: ids }, status: 'published', publishedAt: { lte: now } }, _max: { publishedAt: true } }) : [],
@@ -76,14 +76,14 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
   const all = brands.map(b => {
     const sub = selectSubscription(b.subscriptions, now)
     const members = b.crew?.members || []
-    const socialAccounts = (b.socialAccounts || []).map(account => ({ ...account, monthlyPublished: accountCounts.get(account.id) || 0, lastPublishedAt: accountDates.get(account.id) || null }))
+    const socialAccounts = (b.accounts || []).map(account => ({ ...account, monthlyPublished: accountCounts.get(account.id) || 0, lastPublishedAt: accountDates.get(account.id) || null }))
     const monthlyPublished = counts.get(b.id) || 0
     return { id: b.id, name: b.name, location: b.location, status: b.status,
       subscription: { ...sub, effectiveStatus: subscriptionState(sub, now) },
       owners: members.filter(m => m.active && m.role === 'OWNER').map(m => m.user),
       principals: members.filter(m => m.active && m.role === 'PRINCIPAL').map(m => m.user),
       assignmentVersion: admin ? assignmentVersion(members) : undefined,
-      socialAccounts, accountSummary: accountHealth(b.socialAccounts || [], monthlyPublished),
+      socialAccounts, accountSummary: accountHealth(b.accounts || [], monthlyPublished),
       monthlyPublished, lastPublishedAt: dates.get(b.id) || null,
     }
   })

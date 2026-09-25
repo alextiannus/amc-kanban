@@ -121,6 +121,8 @@ const readDb: any = {
   user: { findMany: async ({select}: any) => select.crewMemberships ? [{crewMemberships:[{crew:{brandId:'b00'}}],organizationsJoined:[{owner:{crewMemberships:[{crew:{brandId:'b01'}}]}}]}] : [person('p')] },
   brand: { findMany: async ({where, select}: any) => {
     assert.equal(select.postfastApiKey, undefined)
+    assert(select.accounts, 'Brand relation must use the Prisma `accounts` field')
+    assert.equal(select.socialAccounts, undefined)
     assert.equal(where.subscriptions.some.constructor, Object)
     return fixtures.filter(b=>b.status!==where.status.not && b.subscriptions.length && (!where.id || where.id.in.includes(b.id)))
   } },
