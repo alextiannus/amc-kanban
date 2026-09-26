@@ -1,6 +1,12 @@
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
 import { SignJWT } from 'jose'
+const contrastRatio = (foreground, background) => {
+ const rgb = value => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number)
+ const luminance = value => rgb(value).map(channel => channel / 255).map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4).reduce((total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index], 0)
+ const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a)
+ return (lighter + 0.05) / (darker + 0.05)
+}
 // Start an isolated local dev server with JWT_SECRET=brand-operations-local-ui-test-only.
 // All business APIs use fixtures; no production credentials or data are required.
 (async () => {
@@ -8,7 +14,9 @@ import { SignJWT } from 'jose'
  const token = await new SignJWT({sub:'test-admin'}).setProtectedHeader({alg:'HS256'}).setIssuer('amc-kanban').setAudience('amc-users').setExpirationTime('1h').sign(new TextEncoder().encode('brand-operations-local-ui-test-only'));
  const browser = await chromium.launch({headless:true, ...(process.env.PLAYWRIGHT_CHANNEL ? {channel:process.env.PLAYWRIGHT_CHANNEL} : {})});
  try {
-  const context = await browser.newContext({viewport:{width:1440,height:1000}});
+  // Simulate a dark OS while the app intentionally uses its default light theme.
+  // System preference must not turn inherited text white on light surfaces.
+  const context = await browser.newContext({viewport:{width:1440,height:1000},colorScheme:'dark'});
   await context.addCookies([{name:'session',value:token,domain:'127.0.0.1',path:'/'}]);
   await context.addInitScript(()=>{localStorage.setItem('amc.currentView','managementOverview');localStorage.setItem('amc.sidebar.collapsed','false');localStorage.setItem('amc.ui.language','zh')});
   let role='ADMIN', fail=false, saved=false, patchCount=0, failSave=false, brandWrites=0, accountWrites=0;
@@ -30,6 +38,16 @@ import { SignJWT } from 'jose'
   const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',dialog=>dialog.accept());
   await page.goto('http://127.0.0.1:3105/board?tab=managementOverview');
   await page.getByRole('cell',{name:/测试餐饮品牌.*新加坡/}).waitFor({timeout:60000});
+  const lightTheme = await page.evaluate(() => {
+   const body = getComputedStyle(document.body)
+   const brand = document.querySelector('[data-brand-link]')
+   const surface = brand?.closest('.bg-white')
+   return { bodyColor: body.color, bodyBackground: body.backgroundColor, brandColor: brand ? getComputedStyle(brand).color : '', brandBackground: surface ? getComputedStyle(surface).backgroundColor : '' }
+  })
+  assert(contrastRatio(lightTheme.bodyColor, lightTheme.bodyBackground) >= 4.5, 'light theme body text must meet WCAG AA contrast under a dark OS preference')
+  assert(contrastRatio(lightTheme.brandColor, lightTheme.brandBackground) >= 4.5, 'brand link must meet WCAG AA contrast')
+  const darkTheme = await page.evaluate(() => { document.documentElement.classList.add('dark'); const style=getComputedStyle(document.body); const colors={color:style.color,background:style.backgroundColor}; document.documentElement.classList.remove('dark'); return colors })
+  assert(contrastRatio(darkTheme.color, darkTheme.background) >= 4.5, 'dark theme body text must meet WCAG AA contrast')
   await page.screenshot({path:'/tmp/amc-brand-operations-desktop.png',fullPage:true});
   assert.equal(await page.getByRole('button',{name:/更换主理人/}).count(),0);
   assert.equal(await page.getByRole('columnheader',{name:'品牌主',exact:true}).count(),0);

@@ -2,6 +2,10 @@
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
+## 全系统主题与文字可读性
+
+应用主题是全系统颜色的唯一依据：浅色主题始终使用深色正文，深色主题始终使用浅色正文，不得由设备的 `prefers-color-scheme` 单独覆盖应用已选择的主题。页面可以使用分层辅助色，但品牌名、主要数字、表格正文、表单值和可操作文字必须具有清晰对比度；交互控件须提供可见的键盘焦点状态。运营看板等高密度数据页面应明确区分主要数据、辅助信息、状态和操作，不能依赖接近背景色的继承文字。
+
 ## 品牌运营看板（已部署，2026-09-20）
 
 主菜单「主理人」分组的 managementOverview 从占位页改为「品牌运营看板」，位于账号快照前。管理员查看非归档、有真实 BrandSubscription 且看板选定订阅未免收订阅费的品牌；主理人须具有 analytics.read 与 brand.read，仅查看有效 Crew 或组织继承范围。品牌主、BD、研究员不因其他菜单权限获得该入口。此为运营摘要，不开放账单明细或订阅修改权限。
