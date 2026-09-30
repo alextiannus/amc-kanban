@@ -1,7 +1,7 @@
 import { brandContext } from './application'
 import { discoveryFrom, type LibrarySnapshot } from './library'
 import { recommendationReceipts, saveRecommendation } from './recommendations'
-import { readPreference, changePreference } from './preferences'
+import { readPreference, changePreference, preferenceSettings } from './preferences'
 import type { Application, ArtifactReference, TaskView } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type { Pool } from 'pg'
 import { composeApplication, requireActor, type WorkspacePort } from './application'
@@ -151,5 +151,8 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
 
 export async function nativePreference(userId:string,brandId:string,body?:unknown){
   const {actor,app}=await authorizedHost(userId,brandId)
-  return body?changePreference(app,actor,body):readPreference(app,actor)
+  const preference=body?await changePreference(app,actor,body):await readPreference(app,actor)
+  const facts=await brandContext(actor)
+  if(!facts)throw nativeError('brand_context_unavailable',404)
+  return preferenceSettings(preference,facts)
 }
