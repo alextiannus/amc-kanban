@@ -1,6 +1,6 @@
 # AMCMM IAIC 技术改造执行设计
 
-状态：2026-09-30 应用实现和本地验收已完成，生产部署与真实模型验收待验证。P0 人工版本保存已上线，见 creative-lineage.md。本文件是 AI Native 改造的执行契约；设计、代码、本地验证、生产验证分别记账。
+状态：2026-09-30 User AI 工作台已部署；创意改写、补资料、采用保存通过真实模型生产验收。品牌简报的确定统计修正与常驻后台执行已通过实模复验；制作发布、持续运营与平台协作仍待交付。P0 人工版本保存已上线，见 creative-lineage.md。本文件是 AI Native 改造的执行契约；设计、代码、本地验证、生产验证分别记账。
 
 ## 产品与验收
 
@@ -57,10 +57,10 @@ Platform AI/Codex 协作复用 Core collaboration/peer 公共契约，任务包�
 | 范围 | 当前状态 | 验收证据 |
 | --- | --- | --- |
 | 人工版本追溯 | 已上线 | creative-lineage.md |
-| Core 固定依赖与服务端组合 | 本地通过，待生产 | candidate.114；两端类型检查与生产构建 |
-| 持久创意任务、资料等待、候选采用 | 本地通过，待生产 | 真实 PostgreSQL + Core；桌面/手机真实组件 |
-| 品牌简报、个人品牌偏好 | 本地通过，待生产 | 运营证据绑定；记住/遗忘/旧写不可复活 |
-| 模型账务、权限及故障恢复 | 本地通过，待实模 | 未知用量不重调；撤权；回执重放；中央模型配置已核实 |
+| Core 固定依赖与服务端组合 | 已部署 | candidate.114；两端类型检查与生产构建 |
+| 持久创意任务、资料等待、候选采用 | 生产实模通过 | 真实 PostgreSQL + Core；跨进程补资料、候选采用、原版本回执 |
+| 品牌简报、个人品牌偏好 | 生产实模及本地故障验证通过 | 运营证据绑定、真实后台执行；记住/遗忘/旧写不可复活 |
+| 模型账务、权限及故障恢复 | 故障本地通过，实模账务通过 | 未知用量不重调；撤权；回执重放；中央真实模型用量已结算 |
 | 制作发布、持续运营 | 设计待实现 | 不能由本文件宣称完成 |
 | Platform AI 双向工程协作 | 设计待实现 | 不能由安装框架宣称完成 |
 
@@ -89,3 +89,20 @@ Platform AI/Codex 协作复用 Core collaboration/peer 公共契约，任务包�
 - 原全库 auth audit 存在20条未识别的既有路由；本轮4条新路由由 nativeHttp 封装鉴权且单独测试。此历史扫描债务未扩为本轮权限改造。
 
 未交付范围明确为：旧语音 companion 业务动作尚未全部迁入 Core、Content付费制作及发布能力、周期Business AI、Platform AI/Codex双向实际工程交接。这些仍使用已有流程或保持未启用状态；不能从本轮User AI验收推导其已完成。
+
+## 生产验收记录
+
+Core 未修改或发布新版本。中央策略 version5、既有文本配置；未更改密钥管理、费用或奖励规则。验收使用归档且关闭 autopilot 的合成品牌，不操作真实商户内容。
+
+- 创意任务 b208e9c8-0dc5-4d63-873a-43ca4df7bfb7：prepare 作业 job-dau6dpmgekts73d5b9v0 真实询问受众；独立 complete 作业 job-dau6ejnlot8c739rur4g 补资料、回读候选、采用并验证版本 cmunft1pl00035l1gvzw2q3na；重复采用同一回执，实际操作者与来源 cre_acceptance_source 一致，无发布。10次真实模型请求，58921 provider tokens，pending=0。续接阶段约189秒，未宣称即时响应。
+- 首次后台简报：请求进程主动 drain 自身执行器，线上常驻服务完成任务7155bf16-863e-4cc8-95bc-9319d02d8963（job-dau6h76k1f9s73aicdsg），9次真实请求/48537 provider tokens/pending=0。结构、快照及后台执行通过，但正文把空统计写成unknown；这是应用事实表达验收发现的问题，未将结构验证冒充语义正确。
+- 修正：后端在RepeatableRead快照内提供确定总数，覆盖0、31条内容超出30条返回页、已解绑账号排除；UI单独显示当前数值及旧报告快照标记；Skill要求零值按零表达，正文不包含内部hash或工具名。最终复验 job-dau6m25g1s2s73blr3m0 succeeded，任务a147a341-2c6a-4c09-8c55-0e1b96d00bcc：9次请求/48461 provider tokens/pending=0，currentOperations为draftTotal=0、accountTotal=0、changed=false。正文明确两个0、不含内部摘要或工具名；请求进程自身执行器已drain，由线上后台完成。
+- 页面200、未登录任务接口401、MM跨来源偏好写入403/no-store。401来自既有前置鉴权层，不声称其返回了新路由的no-store。真实组件浏览器验收与生产服务验收分开，未使用真实商户账号执行线上UI全流程。
+
+范围边界：已交付User AI持久工作台；旧语音业务动作全面迁移、Content付费制作/发布、周期Business AI与Platform AI/Codex双向工程交接没有在本轮完成，不将其写成已上线。
+
+最终运行版本：Kanban `473bb637f73a9e85a837d02fdf06f3f7eaf8874d` / Render SG `dep-dau6kfjrjlhs73cha4ng` live；AMCMM `ac4047f599117f3ebd1100bc648498d71a850b49` / `dep-dau6ll6q1p3s7388n6h0` live。创意实模验收首次运行于3330d696；最终版本补齐统计和读取投影，并完成本地回归、旧任务回读及简报复验。MM同时修正非当前月份采用后的刷新，保留其他月份创意。
+
+三项实模验收共28次请求、155919 provider tokens，均已结算，无未知调用；这些是实测token，不是报价或货币。测试品牌清理作业为 job-dau6o8vavr4c73ftuki0，清理作业已succeeded并输出ok:true；清理前再次核对品牌、实际修改人、当时主理人、requestedBy与原创意关系，删除归档测试品牌及测试账号，保留Core任务、用量、artifact与审计。
+
+下一阶段负责人：AMC应用维护者与产品负责人。先固定Content制作采用的creativeRevision及估价/授权/原job恢复契约，再实施有期限和预算的Business AI mandate；Platform AI协作需独立工程任务、双向交接和评审部署验证。现有User AI成功不代替后续阶段验收。
