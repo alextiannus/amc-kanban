@@ -1,10 +1,10 @@
 # AMCMM 创意再创作与 AI Native 升级设计
 
-日期：2026-09-30。状态：需求已记录，设计待实施。面向 AMC 产品、AMCMM、Kanban、Growth、Content 和 IAiC Core 开发者。
+日期：2026-09-30。状态：P0 人工保存与追溯已实现并通过本地验证，待生产验收；AI Native 后续阶段待实施。面向 AMC 产品、AMCMM、Kanban、Growth、Content 和 IAiC Core 开发者。
 
 品牌主理人应能在 AMCMM 品牌策划中修改创意草稿并保存，系统应明确保留再创作创意、品牌、实际修改人及原创意之间的关系。已有编辑入口可复用；本次升级重点是逐条版本、可信身份、来源追溯和可靠保存。AI Native 升级以这条业务闭环为首个切片，随后扩展到策划、素材、制作、发布和复盘。
 
-本文记录用户要求和建议实现，不代表代码、数据库迁移或生产验收已完成。未变更生产、模型配置、费用或奖励规则。
+本文保留整体目标设计；P0 当前执行契约和验证状态见 [创意版本追溯](creative-lineage.md)。P0 复用 BrandMarketingSolution 逐条保存版本，不新建四张业务表，也不在保存时同步下游或建立 outbox；制作与发布联动仍待后续交付。其余章节的能力均为后续设计，不能视作已部署。
 
 ## 检查范围和证据
 
@@ -143,7 +143,7 @@ AMC-F02 为 design-feedback：主理人请求、Business AI 执行及 Content �
 | --- | --- | --- |
 | 需求与设计 | 已记录 | AMC 产品确认优先级；“MMO”目录对应仍待明确 |
 | Core delivery | 未变更、未发布 | Core 维护者核定实施时受支持包及公共契约，必要时处理最小复现 |
-| Application integration | 未实施 | Kanban 先交付 P0；MM 接统一编辑器；Content 提供来源快照适配；Growth 提供知识版本读取 |
+| Application integration | P0 已实现并完成本地验证，待生产验收 | 当前使用既有版本表、可信身份、事务与来源摘录快照；准确 Content 历史发行版本未补造，P1至P3仍待实施 |
 | Production verification | 未执行 | 各应用发布负责人按阶段记录版本及受权生产验证 |
 | Acceptance | 未进行运行验收 | 产品与独立验证者按上述矩阵验收，保留未完成范围 |
 

@@ -1,3 +1,4 @@
+import { CreativeRevisionError } from '@/lib/brand-plan/creativeRevisions'
 import { NextResponse } from 'next/server'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
@@ -37,6 +38,7 @@ export async function POST(request: Request, { params }: Params) {
     })
     return NextResponse.json(data)
   } catch (error) {
+    if (error instanceof CreativeRevisionError) return NextResponse.json({ error: error.code }, { status: error.status })
     if (error instanceof BrandPlanError) {
       return NextResponse.json({
         error: error.message,

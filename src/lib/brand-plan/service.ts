@@ -1,4 +1,6 @@
-import type { Prisma } from '@prisma/client'
+import { protectTrackedCreativeChanges } from './creativeRevisions'
+import { CREATIVE_REVISION_KIND, CreativeRevisionError, revisionPeriod } from './creativeRevisionContract'
+import { Prisma } from '@prisma/client'
 import { createHash } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import {
@@ -372,6 +374,16 @@ export async function runBrandPlanAction(input: {
   let latestInterview = serializeMerchantInterview(brand.brandPlanInterviews[0])
   let extraPayload: Record<string, unknown> = {}
 
+  if (['generate_publishing_calendar', 'regenerate_calendar_item'].includes(input.action)) {
+    const month = normalizeMonth(input.body?.month)
+    const tracked = await prisma.brandMarketingSolution.findFirst({ where: {
+      brandId: brand.id, kind: CREATIVE_REVISION_KIND,
+      ...(input.action === 'regenerate_calendar_item'
+        ? { period: revisionPeriod(month, text(input.body?.itemId)) }
+        : { input: { path: ['month'], equals: month } }),
+    } })
+    if (tracked) throw new CreativeRevisionError('tracked_creative_requires_revision_save', 409)
+  }
   let next = current
   if (input.action === 'generate_research_report') {
     const researchReport = await saveResearchReport(brand.id, await buildGrowthResearchReport(brand))
@@ -542,21 +554,23 @@ export async function runBrandPlanAction(input: {
       ? normalizePublishingFreq(input.body?.value ?? input.body?.publishingFreqOverride)
       : null
 
-  await prisma.brandKnowledge.upsert({
-    where: { brandId: brand.id },
-    update: {
-      marketingSolution: next as Prisma.InputJsonValue,
-      researchReport: next.researchReport ? next.researchReport as Prisma.InputJsonValue : undefined,
-      publishingFreq: persistedPublishingFreq ? persistedPublishingFreq as Prisma.InputJsonValue : undefined,
-    },
-    create: {
-      brandId: brand.id,
-      negPrompts: [],
-      marketingSolution: next as Prisma.InputJsonValue,
-      researchReport: next.researchReport ? next.researchReport as Prisma.InputJsonValue : undefined,
-      publishingFreq: persistedPublishingFreq ? persistedPublishingFreq as Prisma.InputJsonValue : undefined,
-    },
-  })
+  await protectTrackedCreativeChanges(brand.id, current, next)
+  const workspaceData = {
+    marketingSolution: next as Prisma.InputJsonValue,
+    researchReport: next.researchReport ? next.researchReport as Prisma.InputJsonValue : undefined,
+    publishingFreq: persistedPublishingFreq ? persistedPublishingFreq as Prisma.InputJsonValue : undefined,
+  }
+  // A slow generation or old page must never overwrite a newer manual revision.
+  if (brand.knowledge) {
+    const result = await prisma.brandKnowledge.updateMany({
+      where: { brandId: brand.id, updatedAt: brand.knowledge.updatedAt, marketingSolution: { equals: brand.knowledge.marketingSolution ?? Prisma.DbNull } },
+      data: workspaceData,
+    })
+    if (result.count !== 1) throw new CreativeRevisionError('creative_revision_conflict', 409)
+  } else {
+    try { await prisma.brandKnowledge.create({ data: { brandId: brand.id, negPrompts: [], ...workspaceData } }) }
+    catch (error) { if ((error as { code?: string }).code === 'P2002') throw new CreativeRevisionError('creative_revision_conflict', 409); throw error }
+  }
 
   return {
     ok: true,
@@ -1121,6 +1135,7 @@ async function saveWorkspacePatch(
         [month]: items,
       },
     }
+    await protectTrackedCreativeChanges(brandId, current, { ...current, publishingCalendar })
     await syncCalendarMaterialRequirements(brandId, month, items)
     await syncConfirmedCalendarItemsToDrafts(brandId, month, items)
     await saveMarketingSolutionVersion({
