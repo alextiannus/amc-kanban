@@ -2,6 +2,8 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 export type CalendarCreativeItem = {
+  nativeDaily?: {poolIdeaId:string;taskId:string}
+  nativeReviewStatus?: string
   id?: string
   date?: string
   title?: string
@@ -20,6 +22,8 @@ export type CalendarCreativeItem = {
 }
 
 export type CalendarCreativeOption = {
+  nativeDaily?: {poolIdeaId:string;taskId:string}
+  nativeReviewStatus?: string
   id: string
   date: string
   title: string
@@ -92,6 +96,7 @@ export function calendarSyncMarker(itemId: string) {
 }
 
 export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCreativeOption | null {
+  if(['archived','deleted','归档','已删除'].includes(text(item.status).toLowerCase()))return null
   const id = text(item.id)
   const date = text(item.date)
   if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
@@ -133,6 +138,8 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     product,
     planning,
     materialRequirements,
+    nativeDaily:item.nativeDaily,
+    nativeReviewStatus:item.nativeReviewStatus,
     suggestedFolder: `创意素材/${suggestedFolder}`,
     aiTags,
     aiCaption,
@@ -165,7 +172,7 @@ async function ensurePlaceholderAccount(tx: Prisma.TransactionClient, brandId: s
 
 export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month: string, items: CalendarCreativeItem[]) {
   const confirmed = items
-    .filter((item) => !['已删除', '归档', 'archived', 'deleted'].includes(text(item.status).toLowerCase()))
+    .filter((item) => !['ai_pending_review','已删除', '归档', 'archived', 'deleted'].includes(text(item.status).toLowerCase()))
     .map(calendarCreativeOption)
     .filter((item): item is CalendarCreativeOption => Boolean(item))
 

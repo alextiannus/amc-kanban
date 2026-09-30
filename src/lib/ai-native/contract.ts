@@ -8,7 +8,7 @@ export const DAILY_ALLOWANCE = 3000000
 export type NativeActor = { scopeId:string; subjectId:string }
 export type CreativeIntent = {kind:'creative';requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type DiscoveryIntent = {kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type DiscoveryIntent = {kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
@@ -16,9 +16,11 @@ export function actorFor(brandId:string,userId:string):NativeActor {
   if(!brandId||!userId||brandId.length>150||userId.length>150)throw nativeError('invalid_scope')
   return {scopeId:JSON.stringify(['amc-mm','user_ai',brandId]),subjectId:userId}
 }
+export function dailyActorFor(brandId:string,userId:string):NativeActor {const actor=actorFor(brandId,userId);return {...actor,scopeId:JSON.stringify(['amc-mm','brand_daily',brandId])}}
+export function isDailyActor(actor:NativeActor){try{return JSON.parse(actor.scopeId)[1]==='brand_daily'}catch{return false}}
 export function brandFor(actor:NativeActor){
   let scope:unknown;try{scope=JSON.parse(actor.scopeId)}catch{throw nativeError('invalid_scope',403)}
-  if(!Array.isArray(scope)||scope.length!==3||scope[0]!=='amc-mm'||scope[1]!=='user_ai'||typeof scope[2]!=='string')throw nativeError('invalid_scope',403)
+  if(!Array.isArray(scope)||scope.length!==3||scope[0]!=='amc-mm'||!['user_ai','brand_daily'].includes(scope[1])||typeof scope[2]!=='string')throw nativeError('invalid_scope',403)
   return scope[2] as string
 }
 export function requestKey(value:unknown){if(typeof value!=='string'||!/^[a-zA-Z0-9_-]{8,100}$/.test(value))throw nativeError('invalid_request_key');return value}

@@ -3,12 +3,13 @@ import {randomUUID} from 'node:crypto'
 import {nativePool} from '../src/lib/ai-native/store.ts'
 import {initializeIdeaPool,refreshBrandIdeas,brandDay,selectPoolIdea,poolIdeaLibrary} from '../src/lib/ai-native/idea-pool.ts'
 import {brandLibrary} from '../src/lib/ai-native/library.ts'
+import {DIRECTIONS} from '../src/lib/ai-native/creative-diversity.ts'
 import {prisma} from '../src/lib/prisma.ts'
 const url=new URL(process.env.DATABASE_URL||'')
 assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
 const pool=nativePool(),brandId=`pool-test-${randomUUID()}`,facts={id:brandId,name:'Test brand',timezone:'Asia/Singapore',knowledge:{},productCatalog:[]}
 let calls=0,index=0
-const match=async(input:any)=>{calls++;assert(input.requirePersistedCreative);return {contentMatchRequestId:'match-test',creativeCandidates:Array.from({length:input.requestedCandidateCount},()=>({inspirationCreativeId:`cre_ins_${brandId}_${index++}`,assetNeeds:['Product close-up, vertical, 5 seconds'],scriptContent:{title:'Product story',body:'Show product and invite a visit'}})),libraryVersions:{},contentLibraryGaps:[]}}
+const match=async(input:any)=>{calls++;assert(input.requirePersistedCreative);const active=(await pool.query('SELECT source FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL',[brandId])).rows;const counts:any={};for(const row of active)counts[row.source.creativeDirection]=(counts[row.source.creativeDirection]||0)+1;const directions=[...DIRECTIONS].sort((a,b)=>(counts[a]||0)-(counts[b]||0));return {contentMatchRequestId:'match-test',creativeCandidates:Array.from({length:input.requestedCandidateCount},(_,n)=>({inspirationCreativeId:`cre_ins_${brandId}_${index++}`,creativeDirection:directions[n%directions.length],sourceVideo:{title:randomUUID()+randomUUID()},assetNeeds:['Product close-up, vertical, 5 seconds'],scriptContent:{title:'Product story',body:'Show product and invite a visit'}})),libraryVersions:{},contentLibraryGaps:[]}}
 const day=(n:number)=>new Date(`2099-10-${String(n).padStart(2,'0')}T10:00:00Z`)
 const rows=async()=>(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY created_at,id',[brandId])).rows
 try{

@@ -8,7 +8,7 @@ import path from 'node:path'
 import { prisma } from '../prisma'
 import { canUserAccessBrand } from '../user-management/brandAccess'
 import { readCreativeRevisions } from '../brand-plan/creativeRevisions'
-import { brandFor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, TASK_ALLOWANCE, type NativeIntent, type NativeActor } from './contract'
+import { brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, TASK_ALLOWANCE, type NativeIntent, type NativeActor } from './contract'
 import { intentBy } from './store'
 import { readBrandFacts, validateSkuReferences } from './facts'
 import { principalFromUser } from '../auth-v2/types'
@@ -17,6 +17,7 @@ import { brandOperations, canReadOperations } from './operations'
 
 export async function authorized(actor:NativeActor){
   const brandId=brandFor(actor)
+  if(isDailyActor(actor)&&!await prisma.crewMember.findFirst({where:{userId:actor.subjectId,active:true,role:{in:['PRINCIPAL','OWNER']},crew:{brandId,brand:{status:'ACTIVE'}}}}))return false
   const user=await prisma.user.findUnique({where:{id:actor.subjectId},include:{businessRoles:true,owner:{include:{businessRoles:true}}}})
   return user?.status==='ACTIVE'&&user.type==='HUMAN'&&await canUserAccessBrand(brandId,actor.subjectId,'WRITE')&&await allows(principalFromUser(user,'session'),'brand.update')
 }
@@ -26,7 +27,7 @@ export async function brandContext(actor:NativeActor){
 }
 export async function applicationVersion(root=process.cwd()){
   const hash=createHash('sha256').update(CORE_ARCHIVE_SHA)
-  for(const file of ['src/lib/ai-native/application.ts','src/lib/ai-native/contract.ts','src/lib/ai-native/recommendations.ts','src/lib/ai-native/library.ts','src/lib/promotion-strategy/clients.ts','src/lib/ai-native/facts.ts','src/lib/ai-native/operations.ts','src/lib/ai-native/models.ts','src/lib/ai-native/store.ts','src/lib/ai-native/service.ts','src/lib/ai-native/preferences.ts','src/lib/global-text/transport.ts','src/lib/brand-plan/creativeRevisions.ts','src/lib/brand-plan/creativeRevisionContract.ts','src/lib/model-management/types.ts','src/lib/model-management/registry.ts','skills/amc-creative/SKILL.md','skills/amc-discovery/SKILL.md','skills/amc-brief/SKILL.md'])hash.update(file).update(await readFile(path.join(root,file)))
+  for(const file of ['src/lib/ai-native/application.ts','src/lib/ai-native/idea-pool.ts','src/lib/ai-native/daily-planning.ts','src/lib/ai-native/creative-diversity.ts','src/lib/ai-native/contract.ts','src/lib/ai-native/recommendations.ts','src/lib/ai-native/library.ts','src/lib/promotion-strategy/clients.ts','src/lib/ai-native/facts.ts','src/lib/ai-native/operations.ts','src/lib/ai-native/models.ts','src/lib/ai-native/store.ts','src/lib/ai-native/service.ts','src/lib/ai-native/preferences.ts','src/lib/global-text/transport.ts','src/lib/brand-plan/creativeRevisions.ts','src/lib/brand-plan/creativeRevisionContract.ts','src/lib/model-management/types.ts','src/lib/model-management/registry.ts','skills/amc-creative/SKILL.md','skills/amc-discovery/SKILL.md','skills/amc-brief/SKILL.md'])hash.update(file).update(await readFile(path.join(root,file)))
   return hash.digest('hex')
 }
 type TaskBinding={trusted_context:{reference:string}|null}

@@ -190,3 +190,15 @@ Validation: real PostgreSQL daily admission concurrency, 6→18 growth, bounded 
 Production acceptance completed on 2026-09-30 (Singapore): Content `48c125a`, Kanban runtime `72c28756`, and AMC-MM `fb5dd49` are live. The first resident-worker sweep completed searches for 28 active brands; 15 reached six ideas and 13 returned fewer than six. These shortages remain visible and require additional suitable matches; the configured minimum is not reported as achieved for those brands.
 
 The isolated production fixture received six real Content sources. Selecting one admitted the same Core task on replay, adapted the script to `sku_sesame`, returned five material requirements, and saved a verified human-reviewed revision with the brand, principal, original source and AI artifact lineage. Task `824b0485-e074-4814-8a68-e072c16b540f` completed six provider requests (32,759 tokens; no pending usage). Current authorization and foreign-brand source rejection passed. Production generated no content drafts or publications. Both acceptance fixtures were cleaned; Core task, ledger, artifact and audit evidence remain. Desktop/mobile browser tests covered rotation, interaction pause, selected-source binding and downloads of the edited review text and material checklist.
+
+### 每日自动品牌策划与方向去重（2026-09-30）
+
+每日检索按 Brand.timezone 的当地日期持久化认领；多实例、重启及首页刷新不重复检索。内容库在检索阶段排除已出现的来源和已有策划，扩大候选窗口并继续跨查询寻找不同方向。池的目标为 6–18 个；初次最多补至 6 个，此后每日增加最多 3 个，满池替换旧建议。真实来源不足时显示缺口，不伪造填充。
+
+相似性规则包括原创意 ID、去掉追踪参数的来源 URL、规范化原创文本和字符三元组相似度（Dice ≥ 0.82）。根据原创证据分类为制作过程、产品展示、品尝、知识、对比、顾客故事、品牌故事、场景、探店、优惠、幽默及未分类。每一方向同时最多两个，优先补齐缺少方向；未分类也限制为两个。此版本使用保守分类和文本相似度，不宣称语义识别完全准确。写入策划的品牌级事务锁内再次核对，防止并发任务绕过限制。
+
+匹配后的每个创意通过 IAIC Core 的持久任务读取当前品牌和真实 SKU，产出完整适配脚本、SKU 绑定及逐项素材需求；成功后自动加入品牌的发布策划，状态为 AI 待审核。无需点击创意才启动适配。Core 负责执行、等待、用量、恢复和产物；应用层仅认领每日检索、关联来源、校验及归档版本。后台任务使用主理人或 OWNER 的当前授权、单独的 brand_daily 范围，每品牌当地日最多六个任务额度，不占用人工任务额度。HTTP 调用不能请求该范围。主理人可在任务列表补充资料、查看等待原因或取消；失败及不确定用量不会自动开启新的模型请求。
+
+自动入策划的版本记录 actor=AI，并关联授权主理人、品牌、SKU、原始创意快照、Core task 和 artifact。审核前不转入生产草稿；主理人修改保存后记录 HUMAN 版本，再添加素材制作。下载包含实际适配脚本及素材需求。新创意替换旧建议时，只归档旧的未审核自动稿，保留不可变版本及已审核的人工作品；已有人工作品占满方向时不再添加第三份。因品牌事实变化而无法保存的任务保留明确状态，等待后续新建议，不重复计费无限重试。
+
+本地验证：品牌时区与八并发每日认领、6→18 增长、来源绑定、六个真实 Core 持久任务（测试模型）、AI/主理人/原创意版本链、幂等重放、审核前无生产草稿、人工审核、自动归档、授权撤销；桌面和手机端随机轮播、停留暂停、已适配脚本直接审核、保存响应丢失重试及素材下载。
