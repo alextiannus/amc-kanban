@@ -49,6 +49,14 @@ try{
  assert.equal((await pool.query('SELECT count(*) FROM amc_ai_requests WHERE scope_id=$1',[actor.scopeId])).rows[0].count,'6','six daily tasks fit a separate brand budget')
  // Manual allowance is not consumed by background planning.
  await admitIntent(pool,actorFor(id,id),{kind:'brand_brief',brandId:id,userId:id,goal:'Human task',requestKey:'manual-test-request',artifactPath:'work/manual.json'})
+ await app.close()
+ const oldExecutor=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'previous-daily-test'})
+ for(let n=0;n<40;n++)await oldExecutor.app.runtime.tick();await oldExecutor.app.close()
+ app=(await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'daily-test-v1'})).app
+ const admitted=(await pool.query('SELECT task_id FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id])).rows
+ let recovered=0
+ for(const row of admitted){const task=await app.runtime.get(actor,row.task_id,{history:true});if(task.status==='waiting'&&task.waiting_reason==='interrupted'){assert.equal(task.calls.length,0);assert((await app.ledger.taskUsage(await app.scope(actor),row.task_id)).complete);await app.dispatcher.invoke('tasks.resume',{id:row.task_id},{actor,callId:`daily-deploy-resume-${row.task_id}`});recovered++}}
+ assert.equal(recovered,6,'recover original zero-call tasks paused by a prior deployment executor')
  for(let n=0;n<30;n++)await app.runtime.tick()
  await advanceDailyPlanning(pool,id,ports as any);await advanceDailyPlanning(pool,id,ports as any)
  const rows=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id])).rows
