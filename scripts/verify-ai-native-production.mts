@@ -10,7 +10,7 @@ import {actorFor,CORE_VERSION} from '../src/lib/ai-native/contract.ts'
 
 const [phase,id]=process.argv.slice(2)
 assert.ok(process.argv.includes('--production-acceptance')&&process.env.RENDER,'Explicit Render acceptance required')
-assert.ok(['prepare','complete','inspect','cleanup'].includes(phase)&&/^amc-native-acceptance-[a-z0-9-]{8,50}$/.test(id||''),'Labelled acceptance ID required')
+assert.ok(['prepare','complete','brief','inspect','cleanup'].includes(phase)&&/^amc-native-acceptance-[a-z0-9-]{8,50}$/.test(id||''),'Labelled acceptance ID required')
 const month='2099-11',actor=actorFor(id,id),key='production-creative-acceptance-v1'
 const goal='This is a synthetic acceptance task. Read the brand and selected creative. First ask me ONE question about the target audience using iaic_wait, even if you can guess it. After my answer, rewrite only planning for that audience, preserving product facts. Produce the required JSON candidate, read it back, then finish. No publication or other business action is requested.'
 let host:Awaited<ReturnType<typeof getNativeHost>>|undefined
@@ -38,6 +38,16 @@ try{
   assert.equal(history.revisions[0].ai.taskId,taskId);assert.equal(history.revisions[0].source.creativeId,'cre_acceptance_source')
   assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
   console.log(JSON.stringify({ok:true,phase,core:CORE_VERSION,fixture:id,taskId,status:task.status,artifact:task.artifact,usage:task.usage,receiptId:saved.receipt.id,revision:saved.receipt.revision,actualActor:saved.receipt.actor?.id,sourceCreativeId:history.revisions[0].source.creativeId,verified:true,noPublication:true,patch:task.candidate.patch}))
+ }else if(phase==='brief'){
+  host=await getNativeHost()
+  assert.equal((await host.app.runtime.drain({timeoutMs:5000})).drained,true)
+  const receipt=await createNativeTask(id,id,{kind:'brand_brief',goal:'Prepare a concise English brand work brief: read current brand facts and operations, report recorded draft status counts and propose two sensible next steps. Explicitly label missing data as unknown. Do not ask questions or execute proposals. Write the required JSON report and finish with its exact reference.',requestKey:'production-brand-brief-v2'})
+  const task=await waitFor(receipt.id,t=>t.status==='succeeded')
+  assert.ok(task.report&&task.artifact&&task.usage.complete)
+  assert.equal(task.currentOperations?.draftTotal,0);assert.equal(task.currentOperations?.accountTotal,0);assert.equal(task.currentOperations?.changed,false)
+  assert.ok(!/[a-f0-9]{64}|amc\.(context|operations)/.test(task.report.content),'User-facing report must not expose internal digests or tool names')
+  assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
+  console.log(JSON.stringify({ok:true,phase:'brand-brief-server-worker',requestProcessExecutorDrained:true,taskId:task.id,usage:task.usage,artifact:task.artifact,currentOperations:task.currentOperations,report:task.report,noDownstreamWrites:true}))
  }else if(phase==='inspect'){
   const taskId=await originalTask(),task=await readNativeTask(id,id,taskId)
   console.log(JSON.stringify({phase,fixture:id,taskId,status:task.status,waitingReason:task.waitingReason,inputRequest:task.inputRequest,usage:task.usage,result:task.result}))
@@ -45,6 +55,9 @@ try{
   const taskId=await originalTask(),task=await readNativeTask(id,id,taskId)
   if(['queued','running','waiting'].includes(task.status))await controlNativeTask(id,id,taskId,{action:'cancel',requestKey:'production-acceptance-cleanup'})
   assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
+  const history=await readCreativeRevisions({id,type:'HUMAN'},id,month,'acceptance-idea')
+  const revision=history.revisions[0]
+  if(revision?.ai){assert.equal(revision.actor.id,id);assert.equal(revision.brand.id,id);assert.ok(revision.principals.some((p:any)=>p.userId===id));assert.equal(revision.ai.requestedBy,id);assert.equal(revision.source.creativeId,'cre_acceptance_source')}
   await prisma.brand.delete({where:{id}});await prisma.user.delete({where:{id}})
   // Core task/artifact/usage evidence and audit history are intentionally retained.
   console.log(JSON.stringify({ok:true,phase,fixture:id,retained:['Core task','usage ledger','artifact','audit history']}))

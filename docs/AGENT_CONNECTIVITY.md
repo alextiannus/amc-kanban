@@ -1,7 +1,7 @@
 # AMC Personal MCP 接入与操作 SOP
 
-版本：4.0
-更新：2026-08-22
+版本：4.1
+更新：2026-09-30
 
 ## 1. 身份模型
 
@@ -9,7 +9,7 @@ AMC Personal MCP 使用用户本人生成的个人 API Key。AI 通过 MCP 连�
 
 - 每个用户可生成自己的 Personal API Key。
 - REST、MCP 和网页使用同一套用户角色、Capability 和 Crew 品牌权限。
-- AI 不拥有独立系统身份，不模拟其他用户，不发送 `x-agent-id`。
+- 外部 Personal MCP 客户端使用该用户的业务身份，不模拟其他用户，不发送 `x-agent-id`。AMC 内部 User AI 的 Core 责任身份也不扩大该用户的品牌权限。
 - 所有写操作以 Personal MCP 所属用户写入统一工作日志。
 - 第三方平台 Secret 仍由服务端管理，MCP 不读取、不返回。
 
@@ -50,6 +50,15 @@ Content-Type: application/json
 5. 403 表示身份有效但没有所需 Capability/Crew 权限；停止该操作，不尝试其他身份或旧接口绕过。
 
 ## 4. 标准业务循环
+
+### 持久 AI 品牌工作
+
+已认证 HUMAN 用户可通过 `create_ai_brand_task` 提交品牌简报，或通过 `create_ai_creative_task` 提交带 creativeId/month/expectedRevision 的创意改写。两者要求当前 brand.update 与品牌范围；简报还需 draft.read/brand.read。非人类服务身份不能借此冒充个人委托。
+
+先生成一次 requestKey；响应不明时用相同请求内容及原键核对，不创建新的收费调用。以 `list_ai_tasks` / `get_ai_task` 查看 Core 原任务，用 `control_ai_task` 补资料、取消或核对后继续。未知用量先核对提供方回执，不能直接重跑。候选完成只表示工作区产物已验证，人类在 AMCMM 检查并采用后才写入业务版本；不等于制作或发布完成。个人工作偏好由用户在 AMCMM 明确编辑或遗忘，模型只有读取权限。
+
+这些工具与 AMCMM UI 共用服务、权限、额度及回执。当前契约与完整验收边界见 [IAIC 实施设计](amcmm-iaic-implementation.md)。
+
 
 ### 内容
 

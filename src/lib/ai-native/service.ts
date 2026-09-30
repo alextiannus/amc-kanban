@@ -1,5 +1,5 @@
 import { readPreference, changePreference } from './preferences'
-import type { Application, ArtifactReference } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
+import type { Application, ArtifactReference, TaskView } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type { Pool } from 'pg'
 import { composeApplication, requireActor, type WorkspacePort } from './application'
 import { centralModels } from './models'
@@ -76,7 +76,9 @@ export async function createNativeTask(userId:string,brandId:string,body:any){
   return publicTask(app,actor,receipt.id)
 }
 async function publicTask(app:Application,actor:NativeActor,id:string){
-  const task=await app.runtime.get(actor,id)
+  return projectTask(await app.runtime.get(actor,id))
+}
+function projectTask(task:TaskView){
   return {id:task.id,status:task.status,waitingReason:task.waiting_reason,inputRequest:task.inputRequest,result:task.result,goal:task.input.goal,version:task.version,updatedAt:task.updated_at}
 }
 export async function listNativeTasks(userId:string,brandId:string,cursor?:string){
@@ -88,16 +90,17 @@ export async function listNativeTasks(userId:string,brandId:string,cursor?:strin
 }
 export async function readNativeTask(userId:string,brandId:string,id:string){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
-  const row=await intentForTask(pool,app,actor,id),task=await publicTask(app,actor,id)
+  const row=await intentForTask(pool,app,actor,id),history=await app.runtime.get(actor,id,{history:true}),task=projectTask(history)
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
   let candidate=null,report=null,artifact:ArtifactReference|null=null
   if(task.status==='succeeded'&&task.result){
     artifact=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)||null
     if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else report=briefFrom(content,row.intent)}
   }
-  const history=candidate?await app.runtime.get(actor,id,{history:true}):null
-  const sourceCall=history?.calls.find(c=>c.capability==='amc.creative'&&c.status==='succeeded')?.result as {current?:unknown}|undefined
-  return {...task,kind:row.intent.kind,candidate,report,artifact,usage,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
+  const operations=history.calls.find(c=>c.capability==='amc.operations'&&c.status==='succeeded')?.result as {draftTotal?:number;accountTotal?:number;operationsDigest?:string;retrievedAt?:string}|undefined
+  const currentOperations=report&&typeof operations?.draftTotal==='number'&&typeof operations?.accountTotal==='number'?{draftTotal:operations.draftTotal,accountTotal:operations.accountTotal,retrievedAt:operations.retrievedAt,changed:operations.operationsDigest!==report.operationsDigest}:null
+  const sourceCall=history.calls.find(c=>c.capability==='amc.creative'&&c.status==='succeeded')?.result as {current?:unknown}|undefined
+  return {...task,kind:row.intent.kind,candidate,report,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await authorizedHost(userId,brandId)

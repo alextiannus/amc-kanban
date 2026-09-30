@@ -1,3 +1,6 @@
+import {brandOperations} from '../src/lib/ai-native/operations.ts'
+import {execFile} from 'node:child_process'
+import {promisify} from 'node:util'
 import { readPreference, changePreference } from '../src/lib/ai-native/preferences.ts'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
@@ -59,6 +62,9 @@ try{
  assert.equal(contextCall.result.evidence.partial,true);assert.ok(JSON.stringify(contextCall.result.knowledge).length<24000)
  await assert.rejects(()=>composition.app.runtime.get(actorFor(id,other),receipt.id))
  await composition.app.close()
+ const childSource=`import applicationModule from './src/lib/ai-native/application.ts';import storeModule from './src/lib/ai-native/store.ts';import prismaModule from './src/lib/prisma.ts';const {composeApplication}=applicationModule,{nativePool}=storeModule,{prisma}=prismaModule;const actor=${JSON.stringify(actor)},pool=nativePool();const {app}=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture-model',credentialRef:'fixture'}],resolveSecret:()=> 'fixture-not-real',modelFactory:()=>({next:()=>{throw new Error('No inference during recovery read')}}),tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'amc-native-test-v1',authorize:async a=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId});try{const t=await app.runtime.get(actor,${JSON.stringify(receipt.id)});if(t.status!=='waiting'||!t.inputRequest)throw new Error('Lost persisted input wait');console.log('independent-process-recovered')}finally{await app.close();await pool.end();await prisma.$disconnect()}`
+ const child=await promisify(execFile)(process.execPath,['--import','tsx','--input-type=module','-e',childSource],{timeout:20000,env:process.env})
+ assert.ok(child.stdout.includes('independent-process-recovered'))
  composition=await composeApplication(pool,models,options)
  task=await composition.app.runtime.get(actor,receipt.id);assert.equal(task.status,'waiting')
  assert.equal((await readPreference(composition.app,actor)).content,preference.content)
@@ -106,10 +112,17 @@ try{
  const briefReceipt=await composition.app.dispatcher.invoke('agent.work',{goal:brief.goal,requiredArtifacts:[brief.artifactPath],allowedTools:composition.tools.filter((t:string)=>t!=='amc.creative')},{actor,callId:brief.requestKey})
  await composition.app.runtime.tick()
  assert.equal((await composition.app.runtime.get(actor,briefReceipt.id)).status,'succeeded','brand brief must carry verified current evidence')
+ const operations=(await composition.app.runtime.get(actor,briefReceipt.id,{history:true})).calls.find((c:any)=>c.capability==='amc.operations').result
+ assert.equal(operations.draftTotal,0);assert.equal(operations.accountTotal,0)
  assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
+ // Explicit local fixtures distinguish full totals from the bounded returned page.
+ await prisma.contentDraft.createMany({data:Array.from({length:31},(_,n)=>({brandId:id,caption:'Local count fixture '+n,status:n%2?'approved':'draft'}))})
+ await prisma.socialAccount.createMany({data:[{brandId:id,platformId:'instagram',handle:'current-fixture',autoPilot:false},{brandId:id,platformId:'instagram',handle:'unbound-fixture',autoPilot:false,unboundAt:new Date()}]})
+ const counted=await brandOperations(actor);assert.equal(counted.draftTotal,31);assert.equal(counted.drafts.length,30);assert.equal(counted.accountTotal,1)
+ await prisma.contentDraft.deleteMany({where:{brandId:id}});await prisma.socialAccount.deleteMany({where:{brandId:id}})
  for(const requestKey of ['quota-fourth-request','quota-fifth-request'])await admitIntent(pool,actor,{...brief,requestKey})
  await assert.rejects(()=>admitIntent(pool,actor,{...brief,requestKey:'quota-sixth-request'}),/daily_task_budget_exhausted/)
- console.log(JSON.stringify({ok:true,checks:['Core durable task','recovered application index','scoped persistent preference and forgetting','same admission receipt','bounded partial context','single executor ownership','daily quota bound','brand facts CAS','current permission','cross-user denial','input wait','runtime rebuild','original clarification receipt','candidate verifier','AI provenance','idempotent adoption','post-adoption read','real usage ledger','unknown usage held without retry','cancel','brand brief with operations evidence','no downstream writes'],modelCalls}))
+ console.log(JSON.stringify({ok:true,checks:['Core durable task','recovered application index','scoped persistent preference and forgetting','same admission receipt','bounded partial context','single executor ownership','daily quota bound','brand facts CAS','current permission','cross-user denial','input wait','independent process recovery','runtime rebuild','original clarification receipt','candidate verifier','AI provenance','idempotent adoption','post-adoption read','real usage ledger','unknown usage held without retry','cancel','brand brief with operations evidence','exact zero and nonzero totals beyond page limit','no downstream writes'],modelCalls}))
 }finally{
  if(composition)await composition.app.close()
  await pool.end()
