@@ -11,3 +11,8 @@ assert(!validateSkuReferences({skuIds:['sku_a'],planning:'A different product'},
 assert(!validateSkuReferences({skuIds:[],planning:'Generic copy'},{productCatalog}))
 assert(validateSkuReferences({skuIds:[],planning:'Brand story'},{productCatalog:[]}))
 console.log('PASS: deterministic SKU snapshot, no inferred currency, whitelist, foreign SKU and generic script rejection, empty-catalog brand story')
+
+assert(!validateSkuReferences({skuIds:[],patch:{planning:'Brand introduction'}},{productCatalog:[]}),'missing product patch must not retain source product')
+assert(!validateSkuReferences({skuIds:[],patch:{planning:'Brand introduction',product:'Reference Burger'}},{productCatalog:[]}),'source product must not survive generic adaptation')
+assert(validateSkuReferences({skuIds:[],patch:{planning:'Brand introduction',product:'品牌内容'}},{productCatalog:[]}))
+console.log('PASS: general adaptation explicitly replaces reference product metadata')

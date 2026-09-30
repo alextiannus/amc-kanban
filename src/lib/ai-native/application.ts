@@ -122,7 +122,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         const candidate=candidateFrom(artifact.content,row.intent)
         const currentContext=options.readContext?await options.readContext(actor):await brandContext(actor)
         if(candidate.contextDigest!==digest(currentContext))return {verified:false,feedback:'Brand context changed or its digest is missing. Read amc.context again and revise the candidate against current facts.'}
-        if(row.intent.adaptToBrand&&!validateSkuReferences(candidate,currentContext))return {verified:false,feedback:'Use skuIds from current productCatalog and include their exact names in the full adapted planning script. No invented SKU IDs; empty skuIds only if catalog is empty.'}
+        if(row.intent.adaptToBrand&&!validateSkuReferences(candidate,currentContext))return {verified:false,feedback:'Use skuIds from current productCatalog and include their exact names in the full adapted planning script. No invented SKU IDs. When catalog is empty, use empty skuIds AND explicitly set patch.product to the literal 品牌内容 so the reference product is not retained.'}
         const current=await readCreative({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,row.intent.month,row.intent.creativeId)
         if(current.expectedRevision!==row.intent.expectedRevision||candidate.sourceCreativeId!==(current.current?.inspirationCreativeId||null))return {verified:false,feedback:'Original creative or source changed; do not invent a new source or overwrite the changed creative.'}
         return {verified:true}

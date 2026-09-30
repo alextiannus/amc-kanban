@@ -27,13 +27,13 @@ try{
   const end=Date.now()+230000;while(['queued','running'].includes(task.status)&&Date.now()<end){await delay(1500);task=await readNativeTask(id,id,taskId)}
   console.log(JSON.stringify({phase:'task',taskId,status:task.status,usage:task.usage,waitingReason:task.waitingReason}))
   assert.equal(task.status,'succeeded');assert(task.candidate&&task.artifact&&task.usage.complete);assert.equal(task.adaptToBrand,true)
-  assert.deepEqual(task.candidate.skuIds,[]);assert.match(String(task.candidate.patch.planning),/Morrow/);const copy=JSON.stringify(task.candidate.patch);assert(!/Brand X|Past Name|Burger|1-for-1|signature product|fill in|hard ad|\b99\b/i.test(copy),copy);assert(task.candidate.patch.materialRequirements?.length)
+  assert.deepEqual(task.candidate.skuIds,[]);assert.equal(task.candidate.patch.product,'品牌内容');assert.match(String(task.candidate.patch.planning),/Morrow/);const copy=JSON.stringify(task.candidate.patch);assert(!/Brand X|Past Name|Burger|1-for-1|signature product|fill in|hard ad|\b99\b/i.test(copy),copy);assert(task.candidate.patch.materialRequirements?.length)
   const patch={...task.candidate.patch,planning:task.candidate.patch.planning+'\nHuman review: use approved brand visuals.'}
   const body={requestKey:'generic-review-save-v1',artifactDigest:task.artifact.digest,patch}
   const saved=await adoptNativeCandidate(id,id,taskId,body),again=await adoptNativeCandidate(id,id,taskId,body);assert.equal(saved.receipt.id,again.receipt.id)
   assert.equal((await readNativeTask(id,id,taskId)).adoption?.receipt.id,saved.receipt.id)
   const history=await readCreativeRevisions({id,type:'HUMAN'},id,'2099-11','source-script',saved.receipt.id)
-  assert.equal(history.revisions[0].content.planning,patch.planning);assert.equal(history.revisions[0].actor.id,id);assert.equal(history.revisions[0].source.creativeId,'cre_synthetic_sku_reference');assert.equal(history.revisions[0].ai.taskId,taskId);assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
+  assert.equal(history.revisions[0].content.product,'品牌内容');assert.equal(history.revisions[0].content.planning,patch.planning);assert.equal(history.revisions[0].actor.id,id);assert.equal(history.revisions[0].source.creativeId,'cre_synthetic_sku_reference');assert.equal(history.revisions[0].ai.taskId,taskId);assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
   console.log(JSON.stringify({ok:true,taskId,receiptId:saved.receipt.id,skuIds:task.candidate.skuIds,adaptedScript:task.candidate.patch.planning,usage:task.usage,noPublication:true}))
  }else if(phase==='inspect')console.log(JSON.stringify(task))
  else{

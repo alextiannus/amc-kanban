@@ -20,7 +20,11 @@ export function skuFacts(items:unknown){
 export function validateSkuReferences(value:{skuIds?:unknown;planning?:string;patch?:Record<string,unknown>},facts:any){
   const catalog=facts?.productCatalog||skuFacts(facts?.knowledge?.menuItems)
   const ids=value.skuIds
-  if(!catalog.length)return ids===undefined||(Array.isArray(ids)&&ids.length===0)
+  if(!catalog.length){
+    const emptyIds=ids===undefined||(Array.isArray(ids)&&ids.length===0)
+    // Existing-card adaptation is a partial update: explicitly replace its source product.
+    return emptyIds&&(!value.patch||value.patch.product==='品牌内容')
+  }
   if(!Array.isArray(ids)||!ids.length||ids.length>3||new Set(ids).size!==ids.length)return false
   const script=String(value.planning||value.patch?.planning||'')
   return ids.every(id=>typeof id==='string'&&catalog.some((sku:any)=>sku.id===id&&script.includes(sku.name)))
