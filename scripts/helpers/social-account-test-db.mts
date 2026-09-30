@@ -46,7 +46,16 @@ export function bindingTestDb() {
       },
       brand: {
         findMany: async ({ where }: any) => read().brands.filter((b: any) => matches(b, where)),
-        findUnique: async ({ where }: any) => read().brands.find((b: any) => matches(b, where)),
+        findUnique: async ({ where, select }: any) => { const b = read().brands.find((b: any) => matches(b, where)); return b && select?.accounts ? { ...b, accounts: read().accounts.filter((a: any) => a.brandId === b.id && !a.unboundAt).sort((a: any, b: any) => a.id.localeCompare(b.id)) } : b },
+      },
+      googleBrandImport: {
+        findUnique: async ({ where }: any) => (read().imports || []).find((r: any) => r.brandId === where.brandId) || null,
+        upsert: async ({ where, create, update }: any) => {
+          read().imports ||= []
+          const row = read().imports.find((r: any) => r.brandId === where.brandId)
+          if (row) { Object.assign(row, update, { generation: (row.generation || 1) + 1 }); return row }
+          const added = { ...create, generation: 1 }; read().imports.push(added); return added
+        },
       },
       contentDraft: { count: async ({ where }: any) => read().drafts.filter((d: any) => matches(d, where)).length },
       auditLog: { create: async ({ data }: any) => { read().audit.push(data); return data } },

@@ -1,3 +1,4 @@
+import { queueGoogleBrandImport } from '@/lib/googleBrandImport'
 import { syncSocialAccountBindings } from '@/lib/socialAccountBinding'
 import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
@@ -157,6 +158,7 @@ export async function PATCH(request: Request, { params }: Params) {
         tx,
       })
     }
+    await queueGoogleBrandImport(id, false, tx)
     return saved
   })
 

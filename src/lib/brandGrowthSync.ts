@@ -118,6 +118,7 @@ export function growthPathsForBrandPatch(input: Record<string, unknown>) {
 
 export function growthPathsForKnowledgePatch(input: Record<string, unknown>) {
   const paths: string[] = []
+  if (Object.prototype.hasOwnProperty.call(input, 'menuItems')) paths.push('merchant.menuItems')
   if (Object.prototype.hasOwnProperty.call(input, 'market')) paths.push('merchant.market')
   if (Object.prototype.hasOwnProperty.call(input, 'deliveryUrls')) paths.push('merchant.deliveryUrls')
   if (Object.prototype.hasOwnProperty.call(input, 'businessHours')) paths.push('stores.main.businessHours')
@@ -275,9 +276,11 @@ export async function buildBrandGrowthSnapshot(brandId: string, state?: {
       logoUrl: true,
       website: true,
       phone: true,
+      googleBrandImport: { select: { result: true } },
       knowledge: {
         select: {
           market: true,
+          menuItems: true,
           deliveryUrls: true,
           brandTone: true,
           audienceAssumptions: true,
@@ -310,6 +313,8 @@ export async function buildBrandGrowthSnapshot(brandId: string, state?: {
       website: brand.website || null,
       brandPhone: brand.phone || null,
       deliveryUrls: normalizeDeliveryUrls(brand.knowledge?.deliveryUrls),
+      menuItems: brand.knowledge?.menuItems || [],
+      ...(record(brand.googleBrandImport?.result).reviewSummary ? { googleReviewSummary: { ...record(record(brand.googleBrandImport?.result).reviewSummary), source: record(brand.googleBrandImport?.result).source, resource: record(brand.googleBrandImport?.result).resource, observedAt: record(brand.googleBrandImport?.result).observedAt } } : {}),
     },
     identity: identitySnapshotPayload(state, { brandTone, targetAudience, sellingPoints }),
     locations: stores.map(store => ({
@@ -573,6 +578,15 @@ async function adoptGrowthValue(tx: Prisma.TransactionClient, brandId: string, c
   }
   if (brandField[conflict.path]) {
     await tx.brand.update({ where: { id: brandId }, data: { [brandField[conflict.path]]: text(value) || null } })
+    return
+  }
+  if (conflict.path === 'merchant.googleReviewSummary') {
+    const row = await tx.googleBrandImport.findUnique({ where: { brandId } })
+    if (row) await tx.googleBrandImport.update({ where: { brandId }, data: { result: jsonValue({ ...record(row.result), reviewSummary: value }) } })
+    return
+  }
+  if (conflict.path === 'merchant.menuItems') {
+    await tx.brandKnowledge.upsert({ where: { brandId }, update: { menuItems: jsonValue(Array.isArray(value) ? value : []) }, create: { brandId, negPrompts: [], menuItems: jsonValue(Array.isArray(value) ? value : []) } })
     return
   }
   if (conflict.path === 'merchant.deliveryUrls') {

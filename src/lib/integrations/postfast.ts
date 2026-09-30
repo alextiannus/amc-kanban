@@ -526,7 +526,7 @@ export async function postfastGenerateConnectLink(apiKey: string, options?: {
  */
 export async function postfastGetGBPLocations(apiKey: string, accountId: string, timeoutMs = 15_000): Promise<{
   success: boolean
-  locations: Array<{ id: string; name: string; address?: string; placeId?: string }>
+  locations: Array<{ id: string; name: string; address?: string; placeId?: string; mapsUri?: string }>
   error?: string
 }> {
   const r = await pfFetch(apiKey, `/social-media/${accountId}/gbp-locations`, {}, timeoutMs)
@@ -535,9 +535,10 @@ export async function postfastGetGBPLocations(apiKey: string, accountId: string,
   const locSource = Array.isArray(r.data) ? (r.data as JsonRecord[]) : (Array.isArray(dataObj.locations) ? dataObj.locations as JsonRecord[] : [])
   const locs = locSource.map((l) => ({
     id: asString(l.locationId) || asString(l.gbpLocationId) || asString(l.id),
-    name: asString(l.name) || asString(l.locationName),
+    name: asString(l.title) || asString(l.name) || asString(l.locationName),
     address: asString(l.address) || undefined,
     placeId: asString(l.placeId) || asString(l.googlePlaceId) || undefined,
+    mapsUri: asString(l.mapsUri) || undefined,
   }))
   return { success: true, locations: locs }
 }
@@ -552,7 +553,7 @@ export async function postfastGetGBPLocationsForInternalAccount(
   timeoutMs = 15_000,
 ): Promise<{
   success: boolean
-  locations: Array<{ id: string; name: string; address?: string; placeId?: string }>
+  locations: Array<{ id: string; name: string; address?: string; placeId?: string; mapsUri?: string }>
   socialMediaId?: string
   error?: string
 }> {

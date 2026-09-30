@@ -1,8 +1,10 @@
+import type { Prisma } from '@prisma/client'
+import { queueGoogleBrandImport } from '@/lib/googleBrandImport'
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { fetchGoogleLocations } from '@/lib/integrations/google'
 import { getSession } from '@/lib/auth'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canWriteBrandProject } from '@/lib/brandAccess'
 import { cookies } from 'next/headers'
 
 function isLocalUrl(url: string) {
@@ -78,7 +80,7 @@ export async function GET(request: Request) {
   cookieStore.delete('google_oauth_state')
 
   // 4. Verify user has write access to this brand
-  if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+  if (!(await canWriteBrandProject(brandId, session.user.id))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -101,6 +103,7 @@ export async function GET(request: Request) {
     // Exchange authorization code for tokens
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
+      signal: AbortSignal.timeout(15_000),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: clientId,
@@ -112,8 +115,7 @@ export async function GET(request: Request) {
     })
 
     if (!tokenRes.ok) {
-      const errText = await tokenRes.text()
-      return NextResponse.json({ error: `Google Token exchange failed: ${tokenRes.status} - ${errText}` }, { status: 502 })
+      return NextResponse.json({ error: `Google Token exchange failed: ${tokenRes.status}` }, { status: 502 })
     }
 
     const tokenData = await tokenRes.json() as { access_token: string; refresh_token?: string | null }
@@ -124,31 +126,25 @@ export async function GET(request: Request) {
       console.warn('Warning: Google did not return a refresh token. Make sure prompt=consent is active.')
     }
 
-    // Fetch GBP locations available
+    // Preserve an exact existing binding. Never select the first of several locations.
     const locations = await fetchGoogleLocations(accessToken)
-    if (locations.length === 0) {
-      return NextResponse.json({ error: 'No Google Business locations found under this account.' }, { status: 422 })
-    }
-
-    // Sync the first location automatically
-    const firstLocation = locations[0]
-
-    await prisma.brand.update({
-      where: { id: brandId },
-      data: {
+    const previous = locations.find(l => l.id === brand.googleLocationId && l.accountId === brand.googleAccountId?.replace(/^accounts\//, ''))
+    const selected = previous || (locations.length === 1 ? locations[0] : null)
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.brand.update({ where: { id: brandId }, data: {
         ...(refreshToken && { googleRefreshToken: refreshToken }),
-        googleAccountId: firstLocation.accountId, // Persist the actual Google account ID discoverable by locations API
-        googleLocationId: firstLocation.id,
-        googleLocationName: firstLocation.name,
-      },
+        googleAccountId: selected?.accountId || null,
+        googleLocationId: selected?.id || null,
+        googleLocationName: selected?.name || null,
+      } })
+      await queueGoogleBrandImport(brandId, true, tx)
     })
 
     const redirectUrl = new URL('/board', url.origin)
     redirectUrl.searchParams.set('google_success', 'true')
     return NextResponse.redirect(redirectUrl)
   } catch (e: unknown) {
-    console.error('[Google OAuth Callback Error]', e)
-    const message = e instanceof Error ? e.message : 'OAuth callback failed'
+    const message = 'Google authorization could not be completed. Please reconnect.'
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

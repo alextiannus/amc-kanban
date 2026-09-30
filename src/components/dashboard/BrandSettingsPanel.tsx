@@ -1,4 +1,5 @@
 'use client'
+import GoogleBrandImportPanel from '@/components/GoogleBrandImportPanel'
 import React, { useState, useEffect, useCallback } from 'react'
 import { X, Save, Loader2, CheckCircle2, Copy, ExternalLink, RefreshCw } from 'lucide-react'
 
@@ -395,6 +396,7 @@ export function BrandSettingsPanel({ brandId, open, onClose, initialSettings }: 
           </Section>
           <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
+          <GoogleBrandImportPanel key={brandId} brandId={brandId} />
           {/* Google Business */}
           <Section label="Google Business（评论监控）" badge={<StatusBadge ok={status.google} />}>
             <div className="space-y-3">

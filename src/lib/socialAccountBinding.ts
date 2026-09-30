@@ -48,7 +48,7 @@ export async function withBoundAccount<T>(accountId: string, work: (account: any
 
 /** All PostFast snapshot writers share identity matching and preserve tombstones. */
 export async function syncSocialAccountBindings(brandId: string, remotes: PostFastAccount[]) {
-  return prisma.$transaction(async (tx: any) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     await lockBrandSync(tx, brandId)
     const locals = await tx.socialAccount.findMany({ where: { brandId } })
     const seen = new Set<string>()
@@ -97,6 +97,9 @@ export async function syncSocialAccountBindings(brandId: string, remotes: PostFa
       connectionStatus: true, disabledReason: true, inboxCapable: true, followerCountUpdatedAt: true,
     } })
   }, { timeout: 30_000 })
+  const { queueGoogleBrandImport } = await import('./googleBrandImportQueue.ts')
+  await queueGoogleBrandImport(brandId)
+  return result
 }
 
 export async function resolveLocalPublishAccount(input: { apiKey: string; platform: string; accountId?: string; brandId?: string }, remotes: PostFastAccount[]) {
@@ -159,8 +162,10 @@ export async function unbindSocialAccount(brandId: string, accountId: string, ac
     } else if (remoteId) {
       throw new SocialAccountBindingError('PostFast 配置不可用，无法确认排期状态。', 503, 'ACCOUNT_STATUS_UNAVAILABLE')
     }
+    const { queueGoogleBrandImport } = await import('./googleBrandImportQueue.ts')
     const unboundAt = new Date()
     await tx.socialAccount.update({ where: { id: accountId }, data: { unboundAt, autoPilot: false, postfastAccountId: remoteId } })
+    await queueGoogleBrandImport(brandId, false, tx)
     await tx.auditLog.create({ data: { actorId, actorType: 'HUMAN', action: 'SOCIAL_ACCOUNT_UNBOUND', resourceType: 'SocialAccount', resourceId: accountId,
       oldValue: { autoPilot: account.autoPilot, unboundAt: null }, newValue: { unboundAt: unboundAt.toISOString(), autoPilot: false }, metadata: { brandId, platformId: account.platformId, handle: account.handle } } })
     return { ok: true }

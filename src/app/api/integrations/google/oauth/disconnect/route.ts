@@ -1,7 +1,8 @@
+import { queueGoogleBrandImport } from '@/lib/googleBrandImport'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canHumanAccessBrandProject } from '@/lib/brandAccess'
+import { canWriteBrandProject } from '@/lib/brandAccess'
 
 export async function POST(request: Request) {
   const session = await getSession()
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
     }
 
     // Verify access
-    if (!(await canHumanAccessBrandProject(brandId, session.user.id, session.user.role))) {
+    if (!(await canWriteBrandProject(brandId, session.user.id))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
       },
     })
 
+    await queueGoogleBrandImport(brandId, true)
     return NextResponse.json({ ok: true, disconnected: true })
   } catch (e: unknown) {
     console.error('[Google Disconnect Error]', e)

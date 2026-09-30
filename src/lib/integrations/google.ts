@@ -182,6 +182,7 @@ export async function getGoogleAccessToken(
 
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
+    signal: AbortSignal.timeout(15_000),
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       client_id: clientId,
@@ -192,8 +193,7 @@ export async function getGoogleAccessToken(
   });
 
   if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to refresh Google Access Token: ${response.status} - ${errText}`);
+    throw new Error(`Google OAuth HTTP ${response.status}`);
   }
 
   const data = await response.json();
@@ -208,32 +208,8 @@ export async function fetchGoogleLocations(accessToken: string): Promise<Array<{
     throw new Error('Mock Google access tokens are not allowed. Connect a real Google account before fetching locations.')
   }
 
-  // 1. Fetch Accounts
-  const accRes = await fetch('https://mybusiness.googleapis.com/v1/accounts', {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
-  });
-  if (!accRes.ok) throw new Error(`Google Accounts HTTP ${accRes.status}`);
-  const accData = await accRes.json();
-  const accounts = accData.accounts ?? [];
-  if (accounts.length === 0) return [];
-
-  // Pick first account
-  const accountName = accounts[0].name; // e.g. "accounts/123456"
-
-  // 2. Fetch Locations
-  const locRes = await fetch(`https://mybusiness.googleapis.com/v1/${accountName}/locations`, {
-    headers: { 'Authorization': `Bearer ${accessToken}` }
-  });
-  if (!locRes.ok) throw new Error(`Google Locations HTTP ${locRes.status}`);
-  const locData = await locRes.json();
-  const locations = (locData.locations ?? []) as GoogleLocationEntry[]
-
-  return locations.map((l: GoogleLocationEntry) => ({
-    id: l.name.split('/').pop() || l.name, // Extract location ID
-    name: l.title ?? l.storefrontAddress?.name ?? 'Unnamed Store',
-    address: l.storefrontAddress?.addressLines?.join(', ') ?? '',
-    accountId: accountName,
-  }));
+  const { listOwnedGoogleLocations } = await import('./googleBrandData')
+  return listOwnedGoogleLocations(accessToken)
 }
 
 /**
