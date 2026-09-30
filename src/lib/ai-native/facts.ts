@@ -1,7 +1,14 @@
 // Application facts only: integration credentials and unrelated drafts are never projected.
 export async function readBrandFacts(db:any,brandId:string){
-  const facts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{brandTone:true,negPrompts:true,audienceAssumptions:true,productAssumptions:true,menuItems:true,businessHours:true,brandVoice:true,market:true,brandImage:true,promotionFocus:true}}}})
+  const facts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{brandTone:true,negPrompts:true,audienceAssumptions:true,productAssumptions:true,menuItems:true,businessHours:true,brandVoice:true,market:true,brandImage:true,promotionFocus:true,researchReport:true,marketingSolution:true}}}})
   if(!facts)return null
+  const rawKnowledge=facts.knowledge
+  if(rawKnowledge){
+    const strategy=rawKnowledge.marketingSolution?.autopilotStrategy
+    const report=rawKnowledge.researchReport
+    const {marketingSolution,researchReport,...rest}=rawKnowledge
+    facts.knowledge={...rest,...(strategy?{contentStrategy:{title:strategy.title,content:String(strategy.content||'').slice(0,5000),source:'AI proposal, not verified merchant facts'}}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
+  }
   return {...facts,productCatalog:skuFacts(facts.knowledge?.menuItems),knowledge:facts.knowledge||{brandTone:null,negPrompts:[],audienceAssumptions:null,productAssumptions:null,menuItems:null,businessHours:null,brandVoice:null,market:null,brandImage:null,promotionFocus:null}}
 }
 

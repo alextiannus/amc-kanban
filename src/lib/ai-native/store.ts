@@ -21,12 +21,13 @@ export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeInten
   const c=await pool.connect()
   try{
     await c.query('BEGIN')
-    await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['amc-ai-admission:'+(isDailyActor(actor)?actor.scopeId:actor.subjectId)])
+    const autopilot=intent.kind==='autopilot'||intent.kind==='creative'&&!!intent.autopilotRunId
+    await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['amc-ai-admission:'+(autopilot?`autopilot:${intent.brandId}`:isDailyActor(actor)?actor.scopeId:actor.subjectId)])
     const old=(await c.query('SELECT * FROM amc_ai_requests WHERE id=$1',[id])).rows[0]
     if(old){if(old.digest!==hash)throw nativeError('request_key_reused',409);await c.query('COMMIT');return old}
-    const daily=isDailyActor(actor)
+    const daily=isDailyActor(actor)||autopilot
     const timezone=daily?(await c.query('SELECT timezone FROM public."Brand" WHERE id=$1',[intent.brandId])).rows[0]?.timezone||'Asia/Singapore':'UTC'
-    const used=Number((await c.query("SELECT COALESCE(sum(allowance),0) AS used FROM amc_ai_requests WHERE ($2::boolean AND scope_id=$3 OR NOT $2::boolean AND subject_id=$1 AND scope_id NOT LIKE '%brand_daily%') AND created_at>=date_trunc('day',now() AT TIME ZONE $4) AT TIME ZONE $4",[actor.subjectId,daily,actor.scopeId,timezone])).rows[0].used)
+    const used=Number((await c.query("SELECT COALESCE(sum(allowance),0) AS used FROM amc_ai_requests WHERE (($5::boolean AND intent->>'brandId'=$6 AND (intent->>'kind'='autopilot' OR intent ? 'autopilotRunId')) OR (NOT $5::boolean AND (CASE WHEN $2::boolean THEN scope_id=$3 ELSE subject_id=$1 AND scope_id NOT LIKE '%brand_daily%' END) AND intent->>'kind'<>'autopilot' AND NOT intent ? 'autopilotRunId')) AND created_at>=date_trunc('day',now() AT TIME ZONE $4) AT TIME ZONE $4",[actor.subjectId,daily,actor.scopeId,timezone,autopilot,intent.brandId])).rows[0].used)
     if(used+TASK_ALLOWANCE>(daily?6*TASK_ALLOWANCE:DAILY_ALLOWANCE))throw nativeError('daily_task_budget_exhausted',429)
     const row=(await c.query('INSERT INTO amc_ai_requests(id,scope_id,subject_id,request_key,digest,intent,allowance) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[id,actor.scopeId,actor.subjectId,intent.requestKey,hash,JSON.stringify(intent),TASK_ALLOWANCE])).rows[0]
     await c.query('COMMIT');return row

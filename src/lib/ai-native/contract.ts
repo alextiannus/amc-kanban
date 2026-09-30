@@ -6,10 +6,11 @@ export const CORE_ARCHIVE_SHA = '1eb1b87bcef1c1191eff788ca77cee678a1ac979c91ac0b
 export const TASK_ALLOWANCE = 600000
 export const DAILY_ALLOWANCE = 3000000
 export type NativeActor = { scopeId:string; subjectId:string }
-export type CreativeIntent = {kind:'creative';requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
+export type CreativeIntent = {kind:'creative';autopilotRunId?:string;requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type DiscoveryIntent = {kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent
+export type AutopilotIntent = {kind:'autopilot';runId:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
 export function actorFor(brandId:string,userId:string):NativeActor {

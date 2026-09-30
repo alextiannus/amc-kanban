@@ -320,7 +320,7 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   googleBusinessUrl?: string | null
   googleReviewUrl?: string | null
   accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null; displayName?: string | null; followerCount?: number | null; ratingScore?: number | null }>
-}, merchantContext: Record<string, unknown>) {
+}, merchantContext: Record<string, unknown>, options: { jobId?: string; requestKey?: string; onCreated?: (jobId:string)=>Promise<void>; maxWaitMs?: number } = {}) {
   const owner = brand.owners?.find((item) => item.role === 'owner' && item.user?.email)?.user
     || brand.owners?.find((item) => item.user?.email)?.user
   const contactEmail = owner?.email || process.env.AMC_GROWTH_REPORT_EMAIL || 'contact@immedi.ai'
@@ -371,22 +371,30 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
       ].filter(Boolean),
     },
   }
+  let created: GrowthBrandIntelligenceJob
+  if (options.jobId) {
+    const response=await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(options.jobId)}`,{method:'GET'})
+    if(!response.ok) throw new GrowthDataCenterError(response.status,'growth_research_status_failed')
+    created=await response.json()
+  } else {
   const createResponse = await growthRequest('/v1/brand-intelligence-intake', {
     method: 'POST',
     headers: {
-      'idempotency-key': `amc-kanban-brand-plan:${brand.id}:${Date.now()}`,
+      'idempotency-key': options.requestKey || `amc-kanban-brand-plan:${brand.id}:${Date.now()}`,
     },
     body: JSON.stringify(payload),
   })
-  const created = await createResponse.json().catch(() => ({})) as GrowthBrandIntelligenceJob
+  created = await createResponse.json().catch(() => ({})) as GrowthBrandIntelligenceJob
   if (!createResponse.ok) {
     throw new GrowthDataCenterError(createResponse.status, String((created as Record<string, unknown>).error || 'growth_research_create_failed'))
   }
 
-  const jobId = created.job_id
+  if(created.job_id && options.onCreated) await options.onCreated(created.job_id)
+  }
+  const jobId = created.job_id || options.jobId
   if (!jobId) throw new GrowthDataCenterError(502, 'growth_research_job_missing')
 
-  const maxWaitMs = Math.max(30000, Number(process.env.AMC_GROWTH_REPORT_WAIT_MS || 240000))
+  const maxWaitMs = options.maxWaitMs ?? Math.max(30000, Number(process.env.AMC_GROWTH_REPORT_WAIT_MS || 240000))
   const pollIntervalMs = Math.max(2000, Number(process.env.AMC_GROWTH_REPORT_POLL_MS || 5000))
   const deadline = Date.now() + maxWaitMs
   let job: GrowthBrandIntelligenceJob = created
@@ -401,6 +409,12 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
     job = statusPayload
   }
   return job
+}
+
+export async function readGrowthResearchJob(jobId:string) {
+  const response=await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}`,{method:'GET'})
+  if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_research_status_failed')
+  return await response.json() as GrowthBrandIntelligenceJob
 }
 
 function normalizeGrowthSocialPlatform(platformId: string) {

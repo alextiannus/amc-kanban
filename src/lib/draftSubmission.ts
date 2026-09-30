@@ -112,6 +112,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
+  // AMCMM generation mandate never grants publication, even when legacy brand autopilot is on.
+  if ((draft.viralCopyScriptProvenance as any)?.autopilot?.runId) {
+    brand.autoPilot = false
+    if (input.forcePublish) {
+      const confirmer = await prisma.user.findUnique({where:{id:input.actorId},select:{type:true,status:true}})
+      if (confirmer?.type !== 'HUMAN' || confirmer.status !== 'ACTIVE') return {ok:false as const,status:403,error:'自动驾驶内容须由主理人确认发布。'}
+    }
+  }
   if (draft.account?.unboundAt) return { ok: false as const, status: 409, code: 'ACCOUNT_UNBOUND', error: '该账号已解除绑定，请先选择有效的绑定账号。' }
   const immediatePublish = !!(input.immediatePublish || input.note === '立即发布')
 

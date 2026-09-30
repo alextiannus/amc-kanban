@@ -8,7 +8,7 @@ import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creative
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
-type AiProvenance = { automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
+type AiProvenance = { autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
 async function authorize(db: any, actor: Actor, brandId: string, write = false) {
   if (!await canUserAccessBrand(brandId, actor.id, write ? 'WRITE' : 'READ', db)) throw new CreativeRevisionError('creative_access_denied',404)
@@ -65,6 +65,10 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     }
     const knowledge = await tx.brandKnowledge.findUnique({where:{brandId}})
     const workspace = creativeWorkspace(knowledge)
+    if(ai?.autopilotRunId){
+      const granted:any[]=await tx.$queryRaw`SELECT s.brand_id FROM amc_iaic.autopilot_settings s JOIN amc_iaic.autopilot_runs r ON r.brand_id=s.brand_id WHERE r.id=${ai.autopilotRunId} AND s.brand_id=${brandId} AND s.enabled=true AND s.owner_id=${actor.id} AND r.owner_id=${actor.id} AND r.account_id=s.account_id FOR SHARE OF s`
+      if(!granted.length||!await tx.crewMember.findFirst({where:{userId:actor.id,active:true,role:{in:['PRINCIPAL','OWNER']},crew:{brandId,brand:{status:'ACTIVE'}}}}))throw new CreativeRevisionError('autopilot_authority_revoked',403)
+    }
     if(ai?.automaticDaily){
       if(!seed||!ai.poolIdeaId||!await tx.crewMember.findFirst({where:{userId:actor.id,active:true,role:{in:['PRINCIPAL','OWNER']},crew:{brandId,brand:{status:'ACTIVE'}}}}))throw new CreativeRevisionError('daily_planning_authority_revoked',403)
       const active:any[]=await tx.$queryRaw`SELECT id,source FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND replaced_at IS NULL FOR SHARE`
@@ -97,11 +101,11 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     }
     const parentInput = record(parent.input)
     const revision = parent.version+1
-    const next:Record<string,any> = {...current,...patch,...(current.nativeDaily&&!ai?.automaticDaily?{nativeReviewStatus:'reviewed',status:'planned_unimplemented'}:{})}
+    const next:Record<string,any> = {...current,...patch,...(current.nativeDaily&&!ai?.automaticDaily&&!ai?.autopilotRunId?{nativeReviewStatus:'reviewed',status:'planned_unimplemented'}:{})}
     if(next.nativeDaily&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')
-    const automatic=ai?.automaticDaily===true
+    const automatic=ai?.automaticDaily===true||!!ai?.autopilotRunId
     const revisionActor=automatic?{id:'amc-mm-user-ai',name:'AMC-MM AI User Assistant',type:'AI',authorizedBy:user.id}:{id:user.id,name:user.nickname || user.id,type:user.type,roles:[user.role,...user.businessRoles.map((role:{role:string})=>role.role)]}
-    const entry = await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period,version:revision,status:'DRAFT',generationMode:automatic?'AI_DAILY_ADAPTATION':'MANUAL_EDIT',createdById:user.id,input:{creativeId,month,brand:brandSnapshot,actor:revisionActor,principals,origin:automatic?'automatic_daily_adaptation':ai?'ai_assisted':user.type==='HUMAN'?'human':'agent',...(ai?{ai}:{}),source:parentInput.source,parentRevisionId:parent.id,originalRevisionId:parentInput.originalRevisionId || parent.id,requestKey,requestHash},output:next as Prisma.InputJsonValue}})
+    const entry = await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period,version:revision,status:'DRAFT',generationMode:ai?.autopilotRunId?'AI_AUTOPILOT_ADAPTATION':automatic?'AI_DAILY_ADAPTATION':'MANUAL_EDIT',createdById:user.id,input:{creativeId,month,brand:brandSnapshot,actor:revisionActor,principals,origin:ai?.autopilotRunId?'automatic_user_ai_adaptation':automatic?'automatic_daily_adaptation':ai?'ai_assisted':user.type==='HUMAN'?'human':'agent',...(ai?{ai}:{}),source:parentInput.source,parentRevisionId:parent.id,originalRevisionId:parentInput.originalRevisionId || parent.id,requestKey,requestHash},output:next as Prisma.InputJsonValue}})
     const nextWorkspace = {...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar?.months,[month]:(seed ? [...monthItems(workspace,month),next] : monthItems(workspace,month).map(item=>item.id===creativeId ? next : item))}}}
     await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:nextWorkspace as Prisma.InputJsonValue}})
     await tx.auditLog.create({data:{actorId:user.id,actorType:automatic?'AI':user.type,actorName:automatic?'AMC-MM AI User Assistant':user.nickname,action:'CREATIVE_REVISION_SAVED',resourceType:'BrandCreative',resourceId:creativeId,oldValue:{hash:body.expectedRevision,parentRevisionId:parent.id},newValue:{revisionId:entry.id,revision,hash:creativeDigest(next)},metadata:{brandId,month,...(ai?{ai}:{}),principalIds:principals.map(member=>member.userId),sourceCreativeId:parentInput.source?.creativeId || null}}})

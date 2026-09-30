@@ -585,9 +585,9 @@ export async function runBrandPlanAction(input: {
   }
 }
 
-async function buildGrowthResearchReport(brand: BrandPlanBrand): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
+export async function buildGrowthResearchReport(brand: BrandPlanBrand, options?: Parameters<typeof generateGrowthResearchReportForBrand>[2]): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
   const merchantContext = await buildGrowthMerchantContext(brand)
-  const job = await generateGrowthResearchReportForBrand(brand, merchantContext)
+  const job = await generateGrowthResearchReportForBrand(brand, merchantContext, options)
   if (text(job.status) === 'failed') {
     throw new BrandPlanError('growth_research_failed', 502)
   }
@@ -961,7 +961,7 @@ function isGrowthResearchReport(report: BrandPlanWorkspaceData['researchReport']
   ))
 }
 
-async function saveResearchReport(
+export async function saveResearchReport(
   brandId: string,
   report: NonNullable<BrandPlanWorkspaceData['researchReport']>
 ): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {

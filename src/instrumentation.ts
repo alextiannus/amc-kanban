@@ -7,6 +7,8 @@ export async function register() {
     startNativeWorker()
     const { startIdeaPoolWorker } = await import('./lib/ai-native/idea-pool')
     startIdeaPoolWorker()
+    const { startAutopilotWorker } = await import('./lib/ai-native/autopilot')
+    startAutopilotWorker()
     const { startVoiceTaskWorker } = await import('./lib/voiceTaskWorker')
     startVoiceTaskWorker()
     const { startAssetAnalysisWorker } = await import('./lib/asset-analysis/worker')
