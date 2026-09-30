@@ -180,3 +180,4 @@ Exposed to the agent directly inside [server.ts](file:///Users/alextian/Document
 - 本地验证：Google 精确身份、多个授权账号分页、不做名称检索、菜单来源与规格去重、保留人工/旧格式商品、评价样本与评分统计、错误脱敏；PostgreSQL 真实事务验证持久认领、并发执行、重复同步、解绑期间丢弃旧结果、Growth outbox，以及 PostFast 权限不足时只补充可取得字段。
 - 浏览器验证：390px 手机界面、明确门店选择（不默认选首项）、同步状态、缺项提示、品牌切换隔离；原 Brand Ideas 消息预览回归通过。两端生产构建及类型检查通过。接口专项验证未登录、跨品牌及 AI 身份不触发读取或导入；线上未授权请求被拒绝。全库旧静态鉴权扫描仍有 20 个既有未识别路由，本次新接口不在其中，未将该扫描报告为全通过。
 - 真实账号验证：Render `job-daub3qe0tbcc73en4bvg` 对“何师傅烤骨头”已配置的 PostFast Google 账号读取其唯一门店，新增地址 `81 Geylang Road, 389199`、Google 门店名称与地图主页。同步回执为 `PARTIAL`，SKU 数 0，评价摘要为空，缺项为直接 Google 菜单/评价授权。没有通过名称寻找其他商家，没有推测菜品或生成虚假评价。直接 OAuth 菜单与评价分支已通过模拟提供方及真实本地数据库验证；该品牌尚无直接授权，不能称为已通过该分支的线上菜单/评价实测。
+- 主数据同步回读：Render `job-daub4o60tbcc73en85cg` 确认该品牌 Growth outbox 为 `SYNCED`，无待同步字段、错误或冲突。
