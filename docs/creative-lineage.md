@@ -1,6 +1,6 @@
 # 品牌创意修改与版本追溯
 
-状态：代码已实现并通过本地验证，待生产部署验收。范围为人工修改保存与追溯，不包含 Core 接入或自动发布。
+状态：代码已实现并部署；本地验证和生产隔离回滚验证通过。范围为人工修改保存与追溯，不包含 Core 接入或自动发布。
 
 复用 BrandMarketingSolution，kind=CREATIVE_ITEM，以品牌、月份和卡片 ID 的摘要为 period。版本0保留首次编辑时的策划原稿，作者未知标记 legacy_unknown；版本1起保存真实会话操作者、角色快照、当时有效 Crew PRINCIPAL 关系、父版本、原始来源 ID/已知内容快照及摘要。来源仅有策划摘录时明确 plan_snapshot，不能冒充 Content 原文或原创意准确发行版本。已有版本只读保留。
 
@@ -20,3 +20,13 @@ AMCMM 编辑窗口显示版本历史、品牌、操作者、当时主理人、�
 已知基线问题：test-brand-plan-inspiration-link.mts 仍断言已替换的旧 Content 跳转代码，在未修改基线上同样失败；audit-route-auth --strict 的20个未识别旧路由在基线与本次完全相同，新版本接口被识别为已鉴权。没有将这些检查冒充全绿。
 
 实现复用既有表和索引，无生产 Schema 迁移、历史批量回填或 Core 版本变化。版本存储在服务中只追加；按品牌知识行锁序列化版本分配。生产验证脚本只在事务内创建隔离样本，并强制整体回滚，不触发发布或通知。
+
+## 生产交付证据（2026-09-30）
+
+- Kanban `e02bbf653ae87995f018759fe245364bdc41534f`；Render SG `dep-dau5m9jbc2fs73c9enog` 为 live。
+- AMCMM `56cee190c22de02c5218d423537ea1bf083e385f`；Render SG `dep-dau5o57f3r2c73fg8ur0` 为 live。
+- 生产任务 `job-dau5o13ncjis73asbku0` succeeded，输出 ok:true、mode:rollback-only，代码版本匹配 Kanban。save/source/actor/principal/readback/idempotency/audit/no-downstream-writes/complete-rollback 全部通过。
+- 正式域名 AMCMM 页面200；Kanban/MM 未登录新接口401；MM 跨来源写入403且 no-store。未登录401由既有鉴权层提前返回，未声称其具备新路由的 no-store 响应头。
+- 浏览器编辑流程使用真实组件和模拟 API，本地真实 PostgreSQL 与生产回滚服务测试分别验证数据行为；未使用真实商户登录会话执行线上 UI 保存，不将这三层验证冒充线上商户端到端验收。
+
+用户入口：AMCMM 品牌策划 → 编辑创意草稿与查看版本记录 → 选择创意 → 编辑保存/版本历史。完整 AI Native（Core、持久 AI 任务、制作发布版本采用、持续运营）仍待后续实施。

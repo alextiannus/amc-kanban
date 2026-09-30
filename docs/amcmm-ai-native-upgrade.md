@@ -1,6 +1,6 @@
 # AMCMM 创意再创作与 AI Native 升级设计
 
-日期：2026-09-30。状态：P0 人工保存与追溯已实现并通过本地验证，待生产验收；AI Native 后续阶段待实施。面向 AMC 产品、AMCMM、Kanban、Growth、Content 和 IAiC Core 开发者。
+日期：2026-09-30。状态：P0 人工保存与追溯已部署，生产隔离回滚验证通过；AI Native 后续阶段待实施。面向 AMC 产品、AMCMM、Kanban、Growth、Content 和 IAiC Core 开发者。
 
 品牌主理人应能在 AMCMM 品牌策划中修改创意草稿并保存，系统应明确保留再创作创意、品牌、实际修改人及原创意之间的关系。已有编辑入口可复用；本次升级重点是逐条版本、可信身份、来源追溯和可靠保存。AI Native 升级以这条业务闭环为首个切片，随后扩展到策划、素材、制作、发布和复盘。
 
@@ -143,8 +143,8 @@ AMC-F02 为 design-feedback：主理人请求、Business AI 执行及 Content �
 | --- | --- | --- |
 | 需求与设计 | 已记录 | AMC 产品确认优先级；“MMO”目录对应仍待明确 |
 | Core delivery | 未变更、未发布 | Core 维护者核定实施时受支持包及公共契约，必要时处理最小复现 |
-| Application integration | P0 已实现并完成本地验证，待生产验收 | 当前使用既有版本表、可信身份、事务与来源摘录快照；准确 Content 历史发行版本未补造，P1至P3仍待实施 |
-| Production verification | 未执行 | 各应用发布负责人按阶段记录版本及受权生产验证 |
-| Acceptance | 未进行运行验收 | 产品与独立验证者按上述矩阵验收，保留未完成范围 |
+| Application integration | P0 已实现并部署，生产隔离回滚验证通过 | 当前使用既有版本表、可信身份、事务与来源摘录快照；准确 Content 历史发行版本未补造，P1至P3仍待实施 |
+| Production verification | P0 两服务 live；生产保存/来源/身份/幂等/审计及完整回滚通过 | 版本和部署证据见 creative-lineage.md |
+| Acceptance | P0 数据库与 API 测试、组件浏览器测试通过；未用真实商户账号进行线上 UI 保存 | 产品按实际品牌使用验证；P1至P3未交付 |
 
 Obsidian 反馈索引：`Immedi.ai/IAiC/51 - AMCMM Creative Lineage and AI Native Upgrade.md`，并链接到 IAiC Home。此设计不创建 Framework 功能、实际后台任务或经营政策。
