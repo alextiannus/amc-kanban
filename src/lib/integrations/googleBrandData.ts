@@ -52,8 +52,10 @@ export function normalizeGoogleMenu(value: unknown, locationId: string, observed
   const items = new Map<string, Obj>()
   for (const menu of list(object(value).menus)) for (const section of list(menu.sections)) for (const item of list(section.items)) {
     for (const entry of [item, ...list(item.options)]) {
-      const l = label(entry.labels), name = text(l.displayName, 140)
-      if (!name) continue
+      const l = label(entry.labels), optionName = text(l.displayName, 140)
+      if (!optionName) continue
+      const parentName = text(label(item.labels).displayName, 140)
+      const name = entry === item || !parentName ? optionName : `${parentName} · ${optionName}`
       const identity = name.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ')
       const id = `google-menu-${createHash('sha256').update(`${locationId}:${identity}`).digest('hex').slice(0, 24)}`
       const price = object(object(entry.attributes).price)
@@ -113,7 +115,7 @@ export async function readGoogleBrandData(token: string, account: string, locati
     menu, reviewSummary: reviewResult.status === 'fulfilled' ? summarizeGoogleReviews(reviewResult.value, menu) : null, missing }
 }
 export function mergeGoogleMenu(existing: unknown, incoming: Obj[]) {
-  const items = list(existing)
+  const items = Array.isArray(existing) ? existing.map(i => typeof i === 'string' ? { name: i } : object(i)) : []
   const names = new Set(items.map(i => text(i.name).normalize('NFKC').toLowerCase().replace(/\s+/g, ' ')))
   const ids = new Set(items.map(i => i.id))
   const added = incoming.filter(i => !ids.has(i.id) && !names.has(text(i.name).normalize('NFKC').toLowerCase().replace(/\s+/g, ' ')))
