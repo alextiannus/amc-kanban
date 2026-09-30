@@ -308,6 +308,33 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     return (server.tool as any)(...args)
   }) as typeof server.tool
 
+  // Durable AI work uses the same admission/control services as AMCMM.
+  registerTool('create_ai_brand_task', 'Prepare a durable brand work brief from current authorized facts and operations. Proposals are not executed business actions.', {brandId:z.string(),goal:z.string().min(1).max(6000),requestKey:z.string().min(8).max(100)}, async input=>{
+    const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
+    const {createNativeTask}=await import('@/lib/ai-native/service')
+    return {content:[{type:'text' as const,text:JSON.stringify(await createNativeTask(user.id,input.brandId,{...input,kind:'brand_brief'}))}]}
+  })
+  registerTool('create_ai_creative_task', 'Start a durable, bounded creative candidate task. This does not save or publish the creative. Reuse requestKey after an unknown response.', {brandId:z.string(),creativeId:z.string(),month:z.string(),expectedRevision:z.string(),goal:z.string().min(1).max(6000),requestKey:z.string().min(8).max(100)}, async input=>{
+    const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
+    const {createNativeTask}=await import('@/lib/ai-native/service')
+    return {content:[{type:'text' as const,text:JSON.stringify(await createNativeTask(user.id,input.brandId,input))}]}
+  })
+  registerTool('list_ai_tasks', 'List current authorized durable AI tasks, following nextCursor.', {brandId:z.string(),cursor:z.string().optional()}, async input=>{
+    const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
+    const {listNativeTasks}=await import('@/lib/ai-native/service')
+    return {content:[{type:'text' as const,text:JSON.stringify(await listNativeTasks(user.id,input.brandId,input.cursor))}]}
+  })
+  registerTool('get_ai_task', 'Read current task status, input request, candidate and usage evidence. Candidate completion is not publication.', {brandId:z.string(),taskId:z.string().uuid()}, async input=>{
+    const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
+    const {readNativeTask}=await import('@/lib/ai-native/service')
+    return {content:[{type:'text' as const,text:JSON.stringify(await readNativeTask(user.id,input.brandId,input.taskId))}]}
+  })
+  registerTool('control_ai_task', 'Supply requested facts or control the original task. Preserve requestKey after uncertain responses; reconcile usage before resuming.', {brandId:z.string(),taskId:z.string().uuid(),action:z.enum(['provide_input','cancel','resume','control_result']),requestKey:z.string().min(8).max(100),input:z.string().max(8000).optional()}, async input=>{
+    const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
+    const {controlNativeTask}=await import('@/lib/ai-native/service')
+    return {content:[{type:'text' as const,text:JSON.stringify(await controlNativeTask(user.id,input.brandId,input.taskId,input))}]}
+  })
+
   // ── get_brand_config ────────────────────────────────────────────────────
   registerTool(
     'get_brand_config',

@@ -102,12 +102,14 @@
     "test:postfast-key-release": "node --experimental-strip-types scripts/test-postfast-key-release.mts",
     "test:admin-brand-principal": "node --import tsx scripts/test-admin-brand-principal.mts",
     "test:postfast-account-health": "node --import tsx scripts/test-postfast-account-health.mts",
-    "test:creative-revisions": "node --import tsx scripts/test-creative-revision-route.mts && node --import tsx scripts/test-creative-revisions.mts"
+    "test:creative-revisions": "node --import tsx scripts/test-creative-revision-route.mts && node --import tsx scripts/test-creative-revisions.mts",
+    "test:ai-native": "node --import tsx scripts/test-ai-native-usage.mts && node --import tsx scripts/test-ai-native-http.mts && node --import tsx scripts/test-ai-native.mts"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",
     "@dnd-kit/core": "^6.3.1",
     "@ducanh2912/next-pwa": "^10.2.9",
+    "@immedi/iaic-core": "file:vendor/core-1eb1b87bcef1c1191eff788ca77cee678a1ac979c91ac0bcbecc77a525d79f24.tgz",
     "@langchain/core": "^1.2.1",
     "@langchain/langgraph": "^1.4.5",
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -123,6 +125,7 @@
     "next": "^16.2.9",
     "next-themes": "^0.4.6",
     "nodemailer": "^9.0.1",
+    "pg": "8.23.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -141,6 +144,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20",
+    "@types/pg": "8.15.6",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",

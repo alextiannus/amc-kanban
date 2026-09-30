@@ -4,10 +4,12 @@
 
 2026-09-30 人工保存与追溯已部署，生产隔离回滚验证通过，执行契约见 [创意版本追溯](creative-lineage.md)：品牌主理人可在 AMCMM 品牌策划中编辑创意草稿并保存，再创作关联品牌、实际修改人、当时主理人关系及原创意 ID/来源快照；准确来源发行版本未知时明确标记未知。编辑器已使用逐条不可变版本、可信服务端身份、并发校验、幂等回执和权威回读。保存与批准、排期、发布分别处理。
 
-完整当前设计与分阶段验收见 [AMCMM 创意再创作与 AI Native 升级设计](amcmm-ai-native-upgrade.md)。AI Native 目标基于独立 IAIC Core，组合 User AI、Business AI 与 Platform AI 责任、持久任务、补资料、恢复、统一能力、分账预算及结果验证。人工保存与追溯的实际实现状态以创意版本追溯文档为准；完整 AI Native 目标尚未实施。
+完整当前设计与分阶段验收见 [AMCMM 创意再创作与 AI Native 升级设计](amcmm-ai-native-upgrade.md)。AI Native 目标基于独立 IAIC Core，组合 User AI、Business AI 与 Platform AI 责任、持久任务、补资料、恢复、统一能力、分账预算及结果验证。人工保存与追溯的实际实现状态以创意版本追溯文档为准；AI Native 工作台已完成本地实现和验证，生产验收待完成，当前执行契约见 [IAIC 改造实施设计](amcmm-iaic-implementation.md)；未通过生产验收的能力仍标记待交付。
 
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
+
+工作台当前实现：品牌工作简报、指定创意改写、补资料续接、任务查询/取消、候选对比采用，以及个人品牌偏好记住/遗忘。模型读取授权事实并写入候选，用户采用后保存新版本并记录 taskId、artifact digest、实际操作者和原创意；此流程不自动执行制作或发布。旧语音 companion 的全部动作迁移、周期运营和平台工程协作仍待交付。
 
 ## 店内抽奖固定二维码（当前规则）
 
@@ -467,69 +469,13 @@ AI 语音回答的同时，在对话气泡下方显示迷你数据可视化卡�
 
 ---
 
-## 十一、对话历史持久化方案（已决策）
+## 十一、任务与对话持久化
 
-### 策略：混合持久化
+AI 工作真值由 Kanban 托管的 IAIC Task、Session、Memory 与 Workspace 保存。浏览器缓存仅用于显示，不以异步写聊天记录替代任务接受回执。任务提交返回持久 taskId；刷新、切设备和关页不取消已接受任务。补充资料回到同一任务，继续动作使用稳定请求键及 Core 原操作回执。
 
-```
-写入链路（每次对话结束后）：
-用户发消息 → AI 回复 → 同步写入 localStorage → 异步写入 DB
+旧 companion 对话与 persona 保留兼容；未迁移的闲聊历史不冒充可恢复业务任务。权限撤销或切品牌后清理当前显示并按新范围重读。任务、审计与来源的保留遵循各自业务规则，不套用旧“30天/500条聊天自动归档”设想。
 
-读取链路（页面加载时）：
-1. 优先读 localStorage（毫秒级，无 loading）
-2. 后台静默 fetch DB 版本
-3. 若 DB 版本更新（跨设备写入），合并并更新 localStorage
-```
-
-### 数据库 Schema（新增表）
-
-```prisma
-model CompanionMessage {
-  id        String   @id @default(cuid())
-  brandId   String
-  userId    String
-  role      String   // 'user' | 'assistant'
-  content   String
-  action    String?  // 记录 AI 执行了什么操作
-  draftId   String?  // 关联的草稿 ID（审核场景）
-  createdAt DateTime @default(now())
-
-  brand     Brand    @relation(fields: [brandId], references: [id])
-  @@index([brandId, userId])
-  @@index([createdAt])
-}
-```
-
-### 新增 API 端点
-
-```
-// 拉取历史记录
-GET /api/brands/[id]/companion/history?limit=50
-Response: { messages: CompanionMessage[] }
-
-// 追加新消息（异步，非阻塞）
-POST /api/brands/[id]/companion/history
-Body: { role: 'user' | 'assistant', content: string, action?: string, draftId?: string }
-```
-
-### 前端实现细节
-
-| 场景 | 行为 |
-|------|------|
-| 首次打开 | 从 DB 拉取最近 50 条，写入 localStorage |
-| 对话中 | 立即写 localStorage，后台异步 POST 到 DB |
-| 换设备打开 | DB 拉取，与本地 localStorage 合并（DB 优先）|
-| 清除历史 | 清空 localStorage + 调用 DELETE API |
-
-### 保留策略
-- localStorage：保留最近 **100 条**消息
-- 数据库：保留最近 **30 天**或 **500 条**（whichever comes first），超出自动归档
-
----
-
-*文档回写时间：2026-06-27（历史持久化决策更新）*  
-*基于讨论结论整理，后续变更请更新此文档*
-
+当前改造状态、接口与验收以 [IAIC 改造实施设计](amcmm-iaic-implementation.md) 为准。制作、批准及发布分别授权，模型返回 action 不构成执行权限或成功证据。
 
 ## 商家声音上传响应处理（修复待发布）
 

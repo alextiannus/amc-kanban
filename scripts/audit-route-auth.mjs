@@ -31,6 +31,8 @@ const authMarkers = [
   'verifySessionToken',
   'getSession',
   'resolveSessionOrApiKey',
+  // Central wrapper tested by test-ai-native-http.mts (session/API key + origin).
+  'nativeHttp',
   'getAgentFromApiKey',
   'verifyUserApiKey',
   'requireAdminAgent',

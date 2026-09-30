@@ -12,15 +12,17 @@ Agent 视角的连接与工作流手册见：[AGENT_CONNECTIVITY.md](AGENT_CONNE
 
 品牌账号的单独解绑、排期阻塞与显式重绑契约见：[社交账号单独解绑](social-account-unbinding.md)。该操作保留第三方授权和历史记录，与旧的账号 DELETE 接口分开。
 
+AMCMM AI 工作台接口、MCP、个人偏好、额度与恢复契约见 [IAIC 改造实施设计](amcmm-iaic-implementation.md)。
+
 设计原则：
 
-1. Dify-first：复杂工作流与知识库管理优先由 Dify 承载。
+1. AMCMM 持久 AI 工作使用独立 IAIC Core；现有 Dify/业务作业保留原职责，不与 Core 任务混为一套状态。
 2. API layer 负责认证、权限、数据持久化、第三方集成、fallback 和审计。
 3. 所有品牌级 API 必须执行品牌资源级授权。
 4. AMC Agent 使用绑定自身 User 的 Bearer API Key；人类用户使用 Cookie session。
 5. 所有品牌运营数据都以 `brandId` 作为隔离边界。
 6. 人类与 Agent 使用同一 Capability + Crew 授权；ADMIN Agent 与人类 ADMIN 权限一致。
-7. 新流程直接操作业务资源和 ActionItem，不创建 WorkUnit/泳道任务。
+7. 业务结果仍由业务资源与 ActionItem 表达；Core Task 记录 AI 执行、等待与恢复，不新建 WorkUnit/泳道副本。
 
 ## 2. 认证模型
 
@@ -594,7 +596,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **261** 个 API 路径、**373** 个 HTTP 方法组合。
+共 **265** 个 API 路径、**380** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -675,6 +677,10 @@ Permanent QR contract:
 | PATCH | `/api/brands/{id}/actions/{aid}/approve` |
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
+| GET, POST | `/api/brands/{id}/ai/preference` |
+| GET, POST | `/api/brands/{id}/ai/tasks` |
+| GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
+| POST | `/api/brands/{id}/ai/tasks/{taskId}/adopt` |
 | GET | `/api/brands/{id}/analytics` |
 | GET, POST | `/api/brands/{id}/apify-sync` |
 | GET, PATCH, POST | `/api/brands/{id}/asset-analysis` |

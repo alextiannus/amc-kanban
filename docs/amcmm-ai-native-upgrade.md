@@ -1,14 +1,14 @@
 # AMCMM 创意再创作与 AI Native 升级设计
 
-日期：2026-09-30。状态：P0 人工保存与追溯已部署，生产隔离回滚验证通过；AI Native 后续阶段待实施。面向 AMC 产品、AMCMM、Kanban、Growth、Content 和 IAiC Core 开发者。
+日期：2026-09-30。状态：P0 人工保存与追溯已部署，生产隔离回滚验证通过；AI Native 技术改造实施中，执行契约见 [IAIC 改造实施设计](amcmm-iaic-implementation.md)。面向 AMC 产品、AMCMM、Kanban、Growth、Content 和 IAiC Core 开发者。
 
 品牌主理人应能在 AMCMM 品牌策划中修改创意草稿并保存，系统应明确保留再创作创意、品牌、实际修改人及原创意之间的关系。已有编辑入口可复用；本次升级重点是逐条版本、可信身份、来源追溯和可靠保存。AI Native 升级以这条业务闭环为首个切片，随后扩展到策划、素材、制作、发布和复盘。
 
-本文保留整体目标设计；P0 当前执行契约和验证状态见 [创意版本追溯](creative-lineage.md)。P0 复用 BrandMarketingSolution 逐条保存版本，不新建四张业务表，也不在保存时同步下游或建立 outbox；制作与发布联动仍待后续交付。其余章节的能力均为后续设计，不能视作已部署。
+本文保留整体目标设计；P0 当前执行契约和验证状态见 [创意版本追溯](creative-lineage.md)。P0 复用 BrandMarketingSolution 逐条保存版本，不新建四张业务表，也不在保存时同步下游或建立 outbox；制作与发布联动仍待后续交付。本文后续能力以实施设计的状态表为准，设计本身不代表部署。
 
 ## 检查范围和证据
 
-用户说明本地代码最新，因此以本地源码为检查基线，没有拉取或改动应用代码。四个应用检查时工作树均干净。尚未独立确认“MMO”的对应目录；按 AMCMM 检查 amc-mm，并补查与其集成的 Growth。没有将 Growth 宣称为 MMO。
+最初检查以用户说明的本地最新代码为基线，当时四个应用工作树均干净；后续实现与部署证据另见执行文档。尚未独立确认“MMO”的对应目录；按 AMCMM 检查 amc-mm，并补查与其集成的 Growth。没有将 Growth 宣称为 MMO。
 
 | 代码库 | 检查基线 | 当前职责 |
 | --- | --- | --- |
@@ -17,7 +17,7 @@
 | amc-growth | b692338345591325d96ce33c2bbca98845fe043e | 品牌研究、知识、增长策略及版本化报告 |
 | amc-content | d6c427d18935f28a1df28ee848aa6084a6292e16 | 原创意库、内容生成、视频制作及来源资产 |
 
-以下均为静态检查结果，未执行生产写入或端到端运行测试。
+以下为最初设计的检查基线；P0 缺口已按 creative-lineage.md 修复并部署，AI Runtime 改造状态以执行设计为准。
 
 1. **已有编辑保存功能。** MM `src/components/dashboard/CalendarSubPage.tsx` 的 `creativeFromForm` 和 `onSaveCreative` 支持标题、日期、平台、产品、策划、素材要求和文案标签。`BrandOwnerDashboard.tsx` 的 `handleSaveCalendarCreative` 调用 `save_workspace_patch / calendar_month`，提交整月数组。品牌策划公开分享页 `src/app/brand-strategy/[id]/page.tsx` 为展示页面，不应变为无登录编辑入口。
 2. **已有快照，缺少逐条归属。** Kanban `src/lib/brand-plan/service.ts` 的 `saveWorkspacePatch` 保存 MANUAL_EDIT 的 CALENDAR 快照；`saveMarketingSolutionVersion` 查询最大版本再新增。`BrandMarketingSolution` 有 `createdById` 字段，但该保存函数不写入它；`src/app/api/brands/[id]/brand-plan/route.ts` 检查登录和品牌写权限后没有把可信 actor 传给服务。
@@ -29,24 +29,19 @@
 
 用户明确要求：品牌主理人可以编辑并保存品牌策划创意草稿，保存内容必须记录再创作与品牌、主理人、原创意的关系。
 
-以下为建议实现：以 Kanban 为品牌再创作业务记录的权威系统，Content 保持原创意与其版本的权威系统，Growth 保持已发布品牌知识的权威系统。MM 不建立独立业务真值副本。创意借鉴关系不自动代表素材使用授权，也不自动产生报酬或所有权转移。
+当前业务责任划分：以 Kanban 为品牌再创作业务记录的权威系统，Content 保持原创意与其版本的权威系统，Growth 保持已发布品牌知识的权威系统。MM 不建立独立业务真值副本。创意借鉴关系不自动代表素材使用授权，也不自动产生报酬或所有权转移。
 
 ### 身份与权限
 
 沿用现有 `AMC_PRINCIPAL` 平台能力角色、Crew `PRINCIPAL` 品牌关系和组织继承规则。品牌主 `OWNER` 与品牌主理人不混用。每次读写均通过当前品牌访问与编辑授权；全局角色本身不授予所有品牌访问。
 
-服务端从会话或受信任委托解析实际操作者，不接受客户端提交作者、角色或品牌归属作为真值。保存 `actorUserId`、操作者当时有效角色及授权关系引用；另存品牌当时的主理人关系快照。管理员或 OWNER 编辑时记录本人，不冒充主理人。更换主理人后旧作品仍归当时修改人，当前访问权限按新关系执行。AI 代办同时记录请求人、执行 Agent、授权 mandate 和 taskId。
+服务端从会话或受信任委托解析实际操作者，不接受客户端提交作者、角色或品牌归属作为真值。保存 `actorUserId`、操作者当时有效角色及授权关系引用；另存品牌当时的主理人关系快照。管理员或 OWNER 编辑时记录本人，不冒充主理人。更换主理人后旧作品仍归当时修改人，当前访问权限按新关系执行。AI 辅助版本同时记录请求人、执行 Agent、taskId、候选工作区摘要与品牌事实摘要；当前采用由人类明确操作，未伪造持续执行 mandate。
 
 ### 数据关系
 
-建议新增以下业务实体；名称为设计名，尚未创建表或公开 API。
+当前复用 BrandMarketingSolution 的 CREATIVE_ITEM 版本记录，不新建平行业务表：input 保存 origin、父版本、原来源快照、实际修改人、主理人关系与可选 AI provenance；output 保存创意快照，knowledge 当前卡片是最新投影。按品牌知识行锁分配逐条版本并在事务内写入审计。准确 Content 发行版本未知时只记录已有来源 ID/快照。
 
-| 实体 | 最小字段和约束 |
-| --- | --- |
-| BrandCreative | id、brandId、planId、calendarItemId、createdByUserId、currentRevisionId、生命周期状态；品牌内策划卡片有稳定唯一映射 |
-| BrandCreativeRevision | id、creativeId、revision、parentRevisionId、内容快照及 hash、actorUserId、actorRoleSnapshot、principalRelationSnapshot、createdAt、changeSummary、origin=human/ai_assisted/imported、可选 taskId/agentId/mandateId；版本不可变 |
-| CreativeSourceReference | revisionId、sourceSystem、sourceCreativeId、sourceVersion 或可信快照 digest、来源链接、capturedAt、sourceAvailability；支持一条再创作依赖多个原创意 |
-| CreativeUsageReference | creativeRevisionId、下游 draftId/videoProjectId/materialRequirementId、关联类型和状态；记录每个交付物实际使用的版本 |
+后续制作联动需在现有 Draft/VideoProject 上增加固定 creativeRevision 引用，并通过原作业幂等及权威回执验证；该关联尚未交付。
 
 ```mermaid
 flowchart LR
@@ -68,19 +63,20 @@ flowchart LR
 1. 在已登录的品牌策划创意卡提供“编辑草稿”“保存新版本”“查看原始创意”“版本历史”；日历入口使用同一编辑器和服务。界面展示品牌、来源、当前版本及最近修改人；中英文、手机端一致。
 2. 人工编辑无需调用模型。AI 改写先产生候选与差异；用户可继续修改后保存，或在明确授权的范围内由 Agent 保存。保存不等于批准、排期或公开发布。
 3. 按单条创意提交白名单业务字段及 expectedRevision、idempotencyKey。来源、作者、权限及下游发布状态不可由内容 patch 覆盖。日期调整沿用当前月份限制，跨月迁移作为独立操作设计。
-4. 在同一 Kanban 事务中校验权限及版本，插入不可变版本、来源引用、审计和同步 outbox，并推进当前版本。对 `(creativeId, revision)` 和作用域内幂等键建立唯一约束；不再用“读最大版本再加一”作为并发保障。
+4. 在同一 Kanban 事务中重验权限及当前版本，按品牌知识行锁序列化不可变版本和审计写入，并推进当前卡片。幂等回执在锁内查询；AI采用同时校验品牌事实摘要。当前保存不创建下游outbox。
 5. 同一幂等键和同一 payload 返回原回执；不同 payload 拒绝。409 返回最新版本及可比较差异，保留用户输入，禁止静默覆盖整月其他卡片。
-6. 保存响应区分 `saved`、`downstreamSyncPending` 和 `verified`。以返回的 revisionId 权威回读核对内容摘要和关系后显示“已保存”；回读失败显示“已提交，待确认”，不能以本地值冒充已验证。
-7. 下游同步使用版本固定和 outbox 幂等消费；未发布草稿可标记“有新创意版本可应用”。已审批、排期、发布或付费制作保留旧版本，不因保存自动覆盖。用户明确采用新版本后走既有授权及状态检查。
+6. 当前响应包含业务回执及内容摘要；不虚构下游同步状态。以返回的 revisionId 权威回读核对内容摘要和关系后显示“已保存”；回读失败显示“已提交，待确认”，不能以本地值冒充已验证。
+7. 后续下游同步应使用版本固定和可靠幂等消费（待实现）；未发布草稿可标记“有新创意版本可应用”。已审批、排期、发布或付费制作保留旧版本，不因保存自动覆盖。用户明确采用新版本后走既有授权及状态检查。
 8. 超时或重启先按原请求键查回执，未知写入先核对，不创建新键盲重试。撤销编辑不写库；恢复旧版以新 revision 表示，完整保留历史。
 
-建议接口为 `GET /api/brands/:brandId/creatives/:creativeId`、`POST .../revisions`、`GET .../revisions/:revisionId` 和作用域内 operation 查询。POST 接受 `{expectedRevision,idempotencyKey,patch,changeSummary}`，返回 `{creativeId,revisionId,revision,contentHash,receiptId,syncStatus}`。这些是待实现契约，不是已存在端点。旧 save_workspace_patch 的 calendar 写入需兼容适配到同一服务；迁移后拒绝缺乏版本保护的旧整月覆盖路径，不能留下绕过审计的第二写入口。
+现有接口为 `GET/POST /api/brands/:brandId/content-creatives/:creativeId/revisions?month=YYYY-MM`，历史读取可指定 revisionId。写入接受 expectedRevision、idempotencyKey 和白名单 patch；服务端回传原版本回执。旧 calendar_month 整月路径已增加对受追溯卡片的保护，不能绕过逐条版本服务。AI任务与采用接口见实施设计。
+
 
 ## AMCMM 的 AI Native 目标架构
 
 用户向 AMCMM 提出一个营销目标后，系统应持续完成被授权的工作：读取品牌事实和原创意，发现缺项，收集补充，生成或修改候选，保存可追溯版本，连接制作流程并验证结果。关闭页面不丢任务；回答“完成”必须有业务回执支持。
 
-采用独立 `@immedi/iaic-core`，复用公共 Runtime、Tasks、identities、Skills、Knowledge、Memory、Workspace、model/budget、collaboration、evaluation 和 recovery。建议由 Kanban 服务端组合 Core，执行器可独立进程部署；MM 仅提供交互与 BFF，Growth 和 Content 通过能力适配器接入。业务记录和 Core Task 生命周期各有职责，不另造平行 Agent Runtime，也不把所有业务作业强行搬入 Core。
+采用独立 `@immedi/iaic-core`，复用公共 Runtime、Tasks、identities、Skills、Knowledge、Memory、Workspace、model/budget、collaboration、evaluation 和 recovery。由 Kanban 服务端组合 Core，执行器可独立进程部署；MM 仅提供交互与 BFF，Growth 和 Content 通过能力适配器接入。业务记录和 Core Task 生命周期各有职责，不另造平行 Agent Runtime，也不把所有业务作业强行搬入 Core。
 
 | 责任 | 工作范围 | 资源与边界 |
 | --- | --- | --- |
@@ -112,7 +108,7 @@ Growth 已发布品牌事实用于 Knowledge 适配；个人表达偏好进入�
 
 继续使用现有 `/admin` 的 ModelConnection 加密版本、ModelCatalogEntry、ModelManagementDraft 及已验证发布策略，通过 adapter 向 Core 提供模型身份与凭证引用；不新增环境变量 API Key 配置或另一套模型管理后台。任务固定模型策略版本，切换及恢复按 Core 公共契约处理。文本、图片和视频能力须分别验证，模型目录存在不代表可用。
 
-个人、业务、平台开发预算分别计量。任务执行前核准付款主体、上限、模型额度和 Content 视频估价；Core 计量与 Content 原生付费作业各自记录，使用关联 ID 汇总避免重复扣费。具体限额待业务配置，不把 ImmediToday 的额度直接照搬。未知供应商结果保留预留与原 jobId，查询核对后结算，禁止自动重提收费任务。
+个人、业务、平台开发预算分别计量。任务执行前核准付款主体、上限、模型额度和 Content 视频估价；Core 计量与 Content 原生付费作业各自记录，使用关联 ID 汇总避免重复扣费。User AI 当前固定额度见实施设计，持续Business AI及付费制作限额待业务授权，不把 ImmediToday 的额度直接照搬。未知供应商结果保留预留与原 jobId，查询核对后结算，禁止自动重提收费任务。
 
 ### 运营和工程闭环
 

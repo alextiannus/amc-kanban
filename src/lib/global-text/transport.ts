@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto'
 export type Connection = { id: string; provider: string; displayName: string; modelName: string; baseUrl: string | null; apiKey: string; timeoutMs?: number | null; reasoningEffort?: 'low'|'high'|'max' }
 export type Message = { role: string; content?: any; tool_calls?: any[]; tool_call_id?: string }
 export type TextRequest = { messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
-export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number }
+export type TextUsage={input_tokens:number|null;output_tokens:number|null;input_tokens_details?:{cached_tokens:number|null};output_tokens_details?:{reasoning_tokens:number|null}}
+export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number; providerReference?:string; usage?:TextUsage; rawUsage?:unknown }
 
 export class TextOutputLimitError extends Error {
   constructor(readonly diagnostics: {
@@ -13,6 +14,13 @@ export class TextOutputLimitError extends Error {
 }
 function tokenCount(value: unknown): number|null {
   return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0&&value<=100000000?value:null
+}
+export function normalizeTextUsage(protocol:string,value:any):TextUsage|undefined {
+  if(!value)return undefined
+  const sum=(parts:unknown[])=>{const counts=parts.map(tokenCount);return counts.every(n=>n!==null)?counts.reduce<number>((a,n)=>a+n!,0):null}
+  if(protocol==='anthropic')return {input_tokens:sum([value.input_tokens,value.cache_creation_input_tokens??0,value.cache_read_input_tokens??0]),output_tokens:tokenCount(value.output_tokens),input_tokens_details:{cached_tokens:tokenCount(value.cache_read_input_tokens??0)}}
+  if(protocol==='google')return {input_tokens:tokenCount(value.promptTokenCount),output_tokens:sum([value.candidatesTokenCount,value.thoughtsTokenCount??0]),input_tokens_details:{cached_tokens:tokenCount(value.cachedContentTokenCount??0)},output_tokens_details:{reasoning_tokens:tokenCount(value.thoughtsTokenCount??0)}}
+  return {input_tokens:tokenCount(value.prompt_tokens),output_tokens:tokenCount(value.completion_tokens),input_tokens_details:{cached_tokens:tokenCount(value.prompt_tokens_details?.cached_tokens??0)},output_tokens_details:{reasoning_tokens:tokenCount(value.completion_tokens_details?.reasoning_tokens??0)}}
 }
 
 export function protocolOf(provider: string) {
@@ -72,16 +80,19 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
   const data = await response.json()
-  if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw new TextOutputLimitError({
+  if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw Object.assign(new TextOutputLimitError({
     finishReason:'length', maxTokens, reasoningEffort:body.reasoning_effort||'unspecified',
     completionTokens:tokenCount(data.usage?.completion_tokens),
     reasoningTokens:tokenCount(data.usage?.completion_tokens_details?.reasoning_tokens),
     contentChars:typeof data.choices[0].message?.content==='string'?data.choices[0].message.content.length:0,
-  })
+  }), {code:'MODEL_OUTPUT_LIMIT',usage:{inputTokens:tokenCount(data.usage?.prompt_tokens),outputTokens:tokenCount(data.usage?.completion_tokens)},usageEvidence:{providerReference:data.id||response.headers.get('x-request-id'),rawUsage:data.usage||null}})
   let message: Message
   if (protocol === 'openai') message = data.choices?.[0]?.message
   else if (protocol === 'anthropic') message = {role:'assistant',content:(data.content||[]).filter((v:any)=>v.type==='text').map((v:any)=>v.text).join(''),tool_calls:(data.content||[]).filter((v:any)=>v.type==='tool_use').map((v:any)=>({id:v.id,type:'function',function:{name:v.name,arguments:JSON.stringify(v.input)}}))}
   else { const parts=data.candidates?.[0]?.content?.parts||[]; message={role:'assistant',content:parts.filter((v:any)=>v.text&&!v.thought).map((v:any)=>v.text).join(''),tool_calls:parts.filter((v:any)=>v.functionCall).map((v:any,i:number)=>({id:`call_${i}`,thoughtSignature:v.thoughtSignature,type:'function',function:{name:v.functionCall.name,arguments:JSON.stringify(v.functionCall.args)}}))} }
   if (!message || (!message.content && !message.tool_calls?.length)) throw new Error('Text provider returned an empty response')
-  return {text:typeof message.content==='string'?message.content:null,message,provider:c.provider,modelName:c.modelName,responseModel:data.model||data.modelVersion||null,latencyMs:Date.now()-started}
+  const rawUsage=protocol==='google'?data.usageMetadata:data.usage
+  return {text:typeof message.content==='string'?message.content:null,message,provider:c.provider,modelName:c.modelName,responseModel:data.model||data.modelVersion||null,latencyMs:Date.now()-started,
+    providerReference:typeof data.id==='string'?data.id:response.headers.get('x-request-id')||undefined,
+    rawUsage,usage:normalizeTextUsage(protocol,rawUsage)}
 }
