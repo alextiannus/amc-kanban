@@ -8,6 +8,7 @@ datasource db {
 }
 
 model User {
+  inboxReceipts InboxReceipt[]
   id          String  @id @default(cuid())
   email       String  @unique
   password    String
@@ -366,6 +367,7 @@ model CrewMember {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
+  inboxReceipts InboxReceipt[]
   assetFoldersInitialized Boolean @default(false)
   assetAnalysisBatches AssetAnalysisBatch[]
   manualStoreLimit Int? // Administrator granted total capacity; independent of billing
@@ -2075,4 +2077,19 @@ model GoogleBrandImport {
   result Json?
   updatedAt DateTime @updatedAt
   @@index([status, nextAttemptAt])
+}
+
+model InboxReceipt {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandId String?
+  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  key String
+  remindedAt DateTime?
+  readAt DateTime?
+  state String @default("active")
+  until DateTime?
+  @@unique([userId, key])
+  @@index([userId, brandId])
 }
