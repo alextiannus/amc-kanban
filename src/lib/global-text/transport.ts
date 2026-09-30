@@ -48,9 +48,9 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   let url: string
   let body: any
   if (protocol === 'openai') {
-    // GLM-5.3 defaults to max reasoning, which can consume the entire short-copy
+    // GLM-5.3 defaults to max reasoning, which can consume the entire bounded tool/copy
     // output budget before emitting JSON. Explicit central settings take priority.
-    const reasoningEffort=c.reasoningEffort ?? (/^glm-5\.3(?:$|-)/i.test(c.modelName)&&['body_composition','quality_rewrite'].includes(input.task||'')?'low':undefined)
+    const reasoningEffort=c.reasoningEffort ?? (/^glm-5\.3(?:$|-)/i.test(c.modelName)&&['body_composition','quality_rewrite','ai_native'].includes(input.task||'')?'low':undefined)
     const base = c.baseUrl || ({ kopix:'https://www.kopix.ai/v1', deepseek:'https://api.deepseek.com/v1', minimax:'https://api.minimaxi.chat/v1' } as Record<string,string>)[c.provider] || 'https://api.openai.com/v1'
     url = `${base.trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
     headers.Authorization = `Bearer ${c.apiKey}`

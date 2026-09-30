@@ -4,7 +4,7 @@ import {prisma} from '../src/lib/prisma.ts'
 import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {nativePool,initializeHost,admitIntent} from '../src/lib/ai-native/store.ts'
 import {actorFor,digest,type DiscoveryIntent} from '../src/lib/ai-native/contract.ts'
-import {brandLibrary,discoveryFrom,type LibrarySnapshot} from '../src/lib/ai-native/library.ts'
+import {brandLibrary,sourceExcerpt,discoveryFrom,type LibrarySnapshot} from '../src/lib/ai-native/library.ts'
 import {saveRecommendation,recommendationReceipts} from '../src/lib/ai-native/recommendations.ts'
 import {readBrandFacts} from '../src/lib/ai-native/facts.ts'
 import {readCreativeRevisions} from '../src/lib/brand-plan/creativeRevisions.ts'
@@ -26,6 +26,7 @@ try{
  const intent:DiscoveryIntent={kind:'creative_discovery',brandId:id,userId:id,goal:'Recommend brand-fit library ideas',requestKey:`discover-${randomUUID()}`,artifactPath:`work/${id}.json`}
  try{assert.equal((await brandLibrary(intent,facts)).sources.length,2)}finally{globalThis.fetch=realFetch}
  const value={kind:'creative_discovery',brandId:id,contextDigest:digest(facts),libraryDigest:library.libraryDigest,summary:'Craft suits handmade noodles.',recommendations:[{sourceCreativeId:source.inspirationCreativeId,title:'Handmade noodles',planning:'Show the brand’s actual preparation with its own footage.',aiCaption:'Made by hand.',materialRequirements:['Own preparation footage'],rationale:'Brand description confirms handmade noodles.'}]}
+ assert(Buffer.byteLength(JSON.stringify(sourceExcerpt({...source,scriptContent:{kind:'video',body:'long'.repeat(30000),shots:Array.from({length:100},()=>({instruction:'long'.repeat(1000)}))}})))<6000,'source excerpts are bounded')
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],sourceCreativeId:'cre_forged'}]}),intent,library),/recommendation_source_mismatch/)
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,libraryDigest:'0'.repeat(64)}),intent,library),/recommendation_source_mismatch/)
  const usage={inputTokens:100,outputTokens:30}
