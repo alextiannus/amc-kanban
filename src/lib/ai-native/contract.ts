@@ -6,7 +6,7 @@ export const CORE_ARCHIVE_SHA = '1eb1b87bcef1c1191eff788ca77cee678a1ac979c91ac0b
 export const TASK_ALLOWANCE = 600000
 export const DAILY_ALLOWANCE = 3000000
 export type NativeActor = { scopeId:string; subjectId:string }
-export type CreativeIntent = {kind:'creative';brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
+export type CreativeIntent = {kind:'creative';adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type DiscoveryIntent = {kind:'creative_discovery';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent
@@ -27,9 +27,10 @@ export function candidateFrom(content:string,intent:CreativeIntent){
   const c=JSON.parse(content)
   if(c?.kind!=='creative_candidate'||c.brandId!==intent.brandId||c.creativeId!==intent.creativeId||c.month!==intent.month||c.expectedRevision!==intent.expectedRevision||typeof c.rationale!=='string'||!Array.isArray(c.factsUsed))throw nativeError('candidate_binding_mismatch',409)
   if(typeof c.contextDigest!=='string'||!/^[a-f0-9]{64}$/.test(c.contextDigest)||c.factsUsed.length>30||c.factsUsed.some((v:unknown)=>typeof v!=='string'||v.length>500))throw nativeError('candidate_evidence_invalid')
-  if(!c.patch||Object.keys(c.patch).some(k=>!['title','planning','aiCaption','aiTags'].includes(k))||!Object.keys(c.patch).length)throw nativeError('candidate_patch_invalid')
+  if(!c.patch||Object.keys(c.patch).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k))||!Object.keys(c.patch).length)throw nativeError('candidate_patch_invalid')
+  if(intent.adaptToBrand&&(!c.patch.planning?.trim()||!c.patch.title?.trim()||typeof c.patch.aiCaption!=='string'||!Array.isArray(c.skuIds)))throw nativeError('adapted_script_required')
   validateCreativePatch(c.patch,intent.month)
-  return c as {kind:'creative_candidate';brandId:string;creativeId:string;month:string;expectedRevision:string;contextDigest:string;patch:Record<string,unknown>;rationale:string;sourceCreativeId:string|null;factsUsed:string[]}
+  return c as {kind:'creative_candidate';brandId:string;creativeId:string;month:string;expectedRevision:string;contextDigest:string;patch:Record<string,unknown>;rationale:string;sourceCreativeId:string|null;factsUsed:string[];skuIds?:string[]}
 }
 export function briefFrom(content:string,intent:BriefIntent){
   if(Buffer.byteLength(content)>32000)throw nativeError('report_too_large')

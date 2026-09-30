@@ -891,3 +891,6 @@ Regression commands: `npm run test:tiktok-aigc` (draft authorization, merge/read
 
 
 AMCMM工作台设定：GET/POST `/api/brands/:id/ai/preference` 保留Core个人偏好revision/status/content，增加从当前受权品牌事实计算的 `defaults`（brandId、brandName、content）及 `effectiveContent`、`source`（personal/brand）。无有效个人偏好时采用品牌默认；读取不创建个人记忆，POST仍由人类明确保存/遗忘。入口及默认投影已部署，生产隔离验收通过。
+
+
+AMCMM脚本自动适配（待部署）：POST `/api/brands/:id/ai/tasks` 的 `kind=creative, adaptToBrand=true, creativeId, month` 由服务端读取当前脚本版本及品牌/SKU快照，构造固定适配目标和按用户/品牌/原稿版本/事实快照/UTC日去重的请求键；调用方无需手填goal或expectedRevision。详情返回adaptToBrand。采用接口允许人类提交白名单patch，保留原AI artifact和SKU依据，原任务首次保存键阻止重复落版。切换品牌不带入旧品牌脚本。

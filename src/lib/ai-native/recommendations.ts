@@ -27,3 +27,10 @@ export async function saveRecommendation(userId:string,brandId:string,taskId:str
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
   return {verified:true,receipt:saved.receipt,creativeId,month,creative:calendarCreativeOption(saved.receipt.content as any)}
 }
+
+export async function adaptedScriptReceipt(userId:string,brandId:string,taskId:string,month:string,creativeId:string){
+  const row=await prisma.brandMarketingSolution.findFirst({where:{brandId,kind:'CREATIVE_ITEM',createdById:userId,input:{path:['ai','taskId'],equals:taskId}},orderBy:{version:'desc'}})
+  if(!row)return null
+  const history=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,month,creativeId,row.id)
+  return {verified:true,month,creativeId,receipt:history.revisions[0]}
+}

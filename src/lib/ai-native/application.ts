@@ -10,7 +10,7 @@ import { canUserAccessBrand } from '../user-management/brandAccess'
 import { readCreativeRevisions } from '../brand-plan/creativeRevisions'
 import { brandFor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, TASK_ALLOWANCE, type NativeIntent, type NativeActor } from './contract'
 import { intentBy } from './store'
-import { readBrandFacts } from './facts'
+import { readBrandFacts, validateSkuReferences } from './facts'
 import { principalFromUser } from '../auth-v2/types'
 import { allows } from '../role-permissions/store'
 import { brandOperations, canReadOperations } from './operations'
@@ -49,7 +49,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     const text=JSON.stringify(knowledge)
     const partial=text.length>24000
     const projection=partial?{excerpt:text.slice(0,18000),scope:'Partial literal JSON excerpt; omitted material is unknown. Ask the user for any essential missing facts.'}:JSON.parse(text)
-    return {intent,...(intent.kind==='creative_discovery'?{requiredSkill:'amc-discovery/SKILL.md',artifactContract:discoveryContract(intent,digest(knowledge))}:{}),knowledge:projection,contextDigest:digest(knowledge),evidence:{system:'AMC',brandId:intent.brandId,partial,retrievedAt:new Date().toISOString()}}
+    return {intent,...(intent.kind==='creative_discovery'?{requiredSkill:'amc-discovery/SKILL.md',artifactContract:discoveryContract(intent,digest(knowledge))}:intent.kind==='creative'&&intent.adaptToBrand?{requiredSkill:'amc-creative/SKILL.md',artifactContract:{instructions:'Read amc.creative and requiredSkill. Write a complete adapted planning script with actual SKU names; use real productCatalog IDs in skuIds, empty only with no catalog. Preserve original source ID.',example:{kind:'creative_candidate',brandId:intent.brandId,creativeId:intent.creativeId,month:intent.month,expectedRevision:intent.expectedRevision,contextDigest:digest(knowledge),sourceCreativeId:'exact original source ID from amc.creative, or null',skuIds:[],patch:{title:'Brand-specific title',product:'Actual product name',planning:'Complete adapted opening, scenes/body, voiceover and CTA',aiCaption:'Verified brand copy',materialRequirements:['Brand-owned product footage']},rationale:'Specific brand and SKU adaptation',factsUsed:['Verified fact and its brand/SKU source']}}}:{}),knowledge:projection,productCatalog:(knowledge as any).productCatalog||[],contextDigest:digest(knowledge),evidence:{system:'AMC',brandId:intent.brandId,partial,retrievedAt:new Date().toISOString()}}
   }
   const creativeRead=async(actor:NativeActor,taskId?:string)=>{
     const intent=await getIntent(actor,taskId)
@@ -115,12 +115,13 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
           if(!library)return {verified:false,feedback:'Read amc.library and use only returned original creative IDs.'}
           const recommendations=discoveryFrom(artifact.content,row.intent,library)
           const facts=options.readContext?await options.readContext(actor):await brandContext(actor)
-          return {verified:recommendations.contextDigest===digest(facts),feedback:'Bind current facts and the exact library evidence. No invented source IDs.'}
+          return {verified:recommendations.contextDigest===digest(facts)&&recommendations.recommendations.every(c=>validateSkuReferences(c,facts)),feedback:'Bind current facts and library evidence. Use actual productCatalog skuIds and exact SKU names in planning; empty skuIds only when no catalog exists.'}
         }
         if(!history.calls.some(c=>c.status==='succeeded'&&c.capability==='amc.creative'))return {verified:false,feedback:'Read the selected creative first.'}
         const candidate=candidateFrom(artifact.content,row.intent)
         const currentContext=options.readContext?await options.readContext(actor):await brandContext(actor)
         if(candidate.contextDigest!==digest(currentContext))return {verified:false,feedback:'Brand context changed or its digest is missing. Read amc.context again and revise the candidate against current facts.'}
+        if(row.intent.adaptToBrand&&!validateSkuReferences(candidate,currentContext))return {verified:false,feedback:'Use skuIds from current productCatalog and include their exact names in the full adapted planning script. No invented SKU IDs; empty skuIds only if catalog is empty.'}
         const current=await readCreative({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,row.intent.month,row.intent.creativeId)
         if(current.expectedRevision!==row.intent.expectedRevision||candidate.sourceCreativeId!==(current.current?.inspirationCreativeId||null))return {verified:false,feedback:'Original creative or source changed; do not invent a new source or overwrite the changed creative.'}
         return {verified:true}

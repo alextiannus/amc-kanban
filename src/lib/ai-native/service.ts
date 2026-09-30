@@ -1,6 +1,6 @@
 import { brandContext } from './application'
 import { discoveryFrom, type LibrarySnapshot } from './library'
-import { recommendationReceipts, saveRecommendation } from './recommendations'
+import { recommendationReceipts, saveRecommendation, adaptedScriptReceipt } from './recommendations'
 import { readPreference, changePreference, preferenceSettings } from './preferences'
 import type { Application, ArtifactReference, TaskView } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type { Pool } from 'pg'
@@ -55,6 +55,11 @@ export async function createNativeTask(userId:string,brandId:string,body:any){
   if(body?.kind==='creative_discovery'&&body.proactive===true){
     body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}
   }
+  if(body?.kind==='creative'&&body.adaptToBrand===true){
+    if(typeof body.creativeId!=='string'||typeof body.month!=='string')throw nativeError('invalid_creative_task')
+    const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
+    body={kind:'creative',adaptToBrand:true,creativeId:body.creativeId,month:body.month,expectedRevision:current.expectedRevision,goal:'自动把选中创意改写为当前品牌可直接审阅的完整脚本。读取品牌与productCatalog，选择适合的真实SKU，在planning写出品牌及SKU名称、开场、分镜/正文、口播和行动提示；原稿只借鉴表达结构，不照搬外部产品、价格或卖点。先读取amc-creative/SKILL.md。事实不足先补问，不编造。返回适配脚本及实际skuIds，供主理人修改后保存或制作。',requestKey:`adapt-${digest([brandId,userId,body.creativeId,body.month,current.expectedRevision,await brandContext(actor),new Date().toISOString().slice(0,10)])}`}
+  }
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
   const kind=body.kind||'creative'
@@ -63,7 +68,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any){
   let intent:NativeIntent
   if(kind==='creative'){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string'||typeof body.expectedRevision!=='string')throw nativeError('invalid_creative_task')
-    intent={...common,kind,creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
+    intent={...common,kind,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
   }else if(kind==='creative_discovery'){intent={...common,kind}}else{
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
@@ -117,8 +122,9 @@ export async function readNativeTask(userId:string,brandId:string,id:string){
   const currentOperations=report&&typeof operations?.draftTotal==='number'&&typeof operations?.accountTotal==='number'?{draftTotal:operations.draftTotal,accountTotal:operations.accountTotal,retrievedAt:operations.retrievedAt,changed:operations.operationsDigest!==report.operationsDigest}:null
   const sourceCall=history.calls.find(c=>c.capability==='amc.creative'&&c.status==='succeeded')?.result as {current?:unknown}|undefined
   const adoptions=row.intent.kind==='creative_discovery'?await recommendationReceipts(userId,brandId,id):[]
+  const adoption=row.intent.kind==='creative'&&row.intent.adaptToBrand?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
-  return {...task,historyUnavailable:view.historyUnavailable,kind:row.intent.kind,candidate,report,recommendations,adoptions,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
+  return {...task,historyUnavailable:view.historyUnavailable,kind:row.intent.kind,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await authorizedHost(userId,brandId)
@@ -143,10 +149,12 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   }
   if(row.intent.kind!=='creative')throw nativeError('creative_task_required',400)
   const candidate=candidateFrom((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
-  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:candidate.patch},undefined,{taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
+  const reviewed=body.patch===undefined?candidate.patch:body.patch
+  if(!reviewed||Object.keys(reviewed).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k)))throw nativeError('candidate_patch_invalid')
+  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:reviewed},undefined,{taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
-  return {verified:true,receipt:saved.receipt}
+  return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}
 }
 
 export async function nativePreference(userId:string,brandId:string,body?:unknown){

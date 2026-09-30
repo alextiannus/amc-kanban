@@ -1,3 +1,4 @@
+import {adaptedScriptReceipt} from '../src/lib/ai-native/recommendations.ts'
 import {brandOperations} from '../src/lib/ai-native/operations.ts'
 import {execFile} from 'node:child_process'
 import {promisify} from 'node:util'
@@ -30,7 +31,7 @@ const model={next:async(request:any)=>{
  }
  if(!has('amc.creative'))return {type:'call',name:'amc.creative',input:{},usage}
  if(!data.events.some((e:any)=>e.kind==='input'))return {type:'wait',question:'请提供希望突出的一项真实卖点。',usage}
- if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'creative_candidate',brandId:id,creativeId:'idea',month,expectedRevision:host.expectedRevision,contextDigest:calls.find((c:any)=>c.capability==='amc.context').result.contextDigest,patch:{planning:'手工制作，每日现做'},rationale:'采用用户补充的真实卖点',sourceCreativeId:'cre_fixture',factsUsed:['user clarification: handmade daily']})},usage}
+ if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'creative_candidate',brandId:id,creativeId:'idea',month,expectedRevision:host.expectedRevision,contextDigest:calls.find((c:any)=>c.capability==='amc.context').result.contextDigest,patch:{title:'品牌适配脚本',planning:'Fixture Noodles：手工制作，每日现做。开场展示面条，口播介绍，邀请了解。',aiCaption:'Fixture Noodles',product:'Fixture Noodles'},skuIds:['sku_fixture'],rationale:'采用用户补充的真实卖点',sourceCreativeId:'cre_fixture',factsUsed:['user clarification: handmade daily']})},usage}
  const ref=calls.find((c:any)=>c.capability==='my_write_workspace').result.reference
  return {type:'finish',result:{summary:'候选已准备，等待用户采用。',artifacts:[ref]},usage}
 }}
@@ -38,11 +39,11 @@ const models={profiles:[{id:'fixture',provider:'openai' as const,model:'fixture-
 const options={version:'amc-native-test-v1',authorize:async(a:any)=>allowed&&a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId}
 try{
  await prisma.user.create({data:{id,email:`${id}@example.invalid`,nickname:'Native fixture',password:randomUUID(),businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
- await prisma.brand.create({data:{id,name:'Native fixture',description:'Synthetic long brand context. '.repeat(1000),status:'ARCHIVED',autoPilot:false,crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}},knowledge:{create:{negPrompts:[],marketingSolution:{publishingCalendar:{months:{[month]:[{id:'idea',date:'2099-11-15',title:'Original',platform:'Instagram',platformSlug:'instagram',contentType:'image',product:'Fixture',planning:'Original',inspirationCreativeId:'cre_fixture'}]}}}}}}})
+ await prisma.brand.create({data:{id,name:'Native fixture',description:'Synthetic long brand context. '.repeat(1000),status:'ARCHIVED',autoPilot:false,crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}},knowledge:{create:{negPrompts:[],menuItems:[{id:'sku_fixture',name:'Fixture Noodles',price:'8.50',currency:'SGD'}],marketingSolution:{publishingCalendar:{months:{[month]:[{id:'idea',date:'2099-11-15',title:'Original',platform:'Instagram',platformSlug:'instagram',contentType:'image',product:'Fixture',planning:'Original',inspirationCreativeId:'cre_fixture'}]}}}}}}})
  await initializeHost(pool)
  composition=await composeApplication(pool,models,options)
  const first=await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')
- const intent:CreativeIntent={kind:'creative',userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
+ const intent:CreativeIntent={kind:'creative',adaptToBrand:true,userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
  const row=await admitIntent(pool,actor,intent)
  await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
  await composition.app.ledger.grant(await composition.app.scope(actor),{reference:id,amount:20000,evidence:{test:true}})
@@ -59,7 +60,7 @@ try{
  let task=await composition.app.runtime.get(actor,receipt.id)
  assert.equal(task.status,'waiting');assert.equal(task.waiting_reason,'input');assert.ok(task.inputRequest.question.includes('卖点'))
  const contextCall=(await composition.app.runtime.get(actor,receipt.id,{history:true})).calls.find((c:any)=>c.capability==='amc.context')
- assert.equal(contextCall.result.evidence.partial,true);assert.ok(JSON.stringify(contextCall.result.knowledge).length<24000)
+ assert.equal(contextCall.result.productCatalog[0].id,'sku_fixture');assert.equal(contextCall.result.evidence.partial,true);assert.ok(JSON.stringify(contextCall.result.knowledge).length<24000)
  await assert.rejects(()=>composition.app.runtime.get(actorFor(id,other),receipt.id))
  await composition.app.close()
  const childSource=`import applicationModule from './src/lib/ai-native/application.ts';import storeModule from './src/lib/ai-native/store.ts';import prismaModule from './src/lib/prisma.ts';const {composeApplication}=applicationModule,{nativePool}=storeModule,{prisma}=prismaModule;const actor=${JSON.stringify(actor)},pool=nativePool();const {app}=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture-model',credentialRef:'fixture'}],resolveSecret:()=> 'fixture-not-real',modelFactory:()=>({next:()=>{throw new Error('No inference during recovery read')}}),tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'amc-native-test-v1',authorize:async a=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId});try{const t=await app.runtime.get(actor,${JSON.stringify(receipt.id)});if(t.status!=='waiting'||!t.inputRequest)throw new Error('Lost persisted input wait');console.log('independent-process-recovered')}finally{await app.close();await pool.end();await prisma.$disconnect()}`
@@ -85,6 +86,7 @@ try{
  const provenance={taskId:receipt.id,agentId:'amc-mm-user-ai',requestedBy:id,artifact:ref,contextDigest:candidate.contextDigest}
  const saved=await saveCreativeRevision({id,type:'HUMAN'},id,month,'idea',body,undefined,provenance)
  assert.equal(saved.receipt.origin,'ai_assisted');assert.equal(saved.receipt.ai.taskId,receipt.id)
+ assert.equal((await adaptedScriptReceipt(id,id,receipt.id,month,'idea'))?.receipt.id,saved.receipt.id)
  assert.equal((await saveCreativeRevision({id,type:'HUMAN'},id,month,'idea',body,undefined,provenance)).receipt.id,saved.receipt.id)
  assert.equal((await composition.app.runtime.get(actor,receipt.id)).status,'succeeded','saved creative must not hide completed task')
  const ledger=await composition.app.ledger.taskUsage(await composition.app.scope(actor),receipt.id);assert.equal(ledger.complete,true);assert.equal(Number(ledger.platformUnits),modelCalls*130)
