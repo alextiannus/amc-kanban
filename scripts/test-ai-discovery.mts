@@ -27,12 +27,13 @@ try{
  // Test the real adapter via a transport fixture, including persisted IDs and library review metadata.
  const realFetch=globalThis.fetch
  globalThis.fetch=async(_url,init)=>{const request=JSON.parse(String(init?.body));assert.equal(request.requirePersistedCreative,true);assert.equal(request.merchantId,id);return Response.json({creativeCandidates:[source,{...source,inspirationCreativeId:'cre_unreviewed',libraryGap:{reviewStatus:'needs_content_review'}},{...source,inspirationCreativeId:'invented'}],contentLibraryGaps:[],libraryVersions:{},contentMatchRequestId:'transport-fixture'})}
- const intent:DiscoveryIntent={kind:'creative_discovery',brandId:id,userId:id,goal:'Recommend brand-fit library ideas',requestKey:`discover-${randomUUID()}`,artifactPath:`work/${id}.json`}
+ const intent:DiscoveryIntent={kind:'creative_discovery',requireMaterials:true,brandId:id,userId:id,goal:'Recommend brand-fit library ideas',requestKey:`discover-${randomUUID()}`,artifactPath:`work/${id}.json`}
  try{assert.equal((await brandLibrary(intent,facts)).sources.length,2)}finally{globalThis.fetch=realFetch}
  const value={kind:'creative_discovery',brandId:id,contextDigest:digest(facts),libraryDigest:library.libraryDigest,summary:'Craft suits handmade noodles.',recommendations:[{sourceCreativeId:source.inspirationCreativeId,title:'Handmade noodles',planning:'Show the brand’s actual preparation with its own footage.',aiCaption:'Made by hand.',materialRequirements:['Own preparation footage'],rationale:'Brand description confirms handmade noodles.'}]}
  assert(Buffer.byteLength(JSON.stringify(sourceExcerpt({...source,scriptContent:{kind:'video',body:'long'.repeat(30000),shots:Array.from({length:100},()=>({instruction:'long'.repeat(1000)}))}})))<6000,'source excerpts are bounded')
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],sourceCreativeId:'cre_forged'}]}),intent,library),/recommendation_source_mismatch/)
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,libraryDigest:'0'.repeat(64)}),intent,library),/recommendation_source_mismatch/)
+ assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],materialRequirements:[]}]}),intent,library),/recommendation_invalid/)
  const usage={inputTokens:100,outputTokens:30}
  const model={next:async(request:any)=>{
   const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded'),has=(n:string)=>calls.some((c:any)=>c.capability===n)

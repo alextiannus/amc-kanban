@@ -31,7 +31,7 @@ const model={next:async(request:any)=>{
  }
  if(!has('amc.creative'))return {type:'call',name:'amc.creative',input:{},usage}
  if(!data.events.some((e:any)=>e.kind==='input'))return {type:'wait',question:'请提供希望突出的一项真实卖点。',usage}
- if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'creative_candidate',brandId:id,creativeId:'idea',month,expectedRevision:host.expectedRevision,contextDigest:calls.find((c:any)=>c.capability==='amc.context').result.contextDigest,patch:{title:'品牌适配脚本',planning:'Fixture Noodles：手工制作，每日现做。开场展示面条，口播介绍，邀请了解。',aiCaption:'Fixture Noodles',product:'Fixture Noodles'},skuIds:['sku_fixture'],rationale:'采用用户补充的真实卖点',sourceCreativeId:'cre_fixture',factsUsed:['user clarification: handmade daily']})},usage}
+ if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'creative_candidate',brandId:id,creativeId:'idea',month,expectedRevision:host.expectedRevision,contextDigest:calls.find((c:any)=>c.capability==='amc.context').result.contextDigest,patch:{title:'品牌适配脚本',planning:'Fixture Noodles：手工制作，每日现做。开场展示面条，口播介绍，邀请了解。',aiCaption:'Fixture Noodles',product:'Fixture Noodles',materialRequirements:['拍摄 Fixture Noodles 成品特写，竖屏 5 秒']},skuIds:['sku_fixture'],rationale:'采用用户补充的真实卖点',sourceCreativeId:'cre_fixture',factsUsed:['user clarification: handmade daily']})},usage}
  const ref=calls.find((c:any)=>c.capability==='my_write_workspace').result.reference
  return {type:'finish',result:{summary:'候选已准备，等待用户采用。',artifacts:[ref]},usage}
 }}
@@ -43,7 +43,7 @@ try{
  await initializeHost(pool)
  composition=await composeApplication(pool,models,options)
  const first=await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')
- const intent:CreativeIntent={kind:'creative',adaptToBrand:true,userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
+ const intent:CreativeIntent={kind:'creative',adaptToBrand:true,requireMaterials:true,userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
  const row=await admitIntent(pool,actor,intent)
  assert.equal((await intentBy(pool,actor,'request_key',intent.requestKey)).digest,digest(intent),'replay uses persisted admission digest, not reordered JSONB object serialization')
  await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)

@@ -6,9 +6,9 @@ export const CORE_ARCHIVE_SHA = '1eb1b87bcef1c1191eff788ca77cee678a1ac979c91ac0b
 export const TASK_ALLOWANCE = 600000
 export const DAILY_ALLOWANCE = 3000000
 export type NativeActor = { scopeId:string; subjectId:string }
-export type CreativeIntent = {kind:'creative';adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
+export type CreativeIntent = {kind:'creative';requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type DiscoveryIntent = {kind:'creative_discovery';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type DiscoveryIntent = {kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
@@ -28,7 +28,7 @@ export function candidateFrom(content:string,intent:CreativeIntent){
   if(c?.kind!=='creative_candidate'||c.brandId!==intent.brandId||c.creativeId!==intent.creativeId||c.month!==intent.month||c.expectedRevision!==intent.expectedRevision||typeof c.rationale!=='string'||!Array.isArray(c.factsUsed))throw nativeError('candidate_binding_mismatch',409)
   if(typeof c.contextDigest!=='string'||!/^[a-f0-9]{64}$/.test(c.contextDigest)||c.factsUsed.length>30||c.factsUsed.some((v:unknown)=>typeof v!=='string'||v.length>500))throw nativeError('candidate_evidence_invalid')
   if(!c.patch||Object.keys(c.patch).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k))||!Object.keys(c.patch).length)throw nativeError('candidate_patch_invalid')
-  if(intent.adaptToBrand&&(!c.patch.planning?.trim()||!c.patch.title?.trim()||typeof c.patch.aiCaption!=='string'||!Array.isArray(c.skuIds)))throw nativeError('adapted_script_required')
+  if(intent.adaptToBrand&&(!c.patch.planning?.trim()||!c.patch.title?.trim()||typeof c.patch.aiCaption!=='string'||!Array.isArray(c.skuIds)||(intent.requireMaterials&&(!Array.isArray(c.patch.materialRequirements)||!c.patch.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))))throw nativeError('adapted_script_required')
   validateCreativePatch(c.patch,intent.month)
   return c as {kind:'creative_candidate';brandId:string;creativeId:string;month:string;expectedRevision:string;contextDigest:string;patch:Record<string,unknown>;rationale:string;sourceCreativeId:string|null;factsUsed:string[];skuIds?:string[]}
 }

@@ -174,3 +174,15 @@ Kanban运行版本 `bf532b456aea5bf44099e91e1e7afd8300cec399`，Render `dep-dau8
 事实表达边界：引用正确SKU和替换外部产品不等于所有自然语言事实已验证。实模稿中的warm/smooth等形容以及家庭用餐等新增镜头仍需主理人核实和提供素材；它们不能因结构校验通过被当作既有品牌事实或现成素材。人工review步骤保留。日志导出曾超时，使用确切时间窗口读取后取得完整回执；未因此重复推理。
 
 负责人AMC应用维护者；本次选择即适配需求完成。下一步由主理人在实际品牌资料与SKU下使用、审阅；周期无人值守运营及下游固定creativeRevision引用仍按独立范围推进。
+
+### Daily brand idea pool (2026-09-30)
+
+AMC-MM keeps an application-owned, persisted idea pool separate from reviewed publishing plans. The server worker runs without an open browser and claims one search per active brand and local calendar day. The unique `(brand_id, local_day)` receipt prevents repeat searches across replicas and restarts. On first fill it requests six persisted Content creatives; subsequent daily searches request three new sources (or the deficit to six), excluding up to 72 active/recent sources. The pool grows to 18. At capacity, new matches replace the oldest unselected suggestions first, then older selected suggestions if necessary. Replacement only changes homepage visibility: source snapshots, admitted Core tasks, reviewed revisions and publishing plans remain unchanged.
+
+Six is a replenishment target backed by real library matches, not permission to fabricate sources. Empty matches and outages preserve the existing pool; the UI shows a shortfall. Failed or interrupted searches are not automatically repeated that day because transport completion may be unknown. Startup catches up the current day, not every missed date. Invalid brand time zones fall back to UTC; missing zones use Asia/Singapore.
+
+The homepage reads the pool without admitting model work. It randomly selects one idea, rotates every 30 seconds while visible and idle, and pauses on pointer/focus interaction. Selecting a pool idea admits an idempotent, brand/user-scoped IAIC discovery task restricted to that immutable source. AI reads current brand/SKU facts and produces the complete adapted script and a non-empty scene-specific material checklist. Human review remains required before saving or producing content. Source/brand/principal/reviewer/AI artifact lineage continues through the existing revision service. Script and checklist downloads reflect the currently displayed review draft or saved receipt.
+
+Storage: `amc_iaic.brand_idea_days` and `amc_iaic.brand_ideas`, initialized idempotently by the resident worker. Read endpoint: `GET /api/brands/:id/ai/ideas` with current human brand-write authorization. Selection uses `POST /api/brands/:id/ai/tasks` with `kind: creative_discovery` and `poolIdeaId`; cross-brand IDs cannot resolve. Content matching supports bounded `excludeCreativeIds` and expands its search window before filtering and counting persisted results.
+
+Validation: real PostgreSQL daily admission concurrency, 6→18 growth, bounded replacement and immutable source retention, outage/no-match/duplicate preservation; Content matcher exclusions; desktop/mobile rotation, interaction pause, selected-source admission and exact reviewed-script/material downloads; existing Core provenance and review-to-production regression suites.

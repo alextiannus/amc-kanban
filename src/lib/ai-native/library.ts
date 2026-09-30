@@ -14,6 +14,10 @@ export function sourceExcerpt(source:Record<string,any>){
 }
 export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<LibrarySnapshot>{
   if(!facts)throw nativeError('brand_context_unavailable',404)
+  if(intent.poolIdeaId){
+    const {poolIdeaLibrary}=await import('./idea-pool')
+    return poolIdeaLibrary(intent.brandId,intent.poolIdeaId,facts)
+  }
   const response=await matchPromotionStrategyCreativeCandidates({merchantId:intent.brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`amc-native-${intent.requestKey}`,promotionGoal:intent.goal,sellingPoint:JSON.stringify({description:facts.description,knowledge:facts.knowledge}).slice(0,6000),requestedCandidateCount:3,requirePersistedCreative:true,platforms:['instagram','xiaohongshu','tiktok']})
   const seen=new Set<string>()
   const sources=(response.creativeCandidates||[]).filter(c=>typeof c.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(c.inspirationCreativeId)&&!seen.has(c.inspirationCreativeId)&&!!seen.add(c.inspirationCreativeId)).slice(0,3).map(sourceExcerpt)
@@ -33,7 +37,7 @@ export function discoveryFrom(content:string,intent:DiscoveryIntent,library?:Lib
   if(value?.kind!=='creative_discovery'||value.brandId!==intent.brandId||!/^([a-f0-9]{64})$/.test(value.contextDigest)||!/^([a-f0-9]{64})$/.test(value.libraryDigest)||!Array.isArray(value.recommendations)||value.recommendations.length>3||typeof value.summary!=='string')throw nativeError('recommendation_invalid')
   const ids=new Set<string>()
   for(const c of value.recommendations){
-    if(typeof c?.sourceCreativeId!=='string'||ids.has(c.sourceCreativeId)||typeof c.rationale!=='string'||c.rationale.length>2000||typeof c.title!=='string'||!c.title.trim()||typeof c.planning!=='string'||!c.planning.trim()||typeof c.aiCaption!=='string'||!Array.isArray(c.materialRequirements))throw nativeError('recommendation_invalid')
+    if(typeof c?.sourceCreativeId!=='string'||ids.has(c.sourceCreativeId)||typeof c.rationale!=='string'||c.rationale.length>2000||typeof c.title!=='string'||!c.title.trim()||typeof c.planning!=='string'||!c.planning.trim()||typeof c.aiCaption!=='string'||!Array.isArray(c.materialRequirements)||(intent.requireMaterials&&!c.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))throw nativeError('recommendation_invalid')
     validateCreativePatch({title:c.title,planning:c.planning,aiCaption:c.aiCaption,materialRequirements:c.materialRequirements},'2000-01')
     ids.add(c.sourceCreativeId)
   }

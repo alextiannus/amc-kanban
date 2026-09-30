@@ -52,6 +52,11 @@ export function startNativeWorker(){
 async function authorizedHost(userId:string,brandId:string){const actor=actorFor(brandId,userId);await requireActor(actor);return {actor,...await getNativeHost()}}
 export async function createNativeTask(userId:string,brandId:string,body:any){
   const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId)
+  if(body?.kind==='creative_discovery'&&body.poolIdeaId){
+    const {selectPoolIdea}=await import('./idea-pool')
+    const idea=await selectPoolIdea(brandId,body.poolIdeaId)
+    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅使用选中的原创意，根据当前品牌和真实 SKU 改写完整脚本，包含开场、分镜/正文、口播、行动提示及逐项对应的拍摄/上传素材需求。供主理人审阅后保存计划或上传素材制作。不得编造产品事实。',requestKey:`pool-${digest([brandId,userId,idea.id,await brandContext(actor)])}`}
+  }
   if(body?.kind==='creative_discovery'&&body.proactive===true){
     body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}
   }
@@ -68,13 +73,13 @@ export async function createNativeTask(userId:string,brandId:string,body:any){
   let intent:NativeIntent
   if(kind==='creative'){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string'||typeof body.expectedRevision!=='string')throw nativeError('invalid_creative_task')
-    intent={...common,kind,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
-  }else if(kind==='creative_discovery'){intent={...common,kind}}else{
+    intent={...common,kind,requireMaterials:true,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
+  }else if(kind==='creative_discovery'){intent={...common,kind,requireMaterials:true,...(body.poolIdeaId?{poolIdeaId:body.poolIdeaId}:{})}}else{
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
   }
   let prior;try{prior=await intentBy(pool,actor,'request_key',key)}catch(e){if((e as any).statusCode!==404)throw e}
-  if(prior){if(prior.digest!==digest(intent))throw nativeError('request_key_reused',409);const existing=prior.task_id?{id:prior.task_id}:await (app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',key);if(existing){await intentForTask(pool,app,actor,existing.id);return publicTask(app,actor,existing.id)}}
+  if(prior){if(prior.intent.kind!=='brand_brief'&&!prior.intent.requireMaterials&&intent.kind!=='brand_brief')delete intent.requireMaterials;if(prior.digest!==digest(intent))throw nativeError('request_key_reused',409);const existing=prior.task_id?{id:prior.task_id}:await (app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',key);if(existing){await intentForTask(pool,app,actor,existing.id);return publicTask(app,actor,existing.id)}}
   if(intent.kind==='creative'){
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,intent.month,intent.creativeId)
     if(current.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
@@ -151,6 +156,7 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   const candidate=candidateFrom((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
   const reviewed=body.patch===undefined?candidate.patch:body.patch
   if(!reviewed||Object.keys(reviewed).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k)))throw nativeError('candidate_patch_invalid')
+  if(row.intent.requireMaterials&&row.intent.adaptToBrand&&(!Array.isArray(reviewed.materialRequirements)||!reviewed.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))throw nativeError('material_requirements_required')
   const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:reviewed},undefined,{taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
