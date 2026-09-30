@@ -46,8 +46,9 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     const knowledge=options.readContext?await options.readContext(actor):await brandContext(actor)
     if(!knowledge)throw nativeError('brand_context_unavailable',404)
     const text=JSON.stringify(knowledge)
-    if(text.length>24000)throw nativeError('brand_context_requires_narrowing',422)
-    return {intent,knowledge:JSON.parse(text),contextDigest:digest(knowledge),evidence:{system:'AMC',brandId:intent.brandId,retrievedAt:new Date().toISOString()}}
+    const partial=text.length>24000
+    const projection=partial?{excerpt:text.slice(0,18000),scope:'Partial literal JSON excerpt; omitted material is unknown. Ask the user for any essential missing facts.'}:JSON.parse(text)
+    return {intent,knowledge:projection,contextDigest:digest(knowledge),evidence:{system:'AMC',brandId:intent.brandId,partial,retrievedAt:new Date().toISOString()}}
   }
   const creativeRead=async(actor:NativeActor,taskId?:string)=>{
     const intent=await getIntent(actor,taskId)

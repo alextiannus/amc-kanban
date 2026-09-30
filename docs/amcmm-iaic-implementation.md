@@ -18,6 +18,8 @@ AMCMM 由短对话入口扩展为品牌工作台。用户提出目标后取得�
 
 Kanban 托管 Core TaskStore、AgentRuntime、CapabilityDispatcher、身份、Skills、Workspace、Memory、Knowledge、模型额度和任务控制。PostgreSQL 为持久层，独立 schema 防止框架表名和其他应用混淆。Core 自己执行模块迁移，应用不读写 Core 私有表。AMCMM 通过认证 BFF 调用同一能力；不持有模型密钥，不在 localStorage 存任务真值。
 
+超大品牌资料使用有界原文摘录并明确 partial，摘要始终绑定完整授权数据快照；省略部分必须按未知处理，必要时向人类补资料。运营列表和计数按稳定顺序计算摘要。
+
 品牌知识、创意、Content 制作任务、发布、支付保留原权威系统。Core 任务引用它们的 ID、版本和核对回执。业务适配器进行字段白名单、当前权限、幂等和版本检查。无需把现有所有作业复制成另一套任务系统。
 
 ## 身份与责任

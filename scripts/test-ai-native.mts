@@ -35,7 +35,7 @@ const models={profiles:[{id:'fixture',provider:'openai' as const,model:'fixture-
 const options={version:'amc-native-test-v1',authorize:async(a:any)=>allowed&&a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId}
 try{
  await prisma.user.create({data:{id,email:`${id}@example.invalid`,nickname:'Native fixture',password:randomUUID(),businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
- await prisma.brand.create({data:{id,name:'Native fixture',status:'ARCHIVED',autoPilot:false,crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}},knowledge:{create:{negPrompts:[],marketingSolution:{publishingCalendar:{months:{[month]:[{id:'idea',date:'2099-11-15',title:'Original',platform:'Instagram',platformSlug:'instagram',contentType:'image',product:'Fixture',planning:'Original',inspirationCreativeId:'cre_fixture'}]}}}}}}})
+ await prisma.brand.create({data:{id,name:'Native fixture',description:'Synthetic long brand context. '.repeat(1000),status:'ARCHIVED',autoPilot:false,crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}},knowledge:{create:{negPrompts:[],marketingSolution:{publishingCalendar:{months:{[month]:[{id:'idea',date:'2099-11-15',title:'Original',platform:'Instagram',platformSlug:'instagram',contentType:'image',product:'Fixture',planning:'Original',inspirationCreativeId:'cre_fixture'}]}}}}}}})
  await initializeHost(pool)
  composition=await composeApplication(pool,models,options)
  const first=await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')
@@ -55,6 +55,8 @@ try{
  for(let i=0;i<20&&(await composition.app.runtime.state(actor,receipt.id)).status==='queued';i++)await composition.app.runtime.tick()
  let task=await composition.app.runtime.get(actor,receipt.id)
  assert.equal(task.status,'waiting');assert.equal(task.waiting_reason,'input');assert.ok(task.inputRequest.question.includes('卖点'))
+ const contextCall=(await composition.app.runtime.get(actor,receipt.id,{history:true})).calls.find((c:any)=>c.capability==='amc.context')
+ assert.equal(contextCall.result.evidence.partial,true);assert.ok(JSON.stringify(contextCall.result.knowledge).length<24000)
  await assert.rejects(()=>composition.app.runtime.get(actorFor(id,other),receipt.id))
  await composition.app.close()
  composition=await composeApplication(pool,models,options)
@@ -107,7 +109,7 @@ try{
  assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
  for(const requestKey of ['quota-fourth-request','quota-fifth-request'])await admitIntent(pool,actor,{...brief,requestKey})
  await assert.rejects(()=>admitIntent(pool,actor,{...brief,requestKey:'quota-sixth-request'}),/daily_task_budget_exhausted/)
- console.log(JSON.stringify({ok:true,checks:['Core durable task','recovered application index','scoped persistent preference and forgetting','same admission receipt','single executor ownership','daily quota bound','brand facts CAS','current permission','cross-user denial','input wait','runtime rebuild','original clarification receipt','candidate verifier','AI provenance','idempotent adoption','post-adoption read','real usage ledger','unknown usage held without retry','cancel','brand brief with operations evidence','no downstream writes'],modelCalls}))
+ console.log(JSON.stringify({ok:true,checks:['Core durable task','recovered application index','scoped persistent preference and forgetting','same admission receipt','bounded partial context','single executor ownership','daily quota bound','brand facts CAS','current permission','cross-user denial','input wait','runtime rebuild','original clarification receipt','candidate verifier','AI provenance','idempotent adoption','post-adoption read','real usage ledger','unknown usage held without retry','cancel','brand brief with operations evidence','no downstream writes'],modelCalls}))
 }finally{
  if(composition)await composition.app.close()
  await pool.end()
