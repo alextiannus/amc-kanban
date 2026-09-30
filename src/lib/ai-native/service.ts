@@ -63,7 +63,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if(automaticDaily&&!(body?.kind==='creative_discovery'&&body.poolIdeaId))throw nativeError('daily_pool_idea_required')
   if(body?.kind==='creative_discovery'&&body.poolIdeaId){
     const idea=await selectPoolIdea(brandId,body.poolIdeaId)
-    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅使用选中的原创意，根据当前品牌和真实 SKU 改写完整脚本，包含开场、分镜/正文、口播、行动提示及逐项对应的拍摄/上传素材需求。供主理人审阅后保存计划或上传素材制作。不得编造产品事实。',requestKey:automaticDaily?`daily-${digest([brandId,idea.id])}`:`pool-${digest([brandId,userId,idea.id,await brandContext(actor)])}`}
+    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅借鉴选中原创意的创作方向，根据当前品牌资料改写可直接审阅的完整脚本，包含开场、分镜/正文、口播、行动提示及对应素材需求。有产品目录时使用真实 SKU；无目录时直接完成品牌通用稿并返回空 skuIds，不补问产品、不留待填内容、不要求先补 SKU。未知产品、价格、优惠与卖点改为不依赖它们的表达；使用当前品牌名称。供主理人审阅后保存或添加素材。',requestKey:automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`}
   }
   if(body?.kind==='creative_discovery'&&body.proactive===true){
     body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}
@@ -71,7 +71,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if(body?.kind==='creative'&&body.adaptToBrand===true){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string')throw nativeError('invalid_creative_task')
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
-    body={kind:'creative',adaptToBrand:true,creativeId:body.creativeId,month:body.month,expectedRevision:current.expectedRevision,goal:'自动把选中创意改写为当前品牌可直接审阅的完整脚本。读取品牌与productCatalog，选择适合的真实SKU，在planning写出品牌及SKU名称、开场、分镜/正文、口播和行动提示；原稿只借鉴表达结构，不照搬外部产品、价格或卖点。先读取amc-creative/SKILL.md。事实不足先补问，不编造。返回适配脚本及实际skuIds，供主理人修改后保存或制作。',requestKey:`adapt-${digest([brandId,userId,body.creativeId,body.month,current.expectedRevision,await brandContext(actor),new Date().toISOString().slice(0,10)])}`}
+    body={kind:'creative',adaptToBrand:true,creativeId:body.creativeId,month:body.month,expectedRevision:current.expectedRevision,goal:'自动把选中创意改写为当前品牌可直接审阅的完整脚本。先读取amc-creative/SKILL.md、品牌与productCatalog。有目录时选择真实SKU并写出其名称；无目录时直接完成品牌通用稿，skuIds为空，不补问产品、不留待填内容、不要求先补SKU。planning包含当前品牌名称、开场、分镜/正文、口播、行动提示及对应素材需求。原稿只借鉴表达结构，未知产品、价格、优惠或卖点改写为不依赖这些信息的表达。只有本次明确任务不可缺少的事实才补问。供主理人修改后保存或制作。',requestKey:`adapt-general-v2-${digest([brandId,userId,body.creativeId,body.month,current.expectedRevision,await brandContext(actor),new Date().toISOString().slice(0,10)])}`}
   }
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
