@@ -4,6 +4,7 @@ import {prisma} from '../src/lib/prisma.ts'
 import {nativePool,initializeHost,admitIntent} from '../src/lib/ai-native/store.ts'
 import {initializeIdeaPool,refreshBrandIdeas} from '../src/lib/ai-native/idea-pool.ts'
 import {advanceDailyPlanning} from '../src/lib/ai-native/daily-planning.ts'
+import {listNativeTasks,readNativeTask} from '../src/lib/ai-native/service.ts'
 import {dailyActorFor,actorFor,digest} from '../src/lib/ai-native/contract.ts'
 import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {readBrandFacts} from '../src/lib/ai-native/facts.ts'
@@ -52,6 +53,9 @@ try{
  await advanceDailyPlanning(pool,id,ports as any);await advanceDailyPlanning(pool,id,ports as any)
  const rows=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id])).rows
  assert.equal(rows.filter(row=>row.plan_id).length,6,JSON.stringify(rows.map(row=>({error:row.last_error,task:row.task_id}))))
+ ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:composed.tools,modelRevision:1})
+ const listing=await listNativeTasks(id,id);assert.equal(listing.page.items.length,6,'principal sees all daily tasks')
+ const visible=await readNativeTask(id,id,rows[0].task_id);assert.equal(visible.automaticDaily,true);assert.equal(visible.status,'succeeded');assert(visible.recommendations)
  const row=rows[0],history=await readCreativeRevisions({id,type:'HUMAN'},id,row.plan_month,row.plan_id)
  assert.equal(history.revisions.length,2);assert.equal(history.revisions[0].actor.type,'AI');assert.equal(history.revisions[0].principals[0].userId,id);assert.equal(history.current.nativeReviewStatus,'pending_review')
  const options=await listOpenCalendarCreativeOptions(id,row.plan_month);assert(options.every(item=>item.nativeDaily));assert.equal(options.length,6)
@@ -67,4 +71,4 @@ try{
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
  await assert.rejects(()=>app.runtime.get(actor,row.task_id))
  console.log('PASS: source/url dedup, two-per-direction cap, six durable Core tasks, isolated daily budget, automatic plan insertion, AI/principal/source lineage, replay, no pre-review production, human review, safe retirement and revocation')
-}finally{if(app)await app.close();await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[id]);await prisma.brand.deleteMany({where:{id}});await prisma.user.deleteMany({where:{id}});await pool.end();if((globalThis as any).amcIdeaPool)await(await(globalThis as any).amcIdeaPool).end();await prisma.$disconnect()}
+}finally{delete (globalThis as any).amcNativeHost;if(app)await app.close();await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[id]);await prisma.brand.deleteMany({where:{id}});await prisma.user.deleteMany({where:{id}});await pool.end();if((globalThis as any).amcIdeaPool)await(await(globalThis as any).amcIdeaPool).end();await prisma.$disconnect()}
