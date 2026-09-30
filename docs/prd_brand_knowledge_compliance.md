@@ -30,7 +30,7 @@ Growth is the canonical merchant data and knowledge center. Merchant identity, c
 
 Confirmed Google Places data follows the same ownership boundary. Growth performs Place confirmation, collection, source attribution and freshness control, and exposes store-level Google action links through the authenticated Merchant 360 interface. Kanban does not call Places API for this sync; an explicit Growth sync caches each store's links in `BrandKnowledge.stores[].googleBusiness` and mirrors the current primary store into the legacy Brand Google fields for existing review and game flows. Cached values retain source and expiry metadata and must not be presented as current after expiry.
 
-Google 商家账号自动补充（本次实施，待部署）：Google OAuth 授权、明确门店选择及 PostFast Google 账号同步完成后，AMC 自动登记持久同步任务。任务只读取当前品牌绑定账号的精确门店，不执行名称搜索，不默认选择多个门店中的第一个。OAuth 可读取门店信息、符合条件的商家维护菜单和顾客评价；PostFast 仅导入其接口实际提供的绑定门店字段，缺少菜单/评价读取权限时显示具体缺项。配置变更、解绑与并发更新必须使旧抓取结果失效。
+Google 商家账号自动补充（已上线，2026-09-30）：Google OAuth 授权、明确门店选择及 PostFast Google 账号同步完成后，AMC 自动登记持久同步任务。任务只读取当前品牌绑定账号的精确门店，不执行名称搜索，不默认选择多个门店中的第一个。OAuth 可读取门店信息、符合条件的商家维护菜单和顾客评价；PostFast 仅导入其接口实际提供的绑定门店字段，缺少菜单/评价读取权限时显示具体缺项。配置变更、解绑与并发更新必须使旧抓取结果失效。
 
 自动导入只补充空白资料，不覆盖主理人已有内容。商家维护菜单以稳定来源 ID 去重进入 SKU 目录，保留门店、来源和采集时间；顾客评价汇总保留样本数、时间范围、评分分布和产品提及，仅属于顾客反馈，不作为已确认产品卖点或商品目录。信息不足不虚构 SKU。导入结果和失败原因在商家资料中可见，可重试；后台任务有租约、退避和重启恢复。品牌/门店字段通过现有 Growth outbox 汇入主数据，商品目录通过 merchant.menuItems 发布为 Growth menu.items，评价统计通过 merchant.googleReviewSummary 发布为 observation 类型的 reputation.google_account_summary；原始评价不复制到永久审计日志。Google Places 公共查询继续由 Growth 管理，本流程不添加模糊检索或转移 12eat 凭证。
 
@@ -173,3 +173,10 @@ Exposed to the agent directly inside [server.ts](file:///Users/alextian/Document
 所有门店写入使用统一校验，超额历史数据可修改、减少但不可增加；降低额度不删除门店。保留稳定标识和 Google 元数据，拒绝时不写 Markdown 或发送 Growth 同步。门店消失不代表删除 Growth 记录。独立门店账号、任务、员工权限和经营报表不属于本期。
 
 验收：默认 1 家、授权 3 家、付费权益优先、撤销后资料保留、接口和 Markdown 无法绕过、账单不变及审计可查。发布顺序：数据库迁移、应用发布、管理员及品牌页面验证。
+
+## Google 自动补充验收（2026-09-30）
+
+- 运行版本：Kanban `edc56ea1`、AMC-MM `64675665`、Growth `efb51851` 均已 live。
+- 本地验证：Google 精确身份、多个授权账号分页、不做名称检索、菜单来源与规格去重、保留人工/旧格式商品、评价样本与评分统计、错误脱敏；PostgreSQL 真实事务验证持久认领、并发执行、重复同步、解绑期间丢弃旧结果、Growth outbox，以及 PostFast 权限不足时只补充可取得字段。
+- 浏览器验证：390px 手机界面、明确门店选择（不默认选首项）、同步状态、缺项提示、品牌切换隔离；原 Brand Ideas 消息预览回归通过。两端生产构建及类型检查通过。接口专项验证未登录、跨品牌及 AI 身份不触发读取或导入；线上未授权请求被拒绝。全库旧静态鉴权扫描仍有 20 个既有未识别路由，本次新接口不在其中，未将该扫描报告为全通过。
+- 真实账号验证：Render `job-daub3qe0tbcc73en4bvg` 对“何师傅烤骨头”已配置的 PostFast Google 账号读取其唯一门店，新增地址 `81 Geylang Road, 389199`、Google 门店名称与地图主页。同步回执为 `PARTIAL`，SKU 数 0，评价摘要为空，缺项为直接 Google 菜单/评价授权。没有通过名称寻找其他商家，没有推测菜品或生成虚假评价。直接 OAuth 菜单与评价分支已通过模拟提供方及真实本地数据库验证；该品牌尚无直接授权，不能称为已通过该分支的线上菜单/评价实测。

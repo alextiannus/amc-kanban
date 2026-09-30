@@ -39,5 +39,21 @@ try {
  assert.equal((await prisma.brand.findUniqueOrThrow({ where: { id: brand.id } })).website, null)
  await runGoogleBrandImport(brand.id)
  assert.equal((await prisma.googleBrandImport.findUniqueOrThrow({ where: { brandId: brand.id } })).status, 'NEEDS_ATTENTION')
+ // The PostFast route imports only fields actually exposed by the bound account.
+ await prisma.brand.update({ where: { id: brand.id }, data: { postfastApiKey: 'fixture-postfast', googleLocationName: null, googleBusinessUrl: null } })
+ await prisma.socialAccount.create({ data: { brandId: brand.id, platformId: 'google', handle: 'fixture-store', postfastAccountId: 'fixture-remote' } })
+ globalThis.fetch = (async (url: any) => {
+   if (String(url).includes('my-social-accounts')) return Response.json([{ id: 'fixture-remote', platform: 'GOOGLE', platformUsername: 'fixture-store' }])
+   if (String(url).includes('gbp-locations')) return Response.json([{ id: 'accounts/a/locations/l', title: 'Authorized store', address: 'Authorized address', mapsUri: 'https://maps.google.com/authorized' }])
+   return Response.json({ error: 'test_growth_unavailable' }, { status: 503 })
+ }) as typeof fetch
+ await queueGoogleBrandImport(brand.id, true); await runGoogleBrandImport(brand.id)
+ const partial = await prisma.brand.findUniqueOrThrow({ where: { id: brand.id }, include: { googleBrandImport: true, knowledge: true } })
+ assert.equal(partial.googleLocationName, 'Authorized store')
+ assert.equal(partial.googleBusinessUrl, 'https://maps.google.com/authorized')
+ assert.equal(partial.googleBrandImport.status, 'PARTIAL')
+ assert.equal((partial.googleBrandImport.result as any).reviewSummary, null)
+ assert.deepEqual((partial.googleBrandImport.result as any).missing, ['GOOGLE_OAUTH_REQUIRED_FOR_MENU_AND_REVIEWS'])
+ assert.equal((partial.knowledge.menuItems as any[]).length, 2, 'PostFast must not fabricate additional SKUs')
  console.log('PASS: durable claim, concurrent workers, non-overwrite, SKU merge, Growth outbox, re-run dedup, disconnect during fetch')
 } finally { globalThis.fetch = original; await prisma.auditLog.deleteMany({ where: { resourceId: brand.id } }); await prisma.brand.delete({ where: { id: brand.id } }); await prisma.$disconnect() }
