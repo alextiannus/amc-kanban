@@ -8,7 +8,8 @@ export const DAILY_ALLOWANCE = 3000000
 export type NativeActor = { scopeId:string; subjectId:string }
 export type CreativeIntent = {kind:'creative';brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type NativeIntent = CreativeIntent | BriefIntent
+export type DiscoveryIntent = {kind:'creative_discovery';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
 export function actorFor(brandId:string,userId:string):NativeActor {

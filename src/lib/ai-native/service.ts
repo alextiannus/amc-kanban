@@ -1,3 +1,6 @@
+import { brandContext } from './application'
+import { discoveryFrom, type LibrarySnapshot } from './library'
+import { recommendationReceipts, saveRecommendation } from './recommendations'
 import { readPreference, changePreference } from './preferences'
 import type { Application, ArtifactReference, TaskView } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type { Pool } from 'pg'
@@ -49,16 +52,19 @@ export function startNativeWorker(){
 async function authorizedHost(userId:string,brandId:string){const actor=actorFor(brandId,userId);await requireActor(actor);return {actor,...await getNativeHost()}}
 export async function createNativeTask(userId:string,brandId:string,body:any){
   const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId)
+  if(body?.kind==='creative_discovery'&&body.proactive===true){
+    body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}
+  }
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
   const kind=body.kind||'creative'
-  if(!['creative','brand_brief'].includes(kind))throw nativeError('invalid_task_kind')
+  if(!['creative','brand_brief','creative_discovery'].includes(kind))throw nativeError('invalid_task_kind')
   const common={brandId,userId,goal:body.goal.trim(),requestKey:key,artifactPath:`work/${digest([actor,key])}.json`}
   let intent:NativeIntent
   if(kind==='creative'){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string'||typeof body.expectedRevision!=='string')throw nativeError('invalid_creative_task')
     intent={...common,kind,creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
-  }else{
+  }else if(kind==='creative_discovery'){intent={...common,kind}}else{
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
   }
@@ -71,7 +77,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any){
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
   const row=await admitIntent(pool,actor,intent)
   await app.ledger.grant(await app.scope(actor),{reference:`amc-request-${row.id}`,amount:TASK_ALLOWANCE,evidence:{kind:'explicit-ai-task',requestId:row.id,policy:'amc-ai-allowance-v1',requestedBy:userId}})
-  const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>intent.kind==='creative'?t!=='amc.operations':t!=='amc.creative')},{actor,callId:key})
+  const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':'amc.operations'))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
   return publicTask(app,actor,receipt.id)
 }
@@ -92,15 +98,17 @@ export async function readNativeTask(userId:string,brandId:string,id:string){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
   const row=await intentForTask(pool,app,actor,id),history=await app.runtime.get(actor,id,{history:true}),task=projectTask(history)
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
-  let candidate=null,report=null,artifact:ArtifactReference|null=null
+  let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null
   if(task.status==='succeeded'&&task.result){
     artifact=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)||null
-    if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else report=briefFrom(content,row.intent)}
+    if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else report=briefFrom(content,row.intent)}
   }
   const operations=history.calls.find(c=>c.capability==='amc.operations'&&c.status==='succeeded')?.result as {draftTotal?:number;accountTotal?:number;operationsDigest?:string;retrievedAt?:string}|undefined
   const currentOperations=report&&typeof operations?.draftTotal==='number'&&typeof operations?.accountTotal==='number'?{draftTotal:operations.draftTotal,accountTotal:operations.accountTotal,retrievedAt:operations.retrievedAt,changed:operations.operationsDigest!==report.operationsDigest}:null
   const sourceCall=history.calls.find(c=>c.capability==='amc.creative'&&c.status==='succeeded')?.result as {current?:unknown}|undefined
-  return {...task,kind:row.intent.kind,candidate,report,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
+  const adoptions=row.intent.kind==='creative_discovery'?await recommendationReceipts(userId,brandId,id):[]
+  const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
+  return {...task,kind:row.intent.kind,candidate,report,recommendations,adoptions,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await authorizedHost(userId,brandId)
@@ -114,11 +122,16 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
 export async function adoptNativeCandidate(userId:string,brandId:string,id:string,body:any){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
   requestKey(body?.requestKey)
-  const task=await app.runtime.get(actor,id)
+  const task=await app.runtime.get(actor,id,{history:true})
   if(task.status!=='succeeded'||!task.result)throw nativeError('candidate_not_ready',409)
   const row=await intentForTask(pool,app,actor,id),ref=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)
-  if(row.intent.kind!=='creative')throw nativeError('creative_task_required',400)
   if(!ref||body.artifactDigest!==ref.digest)throw nativeError('candidate_changed',409)
+  if(row.intent.kind==='creative_discovery'){
+    const library=task.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
+    if(!library)throw nativeError('recommendation_source_mismatch',409)
+    return saveRecommendation(userId,brandId,id,row.intent,ref,(await (app.workspace as WorkspacePort).read(actor,ref)).content,library,body)
+  }
+  if(row.intent.kind!=='creative')throw nativeError('creative_task_required',400)
   const candidate=candidateFrom((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
   const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:candidate.patch},undefined,{taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)

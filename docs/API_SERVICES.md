@@ -884,3 +884,7 @@ Draft create/PATCH accepts optional boolean `postfastControls.tiktokIsAigc`; rea
 Direct brand post creation accepts optional top-level `tiktokIsAigc`; partner MCP publishing accepts it inside `postfastControls`. The PostFast adapter emits `controls.tiktokIsAigc: true` only for TikTok and only when explicitly enabled. False/omitted values are not sent. Immediate, scheduled and queued delivery use the saved controls; no schema migration or historical backfill is needed. Deploy backend before frontend. Mock request verification does not establish the visible label on a real TikTok post.
 
 Regression commands: `npm run test:tiktok-aigc` (draft authorization, merge/readback, publication guards, queued snapshot/retry); `npm run test:postfast-integration` (outbound platform-specific payloads); `npm run test:postfast-delivery` (large-video transfer). Both Kanban and MM must pass `npm run typecheck`.
+
+### AMCMM 品牌创意推荐与审阅
+
+`POST /api/brands/:id/ai/tasks` 支持 `kind: creative_discovery`、goal、requestKey；`proactive:true` 使用服务端当日品牌事实快照键。新 MCP `discover_brand_creatives` 同样调用当前 HUMAN 品牌权限、额度与持久任务服务。`amc.library` 检索真实原创意；任务详情返回 recommendations、library 来源快照与 adoptions。`POST .../:taskId/adopt` 对推荐接受 artifactDigest、sourceCreativeId、requestKey、patch（title/planning/aiCaption/materialRequirements/date/platform），保存待用品牌计划并回读，返回 creativeId/month/creative 供既有制作入口使用。审阅不授予自动发布权限。当前交付状态见 amcmm-iaic-implementation.md。

@@ -58,6 +58,6 @@ export function validateCreativePatch(value: unknown, month: string) {
 }
 // Historical plans carry excerpts, not the immutable full Content creative.
 export function originalSource(item: Record<string, any>, capturedAt: string) {
-  const snapshot = Object.fromEntries(['inspirationCreativeId','inspirationSourceTitle','inspirationSourceSummary','selectedCreativeCandidateId','sampleOriginalUrl','sampleVideoUrl','sampleSourcePlatform','creativeMechanism','videoScript'].filter(key => item[key] !== undefined).map(key => [key,item[key]]))
+  const snapshot = Object.fromEntries(['inspirationCreativeId','inspirationSourceTitle','inspirationSourceSummary','selectedCreativeCandidateId','sampleOriginalUrl','sampleVideoUrl','sampleSourcePlatform','creativeMechanism','videoScript','nativeSourceSnapshot','nativeCandidate'].filter(key => item[key] !== undefined).map(key => [key,item[key]]))
   return { system: item.inspirationCreativeId ? 'amc-content' : 'amc-kanban', creativeId: item.inspirationCreativeId || null, version: null, evidence: item.inspirationCreativeId ? 'plan_snapshot' : 'unresolved', capturedAt, snapshot, digest: creativeDigest(snapshot) }
 }

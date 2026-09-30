@@ -24,6 +24,7 @@ export async function matchPromotionStrategyCreativeCandidates(input: unknown) {
   if (!baseUrl) throw new Error('amc_content_service_not_configured')
   const token = process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal ? 'local-service-token' : '')
   const response = await fetch(`${baseUrl}/v1/content-library/match-promotion-point-creatives`, {
+    signal: AbortSignal.timeout(45000),
     method: 'POST',
     cache: 'no-store',
     headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },

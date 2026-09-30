@@ -309,6 +309,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
   }) as typeof server.tool
 
   // Durable AI work uses the same admission/control services as AMCMM.
+  registerTool('discover_brand_creatives', 'Match persisted original library creatives to the current brand. Returns a durable review task, not a saved plan or publication.', {brandId:z.string(),goal:z.string().min(1).max(6000),requestKey:z.string().min(8).max(100)}, async input=>{
+    const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
+    const {createNativeTask}=await import('@/lib/ai-native/service')
+    return {content:[{type:'text' as const,text:JSON.stringify(await createNativeTask(user.id,input.brandId,{...input,kind:'creative_discovery'}))}]}
+  })
   registerTool('create_ai_brand_task', 'Prepare a durable brand work brief from current authorized facts and operations. Proposals are not executed business actions.', {brandId:z.string(),goal:z.string().min(1).max(6000),requestKey:z.string().min(8).max(100)}, async input=>{
     const user=await resolveAgent();if(!user)throw new Error('Invalid identity')
     const {createNativeTask}=await import('@/lib/ai-native/service')

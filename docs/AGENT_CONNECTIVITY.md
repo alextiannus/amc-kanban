@@ -130,3 +130,7 @@ ADMIN 是全局角色，与人类 ADMIN 相同；非 ADMIN Agent 必须同时具
 **MCP 操作记在哪里？**
 
 与网页操作一样进入统一工作日志，actor 为 Personal MCP 所属用户。
+
+### AMCMM 品牌创意推荐与审阅
+
+`POST /api/brands/:id/ai/tasks` 支持 `kind: creative_discovery`、goal、requestKey；`proactive:true` 使用服务端当日品牌事实快照键。新 MCP `discover_brand_creatives` 同样调用当前 HUMAN 品牌权限、额度与持久任务服务。`amc.library` 检索真实原创意；任务详情返回 recommendations、library 来源快照与 adoptions。`POST .../:taskId/adopt` 对推荐接受 artifactDigest、sourceCreativeId、requestKey、patch（title/planning/aiCaption/materialRequirements/date/platform），保存待用品牌计划并回读，返回 creativeId/month/creative 供既有制作入口使用。审阅不授予自动发布权限。当前交付状态见 amcmm-iaic-implementation.md。
