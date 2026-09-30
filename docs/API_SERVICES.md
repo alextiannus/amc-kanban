@@ -890,4 +890,4 @@ Regression commands: `npm run test:tiktok-aigc` (draft authorization, merge/read
 `POST /api/brands/:id/ai/tasks` 支持 `kind: creative_discovery`、goal、requestKey；`proactive:true` 使用服务端当日品牌事实快照键。新 MCP `discover_brand_creatives` 同样调用当前 HUMAN 品牌权限、额度与持久任务服务。`amc.library` 检索真实原创意；任务详情返回 recommendations、library 来源快照与 adoptions。`POST .../:taskId/adopt` 对推荐接受 artifactDigest、sourceCreativeId、requestKey、patch（title/planning/aiCaption/materialRequirements/date/platform），保存待用品牌计划并回读，返回 creativeId/month/creative 供既有制作入口使用。审阅不授予自动发布权限。当前交付状态见 amcmm-iaic-implementation.md。
 
 
-AMCMM工作台设定：GET/POST `/api/brands/:id/ai/preference` 保留Core个人偏好revision/status/content，增加从当前受权品牌事实计算的 `defaults`（brandId、brandName、content）及 `effectiveContent`、`source`（personal/brand）。无有效个人偏好时采用品牌默认；读取不创建个人记忆，POST仍由人类明确保存/遗忘。当前入口调整待部署。
+AMCMM工作台设定：GET/POST `/api/brands/:id/ai/preference` 保留Core个人偏好revision/status/content，增加从当前受权品牌事实计算的 `defaults`（brandId、brandName、content）及 `effectiveContent`、`source`（personal/brand）。无有效个人偏好时采用品牌默认；读取不创建个人记忆，POST仍由人类明确保存/遗忘。入口及默认投影已部署，生产隔离验收通过。
