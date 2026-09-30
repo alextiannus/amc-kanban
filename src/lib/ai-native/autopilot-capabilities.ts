@@ -23,6 +23,6 @@ export function autopilotCapabilities(getIntent:(actor:NativeActor,taskId?:strin
     if(action==='generate'&&!state.evidence.adapted?.[input.creativeId])return {valid:false,feedback:'Call adapt, await_adaptation and save_adaptation for this creative before generating content.'}
     if(action==='save_content'&&!state.outputs.some((o:any)=>o.id===input.outputId&&['generated','completed'].includes(o.status)))return {valid:false,feedback:'Only a stored generated result can become a draft. Read status and reconcile the original result; never regenerate an unknown provider outcome.'}
     return true
-  },revalidate:async(input:any,previous:any,context:any)=>read?execute(input,context):{...previous,current:await readAutopilot(context.actor.subjectId,brandFor(context.actor),input.runId)},...(['await_profile','await_research','ideas','await_adaptation'].includes(action)?{waitReady:(_input:any,result:any)=>result.ready===true}:{})})
+  },revalidate:async(input:any,previous:any,context:any)=>{if(read)return execute(input,context);await autopilotRun(context.actor.subjectId,brandFor(context.actor),input.runId);return previous},...(['await_profile','await_research','ideas','await_adaptation'].includes(action)?{waitReady:(_input:any,result:any)=>result.ready===true}:{})})
  })
 }

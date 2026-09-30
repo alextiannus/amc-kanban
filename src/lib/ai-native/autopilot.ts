@@ -54,7 +54,11 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
  const outputs=(await pool.query('SELECT id,creative_id,revision_id,status,draft_id,error FROM amc_iaic.autopilot_outputs WHERE run_id=$1',[runId])).rows
  const research=run.evidence.researchSnapshotId?await prisma.brandGrowthResearchSnapshot.findFirst({where:{id:run.evidence.researchSnapshotId,brandId},select:{report:true,generatedAt:true}}):null
  const strategy=run.evidence.strategyVersionId?await prisma.brandMarketingSolution.findFirst({where:{id:run.evidence.strategyVersionId,brandId},select:{output:true}}):null
- return {runId,brandId,limit:run.daily_limit,accountId:run.account_id,evidence:run.evidence,research:research?{generatedAt:research.generatedAt,excerpt:JSON.stringify(research.report).slice(0,14000),untrusted:true}:null,strategy:strategy?.output,outputs,publishRequiresConfirmation:true}
+ return {runId,brandId,limit:run.daily_limit,accountId:run.account_id,evidence:run.evidence,research:research?{generatedAt:research.generatedAt,excerpt:researchExcerpt(research.report),untrusted:true,scope:'Bounded summary and sources; omitted report details remain unknown.'}:null,strategy:strategy?.output,outputs,publishRequiresConfirmation:true}
+}
+function researchExcerpt(value:unknown){
+ const r=(value||{}) as any,s=r.structuredReport||{}
+ return JSON.stringify({summary:r.summary,brandImage:r.brandImage,marketingStatus:r.marketingStatus,marketAnalysis:r.marketAnalysis,issues:r.issues,growthPoints:r.growthPoints,missingQuestions:r.missingQuestions,sources:s.sources||r.dataSources,coverage:r.sourceCoverage,structuredOverview:s.executive_summary||s.brand_overview}).slice(0,8000)
 }
 export const autopilotAdapters={generate:generateContentDirect}
 export async function executeAutopilot(userId:string,brandId:string,runId:string,action:string,input:any,adapters=autopilotAdapters){
@@ -81,15 +85,15 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    return readAutopilot(userId,brandId,runId,'research')
   }
   if(action==='research_save'){
-   if(evidence.researchSnapshotId)return readAutopilot(userId,brandId,runId)
+   if(evidence.researchSnapshotId)return {snapshotId:evidence.researchSnapshotId,saved:true}
    if(!evidence.researchJobId)throw nativeError('research_not_started')
    const brand=await loadBrandPlanBrand(brandId);if(!brand)throw nativeError('brand_not_found',404)
    const report=await buildGrowthResearchReport(brand,{jobId:evidence.researchJobId,maxWaitMs:0})
    await gate();const saved=await saveResearchReport(brandId,report);evidence.researchSnapshotId=saved.snapshotId;await progress(pool,run,'research',evidence)
-   return readAutopilot(userId,brandId,runId)
+   return {snapshotId:evidence.researchSnapshotId,saved:true}
   }
   if(action==='strategy'){
-   if(evidence.strategyVersionId)return readAutopilot(userId,brandId,runId)
+   if(evidence.strategyVersionId)return {strategyVersionId:evidence.strategyVersionId,saved:true}
    if(!evidence.researchSnapshotId)throw nativeError('research_evidence_required')
    if(typeof input.title!=='string'||!input.title.trim()||typeof input.content!=='string'||input.content.trim().length<100||input.content.length>12000)throw nativeError('complete_strategy_required')
    await gate()
@@ -104,7 +108,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
     await tx.$executeRaw`UPDATE "BrandKnowledge" SET "marketingSolution"=jsonb_set(COALESCE("marketingSolution",'{}'::jsonb),'{autopilotStrategy}',${JSON.stringify({id:result.id,...output})}::jsonb) WHERE "brandId"=${brandId}`
     return result
    })
-   evidence.strategyVersionId=saved.id;await progress(pool,run,'strategy',evidence);return readAutopilot(userId,brandId,runId)
+   evidence.strategyVersionId=saved.id;await progress(pool,run,'strategy',evidence);return {strategyVersionId:saved.id,saved:true}
   }
   if(action==='match'){
    if(!evidence.strategyVersionId)throw nativeError('strategy_required')
