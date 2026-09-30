@@ -129,3 +129,5 @@ Core 未修改或发布新版本。中央策略 version5、既有文本配置；
 ## 真实推荐任务验收发现（进行中）
 
 首个真实库推荐任务 `6920de14-794e-44ff-a457-0fa1245ef07a` 在3次模型请求后进入 model_output_limit，22639 provider tokens 已结算、pending=0，没有保存或发布。当前6000输出上限同时承担模型推理和结构化工具输出。只读检查确认真实库已返回3个来源，工具结果24531字节，第三次请求耗满6000输出额度。修正采用标记 bounded_excerpt 的有限来源摘录（保留实际 ID/链接/审核状态），并复用现有短文生成的有界推理默认：仅当中央配置未指定 reasoningEffort 且模型为 GLM-5.3 时，ai_native 默认 low；中央明确配置继续优先，输出上限/任务预算不增加，不自动续调已暂停任务。待真实复验后才能标记推荐主流程生产验收通过。
+
+第二次实模任务 `e5f3ad31-5a30-4052-a762-ec3c33cb832b` 没有输出超限，但12轮后进入 limit，12次请求/114722 tokens已结算。只读诊断证实模型先自行使用 candidates/reviewCopyEn 等错误字段，两次未通过验证；直到后段才读Skill并改为正确 recommendations，因此耗尽轮次。修正不增加轮数：amc.context直接提供requiredSkill与artifactContract，验证要求实际读Skill，并返回discovery专用字段反馈；强化不能从原创意或handmade推断freshness等未确认事实。待第三次实模复验；未把第二次失败标记成功。

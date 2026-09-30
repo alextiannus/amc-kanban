@@ -33,6 +33,7 @@ try{
  const model={next:async(request:any)=>{
   const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded'),has=(n:string)=>calls.some((c:any)=>c.capability===n)
   if(!has('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
+  if(!has('assistant.skills.read')){const context=calls.find((c:any)=>c.capability==='amc.context').result;assert.equal(context.requiredSkill,'amc-discovery/SKILL.md');assert.ok(context.artifactContract.example.recommendations);return {type:'call',name:'assistant.skills.read',input:{id:context.requiredSkill},usage}}
   if(!has('amc.library'))return {type:'call',name:'amc.library',input:{},usage}
   if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify(value)},usage}
   return {type:'finish',result:{summary:'Recommendations ready',artifacts:[calls.find((c:any)=>c.capability==='my_write_workspace').result.reference]},usage}

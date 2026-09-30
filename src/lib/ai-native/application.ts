@@ -1,4 +1,4 @@
-import { brandLibrary, discoveryFrom, type LibrarySnapshot } from './library'
+import { brandLibrary, discoveryFrom, discoveryContract, type LibrarySnapshot } from './library'
 import { openApplication, type Application, type ApplicationOptions } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import { defineCapability } from '@immedi/iaic-core/capabilities/index.js'
 import type { Pool } from 'pg'
@@ -49,7 +49,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     const text=JSON.stringify(knowledge)
     const partial=text.length>24000
     const projection=partial?{excerpt:text.slice(0,18000),scope:'Partial literal JSON excerpt; omitted material is unknown. Ask the user for any essential missing facts.'}:JSON.parse(text)
-    return {intent,knowledge:projection,contextDigest:digest(knowledge),evidence:{system:'AMC',brandId:intent.brandId,partial,retrievedAt:new Date().toISOString()}}
+    return {intent,...(intent.kind==='creative_discovery'?{requiredSkill:'amc-discovery/SKILL.md',artifactContract:discoveryContract(intent,digest(knowledge))}:{}),knowledge:projection,contextDigest:digest(knowledge),evidence:{system:'AMC',brandId:intent.brandId,partial,retrievedAt:new Date().toISOString()}}
   }
   const creativeRead=async(actor:NativeActor,taskId?:string)=>{
     const intent=await getIntent(actor,taskId)
@@ -72,7 +72,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
   ]
   app=await openApplication({pool,...models,skillRoot:options.skillRoot||path.join(process.cwd(),'skills'),version:options.version||await applicationVersion(),authorize,
     taskCursorKey:createHash('sha256').update('amc-task-cursor-v1:').update(process.env.JWT_SECRET||process.env.DATABASE_URL||'local-test').digest(),
-    job:{id:'amc-mm-user-ai',purpose:'Proactively match original library creatives to brand facts for human review, or prepare sourced briefs and rewrites. Read trusted amc.context and the Skill matching its intent kind. Candidate and report completion never imply execution, publishing or saved business changes.',capabilities:['agent.work'],configuration:{skills:['amc-discovery/SKILL.md','amc-creative/SKILL.md','amc-brief/SKILL.md'],knowledge:[],tools:[...tools,...humanMemoryTools]}},
+    job:{id:'amc-mm-user-ai',purpose:'Proactively match original library creatives to brand facts for human review, or prepare sourced briefs and rewrites. Read trusted amc.context first and then its requiredSkill using assistant.skills.read before any workspace write. Follow artifactContract exactly; never guess field names. Candidate and report completion never imply execution, publishing or saved business changes.',capabilities:['agent.work'],configuration:{skills:['amc-discovery/SKILL.md','amc-creative/SKILL.md','amc-brief/SKILL.md'],knowledge:[],tools:[...tools,...humanMemoryTools]}},
     runtimeLimits:{maxTurns:12,maxCalls:18,maxBatchCalls:1,modelTimeoutMs:110000,taskTimeoutMs:240000},extraCapabilities,
     executionPolicy:{check:async({actor,capability,input,phase,taskId})=>{
       let allowed=await authorize(actor),reason='current_brand_authority'
@@ -110,6 +110,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
           return {verified:report.contextDigest===digest(facts)&&report.operationsDigest===operations.operationsDigest,feedback:'The report must bind current brand and operations evidence, with no invented results.'}
         }
         if(row.intent.kind==='creative_discovery'){
+          if(!history.calls.some(c=>c.status==='succeeded'&&c.capability==='assistant.skills.read'&&(c.input as {id?:string}).id==='amc-discovery/SKILL.md'))return {verified:false,feedback:'Read assistant.skills.read with id amc-discovery/SKILL.md before completing. Use the exact artifactContract returned by amc.context.'}
           const library=history.calls.slice().reverse().find(c=>c.status==='succeeded'&&c.capability==='amc.library')?.result as LibrarySnapshot|undefined
           if(!library)return {verified:false,feedback:'Read amc.library and use only returned original creative IDs.'}
           const recommendations=discoveryFrom(artifact.content,row.intent,library)
@@ -123,7 +124,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         const current=await readCreative({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,row.intent.month,row.intent.creativeId)
         if(current.expectedRevision!==row.intent.expectedRevision||candidate.sourceCreativeId!==(current.current?.inspirationCreativeId||null))return {verified:false,feedback:'Original creative or source changed; do not invent a new source or overwrite the changed creative.'}
         return {verified:true}
-      }catch{return {verified:false,feedback:'Candidate JSON must match the trusted intent, source and allowed creative patch fields.'}}
+      }catch{return {verified:false,feedback:row.intent.kind==='creative_discovery'?'Read amc.context.artifactContract and assistant.skills.read id amc-discovery/SKILL.md. Required JSON fields: kind=creative_discovery, brandId, contextDigest, libraryDigest, summary, recommendations. Each recommendation requires sourceCreativeId, title, planning, aiCaption, materialRequirements, rationale. Do not use candidates or copy source product claims into brand facts. Preserve exact evidence digests.':'Candidate JSON must match the trusted intent, source and allowed creative patch fields.'}}
     },
   })
   return {app,tools}

@@ -23,6 +23,9 @@ export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<Lib
   if(Buffer.byteLength(JSON.stringify(payload))>60000)throw nativeError('library_evidence_too_large',502)
   return {...payload,libraryDigest:digest(payload),retrievedAt:new Date().toISOString()}
 }
+export function discoveryContract(intent:DiscoveryIntent,contextDigest:string){
+  return {path:intent.artifactPath,mediaType:'application/json',instructions:'Read requiredSkill before writing. Use recommendations (not candidates). Copy libraryDigest and actual sourceCreativeId values from amc.library. Keep title under 100 characters and planning/caption under 800 each. Never infer freshness, hand-pulling, ingredients, stock, prices or opening hours from a reference.',example:{kind:'creative_discovery',brandId:intent.brandId,contextDigest,libraryDigest:'exact libraryDigest from amc.library',summary:'Short result for the brand owner',recommendations:[{sourceCreativeId:'actual inspirationCreativeId from amc.library.sources',title:'Brand-specific title',planning:'Plan using verified brand facts',aiCaption:'Draft using verified brand facts only',materialRequirements:['Brand-owned material needed'],rationale:'Concrete fit between source mechanism and verified brand facts'}]}}
+}
 export type Recommendation={sourceCreativeId:string;title:string;planning:string;aiCaption:string;materialRequirements:string[];rationale:string}
 export function discoveryFrom(content:string,intent:DiscoveryIntent,library?:LibrarySnapshot){
   if(Buffer.byteLength(content)>32000)throw nativeError('candidate_too_large')
