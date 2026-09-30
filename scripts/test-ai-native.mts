@@ -6,7 +6,7 @@ import { readPreference, changePreference } from '../src/lib/ai-native/preferenc
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { composeApplication } from '../src/lib/ai-native/application.ts'
-import { nativePool, initializeHost, admitIntent, intentForTask } from '../src/lib/ai-native/store.ts'
+import { nativePool, initializeHost, admitIntent, intentForTask, intentBy } from '../src/lib/ai-native/store.ts'
 import { actorFor, digest, candidateFrom, type CreativeIntent } from '../src/lib/ai-native/contract.ts'
 import { prisma } from '../src/lib/prisma.ts'
 import { readCreativeRevisions,saveCreativeRevision } from '../src/lib/brand-plan/creativeRevisions.ts'
@@ -45,6 +45,7 @@ try{
  const first=await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')
  const intent:CreativeIntent={kind:'creative',adaptToBrand:true,userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
  const row=await admitIntent(pool,actor,intent)
+ assert.equal((await intentBy(pool,actor,'request_key',intent.requestKey)).digest,digest(intent),'replay uses persisted admission digest, not reordered JSONB object serialization')
  await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
  await composition.app.ledger.grant(await composition.app.scope(actor),{reference:id,amount:20000,evidence:{test:true}})
  const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools}

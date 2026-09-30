@@ -33,7 +33,7 @@ export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeInten
 export async function intentBy(pool:Pool,actor:NativeActor,field:'id'|'request_key'|'task_id',value:string){
   const row=(await pool.query(`SELECT * FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND ${field}=$3`,[actor.scopeId,actor.subjectId,value])).rows[0]
   if(!row)throw nativeError('task_not_found',404)
-  return row as {id:string;intent:NativeIntent;task_id:string|null;request_key:string;allowance:number}
+  return row as {id:string;digest:string;intent:NativeIntent;task_id:string|null;request_key:string;allowance:number}
 }
 
 // Recover the application index from Core's public binding after an accepted
