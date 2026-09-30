@@ -1,5 +1,12 @@
 # AMC-MM 品牌主端产品需求文档 (PRD)
 
+## AMCMM 创意再创作与 AI Native 升级
+
+2026-09-30 已记录需求，待实施：品牌主理人可在 AMCMM 品牌策划中编辑创意草稿并保存，再创作必须关联品牌、实际修改人、当时主理人关系及原创意固定版本。已有日历编辑和整月计划快照继续作为现状；目标改为逐条不可变版本、可信服务端身份、并发校验、幂等回执和权威回读。保存与批准、排期、发布分别处理。
+
+完整当前设计与分阶段验收见 [AMCMM 创意再创作与 AI Native 升级设计](amcmm-ai-native-upgrade.md)。AI Native 目标基于独立 IAIC Core，组合 User AI、Business AI 与 Platform AI 责任、持久任务、补资料、恢复、统一能力、分账预算及结果验证。本次仅更新设计，未实现或部署这些目标。
+
+
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
 ## 店内抽奖固定二维码（当前规则）
@@ -199,11 +206,11 @@ AI（执行）: "收到！我来重新写一版..."
 | 拒绝重写 | "重新写"/"风格不对" | 调用重新生成 API |
 | 拒绝并放弃 | "算了，先不发这篇" | 将草稿标记为 archived |
 
-**多轮上下文记忆（架构要求）**：
-- 前端维护 `conversationHistory[]`（用户/AI 交替消息记录）
-- 每次请求将 history 传给后端 API
-- 后端将 history 注入 prompt，AI 能理解"刚才那篇"指代哪个 draftId
-- 当前活跃草稿的 draftId 通过 history 隐式传递
+**多轮上下文与持久任务（升级目标，待实施）**：
+- 前端可维护会话展示缓存；服务端通过 Core 持久 Task 记录原目标、补充输入和仍有权读取的业务引用。
+- “刚才那篇”由显式 taskId、brandId、draftId 或 creativeRevisionId 解析；对话 history 只用于理解，不作为写入对象、权限或版本的权威依据。
+- 写入前检查当前用户品牌权限及目标版本；重启或换设备后续接原任务，未知写入先按原回执查询。
+- 当前日历编辑路径与目标之间的差距、Core 依赖选择和验收要求见上述升级设计。
 
 **验收标准**：
 - [ ] 用户说"发出去"时，AI 能识别并调用正确的 draftId approve API

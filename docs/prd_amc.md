@@ -1,5 +1,12 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+## AMCMM 创意再创作与 AI Native 升级
+
+2026-09-30 已记录需求，待实施：品牌主理人可在 AMCMM 品牌策划中编辑创意草稿并保存，再创作必须关联品牌、实际修改人、当时主理人关系及原创意固定版本。已有日历编辑和整月计划快照继续作为现状；目标改为逐条不可变版本、可信服务端身份、并发校验、幂等回执和权威回读。保存与批准、排期、发布分别处理。
+
+完整当前设计与分阶段验收见 [AMCMM 创意再创作与 AI Native 升级设计](amcmm-ai-native-upgrade.md)。AI Native 目标基于独立 IAIC Core，组合 User AI、Business AI 与 Platform AI 责任、持久任务、补资料、恢复、统一能力、分账预算及结果验证。本次仅更新设计，未实现或部署这些目标。
+
+
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
 ## 全系统主题与文字可读性
