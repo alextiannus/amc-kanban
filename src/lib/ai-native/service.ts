@@ -82,7 +82,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any){
   return publicTask(app,actor,receipt.id)
 }
 async function publicTask(app:Application,actor:NativeActor,id:string){
-  return projectTask(await app.runtime.get(actor,id))
+  return projectTask({...await app.runtime.state(actor,id),result:null,inputRequest:null,trusted_context:null})
 }
 function projectTask(task:TaskView){
   return {id:task.id,status:task.status,waitingReason:task.waiting_reason,inputRequest:task.inputRequest,result:task.result,goal:task.input.goal,version:task.version,updatedAt:task.updated_at}
@@ -94,9 +94,19 @@ export async function listNativeTasks(userId:string,brandId:string,cursor?:strin
   const items=await Promise.all(listing.items.map(async item=>{try{const row=await intentForTask(pool,app,actor,item.id);return {...item,goal:row.intent.goal,kind:row.intent.kind,creativeId:row.intent.kind==='creative'?row.intent.creativeId:null}}catch{return item}}))
   return {page:{...listing,items},coreVersion:CORE_VERSION,limits:{taskAllowance:TASK_ALLOWANCE,dailyAllowance:DAILY_ALLOWANCE},balance:await app.ledger.balance(await app.scope(actor))}
 }
+// Status/control must remain available when Core refuses stale source or Skill revisions.
+// This never returns unvalidated historical sources or bypasses current authorization.
+export async function nativeTaskHistory(app:Application,actor:NativeActor,id:string){
+  try{return {history:await app.runtime.get(actor,id,{history:true}),historyUnavailable:null as string|null}}
+  catch(error){
+    if((error as {statusCode?:number}).statusCode!==409)throw error
+    const state=await app.runtime.state(actor,id)
+    return {history:{...state,result:null,inputRequest:null,trusted_context:null,calls:[],events:[]},historyUnavailable:'revision_conflict'}
+  }
+}
 export async function readNativeTask(userId:string,brandId:string,id:string){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
-  const row=await intentForTask(pool,app,actor,id),history=await app.runtime.get(actor,id,{history:true}),task=projectTask(history)
+  const row=await intentForTask(pool,app,actor,id),view=await nativeTaskHistory(app,actor,id),history=view.history,task=projectTask(history)
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
   let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null
   if(task.status==='succeeded'&&task.result){
@@ -108,7 +118,7 @@ export async function readNativeTask(userId:string,brandId:string,id:string){
   const sourceCall=history.calls.find(c=>c.capability==='amc.creative'&&c.status==='succeeded')?.result as {current?:unknown}|undefined
   const adoptions=row.intent.kind==='creative_discovery'?await recommendationReceipts(userId,brandId,id):[]
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
-  return {...task,kind:row.intent.kind,candidate,report,recommendations,adoptions,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
+  return {...task,historyUnavailable:view.historyUnavailable,kind:row.intent.kind,candidate,report,recommendations,adoptions,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await authorizedHost(userId,brandId)

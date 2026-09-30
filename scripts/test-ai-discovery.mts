@@ -1,3 +1,5 @@
+import {mkdtemp,mkdir,copyFile,appendFile,rm} from 'node:fs/promises'
+import {nativeTaskHistory} from '../src/lib/ai-native/service.ts'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
@@ -12,6 +14,8 @@ import {listOpenCalendarCreativeOptions} from '../src/lib/brand-plan/calendarSyn
 const url=new URL(process.env.DATABASE_URL||'')
 assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
 const id=`discovery-${randomUUID()}`,actor=actorFor(id,id),pool=nativePool()
+const skillRoot=await mkdtemp('/private/tmp/amc-discovery-skills-')
+for(const name of ['amc-discovery','amc-creative','amc-brief']){await mkdir(`${skillRoot}/${name}`);await copyFile(`skills/${name}/SKILL.md`,`${skillRoot}/${name}/SKILL.md`)}
 let app:any,allowed=true
 try{
  await prisma.user.create({data:{id,email:`${id}@example.invalid`,password:randomUUID(),businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
@@ -33,13 +37,14 @@ try{
  const model={next:async(request:any)=>{
   const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded'),has=(n:string)=>calls.some((c:any)=>c.capability===n)
   if(!has('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
-  if(!has('assistant.skills.read')){const context=calls.find((c:any)=>c.capability==='amc.context').result;assert.equal(context.requiredSkill,'amc-discovery/SKILL.md');assert.ok(context.artifactContract.example.recommendations);return {type:'call',name:'assistant.skills.read',input:{id:context.requiredSkill},usage}}
+  if(!has('assistant.skills.list'))return {type:'call',name:'assistant.skills.list',input:{},usage}
+  if(!has('assistant.skills.read')){const context=calls.find((c:any)=>c.capability==='amc.context').result;assert.equal(context.requiredSkill,'amc-discovery/SKILL.md');assert.ok(context.artifactContract.example.recommendations);return {type:'call',name:'assistant.skills.read',input:{id:context.requiredSkill,expectedVersion:calls.find((c:any)=>c.capability==='assistant.skills.list').result.find((s:any)=>s.id===context.requiredSkill).version},usage}}
   if(!has('amc.library'))return {type:'call',name:'amc.library',input:{},usage}
   if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify(value)},usage}
   return {type:'finish',result:{summary:'Recommendations ready',artifacts:[calls.find((c:any)=>c.capability==='my_write_workspace').result.reference]},usage}
  }}
  await initializeHost(pool)
- const composed=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'discovery-test-v1',authorize:async(a:any)=>allowed&&a.subjectId===id&&a.scopeId===actor.scopeId,readLibrary:async()=>library})
+ const composed=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'discovery-test-v1',skillRoot,authorize:async(a:any)=>allowed&&a.subjectId===id&&a.scopeId===actor.scopeId,readLibrary:async()=>library})
  app=composed.app
  await admitIntent(pool,actor,intent)
  await app.ledger.grant(await app.scope(actor),{reference:id,amount:10000,evidence:{test:true}})
@@ -67,13 +72,16 @@ try{
  await assert.rejects(()=>saveRecommendation(id,id,'different-task',intent,ref,content,library,body),/brand_context_changed/)
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
  await assert.rejects(save,/creative_access_denied/)
- allowed=false;await assert.rejects(()=>app.runtime.get(actor,task.id))
+ await appendFile(`${skillRoot}/amc-discovery/SKILL.md`,'\nChanged Skill revision for the conflict test.\n')
+ await assert.rejects(()=>app.runtime.get(actor,task.id,{history:true}),(e:any)=>e.statusCode===409)
+ const projection=await nativeTaskHistory(app,actor,task.id);assert.equal(projection.history.status,'succeeded');assert.equal(projection.historyUnavailable,'revision_conflict');assert.equal(projection.history.calls.length,0);assert.equal(projection.history.result,null)
+ allowed=false;await assert.rejects(()=>nativeTaskHistory(app,actor,task.id))
  assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
  const emptyLibrary={...library,sources:[],libraryDigest:'f'.repeat(64)}
  assert.equal(discoveryFrom(JSON.stringify({...value,libraryDigest:emptyLibrary.libraryDigest,recommendations:[]}),intent,emptyLibrary).recommendations.length,0)
- console.log('PASS: real Core discovery, verified persisted source, empty library, human review provenance, new-brand enrollment, concurrent replay, cross-month duplicate prevention, plan readback, durable adoption receipts, stale facts and revocation; no publication')
+ console.log('PASS: real Core discovery, verified persisted source, empty library, human review provenance, new-brand enrollment, concurrent replay, cross-month duplicate prevention, plan readback, durable adoption receipts, stale facts, Skill revision conflict status projection and revocation; no publication')
 }finally{
  if(app)await app.close()
  await prisma.brand.deleteMany({where:{id}});await prisma.user.deleteMany({where:{id}})
- await prisma.$disconnect();await pool.end()
+ await prisma.$disconnect();await pool.end();await rm(skillRoot,{recursive:true,force:true})
 }
