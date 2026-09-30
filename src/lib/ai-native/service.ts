@@ -1,3 +1,4 @@
+import {selectPoolIdea} from './idea-pool'
 import { brandContext } from './application'
 import { discoveryFrom, type LibrarySnapshot } from './library'
 import { recommendationReceipts, saveRecommendation, adaptedScriptReceipt } from './recommendations'
@@ -53,7 +54,6 @@ async function authorizedHost(userId:string,brandId:string){const actor=actorFor
 export async function createNativeTask(userId:string,brandId:string,body:any){
   const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId)
   if(body?.kind==='creative_discovery'&&body.poolIdeaId){
-    const {selectPoolIdea}=await import('./idea-pool')
     const idea=await selectPoolIdea(brandId,body.poolIdeaId)
     body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅使用选中的原创意，根据当前品牌和真实 SKU 改写完整脚本，包含开场、分镜/正文、口播、行动提示及逐项对应的拍摄/上传素材需求。供主理人审阅后保存计划或上传素材制作。不得编造产品事实。',requestKey:`pool-${digest([brandId,userId,idea.id,await brandContext(actor)])}`}
   }

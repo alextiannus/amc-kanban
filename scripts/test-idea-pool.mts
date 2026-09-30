@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {nativePool} from '../src/lib/ai-native/store.ts'
-import {initializeIdeaPool,refreshBrandIdeas,brandDay} from '../src/lib/ai-native/idea-pool.ts'
+import {initializeIdeaPool,refreshBrandIdeas,brandDay,selectPoolIdea,poolIdeaLibrary} from '../src/lib/ai-native/idea-pool.ts'
+import {brandLibrary} from '../src/lib/ai-native/library.ts'
 import {prisma} from '../src/lib/prisma.ts'
 const url=new URL(process.env.DATABASE_URL||'')
 assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
@@ -17,7 +18,11 @@ try{
  assert.equal(calls,1,'replicas must share the daily admission');assert.equal((await rows()).length,6)
  for(let n=2;n<=5;n++)await refreshBrandIdeas(pool,facts,match as any,day(n))
  assert.equal((await rows()).length,18)
- const original=(await rows())[0];await pool.query('UPDATE amc_iaic.brand_ideas SET selected_at=now() WHERE id=$1',[original.id])
+ const original=(await rows())[0];await selectPoolIdea(brandId,original.id)
+ const bound=await brandLibrary({kind:'creative_discovery',poolIdeaId:original.id,brandId,userId:'fixture',goal:'Adapt selected source',requestKey:'pool-test-request',artifactPath:'work/test.json'},facts)
+ assert.equal(bound.sources.length,1);assert.equal(bound.sources[0].inspirationCreativeId,original.source_id)
+ await assert.rejects(()=>selectPoolIdea('other-brand',original.id),/idea_not_found/)
+ await assert.rejects(()=>poolIdeaLibrary('other-brand',original.id,facts),/idea_not_found/)
  await refreshBrandIdeas(pool,facts,match as any,day(6));assert.equal((await rows()).length,18)
  assert((await rows()).some(row=>row.id===original.id),'prefer replacing unselected suggestions')
  await pool.query('UPDATE amc_iaic.brand_ideas SET selected_at=now() WHERE brand_id=$1',[brandId])
@@ -34,4 +39,4 @@ try{
  await refreshBrandIdeas(pool,facts,async()=>({creativeCandidates:[source,source],contentLibraryGaps:[]}) as any,day(10))
  assert.deepEqual((await rows()).map(row=>row.id).sort(),before,'duplicate content results never replace a valid pool item')
  console.log('PASS: brand timezone, 8-way daily claim, 6→18 growth, bounded replacement, selected source retention, outage/no-match/duplicate preservation')
-}finally{await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[brandId]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[brandId]);await pool.end();await prisma.$disconnect()}
+}finally{await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[brandId]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[brandId]);await pool.end();if((globalThis as any).amcIdeaPool)await (await (globalThis as any).amcIdeaPool).end();await prisma.$disconnect()}

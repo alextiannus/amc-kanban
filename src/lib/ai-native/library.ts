@@ -1,3 +1,4 @@
+import {poolIdeaLibrary} from './idea-pool'
 import { matchPromotionStrategyCreativeCandidates } from '../promotion-strategy/clients'
 import { digest, nativeError, type DiscoveryIntent } from './contract'
 import { validateCreativePatch } from '../brand-plan/creativeRevisionContract'
@@ -15,7 +16,6 @@ export function sourceExcerpt(source:Record<string,any>){
 export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<LibrarySnapshot>{
   if(!facts)throw nativeError('brand_context_unavailable',404)
   if(intent.poolIdeaId){
-    const {poolIdeaLibrary}=await import('./idea-pool')
     return poolIdeaLibrary(intent.brandId,intent.poolIdeaId,facts)
   }
   const response=await matchPromotionStrategyCreativeCandidates({merchantId:intent.brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`amc-native-${intent.requestKey}`,promotionGoal:intent.goal,sellingPoint:JSON.stringify({description:facts.description,knowledge:facts.knowledge}).slice(0,6000),requestedCandidateCount:3,requirePersistedCreative:true,platforms:['instagram','xiaohongshu','tiktok']})

@@ -18,6 +18,8 @@ try{
  const fixture=await prisma.brand.findUniqueOrThrow({where:{id}});assert.equal(fixture.name,'Noodle Studio pool acceptance');assert.equal(fixture.status,'ARCHIVED')
  const facts=await readBrandFacts(prisma,id)
  if(phase==='run'){
+  const daily=(await host.pool.query("SELECT d.status,count(i.id)::int AS count FROM (SELECT DISTINCT ON (brand_id) brand_id,status FROM amc_iaic.brand_idea_days WHERE brand_id NOT LIKE 'amc-pool-acceptance-%' ORDER BY brand_id,local_day DESC) d LEFT JOIN amc_iaic.brand_ideas i ON i.brand_id=d.brand_id AND i.replaced_at IS NULL GROUP BY d.brand_id,d.status")).rows
+  console.log(JSON.stringify({phase:'resident-daily-worker',brands:daily.length,underTarget:daily.filter(row=>row.count<6).length,maximumIdeas:Math.max(0,...daily.map(row=>row.count)),states:daily.reduce((counts,row)=>({...counts,[row.status]:(counts[row.status]||0)+1}),{})}))
   await refreshBrandIdeas(host.pool,facts)
   assert.equal((await refreshBrandIdeas(host.pool,facts)).skipped,true)
   const pool=await readIdeaPool(id,id);assert(pool.items.length>0&&pool.items.length<=6)
