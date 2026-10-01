@@ -50,10 +50,10 @@ const admin:any={userId:'admin',globalRoles:['ADMIN'],actorType:'HUMAN',source:'
 try {
  assert.equal(roleName('  编辑员  ').name,'编辑员')
  assert.throws(()=>roleName('ADMIN'),/保留/)
- await assert.rejects(createRole({...admin,source:'api_key'},{name:'Denied'},db),/Forbidden/)
+ await assert.rejects(createRole({...admin,source:'api_key',globalRoles:[]},{name:'Denied'},db),/Forbidden/)
  await assert.rejects(createRole({...admin,globalRoles:[]},{name:'Denied'},db),/Forbidden/)
  await assert.rejects(createRole(admin,{name:'Copy Admin',copyFrom:'ADMIN'},db),/只能复制/)
- const role=await createRole(admin,{name:'内容编辑'},db)
+ const role=await createRole({...admin,source:'api_key'},{name:'内容编辑'},db)
  let state=await readPolicies(db)
  assert.deepEqual(state.policies[role.id],[])
  await assert.rejects(createRole(admin,{name:'内容编辑'},db))

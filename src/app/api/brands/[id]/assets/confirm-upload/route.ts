@@ -206,7 +206,7 @@ export async function POST(request: Request, { params }: Params) {
         id: authenticatedAgent.id,
         email: authenticatedAgent.email,
         type: authenticatedAgent.type,
-        role: 'USER',
+        role: authenticatedAgent.role,
       }
     : session?.user
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

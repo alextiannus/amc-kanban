@@ -83,7 +83,7 @@ async function handlePATCH(request: Request, { params }: Params) {
     if (!agent) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const ok = await canSessionAccessBrandProject(id, agent.id, 'AI_AGENT')
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    syncActor = { id: agent.id, type: 'AI_AGENT', roles: ['AI_AGENT'] }
+    syncActor = { id: agent.id, type: agent.type, roles: agent.userRoles }
   }
 
   const body = await request.json().catch(() => ({} as Record<string, unknown>))

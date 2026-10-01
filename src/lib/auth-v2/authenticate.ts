@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { prisma } from '../prisma.ts'
 import { authenticateApiKey } from './api-key.ts'
 import { AuthenticationError } from './errors.ts'
@@ -10,13 +10,13 @@ import {
 import { principalFromUser, type AuthPrincipal } from './types.ts'
 
 export function extractBearerToken(request: Request): string | null {
-  const authorization = request.headers.get('authorization')?.trim()
-  if (authorization?.toLowerCase().startsWith('bearer ')) {
-    const value = authorization.slice(7).trim()
-    return value || null
-  }
-
+  const authorization = request.headers.get('authorization')
   const apiKey = request.headers.get('x-api-key')?.trim()
+  if (authorization !== null) {
+    const match = /^Bearer\s+(\S+)$/i.exec(authorization.trim())
+    if (!match || (request.headers.has('x-api-key') && apiKey !== match[1])) return null
+    return match[1]
+  }
   return apiKey || null
 }
 
@@ -50,8 +50,10 @@ async function principalFromSessionToken(token: string): Promise<AuthPrincipal |
 }
 
 export async function authenticateRequest(request: Request): Promise<AuthPrincipal | null> {
+  const explicitKey = request.headers.has('authorization') || request.headers.has('x-api-key')
   const apiKey = extractBearerToken(request)
-  if (apiKey) {
+  if (explicitKey) {
+    if (!apiKey) return null
     const principal = await authenticateApiKey(apiKey)
     if (!principal) return null
     return principal
@@ -67,6 +69,10 @@ export async function authenticateCurrentSession(): Promise<AuthPrincipal | null
   const token = cookieStore.get(sessionCookieName)?.value
   if (!token) return null
   return principalFromSessionToken(token)
+}
+
+export async function authenticateCurrentRequest(): Promise<AuthPrincipal | null> {
+  return authenticateRequest(new Request('http://amc.internal', { headers: await headers() }))
 }
 
 export async function requirePrincipal(request: Request): Promise<AuthPrincipal> {

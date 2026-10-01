@@ -5,7 +5,7 @@ import { PolicyError } from './store.ts'
 import { defaultGrants, validateGrants } from './contract.ts'
 import type { Prisma } from '@prisma/client'
 export function requireRoleAdmin(actor: AuthPrincipal) {
-  if (actor.source !== 'session' || !actor.globalRoles.includes('ADMIN')) throw new PolicyError('Forbidden', 403)
+  if (!actor.globalRoles.includes('ADMIN')) throw new PolicyError('Forbidden', 403)
 }
 export function roleName(value: unknown) {
   if (typeof value !== 'string' || !value.trim() || value.trim().length > 60) throw new PolicyError('角色名称需要 1–60 个字符', 400)

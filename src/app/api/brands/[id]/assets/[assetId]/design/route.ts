@@ -14,7 +14,7 @@ async function getActor(request: Request) {
   if (apiKey) {
     const authenticatedAgent = await getAgentFromApiKey(apiKey)
     if (authenticatedAgent) {
-      return { id: authenticatedAgent.id, type: authenticatedAgent.type, role: 'USER' }
+      return { id: authenticatedAgent.id, type: authenticatedAgent.type, role: authenticatedAgent.role }
     }
     return null
   }

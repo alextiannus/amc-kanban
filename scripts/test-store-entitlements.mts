@@ -78,7 +78,7 @@ assert.deepEqual(subscription, billBefore, 'authorization must not update billin
 principal = { ...principal, globalRoles: ['BRAND_OWNER'] }
 assert.equal((await admin.PATCH(request({ manualStoreLimit: 9 }), context)).status, 403)
 principal = { ...principal, globalRoles: ['ADMIN'], source: 'api_key' }
-assert.equal((await admin.PATCH(request({ manualStoreLimit: 9 }), context)).status, 403)
+assert.equal((await admin.PATCH(request({ manualStoreLimit: 3 }), context)).status, 200)
 principal = null
 assert.equal((await admin.PATCH(request({ manualStoreLimit: 9 }), context)).status, 401)
 principal = { userId: 'admin', source: 'session', actorType: 'HUMAN', globalRoles: ['ADMIN'] }

@@ -28,6 +28,7 @@ const publicMarkers = [
 const authMarkers = [
   'authenticateRequest',
   'authenticateCurrentSession',
+  'authenticateCurrentRequest',
   'verifySessionToken',
   'getSession',
   'resolveSessionOrApiKey',

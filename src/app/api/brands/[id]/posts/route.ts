@@ -83,7 +83,7 @@ export async function POST(request: Request, { params }: Params) {
       id: authenticatedAgent.id,
       email: authenticatedAgent.email,
       type: authenticatedAgent.type,
-      role: 'USER',
+      role: authenticatedAgent.role,
     }
   }
 
@@ -274,7 +274,7 @@ export async function GET(request: Request, { params }: Params) {
       id: authenticatedAgent.id,
       email: authenticatedAgent.email,
       type: authenticatedAgent.type,
-      role: 'USER',
+      role: authenticatedAgent.role,
     }
   }
 

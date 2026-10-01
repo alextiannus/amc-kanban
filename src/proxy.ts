@@ -30,7 +30,7 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const publicGameConfig = pathname === '/api/game/config' && request.method === 'GET' && request.nextUrl.searchParams.get('public') === 'true'
-  // The identity handler authenticates the current session (not API keys), checks
+  // The identity handler authenticates the current user credential, checks
   // brand scope and live video grants, and returns no-store structured errors.
   const contentIdentity = pathname === '/api/content/access-identity'
   // Subscription operations do not execute AI and must survive text-policy outages.

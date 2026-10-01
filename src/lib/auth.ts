@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose'
-import { authenticateApiKey, authenticateCurrentSession } from './auth-v2/index.ts'
+import { authenticateApiKey, authenticateCurrentRequest, extractBearerToken } from './auth-v2/index.ts'
 
 function getJwtKey() {
   const secretKey = process.env.JWT_SECRET
@@ -52,7 +52,7 @@ export async function decrypt(input: string): Promise<SessionPayload> {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const principal = await authenticateCurrentSession()
+  const principal = await authenticateCurrentRequest()
   if (!principal) return null
   return {
     sub: principal.userId,
@@ -62,26 +62,14 @@ export async function getSession(): Promise<Session | null> {
       role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
       type: 'HUMAN',
       userRoles: principal.globalRoles,
+      authSource: principal.source,
+      credentialId: principal.credentialId,
     },
   }
 }
 
 export function extractApiKey(request: Request): string | null {
-  const apiKeyHeader = request.headers.get('x-api-key')?.trim()
-  if (apiKeyHeader && apiKeyHeader.length >= 20) {
-    return apiKeyHeader
-  }
-
-  const authHeader = request.headers.get('Authorization')?.trim()
-  if (!authHeader) return null
-
-  if (authHeader.startsWith('Bearer ')) {
-    const token = authHeader.slice(7).trim()
-    return token.length >= 20 ? token : null
-  }
-
-  // Backward compatibility: allow passing raw API key in Authorization header.
-  return authHeader.length >= 20 ? authHeader : null
+  return extractBearerToken(request)
 }
 
 // Get agent by API key from database

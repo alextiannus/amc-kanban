@@ -24,7 +24,7 @@ export async function allows(principal: Pick<AuthPrincipal, 'globalRoles' | 'per
 }
 export class PolicyError extends Error { constructor(message: string, public status: number) { super(message) } }
 export async function savePolicy(actor: AuthPrincipal, role: string, input: { grants?: unknown; expectedVersion?: unknown }, db = prisma) {
-  if (actor.source !== 'session' || !actor.globalRoles.includes('ADMIN')) throw new PolicyError('Forbidden', 403)
+  if (!actor.globalRoles.includes('ADMIN')) throw new PolicyError('Forbidden', 403)
   if (role === 'ADMIN') throw new PolicyError('该角色不能修改', 400)
   let grants: string[]
   try { grants = validateGrants(input.grants) } catch (e) { throw new PolicyError((e as Error).message, 400) }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   apiKeyPrefix,
-  authenticateCurrentSession,
+  authenticateCurrentRequest,
   createApiKeyToken,
   hashApiKeyToken,
   requireCapability,
@@ -10,7 +10,7 @@ import {
 
 export async function POST() {
   try {
-    const principal = await authenticateCurrentSession()
+    const principal = await authenticateCurrentRequest()
     if (!principal) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

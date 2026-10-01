@@ -8,5 +8,5 @@ export function selectContentRole(roles: readonly string[], allowResearcher = fa
     : allowResearcher && roles.includes('RESEARCHER') ? 'RESEARCHER' : null
 }
 export function isOverviewAdmin(principal: { source: string; globalRoles: AppRole[] } | null): boolean {
-  return principal?.source === 'session' && principal.globalRoles.includes('ADMIN')
+  return !!principal?.globalRoles.includes('ADMIN')
 }

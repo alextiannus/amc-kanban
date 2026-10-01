@@ -67,7 +67,7 @@ try {
   const before = await memberRows()
   const version = assignmentVersion(before)
   const input = { principalId: 'next', expectedVersion: version }
-  for (const actor of [{...admin,globalRoles:['AMC_PRINCIPAL']},{...admin,source:'api_key'}]) await assert.rejects(changePrincipal(actor,'brand',input,db), /Forbidden/)
+  for (const actor of [{...admin,globalRoles:['AMC_PRINCIPAL']},{...admin,source:'api_key',globalRoles:['BRAND_OWNER']}]) await assert.rejects(changePrincipal(actor,'brand',input,db), /Forbidden/)
   for (const id of ['none','archive','missing']) await assert.rejects(changePrincipal(admin,id,input,db), /不存在或没有订阅/)
   for (const id of ['disabled','invalid','missing']) await assert.rejects(changePrincipal(admin,'brand',{...input,principalId:id},db), /不是可指派/)
   await assert.rejects(changePrincipal(admin,'brand',{...input,principalId:'owner'},db), /品牌主/)
@@ -77,7 +77,7 @@ try {
   await assert.rejects(changePrincipal(admin,'brand',input,db), /audit unavailable/)
   assert.deepEqual(await memberRows(), before, 'all membership writes roll back with failed audit')
   failAudit = false
-  await changePrincipal(admin,'brand',input,db)
+  await changePrincipal({...admin,source:'api_key'},'brand',input,db)
   const after = await memberRows()
   assert.equal(after.find(m=>m.userId==='old').active, true)
   assert.equal(after.find(m=>m.userId==='old').role, 'EDITOR')

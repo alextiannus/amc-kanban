@@ -1,23 +1,16 @@
 import { readPolicies } from '@/lib/role-permissions/store'
 import { effectiveGrants } from '@/lib/role-permissions/contract'
-import { authenticateCurrentSession } from '@/lib/auth-v2'
+import { authenticateCurrentRequest } from '@/lib/auth-v2'
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
-import { sessionCookieName, verifySessionToken } from '@/lib/auth-v2'
 import { computeEffectiveUserRoles, getLegacyDashboardRole } from '@/lib/userRoles'
 
 export async function GET() {
-  const token = (await cookies()).get(sessionCookieName)?.value
-  const claims = token ? await verifySessionToken(token) : null
-  if (!claims) {
-    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    res.cookies.delete(sessionCookieName)
-    return res
-  }
+  const principal = await authenticateCurrentRequest()
+  if (!principal) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'Cache-Control': 'no-store' } })
 
   const user = await prisma.user.findUnique({
-    where: { id: claims.sub },
+    where: { id: principal.userId },
     select: {
       id: true,
       email: true,
@@ -32,15 +25,7 @@ export async function GET() {
     }
   })
 
-  if (
-    !user ||
-    user.status !== 'ACTIVE' ||
-    (claims.authVersion > 0 && claims.authVersion !== user.authVersion)
-  ) {
-    const res = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    res.cookies.delete(sessionCookieName)
-    return res
-  }
+  if (!user || user.status !== 'ACTIVE') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const userRoles = computeEffectiveUserRoles({
     userType: user.type,
@@ -49,8 +34,6 @@ export async function GET() {
   })
   const dashboardRole = getLegacyDashboardRole(userRoles)
 
-  const principal = await authenticateCurrentSession()
-  if (!principal) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const snapshot = await readPolicies()
   const assigned = principal.permissionRoleIds || principal.globalRoles
   const permissionRoles = snapshot.roles.filter(role => assigned.includes(role.id))
@@ -58,6 +41,8 @@ export async function GET() {
   const permissions = effectiveGrants(effectiveRoleIds, snapshot.policies)
   return NextResponse.json({
     ...user,
+    role: principal.globalRoles.includes('ADMIN') ? 'ADMIN' : 'USER',
+    authSource: principal.source,
     status: undefined,
     authVersion: undefined,
     businessRoles: undefined,

@@ -119,12 +119,12 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
 }
 
 export async function changePrincipal(actor: AuthPrincipal, brandId: string, input: unknown, db = prisma, fromCrew = false) {
-  if (actor.source !== 'session' || !actor.globalRoles.includes('ADMIN')) throw new OperationsError('Forbidden', 403)
+  if (!actor.globalRoles.includes('ADMIN')) throw new OperationsError('Forbidden', 403)
   return db.$transaction((tx: typeof prisma) => changePrincipalInTransaction(actor, brandId, input, tx, fromCrew), { isolationLevel: 'Serializable' })
 }
 
-export async function changePrincipalInTransaction(actor: Pick<AuthPrincipal, 'source' | 'globalRoles' | 'userId' | 'actorType' | 'email'>, brandId: string, input: unknown, tx: typeof prisma, fromCrew = false) {
-  if (actor.source !== 'session' || !actor.globalRoles.includes('ADMIN')) throw new OperationsError('Forbidden', 403)
+export async function changePrincipalInTransaction(actor: Pick<AuthPrincipal, 'source' | 'globalRoles' | 'userId' | 'actorType' | 'email' | 'credentialId'>, brandId: string, input: unknown, tx: typeof prisma, fromCrew = false) {
+  if (!actor.globalRoles.includes('ADMIN')) throw new OperationsError('Forbidden', 403)
   const body = input as { principalId?: unknown; expectedVersion?: unknown } | null
   if (!body || typeof body.principalId !== 'string' || !body.principalId || typeof body.expectedVersion !== 'string' || !body.expectedVersion) throw new OperationsError('请选择主理人并刷新品牌数据', 400)
   const principalId = body.principalId

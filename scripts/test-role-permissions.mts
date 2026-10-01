@@ -61,9 +61,9 @@ const db: any = {
   })),
 }
 const initial = (await pg.query<{version:number}>('SELECT version FROM "RolePermissionPolicy" WHERE role=$1', ['AMC_PRINCIPAL'])).rows[0]?.version || 0
-await assert.rejects(savePolicy({...admin, source:'api_key'}, 'AMC_PRINCIPAL', {grants:[], expectedVersion:initial}, db), /Forbidden/)
+await assert.rejects(savePolicy({...admin, source:'api_key', globalRoles:[]}, 'AMC_PRINCIPAL', {grants:[], expectedVersion:initial}, db), /Forbidden/)
 await assert.rejects(savePolicy(admin, 'ADMIN', {grants:[], expectedVersion:0}, db), /不能修改/)
-const saved = await savePolicy(admin, 'AMC_PRINCIPAL', {grants:[], expectedVersion:initial}, db)
+const saved = await savePolicy({...admin,source:'api_key'}, 'AMC_PRINCIPAL', {grants:[], expectedVersion:initial}, db)
 assert.equal(saved.version, initial+1)
 await assert.rejects(savePolicy(admin, 'AMC_PRINCIPAL', {grants:[], expectedVersion:initial}, db), /刷新/)
 failAudit = true

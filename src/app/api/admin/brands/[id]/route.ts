@@ -102,7 +102,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (body.principalId !== undefined) {
       if (!allowedRoleWriteOrigin(request)) throw new OperationsError('Forbidden', 403)
       if (resolvedOwnerId && resolvedOwnerId === body.principalId) throw new OperationsError('不能将品牌主改为主理人', 400)
-      await changePrincipalInTransaction({ userId: session.user.id, email: session.user.email, actorType: 'HUMAN', source: 'session', globalRoles: ['ADMIN'] }, id, { principalId: body.principalId, expectedVersion: body.principalVersion }, tx, true)
+      await changePrincipalInTransaction({ userId: session.user.id, email: session.user.email, actorType: 'HUMAN', source: session.user.authSource === 'api_key' ? 'api_key' : 'session', credentialId: typeof session.user.credentialId === 'string' ? session.user.credentialId : undefined, globalRoles: ['ADMIN'] }, id, { principalId: body.principalId, expectedVersion: body.principalVersion }, tx, true)
     }
     const brand = await tx.brand.update({
       where: { id },

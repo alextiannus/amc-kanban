@@ -9,7 +9,7 @@ type Context = { params: Promise<{ id: string }> }
 async function administrator(request: Request) {
   const principal = await authenticateRequest(request)
   if (!principal) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
-  if (principal.source !== 'session' || !principal.globalRoles.includes('ADMIN')) {
+  if (!principal.globalRoles.includes('ADMIN')) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
   }
   return { principal }

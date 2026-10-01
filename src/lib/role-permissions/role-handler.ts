@@ -1,4 +1,4 @@
-﻿import { authenticateCurrentSession } from '../auth-v2/index'
+﻿import { authenticateCurrentRequest } from '../auth-v2/index'
 import { PolicyError } from './store'
 import { contentPolicyReady } from './readiness'
 import { requireRoleAdmin } from './roles'
@@ -7,7 +7,7 @@ import { allowedRoleWriteOrigin } from './request-origin'
 export async function roleRequest(request: Request, action: (actor: AuthPrincipal) => Promise<unknown>, needsContent = false) {
   const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } })
   try {
-    const actor = await authenticateCurrentSession()
+    const actor = await authenticateCurrentRequest()
     if (!actor) return json({ error: 'Unauthorized' }, 401)
     requireRoleAdmin(actor)
     if (request.method !== 'GET' && !allowedRoleWriteOrigin(request)) return json({ error: 'Forbidden origin' }, 403)

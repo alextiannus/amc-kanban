@@ -234,7 +234,7 @@ export async function POST(request: Request) {
 
       if (brandId) {
         const actor = authenticatedAgent
-          ? { id: authenticatedAgent.id, type: 'AI_AGENT', role: 'USER' }
+          ? { id: authenticatedAgent.id, type: authenticatedAgent.type, role: authenticatedAgent.role }
           : session?.user
             ? { id: session.user.id, type: session.user.type ?? 'HUMAN', role: session.user.role }
             : null

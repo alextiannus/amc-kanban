@@ -22,7 +22,7 @@ export async function GET(request: Request) {
     return NextResponse.redirect(loginUrl)
   }
 
-  if (principal.source !== 'session' || principal.actorType !== 'HUMAN') {
+  if (principal.actorType !== 'HUMAN') {
     return NextResponse.json({ error: 'growth_human_session_required' }, { status: 401 })
   }
 

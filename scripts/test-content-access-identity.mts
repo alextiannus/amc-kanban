@@ -12,7 +12,7 @@ const source = await readFile(new URL('../src/app/api/content/access-identity/ro
 const parsed = ts.createSourceFile('route.ts', source, ts.ScriptTarget.Latest, true)
 const code = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed, parsed.statements.filter(s => !ts.isImportDeclaration(s))))
 const context = vm.createContext({ exports: {}, Response,
-  authenticateCurrentSession: async () => principal,
+  authenticateCurrentRequest: async () => principal,
   canAccessBrandScope: async (_principal: any, brandId: string) => scope && brandId === 'brand-a',
   allows: async (_principal: any, permission: string) => { assert.equal(permission, 'content.video-making.read'); if (unavailable) throw Error('database offline'); return allowed },
   labSecret: () => configured, signAccessIdentity,
@@ -37,4 +37,4 @@ scope = true; unavailable = true; assert.equal((await post()).status, 503)
 unavailable = false; configured = false; assert.equal((await post()).status, 503)
 configured = true; principal = null; assert.equal((await post()).status, 401)
 assert.equal(kanbanRoutePermission('/api/content/access-identity', 'POST'), 'content.video-making.read')
-console.log('PASS: Content identity uses current session, signed brand/auth version, unified role policy, no-store and fails closed')
+console.log('PASS: Content identity uses current authenticated user, signed brand/auth version, unified role policy, no-store and fails closed')

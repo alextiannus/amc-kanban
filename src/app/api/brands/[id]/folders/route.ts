@@ -28,7 +28,7 @@ async function checkAuth(request: Request, brandId: string) {
       id: authenticatedAgent.id,
       email: authenticatedAgent.email,
       type: authenticatedAgent.type,
-      role: 'USER',
+      role: authenticatedAgent.role,
     }
   }
 

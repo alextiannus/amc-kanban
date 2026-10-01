@@ -14,7 +14,7 @@ const json = (data: unknown, status=200) => Response.json(data,{status})
 const http = { operationsJson: json, operationsFailure: (e: any) => json({error:e.message},e.status || 503) }
 let actor: any = null, trusted = true, assigned = false
 const route = compile('src/app/api/admin/brands/[id]/principal/route.ts', {
-  '@/lib/auth-v2': { authenticateCurrentSession: async()=>actor, isAdmin:(a:any)=>a.globalRoles.includes('ADMIN') },
+  '@/lib/auth-v2': { authenticateCurrentRequest: async()=>actor, isAdmin:(a:any)=>a.globalRoles.includes('ADMIN') },
   '@/lib/role-permissions/request-origin': { allowedRoleWriteOrigin:()=>trusted },
   '@/lib/brand-operations/http': http,
   '@/lib/brand-operations/service': {

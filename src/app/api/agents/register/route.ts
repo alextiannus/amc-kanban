@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import {
   apiKeyPrefix,
-  authenticateCurrentSession,
+  authenticateCurrentRequest,
   createApiKeyToken,
   hashApiKeyToken,
   requireCapability,
@@ -25,7 +25,7 @@ function isSystemRegistrationAuthorized(request: Request): boolean {
 
 export async function POST(request: Request) {
   try {
-    const principal = await authenticateCurrentSession()
+    const principal = await authenticateCurrentRequest()
     const authorizedBySystemKey = isSystemRegistrationAuthorized(request)
 
     if (!authorizedBySystemKey && !principal) {

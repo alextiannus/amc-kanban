@@ -1,4 +1,4 @@
-import { authenticateCurrentSession, canAccessBrandScope } from '@/lib/auth-v2'
+import { authenticateCurrentRequest, canAccessBrandScope } from '@/lib/auth-v2'
 import { allows } from '@/lib/role-permissions/store'
 import { labSecret, signAccessIdentity } from '@/lib/role-permissions/token'
 
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     status, headers: { 'Cache-Control': 'no-store' },
   })
   try {
-    const principal = await authenticateCurrentSession()
+    const principal = await authenticateCurrentRequest()
     if (!principal) return respond({ error: '登录已失效，请重新登录 MM', code: 'AUTH_REQUIRED' }, 401)
     const body = await request.json().catch(() => null)
     const brandId = typeof body?.brandId === 'string' ? body.brandId.trim() : ''

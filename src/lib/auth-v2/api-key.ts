@@ -80,3 +80,9 @@ export async function authenticateApiKey(token: string): Promise<AuthPrincipal |
   }
   return null
 }
+
+/** Recheck a signed downstream reference without exposing the original token. */
+export async function activeUserCredential(userId: string, credentialId: string, db = prisma): Promise<boolean> {
+  const key = await db.userApiKey.findFirst({ where: { id: credentialId, userId }, select: { expiresAt: true, revokedAt: true } })
+  return !!key && isActiveDateRange(key.expiresAt, key.revokedAt)
+}

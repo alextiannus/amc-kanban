@@ -81,7 +81,6 @@ export function growthReportSsoHref(report: GrowthReportViewerReference, fallbac
 }
 
 export function canUseGrowthStandaloneReport(principal: GrowthReportPrincipal) {
-  return principal.source === 'session'
-    && principal.actorType === 'HUMAN'
+  return principal.actorType === 'HUMAN'
     && (principal.globalRoles || []).some((role) => GROWTH_STAFF_ROLES.has(role))
 }
