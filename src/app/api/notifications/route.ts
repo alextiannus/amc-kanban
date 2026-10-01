@@ -1,3 +1,5 @@
+import { nativeHttp } from '@/lib/ai-native/http'
+import { notifyVideoReview } from '@/lib/notification/videoReview'
 import { NextResponse } from 'next/server'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { syncSetupNotifications } from '@/lib/notification/notificationService'
@@ -20,4 +22,8 @@ export async function GET(request: Request) {
       { status: 500 }
     )
   }
+}
+
+export async function POST(request: Request) {
+  return nativeHttp(request, notifyVideoReview)
 }
