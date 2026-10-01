@@ -399,7 +399,7 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   const deadline = Date.now() + maxWaitMs
   let job: GrowthBrandIntelligenceJob = created
   while (Date.now() < deadline) {
-    if (['completed', 'needs_review', 'failed', 'cancelled'].includes(String(job.status))) break
+    if (['completed', 'needs_review', 'initial_ready', 'evidence_review', 'failed', 'cancelled'].includes(String(job.status))) break
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
     const statusResponse = await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}`, { method: 'GET' })
     const statusPayload = await statusResponse.json().catch(() => ({})) as GrowthBrandIntelligenceJob
@@ -476,4 +476,15 @@ export async function publishGrowthMerchantKnowledgeRevision(input: {
     )
   }
   return payload
+}
+
+/** Scoped application bridge; never grants a Growth admin session to the caller. */
+export async function growthAutopilotEvidence(jobId:string,brandId:string,userId:string,review?:{expectedSnapshotId:string;note:string}) {
+  const response=await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}/autopilot-evidence`,{
+    method:review?'POST':'GET',headers:{'x-amc-brand-id':brandId,'x-amc-actor-id':userId},
+    ...(review?{body:JSON.stringify(review)}:{}),
+  })
+  const data=await response.json().catch(()=>({}))
+  if(!response.ok)throw new GrowthDataCenterError(response.status,data.error||'growth_evidence_unavailable')
+  return data
 }

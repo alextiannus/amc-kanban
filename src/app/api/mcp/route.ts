@@ -19,18 +19,17 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import { createAmcMcpServer } from '@/lib/partner/mcp/server'
 import { prisma } from '@/lib/prisma'
-import { authenticateRequest } from '@/lib/auth-v2'
+import { authenticateRequest, extractBearerToken } from '@/lib/auth-v2'
 
 export const dynamic = 'force-dynamic'
 
 async function handleMcp(request: Request): Promise<Response> {
   // Validate API key from Authorization header
-  const authHeader = request.headers.get('authorization') || ''
-  const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim()
+  const apiKey = extractBearerToken(request)
 
   if (!apiKey) {
     return new Response(
-      JSON.stringify({ error: 'Missing Authorization header. Use: Authorization: Bearer <PERSONAL_API_KEY>' }),
+      JSON.stringify({ error: 'Use Authorization: Bearer <PERSONAL_API_KEY> or x-api-key with a valid personal key' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     )
   }

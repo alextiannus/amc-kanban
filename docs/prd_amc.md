@@ -1880,3 +1880,7 @@ PostFast connectionStatus=DISABLED、disabledReason=TOKEN_REVOKED 表示社交�
 验收以相同用户/输入经 UI 会话和 API 调用的结果为准，覆盖创意、知识、素材、视频制作、草稿编辑、通知、审核和排期，以及普通用户/管理员、Key 撤销/过期、用户停用、实时撤权、跨品牌隔离、无效 Key + 有效 Cookie、重复写入与未知结果。能力测试、生产验证和完整 Framework 验收分别记录，不能以代理修复或 HTTP 200 代表完整验收通过。
 
 AMC-MM 视频 Review 闭环目标：保留 creativeId，允许未发布草稿编辑已有内容，通过当前用户的幂等站内通知返回视频制作页。详见 MM PRD，发布确认规则不变。
+
+MCP 诊断接口仅当前 ADMIN 可访问，会话与本人 API Key 同权。诊断响应不包含凭证头、原始异常堆栈或配置密钥。
+
+自动驾驶调研状态契约（实施中）：Growth 的 evidence_review 是待 AI 审阅，initial_ready 是初级报告可读取，均不能作为无限外部等待。User AI 读取绑定原任务的证据快照、来源、blockers 和 warnings。无 blockers 时可以明确提交 AI 审阅并复用原任务生成报告；快照变化必须重读。存在门店身份歧义等 blockers 时不得批准或猜测门店；若通用品牌策划不依赖缺失事实，可以记录 AI 对固定快照的审阅说明与限制，基于已确认品牌事实继续，不能声称完整报告已完成。策略保存该原任务和快照引用，发布仍需人确认。

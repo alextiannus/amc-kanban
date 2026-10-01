@@ -591,7 +591,7 @@ export async function buildGrowthResearchReport(brand: BrandPlanBrand, options?:
   if (text(job.status) === 'failed') {
     throw new BrandPlanError('growth_research_failed', 502)
   }
-  if (!['completed', 'needs_review'].includes(text(job.status))) {
+  if (!['completed', 'needs_review', 'initial_ready'].includes(text(job.status))) {
     throw new BrandPlanError('growth_research_still_running', 409)
   }
   const result = objectValue(job.result)

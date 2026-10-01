@@ -9,7 +9,7 @@ import {readBrandFacts} from './facts'
 import {digest,nativeError,actorFor} from './contract'
 import {queueGoogleBrandImport} from '../googleBrandImportQueue'
 import {loadBrandPlanBrand,buildGrowthResearchReport,saveResearchReport} from '../brand-plan/service'
-import {readGrowthResearchJob} from '../growthDataCenter'
+import {readGrowthResearchJob,growthAutopilotEvidence} from '../growthDataCenter'
 import {createNativeTask,readNativeTask,getNativeHost} from './service'
 import {readCreativeRevisions,saveCreativeRevision} from '../brand-plan/creativeRevisions'
 import {generateContentDirect} from '../amc-content/contentGenerationService'
@@ -34,9 +34,14 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
  }
  if(action==='research'){
   if(run.evidence.researchSnapshotId)return {ready:true,snapshotId:run.evidence.researchSnapshotId}
+  if(run.evidence.researchReview?.mode==='limited')return {ready:true,limitedEvidence:run.evidence.researchReview}
   if(!run.evidence.researchJobId)return {ready:true,error:'research_not_started'}
   const job=await readGrowthResearchJob(run.evidence.researchJobId)
-  return {ready:['completed','needs_review','failed','cancelled'].includes(String(job.status)),jobId:job.job_id,status:job.status}
+  if(job.status==='evidence_review') {
+   const workspace=await growthAutopilotEvidence(run.evidence.researchJobId,brandId,userId)
+   return {ready:true,requiresEvidenceReview:true,jobId:job.job_id,status:job.status,snapshotId:String(workspace.latest_snapshot?.snapshot_id||''),blockers:workspace.blockers,warnings:workspace.warnings,evidence:JSON.stringify(workspace.latest_snapshot?.evidence||{}).slice(0,16000),untrusted:true,note:'Review this fixed evidence snapshot with research_review. Missing or truncated facts remain unknown. Do not approve blockers.'}
+  }
+  return {ready:['completed','needs_review','initial_ready','failed','cancelled'].includes(String(job.status)),jobId:job.job_id,status:job.status}
  }
  if(action==='adaptation'){
   const taskId=run.evidence.adaptations?.[input.creativeId]
@@ -54,7 +59,7 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
  const outputs=(await pool.query('SELECT id,creative_id,revision_id,status,draft_id,error FROM amc_iaic.autopilot_outputs WHERE run_id=$1',[runId])).rows
  const research=run.evidence.researchSnapshotId?await prisma.brandGrowthResearchSnapshot.findFirst({where:{id:run.evidence.researchSnapshotId,brandId},select:{report:true,generatedAt:true}}):null
  const strategy=run.evidence.strategyVersionId?await prisma.brandMarketingSolution.findFirst({where:{id:run.evidence.strategyVersionId,brandId},select:{output:true}}):null
- return {runId,brandId,limit:run.daily_limit,accountId:run.account_id,evidence:run.evidence,research:research?{generatedAt:research.generatedAt,excerpt:researchExcerpt(research.report),untrusted:true,scope:'Bounded summary and sources; omitted report details remain unknown.'}:null,strategy:strategy?.output,outputs,publishRequiresConfirmation:true}
+ return {runId,brandId,limit:run.daily_limit,accountId:run.account_id,evidence:run.evidence,research:research?{generatedAt:research.generatedAt,excerpt:researchExcerpt(research.report),untrusted:true,scope:'Bounded summary and sources; omitted report details remain unknown.'}:run.evidence.researchReview||null,strategy:strategy?.output,outputs,publishRequiresConfirmation:true}
 }
 function researchExcerpt(value:unknown){
  const r=(value||{}) as any,s=r.structuredReport||{}
@@ -84,6 +89,22 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    }catch(error){if((error as any).code!=='growth_research_still_running'&&(error as Error).message!=='growth_research_still_running')throw error}
    return readAutopilot(userId,brandId,runId,'research')
   }
+  if(action==='research_review'){
+   if(!evidence.researchJobId)throw nativeError('research_not_started')
+   if(!['approve','limited'].includes(input.mode)||typeof input.note!=='string'||input.note.trim().length<20||input.note.length>4000)throw nativeError('research_review_required')
+   const workspace=await growthAutopilotEvidence(evidence.researchJobId,brandId,userId)
+   const snapshotId=String(workspace.latest_snapshot?.snapshot_id||'')
+   if(!snapshotId||input.snapshotId!==snapshotId)throw nativeError('research_snapshot_changed',409)
+   if(evidence.researchReview?.snapshotId===snapshotId&&evidence.researchReview.mode===input.mode)return evidence.researchReview
+   await gate()
+   if(input.mode==='approve'){
+    if(workspace.blockers?.length)throw nativeError('research_evidence_blocked',409)
+    await growthAutopilotEvidence(evidence.researchJobId,brandId,userId,{expectedSnapshotId:snapshotId,note:input.note})
+   }
+   evidence.researchReview={mode:input.mode,snapshotId,jobId:evidence.researchJobId,reviewerType:'AI',authorizedUserId:userId,note:input.note,blockers:workspace.blockers||[],warnings:workspace.warnings||[],evidenceExcerpt:JSON.stringify(workspace.latest_snapshot?.evidence||{}).slice(0,16000),untrusted:true,fullReportAvailable:false}
+   await progress(pool,run,'research',evidence)
+   return {...evidence.researchReview,ready:input.mode==='limited',note:input.mode==='limited'?'Proceed only with known brand facts and these explicit research gaps; no complete report exists.':'Await the original research job, then research_save.'}
+  }
   if(action==='research_save'){
    if(evidence.researchSnapshotId)return {snapshotId:evidence.researchSnapshotId,saved:true}
    if(!evidence.researchJobId)throw nativeError('research_not_started')
@@ -94,7 +115,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
   }
   if(action==='strategy'){
    if(evidence.strategyVersionId)return {strategyVersionId:evidence.strategyVersionId,saved:true}
-   if(!evidence.researchSnapshotId)throw nativeError('research_evidence_required')
+   if(!evidence.researchSnapshotId&&evidence.researchReview?.mode!=='limited')throw nativeError('research_evidence_required')
    if(typeof input.title!=='string'||!input.title.trim()||typeof input.content!=='string'||input.content.trim().length<100||input.content.length>12000)throw nativeError('complete_strategy_required')
    await gate()
    const saved=await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
@@ -104,7 +125,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
     if(old)return old
     const period=run.local_day.slice(0,7),version=await tx.brandMarketingSolution.count({where:{brandId,kind:'AUTOPILOT_STRATEGY',period}})+1
     const output={title:input.title,content:input.content}
-    const result=await tx.brandMarketingSolution.create({data:{brandId,kind:'AUTOPILOT_STRATEGY',period,version,createdById:userId,researchSnapshotId:evidence.researchSnapshotId,input:{runId,taskId:run.task_id,authorizationRevision:run.config_revision,actor:'AI'},output,generationMode:'AI'}})
+    const result=await tx.brandMarketingSolution.create({data:{brandId,kind:'AUTOPILOT_STRATEGY',period,version,createdById:userId,researchSnapshotId:evidence.researchSnapshotId,input:{runId,taskId:run.task_id,authorizationRevision:run.config_revision,actor:'AI',researchReview:evidence.researchReview||null},output,generationMode:'AI'}})
     await tx.$executeRaw`UPDATE "BrandKnowledge" SET "marketingSolution"=jsonb_set(COALESCE("marketingSolution",'{}'::jsonb),'{autopilotStrategy}',${JSON.stringify({id:result.id,...output})}::jsonb) WHERE "brandId"=${brandId}`
     return result
    })
@@ -201,7 +222,10 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   if(!(await c.query('SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS acquired',[`autopilot-admission:${brandId}`])).rows[0].acquired)return
   const settings=(await pool.query('SELECT * FROM amc_iaic.autopilot_settings WHERE brand_id=$1 AND enabled=true',[brandId])).rows[0];if(!settings)return
   await requireAutopilotOwner(settings.owner_id,brandId)
-  const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}}),day=brandDay(brand.timezone),id=digest([brandId,day])
+  const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}})
+  // Finish the original business run across midnight before admitting another day.
+  const pending=(await pool.query("SELECT id,local_day FROM amc_iaic.autopilot_runs WHERE brand_id=$1 AND owner_id=$2 AND status NOT IN ('succeeded','cancelled','failed') ORDER BY local_day,id LIMIT 1",[brandId,settings.owner_id])).rows[0]
+  const day=pending?.local_day||brandDay(brand.timezone),id=pending?.id||digest([brandId,day])
   await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
   const run=await autopilotRun(settings.owner_id,brandId,id)
   let taskId=run.task_id
@@ -211,7 +235,8 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
    const host=await getNativeHost(),actor=actorFor(brandId,settings.owner_id),history=await host.app.runtime.get(actor,taskId,{history:true})
    if(!history.calls.length&&!history.events.some(event=>event.kind==='model_requested')&&(await host.app.ledger.taskUsage(await host.app.scope(actor),taskId)).complete){await host.app.dispatcher.invoke('tasks.resume',{id:taskId},{actor,callId:`autopilot-rollout-${taskId}`});task=await readNativeTask(settings.owner_id,brandId,taskId)}
   }
-  await pool.query('UPDATE amc_iaic.autopilot_runs SET status=$2,error=$3,updated_at=now() WHERE id=$1',[id,task.status,task.inputRequest?.question||task.waitingReason||null])
+  const continuationPending=task.status==='cancelled'&&run.evidence.versionContinuationPending
+  await pool.query('UPDATE amc_iaic.autopilot_runs SET status=$2,error=$3,updated_at=now() WHERE id=$1',[id,continuationPending?'waiting':task.status,continuationPending?'version_continuation_pending':task.inputRequest?.question||task.waitingReason||null])
  }finally{await c.query('SELECT pg_advisory_unlock(hashtextextended($1,0))',[`autopilot-admission:${brandId}`]);c.release()}
 }
 const state=globalThis as typeof globalThis&{autopilotWorker?:boolean}

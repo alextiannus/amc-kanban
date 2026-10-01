@@ -18,6 +18,9 @@ const publicMarkers = [
   '/api/auth/login/',
   '/api/auth/register/',
   '/api/auth/logout/',
+  '/api/auth/forgot-password/',
+  '/api/auth/reset-password/',
+  '/api/legal/service-terms/',
   '/api/integrations/stripe/webhook/',
   '/api/public/',
   '/api/game/',
@@ -27,6 +30,9 @@ const publicMarkers = [
 ]
 const authMarkers = [
   'authenticateRequest',
+  'roleRequest',
+  'analysisActor',
+  'CONTENT_SERVICE_INTERNAL_TOKEN',
   'authenticateCurrentSession',
   'authenticateCurrentRequest',
   'verifySessionToken',

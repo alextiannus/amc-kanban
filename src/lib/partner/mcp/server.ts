@@ -299,7 +299,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         if (!authenticated) throw new Error('Invalid credential')
         const user = await prisma.user.findUnique({where:{id:authenticated.userId},include:{businessRoles:true,owner:{include:{businessRoles:true}}}})
         if (!user || user.status !== 'ACTIVE' || user.authVersion !== authenticated.authVersion) throw new Error('Identity revoked')
-        const current = principalFromUser(user, authenticated.source)
+        const current = principalFromUser(user, authenticated.source, authenticated.credentialId)
         const permission = MCP_PERMISSIONS[name]
         if (permission && !await allows(current, permission)) throw new Error('Permission denied: '+permission)
         return await callback(...input)
