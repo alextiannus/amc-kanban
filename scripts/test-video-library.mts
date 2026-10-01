@@ -23,6 +23,20 @@ try{
  assert.equal((original.technicalMetadata as any).videoDraft.editor.script,'Reviewed script')
  assert.equal(original.url,'https://example.invalid/final.mp4')
  await assert.rejects(()=>saveVideoToLibrary(id,id,{videoJobId:'other-brand-job'}),(e:any)=>e.status===404)
+ // Historical jobs stored the submitted script in voiceoverState, not plan metadata.
+ const originalScript='0–3秒：推进彩色锅贴。3–7秒：切换汤中饺子。7–10秒：暖光收尾。'
+ await prisma.videoProductionJob.update({where:{id},data:{finalVideoUrl:'https://example.invalid/legacy.mp4',idea:'Short idea only',plan:{_mmVideoJob:{templateId:null}},voiceoverState:{script:originalScript},scenes:[{prompt:'Later unsent edit'}]}})
+ const legacy=await saveVideoToLibrary(id,id,{videoJobId:id})
+ assert.equal((legacy.asset.technicalMetadata as any).videoDraft.editor.script,originalScript)
+ assert.equal((legacy.asset.technicalMetadata as any).videoDraft.editor.templateId,null)
+ const legacyMeta=legacy.asset.technicalMetadata as any
+ await prisma.mediaAsset.update({where:{id:legacy.asset.id},data:{aiTags:['keep-tag'],technicalMetadata:{...legacyMeta,videoDraft:{...legacyMeta.videoDraft,version:1,editor:{...legacyMeta.videoDraft.editor,script:'Short idea only'}}}}})
+ const repaired=await saveVideoToLibrary(id,id,{videoJobId:id})
+ assert.equal(repaired.asset.id,legacy.asset.id)
+ assert.equal((repaired.asset.technicalMetadata as any).videoDraft.editor.script,originalScript)
+ assert.deepEqual(repaired.asset.aiTags,['keep-tag'])
+ assert.equal((repaired.asset.technicalMetadata as any).videoDraft.version,2)
+
  await prisma.videoProductionJob.update({where:{id},data:{status:'generating'}})
  await assert.rejects(()=>saveVideoToLibrary(id,id,{videoJobId:id}),(e:any)=>e.status===409)
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
