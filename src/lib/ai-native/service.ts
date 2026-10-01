@@ -27,6 +27,7 @@ export async function getNativeHost(start=true):Promise<Host>{
         await lock.query("SELECT pg_advisory_lock(hashtextextended('amc-iaic-initialize',0))")
         const models=await centralModels(),{app,tools}=await composeApplication(pool,models)
         if(start)app.start()
+        else await app.runtime.drain({timeoutMs:0})
         return {pool,app,tools,modelRevision:Number(models.profiles[0].id.replace('central-',''))}
       }finally{await lock.query("SELECT pg_advisory_unlock(hashtextextended('amc-iaic-initialize',0))");lock.release()}
     }catch(e){await pool.end();throw e}
