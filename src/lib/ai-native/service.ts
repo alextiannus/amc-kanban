@@ -1,7 +1,8 @@
 import {AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {autopilotRun} from './autopilot'
 import {selectPoolIdea} from './idea-pool'
-import { brandContext } from './application'
+import { applicationVersion, brandContext } from './application'
+import { recoveryRequestKey } from './daily-recovery'
 import { discoveryFrom, type LibrarySnapshot } from './library'
 import { recommendationReceipts, saveRecommendation, adaptedScriptReceipt } from './recommendations'
 import { readPreference, changePreference, preferenceSettings } from './preferences'
@@ -65,9 +66,13 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId,automaticDaily)
   if(autopilotRunId)await autopilotRun(userId,brandId,autopilotRunId)
   if(automaticDaily&&!(body?.kind==='creative_discovery'&&body.poolIdeaId))throw nativeError('daily_pool_idea_required')
+  if(body?.recoveryOfTaskId&&!automaticDaily)throw nativeError('daily_recovery_scope_required',403)
   if(body?.kind==='creative_discovery'&&body.poolIdeaId){
+    const recoveryOfTaskId=typeof body.recoveryOfTaskId==='string'&&/^[0-9a-f-]{36}$/i.test(body.recoveryOfTaskId)?body.recoveryOfTaskId:null
+    if(body.recoveryOfTaskId&&!recoveryOfTaskId)throw nativeError('invalid_recovery_task')
+    const recoveryVersion=recoveryOfTaskId?await applicationVersion():null
     const idea=await selectPoolIdea(brandId,body.poolIdeaId)
-    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅借鉴选中原创意的创作方向，根据当前品牌资料改写可直接审阅的完整脚本，包含开场、分镜/正文、口播、行动提示及对应素材需求。有产品目录时使用真实 SKU；无目录时直接完成品牌通用稿并返回空 skuIds，不补问产品、不留待填内容、不要求先补 SKU。未知产品、价格、优惠与卖点改为不依赖它们的表达；使用当前品牌名称。供主理人审阅后保存或添加素材。',requestKey:automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`}
+    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅借鉴选中原创意的创作方向，根据当前品牌资料改写可直接审阅的完整脚本，包含开场、分镜/正文、口播、行动提示及对应素材需求。有产品目录时使用真实 SKU；无目录时直接完成品牌通用稿并返回空 skuIds，不补问产品、不留待填内容、不要求先补 SKU。未知产品、价格、优惠与卖点改为不依赖它们的表达；使用当前品牌名称。供主理人审阅后保存或添加素材。',requestKey:recoveryOfTaskId?recoveryRequestKey(brandId,idea.id,recoveryVersion!):automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`,...(recoveryOfTaskId?{recoveryOfTaskId,recoveryVersion}:{})}
   }
   if(body?.kind==='creative_discovery'&&body.proactive===true){
     body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}

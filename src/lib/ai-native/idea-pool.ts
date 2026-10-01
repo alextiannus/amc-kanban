@@ -25,7 +25,7 @@ export async function initializeIdeaPool(pool:Pool){
     library_versions jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(),
     selected_at timestamptz, replaced_at timestamptz);
     CREATE UNIQUE INDEX IF NOT EXISTS brand_ideas_active_source ON amc_iaic.brand_ideas(brand_id,source_id) WHERE replaced_at IS NULL;
-    ALTER TABLE amc_iaic.brand_ideas ADD COLUMN IF NOT EXISTS owner_id text, ADD COLUMN IF NOT EXISTS task_id uuid, ADD COLUMN IF NOT EXISTS plan_id text, ADD COLUMN IF NOT EXISTS plan_month text, ADD COLUMN IF NOT EXISTS plan_date text, ADD COLUMN IF NOT EXISTS last_error text;
+    ALTER TABLE amc_iaic.brand_ideas ADD COLUMN IF NOT EXISTS owner_id text, ADD COLUMN IF NOT EXISTS task_id uuid, ADD COLUMN IF NOT EXISTS plan_id text, ADD COLUMN IF NOT EXISTS plan_month text, ADD COLUMN IF NOT EXISTS plan_date text, ADD COLUMN IF NOT EXISTS last_error text, ADD COLUMN IF NOT EXISTS recovery_of_task_id uuid, ADD COLUMN IF NOT EXISTS recovery_version text;
     CREATE INDEX IF NOT EXISTS brand_ideas_brand ON amc_iaic.brand_ideas(brand_id,created_at);`)
 }
 async function database(){

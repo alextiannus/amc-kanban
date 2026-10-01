@@ -39,9 +39,10 @@ try{
   return {type:'finish',result:{summary:'Ready',artifacts:[calls.find((c:any)=>c.capability==='my_write_workspace').result.reference]},usage}
  }}
  const composed=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'daily-test-v1'});app=composed.app
- const ports={getHost:async()=>({pool,app,tools:composed.tools,modelRevision:1}),createTask:async(userId:string,brandId:string,body:any)=>{
+ const ports={currentVersion:async()=>'daily-test-v1',getHost:async()=>({pool,app,tools:composed.tools,modelRevision:1}),createTask:async(userId:string,brandId:string,body:any)=>{
   await pool.query('UPDATE amc_iaic.brand_ideas SET selected_at=now() WHERE id=$1',[body.poolIdeaId])
-  const intent:any={kind:'creative_discovery',automaticDaily:true,requireMaterials:true,poolIdeaId:body.poolIdeaId,brandId,userId,goal:'Automatic planning',artifactPath:`work/${body.poolIdeaId}.json`,requestKey:`daily-${body.poolIdeaId}`}
+  const recovery=typeof body.recoveryOfTaskId==='string'
+  const intent:any={kind:'creative_discovery',automaticDaily:true,requireMaterials:true,poolIdeaId:body.poolIdeaId,...(recovery?{recoveryOfTaskId:body.recoveryOfTaskId,recoveryVersion:'daily-test-v1'}:{}),brandId,userId,goal:'Automatic planning',artifactPath:`work/${body.poolIdeaId}${recovery?'-recovery':''}.json`,requestKey:recovery?`daily-recovery-${body.poolIdeaId}`:`daily-${body.poolIdeaId}`}
   const row=await admitIntent(pool,actor,intent);await app.ledger.grant(await app.scope(actor),{reference:row.id,amount:600000,evidence:{test:true}})
   return app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composed.tools},{actor,callId:intent.requestKey})
  }}
@@ -54,15 +55,21 @@ try{
  for(let n=0;n<40;n++)await oldExecutor.app.runtime.tick();await oldExecutor.app.close()
  app=(await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'daily-test-v1'})).app
  const admitted=(await pool.query('SELECT task_id FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id])).rows
- let recovered=0
- for(const row of admitted){const task=await app.runtime.get(actor,row.task_id,{history:true});if(task.status==='waiting'&&task.waiting_reason==='interrupted'){assert.equal(task.calls.length,0);assert((await app.ledger.taskUsage(await app.scope(actor),row.task_id)).complete);await app.dispatcher.invoke('tasks.resume',{id:row.task_id},{actor,callId:`daily-deploy-resume-${row.task_id}`});recovered++}}
- assert.equal(recovered,6,'recover original zero-call tasks paused by a prior deployment executor')
+ for(const row of admitted){const task=await app.runtime.get(actor,row.task_id,{history:true});assert.equal(task.status,'waiting');assert.equal(task.waiting_reason,'interrupted');assert.equal(task.calls.length,0);assert((await app.ledger.taskUsage(await app.scope(actor),row.task_id)).complete)}
+ await pool.query("UPDATE amc_ai_requests SET created_at=created_at-interval '1 day' WHERE scope_id=$1",[actor.scopeId])
+ await advanceDailyPlanning(pool,id,ports as any)
+ await advanceDailyPlanning(pool,id,ports as any)
+ const recoveredRows=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 ORDER BY id',[id])).rows
+ assert.equal(recoveredRows.filter(row=>row.recovery_of_task_id&&row.recovery_version==='daily-test-v1').length,6,'replace settled interrupted tasks with current-version recoveries')
+ assert(recoveredRows.every(row=>admitted.some(old=>old.task_id===row.recovery_of_task_id)),'retain predecessor task ids')
+ assert.equal((await pool.query('SELECT count(*) FROM amc_ai_requests WHERE scope_id=$1',[actor.scopeId])).rows[0].count,'12')
  for(let n=0;n<30;n++)await app.runtime.tick()
  await advanceDailyPlanning(pool,id,ports as any);await advanceDailyPlanning(pool,id,ports as any)
+ assert.equal((await pool.query('SELECT count(*) FROM amc_ai_requests WHERE scope_id=$1',[actor.scopeId])).rows[0].count,'12','repeat polling must not admit another recovery')
  const rows=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id])).rows
  assert.equal(rows.filter(row=>row.plan_id).length,6,JSON.stringify(rows.map(row=>({error:row.last_error,task:row.task_id}))))
  ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:composed.tools,modelRevision:1})
- const listing=await listNativeTasks(id,id);assert.equal(listing.page.items.length,6,'principal sees all daily tasks')
+ const listing=await listNativeTasks(id,id);assert.equal(listing.page.items.length,12,'principal sees original and recovery tasks')
  const visible=await readNativeTask(id,id,rows[0].task_id);assert.equal(visible.automaticDaily,true);assert.equal(visible.status,'succeeded');assert(visible.recommendations)
  const row=rows[0],history=await readCreativeRevisions({id,type:'HUMAN'},id,row.plan_month,row.plan_id)
  assert.equal(history.revisions.length,2);assert.equal(history.revisions[0].actor.type,'AI');assert.equal(history.revisions[0].principals[0].userId,id);assert.equal(history.current.nativeReviewStatus,'pending_review')
