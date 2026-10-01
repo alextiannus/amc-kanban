@@ -26,8 +26,16 @@ export async function autopilotRun(userId:string,brandId:string,runId:string,act
 async function progress(pool:Pool,run:any,step:string,evidence:any){
  await pool.query('UPDATE amc_iaic.autopilot_runs SET step=$2,evidence=$3,updated_at=now() WHERE id=$1',[run.id,step,JSON.stringify(evidence)])
 }
+export async function autopilotDayCapacity(pool:Pool,brandId:string,timezone:string|null,limit:number,now=new Date()){
+ const day=brandDay(timezone,now)
+ // A 48-hour bound includes the entire local day, including DST transitions.
+ const rows=(await pool.query('SELECT created_at FROM amc_iaic.autopilot_outputs WHERE brand_id=$1 AND created_at >= $2',[brandId,new Date(now.getTime()-48*3600000)])).rows
+ const used=rows.filter(row=>brandDay(timezone,new Date(row.created_at))===day).length
+ return {ready:used<limit,day,used,limit}
+}
 export async function readAutopilot(userId:string,brandId:string,runId:string,action='status',input:any={}){
  const run=await autopilotRun(userId,brandId,runId),pool=await autopilotDb()
+ if(action==='capacity'){const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}});return autopilotDayCapacity(pool,brandId,brand.timezone,run.daily_limit)}
  if(action==='profile'){
   const row=await prisma.googleBrandImport.findUnique({where:{brandId},select:{status:true,result:true,lastError:true}})
   return {ready:!row||!['PENDING','RUNNING'].includes(row.status),profile:row||{status:'not_configured'},note:'Missing Google permissions do not block a generic brand script. Never fabricate SKUs.'}
@@ -163,7 +171,6 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
   }
   if(action==='generate'){
    const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}})
-   if(run.local_day!==brandDay(brand.timezone))throw nativeError('autopilot_day_expired')
    if(!evidence.strategyVersionId)throw nativeError('strategy_required')
    if(typeof input.creativeId!=='string'||!Array.isArray(input.assetIds)||input.assetIds.length<1||input.assetIds.length>9||new Set(input.assetIds).size!==input.assetIds.length)throw nativeError('creative_and_assets_required')
    const id=digest([brandId,input.creativeId])
@@ -171,6 +178,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    if(output){if(output.run_id!==run.id)return {alreadyGenerated:true,draftId:output.draft_id,status:output.status};if(['completed','generated'].includes(output.status))return {outputId:id,status:output.status,draftId:output.draft_id};throw nativeError('generation_result_requires_verification')}
    const count=Number((await pool.query('SELECT count(*) AS count FROM amc_iaic.autopilot_outputs WHERE run_id=$1',[run.id])).rows[0].count)
    if(count>=run.daily_limit)throw nativeError('autopilot_daily_limit')
+   if(!(await autopilotDayCapacity(pool,brandId,brand.timezone,run.daily_limit)).ready)throw nativeError('autopilot_brand_day_limit')
    const idea=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND plan_id=$2 AND replaced_at IS NULL',[brandId,input.creativeId])).rows[0]
    if(!idea)throw nativeError('adapted_idea_required')
    const revision=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,idea.plan_month,idea.plan_id)
@@ -225,6 +233,7 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}})
   // Finish the original business run across midnight before admitting another day.
   const pending=(await pool.query("SELECT id,local_day FROM amc_iaic.autopilot_runs WHERE brand_id=$1 AND owner_id=$2 AND status NOT IN ('succeeded','cancelled','failed') ORDER BY local_day,id LIMIT 1",[brandId,settings.owner_id])).rows[0]
+  if(!pending&&!(await autopilotDayCapacity(pool,brandId,brand.timezone,settings.daily_limit)).ready)return
   const day=pending?.local_day||brandDay(brand.timezone),id=pending?.id||digest([brandId,day])
   await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
   const run=await autopilotRun(settings.owner_id,brandId,id)

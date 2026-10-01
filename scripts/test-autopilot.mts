@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
 import {autopilotDb,autopilotSettings,initializeBrandAutopilotDefault} from '../src/lib/ai-native/autopilot-store.ts'
-import {executeAutopilot,readAutopilot,autopilotAdapters} from '../src/lib/ai-native/autopilot.ts'
+import {executeAutopilot,readAutopilot,autopilotAdapters,autopilotDayCapacity} from '../src/lib/ai-native/autopilot.ts'
 import {initializeIdeaPool,brandDay} from '../src/lib/ai-native/idea-pool.ts'
 import {initializeHost,admitIntent} from '../src/lib/ai-native/store.ts'
 import {actorFor,digest} from '../src/lib/ai-native/contract.ts'
@@ -14,7 +14,7 @@ assert(process.env.DATABASE_URL?.includes('localhost')&&process.env.DATABASE_URL
 const id=`autopilot-${randomUUID()}`,other=`other-${id}`,pool=await autopilotDb(),day=brandDay('Asia/Singapore'),month=day.slice(0,7),runId=digest([id,day]),actor=actorFor(id,id)
 let app:any,calls=0
 const creative={id:'idea-one',date:day,title:'Verified brand introduction',platform:'instagram',planning:'Introduce the brand and invite questions. No invented products.',materialRequirements:['Brand entrance image'],contentType:'图文',nativeReviewStatus:'pending_review'}
-const createRun=()=>pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit,evidence) VALUES($1,$2,$3,$2,$4,2,1,$5)`,[runId,id,day,`account-${id}`,JSON.stringify({researchSnapshotId:`research-${id}`,adapted:{[creative.id]:`revision-${id}`}})])
+const createRun=()=>pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit,evidence) VALUES($1,$2,$3,$2,$4,2,1,$5)`,[runId,id,brandDay('Asia/Singapore',new Date(Date.now()-86400000)),`account-${id}`,JSON.stringify({researchSnapshotId:`research-${id}`,adapted:{[creative.id]:`revision-${id}`}})])
 try{
  await initializeIdeaPool(pool);await initializeHost(pool)
  for(const uid of [id,other])await prisma.user.create({data:{id:uid,email:`${uid}@example.invalid`,password:'fixture',businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
@@ -69,6 +69,12 @@ try{
  await Promise.all(Array.from({length:4},()=>executeAutopilot(id,id,runId,'generate',{creativeId:creative.id,assetIds:[`asset-${id}`]})));assert.equal(calls,1)
  await executeAutopilot(id,id,runId,'save_content',{outputId:output.id});assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),1)
  await assert.rejects(()=>executeAutopilot(id,id,runId,'generate',{creativeId:'another-idea',assetIds:[`asset-${id}`]}),(e:any)=>e.code==='autopilot_daily_limit');assert.equal(calls,1)
+ const secondRun=digest([runId,'next-day'])
+ await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit,evidence) VALUES($1,$2,$3,$2,$4,2,1,$5)`,[secondRun,id,day,`account-${id}`,JSON.stringify(state.evidence)])
+ await assert.rejects(()=>executeAutopilot(id,id,secondRun,'generate',{creativeId:'another-idea',assetIds:[`asset-${id}`]}),(e:any)=>e.code==='autopilot_brand_day_limit')
+ assert.equal((await readAutopilot(id,id,secondRun,'capacity')).ready,false,'cross-day continuation consumes the current brand day quota')
+ assert.equal((await autopilotDayCapacity(pool,id,'Asia/Singapore',1,new Date(Date.now()+86400000))).ready,true,'capacity becomes available on the next brand day without recreating a run')
+ assert.equal(calls,1,'a separate business run cannot multiply the daily allowance')
  const unknownId=digest([id,'unknown-idea'])
  await pool.query(`INSERT INTO amc_iaic.autopilot_outputs(id,run_id,brand_id,creative_id,revision_id,source,status) VALUES($1,$2,$3,'unknown-idea','unknown-revision','{}','running')`,[unknownId,runId,id])
  await assert.rejects(()=>executeAutopilot(id,id,runId,'generate',{creativeId:'unknown-idea',assetIds:[`asset-${id}`]}),(e:any)=>e.code==='generation_result_requires_verification')
@@ -77,7 +83,7 @@ try{
  await assert.rejects(()=>executeAutopilot(id,id,runId,'generate',{creativeId:creative.id,assetIds:[`asset-${id}`]}))
  await initializeBrandAutopilotDefault(id);assert.equal((await autopilotSettings(id,id)).settings.enabled,false,'explicit opt-out survives default initialization')
  await assert.rejects(()=>readAutopilot(other,id,runId))
- console.log('PASS: real IAIC Agent capability decisions, Core result wait survives restart, durable strategy/script/assets lineage, one provider call under concurrent replay, draft-only save, default on, settings CAS, disable and brand authorization')
+ console.log('PASS: real IAIC Agent capability decisions, Core result wait survives restart, cross-midnight continuation and shared brand-day quota, durable strategy/script/assets lineage, one provider call under concurrent replay, draft-only save, default on, settings CAS, disable and brand authorization')
 }finally{
  if(app)await app.close()
  await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[id]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[id])
