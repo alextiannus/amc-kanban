@@ -5,7 +5,7 @@ import {actorFor,digest,TASK_ALLOWANCE} from '../src/lib/ai-native/contract.ts'
 import {intentForTask,admitIntent} from '../src/lib/ai-native/store.ts'
 import {autopilotRun} from '../src/lib/ai-native/autopilot.ts'
 import {prisma} from '../src/lib/prisma.ts'
-const apply=process.argv.includes('--apply'),host=await getNativeHost()
+const apply=process.argv.includes('--apply'),host=await getNativeHost(false)
 try {
  if(!(await host.app.runtime.drain({timeoutMs:5000})).drained)throw new Error('Local runtime still active')
  const version=await applicationVersion()

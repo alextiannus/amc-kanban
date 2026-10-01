@@ -1,3 +1,4 @@
+import { videoDraftReceipt } from '@/lib/videoDraftReceipt'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -340,7 +341,21 @@ export async function POST(request: Request, { params }: Params) {
 
   let newTask: any = null
 
+  const videoJobId = typeof body.videoJobId === 'string' ? body.videoJobId.trim() : ''
+  if (body.videoJobId !== undefined && (!videoJobId || videoJobId.length > 200 || status !== 'draft')) {
+    return NextResponse.json({ error: 'videoJobId requires a draft-only save' }, { status: 400 })
+  }
+  let videoReplay = false
   const draft = await prisma.$transaction(async (tx: any) => {
+    if (videoJobId) {
+      const receipt = await videoDraftReceipt(tx, brandId, videoJobId, normalizeStringArray(body.mediaUrls))
+      if ('error' in receipt) return { videoError: receipt.error, status: receipt.status }
+      if (receipt.existingId) {
+        videoReplay = true
+        return tx.contentDraft.findUniqueOrThrow({ where: { id: receipt.existingId }, select: DRAFT_SELECT })
+      }
+      body.agentNote = [receipt.marker, typeof body.agentNote === 'string' ? body.agentNote : ''].filter(Boolean).join('\n')
+    }
     const created = await tx.contentDraft.create({
       data: {
         brandId,
@@ -467,6 +482,8 @@ export async function POST(request: Request, { params }: Params) {
     return tx.contentDraft.findUniqueOrThrow({ where: { id: created.id }, select: DRAFT_SELECT })
   })
 
+  if (draft.videoError) return NextResponse.json({ error: draft.videoError }, { status: draft.status })
+
   if (newTask) {
     const session = await getSession()
     const apiKey = extractApiKey(request)
@@ -487,7 +504,7 @@ export async function POST(request: Request, { params }: Params) {
     console.error('[POST /api/brands/:id/drafts] OBS draft snapshot failed:', error)
   })
 
-  return NextResponse.json({ ok: true, draft }, { status: 201 })
+  return NextResponse.json({ ok: true, draft, replayed: videoReplay }, { status: videoReplay ? 200 : 201 })
 }
 
 function optionalString(value: unknown): string | null {

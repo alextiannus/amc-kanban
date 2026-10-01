@@ -17,7 +17,7 @@ import { runtimeConfig } from '../model-management/registry'
 
 type Host={pool:Pool;app:Application;tools:string[];modelRevision:number}
 const globalState=globalThis as typeof globalThis & {amcNativeHost?:Promise<Host>;amcNativeStartup?:boolean;amcNativeError?:string;amcNativeStopping?:boolean}
-export async function getNativeHost():Promise<Host>{
+export async function getNativeHost(start=true):Promise<Host>{
   if(!globalState.amcNativeHost)globalState.amcNativeHost=(async()=>{
     const pool=nativePool()
     try{
@@ -26,7 +26,7 @@ export async function getNativeHost():Promise<Host>{
       try{
         await lock.query("SELECT pg_advisory_lock(hashtextextended('amc-iaic-initialize',0))")
         const models=await centralModels(),{app,tools}=await composeApplication(pool,models)
-        app.start()
+        if(start)app.start()
         return {pool,app,tools,modelRevision:Number(models.profiles[0].id.replace('central-',''))}
       }finally{await lock.query("SELECT pg_advisory_unlock(hashtextextended('amc-iaic-initialize',0))");lock.release()}
     }catch(e){await pool.end();throw e}
