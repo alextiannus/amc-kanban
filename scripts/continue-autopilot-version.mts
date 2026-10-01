@@ -15,8 +15,9 @@ try {
   try{
    if(!(await lock.query('SELECT pg_try_advisory_lock(hashtextextended($1,0)) AS ok',[`autopilot-admission:${row.brand_id}`])).rows[0].ok)continue
    const actor=actorFor(row.brand_id,row.owner_id),run=await autopilotRun(row.owner_id,row.brand_id,row.id)
-   const old=await host.app.runtime.get(actor,run.task_id,{history:true}),usage=await host.app.ledger.taskUsage(await host.app.scope(actor),old.id)
-   if(old.version===version||!['waiting','cancelled'].includes(old.status)||!usage.complete||old.calls.some(call=>['running','unknown'].includes(call.status))){console.log(JSON.stringify({runId:row.id,action:'skipped',status:old.status,usageComplete:usage.complete}));continue}
+   const old=await host.app.runtime.state(actor,run.task_id),usage=await host.app.ledger.taskUsage(await host.app.scope(actor),old.id)
+   const calls=await host.app.tasks.operationReceipts(actor,old.id)
+   if(old.version===version||!['queued','waiting','cancelled'].includes(old.status)||!usage.complete||calls.some((call:{status:string})=>['running','unknown'].includes(call.status))){console.log(JSON.stringify({runId:row.id,action:'skipped',status:old.status,usageComplete:usage.complete}));continue}
    const binding=await intentForTask(host.pool,host.app,actor,old.id)
    if(binding.intent.kind!=='autopilot'||binding.intent.runId!==row.id)throw new Error('Task/run mismatch')
    const key=`autopilot-upgrade-${digest([old.id,version])}`
