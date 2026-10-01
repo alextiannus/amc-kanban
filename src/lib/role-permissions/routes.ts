@@ -15,7 +15,7 @@ export function kanbanRoutePermission(path: string, method: string): string | nu
     if (/\/actions(\/|$)/.test(path)) return `action_item.${read ? 'read' : /\/(approve|reject)$/.test(path) ? 'resolve' : 'create'}`
     if (/\/(video-director|voiceover-tasks|voices)(\/|$)/.test(path)) return `content.video-making.${read ? 'read' : 'generate'}`
     if (/\/copywriter(\/|$)/.test(path)) return `draft.${read ? 'read' : 'create'}`
-    if (/\/(assets|folders|asset-analysis)(\/|$)/.test(path)) return `asset.${read ? 'read' : method === 'DELETE' ? 'archive' : /\/(upload|presign-upload|confirm-upload)$/.test(path) || method === 'POST' && /\/assets$/.test(path) ? 'create' : 'update'}`
+    if (/\/(assets|folders|asset-analysis)(\/|$)/.test(path)) return `asset.${read ? 'read' : method === 'DELETE' ? 'archive' : /\/(upload|presign-upload|confirm-upload|video-draft)$/.test(path) || method === 'POST' && /\/assets$/.test(path) ? 'create' : 'update'}`
     if (/\/(drafts|posts)(\/|$)/.test(path)) {
       if (read) return 'draft.read'
       if (/\/(retry-publish|reset-publishing)$/.test(path)) return 'content.retry'

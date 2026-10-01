@@ -136,6 +136,7 @@ export async function GET(request: Request) {
     filename: asset.filename,
     mimeType: asset.mimeType,
     imageAnalysis: asset.imageAnalysis,
+    technicalMetadata: asset.technicalMetadata,
     analysisTask: asset.analysisItems[0] || null,
     aiTags: asset.aiTags,
     aiCategory: asset.aiCategory,
