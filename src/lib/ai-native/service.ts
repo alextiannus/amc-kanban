@@ -64,6 +64,10 @@ async function taskHost(userId:string,brandId:string,id:string){
 }
 export async function createNativeTask(userId:string,brandId:string,body:any,automaticDaily=false,autopilotRunId?:string){
   const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId,automaticDaily)
+  // A rolling-deploy standby can admit durable interactive work, but automatic
+  // tasks must wait until this process owns the sole Core executor. Otherwise
+  // the retiring executor can claim a new-version task and pause it immediately.
+  if(automaticDaily&&!(await app.runtime.deploymentState()).ownsExecutor)throw nativeError('daily_executor_standby',503)
   if(autopilotRunId)await autopilotRun(userId,brandId,autopilotRunId)
   if(automaticDaily&&!(body?.kind==='creative_discovery'&&body.poolIdeaId))throw nativeError('daily_pool_idea_required')
   if(body?.recoveryOfTaskId&&!automaticDaily)throw nativeError('daily_recovery_scope_required',403)

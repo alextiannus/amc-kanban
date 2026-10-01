@@ -10,7 +10,7 @@ import {discoveryFrom,type LibrarySnapshot} from './library'
 import type {WorkspacePort} from './application'
 import {applicationVersion} from './application'
 import {brandDay,IDEA_POOL_MIN} from './idea-pool'
-import {dailyRecoverySlots,isRecoverableDailyWait} from './daily-recovery'
+import {dailyRecoverySlots,isRecoverableDailyWait,shouldRetireDailyIdea} from './daily-recovery'
 
 // This is a binding/reconciliation loop. IAIC owns execution, retries, usage and task state.
 export async function advanceDailyPlanning(pool:Pool,brandId:string,ports={createTask:createNativeTask,getHost:getNativeHost,currentVersion:applicationVersion}){
@@ -63,7 +63,11 @@ export async function advanceDailyPlanning(pool:Pool,brandId:string,ports={creat
     const date=(await pool.query('UPDATE amc_iaic.brand_ideas SET plan_date=COALESCE(plan_date,$2) WHERE id=$1 RETURNING plan_date',[row.id,brandDay(brand.timezone)])).rows[0].plan_date
     const saved=await saveRecommendation(owner,brandId,taskId,binding.intent,ref,content,library,{sourceCreativeId:row.source_id,patch:{title:candidate.title,planning:candidate.planning,aiCaption:candidate.aiCaption,materialRequirements:candidate.materialRequirements,date,platform:['instagram','tiktok','xiaohongshu','facebook','google_business'].includes(row.source.sourceVideo?.platform||row.source.sourcePost?.platform)?row.source.sourceVideo?.platform||row.source.sourcePost?.platform:'instagram'}},true)
     await pool.query('UPDATE amc_iaic.brand_ideas SET plan_id=$2,plan_month=$3,last_error=NULL WHERE id=$1',[row.id,saved.creativeId,saved.month])
-   }catch(error){await pool.query('UPDATE amc_iaic.brand_ideas SET last_error=$2 WHERE id=$1',[row.id,/^[a-z][a-z0-9_]{2,100}$/.test(String((error as any).code||(error as Error).message))?String((error as any).code||(error as Error).message):'daily_planning_unavailable'])}
+   }catch(error){
+    const raw=String((error as any).code||(error as Error).message),code=/^[a-z][a-z0-9_]{2,100}$/.test(raw)?raw:'daily_planning_unavailable'
+    if(shouldRetireDailyIdea(code))await pool.query('UPDATE amc_iaic.brand_ideas SET replaced_at=COALESCE(replaced_at,now()),last_error=$2 WHERE id=$1',[row.id,code])
+    else await pool.query('UPDATE amc_iaic.brand_ideas SET last_error=$2 WHERE id=$1',[row.id,code])
+   }
   }
  }finally{await lock.query('SELECT pg_advisory_unlock(hashtextextended($1,0))',[`daily-planning:${brandId}`]);lock.release()}
 }

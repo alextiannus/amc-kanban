@@ -26,3 +26,7 @@ export function recoveryRequestKey(brandId: string, poolIdeaId: string, version:
   const digest = createHash('sha256').update(JSON.stringify([brandId, poolIdeaId, version])).digest('hex')
   return `daily-recovery-v1-${digest}`
 }
+
+export function shouldRetireDailyIdea(errorCode: string) {
+  return errorCode === 'creative_direction_limit'
+}
