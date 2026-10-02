@@ -18,7 +18,7 @@ let available = true
 globalThis.fetch = (async (url, init) => {
   calls.push({ url: String(url), init: init || {} })
   if (!available) return Response.json({ error: 'Content image analysis unavailable' }, { status: 503 })
-  return Response.json(String(url).endsWith('/capabilities') ? { tasks: ['asset_image_analysis', 'asset_category_summary'].map(task => ({ task, configured: true, models: ['doubao-seed-2.1-turbo'] })) } : { id: 'old:job/1', status: 'succeeded' })
+  return Response.json(String(url).endsWith('/capabilities') ? { tasks: ['asset_image_analysis', 'asset_video_analysis', 'asset_category_summary'].map(task => ({ task, configured: true, models: ['doubao-seed-2.1-turbo'] })) } : { id: 'old:job/1', status: 'succeeded' })
 }) as typeof fetch
 try {
   const config = assetAnalysisContentConfig()

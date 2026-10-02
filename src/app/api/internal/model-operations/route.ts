@@ -12,9 +12,9 @@ export async function POST(request:Request){
   try{
     const {record,claim}=await request.json()
     if(typeof record?.id!=='string'||!record.id.startsWith('central-asset:')||!Number.isInteger(record.version))throw new Error('Invalid operation')
-    const allowed=['id','version','taskType','modelName','modelId','status','providerJobId','result','secretRef','baseUrl','error','startedAt']
+    const allowed=['id','version','taskType','modelName','modelId','status','providerJobId','result','usage','secretRef','baseUrl','error','startedAt']
     if(Object.keys(record).some(key=>!allowed.includes(key)))throw new Error('Invalid operation fields')
-    if(!['asset_image_analysis','asset_category_summary'].includes(record.taskType))throw new Error('Invalid task')
+    if(!['asset_image_analysis','asset_video_analysis','asset_category_summary'].includes(record.taskType))throw new Error('Invalid task')
     const rows:any[]=await prisma.$queryRawUnsafe('INSERT INTO "ModelOperation" (id,version,record) VALUES ($1,$2,$3::jsonb) ON CONFLICT(id) '+(claim?'DO NOTHING':'DO UPDATE SET record=EXCLUDED.record,"updatedAt"=now() WHERE "ModelOperation".version=EXCLUDED.version')+' RETURNING id',record.id,record.version,JSON.stringify(record))
     if(!rows.length&&!claim)return NextResponse.json({error:'Operation version conflict'},{status:409})
     return NextResponse.json({ok:true,record:{claimed:rows.length===1}})

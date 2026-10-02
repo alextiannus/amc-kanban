@@ -109,7 +109,7 @@ export async function PATCH(request: Request) {
   if (analysisEnabled && 'assetAnalysisEnabled' in body) {
     try {
       const capabilities = await analysisContent(assetAnalysisContentConfig(), '/v1/capabilities')
-      if (!['asset_image_analysis', 'asset_category_summary'].every(task => capabilities.tasks?.some((entry: any) => entry.task === task && entry.configured && entry.models?.includes('doubao-seed-2.1-turbo')))) throw new Error('Content image analysis is not ready; check its CN gateway capabilities')
+      if (!['asset_image_analysis', 'asset_video_analysis', 'asset_category_summary'].every(task => capabilities.tasks?.some((entry: any) => entry.task === task && entry.configured && entry.models?.includes('doubao-seed-2.1-turbo')))) throw new Error('Content media analysis is not ready; check its CN gateway capabilities')
     } catch (e: any) { return NextResponse.json({ error: e.message }, { status: 422 }) }
   }
 

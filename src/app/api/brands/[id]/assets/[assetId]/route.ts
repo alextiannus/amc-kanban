@@ -52,7 +52,7 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   // Trigger platform Designer auto-tagging in the background
-  if (body.triggerAiTagging === true && asset.mimeType.startsWith('image/')) {
+  if (body.triggerAiTagging === true && (asset.mimeType.startsWith('image/') || asset.mimeType.startsWith('video/'))) {
     await triggerDesignerAutoTag(asset.id).catch((err) => {
       console.error('[Asset PATCH] Failed to auto-tag asset in background:', err)
     })

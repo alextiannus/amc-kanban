@@ -133,6 +133,7 @@ async function createConfirmedAsset(input: {
         width: metadata.width ?? null,
         height: metadata.height ?? null,
         technicalMetadata: metadata,
+        assetKind: metadata.mimeType.startsWith('video/') ? 'video' : 'image',
         aiTags: Array.isArray(aiTags) ? aiTags : [],
         aiCategory: folder || '素材库',
         aiCaption: aiCaption || null,
@@ -151,7 +152,7 @@ async function createConfirmedAsset(input: {
       })
     }
 
-    if (asset.mimeType.startsWith('image/')) {
+    if (asset.mimeType.startsWith('image/') || asset.mimeType.startsWith('video/')) {
       await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch((error) => {
         console.error('[confirm-upload] Failed to auto-tag asset:', error)
       })
