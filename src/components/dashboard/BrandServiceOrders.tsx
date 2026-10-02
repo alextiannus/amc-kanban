@@ -39,7 +39,12 @@ export default function BrandServiceOrders({ brandId }: { brandId: string }) {
  return <section className="rounded-2xl border border-slate-200 bg-white p-5 dark:bg-slate-900 dark:border-slate-700">
   <div className="flex items-center justify-between gap-3"><div><h3 className="font-bold">订单与 ERP 同步</h3><p className="text-xs text-slate-500">销售人员默认为品牌主理人。服务订单提交后进入 Immedi Today 审核流程。</p></div><button onClick={()=>setOpen(!open)} disabled={!data.enabled} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white disabled:opacity-40">提交服务订单</button></div>
   {!data.enabled && <p className="mt-2 text-amber-700 text-sm">ERP 对接尚未启用</p>}
-  <p className="mt-3 text-sm">主理人归属与激励：{label(data.assignment)}{data.assignment.error && <span className="ml-2 text-amber-700">{data.assignment.error}</span>}</p>
+  <p className="mt-3 text-sm">主理人归属：{label(data.assignment)}{data.assignment.error && <span className="ml-2 text-amber-700">{data.assignment.error}</span>}</p>
+  <div className="mt-2 text-sm"><p>个人月度奖励（生效次月起算）：{data.rewards?.error?'核对待重试':data.rewards?.issues?.length?'部分待核对':data.rewards?.status==='PENDING'?'等待同步':'已核对'}</p>
+   {data.rewards?.error && <p className="text-amber-700">{data.rewards.error}</p>}
+   {data.rewards?.entries?.map((r:any)=><p key={r.employeeId+r.period}>{r.period}：{r.entries.map((e:any)=>e.currency+' '+e.amount).join('、')}（已记录，不代表已发放）</p>)}
+   {data.rewards?.issues?.length>0 && <p className="text-amber-700">{data.rewards.issues.some((i:any)=>i.reason==='essential_tariff_pending')?'Essential 个人奖励标准待明确；订阅奖池计提独立计算。':'主理人、奖励标准或历史发放记录需核对。'}</p>}
+  </div>
   {open && <div className="my-4 space-y-3 rounded-xl border p-4">
    {pending.current ? <p className="text-sm">上次提交结果待确认，将重试原订单，避免重复下单。</p> : <>
     <label className="block text-sm">服务<select value={service} onChange={e=>setService(e.target.value)} className="ml-2 rounded border p-2">{data.catalog.map((s: Catalog)=><option key={s.id} value={s.id}>{s.name} · SGD {s.price}{s.pricing==='monthly'?'/月':''}</option>)}</select></label>

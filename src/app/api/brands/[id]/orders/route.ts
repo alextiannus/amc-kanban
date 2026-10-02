@@ -19,11 +19,14 @@ export async function GET(request: Request, { params }: Params) {
  const orders = await prisma.immediServiceOrder.findMany({ where: { brandId: id }, orderBy: { createdAt: 'desc' }, take: 100 })
  const subscriptions = await prisma.brandSubscription.findMany({ where: { brandId: id }, orderBy: { createdAt: 'desc' }, take: 100, select: { id: true, planName: true, status: true, paidAt: true, feeWaived: true, totalDueUsd: true } })
  const receipts = await prisma.immediErpSync.findMany({ where: { OR: [{ kind: 'ORDER', sourceId: { in: orders.map((o: any) => o.id) } }, { kind: 'SUBSCRIPTION', sourceId: { in: subscriptions.map((s: any) => s.id) } }, { kind: 'BRAND', sourceId: id }] } })
+ const monthly=await prisma.immediErpSync.findUnique({where:{id:'REWARDS:monthly'}})
+ const result=monthly?.payload as any
+ const rewards={status:monthly?.status||'PENDING',error:monthly?.lastError||null,updatedAt:monthly?.updatedAt||null,entries:(result?.rewards||[]).filter((r:any)=>r.brandId===id),issues:(result?.issues||[]).filter((r:any)=>r.brandId===id)}
  const status = (kind: string, sourceId: string) => {
   const row = receipts.find((r: any) => r.kind === kind && r.sourceId === sourceId)
   return { status: row?.status || 'PENDING', erpReference: row?.reference || null, error: row?.lastError || null, updatedAt: row?.updatedAt || null }
  }
- return NextResponse.json({ enabled: !!cfg, catalog: cfg ? serviceCatalog(cfg) : [], orders: orders.map((o: any) => ({ id: o.id, createdAt: o.createdAt, amount: (o.payload as any).amount, currency: (o.payload as any).currency, ...status('ORDER',o.id) })), subscriptions: subscriptions.map((s: any) => ({ ...s, ...status('SUBSCRIPTION',s.id), eligible: s.status === 'ACTIVE' && !s.feeWaived && s.totalDueUsd > 0 })), assignment: status('BRAND',id) })
+ return NextResponse.json({ enabled: !!cfg, catalog: cfg ? serviceCatalog(cfg) : [], orders: orders.map((o: any) => ({ id: o.id, createdAt: o.createdAt, amount: (o.payload as any).amount, currency: (o.payload as any).currency, ...status('ORDER',o.id) })), subscriptions: subscriptions.map((s: any) => ({ ...s, ...status('SUBSCRIPTION',s.id), eligible: s.status === 'ACTIVE' && !s.feeWaived && s.totalDueUsd > 0 })), assignment: status('BRAND',id), rewards })
 }
 export async function POST(request: Request, { params }: Params) {
  const { id } = await params, auth = await access(request, id)

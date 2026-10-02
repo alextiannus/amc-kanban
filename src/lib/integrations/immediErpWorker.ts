@@ -1,3 +1,4 @@
+import {syncMonthlyRewards} from './immediMonthlyRewards'
 import {isPaidSubscription,resolvePrincipal,orderCustomer,brandInclude} from './immediOrders'
 import crypto from 'node:crypto'
 import { prisma } from '../prisma'
@@ -127,6 +128,7 @@ export async function processImmediErpSync() {
     for (const brand of brands) await syncBrandAssignment(brand.id, cfg)
     cursor = brands.length === 100 ? brands[99].id : undefined
   } while (cursor)
+  await syncMonthlyRewards(cfg,withReceipt)
 }
 
 export function startImmediErpWorker() {

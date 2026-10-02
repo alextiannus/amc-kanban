@@ -8,7 +8,7 @@ A source snapshot captures real customer contact, currency, discounted service l
 
 Brand service orders use the existing AMC service catalog, server pricing, brand authorization and subscription.manage capability. GET/POST /api/brands/:id/orders exposes order status and submission. Stable request IDs prevent duplicate purchases. Background delivery, not browser waiting, supplies ERP receipts.
 
-Current Crew assignments synchronize to ERP Project ToDos and existing incentive reconciliation, including transfers/removals. Published payment history and original sales ownership remain unchanged. A missing ERP identity or active incentive rule remains visible as a retry error. Manual review is required for unsupported SKUs or inconsistent values.
+品牌归属同步与个人奖励分开核验：Project/ToDo 仅表示当前负责人，月度奖励及奖池由独立后台接口 /external/v1/amc-monthly-rewards 处理。按合同生效月份的次月起算，最多计算至当前月份及合同结束月份。每个收费 ACTIVE subscription 每月计提 SGD70，按订阅和月份唯一入池；个人奖励每品牌每月仅一次。Booster 每品牌每月新加坡员工 SGD700、中国员工 CNY3500；员工所在地缺失或币种无标准时明确待处理。Essential 标准待用户明确，不沿用已停用规则。主理人固定奖励独立于 AMC 奖池，不扣减奖池；仅奖池实际发放扣减年度余额。历史已发放奖励保留，差额单独核对。缺失品牌或生效日期的订阅不猜测、不伪装全量成功。品牌订单页分别展示归属状态及本品牌月度奖励结果，不泄露其他品牌或员工金额。
 
 Deploy ImmediToday first, then AMC with prisma migrate deploy. Enable only the existing database integration using a scoped external key. Validate native receipts and production versions, without fabricated business transactions.
 
