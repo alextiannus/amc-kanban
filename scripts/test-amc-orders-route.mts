@@ -22,6 +22,9 @@ try {
  const ids=await Promise.all(responses.map(r=>r.json()));assert.equal(ids[0].id,ids[1].id)
  const rows=await prisma.immediServiceOrder.findMany({where:{brandId:'test-brand'}});assert.equal(rows.length,1);assert.equal(rows[0].payload.amount,600);assert.equal(rows[0].payload.currency,'SGD');assert.equal(rows[0].payload.principal_employee_id,'erp-principal')
  assert.equal((await post({...body,amount:2})).status,409)
+ await prisma.immediErpSync.upsert({where:{id:'REWARDS:monthly'},create:{id:'REWARDS:monthly',kind:'REWARDS',sourceId:'monthly'},update:{}})
+ await prisma.immediErpSync.update({where:{id:'REWARDS:monthly'},data:{status:'PARTIAL',payload:{rewards:[{brandId:'test-brand',employeeId:'erp-principal',period:'2026-10',entries:[{amount:700,currency:'SGD'}]},{brandId:'private-brand',employeeId:'private-person',period:'2026-10',entries:[{amount:3500,currency:'CNY'}]}],issues:[{brandId:'private-brand',reason:'private-issue'}]}}})
  const view=await (await GET(new Request(path,{headers}),params)).json();assert.equal(view.orders.length,1);assert.equal(view.orders[0].status,'PENDING')
+ assert.equal(view.rewards.entries.length,1);assert.equal(view.rewards.entries[0].brandId,'test-brand');assert.equal(view.rewards.issues.length,0);assert.ok(!JSON.stringify(view).includes('private-person'));
  console.log('PASS: brand authorization, cross-origin guard, concurrent replay, immutable source and server pricing')
 }finally{await prisma.$disconnect()}
