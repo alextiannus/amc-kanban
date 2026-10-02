@@ -1,3 +1,4 @@
+import {isPaidSubscription,resolvePrincipal,orderCustomer,brandInclude} from './immediOrders'
 import crypto from 'node:crypto'
 import { prisma } from '../prisma'
 import { buildOrderItems } from './immediErpContract'
@@ -26,43 +27,57 @@ export async function withReceipt(kind: string, sourceId: string, execute: (tx: 
   }, { maxWait: 5000, timeout: 240_000 })
 }
 
-export async function syncSubscription(subscriptionId: string, config?: ImmediErpConfig) {
+export async function syncSubscription(subscriptionId: string, config?: ImmediErpConfig, {database=prisma,send=createSalesOrder}: {database?: any;send?: typeof createSalesOrder} = {}) {
   const cfg = config || await getImmediErpConfig()
   if (!cfg) return null
-  return withReceipt('SUBSCRIPTION', subscriptionId, async (tx, row) => {
-    const sub = await tx.brandSubscription.findUnique({ where: { id: subscriptionId }, include: { brand: true } })
-    if (!sub?.brand || !['ACTIVE', 'PENDING'].includes(sub.status)) throw new Error('Subscription needs a linked brand and active/pending status')
-    const customer = sub.brand.ownerId ? await tx.user.findUnique({ where: { id: sub.brand.ownerId } }) : null
-    if (!customer?.email && !sub.brand.phone) throw new Error('Real merchant email or phone is required')
-    const items = buildOrderItems(sub, cfg)
-    const salesDate = sub.createdAt.toISOString().slice(0, 10)
+  // Commit the immutable source/ownership snapshot before dispatching any network write.
+  await withReceipt('SUBSCRIPTION', subscriptionId, async (tx, row) => {
+    if (row.payload || row.reference) return row
+    const sub = await tx.brandSubscription.findUnique({ where: { id: subscriptionId }, include: { brand: { include: brandInclude } } })
+    if (!sub?.brand || !isPaidSubscription(sub)) throw new Error('订阅尚未确认付款、已豁免或缺少品牌；不会作为付费订阅同步')
     const delivery = sub.contractEndDate || new Date(Date.UTC(sub.createdAt.getUTCFullYear(), sub.createdAt.getUTCMonth() + sub.durationMonths, sub.createdAt.getUTCDate()))
+    const customer = sub.brand.ownerId ? await tx.user.findUnique({where:{id:sub.brand.ownerId},select:{email:true,nickname:true}}) : sub.brand.owner
     const input = {
-      idempotencyKey: `amc-sub-${sub.id}`, contact_name: customer?.nickname || sub.brand.name,
-      company_name: sub.brand.name, mobile_no: sub.brand.phone, email: customer?.email,
-      items, amount: sub.totalDueUsd, currency: sub.currency,
-      sales_date: salesDate, delivery_date: delivery.toISOString().slice(0, 10),
+      idempotencyKey: 'amc-sub-' + sub.id, ...orderCustomer(sub.brand, customer),
+      principal_employee_id: resolvePrincipal(sub.brand, cfg),
+      items: buildOrderItems(sub, cfg), amount: sub.totalDueUsd, currency: sub.currency,
+      sales_date: sub.createdAt.toISOString().slice(0, 10), delivery_date: delivery.toISOString().slice(0, 10),
+      amc_source: { kind: 'subscription', id: sub.id, brand_id: sub.brandId, plan_id: sub.planId,
+        subscription_status: 'ACTIVE', fee_waived: false, payment_status: 'paid', payment_basis: 'active_paid_subscription', paid_at: sub.paidAt?.toISOString() || null, payment_provider: sub.paymentProvider || 'AMC_ADMIN_CONFIRMATION',
+        payment_reference: sub.paymentSessionId || sub.id,
+        contract_start: sub.contractStartDate?.toISOString() || null, contract_end: sub.contractEndDate?.toISOString() || null },
     }
-    const hash = digest({ amount: input.amount, currency: input.currency, items, brandId: sub.brandId })
-    if (row.reference) {
-      if (row.payloadHash !== hash) throw new Error('The synchronized subscription value changed; amend the ERP order with review')
-      return row.status === 'SYNCED' ? row : tx.immediErpSync.update({ where: { id: row.id }, data: { status: 'SYNCED', lastError: null, attempts: 0 } })
-    }
-    const order = await createSalesOrder(cfg, input)
+    return tx.immediErpSync.update({ where: { id: row.id }, data: { payload: input, payloadHash: digest(input), status: 'PENDING', lastError: null, nextAttemptAt: new Date() } })
+  }, database)
+  return withReceipt('SUBSCRIPTION', subscriptionId, async (tx, row) => {
+    if (row.reference) return row
+    if (!row.payload) throw new Error('等待完整且已确认的订阅快照')
+    const order = await send(cfg, row.payload)
     if (!order.ok || !order.erpOrderName) throw new Error(order.error || 'Missing ERP Sales Order receipt')
-    return tx.immediErpSync.update({ where: { id: row.id }, data: { status: 'SYNCED', reference: order.erpOrderName, payloadHash: hash, lastError: null, attempts: 0 } })
+    return tx.immediErpSync.update({ where: { id: row.id }, data: { status: 'SYNCED', reference: order.erpOrderName, lastError: null, attempts: 0 } })
+  }, database)
+}
+
+export async function syncServiceOrder(orderId: string, cfg: ImmediErpConfig) {
+  return withReceipt('ORDER', orderId, async (tx, row) => {
+    if (row.status === 'SYNCED' && row.reference) return row
+    const source = await tx.immediServiceOrder.findUnique({ where: { id: orderId } })
+    if (!source) throw new Error('服务订单不存在')
+    const order = await createSalesOrder(cfg, source.payload as any)
+    if (!order.ok || !order.erpOrderName) throw new Error(order.error || 'Missing ERP Sales Order receipt')
+    return tx.immediErpSync.update({ where: { id: row.id }, data: { status: 'SYNCED', reference: order.erpOrderName, payloadHash: digest(source.payload), lastError: null, attempts: 0 } })
   })
 }
 
 export async function syncBrandAssignment(brandId: string, cfg: ImmediErpConfig) {
   // Obtain a Sales Order first. A new assignment on an existing brand also needs
   // the real current subscription represented in ERP, using its stable identity.
-  const sub = await prisma.brandSubscription.findFirst({ where: { brandId, status: { in: ['ACTIVE', 'PENDING'] } }, orderBy: { createdAt: 'desc' } })
+  const sub = await prisma.brandSubscription.findFirst({ where: { brandId, status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } }, orderBy: { createdAt: 'desc' } })
   if (sub) await syncSubscription(sub.id, cfg)
   return withReceipt('BRAND', brandId, async (tx, row) => {
     const brand = await tx.brand.findUnique({ where: { id: brandId }, include: { crew: { include: { members: { include: { user: true } } } } } })
     if (!brand) throw new Error('Brand no longer exists; review ERP assignment closure')
-    const principals = (brand.crew?.members || []).filter((member: any) => member.active && member.role === 'PRINCIPAL' && member.user.type === 'HUMAN')
+    const principals = (brand.crew?.members || []).filter((member: any) => member.active && member.role === 'PRINCIPAL' && member.user.type === 'HUMAN' && member.user.status === 'ACTIVE')
     const ids = principals.map((member: any) => {
       const id = cfg.employeeMap?.[member.userId] || cfg.employeeMap?.[member.user.email.toLowerCase()]
       if (!id) throw new Error(`Missing ERP employee mapping for AMC user ${member.userId}`)
@@ -95,14 +110,20 @@ export async function processImmediErpSync() {
   if (!rollout) throw new Error('Immedi ERP migration/cutover marker is missing')
   let cursor: string | undefined
   do {
-    const rows = await prisma.brandSubscription.findMany({ where: { createdAt: { gte: rollout.createdAt }, status: { in: ['PENDING', 'ACTIVE'] } }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
+    const rows = await prisma.brandSubscription.findMany({ where: { status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
     for (const row of rows) await syncSubscription(row.id, cfg)
     cursor = rows.length === 100 ? rows[99].id : undefined
+  } while (cursor)
+  cursor = undefined
+  do {
+    const orders: Array<{id: string}> = await prisma.immediServiceOrder.findMany({ orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
+    for (const order of orders) await syncServiceOrder(order.id, cfg)
+    cursor = orders.length === 100 ? orders[99].id : undefined
   } while (cursor)
   const tracked = await prisma.immediErpSync.findMany({ where: { kind: 'BRAND' }, select: { sourceId: true } })
   cursor = undefined
   do {
-    const brands: Array<{ id: string }> = await prisma.brand.findMany({ where: { OR: [{ id: { in: tracked.map((row: any) => row.sourceId) } }, { crew: { members: { some: { updatedAt: { gte: rollout.createdAt } } } } }] }, select: { id: true }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
+    const brands: Array<{ id: string }> = await prisma.brand.findMany({ where: { OR: [{ id: { in: tracked.map((row: any) => row.sourceId) } }, { subscriptions: { some: { status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } } } }] }, select: { id: true }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
     for (const brand of brands) await syncBrandAssignment(brand.id, cfg)
     cursor = brands.length === 100 ? brands[99].id : undefined
   } while (cursor)

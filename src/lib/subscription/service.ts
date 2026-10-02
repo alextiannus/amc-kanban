@@ -20,7 +20,7 @@ export async function activateSubscriptionByPaymentSession(paymentSessionId: str
     return { ok: false as const, reason: 'not_found' as const }
   }
 
-  if (sub.status === 'ACTIVE') {
+  if (sub.status === 'ACTIVE' && sub.paidAt) {
     return { ok: true as const, subscription: sub, alreadyActive: true as const }
   }
 

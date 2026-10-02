@@ -1,5 +1,6 @@
 'use client'
 
+import BrandServiceOrders from './BrandServiceOrders'
 import React, { useState, useRef, useEffect } from 'react'
 import Image from 'next/image'
 import {
@@ -1987,6 +1988,7 @@ ${storeLines}
 
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-7xl space-y-6 p-5 pb-16">
+          <BrandServiceOrders brandId={brandId} />
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>

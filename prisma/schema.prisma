@@ -2046,6 +2046,7 @@ model ModelManagementDraft {
 }
 
 model ImmediErpSync {
+  payload Json?
   id String @id
   kind String
   sourceId String
@@ -2092,4 +2093,15 @@ model InboxReceipt {
   until DateTime?
   @@unique([userId, key])
   @@index([userId, brandId])
+}
+
+model ImmediServiceOrder {
+  id String @id @default(cuid())
+  brandId String
+  createdById String
+  requestKey String @unique
+  requestHash String
+  payload Json
+  createdAt DateTime @default(now())
+  @@index([brandId, createdAt])
 }

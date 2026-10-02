@@ -1,21 +1,15 @@
 # ImmediToday synchronization
 
-Status: implemented, pending production verification.
+Implemented application contract. Verify release using the deployed commit and native source receipts.
 
-Run `prisma migrate deploy` before starting the new build. The migration's durable `rollout` row marks the cutoff for newly submitted subscriptions; existing contracts are not bulk-imported. A subsequent brand assignment on an existing contract synchronizes that contract with the same subscription retry key before writing its Project.
+Paid non-waived subscriptions (including existing unsynchronized purchases) and durable brand service orders are delivered by the existing minute worker. Per the user-approved rule, ACTIVE + feeWaived=false + positive value is authoritative payment confirmation. A separate paidAt timestamp or second Finance confirmation is not required. Stripe checkout completion without payment is ignored. Persist the confirmed payment basis with the native order, without inventing a bank account or payment timestamp.
 
-Configuration remains in `SystemConfig`: `immediErpEnabled`, existing `immediErpApiKey`, `immediErpBaseUrl`, `immediErpItemCodeMap`, `immediErpCostCenter` (default `Main - IMD`), and `immediErpEmployeeMap` (exact AMC user ID or lowercase email to verified ERP Lark employee ID). The existing AMC key needs `sales_orders` and the separately authorized `brand_assignments` scope. Do not copy secrets into migration scripts or logs.
+A source snapshot captures real customer contact, currency, discounted service lines, contract dates, payment reference and the exactly mapped current human principal. Persist it before dispatch and reuse it on uncertain retries. Missing or ambiguous principals are actionable failures. The existing SystemConfig stores credentials, SKU and employee mappings; no credentials move to browser or environment variables.
 
-The worker scans persisted subscriptions and HUMAN PRINCIPAL crew changes every minute. It stores receipts/errors in `ImmediErpSync`, retries failures with bounded exponential backoff, and holds PostgreSQL advisory transaction locks during a synchronization attempt. A verified ERP order name is mandatory for success. The subscription retry key is `amc-sub-{id}`. The receiver stores monotonically increasing assignment revisions, rejects changed replays and stale overwrites, and reconciles both principals on transfers.
+Brand service orders use the existing AMC service catalog, server pricing, brand authorization and subscription.manage capability. GET/POST /api/brands/:id/orders exposes order status and submission. Stable request IDs prevent duplicate purchases. Background delivery, not browser waiting, supplies ERP receipts.
 
-Only Xiao Han and Luo Yueling may receive new brand assignments in ERP. Configure their exact employee mappings, and complete the ERP location so incentive currency can be determined. Li Wei's ERP title is 私域运营官 / Private Domain Operations Officer. Merchant owners, AI agents and crew editors are not brand incentive recipients.
+Current Crew assignments synchronize to ERP Project ToDos and existing incentive reconciliation, including transfers/removals. Published payment history and original sales ownership remain unchanged. A missing ERP identity or active incentive rule remains visible as a retry error. Manual review is required for unsupported SKUs or inconsistent values.
 
-Financial rules: persist actual currency and post-discount amounts; allocate subscription discounts across service lines in cents; never invent a customer phone, SKU, cost estimate or payment. Zero-value/waived contracts and unsupported SKUs remain failed with actionable errors for ERP review. Creating a Sales Order creates a draft. Formal submission retains ERP profitability-review requirements; subscription activation alone does not satisfy them. Brand rewards are pending, not paid.
+Deploy ImmediToday first, then AMC with prisma migrate deploy. Enable only the existing database integration using a scoped external key. Validate native receipts and production versions, without fabricated business transactions.
 
-Verification:
-
-- `npm run typecheck`
-- `DATABASE_URL=postgresql://test:test@localhost:5432/test node --import tsx --test scripts/test-immedi-erp.mts` (mocked network; does not connect to that database)
-- `npm run test:subscription`
-- `npm run build`
-- Read masked production configuration, migration status, `ImmediErpSync` receipts and the corresponding ERP Project/order. Never create fabricated production subscriptions to smoke-test accounting.
+Validation: `npm run test:immedi-erp`, `npm run test:subscription`, `npm run typecheck`, `npm run verify:auth-routes`, `npm run docs:api:check`, and `npm run build`. For the real PostgreSQL route test, create an isolated database named amc_orders_route_test, apply the schema with prisma db push, then run scripts/test-amc-orders-route.mts using node --import tsx and that DATABASE_URL. It verifies authorization, cross-origin writes, concurrent replay, server pricing, immutable sales ownership and queue status without contacting ERP.
