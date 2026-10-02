@@ -55,7 +55,7 @@ export function permissionSources(roles: readonly string[], policies: Record<str
   return Object.fromEntries(effectiveGrants(roles, policies).map(key => [key, roles.filter(role => role === 'ADMIN' || (policies[role] ?? defaultGrants(role)).includes(key))]))
 }
 export const MENU_PERMISSIONS: Record<string, string> = {
-  dashboard: 'brand.read', calendar: 'content.read', drafts: 'draft.read', assets: 'asset.read', game: 'game.read',
+  dashboard: 'brand.read', calendar: 'content.read', drafts: 'draft.read', assets: 'asset.read', creditUsage: 'brand.read', game: 'game.read',
   socialInsight: 'analytics.read', dataAnalysis: 'analytics.read', logs: 'work_log.read',
   'video-production': 'content.video-making.read', 'viral-copy-scripts': 'content.inspiration-library.read', 'amc-content-roles': 'content.content-lab.read',
 }

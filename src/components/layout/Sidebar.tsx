@@ -14,6 +14,7 @@ import {
   BookOpen,
   Video,
   Lightbulb,
+  Coins,
 } from 'lucide-react'
 import { type BoardView, type MenuGroupDef, type AppRole, getMenuGroups } from '@/lib/permissions'
 import { type Brand } from './BrandSwitcher'
@@ -30,6 +31,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   BookOpen,
   Video,
   Lightbulb,
+  Coins,
 }
 
 function NavIcon({ name, size = 16 }: { name: string; size?: number }) {
@@ -79,6 +81,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '内容创建和发布计划': 'Content Creation and Publishing Plan',
   '发布内容': 'Post Drafts',
   '素材库': 'Asset Library',
+  'AMC Credit 用量': 'AMC Credit Usage',
   '店内活动': 'In-store Campaigns',
   '数据分析': 'Growth Analytics',
   'BD 工作台': 'BD Workspace',

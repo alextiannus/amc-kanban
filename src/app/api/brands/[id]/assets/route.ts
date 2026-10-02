@@ -23,6 +23,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
+import { createHash } from 'node:crypto'
 import {
   assertUploadMedia,
   inspectMediaBuffer,
@@ -148,6 +149,11 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
   }
 
+  const contentHash = createHash('sha256').update(fileBuffer).digest('hex')
+  const duplicate = await prisma.mediaAsset.findFirst({ where: { brandId, contentHash }, select: { id: true, duplicateGroupId: true } })
+  const duplicateGroupId = duplicate?.duplicateGroupId || duplicate?.id || null
+  if (duplicate && !duplicate.duplicateGroupId) await prisma.mediaAsset.update({ where: { id: duplicate.id }, data: { duplicateGroupId } })
+
   try {
     const isProduction = process.env.NODE_ENV === 'production'
 
@@ -175,8 +181,11 @@ export async function POST(request: Request, { params }: Params) {
           width: technicalMetadata.width ?? null,
           height: technicalMetadata.height ?? null,
           technicalMetadata,
+          assetKind: resolvedMimeType.startsWith('video/') ? 'video' : 'image',
+          contentHash,
+          duplicateGroupId,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-          aiCategory: body.folder || body.aiCategory || '素材库',
+          aiCategory: body.folder || body.aiCategory || (duplicate ? '重复素材' : '素材库'),
           aiCaption: body.aiCaption || null,
           creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
           aiReady: true,
@@ -259,8 +268,11 @@ export async function POST(request: Request, { params }: Params) {
           width: technicalMetadata.width ?? null,
           height: technicalMetadata.height ?? null,
           technicalMetadata,
+          assetKind: resolvedMimeType.startsWith('video/') ? 'video' : 'image',
+          contentHash,
+          duplicateGroupId,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-          aiCategory: body.folder || body.aiCategory || '素材库',
+          aiCategory: body.folder || body.aiCategory || (duplicate ? '重复素材' : '素材库'),
           aiCaption: body.aiCaption || null,
           creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
           aiReady: true,
@@ -312,8 +324,11 @@ export async function POST(request: Request, { params }: Params) {
         width: technicalMetadata.width ?? null,
         height: technicalMetadata.height ?? null,
         technicalMetadata,
+        assetKind: resolvedMimeType.startsWith('video/') ? 'video' : 'image',
+        contentHash,
+        duplicateGroupId,
         aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-        aiCategory: body.folder || body.aiCategory || '素材库',
+        aiCategory: body.folder || body.aiCategory || (duplicate ? '重复素材' : '素材库'),
         aiCaption: body.aiCaption || null,
         creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
         aiReady: true,

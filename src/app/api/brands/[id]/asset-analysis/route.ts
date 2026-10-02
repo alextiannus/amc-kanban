@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/asset-analysis/db'
 import { analysisActor } from '@/lib/asset-analysis/auth'
-import { createAnalysisBatch, applyAnalysisBatch, retryAnalysisBatch } from '@/lib/asset-analysis/service'
+import { createAnalysisBatch, applyAnalysisBatch, processAnalysisQueue, retryAnalysisBatch } from '@/lib/asset-analysis/service'
 
 type Params = { params: Promise<{ id: string }> }
 function errorResponse(error: any) { return NextResponse.json({ error: error.message || 'Image analysis failed' }, { status: error.status || 400 }) }
@@ -29,6 +29,7 @@ export async function POST(request: Request, { params }: Params) {
     const body = await request.json()
     if (!['selected', 'unanalyzed'].includes(body.scope) || (body.scope === 'selected' && (!Array.isArray(body.assetIds) || body.assetIds.some((id: unknown) => typeof id !== 'string')))) return NextResponse.json({ error: 'Invalid scope' }, { status: 400 })
     const batch = await createAnalysisBatch({ brandId, assetIds: body.assetIds, unanalyzed: body.scope === 'unanalyzed', language: body.language, batchKey: typeof body.requestKey === 'string' ? body.requestKey.slice(0, 100) : undefined })
+    if (body.immediate === true && batch?.id) await processAnalysisQueue({ force: true, batchId: batch.id })
     return NextResponse.json({ batch }, { status: 202 })
   } catch (error) { return errorResponse(error) }
 }

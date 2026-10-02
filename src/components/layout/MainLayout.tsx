@@ -36,6 +36,7 @@ const VIEW_LABEL_MAP: Record<BoardView, { zh: string; en: string }> = {
   calendar: { zh: '内容创建和发布计划', en: 'Content Creation and Publishing Plan' },
   drafts: { zh: '发布内容', en: 'Post Drafts' },
   assets: { zh: '素材库', en: 'Asset Library' },
+  creditUsage: { zh: 'AMC Credit 用量', en: 'AMC Credit Usage' },
   game: { zh: '店内活动', en: 'In-store Campaigns' },
   socialInsight: { zh: '数据分析', en: 'Growth Analytics' },
   dataAnalysis: { zh: '账号快照', en: 'Account Snapshot' },

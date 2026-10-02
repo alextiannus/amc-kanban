@@ -16,6 +16,7 @@ import DraftManagementView from './dashboard/DraftManagementView'
 import BrandOperationsView from './dashboard/BrandOperationsView'
 import DataAnalysisView from './dashboard/DataAnalysisView'
 import AgentLogsView from './dashboard/AgentLogsView'
+import AmcCreditOverview from './dashboard/AmcCreditOverview'
 
 import { resolveRoles, canAccessView, getMenuGroups, type BoardView } from '@/lib/permissions'
 import { hasActiveBrandSubscription, needsBrandSubscriptionGate } from '@/lib/subscription/kanbanGate'
@@ -61,7 +62,7 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
       try {
         const requestedView = new URLSearchParams(window.location.search).get('tab')
         const savedView = (['assets', 'managementOverview', 'dashboard'].includes(requestedView || '') ? requestedView : window.localStorage.getItem('amc.currentView')) as BoardView | null
-        const validViews: BoardView[] = ['dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'dataAnalysis', 'logs', 'managementOverview']
+        const validViews: BoardView[] = ['dashboard', 'calendar', 'game', 'socialInsight', 'drafts', 'assets', 'creditUsage', 'dataAnalysis', 'logs', 'managementOverview']
         if (savedView && validViews.includes(savedView)) {
           setTimeout(() => {
             setCurrentView(savedView)
@@ -297,6 +298,10 @@ export default function KanbanBoard({ initialView = 'dashboard' }: { initialView
           ) : (
             <div className="flex items-center justify-center h-full text-red-500 text-sm font-bold">无权查看该模块</div>
           )}
+        </div>
+      ) : currentView === 'creditUsage' ? (
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">
+          <AmcCreditOverview />
         </div>
       ) : currentView === 'logs' ? (
         <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-slate-50 dark:bg-slate-950 animate-in fade-in slide-in-from-bottom-2 duration-300 relative h-full">

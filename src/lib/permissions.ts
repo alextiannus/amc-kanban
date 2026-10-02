@@ -11,6 +11,7 @@ export type BoardView =
   | 'calendar'
   | 'drafts'
   | 'assets'
+  | 'creditUsage'
   | 'game'
   | 'socialInsight'
   | 'dataAnalysis'
@@ -49,6 +50,7 @@ export function canAccessView(roles: AppRole[], view: BoardView, grants?: string
     case 'calendar':
     case 'drafts':
     case 'assets':
+    case 'creditUsage':
     case 'game':
       return isAdmin || isPrincipal || isOwner
     case 'socialInsight':
@@ -159,6 +161,7 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
       { id: 'calendar',     view: 'calendar',     label: '内容创建和发布计划', icon: 'Calendar' },
       { id: 'drafts',       view: 'drafts',       label: '发布内容', icon: 'FileText' },
       { id: 'assets',       view: 'assets',       label: '素材库',          icon: 'Images' },
+      { id: 'creditUsage',  view: 'creditUsage',  label: 'AMC Credit 用量', icon: 'Coins' },
       { id: 'game',         view: 'game',         label: '店内活动',        icon: 'Gift' },
       { id: 'socialInsight',view: 'socialInsight',label: '数据分析',        icon: 'BarChart2' },
     ]

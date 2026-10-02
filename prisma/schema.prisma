@@ -9,16 +9,16 @@ datasource db {
 
 model User {
   inboxReceipts InboxReceipt[]
-  id          String  @id @default(cuid())
-  email       String  @unique
-  password    String
-  type        String  @default("HUMAN") // HUMAN or AI_AGENT
-  role        String  @default("USER") // ADMIN or USER (针对人类)
-  status      String  @default("ACTIVE") // ACTIVE | SUSPENDED | DISABLED
-  authVersion Int     @default(1)
-  country     String?
-  phone       String?
-  locale      String?
+  id            String         @id @default(cuid())
+  email         String         @unique
+  password      String
+  type          String         @default("HUMAN") // HUMAN or AI_AGENT
+  role          String         @default("USER") // ADMIN or USER (针对人类)
+  status        String         @default("ACTIVE") // ACTIVE | SUSPENDED | DISABLED
+  authVersion   Int            @default(1)
+  country       String?
+  phone         String?
+  locale        String?
 
   // AI Agent 独占属性
   nickname       String?
@@ -80,36 +80,36 @@ model User {
 }
 
 model RoleDefinition {
-  id             String @id
+  id             String                @id
   name           String
-  normalizedName String @unique
-  description    String @default("")
-  builtIn        Boolean @default(false)
-  enabled        Boolean @default(true)
-  version        Int @default(1)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  normalizedName String                @unique
+  description    String                @default("")
+  builtIn        Boolean               @default(false)
+  enabled        Boolean               @default(true)
+  version        Int                   @default(1)
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
   members        UserBusinessRole[]
   policy         RolePermissionPolicy?
 }
 
 model RolePermissionPolicy {
-  role        String   @id
+  role        String         @id
   definition  RoleDefinition @relation(fields: [role], references: [id])
   grants      Json
-  version     Int      @default(1)
+  version     Int            @default(1)
   updatedById String?
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime       @updatedAt
 }
 
 model UserBusinessRole {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String
+  id         String         @id @default(cuid())
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       String
   definition RoleDefinition @relation(fields: [role], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
 
   @@unique([userId, role])
   @@index([userId])
@@ -367,21 +367,23 @@ model CrewMember {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
-  inboxReceipts InboxReceipt[]
-  assetFoldersInitialized Boolean @default(false)
-  assetAnalysisBatches AssetAnalysisBatch[]
-  manualStoreLimit Int? // Administrator granted total capacity; independent of billing
-  id             String         @id @default(cuid())
-  growthBrandKey String?        @unique
-  crew           MarketingCrew?
+  inboxReceipts           InboxReceipt[]
+  assetFoldersInitialized Boolean              @default(false)
+  assetAnalysisBatches    AssetAnalysisBatch[]
+  creditAccount           AmcCreditAccount?
+  creditCycles            AmcCreditCycle[]
+  manualStoreLimit        Int? // Administrator granted total capacity; independent of billing
+  id                      String               @id @default(cuid())
+  growthBrandKey          String?              @unique
+  crew                    MarketingCrew?
   // Legacy single-owner field — kept for zero-downtime migration,
   // new code uses the BrandOwner join table for multi-owner support.
-  ownerId        String?
-  name           String
-  location       String?
-  timezone       String         @default("Asia/Singapore")
-  autoPilot      Boolean        @default(true)
-  status         String         @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
+  ownerId                 String?
+  name                    String
+  location                String?
+  timezone                String               @default("Asia/Singapore")
+  autoPilot               Boolean              @default(true)
+  status                  String               @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
 
   // Brand profile (Agent can populate these)
   description       String? // Brand tagline / about text
@@ -413,7 +415,7 @@ model Brand {
   googleBusinessUrl     String?
   googleReviewUrl       String?
   googleLinksMeta       Json? // Additional Growth-confirmed Google Maps links and freshness metadata
-  googlePreferOAuth     Boolean @default(true)
+  googlePreferOAuth     Boolean            @default(true)
   larkAppId             String?
   larkAppSecret         String?
   larkDriveToken        String?
@@ -427,42 +429,42 @@ model Brand {
   postfastConnectLink          String?
   postfastConnectLinkUpdatedAt DateTime?
 
-  owners            BrandOwner[]
-  tasks             WorkUnit[]
-  accounts          SocialAccount[]
-  contents          ContentDraft[]
-  assets            MediaAsset[]
-  topicFeeds        TopicFeed[]
-  actionItems       ActionItem[]
-  inboxConversations PostfastInboxConversation[]
-  conversions       ConversionEvent[]
+  owners                      BrandOwner[]
+  tasks                       WorkUnit[]
+  accounts                    SocialAccount[]
+  contents                    ContentDraft[]
+  assets                      MediaAsset[]
+  topicFeeds                  TopicFeed[]
+  actionItems                 ActionItem[]
+  inboxConversations          PostfastInboxConversation[]
+  conversions                 ConversionEvent[]
   socialInsightPosts          SocialInsightPost[]
   socialInsightReviews        SocialInsightReview[]
   socialInsightAccountMetrics SocialInsightAccountMetric[]
-  brandAgents       BrandAgent[]
-  subscriptions     BrandSubscription[]
-  gameConfig        GameConfig?
-  gameSessions      GameSession[]
-  gameShareDrafts   GameShareDraft[]
-  folders           BrandFolder[]
-  knowledge         BrandKnowledge?
-  corrections       UserCorrectionFeedback[]
-  companionMessages CompanionMessage[]
-  companionSessions CompanionSession[]
-  copywriterLogs    CopywriterLog[]
-  mcpServerConfigs  McpServerConfig[]
-  companionSkills   CompanionSkill[]
-  notifications     Notification[]
-  identityPendingChanges BrandIdentityPendingChange[]
-  growthSyncState   BrandGrowthSyncState?
-  planningReviews   PlanningReview[]
-  materialRequirements MaterialRequirement[]
-  brandPlanInterviews BrandPlanInterview[]
-  growthResearchSnapshots BrandGrowthResearchSnapshot[]
-  marketingSolutions BrandMarketingSolution[]
-  postfastDeliveryJobs PostfastDeliveryJob[]
-  videoShootBatches VideoShootBatch[]
-  videoProductionJobs VideoProductionJob[]
+  brandAgents                 BrandAgent[]
+  subscriptions               BrandSubscription[]
+  gameConfig                  GameConfig?
+  gameSessions                GameSession[]
+  gameShareDrafts             GameShareDraft[]
+  folders                     BrandFolder[]
+  knowledge                   BrandKnowledge?
+  corrections                 UserCorrectionFeedback[]
+  companionMessages           CompanionMessage[]
+  companionSessions           CompanionSession[]
+  copywriterLogs              CopywriterLog[]
+  mcpServerConfigs            McpServerConfig[]
+  companionSkills             CompanionSkill[]
+  notifications               Notification[]
+  identityPendingChanges      BrandIdentityPendingChange[]
+  growthSyncState             BrandGrowthSyncState?
+  planningReviews             PlanningReview[]
+  materialRequirements        MaterialRequirement[]
+  brandPlanInterviews         BrandPlanInterview[]
+  growthResearchSnapshots     BrandGrowthResearchSnapshot[]
+  marketingSolutions          BrandMarketingSolution[]
+  postfastDeliveryJobs        PostfastDeliveryJob[]
+  videoShootBatches           VideoShootBatch[]
+  videoProductionJobs         VideoProductionJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -471,24 +473,24 @@ model Brand {
 }
 
 model BrandIdentityPendingChange {
-  id              String   @id @default(cuid())
-  brandId         String
-  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  field           String
-  value           Json
-  expectedVersion Int      @default(0)
-  status          String   @default("PENDING") // PENDING | PROCESSING | CONFLICT
-  attempts        Int      @default(0)
-  nextAttemptAt   DateTime @default(now())
-  lastErrorCode   String?
+  id               String   @id @default(cuid())
+  brandId          String
+  brand            Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  field            String
+  value            Json
+  expectedVersion  Int      @default(0)
+  status           String   @default("PENDING") // PENDING | PROCESSING | CONFLICT
+  attempts         Int      @default(0)
+  nextAttemptAt    DateTime @default(now())
+  lastErrorCode    String?
   lastErrorMessage String?
-  remoteVersion   Int?
-  actorId         String?
-  actorType       String   @default("HUMAN")
-  actorName       String?
-  actorRoles      String[] @default([])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  remoteVersion    Int?
+  actorId          String?
+  actorType        String   @default("HUMAN")
+  actorName        String?
+  actorRoles       String[] @default([])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@unique([brandId, field])
   @@index([status, nextAttemptAt])
@@ -581,37 +583,37 @@ model PostfastApiKeyPool {
 }
 
 model SocialAccount {
-  id           String    @id @default(cuid())
-  brandId      String
-  brand        Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  platformId   String
+  id                String    @id @default(cuid())
+  brandId           String
+  brand             Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platformId        String
   postfastAccountId String?
-  handle       String
-  displayName  String?
-  accessToken  String?
-  refreshToken String?
-  expiresAt    DateTime?
-  autoPilot    Boolean   @default(true)
-  unboundAt    DateTime?
+  handle            String
+  displayName       String?
+  accessToken       String?
+  refreshToken      String?
+  expiresAt         DateTime?
+  autoPilot         Boolean   @default(true)
+  unboundAt         DateTime?
 
   // Login credentials (loginPassword: admin-visible only in API responses)
   profileUrl    String? // public profile URL e.g. https://instagram.com/handle
   loginUsername String? // account login email or username
   loginPassword String? // account password — returned masked to non-admin callers
 
-  followerCount Int?
-  followerDelta Int?      @default(0)
-  ratingScore   Float?
-  snapshotAt    DateTime?
-  connectionStatus String @default("UNKNOWN")
-  disabledReason String?
-  inboxCapable Boolean @default(false)
+  followerCount          Int?
+  followerDelta          Int?      @default(0)
+  ratingScore            Float?
+  snapshotAt             DateTime?
+  connectionStatus       String    @default("UNKNOWN")
+  disabledReason         String?
+  inboxCapable           Boolean   @default(false)
   followerCountUpdatedAt DateTime?
 
-  drafts      ContentDraft[]
-  actionItems ActionItem[]
+  drafts             ContentDraft[]
+  actionItems        ActionItem[]
   inboxConversations PostfastInboxConversation[]
-  snapshots   SocialAccountSnapshot[]
+  snapshots          SocialAccountSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -659,8 +661,8 @@ model ContentDraft {
   viralCopyExperimentOverridden   Boolean        @default(false)
   viralCopyExperimentExcluded     Boolean        @default(false)
 
-  actionItem ActionItem?
-  assetRefs  ContentAssetRef[]
+  actionItem           ActionItem?
+  assetRefs            ContentAssetRef[]
   postfastDeliveryJobs PostfastDeliveryJob[]
 
   createdAt DateTime @default(now())
@@ -727,24 +729,24 @@ model ActionItem {
 }
 
 model PostfastInboxConversation {
-  id                 String              @id @default(cuid())
-  brandId            String
-  brand              Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  accountId          String?
-  account            SocialAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  providerId         String
-  platform           String
-  status             String              @default("OPEN")
-  subject            String?
-  participantName    String?
-  unreadCount        Int                 @default(0)
-  needsAttention     Boolean             @default(false)
-  lastMessageAt      DateTime?
-  lastSyncedAt       DateTime            @default(now())
-  raw                Json?
-  items              PostfastInboxItem[]
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  id              String              @id @default(cuid())
+  brandId         String
+  brand           Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId       String?
+  account         SocialAccount?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  providerId      String
+  platform        String
+  status          String              @default("OPEN")
+  subject         String?
+  participantName String?
+  unreadCount     Int                 @default(0)
+  needsAttention  Boolean             @default(false)
+  lastMessageAt   DateTime?
+  lastSyncedAt    DateTime            @default(now())
+  raw             Json?
+  items           PostfastInboxItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
 
   @@unique([brandId, providerId])
   @@index([brandId, unreadCount, needsAttention])
@@ -752,34 +754,37 @@ model PostfastInboxConversation {
 }
 
 model PostfastInboxItem {
-  id                 String                     @id @default(cuid())
-  conversationId     String
-  conversation       PostfastInboxConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  providerId         String
-  authorName         String?
-  body               String?
-  direction          String?
-  state              String?
-  unread             Boolean                    @default(false)
-  canReply           Boolean                    @default(false)
-  canPrivateReply    Boolean                    @default(false)
-  maxReplyLength     Int?
+  id                         String                    @id @default(cuid())
+  conversationId             String
+  conversation               PostfastInboxConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  providerId                 String
+  authorName                 String?
+  body                       String?
+  direction                  String?
+  state                      String?
+  unread                     Boolean                   @default(false)
+  canReply                   Boolean                   @default(false)
+  canPrivateReply            Boolean                   @default(false)
+  maxReplyLength             Int?
   maxPrivateReplyLengthBytes Int?
-  replyWindowEndsAt  DateTime?
-  raw                Json?
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
+  replyWindowEndsAt          DateTime?
+  raw                        Json?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 
   @@unique([conversationId, providerId])
   @@index([conversationId, unread])
 }
 
 model MediaAsset {
-  imageAnalysis Json?
-  analysisItems AssetAnalysisItem[]
-  id                String    @id @default(cuid())
+  imageAnalysis     Json?
+  analysisItems     AssetAnalysisItem[]
+  videoSegments     AssetVideoSegment[]
+  id                String              @id @default(cuid())
   brandId           String
-  brand             Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand             Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  folderId          String?
+  assetFolder       BrandFolder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
   url               String
   filename          String?
   mimeType          String
@@ -787,26 +792,40 @@ model MediaAsset {
   width             Int?
   height            Int?
   technicalMetadata Json?
-  aiTags            String[]  @default([])
+  aiTags            String[]            @default([])
   aiCategory        String?
   aiCaption         String?
-  aiReady           Boolean   @default(false)
-  usedCount         Int       @default(0)
+  aiReady           Boolean             @default(false)
+  usedCount         Int                 @default(0)
   lastUsedAt        DateTime?
   uploadedBy        String?
-  sourceType        String    @default("upload")
+  sourceType        String              @default("upload")
   shootBatchId      String?
-  shootBatch        VideoShootBatch? @relation(fields: [shootBatchId], references: [id], onDelete: SetNull)
+  shootBatch        VideoShootBatch?    @relation(fields: [shootBatchId], references: [id], onDelete: SetNull)
   videoProjectId    String?
   creativeId        String?
-  creativeVersion  Int?
+  creativeVersion   Int?
   extractionVersion Int?
   captureDate       DateTime?
-  originalFilename String?
+  originalFilename  String?
   rightsStatus      String?
+  assetKind         String              @default("image")
+  contentHash       String?
+  perceptualHash    String?
+  subjects          Json?
+  captureType       String?
+  quality           Json?
+  textDetection     Json?
+  duplicateGroupId  String?
+  linkHealth        Json?
+  analysisState     Json?
+  analysisVersion   String?
+  searchText        String?
+  visualEmbedding   Json?
+  manualOverrides   Json?
 
-  contentRefs ContentAssetRef[]
-  coverDrafts ContentDraft[]    @relation("DraftCoverAsset")
+  contentRefs         ContentAssetRef[]
+  coverDrafts         ContentDraft[]       @relation("DraftCoverAsset")
   materialSubmissions MaterialSubmission[]
 
   createdAt DateTime @default(now())
@@ -815,7 +834,91 @@ model MediaAsset {
   @@index([brandId, aiReady])
   @@index([brandId, aiCategory])
   @@index([brandId, shootBatchId])
+  @@index([brandId, duplicateGroupId])
+  @@index([brandId, analysisVersion])
+  @@index([folderId])
   @@index([videoProjectId])
+}
+
+model AssetVideoSegment {
+  id              String     @id @default(cuid())
+  assetId         String
+  asset           MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  segmentKey      String
+  startMs         Int
+  endMs           Int
+  subjects        Json?
+  scene           String?
+  action          String?
+  captureType     String?
+  quality         Json?
+  textDetection   Json?
+  stabilityScore  Float?
+  roleSuitability String[]   @default([])
+  searchText      String?
+  visualEmbedding Json?
+  analysisVersion String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@unique([assetId, segmentKey, analysisVersion])
+  @@index([assetId, startMs])
+}
+
+model AmcCreditAccount {
+  id                  String                 @id @default(cuid())
+  brandId             String                 @unique
+  brand               Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  planId              String                 @default("starter")
+  cycleAllowance      Int                    @default(1000)
+  allowOverage        Boolean                @default(true)
+  allowNightlyOverage Boolean                @default(false)
+  cycleAnchor         DateTime               @default(now())
+  currentCycleStart   DateTime               @default(now())
+  currentCycleEnd     DateTime?
+  updatedById         String?
+  cycles              AmcCreditCycle[]
+  ledgerEntries       AmcCreditLedgerEntry[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+}
+
+model AmcCreditCycle {
+  id             String                 @id @default(cuid())
+  brandId        String
+  brand          Brand                  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  accountId      String
+  account        AmcCreditAccount       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  startsAt       DateTime
+  endsAt         DateTime
+  includedCredit Int
+  ledgerEntries  AmcCreditLedgerEntry[]
+  createdAt      DateTime               @default(now())
+
+  @@unique([brandId, startsAt])
+  @@index([accountId, endsAt])
+}
+
+model AmcCreditLedgerEntry {
+  id                 String           @id @default(cuid())
+  accountId          String
+  account            AmcCreditAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  cycleId            String
+  cycle              AmcCreditCycle   @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  kind               String
+  taskType           String?
+  taskId             String?
+  creditDelta        Int
+  rawUsage           Json?
+  internalCostMicros BigInt?
+  idempotencyKey     String           @unique
+  metadata           Json?
+  createdById        String?
+  createdAt          DateTime         @default(now())
+
+  @@index([accountId, createdAt])
+  @@index([cycleId, kind])
+  @@index([taskId])
 }
 
 model VideoShootBatch {
@@ -839,7 +942,7 @@ model VideoShootBatch {
 }
 
 model VideoProductionJob {
-  voiceoverState Json?
+  voiceoverState  Json?
   id              String   @id
   brandId         String
   brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -1342,57 +1445,64 @@ model SchoolItem {
 }
 
 model AssetAnalysisBatch {
-  id String @id @default(cuid())
-  brandId String
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  batchKey String
-  language String @default("zh")
-  industry String
-  context String
-  status String @default("QUEUED")
-  sealed Boolean @default(true)
-  summaryJobId String?
+  id             String              @id @default(cuid())
+  brandId        String
+  brand          Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  batchKey       String
+  language       String              @default("zh")
+  industry       String
+  context        String
+  status         String              @default("QUEUED")
+  sealed         Boolean             @default(true)
+  summaryJobId   String?
   summaryRequest Json?
-  groups Json?
-  error String?
-  leaseUntil DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  items AssetAnalysisItem[]
+  groups         Json?
+  error          String?
+  leaseUntil     DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  items          AssetAnalysisItem[]
+
   @@unique([brandId, batchKey])
   @@index([status, leaseUntil])
 }
 
 model AssetAnalysisItem {
-  id String @id @default(cuid())
-  batchId String
-  batch AssetAnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  assetId String
-  asset MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
-  status String @default("QUEUED")
-  attempt Int @default(0)
-  gatewayJobId String?
-  gatewayRequest Json?
-  result Json?
-  originalCategory String?
+  id                String             @id @default(cuid())
+  batchId           String
+  batch             AssetAnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  assetId           String
+  asset             MediaAsset         @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  status            String             @default("QUEUED")
+  attempt           Int                @default(0)
+  gatewayJobId      String?
+  gatewayRequest    Json?
+  result            Json?
+  originalCategory  String?
   originalUpdatedAt DateTime
-  error String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  error             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
   @@unique([batchId, assetId])
   @@index([assetId, status])
 }
 
 model BrandFolder {
-  id        String   @id @default(cuid())
+  id        String        @id @default(cuid())
   brandId   String
-  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand     Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    BrandFolder?  @relation("BrandFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  BrandFolder[] @relation("BrandFolderTree")
+  assets    MediaAsset[]
   name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 
   @@unique([brandId, name])
   @@index([brandId])
+  @@index([parentId])
 }
 
 model BrandAgentCheckpoint {
@@ -1409,12 +1519,12 @@ model BrandAgentCheckpoint {
 }
 
 model SystemConfig {
-  assetAnalysisEnabled Boolean @default(false)
-  assetAnalysisGatewayUrl String?
+  assetAnalysisEnabled       Boolean @default(false)
+  assetAnalysisGatewayUrl    String?
   assetAnalysisGatewaySecret String?
-  id            String  @id @default("default")
-  geminiApiKey  String?
-  minimaxApiKey String? // MiniMax LLM API key (chat completions, OpenAI-compatible)
+  id                         String  @id @default("default")
+  geminiApiKey               String?
+  minimaxApiKey              String? // MiniMax LLM API key (chat completions, OpenAI-compatible)
 
   publishingStandards Json? // 系统统一发布频率标准，见 getPublishingStandards()
   // SMTP email configuration
@@ -1439,12 +1549,12 @@ model SystemConfig {
   useDirectPublishing Boolean? @default(false)
 
   // Immedi Today ERP integration
-  immediErpApiKey     String?  // Bearer token (imx_...)
-  immediErpBaseUrl    String?  // e.g. https://today.immedi.ai/external/v1
-  immediErpEnabled    Boolean? @default(false)
+  immediErpApiKey      String? // Bearer token (imx_...)
+  immediErpBaseUrl     String? // e.g. https://today.immedi.ai/external/v1
+  immediErpEnabled     Boolean? @default(false)
   immediErpEmployeeMap Json? // AMC user ID/email -> verified ERP employee ID
-  immediErpCostCenter String?
-  immediErpItemCodeMap Json?   // { planId: "ERP-ITEM-CODE", ... } override map
+  immediErpCostCenter  String?
+  immediErpItemCodeMap Json? // { planId: "ERP-ITEM-CODE", ... } override map
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1476,27 +1586,27 @@ model SocialAccountSnapshot {
 }
 
 model LLMConfig {
-  globalTextRevisions GlobalTextRevision[]
-  globalTextValidations GlobalTextValidation[]
-  id          String   @id @default(cuid())
-  provider    String // "openai" | "anthropic" | "google" | "deepseek" | "custom_shim" | "minimax"
-  displayName String // Page display name (e.g., "GPT-4o")
-  modelName   String // Real model ID (e.g., "gpt-4o-2024-05-13")
-  apiKey      String // Encrypted API key
-  baseUrl     String? // Custom proxy endpoint URL
-  isEnabled   Boolean  @default(true)
-  isDefault   Boolean  @default(false)
-  priority    Int      @default(0) // Higher number = higher priority in fallback chain (tried first)
-  taskTags    String[] // e.g., ["copywriting", "reasoning", "translation"]
-  contentGenerationTypes String[] @default([]) // e.g., ["marketing_plan", "instagram_content", "tiktok_content"]
-  capabilities      String[] @default([])
-  timeoutMs         Int      @default(120000)
-  maxRetries        Int      @default(1)
-  fallbackProfileIds String[] @default([])
-  costMetadata      Json?
-  secretRef         String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  globalTextRevisions    GlobalTextRevision[]
+  globalTextValidations  GlobalTextValidation[]
+  id                     String                 @id @default(cuid())
+  provider               String // "openai" | "anthropic" | "google" | "deepseek" | "custom_shim" | "minimax"
+  displayName            String // Page display name (e.g., "GPT-4o")
+  modelName              String // Real model ID (e.g., "gpt-4o-2024-05-13")
+  apiKey                 String // Encrypted API key
+  baseUrl                String? // Custom proxy endpoint URL
+  isEnabled              Boolean                @default(true)
+  isDefault              Boolean                @default(false)
+  priority               Int                    @default(0) // Higher number = higher priority in fallback chain (tried first)
+  taskTags               String[] // e.g., ["copywriting", "reasoning", "translation"]
+  contentGenerationTypes String[]               @default([]) // e.g., ["marketing_plan", "instagram_content", "tiktok_content"]
+  capabilities           String[]               @default([])
+  timeoutMs              Int                    @default(120000)
+  maxRetries             Int                    @default(1)
+  fallbackProfileIds     String[]               @default([])
+  costMetadata           Json?
+  secretRef              String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 
   @@index([isEnabled])
   @@index([isDefault])
@@ -1504,75 +1614,83 @@ model LLMConfig {
 }
 
 model ModelConnection {
-  id String @id
-  previousId String?
-  previous ModelConnection? @relation("ConnectionVersions", fields: [previousId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  successors ModelConnection[] @relation("ConnectionVersions")
-  models ModelCatalogEntry[]
-  name String
-  protocol String
-  baseUrl String
-  encryptedSecret String
+  id                String              @id
+  previousId        String?
+  previous          ModelConnection?    @relation("ConnectionVersions", fields: [previousId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  successors        ModelConnection[]   @relation("ConnectionVersions")
+  models            ModelCatalogEntry[]
+  name              String
+  protocol          String
+  baseUrl           String
+  encryptedSecret   String
   secretFingerprint String
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  actorId String
+  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
+  actorId           String
 }
+
 model ModelCatalogEntry {
-  id String @id
+  id           String          @id
   connectionId String
-  connection ModelConnection @relation(fields: [connectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  legacyId String?
-  definition Json
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  actorId String
+  connection   ModelConnection @relation(fields: [connectionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  legacyId     String?
+  definition   Json
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  actorId      String
 }
+
 model ModelPolicyRevision {
-  version Int @id @default(autoincrement())
+  version       Int                @id @default(autoincrement())
   configuration Json
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  actorId String
-  states ModelPolicyState[]
-  jobs ModelPolicyJob[]
-  operations ModelOperation[]
+  createdAt     DateTime           @default(now()) @db.Timestamptz(6)
+  actorId       String
+  states        ModelPolicyState[]
+  jobs          ModelPolicyJob[]
+  operations    ModelOperation[]
 }
+
 model ModelPolicyState {
-  id String @id
-  version Int?
+  id       String               @id
+  version  Int?
   revision ModelPolicyRevision? @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
 }
+
 model ModelPolicyValidation {
-  id String @id
+  id          String   @id
   fingerprint String
-  report Json
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  report      Json
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
 }
+
 model ModelPolicyJob {
-  id String @id
-  version Int?
-  revision ModelPolicyRevision? @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  id        String               @id
+  version   Int?
+  revision  ModelPolicyRevision? @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime             @default(now()) @db.Timestamptz(6)
 }
+
 model ModelExecutionLog {
-  id String @id
-  source String
-  executor String?
-  task String
-  version Int
-  modelId String
-  connectionId String
-  targetModel String
+  id            String   @id
+  source        String
+  executor      String?
+  task          String
+  version       Int
+  modelId       String
+  connectionId  String
+  targetModel   String
   responseModel String?
-  status String
-  latencyMs Int
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  status        String
+  latencyMs     Int
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
   @@index([createdAt(sort: Desc)], map: "ModelExecutionLog_recent")
 }
+
 model ModelOperation {
-  id String @id
-  version Int
-  revision ModelPolicyRevision @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
-  record Json
-  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  id        String              @id
+  version   Int
+  revision  ModelPolicyRevision @relation(fields: [version], references: [version], onDelete: NoAction, onUpdate: NoAction)
+  record    Json
+  updatedAt DateTime            @default(now()) @db.Timestamptz(6)
 }
 
 model PromptTemplate {
@@ -1596,13 +1714,13 @@ model BrandKnowledge {
   brandId String @unique
   brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
-  menuItems  Json? // JSON array of menu items: [{name, price, description, images: []}]
-  slangDict  Json? // JSON dictionary of localized slang mappings
-  brandTone  String? // String description of customized tone/perspective
-  negPrompts String[] // List of forbidden words or guidelines
-  voiceId    String? // Legacy chosen AI companion voice ID
-  companionVoiceId String? // AI companion voice setting, not used for merchant content voiceover
-  brandVoiceProfiles Json? // Merchant-recorded/cloned voice profiles for generated voiceover
+  menuItems                  Json? // JSON array of menu items: [{name, price, description, images: []}]
+  slangDict                  Json? // JSON dictionary of localized slang mappings
+  brandTone                  String? // String description of customized tone/perspective
+  negPrompts                 String[] // List of forbidden words or guidelines
+  voiceId                    String? // Legacy chosen AI companion voice ID
+  companionVoiceId           String? // AI companion voice setting, not used for merchant content voiceover
+  brandVoiceProfiles         Json? // Merchant-recorded/cloned voice profiles for generated voiceover
   defaultBrandVoiceProfileId String? // Default merchant voice profile for generated voiceover
 
   // Structured brand context (from brand owner + amc-growth sync)
@@ -1623,18 +1741,18 @@ model BrandKnowledge {
   competitors Json? // [String] — list of competitor brand names
 
   // ── Section 4: 品牌主张 / 数据调研 / 营销方案 ─────────────────────────────
-  brandVoice    String? // Local creative voice guidance (not a campaign plan)
-  brandImage    String? // Local visual identity guidance
-  promotionFocus String? // Local evergreen promotion focus
+  brandVoice        String? // Local creative voice guidance (not a campaign plan)
+  brandImage        String? // Local visual identity guidance
+  promotionFocus    String? // Local evergreen promotion focus
   // promoPlan: { period, startDate, endDate, direction, copywritingRequirements,
   //              brandVoice, brandImage, keyMessages[], campaigns[] }
-  promoPlan      Json? // Deprecated legacy snapshot; retained for audit/history only
+  promoPlan         Json? // Deprecated legacy snapshot; retained for audit/history only
   // publishingFreq: { postsPerDay, platforms: { [platformSlug]: { postsPerDay?, postsPerWeek?, preferredHours? } } }
-  publishingFreq Json? // Per-brand publishing frequency (overrides global SystemConfig defaults)
-  brandClaim      Json? // Long-lived principal interview synthesis / 商家主张
-  researchReport  Json? // Long-lived AMC-Growth baseline research snapshot / 数据调研
+  publishingFreq    Json? // Per-brand publishing frequency (overrides global SystemConfig defaults)
+  brandClaim        Json? // Long-lived principal interview synthesis / 商家主张
+  researchReport    Json? // Long-lived AMC-Growth baseline research snapshot / 数据调研
   marketingSolution Json? // Kanban-owned annual/quarterly marketing solution and content calendar / 营销方案
-  brandPlan      Json? // Deprecated legacy workspace; retained for migration/audit only
+  brandPlan         Json? // Deprecated legacy workspace; retained for migration/audit only
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1657,17 +1775,17 @@ model BrandPlanInterview {
 }
 
 model BrandGrowthResearchSnapshot {
-  id              String   @id @default(cuid())
-  brandId         String
-  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  source          String   @default("amc-growth")
-  sourceVersion   String?
-  sourcePayload   Json?
-  report          Json
-  dataHash        String?
-  generatedAt     DateTime @default(now())
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id            String   @id @default(cuid())
+  brandId       String
+  brand         Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  source        String   @default("amc-growth")
+  sourceVersion String?
+  sourcePayload Json?
+  report        Json
+  dataHash      String?
+  generatedAt   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   marketingSolutions BrandMarketingSolution[]
 
@@ -1676,25 +1794,25 @@ model BrandGrowthResearchSnapshot {
 }
 
 model BrandMarketingSolution {
-  id                 String   @id @default(cuid())
+  id                 String                       @id @default(cuid())
   brandId            String
-  brand              Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  kind               String   // ANNUAL | QUARTERLY | CALENDAR
+  brand              Brand                        @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  kind               String // ANNUAL | QUARTERLY | CALENDAR
   period             String
-  status             String   @default("DRAFT")
-  version            Int      @default(1)
+  status             String                       @default("DRAFT")
+  version            Int                          @default(1)
   input              Json
   output             Json
-  generationMode     String   @default("LLM") // LLM | RULE_FALLBACK | AMC_CONTENT_ASSISTED
+  generationMode     String                       @default("LLM") // LLM | RULE_FALLBACK | AMC_CONTENT_ASSISTED
   llmProvider        String?
   llmModel           String?
   llmError           String?
   researchSnapshotId String?
   researchSnapshot   BrandGrowthResearchSnapshot? @relation(fields: [researchSnapshotId], references: [id], onDelete: SetNull)
   createdById        String?
-  generatedAt        DateTime @default(now())
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  generatedAt        DateTime                     @default(now())
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
 
   @@index([brandId, kind, period])
   @@index([researchSnapshotId])
@@ -1957,107 +2075,113 @@ model Notification {
 }
 
 model VoiceTask {
-  id String @id
-  brandId String
-  kind String
+  id         String    @id
+  brandId    String
+  kind       String
   requestKey String
-  status String @default("queued")
-  payload Json
-  result Json?
-  error String?
+  status     String    @default("queued")
+  payload    Json
+  result     Json?
+  error      String?
   leaseToken String?
   leaseUntil DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
   @@unique([brandId, kind, requestKey])
   @@index([status, leaseUntil])
 }
 
 model GlobalTextRevision {
-  version Int @id
-  enabled Boolean
+  version      Int                @id
+  enabled      Boolean
   connectionId String?
-  connection LLMConfig? @relation(fields: [connectionId], references: [id], onDelete: Restrict)
-  fingerprint String?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  actorId String
-  policies GlobalTextPolicy[]
-  jobs GlobalTextJob[]
+  connection   LLMConfig?         @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  fingerprint  String?
+  createdAt    DateTime           @default(now()) @db.Timestamptz(6)
+  actorId      String
+  policies     GlobalTextPolicy[]
+  jobs         GlobalTextJob[]
 }
+
 model GlobalTextPolicy {
-  id String @id
-  version Int
+  id       String             @id
+  version  Int
   revision GlobalTextRevision @relation(fields: [version], references: [version])
 }
+
 model GlobalTextValidation {
-  id String @id
+  id           String    @id
   connectionId String
-  connection LLMConfig @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  fingerprint String
-  report Json
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  connection   LLMConfig @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  fingerprint  String
+  report       Json
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
 }
+
 model GlobalTextCall {
-  id String @id
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  source String
-  task String
-  version Int
-  connectionId String
-  provider String
-  targetModel String
+  id            String   @id
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  source        String
+  task          String
+  version       Int
+  connectionId  String
+  provider      String
+  targetModel   String
   responseModel String?
-  status String
-  latencyMs Int
-  error String?
+  status        String
+  latencyMs     Int
+  error         String?
+
   @@index([createdAt(sort: Desc)], map: "GlobalTextCall_recent")
 }
 
 model GlobalTextJob {
- id String @id
- version Int
- revision GlobalTextRevision @relation(fields: [version], references: [version])
- createdAt DateTime @default(now()) @db.Timestamptz(6)
+  id        String             @id
+  version   Int
+  revision  GlobalTextRevision @relation(fields: [version], references: [version])
+  createdAt DateTime           @default(now()) @db.Timestamptz(6)
 }
 
 model ModelDelegatedJob {
-  id String @id
-  source String
-  brandId String
-  actorId String
-  task String
-  platform String?
-  version Int
-  inputHash String
+  id           String   @id
+  source       String
+  brandId      String
+  actorId      String
+  task         String
+  platform     String?
+  version      Int
+  inputHash    String
   contentJobId String?
-  status String @default("pending")
-  createdAt DateTime @default(now()) @db.Timestamptz
-  updatedAt DateTime @default(now()) @db.Timestamptz
+  status       String   @default("pending")
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  updatedAt    DateTime @default(now()) @db.Timestamptz
 }
 
 model ModelManagementDraft {
-  id String @id @default("default")
-  revision Int @default(0)
-  baseVersion Int?
-  configuration Json
+  id                   String   @id @default("default")
+  revision             Int      @default(0)
+  baseVersion          Int?
+  configuration        Json
   initializationReport Json?
-  updatedAt DateTime @default(now()) @db.Timestamptz(6)
-  actorId String
+  updatedAt            DateTime @default(now()) @db.Timestamptz(6)
+  actorId              String
 }
 
 model ImmediErpSync {
-  id String @id
-  kind String
-  sourceId String
-  payloadHash String?
-  revision Int @default(0)
-  status String @default("PENDING")
-  reference String?
-  lastError String?
-  attempts Int @default(0)
+  id            String   @id
+  kind          String
+  sourceId      String
+  payloadHash   String?
+  revision      Int      @default(0)
+  status        String   @default("PENDING")
+  reference     String?
+  lastError     String?
+  attempts      Int      @default(0)
   nextAttemptAt DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@unique([kind, sourceId])
   @@index([status, nextAttemptAt])
 }
@@ -2065,31 +2189,33 @@ model ImmediErpSync {
 // Durable, brand-scoped import receipt. Credentials remain in Brand/SocialAccount.
 model GoogleBrandImport {
   socialAccountId String?
-  configHash String
-  brandId String @id
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  status String @default("PENDING")
-  generation Int @default(1)
-  attempts Int @default(0)
-  nextAttemptAt DateTime @default(now())
-  leaseUntil DateTime?
-  lastError String?
-  result Json?
-  updatedAt DateTime @updatedAt
+  configHash      String
+  brandId         String    @id
+  brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  status          String    @default("PENDING")
+  generation      Int       @default(1)
+  attempts        Int       @default(0)
+  nextAttemptAt   DateTime  @default(now())
+  leaseUntil      DateTime?
+  lastError       String?
+  result          Json?
+  updatedAt       DateTime  @updatedAt
+
   @@index([status, nextAttemptAt])
 }
 
 model InboxReceipt {
-  id String @id @default(cuid())
-  userId String
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  brandId String?
-  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  key String
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brandId    String?
+  brand      Brand?    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  key        String
   remindedAt DateTime?
-  readAt DateTime?
-  state String @default("active")
-  until DateTime?
+  readAt     DateTime?
+  state      String    @default("active")
+  until      DateTime?
+
   @@unique([userId, key])
   @@index([userId, brandId])
 }

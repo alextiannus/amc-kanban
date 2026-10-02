@@ -4,9 +4,11 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/asset-analysis/db'
 import { getAssetAnalysisConfig } from '@/lib/systemConfig'
 import { getHuaweiObsConfig, getHuaweiObsPrivateUrl } from '@/lib/integrations/huaweiObs'
+import { getCreditSnapshot, settleCredit } from '@/lib/amc-credit/service'
+import { analysisCredit } from '@/lib/amc-credit/policy'
 import { analysisContent, type AssetAnalysisContentConfig } from './content'
 import { ensureAssetFolders } from './folders'
-import { ANALYSIS_MODEL, ANALYSIS_VERSION, PROTECTED_FOLDERS, folderName, parseImageAnalysis, mergeAnalysisTags } from './policy'
+import { ANALYSIS_MODEL, ANALYSIS_VERSION, PROTECTED_FOLDERS, folderName, isNightlyWindow, parseImageAnalysis, mergeAnalysisTags, suggestedFolder } from './policy'
 
 const pending = ['QUEUED', 'RUNNING']
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status })
@@ -81,12 +83,21 @@ async function processItem(item: any, batch: any, config: AssetAnalysisContentCo
       // Any edit while analysis ran preserves the user's current caption/tags.
       const untouched = asset.updatedAt.getTime() === new Date(item.originalUpdatedAt).getTime()
       const generatedTags = untouched ? result.tags.filter(t => !(asset.aiTags.includes(t) && !(previous?.generatedTags || []).includes(t))) : (previous?.generatedTags || [])
+      const suggestion = suggestedFolder(result)
+      const categoryUnassigned = !asset.aiCategory || ['raw', '素材库'].includes(asset.aiCategory)
+      const assignedFolder = untouched && categoryUnassigned ? await tx.brandFolder.upsert({ where: { brandId_name: { brandId: asset.brandId, name: suggestion.topLevel } }, create: { brandId: asset.brandId, name: suggestion.topLevel }, update: {} }) : null
       const updated = await tx.mediaAsset.update({ where: { id: asset.id }, data: {
         ...(untouched ? { aiCaption: previous?.captionEdited ? asset.aiCaption : result.caption, aiTags: previous?.tagsEdited ? asset.aiTags : mergeAnalysisTags(asset.aiTags, previous?.generatedTags || [], result.tags) } : {}),
+        ...(assignedFolder ? { folderId: assignedFolder.id, aiCategory: assignedFolder.name } : {}),
+        assetKind: 'image', subjects: result.subjects as any, captureType: result.captureType, quality: result.quality as any, textDetection: result.textDetection as any,
+        linkHealth: { status: 'accessible', checkedAt: new Date().toISOString() }, analysisState: { status: 'SUCCEEDED', stage: 'indexed', updatedAt: new Date().toISOString() },
+        analysisVersion: ANALYSIS_VERSION, searchText: result.searchText,
         imageAnalysis: { ...result, model: job.modelName || ANALYSIS_MODEL, resolvedModel: job.resolvedModel || job.modelName || ANALYSIS_MODEL, configurationVersion:job.configurationVersion??null, version: ANALYSIS_VERSION, analyzedAt: new Date().toISOString(), generatedTags: previous?.tagsEdited ? previous.generatedTags || [] : generatedTags, captionEdited: previous?.captionEdited || !untouched, tagsEdited: previous?.tagsEdited || !untouched },
       } })
       await tx.assetAnalysisItem.update({ where: { id: item.id }, data: { status: 'SUCCEEDED', result: result as any, error: null, originalUpdatedAt: untouched ? updated.updatedAt : item.originalUpdatedAt } })
     }, { isolationLevel: 'Serializable' })
+    const rawUsage = job.usage && typeof job.usage === 'object' ? job.usage : {}
+    await settleCredit({ brandId: batch.brandId, taskType: 'asset_image_analysis', taskId: item.id, credit: analysisCredit('asset_image_analysis', rawUsage), idempotencyKey: `asset-analysis:${ANALYSIS_VERSION}:${item.id}:${item.attempt}`, rawUsage }).catch(error => console.error('[Asset analysis credit]', error instanceof Error ? error.message : 'Failed'))
   } catch (error: any) {
     // Network errors resubmit exactly the persisted request/idempotency key on the next tick.
     if (error.code === 'P2034' || /gateway unavailable|fetch failed|abort|timeout/i.test(error.message)) throw error
@@ -127,11 +138,17 @@ async function summarize(batch: any, config: AssetAnalysisContentConfig) {
   await prisma.assetAnalysisBatch.update({ where: { id: batch.id }, data: { status: 'READY', groups: normalized, error: null } })
 }
 
-export async function processAnalysisQueue() {
+export async function processAnalysisQueue(options: { force?: boolean; now?: Date; batchId?: string } = {}) {
   const config = await getAssetAnalysisConfig()
   if (!config) return
-  const batches = await prisma.assetAnalysisBatch.findMany({ where: { status: { in: pending }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, orderBy: { updatedAt: 'asc' }, take: 3 })
+  const now = options.now || new Date()
+  const batches = await prisma.assetAnalysisBatch.findMany({ where: { status: { in: pending }, ...(options.batchId ? { id: options.batchId } : {}), OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] }, include: { brand: { select: { timezone: true } } }, orderBy: { updatedAt: 'asc' }, take: options.batchId ? 1 : 100 })
   for (const batch of batches) {
+    if (!options.force && !isNightlyWindow(now, batch.brand.timezone || 'Asia/Singapore')) continue
+    if (!options.force) {
+      const credit = await getCreditSnapshot(batch.brandId)
+      if (credit.summary.usagePercent >= 100 && !credit.account.allowNightlyOverage) continue
+    }
     const claimed = await prisma.assetAnalysisBatch.updateMany({ where: { id: batch.id, status: { in: pending }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, data: { leaseUntil: new Date(Date.now() + 300_000), status: 'RUNNING' } })
     if (!claimed.count) continue
     try {
