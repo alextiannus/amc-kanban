@@ -11,7 +11,7 @@ async function accessibleBrandIds(user: { id: string; role: string }) {
     { owners: { some: { userId: user.id } } },
     { crew: { members: { some: { userId: user.id, active: true } } } },
   ] }, select: { id: true } })
-  return rows.map(row => row.id)
+  return rows.map((row: { id: string }) => row.id)
 }
 
 export async function GET(request: Request) {
