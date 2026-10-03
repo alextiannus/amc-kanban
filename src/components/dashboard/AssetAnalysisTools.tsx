@@ -7,7 +7,7 @@ import { PROTECTED_FOLDERS } from '@/lib/asset-analysis/policy'
 
 type Asset = { id: string; brandId: string; url: string; filename: string | null; aiCaption: string | null; aiTags: string[]; aiCategory: string | null; imageAnalysis?: { contentType?: string; needsReview?: boolean }; analysisTask?: { status: string; error?: string; batchId: string } }
 type Folder = { id: string; name: string; assetCount?: number }
-type Batch = { id: string; status: string; error?: string; industry: string; createdAt: string; updatedAt?: string; _count?: { items: number }; groups?: Group[]; items?: Item[] }
+type Batch = { id: string; status: string; error?: string; industry: string; runImmediately?: boolean; createdAt: string; updatedAt?: string; _count?: { items: number }; groups?: Group[]; items?: Item[] }
 type Item = { id: string; assetId: string; status: string; error?: string; result?: { caption: string; contentType: string; needsReview: boolean }; asset: { url: string; filename: string | null } }
 type Group = { name: string; folderId: string | null; reason: string; itemIds: string[] }
 
@@ -103,6 +103,7 @@ export default function AssetAnalysisTools({ brandId, selected, infoAsset, close
     await showBatch(data.batch.id); await refresh(); onChanged()
   })
   const retry = async (id: string) => run(async () => { await api(base, { action: 'retry', batchId: id }, 'PATCH'); await showBatch(id); onChanged() })
+  const runNow = async (id: string) => run(async () => { await api(base, { action: 'run-now', batchId: id }, 'PATCH'); await showBatch(id); onChanged() })
   const ready = batches.filter(b => b.status === 'READY').length
 
   return <>
@@ -135,6 +136,9 @@ export default function AssetAnalysisTools({ brandId, selected, infoAsset, close
       <select aria-label={t('分析批次', 'Analysis batch')} value={batch?.id || ''} onChange={e => e.target.value && void run(() => showBatch(e.target.value))} className="w-full rounded-lg border bg-transparent p-2 text-sm"><option value="">{t('选择分析批次', 'Choose a batch')}</option>{batches.map(b => <option key={b.id} value={b.id}>{new Date(b.createdAt).toLocaleString()} · {statusLabel(b.status)} · {b._count?.items}</option>)}</select>
       {batch && <>
         <p className="text-sm">{statusLabel(batch.status)} · {batch.items?.filter(i => i.status === 'SUCCEEDED').length}/{batch.items?.length} {t('张成功', 'succeeded')}{batch.industry === 'General' && <span className="ml-2 text-orange-600">{t('建议完善商家行业资料', 'Add your merchant industry for better results')}</span>}</p>
+        {['QUEUED', 'RUNNING'].includes(batch.status) && (batch.runImmediately
+          ? <p className="text-xs text-indigo-600">{t('此批次正在立即执行；后台会持续推进，不等待夜间窗口。', 'This batch is running now and will continue without waiting for the nightly window.')}</p>
+          : <button disabled={busy} onClick={() => void runNow(batch.id)} className="rounded-lg border border-indigo-300 px-3 py-2 text-sm text-indigo-700 disabled:opacity-40">{t('立即执行此批次', 'Run this batch now')}</button>)}
         {batch.error && <p className="text-sm text-orange-600">{batch.error}</p>}
         {(batch.status !== 'APPLIED' && (batch.status === 'FAILED' || batch.items?.some(i => i.status === 'FAILED'))) && <div className="space-y-2"><p className="text-xs text-slate-500">{t('仅重试失败项。上游结果未知的重试可能再次产生调用费用。', 'Only failed items are retried. Unknown upstream results may incur another model call.')}</p><button disabled={busy} onClick={() => void retry(batch.id)} className="rounded-lg border px-3 py-2 text-sm">{t('重试失败项 / 汇总', 'Retry failures / summary')}</button></div>}
         {batch.status === 'READY' && <>

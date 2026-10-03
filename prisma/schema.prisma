@@ -1454,6 +1454,7 @@ model AssetAnalysisBatch {
   context        String
   status         String              @default("QUEUED")
   sealed         Boolean             @default(true)
+  runImmediately Boolean             @default(false)
   summaryJobId   String?
   summaryRequest Json?
   groups         Json?

@@ -163,8 +163,8 @@ export async function processAnalysisQueue(options: { force?: boolean; now?: Dat
   const now = options.now || new Date()
   const batches = await prisma.assetAnalysisBatch.findMany({ where: { status: { in: pending }, ...(options.batchId ? { id: options.batchId } : {}), OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] }, include: { brand: { select: { timezone: true } } }, orderBy: { updatedAt: 'asc' }, take: options.batchId ? 1 : 100 })
   for (const batch of batches) {
-    if (!options.force && !isNightlyWindow(now, batch.brand.timezone || 'Asia/Singapore')) continue
-    if (!options.force) {
+    if (!options.force && !batch.runImmediately && !isNightlyWindow(now, batch.brand.timezone || 'Asia/Singapore')) continue
+    if (!options.force && !batch.runImmediately) {
       const credit = await getCreditSnapshot(batch.brandId)
       if (credit.summary.usagePercent >= 100 && !credit.account.allowNightlyOverage) continue
     }

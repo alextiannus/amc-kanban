@@ -35,6 +35,7 @@ for (const table of Object.keys(rows)) {
     if (!row) return row
     row = clone(row)
     if (include?.asset) row.asset = clone(rows.mediaAsset.find(a => a.id === row.assetId))
+    if (include?.brand) row.brand = clone(rows.brand.find(b => b.id === row.brandId))
     if (include?.items) row.items = rows.assetAnalysisItem.filter(i => i.batchId === row.id).map(i => attach(i, include.items.include))
     return row
   }
@@ -132,6 +133,12 @@ manual.aiCaption = 'User description'; manual.aiTags = ['User tag']; manual.upda
 await service.processAnalysisQueue({ force: true })
 assert.equal(rows.mediaAsset.find(a => a.id === manual.id).aiCaption, 'User description')
 assert.deepEqual(rows.mediaAsset.find(a => a.id === manual.id).aiTags, ['User tag'])
+
+addImage('run-immediately')
+const immediateBatch = await service.createAnalysisBatch({ brandId: 'brand', assetIds: ['run-immediately'] })
+await db.assetAnalysisBatch.update({ where: { id: immediateBatch.id }, data: { runImmediately: true } })
+await service.processAnalysisQueue({ now: new Date('2026-10-03T12:00:00Z'), batchId: immediateBatch.id })
+assert.equal(rows.assetAnalysisItem.find(i => i.assetId === 'run-immediately').status, 'SUCCEEDED', 'manual immediate batches bypass only the nightly window')
 
 enabled = false
 assert.equal(await service.createAnalysisBatch({ brandId: 'brand', upload: true, assetIds: ['one'] }), null)

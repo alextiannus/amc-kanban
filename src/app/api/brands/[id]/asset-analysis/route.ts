@@ -3,6 +3,7 @@ import { prisma } from '@/lib/asset-analysis/db'
 import { analysisActor } from '@/lib/asset-analysis/auth'
 import { createAnalysisBatch, applyAnalysisBatch, processAnalysisQueue, retryAnalysisBatch } from '@/lib/asset-analysis/service'
 
+export const maxDuration = 240
 type Params = { params: Promise<{ id: string }> }
 function errorResponse(error: any) { return NextResponse.json({ error: error.message || 'Image analysis failed' }, { status: error.status || 400 }) }
 
@@ -45,6 +46,12 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ ok: true })
     }
     if (typeof body.batchId !== 'string') throw new Error('batchId required')
+    if (body.action === 'run-now') {
+      const updated = await prisma.assetAnalysisBatch.updateMany({ where: { id: body.batchId, brandId, status: { in: ['QUEUED', 'RUNNING'] } }, data: { runImmediately: true } })
+      if (!updated.count) throw Object.assign(new Error('Batch cannot be run now'), { status: 409 })
+      await processAnalysisQueue({ force: true, batchId: body.batchId })
+      return NextResponse.json({ batch: await prisma.assetAnalysisBatch.findFirst({ where: { id: body.batchId, brandId } }) })
+    }
     if (body.action === 'retry') return NextResponse.json({ batch: await retryAnalysisBatch(brandId, body.batchId) })
     if (body.action === 'apply') return NextResponse.json(await applyAnalysisBatch(brandId, body.batchId, body.assignments))
     throw new Error('Invalid action')
