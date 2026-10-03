@@ -1,8 +1,9 @@
-import { Prisma } from '@prisma/client'
-import { prisma } from '@/lib/prisma'
+import { Prisma, type PrismaClient } from '@prisma/client'
+import { prisma as sharedPrisma } from '@/lib/prisma'
 import { canStartCreditTask, creditForPlan, cycleBounds, defaultCreditSettings, normalizeCreditPlan, summarizeCredit } from './policy'
 
-type DbClient = Prisma.TransactionClient | typeof prisma
+const prisma = sharedPrisma as PrismaClient
+type DbClient = Prisma.TransactionClient | PrismaClient
 
 async function latestPlan(brandId: string, db: DbClient) {
   return db.brandSubscription.findFirst({
