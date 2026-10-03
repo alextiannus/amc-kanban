@@ -1,3 +1,4 @@
+import {ignoredHistoricalSubscriptionIds, includedSubscriptionFilter, isIgnoredHistoricalSubscription, ignoreHistoricalSubscription} from './immediIgnoredSubscriptions'
 import {syncMonthlyRewards} from './immediMonthlyRewards'
 import {isPaidSubscription,resolvePrincipal,orderCustomer,brandInclude} from './immediOrders'
 import crypto from 'node:crypto'
@@ -29,6 +30,7 @@ export async function withReceipt(kind: string, sourceId: string, execute: (tx: 
 }
 
 export async function syncSubscription(subscriptionId: string, config?: ImmediErpConfig, {database=prisma,send=createSalesOrder}: {database?: any;send?: typeof createSalesOrder} = {}) {
+  if (isIgnoredHistoricalSubscription(subscriptionId)) return ignoreHistoricalSubscription(database, subscriptionId)
   const cfg = config || await getImmediErpConfig()
   if (!cfg) return null
   // Commit the immutable source/ownership snapshot before dispatching any network write.
@@ -73,7 +75,7 @@ export async function syncServiceOrder(orderId: string, cfg: ImmediErpConfig) {
 export async function syncBrandAssignment(brandId: string, cfg: ImmediErpConfig) {
   // Obtain a Sales Order first. A new assignment on an existing brand also needs
   // the real current subscription represented in ERP, using its stable identity.
-  const sub = await prisma.brandSubscription.findFirst({ where: { brandId, status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } }, orderBy: { createdAt: 'desc' } })
+  const sub = await prisma.brandSubscription.findFirst({ where: { ...includedSubscriptionFilter, brandId, status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } }, orderBy: { createdAt: 'desc' } })
   if (sub) await syncSubscription(sub.id, cfg)
   return withReceipt('BRAND', brandId, async (tx, row) => {
     const brand = await tx.brand.findUnique({ where: { id: brandId }, include: { crew: { include: { members: { include: { user: true } } } } } })
@@ -109,9 +111,10 @@ export async function processImmediErpSync() {
   if (!cfg) return
   const rollout = await prisma.immediErpSync.findUnique({ where: { id: 'rollout' } })
   if (!rollout) throw new Error('Immedi ERP migration/cutover marker is missing')
+  for (const id of ignoredHistoricalSubscriptionIds) await ignoreHistoricalSubscription(prisma, id)
   let cursor: string | undefined
   do {
-    const rows = await prisma.brandSubscription.findMany({ where: { status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
+    const rows = await prisma.brandSubscription.findMany({ where: { ...includedSubscriptionFilter, status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
     for (const row of rows) await syncSubscription(row.id, cfg)
     cursor = rows.length === 100 ? rows[99].id : undefined
   } while (cursor)
@@ -124,7 +127,7 @@ export async function processImmediErpSync() {
   const tracked = await prisma.immediErpSync.findMany({ where: { kind: 'BRAND' }, select: { sourceId: true } })
   cursor = undefined
   do {
-    const brands: Array<{ id: string }> = await prisma.brand.findMany({ where: { OR: [{ id: { in: tracked.map((row: any) => row.sourceId) } }, { subscriptions: { some: { status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } } } }] }, select: { id: true }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
+    const brands: Array<{ id: string }> = await prisma.brand.findMany({ where: { OR: [{ id: { in: tracked.map((row: any) => row.sourceId) } }, { subscriptions: { some: { ...includedSubscriptionFilter, status: 'ACTIVE', feeWaived: false, totalDueUsd: { gt: 0 } } } }] }, select: { id: true }, orderBy: { id: 'asc' }, take: 100, ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
     for (const brand of brands) await syncBrandAssignment(brand.id, cfg)
     cursor = brands.length === 100 ? brands[99].id : undefined
   } while (cursor)

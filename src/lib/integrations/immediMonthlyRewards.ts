@@ -1,3 +1,4 @@
+import { includedSubscriptionFilter } from './immediIgnoredSubscriptions'
 import crypto from 'node:crypto'
 import { prisma } from '../prisma'
 import { erpPost, type ImmediErpConfig } from './immediErp'
@@ -6,7 +7,7 @@ import { brandInclude, resolvePrincipal } from './immediOrders'
 export async function syncMonthlyRewards(cfg: ImmediErpConfig, withReceipt: (kind:string,sourceId:string,execute:(tx:any,row:any)=>Promise<any>)=>Promise<any>) {
  return withReceipt('REWARDS','monthly',async(tx,row)=>{
   // One repeatable-read database snapshot, not a truncated page or inferred dates.
-  const subscriptions = await prisma.$transaction(async (db:any) => db.brandSubscription.findMany({where:{status:'ACTIVE',feeWaived:false,totalDueUsd:{gt:0}},include:{brand:{include:brandInclude}},orderBy:{id:'asc'},take:5001}),{isolationLevel:'RepeatableRead'})
+  const subscriptions = await prisma.$transaction(async (db:any) => db.brandSubscription.findMany({where:{...includedSubscriptionFilter,status:'ACTIVE',feeWaived:false,totalDueUsd:{gt:0}},include:{brand:{include:brandInclude}},orderBy:{id:'asc'},take:5001}),{isolationLevel:'RepeatableRead'})
   if(subscriptions.length>5000)throw new Error('订阅超过同步上限，需分页核对；不会按部分数据结算')
   const input={complete:true,subscriptions:subscriptions.map((s:any)=>{
    let employeeId:string|null=null

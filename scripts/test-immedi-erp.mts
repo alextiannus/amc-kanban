@@ -96,3 +96,25 @@ test('worker commits paid source and principal snapshot before send, recovers af
  await syncSubscription('s',config,{database,send});assert.equal(stored.reference,'SO1');assert.equal(attempts,2)
  await syncSubscription('s',config,{database,send});assert.equal(attempts,2)
 })
+
+import { ignoredHistoricalSubscriptionIds, includedSubscriptionFilter, ignoreHistoricalSubscription } from '../src/lib/integrations/immediIgnoredSubscriptions.ts'
+test('approved orphan exclusions stop direct dispatch, clear retry failures once, preserve source and external evidence', async () => {
+ assert.equal(new Set(ignoredHistoricalSubscriptionIds).size,32)
+ assert.ok(!includedSubscriptionFilter.id.notIn.includes('cmsh82dez04mzn32a4iakasrn'))
+ let stored:any={id:'SUBSCRIPTION:'+ignoredHistoricalSubscriptionIds[0],status:'FAILED',attempts:20,lastError:'missing brand'}
+ let audits=0,sends=0
+ const tx={$queryRaw:async()=>[{acquired:true}],immediErpSync:{upsert:async()=>stored,update:async({data}:any)=>(stored={...stored,...data})},auditLog:{create:async()=>{audits++}}}
+ const database={$transaction:async(fn:any)=>fn(tx)}
+ const send=async()=>{sends++;throw new Error('Must not dispatch excluded history')}
+ await syncSubscription(ignoredHistoricalSubscriptionIds[0],cfg,{database,send})
+ assert.equal(stored.status,'IGNORED');assert.equal(stored.lastError,null);assert.equal(stored.attempts,0)
+ await syncSubscription(ignoredHistoricalSubscriptionIds[0],cfg,{database,send})
+ assert.equal(audits,1);assert.equal(sends,0)
+ for(const evidence of [{payload:{idempotencyKey:'uncertain'}},{reference:'SO-PAID'},{status:'SYNCED'}]){
+  stored={status:'FAILED',attempts:5,...evidence};const before=structuredClone(stored)
+  await syncSubscription(ignoredHistoricalSubscriptionIds[0],cfg,{database,send})
+  assert.deepEqual(stored,before)
+ }
+ assert.equal(audits,1);assert.equal(sends,0)
+ await assert.rejects(()=>ignoreHistoricalSubscription(database,'new-orphan'),/Not an approved/)
+})
