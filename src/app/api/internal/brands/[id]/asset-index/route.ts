@@ -14,9 +14,9 @@ function qualityScore(value: unknown) {
   return Number.isFinite(score) ? Math.max(0, Math.min(1, score)) : 0.5
 }
 
-function riskTypes(value: unknown) {
+function riskTypes(value: unknown): string[] {
   const items = Array.isArray((value as any)?.items) ? (value as any).items : []
-  return [...new Set(items.map((item: any) => String(item?.type || 'other')).filter(Boolean))]
+  return [...new Set<string>(items.map((item: any) => String(item?.type || 'other')).filter(Boolean))]
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -36,7 +36,7 @@ export async function GET(request: Request, { params }: Params) {
     where: { brandId, AND: filters },
     include: { videoSegments: { orderBy: { startMs: 'asc' }, take: 100 } }, orderBy: [{ aiReady: 'desc' }, { createdAt: 'desc' }], take: limit,
   })
-  const candidates = assets.flatMap(asset => {
+  const candidates = assets.flatMap<Record<string, unknown>>(asset => {
     const common = { assetId: asset.id, url: asset.url, mimeType: asset.mimeType, filename: asset.filename, caption: asset.aiCaption, tags: asset.aiTags, category: asset.aiCategory,
       subjects: asset.subjects, captureType: asset.captureType, qualityScore: qualityScore(asset.quality), duplicateGroupId: asset.duplicateGroupId,
       linkHealthy: (asset.linkHealth as any)?.status !== 'invalid', textRiskTypes: riskTypes(asset.textDetection), searchText: asset.searchText || asset.aiCaption || '' }
