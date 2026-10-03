@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   try {
     if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object as Stripe.Checkout.Session
-      if (session.id) {
+      if (session.id && session.payment_status === 'paid') {
         await activateSubscriptionByPaymentSession(session.id)
       }
     }

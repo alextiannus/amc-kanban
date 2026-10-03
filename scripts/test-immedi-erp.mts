@@ -57,3 +57,64 @@ test('failed remote sync persists a retry deadline and survives runner reconstru
   await withReceipt('BRAND', 'b', async (client, row) => { attempts++; return client.immediErpSync.update({ data: { status: 'SYNCED', reference: 'PROJ-1', lastError: null } }) }, database)
   assert.equal(attempts, 2); assert.equal(stored.reference, 'PROJ-1'); assert.equal(stored.lastError, null)
 })
+
+import { isPaidSubscription, resolvePrincipal, buildServicePurchase } from '../src/lib/integrations/immediOrders.ts'
+test('ACTIVE chargeable subscription is accepted as paid without a second confirmation', () => {
+ const sub={status:'ACTIVE',paidAt:new Date(),feeWaived:false,totalDueUsd:100}
+ assert.ok(isPaidSubscription(sub));assert.ok(isPaidSubscription({...sub,paidAt:null}));assert.ok(!isPaidSubscription({...sub,feeWaived:true}));assert.ok(!isPaidSubscription({...sub,totalDueUsd:0}));assert.ok(!isPaidSubscription({...sub,status:'CANCELLED'}))
+})
+test('default salesperson is exact active HUMAN principal; owner, manager and ambiguous crews are rejected', () => {
+ const member={active:true,role:'PRINCIPAL',user:{id:'u1',email:'principal@example.com',type:'HUMAN',status:'ACTIVE'}}
+ const cfg2={...cfg,employeeMap:{u1:'erp-principal'}}
+ assert.equal(resolvePrincipal({crew:{members:[member]}},cfg2),'erp-principal')
+ assert.throws(()=>resolvePrincipal({crew:{members:[member,member]}},cfg2),/一位/)
+ assert.throws(()=>resolvePrincipal({crew:{members:[{...member,role:'OWNER'}]}},cfg2),/一位/)
+ assert.throws(()=>resolvePrincipal({crew:{members:[member]}},cfg),/映射/)
+})
+test('standalone add-on order uses server catalog and exact quantity/months; browser cannot set price or currency', () => {
+ const config={...cfg,itemCodeMap:{xiaohongshu_ops:'AMC-XIAOHONGSHU-MONTHLY',onsite_photo:'AMC-ON-SITE-SHOOT'}}
+ const input={deliveryDate:'2099-12-01',amount:1,currency:'USD',items:[{serviceId:'xiaohongshu_ops',quantity:2,months:3,rate:1},{serviceId:'onsite_photo',quantity:1}]}
+ const order=buildServicePurchase(input,config)
+ assert.equal(order.amount,3900);assert.equal(order.currency,'SGD');assert.equal(order.items[0].quantity,6)
+ assert.throws(()=>buildServicePurchase({...input,items:[{serviceId:'unknown',quantity:1}]},config),/不存在/)
+ assert.throws(()=>buildServicePurchase({...input,items:[{serviceId:'onsite_photo',quantity:-1}]},config),/数量/)
+ assert.throws(()=>buildServicePurchase({...input,deliveryDate:'2026-02-30'},config),/有效/)
+})
+
+import { syncSubscription } from '../src/lib/integrations/immediErpWorker.ts'
+test('worker commits paid source and principal snapshot before send, recovers after failure, never reassigns historical sale', async () => {
+ let stored:any={id:'SUBSCRIPTION:s',kind:'SUBSCRIPTION',sourceId:'s',attempts:0,status:'PENDING'}
+ const merchant={id:'b',name:'Merchant',status:'ACTIVE',owner:{email:'merchant@example.com'},crew:{members:[{active:true,role:'PRINCIPAL',user:{id:'u1',email:'principal@example.com',type:'HUMAN',status:'ACTIVE'}}]}}
+ const source={...sub,id:'s',status:'ACTIVE',feeWaived:false,paidAt:null,brandId:'b',brand:merchant,currency:'SGD',createdAt:new Date('2026-10-01T00:00:00Z')}
+ let inTransaction=false,attempts=0,committedSnapshot:any
+ const tx={$queryRaw:async()=>[{acquired:true}],brandSubscription:{findUnique:async()=>source},immediErpSync:{upsert:async()=>({...stored}),update:async({data}:any)=>{stored={...stored,...data,attempts:data.attempts?.increment?stored.attempts+1:(data.attempts??stored.attempts)};return stored}}}
+ const database={$transaction:async(fn:any)=>{inTransaction=true;const result=await fn(tx);inTransaction=false;committedSnapshot=structuredClone(stored.payload);return result}}
+ const config={...cfg,employeeMap:{u1:'erp-principal'}}
+ const send=async(_:any,p:any)=>{attempts++;assert.ok(committedSnapshot);assert.equal(p.principal_employee_id,'erp-principal');assert.equal(p.amc_source.payment_status,'paid');assert.equal(p.amc_source.paid_at,null);return attempts===1?{ok:false,error:'lost response'}:{ok:true,erpOrderName:'SO1'}}
+ await syncSubscription('s',config,{database,send});assert.equal(stored.status,'FAILED');assert.equal(attempts,1)
+ stored.nextAttemptAt=new Date(0);merchant.crew.members=[]
+ await syncSubscription('s',config,{database,send});assert.equal(stored.reference,'SO1');assert.equal(attempts,2)
+ await syncSubscription('s',config,{database,send});assert.equal(attempts,2)
+})
+
+import { ignoredHistoricalSubscriptionIds, includedSubscriptionFilter, ignoreHistoricalSubscription } from '../src/lib/integrations/immediIgnoredSubscriptions.ts'
+test('approved orphan exclusions stop direct dispatch, clear retry failures once, preserve source and external evidence', async () => {
+ assert.equal(new Set(ignoredHistoricalSubscriptionIds).size,32)
+ assert.ok(!includedSubscriptionFilter.id.notIn.includes('cmsh82dez04mzn32a4iakasrn'))
+ let stored:any={id:'SUBSCRIPTION:'+ignoredHistoricalSubscriptionIds[0],status:'FAILED',attempts:20,lastError:'missing brand'}
+ let audits=0,sends=0
+ const tx={$queryRaw:async()=>[{acquired:true}],immediErpSync:{upsert:async()=>stored,update:async({data}:any)=>(stored={...stored,...data})},auditLog:{create:async()=>{audits++}}}
+ const database={$transaction:async(fn:any)=>fn(tx)}
+ const send=async()=>{sends++;throw new Error('Must not dispatch excluded history')}
+ await syncSubscription(ignoredHistoricalSubscriptionIds[0],cfg,{database,send})
+ assert.equal(stored.status,'IGNORED');assert.equal(stored.lastError,null);assert.equal(stored.attempts,0)
+ await syncSubscription(ignoredHistoricalSubscriptionIds[0],cfg,{database,send})
+ assert.equal(audits,1);assert.equal(sends,0)
+ for(const evidence of [{payload:{idempotencyKey:'uncertain'}},{reference:'SO-PAID'},{status:'SYNCED'}]){
+  stored={status:'FAILED',attempts:5,...evidence};const before=structuredClone(stored)
+  await syncSubscription(ignoredHistoricalSubscriptionIds[0],cfg,{database,send})
+  assert.deepEqual(stored,before)
+ }
+ assert.equal(audits,1);assert.equal(sends,0)
+ await assert.rejects(()=>ignoreHistoricalSubscription(database,'new-orphan'),/Not an approved/)
+})

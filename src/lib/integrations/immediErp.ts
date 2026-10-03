@@ -95,6 +95,8 @@ export interface ErpOrderItem {
 
 export interface CreateSalesOrderParams {
   /** Unique business ID — used as Idempotency-Key to prevent duplicates */
+  principal_employee_id?: string
+  amc_source?: Record<string, unknown>
   idempotencyKey:   string
   contact_name:     string
   company_name:     string
@@ -202,6 +204,8 @@ export async function createSalesOrder(
         path:           '/sales-orders',
         idempotencyKey: params.idempotencyKey,
         body: {
+          principal_employee_id: params.principal_employee_id,
+          amc_source: params.amc_source,
           contact_name:  params.contact_name,
           company_name:  params.company_name,
           // ERP requires at least mobile_no or email to create/link a CRM Lead

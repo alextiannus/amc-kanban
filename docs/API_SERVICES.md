@@ -596,7 +596,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **265** 个 API 路径、**380** 个 HTTP 方法组合。
+共 **272** 个 API 路径、**393** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -677,6 +677,8 @@ Permanent QR contract:
 | PATCH | `/api/brands/{id}/actions/{aid}/approve` |
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
+| GET, POST | `/api/brands/{id}/ai/autopilot` |
+| GET | `/api/brands/{id}/ai/ideas` |
 | GET, POST | `/api/brands/{id}/ai/preference` |
 | GET, POST | `/api/brands/{id}/ai/tasks` |
 | GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
@@ -691,6 +693,7 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/assets/confirm-upload` |
 | GET | `/api/brands/{id}/assets/presign-upload` |
 | GET, POST | `/api/brands/{id}/assets/upload` |
+| POST | `/api/brands/{id}/assets/video-draft` |
 | GET, POST | `/api/brands/{id}/brand-plan` |
 | GET, POST | `/api/brands/{id}/brand-story-sync` |
 | GET | `/api/brands/{id}/companion/context` |
@@ -715,15 +718,18 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/drafts/batch-trigger-copywriter` |
 | POST | `/api/brands/{id}/drafts/sync-statuses` |
 | DELETE, GET, PATCH, POST | `/api/brands/{id}/folders` |
+| GET, POST | `/api/brands/{id}/google-import` |
 | GET, POST | `/api/brands/{id}/growth-sync` |
 | GET, PATCH | `/api/brands/{id}/identity` |
 | POST | `/api/brands/{id}/identity/{field}/sync` |
+| GET, POST | `/api/brands/{id}/inbox-state` |
 | GET, PATCH | `/api/brands/{id}/knowledge` |
 | POST | `/api/brands/{id}/logo` |
 | POST | `/api/brands/{id}/marketing-plan/generate` |
 | POST | `/api/brands/{id}/mcp/execute` |
 | GET, POST | `/api/brands/{id}/memory` |
 | POST | `/api/brands/{id}/notifications` |
+| GET, POST | `/api/brands/{id}/orders` |
 | GET, POST | `/api/brands/{id}/owners` |
 | DELETE, PATCH | `/api/brands/{id}/owners/{userId}` |
 | GET, POST | `/api/brands/{id}/planning` |
@@ -788,6 +794,7 @@ Permanent QR contract:
 | GET | `/api/game/status` |
 | POST | `/api/game/tasks` |
 | POST | `/api/game/tasks/override` |
+| GET, POST | `/api/inbox-state` |
 | GET | `/api/integrations/amc-growth/sso/start` |
 | GET | `/api/integrations/extension/download` |
 | GET | `/api/integrations/extension/events` |
@@ -842,7 +849,7 @@ Permanent QR contract:
 | GET | `/api/mm/health` |
 | POST | `/api/mm/subscription` |
 | POST | `/api/mm/tts-proxy` |
-| GET | `/api/notifications` |
+| GET, POST | `/api/notifications` |
 | PATCH | `/api/notifications/{id}` |
 | GET, PATCH | `/api/profile` |
 | GET, POST | `/api/profile/organization-members` |
