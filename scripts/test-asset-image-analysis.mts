@@ -6,7 +6,7 @@ import * as policy from '../src/lib/asset-analysis/policy.ts'
 
 const clone = (value: any) => structuredClone(value)
 let rows: Record<string, any[]> = { brand: [{ id: 'brand', industry: 'Fitness', name: 'Studio', description: 'Reformer studio' }], mediaAsset: [], brandFolder: [], assetAnalysisBatch: [], assetAnalysisItem: [], assetVideoSegment: [] }
-let ids = 0, time = Date.now(), txLock = Promise.resolve(), enabled = true
+let ids = 0, time = Date.now(), txLock = Promise.resolve(), enabled = true, advisoryLocks = 0
 const stamp = () => new Date(++time)
 const matches = (row: any, where: any = {}): boolean => Object.entries(where).every(([key, value]: [string, any]) => {
   if (key === 'OR') return value.some((v: any) => matches(row, v))
@@ -23,7 +23,7 @@ const matches = (row: any, where: any = {}): boolean => Object.entries(where).ev
   return row[key] === value
 })
 const db: any = {
-  $queryRaw: async () => [],
+  $executeRaw: async () => { advisoryLocks += 1; return 1 },
   $executeRawUnsafe: async (sql:string,id:string) => {assert.match(sql,/ModelPolicyJob/);assert.match(id,/^kanban:asset-batch:/);return 1},
   $transaction: (fn: any) => {
     const result = txLock.then(async () => { const old = clone(rows); try { return await fn(db) } catch (e) { rows = old; throw e } })
@@ -91,6 +91,7 @@ addImage('one'); addImage('two'); addVideo('video-one')
 rows.mediaAsset.push({ id: 'foreign', brandId: 'other', mimeType: 'image/jpeg', aiCategory: '素材库', updatedAt: stamp() })
 
 const batch = await service.createAnalysisBatch({ brandId: 'brand', assetIds: ['one', 'two', 'video-one', 'foreign'], batchKey: 'same' })
+assert.equal(advisoryLocks, 1, 'enqueue uses an execute-only advisory lock')
 assert.equal(rows.assetAnalysisItem.length, 3, 'foreign media excluded')
 assert.equal((await service.createAnalysisBatch({ brandId: 'brand', assetIds: ['one'], batchKey: 'same' })).id, batch.id)
 failAsset = 'two'
@@ -107,6 +108,7 @@ assert.equal(rows.assetVideoSegment.length, 1)
 assert.equal(rows.mediaAsset.find(asset => asset.id === 'video-one').assetKind, 'video')
 failAsset = undefined
 await service.retryAnalysisBatch('brand', batch.id)
+assert.equal(advisoryLocks, 3, 'retry uses the same execute-only advisory lock')
 await service.processAnalysisQueue({ force: true })
 assert.equal(submitted.filter(r => r.mediaInputs?.[0]?.id === 'one').length, 1, 'successful image not billed again')
 const assignments = rows.assetAnalysisItem.map(i => ({ itemId: i.id, newFolderName: 'Training' }))

@@ -19,7 +19,7 @@ export async function createAnalysisBatch(input: { brandId: string; assetIds?: s
   await ensureAssetFolders(input.brandId)
   return prisma.$transaction(async tx => {
     // Serialize enqueue decisions for a brand, including simultaneous upload callbacks.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`asset-analysis:${input.brandId}`}))`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`asset-analysis:${input.brandId}`}))`
     const brand = await tx.brand.findUniqueOrThrow({ where: { id: input.brandId } })
     const key = input.batchKey || randomUUID()
     const existing = await tx.assetAnalysisBatch.findUnique({ where: { brandId_batchKey: { brandId: input.brandId, batchKey: key } } })
@@ -194,7 +194,7 @@ export async function processAnalysisQueue(options: { force?: boolean; now?: Dat
 
 export async function retryAnalysisBatch(brandId: string, batchId: string) {
   return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`asset-analysis:${brandId}`}))`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`asset-analysis:${brandId}`}))`
     const batch = await tx.assetAnalysisBatch.findFirst({ where: { id: batchId, brandId }, include: { items: { include: { asset: true } } } })
     if (!batch || batch.status === 'APPLIED') throw fail('Batch cannot be retried')
     if (batch.leaseUntil && batch.leaseUntil > new Date()) throw fail('Batch is processing')
