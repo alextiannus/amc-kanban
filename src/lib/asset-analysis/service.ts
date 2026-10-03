@@ -106,7 +106,7 @@ Use ${batch.language === 'en' ? 'English' : 'Chinese'} except exact OCR text. De
         perceptualHash: result.duplicateHint || asset.perceptualHash, duplicateGroupId,
         linkHealth: { status: 'accessible', checkedAt: new Date().toISOString() }, analysisState: { status: 'SUCCEEDED', stage: 'indexed', updatedAt: new Date().toISOString() },
         analysisVersion: ANALYSIS_VERSION, searchText: result.searchText,
-        imageAnalysis: { ...result, model: job.modelName || ANALYSIS_MODEL, resolvedModel: job.resolvedModel || job.modelName || ANALYSIS_MODEL, configurationVersion:job.configurationVersion??null, version: ANALYSIS_VERSION, analyzedAt: new Date().toISOString(), generatedTags: previous?.tagsEdited ? previous.generatedTags || [] : generatedTags, captionEdited: previous?.captionEdited || !untouched, tagsEdited: previous?.tagsEdited || !untouched },
+        imageAnalysis: { ...result, model: job.modelName || ANALYSIS_MODEL, resolvedModel: job.resolvedModel || job.modelName || ANALYSIS_MODEL, configurationVersion:job.configurationVersion??null, version: ANALYSIS_VERSION, analyzedAt: new Date().toISOString(), generatedTags: previous?.tagsEdited ? previous.generatedTags || [] : generatedTags, captionEdited: previous?.captionEdited || !untouched, tagsEdited: previous?.tagsEdited || !untouched } as any,
       } })
       await tx.assetAnalysisItem.update({ where: { id: item.id }, data: { status: 'SUCCEEDED', result: result as any, error: null,
         originalCategory: untouched ? updated.aiCategory : item.originalCategory, originalUpdatedAt: untouched ? updated.updatedAt : item.originalUpdatedAt } })
