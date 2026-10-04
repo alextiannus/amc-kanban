@@ -14,6 +14,7 @@
     "social-insight:backfill:dry-run": "node scripts/backfill-social-insight-history.mjs",
     "social-insight:backfill": "node scripts/backfill-social-insight-history.mjs --apply",
     "test:social-insight-history": "node --experimental-strip-types scripts/test-social-insight-history.mts",
+    "test:public-social-profile": "node --experimental-strip-types scripts/test-public-social-profile.mts",
     "start": "next start",
     "start:direct": "node node_modules/next/dist/cli/next-start.js -p 3000",
     "lint": "eslint",

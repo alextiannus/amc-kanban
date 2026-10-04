@@ -492,7 +492,7 @@ Permanent QR contract:
 
 ## 3.18 Integration Service
 
-职责：第三方服务连接、浏览器扩展事件、Lark 上传、Stripe webhook。
+职责：第三方服务连接、浏览器扩展事件、Lark 上传、Stripe webhook，以及已记录社交主页资料的只读查询。
 
 接口：
 
@@ -501,7 +501,10 @@ Permanent QR contract:
 - `POST /api/integrations/extension/test-trigger`
 - `POST /api/integrations/lark/upload/:id`
 - `POST /api/integrations/stripe/webhook`
+- `GET /api/integrations/social/public-profile`
 - `GET /api/integrations/status`
+
+`GET /api/integrations/social/public-profile` 不执行实时抓取，只返回匹配的未解绑 `SocialAccount` 已记录字段。所有未记录字段均为 `null`；响应同时返回 `availabilityStatus`、固定为 `UNVERIFIED` 的 `verificationStatus`、面向界面的 `displayStatus`、`requiresVerification`、`observedAt` 和 `missingFields`。无匹配账号时 `source=unavailable`、`availabilityStatus=MISSING`、`displayStatus=未验证／待补充`。禁止用推算值或模板文字补齐粉丝数、帖子数、互动率、简介或主页链接。
 
 ## 3.19 Meta and Agent Bootstrap Service
 
@@ -596,7 +599,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **272** 个 API 路径、**393** 个 HTTP 方法组合。
+共 **276** 个 API 路径、**398** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -655,6 +658,7 @@ Permanent QR contract:
 | POST | `/api/agents/keys` |
 | GET, POST | `/api/agents/profile` |
 | POST | `/api/agents/register` |
+| GET, PATCH | `/api/amc-credit/brands` |
 | GET | `/api/analytics/activity` |
 | GET | `/api/analytics/agents/{id}/weekly` |
 | GET | `/api/analytics/benchmarks` |
@@ -683,6 +687,7 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/ai/tasks` |
 | GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
 | POST | `/api/brands/{id}/ai/tasks/{taskId}/adopt` |
+| GET | `/api/brands/{id}/amc-credit` |
 | GET | `/api/brands/{id}/analytics` |
 | GET, POST | `/api/brands/{id}/apify-sync` |
 | GET, PATCH, POST | `/api/brands/{id}/asset-analysis` |
@@ -816,6 +821,8 @@ Permanent QR contract:
 | GET | `/api/integrations/status` |
 | POST | `/api/integrations/stripe/webhook` |
 | POST | `/api/internal/access/resolve` |
+| POST | `/api/internal/amc-credit/usage` |
+| GET | `/api/internal/brands/{id}/asset-index` |
 | POST | `/api/internal/content-assets` |
 | POST | `/api/internal/content-brand-voices` |
 | POST | `/api/internal/content-context` |

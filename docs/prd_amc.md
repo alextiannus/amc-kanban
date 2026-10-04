@@ -206,6 +206,7 @@ Kanban 登录后的品牌订阅门禁使用已授权品牌列表中的有效订�
 - 草稿可保存并发布首条评论、Instagram 地理位置、AI 内容标签、Reel 是否上主页网格及 Trial Reel 策略。位置标签只允许 Instagram 单媒体 `TIMELINE`、`REEL` 或 `STORY`，不允许轮播；AI 标签仅在明确选择时提交。
 - TikTok 仅在图片轮播时允许选择 PostFast 返回的商业音乐，`tiktokMusicSoundId` 与自动加音乐互斥。Google Business 支持 `STANDARD`、`EVENT`、`OFFER` 以及 CTA、活动日期、优惠码和条款；所有字段在提交前按 PostFast 的组合规则校验。
 - 粉丝趋势优先使用 PostFast `follower-history` 的权威时间序列补齐本地快照。内容分析除基础互动外持久化视频观看时长、视频观看数、Instagram 保存率与 Reel 跳过率；数据不存在时明确显示缺失，不用零值伪造。
+- 公共社交主页查询只返回 `SocialAccount` 中实际记录的字段，不执行实时外部抓取。找不到账号或字段时返回 `null`、`UNVERIFIED` 和“未验证／待补充”；即使存在数据库记录，也只能标记“已记录，未实时验证”。禁止生成粉丝数、帖子数、互动率、简介或主页链接作为 fallback，未验证数据不得进入品牌审计、客户报告或策略生成。
 - 未提供新控制项的历史草稿与 API 请求继续保持旧行为。所有高风险互动和营销发布均写入 AuditLog。
 
 ### 协作与素材流转

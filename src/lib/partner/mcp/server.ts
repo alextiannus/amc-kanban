@@ -2991,7 +2991,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
   registerTool(
     'fetch_public_social_profile',
-    'Fetch public social media profile stats (followers, posts, engagement).',
+    'Read recorded public social profile fields. Missing fields are returned as null with an explicit unverified status; this tool does not fabricate or live-scrape profile statistics.',
     {
       platform: z.enum(['instagram', 'facebook']).describe('Social platform'),
       handle: z.string().describe('Public handle / profile username'),

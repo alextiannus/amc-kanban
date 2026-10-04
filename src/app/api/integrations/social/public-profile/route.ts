@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { publicSocialProfileResponse } from '@/lib/publicSocialProfile'
 
 export async function GET(request: Request) {
   const session = await getSession()
@@ -28,40 +29,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Supported platforms are: instagram, facebook' }, { status: 400 })
   }
 
+  const normalizedHandle = handle.trim().replace(/^@+/, '').trim()
+  if (!normalizedHandle) {
+    return NextResponse.json({ error: 'handle must not be empty' }, { status: 400 })
+  }
+
   // 1. Try to find existing social account records in the database
   const dbAccount = await prisma.socialAccount.findFirst({
     where: {
       platformId: normalizedPlatform,
-      handle: { equals: handle.replace(/^@/, '').trim(), mode: 'insensitive' }
+      handle: { equals: normalizedHandle, mode: 'insensitive' },
+      unboundAt: null,
     },
     select: {
-      id: true,
       displayName: true,
       followerCount: true,
       profileUrl: true,
-    }
+      snapshotAt: true,
+      followerCountUpdatedAt: true,
+    },
+    orderBy: [
+      { followerCountUpdatedAt: { sort: 'desc', nulls: 'last' } },
+      { snapshotAt: { sort: 'desc', nulls: 'last' } },
+      { updatedAt: 'desc' },
+    ],
   })
 
-  // 2. Generate realistic public profile metadata
-  // Psuedo-random generation based on handle to ensure consistency across calls
-  const seed = (handle.length * 9) % 11
-  const followerCount = dbAccount?.followerCount || Math.round(3500 + seed * 1250)
-  const postCount = Math.round(120 + seed * 15)
-  const avgEngagementRate = Number((2.5 + (seed % 4) * 0.7).toFixed(2)) // 2.5% to 4.6%
-
-  const displayName = dbAccount?.displayName || handle.replace(/^@/, '')
-  const bio = `${displayName} | 官方${normalizedPlatform === 'instagram' ? 'Instagram' : 'Facebook'}主页。关注我们，获取最新产品动态与精彩活动！`
-
-  return NextResponse.json({
-    success: true,
-    platform: normalizedPlatform,
-    handle: handle.trim(),
-    displayName,
-    followerCount,
-    postCount,
-    avgEngagementRate,
-    bio,
-    profileUrl: dbAccount?.profileUrl || `https://www.${normalizedPlatform}.com/${handle.replace(/^@/, '')}`,
-    source: dbAccount ? 'database_sync' : 'scraped_fallback'
+  return NextResponse.json(publicSocialProfileResponse({
+    platform: normalizedPlatform as 'instagram' | 'facebook',
+    handle: normalizedHandle,
+    account: dbAccount,
+  }), {
+    headers: { 'Cache-Control': 'no-store' },
   })
 }

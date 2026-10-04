@@ -220,7 +220,7 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
     *   `postfast_generate_connect_link` (Deprecated alias)
 
 ### `fetch_public_social_profile`
-*   **Description**: Fetch public social media profile stats (followers, posts, engagement).
+*   **Description**: Read fields already recorded for an Instagram or Facebook profile. This tool does not live-scrape the platform. Missing fields are `null` and the response explicitly reports `UNVERIFIED` / `未验证／待补充`; callers must not use them as audit, report, or strategy facts.
 *   **Arguments**:
     *   `platform` (enum: `['instagram', 'facebook']`, required)
     *   `handle` (string, required)

@@ -161,7 +161,7 @@
 *   **Happy Path**:
     1. Agent 定时检索到有待发卡片，拉取已审定的文案和 Singapore OBS 存储的图片。
     2. 对支持官方 API 的渠道（Google Business Profile、Instagram Business、Facebook Page）进行静默发布。
-    3. 发布成功 5 分钟后，Agent 调用 `fetch_public_social_profile()` 读取主页最新 Post。
+    3. 发布成功后的最新帖子与平台指标通过 PostFast／Social Insight 同步读取；`fetch_public_social_profile()` 只读取本地已记录的主页字段，不能用来证明最新帖子或实时平台表现，缺失资料保持未验证／待补充。
     4. 提取到帖子的真实线上 URL（如 `https://www.instagram.com/p/C_xxxx/`）。
     5. 将 URL 回填看板卡片，状态变更为 `done`，通知商家查阅。
 *   **Exception Flow**:
