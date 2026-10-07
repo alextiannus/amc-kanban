@@ -145,6 +145,7 @@ export async function GET(request: Request) {
     usedCount: asset.usedCount,
     lastUsedAt: asset.lastUsedAt?.toISOString() ?? null,
     sourceType: asset.sourceType,
+    videoProjectId: asset.videoProjectId,
     createdAt: asset.createdAt.toISOString(),
   }))
 
