@@ -6,6 +6,9 @@
     "node": "20.x"
   },
   "scripts": {
+    "test:asset-collections": "node --experimental-strip-types scripts/test-asset-collections.mts",
+    "test:asset-library-templates": "node --experimental-strip-types scripts/test-asset-library-templates.mts",
+    "test:asset-library-migration": "node --experimental-strip-types scripts/test-asset-library-migration.mts",
     "test:access-overview": "tsx scripts/test-access-overview.mts",
     "dev": "next dev",
     "build": "next build",

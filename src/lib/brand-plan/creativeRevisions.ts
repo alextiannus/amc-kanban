@@ -5,6 +5,7 @@ import { readBrandFacts } from '../ai-native/facts.ts'
 import { createHash } from 'node:crypto'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
+import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
@@ -44,7 +45,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
   const requestHash = creativeDigest({expectedRevision:body.expectedRevision,patch,...(ai?{ai}:{}),...(seed?{month,creativeId}:{})})
   const period = revisionPeriod(month,creativeId)
-  return db.$transaction(async (tx: Prisma.TransactionClient) => {
+  const saved = await db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Internal library enrollment uses the same lock, revision chain and audit as manual edits.
     if(seed){
       await authorize(tx,actor,brandId,true)
@@ -117,6 +118,11 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     await tx.auditLog.create({data:{actorId:user.id,actorType:automatic?'AI':user.type,actorName:automatic?'AMC-MM AI User Assistant':user.nickname,action:'CREATIVE_REVISION_SAVED',resourceType:'BrandCreative',resourceId:creativeId,oldValue:{hash:body.expectedRevision,parentRevisionId:parent.id},newValue:{revisionId:entry.id,revision,hash:creativeDigest(next)},metadata:{brandId,month,...(ai?{ai}:{}),principalIds:principals.map(member=>member.userId),sourceCreativeId:parentInput.source?.creativeId || null}}})
     return {ok:true,replayed:false,receipt:present(entry)}
   },{maxWait:10000,timeout:15000})
+  if (db === prisma) {
+    const receipt = (saved as any).receipt
+    await syncConfirmedCreativeCollection({ brandId, month, creativeId, creativeVersion: receipt?.revision || 0, creative: receipt?.content, createdById: actor.id }).catch(error => console.error('[creative-collections] sync failed', error))
+  }
+  return saved
 }
 
 // A legacy month replacement cannot bypass the revision service after enrollment.

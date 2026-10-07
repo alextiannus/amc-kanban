@@ -59,8 +59,13 @@ export async function GET(request: Request, { params }: Params) {
       orderBy: { createdAt: 'asc' },
     })
 
-    const counts = await prisma.mediaAsset.groupBy({ by: ['aiCategory'], where: { brandId }, _count: { _all: true } })
-    return NextResponse.json({ folders: folders.map(folder => ({ ...folder, assetCount: counts.find(c => c.aiCategory === folder.name)?._count._all || 0 })) })
+    const [folderCounts, legacyCounts] = await Promise.all([
+      prisma.mediaAsset.groupBy({ by: ['folderId'], where: { brandId, folderId: { not: null } }, _count: { _all: true } }),
+      prisma.mediaAsset.groupBy({ by: ['aiCategory'], where: { brandId, folderId: null }, _count: { _all: true } }),
+    ])
+    const byFolderId = new Map(folderCounts.map(count => [count.folderId, count._count._all]))
+    const byLegacyName = new Map(legacyCounts.map(count => [count.aiCategory, count._count._all]))
+    return NextResponse.json({ folders: folders.map(folder => ({ ...folder, assetCount: (byFolderId.get(folder.id) || 0) + (byLegacyName.get(folder.name) || 0), canRename: folder.folderKind !== 'STANDARD', canDelete: folder.folderKind !== 'STANDARD' })) })
   } catch (error) {
     console.error('[GET /api/brands/[id]/folders]', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -104,6 +109,7 @@ export async function POST(request: Request, { params }: Params) {
       data: {
         brandId,
         name: folderName,
+        folderKind: 'CUSTOM',
       },
     })
 
@@ -148,20 +154,14 @@ export async function DELETE(request: Request, { params }: Params) {
       throw Object.assign(new Error('Folder not found'), { status: 404 })
     }
 
-    if (RESERVED_FOLDERS.has(folder.name)) {
+    if (folder.folderKind === 'STANDARD' || RESERVED_FOLDERS.has(folder.name)) {
       throw Object.assign(new Error('System folders cannot be deleted'), { status: 409 })
     }
 
     // Move assets and delete the folder in one transaction.
-    await tx.mediaAsset.updateMany({
-      where: {
-        brandId,
-        aiCategory: folder.name,
-      },
-      data: {
-        aiCategory: '素材库',
-      },
-    })
+    const reviewFolder = await tx.brandFolder.findUnique({ where: { brandId_systemKey: { brandId, systemKey: 'needs_review' } } })
+    if (!reviewFolder) throw Object.assign(new Error('Standard review folder is missing'), { status: 409 })
+    await tx.mediaAsset.updateMany({ where: { brandId, OR: [{ folderId: folder.id }, { folderId: null, aiCategory: folder.name }] }, data: { folderId: reviewFolder.id, aiCategory: reviewFolder.name } })
 
     // 2. Delete the folder record
     await tx.brandFolder.delete({
@@ -188,9 +188,9 @@ export async function PATCH(request: Request, { params }: Params) {
     const folder = await prisma.$transaction(async tx => {
       const existing = await tx.brandFolder.findFirst({ where: { id: body.folderId, brandId } })
       if (!existing) throw new Error('Folder not found')
-      if (RESERVED_FOLDERS.has(existing.name)) throw new Error('System folders cannot be renamed')
+      if (existing.folderKind === 'STANDARD' || RESERVED_FOLDERS.has(existing.name)) throw new Error('System folders cannot be renamed')
       const updated = await tx.brandFolder.update({ where: { id: existing.id }, data: { name } })
-      await tx.mediaAsset.updateMany({ where: { brandId, aiCategory: existing.name }, data: { aiCategory: name } })
+      await tx.mediaAsset.updateMany({ where: { brandId, OR: [{ folderId: existing.id }, { folderId: null, aiCategory: existing.name }] }, data: { aiCategory: name } })
       return updated
     }, { isolationLevel: 'Serializable' })
     return NextResponse.json({ folder })

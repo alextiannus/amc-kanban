@@ -1,13 +1,15 @@
 import { prisma } from '@/lib/asset-analysis/db'
-import { INITIAL_FOLDERS } from './policy'
+import { templateForIndustry } from '@/lib/asset-library/templates'
 
 export async function ensureAssetFolders(brandId: string) {
   await prisma.$transaction(async tx => {
-    const claimed = await tx.brand.updateMany({ where: { id: brandId, assetFoldersInitialized: false }, data: { assetFoldersInitialized: true } })
-    if (claimed.count) await tx.brandFolder.createMany({ data: INITIAL_FOLDERS.map(name => ({ brandId, name })), skipDuplicates: true })
-    // Adopt existing directory names created through upload / MCP without moving any assets.
-    const categories = await tx.mediaAsset.findMany({ where: { brandId, aiCategory: { not: null } }, distinct: ['aiCategory'], select: { aiCategory: true } })
-    const names = categories.map(a => a.aiCategory!).filter(name => !['raw', '素材库', 'all', '已使用'].includes(name))
-    if (names.length) await tx.brandFolder.createMany({ data: names.map(name => ({ brandId, name })), skipDuplicates: true })
+    const brand = await tx.brand.findUniqueOrThrow({ where: { id: brandId }, select: { industry: true } })
+    const template = templateForIndustry(brand.industry)
+    for (const folder of template.folders) {
+      const existingByName = await tx.brandFolder.findUnique({ where: { brandId_name: { brandId, name: folder.zh } } })
+      if (existingByName) await tx.brandFolder.update({ where: { id: existingByName.id }, data: { systemKey: folder.key, folderKind: 'STANDARD', templateVersion: template.key } })
+      else await tx.brandFolder.upsert({ where: { brandId_systemKey: { brandId, systemKey: folder.key } }, create: { brandId, name: folder.zh, systemKey: folder.key, folderKind: 'STANDARD', templateVersion: template.key }, update: { folderKind: 'STANDARD', templateVersion: template.key } })
+    }
+    await tx.brand.update({ where: { id: brandId }, data: { assetFoldersInitialized: true } })
   })
 }

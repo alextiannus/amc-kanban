@@ -15,6 +15,8 @@ import {
 } from '@/lib/mediaValidation'
 import { prisma } from '@/lib/prisma'
 import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calendarSync'
+import { assertCollectionTarget, findReusableAsset, linkAssetToCollection } from '@/lib/asset-library/collections'
+import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -33,6 +35,9 @@ interface ConfirmUploadRequest {
   aiTags?: string[]
   aiCaption?: string
   creativeId?: string
+  collectionId?: string
+  slotId?: string
+  contentHash?: string
   userId?: string
 }
 
@@ -74,11 +79,16 @@ async function createConfirmedAsset(input: {
       { status: 400 },
     )
   }
+  if (body.collectionId) {
+    try { await assertCollectionTarget(brandId, body.collectionId, body.slotId) }
+    catch (error: any) { return NextResponse.json({ error: error?.message || 'Asset collection not found' }, { status: error?.status || 404 }) }
+  } else if (body.slotId) return NextResponse.json({ error: 'collectionId is required when slotId is provided' }, { status: 400 })
 
   const existing = await prisma.mediaAsset.findFirst({
     where: { brandId, url },
   })
   if (existing) {
+    if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: existing.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
     return NextResponse.json({
       ok: true,
       assetId: existing.id,
@@ -123,6 +133,18 @@ async function createConfirmedAsset(input: {
   }
 
   try {
+    const contentHash = typeof body.contentHash === 'string' && /^[a-f0-9]{64}$/i.test(body.contentHash) ? body.contentHash.toLowerCase() : null
+    const reusable = contentHash ? await findReusableAsset(brandId, contentHash) : null
+    if (reusable && reusable.sizeBytes === metadata.sizeBytes && reusable.mimeType === metadata.mimeType) {
+      if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: reusable.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
+      if (body.creativeId) await submitAssetToCalendarCreativeRequirement({ brandId, assetId: reusable.id, creativeId: body.creativeId, submittedBy: uploadedBy })
+      const duplicateObjectDeleted = await deleteHuaweiObsObject(key).catch(() => false)
+      return NextResponse.json({ ok: true, assetId: reusable.id, assetUrl: reusable.url, storageKey: key, storageEngine: 'huawei_obs', asset: reusable, exactDuplicateReused: true, duplicateObjectDeleted, uploadedObjectRetained: !duplicateObjectDeleted, uploadedAt: reusable.createdAt.toISOString() })
+    }
+    await ensureAssetFolders(brandId)
+    const requestedFolder = folder && !['素材库', 'raw'].includes(folder) ? await prisma.brandFolder.findFirst({ where: { brandId, name: folder } }) : null
+    const initialFolder = body.collectionId || !requestedFolder ? await prisma.brandFolder.findUnique({ where: { brandId_systemKey: { brandId, systemKey: 'needs_review' } } }) : requestedFolder
+    if (!initialFolder) return NextResponse.json({ error: 'Standard review folder is missing' }, { status: 500 })
     const asset = await prisma.mediaAsset.create({
       data: {
         brandId,
@@ -134,8 +156,10 @@ async function createConfirmedAsset(input: {
         height: metadata.height ?? null,
         technicalMetadata: metadata,
         assetKind: metadata.mimeType.startsWith('video/') ? 'video' : 'image',
+        contentHash,
+        folderId: initialFolder.id,
         aiTags: Array.isArray(aiTags) ? aiTags : [],
-        aiCategory: folder || '素材库',
+        aiCategory: initialFolder.name,
         aiCaption: aiCaption || null,
         creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
         aiReady: true,
@@ -143,6 +167,7 @@ async function createConfirmedAsset(input: {
         sourceType: 'huawei_obs',
       },
     })
+    if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: asset.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
     if (body.creativeId) {
       await submitAssetToCalendarCreativeRequirement({
         brandId,

@@ -1,7 +1,8 @@
 export const ANALYSIS_MODEL = 'doubao-seed-2.1-turbo'
 export const ANALYSIS_VERSION = 'asset-image-video-v2'
-export const PROTECTED_FOLDERS = ['素材库', 'raw', '封面图', '视频原片', 'AI视频', '已使用', '待确认', '重复素材', '不建议使用', 'all']
-export const INITIAL_FOLDERS = ['菜品', '门店环境', '人物', '活动与宴席', '菜单与价格', '视频原片', '待确认', '重复素材', '不建议使用', '封面图', 'AI视频']
+import { canonicalFolderForAnalysis, folderForKey, RESTAURANT_TEMPLATE } from '../asset-library/templates.ts'
+export const INITIAL_FOLDERS = RESTAURANT_TEMPLATE.folders.map(folder => folder.zh)
+export const PROTECTED_FOLDERS = ['素材库', 'raw', '封面图', 'AI视频', '已使用', 'all', ...INITIAL_FOLDERS]
 
 export function folderName(value: unknown): string {
   if (typeof value !== 'string') throw new Error('Folder name is required')
@@ -59,19 +60,8 @@ export function parseImageAnalysis(value: any): ImageAnalysisResult {
 }
 
 export function suggestedFolder(result: ImageAnalysisResult) {
-  if (result.needsReview) return { topLevel: '待确认' }
-  if (result.quality.overall < 0.35) return { topLevel: '不建议使用' }
-  const types = new Set(result.subjects.map(subject => subject.type.toLowerCase()))
-  const classification = [result.contentType, ...result.tags].join(' ').toLowerCase()
-  if (types.has('dish') || types.has('food') || types.has('菜品') || /菜|food|dish|meal|drink|beverage/.test(classification)) {
-    const dish = result.subjects.find(subject => ['dish', 'food', '菜品'].includes(subject.type.toLowerCase()) && subject.name && subject.confidence >= 0.8)?.name
-    return { topLevel: '菜品', ...(dish ? { child: folderName(dish) } : {}) }
-  }
-  if (types.has('menu') || types.has('price') || types.has('菜单') || /菜单|价格|menu|price/.test(classification)) return { topLevel: '菜单与价格' }
-  if (types.has('person') || types.has('人物') || /人物|顾客|员工|person|people|customer|staff/.test(classification)) return { topLevel: '人物' }
-  if (types.has('event') || types.has('banquet') || types.has('活动') || /活动|宴席|event|banquet|party/.test(classification)) return { topLevel: '活动与宴席' }
-  if (types.has('store') || types.has('environment') || types.has('门店环境') || /门店|环境|store|interior|exterior|environment/.test(classification)) return { topLevel: '门店环境' }
-  return { topLevel: '待确认' }
+  const key = canonicalFolderForAnalysis(RESTAURANT_TEMPLATE, result)
+  return { topLevel: folderForKey(RESTAURANT_TEMPLATE, key).zh, systemKey: key }
 }
 
 export function isNightlyWindow(at: Date, timezone: string, startHour = 2, durationHours = 4) {

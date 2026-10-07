@@ -29,6 +29,7 @@ import type { CalendarCreativeMatchStatus } from '@/lib/brand-plan/calendarCreat
 import { resolveCalendarCreativeCandidateWithRetry } from '@/lib/brand-plan/calendarCreativeMatching'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import { syncConfirmedCalendarItemsToDrafts } from '@/lib/brand-plan/calendarSync'
+import { syncConfirmedCreativeCollection } from '@/lib/brand-plan/creativeCollections'
 import {
   researchReportTimezone,
   researchReviewLocationId,
@@ -1138,6 +1139,7 @@ async function saveWorkspacePatch(
     await protectTrackedCreativeChanges(brandId, current, { ...current, publishingCalendar })
     await syncCalendarMaterialRequirements(brandId, month, items)
     await syncConfirmedCalendarItemsToDrafts(brandId, month, items)
+    await Promise.all(items.map(item => syncConfirmedCreativeCollection({ brandId, month, creativeId: item.id, creativeVersion: 0, creative: item })))
     await saveMarketingSolutionVersion({
       brandId,
       kind: 'CALENDAR',
