@@ -28,5 +28,5 @@ export function recoveryRequestKey(brandId: string, poolIdeaId: string, version:
 }
 
 export function shouldRetireDailyIdea(errorCode: string) {
-  return errorCode === 'creative_direction_limit'
+  return ['creative_direction_limit','creative_subject_limit','creative_duplicate'].includes(errorCode)
 }

@@ -1,4 +1,4 @@
-import {creativeDirection,duplicateCreative} from '../ai-native/creative-diversity.ts'
+import {creativeDirection,duplicateCreative,exceedsCreativeSubjectLimit} from '../ai-native/creative-diversity.ts'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma.ts'
 import { readBrandFacts } from '../ai-native/facts.ts'
@@ -58,10 +58,11 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       if (record(existing.input).requestHash !== requestHash) throw new CreativeRevisionError('creative_request_key_reused',409)
       return {ok:true,replayed:true,receipt:present(existing)}
     }
+    let currentFacts:any=null
     if(ai){
       await tx.$queryRaw`SELECT "id" FROM "Brand" WHERE "id" = ${brandId} FOR SHARE`
-      const facts=await readBrandFacts(tx,brandId)
-      if(createHash('sha256').update(JSON.stringify(facts)).digest('hex')!==ai.contextDigest)throw new CreativeRevisionError('brand_context_changed',409)
+      currentFacts=await readBrandFacts(tx,brandId)
+      if(createHash('sha256').update(JSON.stringify(currentFacts)).digest('hex')!==ai.contextDigest)throw new CreativeRevisionError('brand_context_changed',409)
     }
     const knowledge = await tx.brandKnowledge.findUnique({where:{brandId}})
     const workspace = creativeWorkspace(knowledge)
@@ -75,8 +76,13 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       if(!active.some(row=>row.id===ai.poolIdeaId))throw new CreativeRevisionError('daily_idea_replaced',409)
       const ids=new Set(active.map(row=>row.id))
       await retireDailyPlans(tx,workspace,brandId,user,ids)
-      const retained=Object.values(workspace.publishingCalendar?.months||{}).flat().filter((item:any)=>item&& !['archived','deleted','published','done','已发布','已完成','归档','已删除'].includes(item.status)) as any[]
-      if(retained.some(item=>duplicateCreative(seed,item))||retained.filter(item=>creativeDirection(item)===creativeDirection(seed)).length>=2)throw new CreativeRevisionError('creative_direction_limit',409)
+    }
+    if(ai&&seed){
+      const retained=monthItems(workspace,month).filter((item:any)=>item&&!['archived','deleted','published','done','已发布','已完成','归档','已删除'].includes(String(item.status||'').toLowerCase())) as any[]
+      const reviewedSeed={...seed,...patch}
+      if(retained.some(item=>duplicateCreative(reviewedSeed,item)))throw new CreativeRevisionError('creative_duplicate',409)
+      if(exceedsCreativeSubjectLimit(reviewedSeed,retained,currentFacts?.productCatalog||[]))throw new CreativeRevisionError('creative_subject_limit',409)
+      if(ai.automaticDaily&&retained.filter(item=>creativeDirection(item)===creativeDirection(reviewedSeed)).length>=2)throw new CreativeRevisionError('creative_direction_limit',409)
     }
     const known = monthItems(workspace,month).find(item=>item.id===creativeId)
     if(seed&&known)throw new CreativeRevisionError('recommendation_already_saved',409)

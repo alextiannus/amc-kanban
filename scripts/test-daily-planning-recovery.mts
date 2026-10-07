@@ -15,6 +15,8 @@ assert.equal(isRecoverableDailyWait('waiting', 'external_result', true), false)
 assert.equal(isRecoverableDailyWait('waiting', 'interrupted', false), false)
 assert.equal(isRecoverableDailyWait('failed', 'interrupted', true), false)
 assert.equal(shouldRetireDailyIdea('creative_direction_limit'), true)
+assert.equal(shouldRetireDailyIdea('creative_subject_limit'), true)
+assert.equal(shouldRetireDailyIdea('creative_duplicate'), true)
 assert.equal(shouldRetireDailyIdea('daily_task_waiting'), false)
 
 assert.equal(dailyRecoverySlots([

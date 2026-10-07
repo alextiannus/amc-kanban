@@ -105,6 +105,7 @@
     "test:admin-brand-principal": "node --import tsx scripts/test-admin-brand-principal.mts",
     "test:postfast-account-health": "node --import tsx scripts/test-postfast-account-health.mts",
     "test:creative-revisions": "node --import tsx scripts/test-creative-revision-route.mts && node --import tsx scripts/test-creative-revisions.mts",
+    "test:creative-diversity": "node --experimental-strip-types scripts/test-creative-diversity.mts",
     "test:ai-native": "node --import tsx scripts/test-ai-native-usage.mts && node --import tsx scripts/test-ai-native-http.mts && node --import tsx scripts/test-ai-native.mts"
   },
   "dependencies": {

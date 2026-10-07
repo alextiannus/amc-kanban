@@ -21,6 +21,10 @@ export function originalEvidence(source:any):string{
  if(original.trim())return original.slice(0,9000)
  return [value?.sourceVideo?.title,value?.sourcePost?.title,value?.sourcePost?.copySummary,value?.title,value?.bodyText,value?.contentAngle,value?.creativeMechanism,...(value?.matchedTags||[]),JSON.stringify(value?.features||{}),value?.scriptContent?.opening,value?.scriptContent?.body].filter(Boolean).join(' ').slice(0,9000)
 }
+export function adaptedEvidence(source:any):string{
+ const value=source||{}
+ return [value.title,value.product,value.planning,value.aiCaption,value.creativeMechanism,JSON.stringify(value.videoScript||{}),JSON.stringify(value.nativeCandidate?.candidate||{})].filter(text=>text&&text!=='{}').join(' ').slice(0,12000)
+}
 export function creativeDirection(source:any):Direction{
  const explicit=source?.creativeDirection||source?.nativeSourceSnapshot?.source?.creativeDirection
  if(DIRECTIONS.includes(explicit))return explicit
@@ -28,19 +32,36 @@ export function creativeDirection(source:any):Direction{
  return patterns.find(([,pattern])=>pattern.test(text))?.[0]||'unclassified'
 }
 export function normalizedCreative(source:any){return originalEvidence(source).normalize('NFKC').toLowerCase().replace(/https?:\/\/\S+/g,'').replace(/[\p{P}\p{S}\s\d]+/gu,'').slice(0,6000)}
+export function normalizedAdaptedCreative(source:any){return adaptedEvidence(source).normalize('NFKC').toLowerCase().replace(/https?:\/\/\S+/g,'').replace(/[\p{P}\p{S}\s\d]+/gu,'').slice(0,6000)}
 export function creativeFingerprint(source:any){return createHash('sha256').update(normalizedCreative(source)).digest('hex')}
 function sourceUrl(source:any){source=source?.nativeSourceSnapshot?.source||source;try{const u=new URL(source.sourceVideo?.sourceUrl||source.sourcePost?.sourceUrl||source.sampleOriginalUrl||source.sourceUrl);u.hash='';for(const key of [...u.searchParams.keys()])if(/^(utm_|fbclid|igsh|ref)/i.test(key))u.searchParams.delete(key);return u.href.replace(/\/$/,'')}catch{return ''}}
-export function duplicateCreative(a:any,b:any){
- const id=(s:any)=>s.inspirationCreativeId||s.nativeSourceSnapshot?.source?.inspirationCreativeId
- if(id(a)&&id(a)===id(b))return true
- const url=sourceUrl(a);if(url&&url===sourceUrl(b))return true
- const x=normalizedCreative(a),y=normalizedCreative(b)
+function similarNormalized(x:string,y:string){
  if(!x||!y)return false
  if(x===y)return true
  if(Math.min(x.length,y.length)<35)return false
  const grams=(s:string)=>new Set(Array.from({length:s.length-2},(_,i)=>s.slice(i,i+3)))
  const left=grams(x),right=grams(y);let overlap=0;for(const gram of left)if(right.has(gram))overlap++
  return 2*overlap/(left.size+right.size)>=0.82
+}
+export function duplicateCreative(a:any,b:any){
+ const id=(s:any)=>s.inspirationCreativeId||s.nativeSourceSnapshot?.source?.inspirationCreativeId
+ if(id(a)&&id(a)===id(b))return true
+ const url=sourceUrl(a);if(url&&url===sourceUrl(b))return true
+ return similarNormalized(normalizedCreative(a),normalizedCreative(b))||similarNormalized(normalizedAdaptedCreative(a),normalizedAdaptedCreative(b))
+}
+export function creativeSubjectIds(source:any,productCatalog:Array<{id?:string;name?:string}>=[]){
+ const explicit=Array.isArray(source?.skuIds)?source.skuIds.filter((id:unknown):id is string=>typeof id==='string'&&id.trim()).map((id:string)=>`sku:${id.trim()}`):[]
+ if(explicit.length)return [...new Set(explicit)]
+ const evidence=adaptedEvidence(source).normalize('NFKC').toLowerCase()
+ const inferred=productCatalog.filter(sku=>sku?.id&&sku?.name&&evidence.includes(sku.name.normalize('NFKC').toLowerCase())).map(sku=>`sku:${sku.id}`)
+ if(inferred.length)return [...new Set(inferred)]
+ const product=typeof source?.product==='string'?source.product.trim():''
+ if(!product||['品牌内容','招牌产品','内容创意素材'].includes(product))return []
+ return [`product:${product.normalize('NFKC').toLowerCase().replace(/[\p{P}\p{S}\s]+/gu,'')}`]
+}
+export function exceedsCreativeSubjectLimit(candidate:any,existing:any[],productCatalog:Array<{id?:string;name?:string}>=[],maximum=2){
+ const subjects=creativeSubjectIds(candidate,productCatalog)
+ return subjects.length>0&&existing.filter(item=>creativeSubjectIds(item,productCatalog).some(subject=>subjects.includes(subject))).length>=maximum
 }
 export function diverseCreatives<T>(candidates:T[],existing:T[],limit:number,counts:Partial<Record<Direction,number>>={}){
  const used={...counts};for(const item of existing){const direction=creativeDirection(item);used[direction]=(used[direction]||0)+1}
