@@ -50,7 +50,7 @@ export function duplicateCreative(a:any,b:any){
  return similarNormalized(normalizedCreative(a),normalizedCreative(b))||similarNormalized(normalizedAdaptedCreative(a),normalizedAdaptedCreative(b))
 }
 export function creativeSubjectIds(source:any,productCatalog:Array<{id?:string;name?:string}>=[]){
- const explicit=Array.isArray(source?.skuIds)?source.skuIds.filter((id:unknown):id is string=>typeof id==='string'&&id.trim()).map((id:string)=>`sku:${id.trim()}`):[]
+ const explicit=Array.isArray(source?.skuIds)?source.skuIds.filter((id:unknown):id is string=>typeof id==='string'&&id.trim().length>0).map((id:string)=>`sku:${id.trim()}`):[]
  if(explicit.length)return [...new Set(explicit)]
  const evidence=adaptedEvidence(source).normalize('NFKC').toLowerCase()
  const inferred=productCatalog.filter(sku=>sku?.id&&sku?.name&&evidence.includes(sku.name.normalize('NFKC').toLowerCase())).map(sku=>`sku:${sku.id}`)
