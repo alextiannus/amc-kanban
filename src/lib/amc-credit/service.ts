@@ -5,6 +5,16 @@ import { canStartCreditTask, creditForPlan, cycleBounds, defaultCreditSettings, 
 const prisma = sharedPrisma as PrismaClient
 type DbClient = Prisma.TransactionClient | PrismaClient
 
+async function lockCreditAccount(tx: Prisma.TransactionClient, brandId: string) {
+  const rows = await tx.$queryRaw<Array<{ locked: boolean }>>`
+    WITH credit_lock AS (
+      SELECT pg_advisory_xact_lock(hashtext(${`amc-credit:${brandId}`}))
+    )
+    SELECT true AS locked FROM credit_lock
+  `
+  if (!rows[0]?.locked) throw new Error('Unable to acquire AMC Credit transaction lock')
+}
+
 async function latestPlan(brandId: string, db: DbClient) {
   return db.brandSubscription.findFirst({
     where: { brandId, status: 'ACTIVE', OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }] },
@@ -45,7 +55,7 @@ export async function getCreditSnapshot(brandId: string, db: DbClient = prisma) 
 
 export async function reserveCredit(input: { brandId: string; taskType: string; taskId: string; credit: number; idempotencyKey: string; rawUsage?: Prisma.InputJsonValue; metadata?: Prisma.InputJsonValue }) {
   return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`amc-credit:${input.brandId}`}))`
+    await lockCreditAccount(tx, input.brandId)
     const snapshot = await getCreditSnapshot(input.brandId, tx)
     const prior = await tx.amcCreditLedgerEntry.findUnique({ where: { idempotencyKey: input.idempotencyKey } })
     if (prior) {
@@ -62,7 +72,7 @@ export async function reserveCredit(input: { brandId: string; taskType: string; 
 
 export async function settleCredit(input: { brandId: string; taskType: string; taskId: string; credit: number; idempotencyKey: string; reservationKey?: string; rawUsage?: Prisma.InputJsonValue; internalCostMicros?: bigint; metadata?: Prisma.InputJsonValue }) {
   return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`amc-credit:${input.brandId}`}))`
+    await lockCreditAccount(tx, input.brandId)
     const snapshot = await getCreditSnapshot(input.brandId, tx)
     const existing = await tx.amcCreditLedgerEntry.findUnique({ where: { idempotencyKey: input.idempotencyKey } })
     if (existing) {
@@ -82,7 +92,7 @@ export async function settleCredit(input: { brandId: string; taskType: string; t
 
 export async function releaseCredit(input: { brandId: string; taskId: string; reservationKey: string; idempotencyKey: string }) {
   return prisma.$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${`amc-credit:${input.brandId}`}))`
+    await lockCreditAccount(tx, input.brandId)
     const snapshot = await getCreditSnapshot(input.brandId, tx)
     const existing = await tx.amcCreditLedgerEntry.findUnique({ where: { idempotencyKey: input.idempotencyKey } })
     if (existing) {
