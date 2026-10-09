@@ -37,8 +37,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   contentModule('records', '记录与审核', ['read', 'review']),
 ]
 export const PERMISSION_KEYS = PERMISSION_MODULES.flatMap(m => m.actions.map(a => `${m.id}.${a}`))
-export const ACTION_LABELS: Record<string, string> = { read: '查看 / 访问', create: '创建 / 上传', update: '编辑', generate: '生成 / 分析', delete: '删除', archive: '归档', submit: '提交审核', approve: '审核通过', reject: '审核拒绝', schedule: '安排发布', publish: '发布', retry: '重试', reply: '回复', resolve: '处理', manage: '管理', review: '审核', export: '导出' }
-ACTION_LABELS.verify = '真人认证'
+export const ACTION_LABELS: Record<string, string> = { read: '查看 / 访问', create: '创建 / 上传', update: '编辑', generate: '生成 / 分析', delete: '删除', archive: '归档', submit: '提交审核', approve: '审核通过', reject: '审核拒绝', schedule: '安排发布', publish: '发布', retry: '重试', reply: '回复', resolve: '处理', manage: '管理', review: '审核', export: '导出', verify: '真人认证' }
 export function defaultGrants(role: string): string[] {
   if (role === 'ADMIN') return [...PERMISSION_KEYS]
   return PERMISSION_MODULES.flatMap(m => (m.defaults[role as PolicyRole] || []).map(a => `${m.id}.${a}`))
