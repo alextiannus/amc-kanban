@@ -28,6 +28,9 @@ Merchant cloned-voice records remain Kanban-owned execution data. The authentica
 
 Growth is the canonical merchant data and knowledge center. Merchant identity, classification, locations, menu/product facts, positioning, audience, channels, reputation, evidence and confirmed competitors are read from Growth by stable `Brand.growthBrandKey`.
 
+Merchant document extraction (implemented locally, not deployed): Growth discovers merchant menu images and PDFs from confirmed Places/website/search sources. The authenticated Kanban internal merchant-document API binds an immutable published model policy and delegates extraction to Content. Text-bearing PDF pages use the unified text model; scanned pages use the unified image model after bounded rendering and OBS upload. Results retain source URL, page, currency, confidence and policy version and enter Growth as review candidates, never automatically confirmed facts. Standard/deep budgets are 10/20 document pages. Provider-unknown submissions are queried rather than replayed. No Growth supplier key or independent model selection is introduced.
+
+
 Confirmed Google Places data follows the same ownership boundary. Growth performs Place confirmation, collection, source attribution and freshness control, and exposes store-level Google action links through the authenticated Merchant 360 interface. Kanban does not call Places API for this sync; an explicit Growth sync caches each store's links in `BrandKnowledge.stores[].googleBusiness` and mirrors the current primary store into the legacy Brand Google fields for existing review and game flows. Cached values retain source and expiry metadata and must not be presented as current after expiry.
 
 Google 商家账号自动补充（已上线，2026-09-30）：Google OAuth 授权、明确门店选择及 PostFast Google 账号同步完成后，AMC 自动登记持久同步任务。任务只读取当前品牌绑定账号的精确门店，不执行名称搜索，不默认选择多个门店中的第一个。OAuth 可读取门店信息、符合条件的商家维护菜单和顾客评价；PostFast 仅导入其接口实际提供的绑定门店字段，缺少菜单/评价读取权限时显示具体缺项。配置变更、解绑与并发更新必须使旧抓取结果失效。

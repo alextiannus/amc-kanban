@@ -3,7 +3,12 @@
 品牌创意的当前入口与展示契约（已上线，2026-09-30）：首页下方四个功能提示为 Plan review、Assets、Brand Ideas、More services；Brand Ideas 替换 Brand Planning，删除首页顶部的大入口和常驻长模板卡。每日检索按品牌时区执行，匹配后由 AI 自动完成品牌适配并保存为待审核策划；有产品目录时引用真实 SKU，无产品目录时生成可直接审阅的品牌通用脚本；只有已完成适配、具有完整脚本及素材需求的品牌策划才进入消息列表。消息仅展示适配标题和简短预览，点击打开可审阅、修改、下载素材需求与添加素材的详情页。Brand Ideas 入口查看所有已适配预览及处理状态。未适配模板不展示标题、正文或素材下载，不以原品牌模板冒充当前品牌内容。消息按品牌与创意 ID 去重，切换品牌立即隔离。新消息只提醒一次；打开详情标为已读，仍在有效期内保留于通知 Inbox。已读与已处理分别记录，只有消息过期或来源已失效才移出有效 Inbox。普通模式审核后制作；自动驾驶可在品牌授权内生成内容，正式发布仍须人工确认。
 
 
+## Growth merchant document recognition
+
+Merchant document extraction (implemented locally, not deployed): Growth discovers merchant menu images and PDFs from confirmed Places/website/search sources. The authenticated Kanban internal merchant-document API binds an immutable published model policy and delegates extraction to Content. Text-bearing PDF pages use the unified text model; scanned pages use the unified image model after bounded rendering and OBS upload. Results retain source URL, page, currency, confidence and policy version and enter Growth as review candidates, never automatically confirmed facts. Standard/deep budgets are 10/20 document pages. Provider-unknown submissions are queried rather than replayed. No Growth supplier key or independent model selection is introduced.
+
 ## AMCMM 创意再创作与 AI Native 升级
+
 
 AMCMM AI Native 的主要业务目标是：根据当前品牌资料主动从 AMC Content 原创意库匹配创意 → 用户 review 并修改 → 保存品牌再创作版本 → 添加素材进入既有制作流程，或保留在该品牌发布计划供日后使用。品牌简报是辅助能力，不能代替这条流程。自动驾驶模式由 User AI Assistant 接管调研、策划、脚本适配与图文内容生成的中间审批；正式发布仍需人工确认。
 

@@ -19,7 +19,7 @@ export function capabilityFor(task:string,required:string[]=[]):Capability {
   if(task==='image_generation'||required.includes('image_output'))return 'image_generation'
   if(task==='reference_audio_transcription'||required.includes('audio_input'))return 'speech_recognition'
   if(task==='reference_video_analysis'||required.includes('video_input'))return 'video_understanding'
-  if(task==='reference_subtitle_ocr'||required.includes('image_input')||task==='asset_image_analysis')return 'image_understanding'
+  if(task==='reference_subtitle_ocr'||required.includes('image_input')||task==='asset_image_analysis'||task==='merchant_document_extraction')return 'image_understanding'
   return 'text'
 }
 export function selectModel(config:RuntimeConfig,source:string,task:string,capability:Capability,required:string[]=[]):RuntimeModel {
