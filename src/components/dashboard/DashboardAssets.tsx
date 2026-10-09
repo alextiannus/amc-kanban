@@ -120,6 +120,10 @@ interface CalendarCreativeOption {
   aiCaption: string
 }
 
+interface AssetCollectionSlotOption { id: string; slotKey: string; title: string; requirement: string; status: 'MISSING' | 'FILLED' | 'UNASSIGNED'; items: Array<{ assetId: string }> }
+interface AssetCollectionOption { id: string; creativeId: string; creativeVersion: number; name: string; status: string; missingCount: number; filledCount: number; slots: AssetCollectionSlotOption[] }
+async function fileSha256(file: File) { const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer()); return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('') }
+
 type AIBatchThreadStatus = 'waiting' | 'drafting' | 'scheduling' | 'copywriting' | 'done' | 'failed'
 
 interface AIBatchThread {
@@ -216,8 +220,12 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [calendarCreatives, setCalendarCreatives] = useState<CalendarCreativeOption[]>([])
   const [selectedCreativeId, setSelectedCreativeId] = useState('')
+  const [assetCollections, setAssetCollections] = useState<AssetCollectionOption[]>([])
+  const [selectedCollectionId, setSelectedCollectionId] = useState('')
+  const [selectedCollectionSlotId, setSelectedCollectionSlotId] = useState('')
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '已使用'])
+  const [folderRecords, setFolderRecords] = useState<Array<{ id: string; name: string; folderKind: string }>>([])
   const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('folder') === 'AI视频' ? 'AI视频' : 'all')
   const [collapsedShootBatches, setCollapsedShootBatches] = useState<Set<string>>(() => new Set())
 
@@ -282,6 +290,14 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     () => calendarCreatives.find((creative) => creative.id === selectedCreativeId) || null,
     [calendarCreatives, selectedCreativeId],
   )
+  const selectedCollection = useMemo(() => assetCollections.find(collection => collection.id === selectedCollectionId) || null, [assetCollections, selectedCollectionId])
+  const loadAssetCollections = useCallback(async () => {
+    if (!brandId) return
+    try { const response = await fetch(`/api/brands/${brandId}/asset-collections`); if (!response.ok) throw new Error(); const json = await response.json(); const collections = Array.isArray(json.collections) ? json.collections : []; setAssetCollections(collections); setSelectedCollectionId(current => collections.some((item: AssetCollectionOption) => item.id === current) ? current : '') }
+    catch { setAssetCollections([]); setSelectedCollectionId(''); setSelectedCollectionSlotId('') }
+  }, [brandId])
+  useEffect(() => { if (!selectedCollection) { setSelectedCollectionSlotId(''); return }; setSelectedCollectionSlotId(current => selectedCollection.slots.some(slot => slot.id === current) ? current : selectedCollection.slots.find(slot => slot.status === 'MISSING')?.id || selectedCollection.slots[0]?.id || '') }, [selectedCollection])
+  useEffect(() => { if (selectedCreativeId) { const matching = assetCollections.find(collection => collection.creativeId === selectedCreativeId); setSelectedCollectionId(matching?.id || '') } }, [assetCollections, selectedCreativeId])
 
   const selectedCreativeUploadPayload = useCallback(() => {
     if (!selectedCreative) {
@@ -329,6 +345,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       const res = await fetch(`/api/brands/${brandId}/folders`)
       if (res.ok) {
         const data = await res.json()
+        setFolderRecords(data.folders || [])
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
         setFolders(['素材库', '已使用', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
         setSelectedFolder(current => ['all', '素材库', '已使用'].includes(current) || folderNames.includes(current) ? current : '素材库')
@@ -600,6 +617,24 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       cancelled = true
     }
   }, [brandId])
+
+  useEffect(() => { void loadAssetCollections() }, [loadAssetCollections])
+
+  const prepareSelectedCreativeCollection = async () => {
+    if (!brandId || !selectedCreative) return
+    const slots = (selectedCreative.materialRequirements || []).map((requirement, index) => ({ slotKey: `material-${index + 1}`, title: `素材 ${index + 1}`, requirement, expectedTags: selectedCreative.aiTags || [], order: index }))
+    if (!slots.length) slots.push({ slotKey: 'material-1', title: '脚本素材', requirement: selectedCreative.planning || selectedCreative.title, expectedTags: selectedCreative.aiTags || [], order: 0 })
+    const response = await fetch(`/api/brands/${brandId}/asset-collections`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ creativeId: selectedCreative.id, name: selectedCreative.title, month: selectedCreative.date?.slice(0, 7), slots }) })
+    const json = await response.json().catch(() => ({})); if (!response.ok) throw new Error(json.error || '创建脚本素材集失败')
+    await loadAssetCollections(); setSelectedCollectionId(json.collection.id)
+  }
+  const linkSelectedAssetsToCollection = async () => {
+    if (!brandId || !selectedCollectionId || !selectedCollectionSlotId || !selected.length) return
+    setUploading(true); setError(null)
+    try { const responses = await Promise.all(selected.map(assetId => fetch(`/api/brands/${brandId}/asset-collections/${selectedCollectionId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assetId, slotId: selectedCollectionSlotId, uploadOrigin: 'LIBRARY' }) }))); const failed = responses.find(response => !response.ok); if (failed) { const json = await failed.json().catch(() => ({})); throw new Error(json.error || '关联素材失败') }; await loadAssetCollections(); setSelected([]) }
+    catch (collectionError) { setError(collectionError instanceof Error ? collectionError.message : '关联素材失败') }
+    finally { setUploading(false) }
+  }
 
 
 
@@ -1242,6 +1277,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           throw new Error(`${isImage ? '图片' : '视频'}不能超过 ${sizeLimit / 1_000_000} MB`)
         }
         const creativePayload = selectedCreativeUploadPayload()
+        const contentHash = await fileSha256(file)
 
         // 1. Request presigned upload URL from backend
         const presignRes = await fetch(
@@ -1290,6 +1326,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 aiTags: creativePayload.aiTags,
                 aiCaption: creativePayload.aiCaption,
                 creativeId: creativePayload.creativeId,
+                contentHash,
+                collectionId: selectedCollectionId || undefined,
+                slotId: selectedCollectionSlotId || undefined,
               }),
             })
             const confirmData = await confirmRes.json().catch(() => ({}))
@@ -1340,6 +1379,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               aiTags: creativePayload.aiTags,
               aiCaption: creativePayload.aiCaption,
               creativeId: creativePayload.creativeId,
+              contentHash,
+              collectionId: selectedCollectionId || undefined,
+              slotId: selectedCollectionSlotId || undefined,
             }),
           })
           const json = await res.json().catch(() => ({}))
@@ -1356,7 +1398,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
     // Process files using a worker pool with a concurrency limit of 3
     const queue = [...fileList]
-    const concurrencyLimit = 3
+    const concurrencyLimit = fileList.some(file => inferUploadMimeType(file).startsWith('video/')) ? 1 : 3
 
     const worker = async () => {
       while (queue.length > 0) {
@@ -1377,6 +1419,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       await fetch(`/api/brands/${brandId}/asset-analysis`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'seal', batchKey: analysisBatchKey }) }).catch(() => {})
       
       await loadAssets()
+      await loadAssetCollections()
       
       if (failedFiles.length > 0) {
         setError(`成功上传 ${uploadedCount} 个，失败 ${failedFiles.length} 个：\n${failedFiles.join('\n')}`)
@@ -1662,9 +1705,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               className="appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none cursor-pointer hover:border-indigo-400 transition-all"
             >
               <option value="all">📁 全部文件夹</option>
-              {folders.map(f => (
-                <option key={f} value={f}>📁 {f === 'AI视频' ? t('AI视频', 'AI Videos') : f}</option>
-              ))}
+              <optgroup label="素材视图"><option value="素材库">📁 素材库</option><option value="已使用">📁 已使用</option></optgroup>
+              <optgroup label="标准目录">{folderRecords.filter(folder => folder.folderKind === 'STANDARD').map(folder => <option key={folder.id} value={folder.name}>📁 {folder.name}</option>)}</optgroup>
+              {folderRecords.some(folder => folder.folderKind !== 'STANDARD') && <optgroup label="自定义目录">{folderRecords.filter(folder => folder.folderKind !== 'STANDARD').map(folder => <option key={folder.id} value={folder.name}>📁 {folder.name}</option>)}</optgroup>}
             </select>
             <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
           </div>
@@ -1722,6 +1765,20 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
+        </div>
+
+        <div className="shrink-0 border-b border-slate-200/60 bg-indigo-50/70 px-3 py-2 dark:border-slate-800 dark:bg-indigo-950/20">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="flex items-center gap-1 font-bold text-indigo-700 dark:text-indigo-300"><FolderOpen className="h-3.5 w-3.5" />脚本素材集</span>
+            <select value={selectedCollectionId} onChange={event => setSelectedCollectionId(event.target.value)} className="min-w-[220px] rounded-lg border border-indigo-200 bg-white px-2 py-1.5 font-semibold text-slate-700 outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200">
+              <option value="">不上传到脚本素材集</option>
+              {assetCollections.map(collection => <option key={collection.id} value={collection.id}>{collection.name} · {collection.filledCount}/{collection.slots.length}</option>)}
+            </select>
+            {selectedCollection && <select value={selectedCollectionSlotId} onChange={event => setSelectedCollectionSlotId(event.target.value)} className="min-w-[200px] rounded-lg border border-indigo-200 bg-white px-2 py-1.5 text-slate-700 outline-none dark:border-indigo-800 dark:bg-slate-900 dark:text-slate-200">{selectedCollection.slots.map(slot => <option key={slot.id} value={slot.id}>{slot.status === 'FILLED' ? '✓' : '○'} {slot.title}</option>)}</select>}
+            {selectedCreative && !assetCollections.some(collection => collection.creativeId === selectedCreative.id) && <button type="button" onClick={() => void prepareSelectedCreativeCollection().catch(error => setError(error instanceof Error ? error.message : '创建脚本素材集失败'))} className="rounded-lg border border-indigo-200 bg-white px-2.5 py-1.5 font-bold text-indigo-700 hover:border-indigo-400 dark:border-indigo-800 dark:bg-slate-900 dark:text-indigo-300">为当前创意准备素材集</button>}
+            {selectedCollection && selected.length > 0 && <button type="button" onClick={() => void linkSelectedAssetsToCollection()} disabled={!selectedCollectionSlotId || uploading} className="rounded-lg bg-indigo-600 px-2.5 py-1.5 font-bold text-white hover:bg-indigo-700 disabled:opacity-50">将已选 {selected.length} 项关联到槽位</button>}
+            {selectedCollection && <span className="text-slate-500 dark:text-slate-400">缺 {selectedCollection.missingCount} 项；这里只保存引用，原件仍只有一份。</span>}
+          </div>
         </div>
 
         {/* Scrollable grid wrapper */}

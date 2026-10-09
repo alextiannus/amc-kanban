@@ -3,15 +3,16 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as policy from '../src/lib/asset-analysis/policy.ts'
+import * as templates from '../src/lib/asset-library/templates.ts'
 
 const clone = (value: any) => structuredClone(value)
-let rows: Record<string, any[]> = { brand: [{ id: 'brand', industry: 'Fitness', name: 'Studio', description: 'Reformer studio' }], mediaAsset: [], brandFolder: [], assetAnalysisBatch: [], assetAnalysisItem: [], assetVideoSegment: [] }
+let rows: Record<string, any[]> = { brand: [{ id: 'brand', industry: 'Fitness', name: 'Studio', description: 'Reformer studio' }], mediaAsset: [], brandFolder: templates.GENERAL_TEMPLATE.folders.map((folder, index) => ({ id: `folder-${index}`, brandId: 'brand', name: folder.zh, systemKey: folder.key, folderKind: 'STANDARD', templateVersion: templates.GENERAL_TEMPLATE.key })), assetAnalysisBatch: [], assetAnalysisItem: [], assetVideoSegment: [] }
 let ids = 0, time = Date.now(), txLock = Promise.resolve(), enabled = true, advisoryLocks = 0
 const stamp = () => new Date(++time)
 const matches = (row: any, where: any = {}): boolean => Object.entries(where).every(([key, value]: [string, any]) => {
   if (key === 'OR') return value.some((v: any) => matches(row, v))
   if (key === 'NOT') return !matches(row, value)
-  if (key === 'brandId_batchKey' || key === 'brandId_name') return matches(row, value)
+  if (key === 'brandId_batchKey' || key === 'brandId_name' || key === 'brandId_systemKey') return matches(row, value)
   if (key === 'analysisItems') { const list = rows.assetAnalysisItem.filter(i => i.assetId === row.id); return value.none ? !list.some(i => matches(i, value.none)) : list.some(i => matches(i, value.some)) }
   if (value instanceof Date) return +row[key] === +value
   if (value && typeof value === 'object') {
@@ -49,7 +50,7 @@ for (const table of Object.keys(rows)) {
     createMany: async ({ data, skipDuplicates }: any) => { for (const d of data) { if (skipDuplicates && table === 'brandFolder' && rows[table].some(r => r.brandId === d.brandId && r.name === d.name)) continue; await db[table].create({ data: d }) } return { count: data.length } },
     deleteMany: async ({ where }: any) => { const before = rows[table].length; rows[table] = rows[table].filter(r => !matches(r, where)); return { count: before - rows[table].length } },
     delete: async ({ where }: any) => { const index = rows[table].findIndex(r => matches(r, where)); if (index < 0) throw Error('Not found'); return rows[table].splice(index, 1)[0] },
-    groupBy: async ({ where }: any) => { const counts = new Map<string, number>(); for (const row of find({ where })) counts.set(row.aiCategory, (counts.get(row.aiCategory) || 0) + 1); return [...counts].map(([aiCategory, count]) => ({ aiCategory, _count: { _all: count } })) },
+    groupBy: async ({ where, by }: any) => { const field = by[0]; const counts = new Map<any, number>(); for (const row of find({ where })) counts.set(row[field], (counts.get(row[field]) || 0) + 1); return [...counts].map(([value, count]) => ({ [field]: value, _count: { _all: count } })) },
     update: async ({ where, data }: any) => { const row = rows[table].find(r => matches(r, where)); if (!row) throw new Error('Not found'); return update(row, data) },
     updateMany: async ({ where, data }: any) => { const list = rows[table].filter(r => matches(r, where)); list.forEach(r => update(r, data)); return { count: list.length } },
     upsert: async ({ where, create, update: changes }: any) => { const row = rows[table].find(r => matches(r, where)); return row ? update(row, changes) : db[table].create({ data: create }) },
@@ -85,6 +86,7 @@ const service = load('../src/lib/asset-analysis/service.ts', {
   '@/lib/amc-credit/service': { getCreditSnapshot: async () => ({ account: { allowNightlyOverage: false }, summary: { usagePercent: 0 } }), settleCredit: async () => ({}) },
   '@/lib/amc-credit/policy': { analysisCredit: (task: string) => task === 'asset_video_analysis' ? 4 : 2 },
   '@/lib/integrations/huaweiObs': { getHuaweiObsConfig: () => null }, './content': { analysisContent: gateway }, './folders': { ensureAssetFolders: async () => {} }, './policy': policy,
+  '@/lib/asset-library/templates': templates,
 })
 const addImage = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', mimeType: 'image/jpeg', url: `https://images.example/${id}.jpg`, aiCategory: '素材库', aiCaption: null, aiTags: ['排期发布', 'manual'], aiReady: false, imageAnalysis: null, duplicateGroupId: null, perceptualHash: null, updatedAt: stamp() })
 const addVideo = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', mimeType: 'video/mp4', url: `https://videos.example/${id}.mp4`, aiCategory: '素材库', aiCaption: null, aiTags: [], aiReady: false, imageAnalysis: null, duplicateGroupId: null, perceptualHash: null, technicalMetadata: { durationSeconds: 3 }, updatedAt: stamp() })
@@ -112,7 +114,8 @@ await service.retryAnalysisBatch('brand', batch.id)
 assert.equal(advisoryLocks, 3, 'retry uses the same execute-only advisory lock')
 await service.processAnalysisQueue({ force: true })
 assert.equal(submitted.filter(r => r.mediaInputs?.[0]?.id === 'one').length, 1, 'successful image not billed again')
-const assignments = rows.assetAnalysisItem.map(i => ({ itemId: i.id, newFolderName: 'Training' }))
+const reviewFolder = rows.brandFolder.find(folder => folder.systemKey === 'needs_review')!
+const assignments = rows.assetAnalysisItem.map(i => ({ itemId: i.id, folderId: reviewFolder.id }))
 await assert.rejects(service.applyAnalysisBatch('other', batch.id, assignments), /not found/)
 const autoFolderCount = rows.brandFolder.length
 const autoCategory = rows.mediaAsset[0].aiCategory
@@ -123,8 +126,8 @@ assert.equal(rows.mediaAsset[0].aiCategory, autoCategory)
 rows.mediaAsset[1].aiCategory = '待确认'
 await service.applyAnalysisBatch('brand', batch.id, assignments)
 await service.applyAnalysisBatch('brand', batch.id, assignments)
-assert.equal(rows.brandFolder.length, autoFolderCount + 1)
-assert.equal(rows.mediaAsset[0].aiCategory, 'Training')
+assert.equal(rows.brandFolder.length, autoFolderCount)
+assert.equal(rows.mediaAsset[0].aiCategory, reviewFolder.name)
 
 addImage('manual-during-analysis')
 const manualBatch = await service.createAnalysisBatch({ brandId: 'brand', assetIds: ['manual-during-analysis'] })
@@ -149,7 +152,7 @@ assert.throws(() => policy.parseImageAnalysis({ tags: ['only'] }), /Invalid/)
 assert.deepEqual(policy.mergeAnalysisTags(['manual', 'old-ai'], ['old-ai'], ['new-ai']), ['manual', 'new-ai'])
 
 rows.brand[0].assetFoldersInitialized = false
-const folderService = load('../src/lib/asset-analysis/folders.ts', { '@/lib/asset-analysis/db': { prisma: db }, './policy': policy })
+const folderService = load('../src/lib/asset-analysis/folders.ts', { '@/lib/asset-analysis/db': { prisma: db }, '@/lib/asset-library/templates': templates })
 const foldersApi = load('../src/app/api/brands/[id]/folders/route.ts', {
   'next/server': { NextResponse: { json: (body: any, options: any) => ({ body, status: options?.status || 200 }) } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN', role: 'USER' } }), extractApiKey: () => null },
@@ -159,14 +162,15 @@ const foldersApi = load('../src/app/api/brands/[id]/folders/route.ts', {
 const context = { params: Promise.resolve({ id: 'brand' }) }
 const response = await foldersApi.GET(new Request('https://test/folders'), context)
 assert.equal(response.status, 200)
-const product = rows.brandFolder.find(f => f.name === '菜品')!
-rows.mediaAsset[0].aiCategory = '菜品'
+const created = await foldersApi.POST(new Request('https://test/folders', { method: 'POST', body: JSON.stringify({ name: 'Portfolio source' }) }), context)
+const product = created.body.folder
+rows.mediaAsset[0].folderId = product.id; rows.mediaAsset[0].aiCategory = product.name
 assert.equal((await foldersApi.PATCH(new Request('https://test/folders', { method: 'PATCH', body: JSON.stringify({ folderId: product.id, name: 'Portfolio' }) }), context)).status, 200)
 assert.equal(rows.mediaAsset[0].aiCategory, 'Portfolio')
 assert.equal((await foldersApi.DELETE(new Request(`https://test/folders?folderId=${product.id}`, { method: 'DELETE' }), context)).status, 200)
-assert.equal(rows.mediaAsset[0].aiCategory, '素材库')
+assert.equal(rows.mediaAsset[0].aiCategory, reviewFolder.name)
 await foldersApi.GET(new Request('https://test/folders'), context)
-assert.ok(!rows.brandFolder.some(f => ['菜品', 'Portfolio'].includes(f.name)), 'deleted default folders stay deleted')
+assert.ok(!rows.brandFolder.some(f => ['Portfolio source', 'Portfolio'].includes(f.name)), 'deleted custom folders stay deleted')
 const videoFolder = rows.brandFolder.find(f => f.name === '视频原片')!
 assert.notEqual((await foldersApi.DELETE(new Request(`https://test/folders?folderId=${videoFolder.id}`, { method: 'DELETE' }), context)).status, 200)
 assert.ok(rows.brandFolder.some(f => f.id === videoFolder.id))

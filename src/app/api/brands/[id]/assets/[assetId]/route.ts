@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { triggerDesignerAutoTag } from '@/lib/designer'
 import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calendarSync'
+import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
 
 type Params = { params: Promise<{ id: string; assetId: string }> }
 
@@ -26,6 +27,10 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
+  const requestedFolder = typeof body.folder === 'string' ? body.folder.trim() || '素材库' : typeof body.aiCategory === 'string' ? body.aiCategory.trim() || '素材库' : ''
+  if (requestedFolder) await ensureAssetFolders(brandId)
+  const folderRecord = requestedFolder && requestedFolder !== '素材库' ? await prisma.brandFolder.findFirst({ where: { brandId, name: requestedFolder }, select: { id: true } }) : null
+  if (requestedFolder && requestedFolder !== '素材库' && !folderRecord) return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
   const existing = await prisma.mediaAsset.findFirst({ where: { id: assetId, brandId }, select: { id: true, imageAnalysis: true } })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -34,7 +39,8 @@ export async function PATCH(request: Request, { params }: Params) {
     data: {
       ...(typeof body.aiCaption === 'string' || Array.isArray(body.aiTags) ? { imageAnalysis: { ...(existing.imageAnalysis as object || {}), ...(typeof body.aiCaption === 'string' ? { captionEdited: true } : {}), ...(Array.isArray(body.aiTags) ? { tagsEdited: true, generatedTags: [] } : {}) } } : {}),
       filename: typeof body.filename === 'string' ? body.filename.trim() || null : undefined,
-      aiCategory: typeof body.folder === 'string' ? body.folder.trim() || '素材库' : typeof body.aiCategory === 'string' ? body.aiCategory.trim() || '素材库' : undefined,
+      folderId: requestedFolder ? folderRecord?.id || null : undefined,
+      aiCategory: requestedFolder || undefined,
       aiCaption: typeof body.aiCaption === 'string' ? body.aiCaption.trim() || null : undefined,
       aiTags: Array.isArray(body.aiTags) ? body.aiTags.filter((tag: unknown) => typeof tag === 'string').map((tag: string) => tag.trim()).filter(Boolean) : undefined,
       aiReady: typeof body.aiReady === 'boolean' ? body.aiReady : undefined,

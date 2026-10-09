@@ -447,6 +447,7 @@ model Brand {
   gameSessions                GameSession[]
   gameShareDrafts             GameShareDraft[]
   folders                     BrandFolder[]
+  assetCollections            AssetCollection[]
   knowledge                   BrandKnowledge?
   corrections                 UserCorrectionFeedback[]
   companionMessages           CompanionMessage[]
@@ -827,6 +828,7 @@ model MediaAsset {
   contentRefs         ContentAssetRef[]
   coverDrafts         ContentDraft[]       @relation("DraftCoverAsset")
   materialSubmissions MaterialSubmission[]
+  collectionItems     AssetCollectionItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1490,20 +1492,81 @@ model AssetAnalysisItem {
 }
 
 model BrandFolder {
-  id        String        @id @default(cuid())
+  id              String        @id @default(cuid())
   brandId   String
   brand     Brand         @relation(fields: [brandId], references: [id], onDelete: Cascade)
   parentId  String?
   parent    BrandFolder?  @relation("BrandFolderTree", fields: [parentId], references: [id], onDelete: SetNull)
   children  BrandFolder[] @relation("BrandFolderTree")
   assets    MediaAsset[]
-  name      String
+  name            String
+  systemKey       String?
+  folderKind      String        @default("CUSTOM")
+  templateVersion String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
   @@unique([brandId, name])
+  @@unique([brandId, systemKey])
   @@index([brandId])
   @@index([parentId])
+}
+
+model AssetCollection {
+  id              String                @id @default(cuid())
+  brandId         String
+  brand           Brand                 @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  kind            String                @default("SCRIPT")
+  creativeId      String
+  creativeVersion Int                   @default(0)
+  month           String?
+  name            String
+  status          String                @default("WAITING_FOR_ASSETS")
+  createdById     String?
+  slots           AssetCollectionSlot[]
+  items           AssetCollectionItem[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@unique([brandId, kind, creativeId])
+  @@index([brandId, status, updatedAt])
+}
+
+model AssetCollectionSlot {
+  id           String                @id @default(cuid())
+  collectionId String
+  collection   AssetCollection       @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  slotKey      String
+  title        String
+  requirement  String
+  expectedTags String[]              @default([])
+  order        Int                   @default(0)
+  status       String                @default("MISSING")
+  items        AssetCollectionItem[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  @@unique([collectionId, slotKey])
+  @@index([collectionId, order])
+}
+
+model AssetCollectionItem {
+  id           String               @id @default(cuid())
+  collectionId String
+  collection   AssetCollection      @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  assetId      String
+  asset        MediaAsset           @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  slotId       String?
+  slot         AssetCollectionSlot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  role         String?
+  order        Int                  @default(0)
+  uploadOrigin String               @default("LIBRARY")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([collectionId, assetId])
+  @@index([assetId])
+  @@index([slotId, order])
 }
 
 model BrandAgentCheckpoint {
