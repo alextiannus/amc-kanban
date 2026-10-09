@@ -27,6 +27,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
   { id: 'subscription', system: 'kanban', label: '订阅业务', scope: '已授权品牌', actions: ['read', 'manage'], defaults: { BD: ['read', 'manage'] } },
   contentModule('dashboard', '内容控制台', ['read'], ['read']),
   contentModule('video-making', '视频制作', operators, [], true),
+  contentModule('portraits', '人像库', ['read', 'create', 'update', 'verify', 'archive'], [], true),
   contentModule('video-production', '爆款复刻', operators, [], true),
   contentModule('inspiration-library', '灵感星链 / 爆品脚本', ['read', 'create', 'update', 'generate', 'review', 'publish', 'delete', 'export'], ['read', 'create', 'export']),
   contentModule('inspiration-tags', '标签库', ['read', 'create', 'update', 'review', 'generate', 'delete'], ['read']),
@@ -37,6 +38,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
 ]
 export const PERMISSION_KEYS = PERMISSION_MODULES.flatMap(m => m.actions.map(a => `${m.id}.${a}`))
 export const ACTION_LABELS: Record<string, string> = { read: '查看 / 访问', create: '创建 / 上传', update: '编辑', generate: '生成 / 分析', delete: '删除', archive: '归档', submit: '提交审核', approve: '审核通过', reject: '审核拒绝', schedule: '安排发布', publish: '发布', retry: '重试', reply: '回复', resolve: '处理', manage: '管理', review: '审核', export: '导出' }
+ACTION_LABELS.verify = '真人认证'
 export function defaultGrants(role: string): string[] {
   if (role === 'ADMIN') return [...PERMISSION_KEYS]
   return PERMISSION_MODULES.flatMap(m => (m.defaults[role as PolicyRole] || []).map(a => `${m.id}.${a}`))
@@ -55,7 +57,7 @@ export function permissionSources(roles: readonly string[], policies: Record<str
   return Object.fromEntries(effectiveGrants(roles, policies).map(key => [key, roles.filter(role => role === 'ADMIN' || (policies[role] ?? defaultGrants(role)).includes(key))]))
 }
 export const MENU_PERMISSIONS: Record<string, string> = {
-  dashboard: 'brand.read', calendar: 'content.read', drafts: 'draft.read', assets: 'asset.read', creditUsage: 'brand.read', game: 'game.read',
+  dashboard: 'brand.read', calendar: 'content.read', drafts: 'draft.read', assets: 'asset.read', game: 'game.read',
   socialInsight: 'analytics.read', dataAnalysis: 'analytics.read', logs: 'work_log.read',
   'video-production': 'content.video-making.read', 'viral-copy-scripts': 'content.inspiration-library.read', 'amc-content-roles': 'content.content-lab.read',
 }

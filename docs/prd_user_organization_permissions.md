@@ -1,5 +1,7 @@
 # 用户、组织与权限管理 PRD（Auth V2）
 
+Content 人像库权限（已本地实现，待发布及供应商验收）：增加品牌范围模块 `content.portraits`，操作为 read、create、update、verify、archive；默认仅 ADMIN 与 AMC_PRINCIPAL 可管理，其他角色经既有权限配置显式授权。管理接口同时校验模块权限和实时品牌范围。视频使用角色同时要求视频生成权限及人像库查看权限，后台提交重新解析当前操作者授权；认证回调只接收一次性会话关联标识，并由服务端查询供应商结果，不使用回调参数直接授予认证状态。Kanban 和 Content 权限契约保持一致。
+
 > 状态：Auth V2 第一阶段已开发，等待生产迁移与 24 小时兼容窗口
 > 日期：2026-07-04
 > 适用系统：amc-kanban、amc-content（角色权限配置与执行）、amc-mm、外部 REST API、AMC MCP

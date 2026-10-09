@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'node:crypto'
+import { parseKopixCredential } from './kopixCredentials.ts'
 import { prisma } from '../prisma.ts'
 import { decryptSecret, encryptSecret, secretFingerprint } from './secrets.ts'
 import { CAPABILITIES, type ModelDefinition, type RuntimeConfig, type Selection } from './types.ts'
@@ -36,6 +37,7 @@ export async function configurationRuntime(selection:Selection,version:number,se
   return {protocolVersion:2,version,active:true,selection,models,...(secrets?{secrets:credentials}:{})}
 }
 export function validateConnection(input:{name:string;protocol:string;baseUrl:string;secret:string}){
+  if(input.protocol==='kopix')parseKopixCredential(input.secret || '')
   if(!input.name?.trim()||!input.secret?.trim())throw new Error('Connection name and credential are required')
   input={...input,baseUrl:input.baseUrl?.trim()}
   if(!['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance'].includes(input.protocol))throw new Error('Unsupported model protocol')
