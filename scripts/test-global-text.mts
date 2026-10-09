@@ -34,6 +34,36 @@ globalThis.fetch=async(url,init)=>{
 }
 try{
  const providerFetch=globalThis.fetch
+ const originalInfo=console.info
+ const diagnostics:string[]=[]
+ try {
+   console.info=(value:any)=>{diagnostics.push(String(value))}
+   for (const [finishReason,content,jsonStatus] of [
+     ['length','{"goal":"private-output"}','object'],
+     ['length','{"goal":"private-output"','invalid'],
+     ['stop','```json\n{"goal":"private-output"}\n```','object'],
+   ]) {
+     globalThis.fetch=async()=>Response.json({id:'upstream-123',model:'glm-5.3',usage:{prompt_tokens:89,completion_tokens:1800,completion_tokens_details:{reasoning_tokens:1700}},choices:[{finish_reason:finishReason,message:{role:'assistant',content,reasoning_content:'private-reasoning'}}]},{headers:{'x-request-id':'request-123'}})
+     const run=()=>complete(c,{task:'marketing_plan',messages:[{role:'user',content:'private-prompt'}],maxTokens:1800})
+     if(finishReason==='length')await assert.rejects(run,/output token limit reached/)
+     else await run()
+     const record=JSON.parse(diagnostics.at(-1)!)
+     assert.equal(record.event,'marketing_plan_provider_response')
+     assert.equal(record.finishReason,finishReason)
+     assert.equal(record.jsonStatus,jsonStatus)
+     assert.equal(record.maxTokens,1800)
+     assert.equal(record.reasoningTokens,1700)
+     assert.equal(record.providerReference,'upstream-123')
+     assert.equal(record.requestId,'request-123')
+     assert.equal(record.contentChars,content.length)
+     assert.equal(record.reasoningChars,'private-reasoning'.length)
+     assert.deepEqual(record.presentPlanFields,jsonStatus==='object'?['goal']:[])
+   }
+   const count=diagnostics.length
+   await complete(c,{task:'other-task',messages:[{role:'user',content:'private-prompt'}]})
+   assert.equal(diagnostics.length,count,'incident logs are scoped to marketing plans')
+   assert.ok(!diagnostics.join('\n').match(/private-output|private-reasoning|private-prompt|test-only|supplier\.test/),'no content or credentials in diagnostic logs')
+ } finally {console.info=originalInfo;globalThis.fetch=providerFetch}
  for(const content of ['', '{"partial":']){
    globalThis.fetch=async()=>Response.json({choices:[{finish_reason:'length',message:{role:'assistant',content}}]})
    await assert.rejects(()=>complete(c,{messages:[{role:'user',content:'test'}],maxTokens:460}),/output token limit reached/)

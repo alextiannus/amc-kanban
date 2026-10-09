@@ -15,6 +15,33 @@ export class TextOutputLimitError extends Error {
 function tokenCount(value: unknown): number|null {
   return typeof value==='number'&&Number.isSafeInteger(value)&&value>=0&&value<=100000000?value:null
 }
+// Temporary incident diagnostic: inspect structure without retaining model text.
+function logMarketingPlanResponse(c: Connection, input: TextRequest, body: any, response: Response, data: any, started: number) {
+  if (input.task !== 'marketing_plan' || protocolOf(c.provider) !== 'openai') return
+  const identifier = (value: unknown) => typeof value === 'string' && /^[a-z0-9_.:/-]{1,200}$/i.test(value) ? value : null
+  const message = data.choices?.[0]?.message
+  const content = typeof message?.content === 'string' ? message.content : ''
+  let jsonStatus = content.trim() ? 'invalid' : 'empty'
+  let plan: Record<string, unknown> | null = null
+  try {
+    const parsed = JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''))
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) { plan = parsed; jsonStatus = 'object' }
+    else jsonStatus = 'non_object'
+  } catch { /* Never log parse errors, which can contain generated text. */ }
+  const planFields = ['goal', 'theme', 'strategyPrinciples', 'platformStrategy', 'contentPillars', 'metrics', 'researchFocus', 'quarter', 'year', 'startMonth', 'endMonth', 'periodLabel', 'strategy', 'focus', 'promotionPoints', 'campaigns', 'contentThemes', 'monthlyFocus']
+  console.info(JSON.stringify({
+    event: 'marketing_plan_provider_response',
+    provider: identifier(c.provider), model: identifier(c.modelName), responseModel: identifier(data.model),
+    providerReference: identifier(data.id), requestId: identifier(response.headers.get('x-request-id')),
+    gatewayCommit: identifier(process.env.RENDER_GIT_COMMIT), httpStatus: response.status,
+    finishReason: identifier(data.choices?.[0]?.finish_reason), maxTokens: body.max_tokens,
+    reasoningEffort: body.reasoning_effort || 'unspecified', latencyMs: Date.now() - started,
+    promptTokens: tokenCount(data.usage?.prompt_tokens), completionTokens: tokenCount(data.usage?.completion_tokens),
+    reasoningTokens: tokenCount(data.usage?.completion_tokens_details?.reasoning_tokens),
+    contentChars: content.length, reasoningChars: typeof message?.reasoning_content === 'string' ? message.reasoning_content.length : 0,
+    jsonStatus, presentPlanFields: planFields.filter(field => plan && Object.hasOwn(plan, field)),
+  }))
+}
 export function normalizeTextUsage(protocol:string,value:any):TextUsage|undefined {
   if(!value)return undefined
   const sum=(parts:unknown[])=>{const counts=parts.map(tokenCount);return counts.every(n=>n!==null)?counts.reduce<number>((a,n)=>a+n!,0):null}
@@ -80,6 +107,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
   const data = await response.json()
+  logMarketingPlanResponse(c, input, body, response, data, started)
   if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw Object.assign(new TextOutputLimitError({
     finishReason:'length', maxTokens, reasoningEffort:body.reasoning_effort||'unspecified',
     completionTokens:tokenCount(data.usage?.completion_tokens),
