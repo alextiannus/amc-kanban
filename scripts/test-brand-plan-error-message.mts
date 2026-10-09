@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { calendarCreativeErrorMessage } from '../src/lib/brand-plan/errorMessages.ts'
+import { calendarCreativeErrorMessage, marketingPlanOutputLimitMessage } from '../src/lib/brand-plan/errorMessages.ts'
+import { marketingPlanLLMFailureCode } from '../src/lib/brand-plan/marketingPlanLLMPolicy.ts'
+
+const limit = 'Text provider output token limit reached'
+assert.equal(marketingPlanLLMFailureCode(limit), 'marketing_plan_output_limit')
+assert.equal(marketingPlanLLMFailureCode('invalid_json', { error: limit }), 'marketing_plan_output_limit')
+assert.equal(marketingPlanLLMFailureCode('Text provider HTTP 429'), 'marketing_plan_llm_failed')
+assert.equal(marketingPlanLLMFailureCode('invalid_json', { error: 'timeout' }), 'marketing_plan_llm_failed')
+for (const payload of ['marketing_plan_output_limit', { error: 'marketing_plan_output_limit' }, { code: 'marketing_plan_output_limit', error: 'upstream message' }]) {
+  assert.equal(marketingPlanOutputLimitMessage(payload), '模型输出达到长度上限，未生成完整计划，请重试')
+}
+assert.equal(marketingPlanOutputLimitMessage({ error: 'marketing_plan_llm_failed' }), undefined)
 
 const friendly = calendarCreativeErrorMessage({
   error: 'calendar_content_creative_missing',

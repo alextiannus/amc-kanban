@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { MARKETING_PLAN_OUTPUT_TOKENS, MARKETING_PLAN_REPAIR_TOKENS } from '../src/lib/brand-plan/marketingPlanLLMPolicy.ts'
 process.env.DATABASE_URL ||= 'postgresql://test:test@localhost/test'
 process.env.JWT_SECRET='test-signing-secret-not-production'
 const {prisma}=await import('../src/lib/prisma.ts')
@@ -76,7 +77,15 @@ try{
  assert.equal(requests.at(-1).body.reasoning_effort,'low','GLM behavior does not depend on vendor name')
  await complete({...c,reasoningEffort:'high'},{task:'body_composition',messages:[{role:'user',content:'copy'}]})
  assert.equal(requests.at(-1).body.reasoning_effort,'high','immutable central definition overrides the task default')
- await complete(c,{task:'marketing_plan',messages:[{role:'user',content:'plan'}]})
+ await complete(c,{task:'marketing_plan',messages:[{role:'user',content:'plan'}],maxTokens:MARKETING_PLAN_OUTPUT_TOKENS})
+ assert.equal(requests.at(-1).body.max_tokens,8192)
+ assert.equal(requests.at(-1).body.reasoning_effort,'low','marketing plans conserve the output budget for JSON')
+ await complete(c,{task:'marketing_plan',messages:[{role:'user',content:'repair JSON'}],maxTokens:MARKETING_PLAN_REPAIR_TOKENS})
+ assert.equal(requests.at(-1).body.max_tokens,4096)
+ assert.equal(requests.at(-1).body.reasoning_effort,'low')
+ await complete({...c,reasoningEffort:'high'},{task:'marketing_plan',messages:[{role:'user',content:'plan'}]})
+ assert.equal(requests.at(-1).body.reasoning_effort,'high','explicit central reasoning remains authoritative')
+ await complete(c,{task:'unrelated_task',messages:[{role:'user',content:'plan'}]})
  assert.equal(requests.at(-1).body.reasoning_effort,undefined,'other tasks retain model defaults')
  await complete({...c,modelName:'other-model'},{task:'body_composition',messages:[{role:'user',content:'copy'}]})
  assert.equal(requests.at(-1).body.reasoning_effort,undefined)

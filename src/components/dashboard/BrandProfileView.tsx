@@ -18,7 +18,7 @@ import type {
 } from '@/lib/brandIdentity'
 import { brandPlanEditorIdentityValues } from '@/lib/brandPlanEditorIdentity'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
-import { calendarCreativeErrorMessage } from '@/lib/brand-plan/errorMessages'
+import { calendarCreativeErrorMessage, marketingPlanOutputLimitMessage } from '@/lib/brand-plan/errorMessages'
 import {
   createSkuId,
   formatSkuPrice,
@@ -523,6 +523,8 @@ function createStoreId() {
 }
 
 function brandPlanErrorMessage(error: unknown) {
+  const outputLimitMessage = marketingPlanOutputLimitMessage(error)
+  if (outputLimitMessage) return outputLimitMessage
   const calendarMessage = calendarCreativeErrorMessage(error)
   if (calendarMessage) return calendarMessage
   const response = error && typeof error === 'object' && !Array.isArray(error) ? error as Record<string, unknown> : {}

@@ -19,6 +19,7 @@ import {
 } from '@/lib/subscription/catalog'
 import { getSubscriptionOperationsPolicy } from '@/lib/subscription/policy'
 import { callLLM } from '@/lib/llmRouter'
+import { MARKETING_PLAN_OUTPUT_TOKENS, MARKETING_PLAN_REPAIR_TOKENS, marketingPlanLLMFailureCode } from './marketingPlanLLMPolicy'
 import { getPromptTemplate, renderPromptTemplate } from '@/lib/promptTemplates'
 import { writeAuditLog } from '@/lib/audit'
 import { skuLibraryForLLM } from '@/lib/sku-library/service'
@@ -1225,7 +1226,7 @@ async function buildAnnualMarketingSolution(
       modelName: strategyLlm.modelName,
       error: strategyLlm.error || 'llm_returned_invalid_json',
     })
-    throw new BrandPlanError('marketing_plan_llm_failed', 502)
+    throw new BrandPlanError(marketingPlanLLMFailureCode(strategyLlm.error, strategyLlm.trace?.repairTrace), 502)
   }
   const strategyPlan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
   const quarterlyPlans: NonNullable<NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']> = []
@@ -1266,7 +1267,7 @@ async function buildAnnualMarketingSolution(
         modelName: quarterLlm.modelName,
         error: quarterLlm.error || 'llm_returned_invalid_json',
       })
-      throw new BrandPlanError('marketing_plan_llm_failed', 502)
+      throw new BrandPlanError(marketingPlanLLMFailureCode(quarterLlm.error, quarterLlm.trace?.repairTrace), 502)
     }
     const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [fallbackQuarter])
     if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
@@ -1313,7 +1314,7 @@ async function buildAnnualMarketingStrategyOnly(
     llm: strategyLlm,
     fallbackUsed: false,
   })
-  if (!strategyLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  if (!strategyLlm.value) throw new BrandPlanError(marketingPlanLLMFailureCode(strategyLlm.error, strategyLlm.trace?.repairTrace), 502)
   const plan = normalizeAnnualMarketingStrategy(strategyLlm.value, fallback, strategyLlm)
   return {
     ...plan,
@@ -1390,7 +1391,7 @@ async function buildNextQuarterMarketingPlan(
     llm: quarterLlm,
     fallbackUsed: false,
   })
-  if (!quarterLlm.value) throw new BrandPlanError('marketing_plan_llm_failed', 502)
+  if (!quarterLlm.value) throw new BrandPlanError(marketingPlanLLMFailureCode(quarterLlm.error, quarterLlm.trace?.repairTrace), 502)
   const [quarterPlan] = normalizeAnnualQuarterlyPlans([quarterLlm.value], [targetQuarter])
   if (!quarterPlan) throw new BrandPlanError('marketing_plan_llm_failed', 502)
   const fallbackOrder = new Map((fallback.quarterlyPlans || []).map((item, index) => [item.startMonth, index]))
@@ -3275,7 +3276,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
     compactInputCharCount: compactInputJson.length,
   }
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1800 : 2200, {
+    const result = await callLLM('marketing_plan', prompt, MARKETING_PLAN_OUTPUT_TOKENS, {
       temperature: 0.35,
       jsonMode: true,
       deadlineMs: scope === 'annual_strategy' ? 60000 : 65000,
@@ -3324,6 +3325,7 @@ async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<
         ...promptTrace,
         attempts: [],
         parseStatus: 'exception',
+        repairTrace: undefined as Record<string, unknown> | undefined,
       },
     }
   }
@@ -3339,7 +3341,7 @@ async function repairMarketingPlanJson(scope: MarketingPlanLLMScope, rawText: st
     `原文：${rawText.slice(0, 12000)}`,
   ].join('\n\n')
   try {
-    const result = await callLLM('marketing_plan', prompt, scope === 'annual_strategy' ? 1600 : 1400, {
+    const result = await callLLM('marketing_plan', prompt, MARKETING_PLAN_REPAIR_TOKENS, {
       temperature: 0,
       jsonMode: true,
       deadlineMs: 22000,

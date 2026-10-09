@@ -1,5 +1,13 @@
 type UnknownRecord = Record<string, unknown>
 
+export function marketingPlanOutputLimitMessage(payload: unknown) {
+  const response = objectValue(payload)
+  const code = text(response.code || response.error || payload)
+  return code === 'marketing_plan_output_limit'
+    ? '模型输出达到长度上限，未生成完整计划，请重试'
+    : undefined
+}
+
 function objectValue(value: unknown): UnknownRecord {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as UnknownRecord : {}
 }
