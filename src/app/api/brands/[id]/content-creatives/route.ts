@@ -3,6 +3,8 @@ import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { listOpenCalendarCreativeOptions } from '@/lib/brand-plan/calendarSync'
 
+export const dynamic='force-dynamic'
+
 type Params = { params: Promise<{ id: string }> }
 
 function currentMonth() {
@@ -21,5 +23,5 @@ export async function GET(request: Request, { params }: Params) {
     ? url.searchParams.get('month')!
     : currentMonth()
   const creatives = await listOpenCalendarCreativeOptions(id, month)
-  return NextResponse.json({ ok: true, month, creatives })
+  return NextResponse.json({ ok: true, month, creatives },{headers:{'Cache-Control':'no-store'}})
 }

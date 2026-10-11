@@ -369,6 +369,7 @@ export async function runBrandPlanAction(input: {
   action: BrandPlanAction
   body?: Record<string, unknown>
 }) {
+  if (['generate_publishing_calendar','generate_publishing_calendar_item','regenerate_calendar_item','rewrite_calendar_item_details'].includes(input.action)) throw new BrandPlanError('use_unified_creative_matching', 409)
   const brand = await loadBrandPlanBrand(input.brandId)
   if (!brand) throw new BrandPlanError('brand_not_found', 404)
   const current = readMarketingSolutionWorkspace(brand)
@@ -1108,48 +1109,7 @@ async function saveWorkspacePatch(
     return { ...current, quarterlyPlans }
   }
 
-  if (target === 'calendar_month') {
-    const month = clampSchedulableCalendarMonth(normalizeMonth(body?.month))
-    const existingItems = current.publishingCalendar?.months?.[month] || []
-    const existingById = new Map<string, BrandPlanCalendarItem>()
-    existingItems.forEach((item) => {
-      const id = text(item.id)
-      if (id) existingById.set(id, item)
-    })
-    const incomingItems = arrayValue(value) as NonNullable<BrandPlanWorkspaceData['publishingCalendar']>['months'][string]
-    const mergedItems = incomingItems.map((item) => {
-      const existing = existingById.get(text(item.id))
-      return {
-        ...(existing || {}),
-        ...item,
-        status: text(item.status) || existing?.status || '已生成',
-      }
-    })
-    const items = clampCalendarItemsToMinimumDate(
-      mergedItems
-    )
-    const publishingCalendar = {
-      generatedAt: new Date().toISOString(),
-      generationMode: 'AMC_CONTENT_ASSISTED' as const,
-      months: {
-        ...(current.publishingCalendar?.months || {}),
-        [month]: items,
-      },
-    }
-    await protectTrackedCreativeChanges(brandId, current, { ...current, publishingCalendar })
-    await syncCalendarMaterialRequirements(brandId, month, items)
-    await syncConfirmedCalendarItemsToDrafts(brandId, month, items)
-    await saveMarketingSolutionVersion({
-      brandId,
-      kind: 'CALENDAR',
-      period: month,
-      input: { target, month, editedAt: new Date().toISOString() },
-      output: { month, items },
-      researchSnapshotId: current.researchReport?.snapshotId,
-      generationMode: 'MANUAL_EDIT',
-    })
-    return { ...current, publishingCalendar }
-  }
+  if (target === 'calendar_month') throw new BrandPlanError('use_versioned_creative_editor',409)
 
   throw new BrandPlanError('invalid_workspace_patch_target', 400)
 }
@@ -3945,7 +3905,7 @@ function clampCalendarItemsToMinimumDate(items: NonNullable<BrandPlanWorkspaceDa
   }))
 }
 
-function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackPlatforms: string[] = [], monthlyQuota = 0) {
+export function buildMonthlyPublishingSchedule(month: string, value: unknown, fallbackPlatforms: string[] = [], monthlyQuota = 0) {
   const [year, monthNumber] = month.split('-').map(Number)
   const daysInMonth = new Date(year, monthNumber, 0).getDate()
   const minimumDate = minimumContentPlanDateValue()

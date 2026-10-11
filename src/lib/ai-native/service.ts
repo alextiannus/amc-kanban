@@ -62,7 +62,7 @@ async function taskHost(userId:string,brandId:string,id:string){
  if(daily){const actor=dailyActorFor(brandId,userId);await requireActor(actor);return {...host,actor}}
  return host
 }
-export async function createNativeTask(userId:string,brandId:string,body:any,automaticDaily=false,autopilotRunId?:string){
+export async function createNativeTask(userId:string,brandId:string,body:any,automaticDaily=false,autopilotRunId?:string,planningRequest?:import('./contract').PlanningBinding){
   const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId,automaticDaily)
   // A rolling-deploy standby can admit durable interactive work, but automatic
   // tasks must wait until this process owns the sole Core executor. Otherwise
@@ -95,7 +95,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if(kind==='autopilot'){if(key!==`autopilot-${body.runId}`)throw nativeError('autopilot_request_key_required');await autopilotRun(userId,brandId,body.runId);intent={...common,kind,runId:body.runId}}else if(kind==='creative'){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string'||typeof body.expectedRevision!=='string')throw nativeError('invalid_creative_task')
     intent={...common,kind,...(autopilotRunId?{autopilotRunId}:{}),requireMaterials:true,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
-  }else if(kind==='creative_discovery'){intent={...common,kind,requireMaterials:true,...(body.poolIdeaId?{poolIdeaId:body.poolIdeaId}:{}),...(automaticDaily?{automaticDaily:true}:{})}}else{
+  }else if(kind==='creative_discovery'){intent={...common,kind,requireMaterials:true,...(planningRequest?{planningRequest}:{}),...(body.poolIdeaId?{poolIdeaId:body.poolIdeaId}:{}),...(automaticDaily?{automaticDaily:true}:{})}}else{
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
   }
@@ -186,7 +186,7 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   const reviewed=body.patch===undefined?candidate.patch:body.patch
   if(!reviewed||Object.keys(reviewed).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k)))throw nativeError('candidate_patch_invalid')
   if(row.intent.requireMaterials&&row.intent.adaptToBrand&&(!Array.isArray(reviewed.materialRequirements)||!reviewed.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))throw nativeError('material_requirements_required')
-  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:reviewed},undefined,{taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
+  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:reviewed,feedback:body.feedback},undefined,{instruction:row.intent.goal,taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
   return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}

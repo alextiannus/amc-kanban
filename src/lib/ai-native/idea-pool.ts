@@ -1,3 +1,5 @@
+import {advanceCalendarMatching} from './calendar-planning'
+import {localPlanningTime} from '../brand-plan/matchingContract'
 import {creativeDirection,diverseCreatives,duplicateCreative} from './creative-diversity'
 import {advanceDailyPlanning} from './daily-planning'
 import {calendarCreativeOption} from '../brand-plan/calendarSync'
@@ -128,7 +130,7 @@ export function startIdeaPoolWorker(){
       const pool=await database()
       // At-most-once daily admission persists across replicas and process restarts.
       const brands=await prisma.brand.findMany({where:{status:'ACTIVE'},select:{id:true}})
-      for(const brand of brands){if(stopped)break;try{const facts=await readBrandFacts(prisma,brand.id);if(facts)await refreshBrandIdeas(pool,facts)}catch{console.error('[idea-pool] daily brand search unavailable',brand.id)}try{await advanceDailyPlanning(pool,brand.id)}catch{console.error('[idea-pool] daily planning unavailable',brand.id)}}
+      for(const brand of brands){if(stopped)break;try{const facts=await readBrandFacts(prisma,brand.id);if(facts&&localPlanningTime(facts.timezone).night)await refreshBrandIdeas(pool,facts)}catch{console.error('[idea-pool] daily brand search unavailable',brand.id)}try{await advanceCalendarMatching(brand.id)}catch{console.error('[idea-pool] calendar matching unavailable',brand.id)}try{await advanceDailyPlanning(pool,brand.id)}catch{console.error('[idea-pool] daily planning unavailable',brand.id)}}
     }catch{console.error('[idea-pool] worker unavailable')}finally{running=false}
   }
   void tick();const timer=setInterval(()=>void tick(),60000);timer.unref()
