@@ -38,13 +38,13 @@ export async function requestCalendarMatching(userId:string,brandId:string,body:
    const state=record(prior.output)
    // Successful-task save failures reuse receipts. A new implementation can
    // recover a settled deterministic model failure once on explicit user retry.
-   if(state.status==='error'&&state.run?.finished&&state.run.taskId){
+   if((state.status==='error'||state.status==='deferred'&&['task_limit','task_token_balance'].includes(state.error))&&state.run?.finished&&state.run.taskId){
     let run={...state.run,finished:false}
-    if(state.error==='task_invalid_model_action'||state.error==='task_model_output_limit'){
+    if(['task_invalid_model_action','task_model_output_limit','task_limit','task_token_balance'].includes(state.error)){
      const version=await applicationVersion(),host=await getNativeHost(),actor=actorFor(brandId,userId)
      const task=await host.app.runtime.state(actor,state.run.taskId)
      const usage=await host.app.ledger.taskUsage(await host.app.scope(actor),state.run.taskId)
-     if(usage.complete===true&&task.status==='waiting'&&['invalid_model_action','model_output_limit'].includes(task.waiting_reason||'')&&task.version!==version&&state.run.recoveryVersion!==version)run={...run,recoveryOfTaskId:state.run.taskId,recoveryVersion:version,taskId:null}
+     if(usage.complete===true&&task.status==='waiting'&&['invalid_model_action','model_output_limit','limit','token_balance'].includes(task.waiting_reason||'')&&task.version!==version&&state.run.recoveryVersion!==version)run={...run,recoveryOfTaskId:state.run.taskId,recoveryVersion:version,taskId:null}
     }
     await tx.brandMarketingSolution.update({where:{id:prior.id},data:{output:{...state,status:'matching',error:null,run}}})
    }

@@ -1,10 +1,9 @@
-import { nativeError, TASK_ALLOWANCE } from './contract'
+import { nativeError } from './contract'
 
 export const MODEL_INVOCATION_ALLOWANCE = 150000
-export function assertTaskAllowance(usage:{platformUnits:unknown;complete?:boolean}){
+export function assertUsageSettled(usage:{platformUnits:unknown;complete?:boolean}){
   const used=Number(usage.platformUnits)
   if(usage.complete===false||!Number.isFinite(used)||used<0)throw nativeError('usage_reconciliation_required',409)
-  if(used+MODEL_INVOCATION_ALLOWANCE>TASK_ALLOWANCE)throw Object.assign(nativeError('task_allowance_exhausted',429),{limitReached:true})
 }
 
 // Preserve provider error identity and usage so every failed invocation is settled.

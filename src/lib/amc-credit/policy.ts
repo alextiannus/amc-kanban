@@ -23,7 +23,7 @@ export function defaultCreditSettings(value: unknown = 'starter') {
     planId,
     cycleAllowance: creditForPlan(planId),
     allowOverage: true,
-    allowNightlyOverage: false,
+    allowNightlyOverage: true,
   }
 }
 
@@ -69,8 +69,8 @@ export function summarizeCredit(includedCredit: number, entries: CreditLedgerLik
 
 export function canStartCreditTask(input: { allowOverage: boolean; includedCredit: number; entries: CreditLedgerLike[]; requestedCredit: number }) {
   if (!Number.isInteger(input.requestedCredit) || input.requestedCredit < 0) return false
-  if (input.allowOverage) return true
-  return summarizeCredit(input.includedCredit, input.entries).remaining >= input.requestedCredit
+  // All brands currently use meter-only policy, including historical restricted accounts.
+  return true
 }
 
 export function analysisCredit(taskType: string, rawUsage?: { durationSec?: number; inputTokens?: number; outputTokens?: number }) {

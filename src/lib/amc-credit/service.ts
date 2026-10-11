@@ -50,7 +50,7 @@ export async function getCreditSnapshot(brandId: string, db: DbClient = prisma) 
   const account = await ensureCreditAccount(brandId, db)
   const cycle = account.cycles[0]
   const entries = await db.amcCreditLedgerEntry.findMany({ where: { cycleId: cycle.id }, orderBy: { createdAt: 'desc' } })
-  return { account, cycle, entries, summary: summarizeCredit(cycle.includedCredit, entries) }
+  return { account, cycle, entries, summary: { ...summarizeCredit(cycle.includedCredit, entries), quotaEnforced: false, usageMode: 'meter_only' } }
 }
 
 export async function reserveCredit(input: { brandId: string; taskType: string; taskId: string; credit: number; idempotencyKey: string; rawUsage?: Prisma.InputJsonValue; metadata?: Prisma.InputJsonValue }) {
@@ -63,7 +63,7 @@ export async function reserveCredit(input: { brandId: string; taskType: string; 
       return { entry: prior, snapshot }
     }
     if (!canStartCreditTask({ allowOverage: snapshot.account.allowOverage, includedCredit: snapshot.cycle.includedCredit, entries: snapshot.entries, requestedCredit: input.credit })) {
-      throw Object.assign(new Error('AMC Credit 余额不足，当前品牌未允许超额使用。'), { status: 402, code: 'AMC_CREDIT_EXHAUSTED' })
+      throw Object.assign(new Error('AMC Credit 消耗记录必须为非负整数。'), { status: 400, code: 'INVALID_CREDIT_USAGE' })
     }
     const entry = await tx.amcCreditLedgerEntry.create({ data: { accountId: snapshot.account.id, cycleId: snapshot.cycle.id, kind: 'RESERVE', taskType: input.taskType, taskId: input.taskId, creditDelta: input.credit, idempotencyKey: input.idempotencyKey, rawUsage: input.rawUsage, metadata: input.metadata } })
     return { entry, snapshot: await getCreditSnapshot(input.brandId, tx) }

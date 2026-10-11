@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/asset-analysis/db'
 import { getAssetAnalysisConfig } from '@/lib/systemConfig'
 import { getHuaweiObsConfig, getHuaweiObsPrivateUrl } from '@/lib/integrations/huaweiObs'
-import { getCreditSnapshot, settleCredit } from '@/lib/amc-credit/service'
+import { settleCredit } from '@/lib/amc-credit/service'
 import { analysisCredit } from '@/lib/amc-credit/policy'
 import { analysisContent, type AssetAnalysisContentConfig } from './content'
 import { ensureAssetFolders } from './folders'
@@ -164,10 +164,6 @@ export async function processAnalysisQueue(options: { force?: boolean; now?: Dat
   const batches = await prisma.assetAnalysisBatch.findMany({ where: { status: { in: pending }, ...(options.batchId ? { id: options.batchId } : {}), OR: [{ leaseUntil: null }, { leaseUntil: { lt: now } }] }, include: { brand: { select: { timezone: true } } }, orderBy: { updatedAt: 'asc' }, take: options.batchId ? 1 : 100 })
   for (const batch of batches) {
     if (!options.force && !batch.runImmediately && !isNightlyWindow(now, batch.brand.timezone || 'Asia/Singapore')) continue
-    if (!options.force && !batch.runImmediately) {
-      const credit = await getCreditSnapshot(batch.brandId)
-      if (credit.summary.usagePercent >= 100 && !credit.account.allowNightlyOverage) continue
-    }
     const claimed = await prisma.assetAnalysisBatch.updateMany({ where: { id: batch.id, status: { in: pending }, OR: [{ leaseUntil: null }, { leaseUntil: { lt: new Date() } }] }, data: { leaseUntil: new Date(Date.now() + 300_000), status: 'RUNNING' } })
     if (!claimed.count) continue
     try {

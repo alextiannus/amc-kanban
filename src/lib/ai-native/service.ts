@@ -1,4 +1,4 @@
-import {assertTaskAllowance} from './model-guards'
+import {assertUsageSettled} from './model-guards'
 import {AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {autopilotRun} from './autopilot'
 import {selectPoolIdea} from './idea-pool'
@@ -12,7 +12,7 @@ import type { Pool } from 'pg'
 import { composeApplication, requireActor, type WorkspacePort } from './application'
 import { centralModels } from './models'
 import { nativePool, initializeHost, admitIntent, intentBy, intentForTask, type PublicTaskIndex } from './store'
-import { actorFor, dailyActorFor, candidateFrom, briefFrom, digest, nativeError, requestKey, TASK_ALLOWANCE, DAILY_ALLOWANCE, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
+import { actorFor, dailyActorFor, candidateFrom, briefFrom, digest, nativeError, requestKey, USAGE_POLICY, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
 import { readCreativeRevisions, saveCreativeRevision } from '../brand-plan/creativeRevisions'
 import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
@@ -108,7 +108,6 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   }
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
   const row=await admitIntent(pool,actor,intent)
-  await app.ledger.grant(await app.scope(actor),{reference:`amc-request-${row.id}`,amount:TASK_ALLOWANCE,evidence:{kind:automaticDaily?'daily-brand-planning':'explicit-ai-task',requestId:row.id,policy:'amc-ai-allowance-v1',requestedBy:userId}})
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
   return publicTask(app,actor,receipt.id)
@@ -132,7 +131,7 @@ export async function listNativeTasks(userId:string,brandId:string,cursor?:strin
       for(const item of daily.items){const row=await intentForTask(pool,app,dailyActor,item.id);items.push({...item,goal:'每日自动策划 · '+row.intent.goal,kind:row.intent.kind,creativeId:null} as any)}
     }catch{/* A normal brand collaborator need not have principal delegation. */}
   }
-  return {page:{...listing,items},coreVersion:CORE_VERSION,limits:{taskAllowance:TASK_ALLOWANCE,dailyAllowance:DAILY_ALLOWANCE},balance:await app.ledger.balance(await app.scope(actor))}
+  return {page:{...listing,items},coreVersion:CORE_VERSION,limits:USAGE_POLICY}
 }
 // Status/control must remain available when Core refuses stale source or Skill revisions.
 // This never returns unvalidated historical sources or bypasses current authorization.
@@ -165,7 +164,7 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
   const {actor,app}=await taskHost(userId,brandId,id)
   if(!['cancel','resume','provide_input','control_result'].includes(body?.action))throw nativeError('invalid_task_action')
   const key=requestKey(body.requestKey)
-  if(['resume','provide_input'].includes(body.action))assertTaskAllowance(await app.ledger.taskUsage(await app.scope(actor),id))
+  if(['resume','provide_input'].includes(body.action))assertUsageSettled(await app.ledger.taskUsage(await app.scope(actor),id))
   const input={id,...(body.action==='provide_input'?{input:body.input}:{}),...(body.action==='control_result'?{requestKey:key}:{})}
   const receipt=await app.dispatcher.invoke(`tasks.${body.action}`,input,{actor,callId:key})
   return {receipt,task:await app.runtime.state(actor,id).then(t=>({id:t.id,status:t.status,waitingReason:t.waiting_reason}))}

@@ -1,7 +1,7 @@
 // Reviewed version transition through public IAIC controls. Never edits Core tables.
 import {getNativeHost} from '../src/lib/ai-native/service.ts'
 import {applicationVersion} from '../src/lib/ai-native/application.ts'
-import {actorFor,digest,TASK_ALLOWANCE} from '../src/lib/ai-native/contract.ts'
+import {actorFor,digest} from '../src/lib/ai-native/contract.ts'
 import {intentForTask,admitIntent} from '../src/lib/ai-native/store.ts'
 import {autopilotRun} from '../src/lib/ai-native/autopilot.ts'
 import {prisma} from '../src/lib/prisma.ts'
@@ -24,7 +24,6 @@ try {
    if(!apply){console.log(JSON.stringify({runId:row.id,predecessor:old.id,action:'eligible'}));continue}
    const intent={...binding.intent,requestKey:key,artifactPath:`work/${digest([actor,key])}.json`}
    const request=await admitIntent(host.pool,actor,intent)
-   await host.app.ledger.grant(await host.app.scope(actor),{reference:`amc-request-${request.id}`,amount:TASK_ALLOWANCE,evidence:{kind:'reviewed-version-continuation',predecessor:old.id,runId:row.id}})
    await host.pool.query("UPDATE amc_iaic.autopilot_runs SET status='waiting',evidence=jsonb_set(evidence,'{versionContinuationPending}',$2::jsonb) WHERE id=$1",[row.id,JSON.stringify({predecessor:old.id,version})])
    await host.app.dispatcher.invoke('tasks.cancel',{id:old.id},{actor,callId:`upgrade-cancel-${digest([old.id,version])}`})
    const receipt=await host.app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:host.tools.filter(tool=>!['amc.creative','amc.library'].includes(tool))},{actor,callId:key})

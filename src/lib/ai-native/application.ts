@@ -1,4 +1,4 @@
-import {assertTaskAllowance} from './model-guards'
+import {assertUsageSettled,MODEL_INVOCATION_ALLOWANCE} from './model-guards'
 import {autopilotCapabilities,AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {readAutopilot,autopilotRun} from './autopilot'
 import { brandLibrary, discoveryFrom, discoveryContract, type LibrarySnapshot } from './library'
@@ -91,8 +91,11 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         }
         if(allowed&&capability.implementation.kind==='agent'){
           const usage=await app.ledger.taskUsage(await app.scope(actor),taskId)
-          assertTaskAllowance(usage)
-          reason='task_allowance_admission_bound'
+          assertUsageSettled(usage)
+          // Trusted host policy supplies one idempotent reservation per metered attempt.
+          // This is not a purchase or a user quota; settlements remain authoritative usage.
+          await app.ledger.grant(await app.scope(actor),{reference:`amc-meter-only:${taskId}:${usage.requests}`,amount:MODEL_INVOCATION_ALLOWANCE,evidence:{policy:'amc-meter-only-v1',taskId,attempt:usage.requests}})
+          reason='meter_only_usage_settled'
         }
       }
       return {allowed,recordId:taskId||'amc-current-access',revision:'amc-ai-policy-v1',reason}
@@ -129,6 +132,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         }
         if(!history.calls.some(c=>c.status==='succeeded'&&c.capability==='amc.creative'))return {verified:false,feedback:'Read the selected creative first.'}
         const candidate=candidateFrom(artifact.content,row.intent)
+        if(row.intent.requireMaterials&&(!Array.isArray(candidate.patch.materialRequirements)||!candidate.patch.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))return {verified:false,feedback:'Include a nonempty array of actionable filming requirements in patch.materialRequirements.'}
         const currentContext=options.readContext?await options.readContext(actor):await brandContext(actor)
         if(candidate.contextDigest!==digest(currentContext))return {verified:false,feedback:'Brand context changed or its digest is missing. Read amc.context again and revise the candidate against current facts.'}
         if(row.intent.adaptToBrand&&!validateSkuReferences(candidate,currentContext))return {verified:false,feedback:'Use skuIds from current productCatalog and include their exact names in the full adapted planning script. No invented SKU IDs. When catalog is empty, use empty skuIds AND explicitly set patch.product to the literal 品牌内容 so the reference product is not retained.'}

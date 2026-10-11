@@ -124,8 +124,8 @@ try{
  const counted=await brandOperations(actor);assert.equal(counted.draftTotal,31);assert.equal(counted.drafts.length,30);assert.equal(counted.accountTotal,1)
  await prisma.contentDraft.deleteMany({where:{brandId:id}});await prisma.socialAccount.deleteMany({where:{brandId:id}})
  for(const requestKey of ['quota-fourth-request','quota-fifth-request'])await admitIntent(pool,actor,{...brief,requestKey})
- await assert.rejects(()=>admitIntent(pool,actor,{...brief,requestKey:'quota-sixth-request'}),/daily_task_budget_exhausted/)
- console.log(JSON.stringify({ok:true,checks:['Core durable task','recovered application index','scoped persistent preference and forgetting','same admission receipt','bounded partial context','single executor ownership','daily quota bound','brand facts CAS','current permission','cross-user denial','input wait','independent process recovery','runtime rebuild','original clarification receipt','candidate verifier','AI provenance','idempotent adoption','post-adoption read','real usage ledger','unknown usage held without retry','cancel','brand brief with operations evidence','exact zero and nonzero totals beyond page limit','no downstream writes'],modelCalls}))
+ for(let n=6;n<=12;n++)await admitIntent(pool,actor,{...brief,requestKey:`unlimited-request-${n}`})
+ console.log(JSON.stringify({ok:true,checks:['Core durable task','recovered application index','scoped persistent preference and forgetting','same admission receipt','bounded partial context','single executor ownership','unlimited daily metering','brand facts CAS','current permission','cross-user denial','input wait','independent process recovery','runtime rebuild','original clarification receipt','candidate verifier','AI provenance','idempotent adoption','post-adoption read','real usage ledger','unknown usage held without retry','cancel','brand brief with operations evidence','exact zero and nonzero totals beyond page limit','no downstream writes'],modelCalls}))
 }finally{
  if(composition)await composition.app.close()
  await pool.end()
