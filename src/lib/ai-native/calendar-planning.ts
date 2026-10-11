@@ -33,7 +33,12 @@ export async function requestCalendarMatching(userId:string,brandId:string,body:
   const planHash=planningHash(workspace)
   const brief=planningBrief(workspace,month)
   if(JSON.stringify(brief).length>5000)throw nativeError('planning_brief_too_large',422)
-  if(prior&&record(prior.input).requestedBy===userId&&record(prior.input).planHash===planHash&&creativeDigest(record(prior.input).frequency)===creativeDigest(freq))return
+  if(prior&&record(prior.input).requestedBy===userId&&record(prior.input).planHash===planHash&&creativeDigest(record(prior.input).frequency)===creativeDigest(freq)){
+   const state=record(prior.output)
+   // Explicit retry reconciles the original immutable task, never regenerates it.
+   if(state.status==='error'&&state.run?.finished&&state.run.taskId)await tx.brandMarketingSolution.update({where:{id:prior.id},data:{output:{...state,status:'matching',error:null,run:{...state.run,finished:false}}}})
+   return
+  }
   const slots=buildMonthlyPublishingSchedule(month,freq,[],total).map((slot,index)=>({id:`${month}-${index}-${slot.platform.slug}`,date:slot.date,platform:slot.platform.slug}))
   await tx.brandMarketingSolution.create({data:{brandId,kind:MATCH_REQUEST_KIND,period:month,version:(prior?.version||0)+1,status:'ACTIVE',createdById:userId,generationMode:'USER_AI_MATCHING',input:{requestedBy:userId,planHash,plan:planningSnapshot(workspace),brief,frequency:freq,slots},output:{status:'queued',run:null}}})
  })

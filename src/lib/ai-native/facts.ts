@@ -1,3 +1,9 @@
+// JSONB may reorder object keys. Restore the exact facts projection before
+// comparing existing (order-sensitive) context digests; array order stays intact.
+export function restorePortfolioContext(value:any[]){
+  return value.map(item=>({month:item.month,id:item.id,title:item.title,product:item.product,skuIds:item.skuIds,creativeDirection:item.creativeDirection,sourceCreativeId:item.sourceCreativeId}))
+}
+
 export function creativePortfolioFromMarketingSolution(value:unknown){
   const solution=value&&typeof value==='object'?value as any:{}
   const months=solution?.publishingCalendar?.months

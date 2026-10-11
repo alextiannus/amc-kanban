@@ -3,7 +3,7 @@ import {validateCreativeFeedback,creativeChanges} from './revisionFeedback'
 import {creativeDirection,duplicateCreative,exceedsCreativeSubjectLimit} from '../ai-native/creative-diversity.ts'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma.ts'
-import { readBrandFacts } from '../ai-native/facts.ts'
+import { readBrandFacts, restorePortfolioContext } from '../ai-native/facts.ts'
 import { createHash } from 'node:crypto'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
@@ -69,7 +69,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       currentFacts=await readBrandFacts(tx,brandId)
       // A batch adds to its own portfolio. Revalidate merchant facts against the
       // trusted original portfolio; current duplicates/SKU limits are checked below.
-      const evidenceFacts=ai.planningRequest&&Array.isArray(ai.contextPortfolio)?{...currentFacts,creativePortfolio:ai.contextPortfolio}:currentFacts
+      const evidenceFacts=ai.planningRequest&&Array.isArray(ai.contextPortfolio)?{...currentFacts,creativePortfolio:restorePortfolioContext(ai.contextPortfolio)}:currentFacts
       if(createHash('sha256').update(JSON.stringify(evidenceFacts)).digest('hex')!==ai.contextDigest)throw new CreativeRevisionError('brand_context_changed',409)
     }
     const knowledge = await tx.brandKnowledge.findUnique({where:{brandId}})
