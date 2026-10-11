@@ -54,3 +54,17 @@ export function validateSkuReferences(value:{skuIds?:unknown;planning?:string;pa
   const script=String(value.planning||value.patch?.planning||'')
   return ids.every(id=>typeof id==='string'&&catalog.some((sku:any)=>sku.id===id&&script.includes(sku.name)))
 }
+
+// Explain the existing binding rules without relaxing them or inventing aliases.
+export function skuReferenceFeedback(value:{skuIds?:unknown;planning?:string;patch?:Record<string,unknown>},facts:any){
+ const catalog=facts?.productCatalog||skuFacts(facts?.knowledge?.menuItems),ids=value.skuIds
+ if(!catalog.length)return 'Catalog is empty: use empty skuIds and, for a patch, set patch.product to 品牌内容.'
+ if(!Array.isArray(ids)||!ids.length)return 'skuIds must contain 1–3 distinct actual productCatalog IDs.'
+ if(ids.length>3)return `skuIds contains ${ids.length} items; maximum is 3. For a set/bundle, select its single catalog SKU. Describe its components from bundleItems without adding all component SKU IDs.`
+ if(new Set(ids).size!==ids.length)return 'skuIds contains duplicate IDs; use 1–3 distinct catalog IDs.'
+ const unknown=ids.filter(id=>typeof id!=='string'||!catalog.some((sku:any)=>sku.id===id))
+ if(unknown.length)return 'Some skuIds are not in productCatalog. Copy actual catalog IDs; do not invent or infer IDs.'
+ const script=String(value.planning||value.patch?.planning||'')
+ const missing=ids.map(id=>catalog.find((sku:any)=>sku.id===id)).filter((sku:any)=>!script.includes(sku.name)).map((sku:any)=>({skuId:sku.id,exactName:sku.name}))
+ return 'planning must include these exact catalog names (including bilingual text and punctuation). They may appear in a product-reference line, not necessarily spoken copy: '+JSON.stringify(missing)
+}

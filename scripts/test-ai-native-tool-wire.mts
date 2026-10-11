@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {nativeWireTools,nativeWireCall} from '../src/lib/ai-native/tool-wire.ts'
+import {nativeWireTools,nativeWireCall,nativeWireCalls} from '../src/lib/ai-native/tool-wire.ts'
 const result:any={usage:{input_tokens:11,output_tokens:7,input_tokens_details:{cached_tokens:2}},rawUsage:{prompt_tokens:11},providerReference:'fixture'}
 const input={result:{summary:'准备好了“完整脚本”\n无需发布',artifacts:[{path:'trusted.json',revision:1,digest:'a'.repeat(64)}]}}
 const call={id:'call',type:'function',function:{name:'iaic_finish',arguments:JSON.stringify(input)}}
@@ -17,3 +17,8 @@ assert.deepEqual(nativeWireCall(valid,result,workspaceTools),valid)
 console.warn=()=>{}
 try{assert.throws(()=>nativeWireCall(write('{"planning":"broken",}'),result,workspaceTools),(e:any)=>e.code==='INVALID_MODEL_ACTION'&&e.usage.inputTokens===11&&e.usageEvidence.providerReference==='fixture')}finally{console.warn=warn}
 console.log('PASS: aliased workspace writer rejects malformed nested JSON before execution, preserving usage')
+
+console.warn=()=>{}
+try{for(const calls of [undefined,null,{},'not an array',[],[null],[{}],[{function:null}]])assert.throws(()=>nativeWireCalls(calls,result,workspaceTools),(e:any)=>e.code==='INVALID_MODEL_ACTION'&&e.invalidAction===true&&e.usage.outputTokens===7&&e.usageEvidence.providerReference==='fixture')}finally{console.warn=warn}
+assert.deepEqual(nativeWireCalls([valid],result,workspaceTools),[valid])
+console.log('PASS: malformed or missing provider tool-call structures retain known usage instead of becoming unmetered exceptions')

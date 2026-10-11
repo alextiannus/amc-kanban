@@ -13,7 +13,7 @@ import { canUserAccessBrand } from '../user-management/brandAccess'
 import { readCreativeRevisions } from '../brand-plan/creativeRevisions'
 import { brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
 import { intentBy } from './store'
-import { readBrandFacts, validateSkuReferences } from './facts'
+import { readBrandFacts, validateSkuReferences, skuReferenceFeedback } from './facts'
 import { principalFromUser } from '../auth-v2/types'
 import { allows } from '../role-permissions/store'
 import { brandOperations, canReadOperations } from './operations'
@@ -128,14 +128,17 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
           if(!library)return {verified:false,feedback:'Read amc.library and use only returned original creative IDs.'}
           const recommendations=discoveryFrom(artifact.content,row.intent,library)
           const facts=options.readContext?await options.readContext(actor):await brandContext(actor)
-          return {verified:recommendations.contextDigest===digest(facts)&&recommendations.recommendations.every(c=>validateSkuReferences(c,facts)),feedback:'Bind current facts and library evidence. Use actual productCatalog skuIds and exact SKU names in planning; empty skuIds only when no catalog exists.'}
+          if(recommendations.contextDigest!==digest(facts))return {verified:false,feedback:'Brand facts changed. Read amc.context and amc.library again; bind their current matching contextDigest.'}
+          const invalid= recommendations.recommendations.findIndex(c=>!validateSkuReferences(c,facts))
+          if(invalid>=0)return {verified:false,feedback:`recommendations[${invalid}]: ${skuReferenceFeedback(recommendations.recommendations[invalid],facts)}`}
+          return {verified:true}
         }
         if(!history.calls.some(c=>c.status==='succeeded'&&c.capability==='amc.creative'))return {verified:false,feedback:'Read the selected creative first.'}
         const candidate=candidateFrom(artifact.content,row.intent)
         if(row.intent.requireMaterials&&(!Array.isArray(candidate.patch.materialRequirements)||!candidate.patch.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))return {verified:false,feedback:'Include a nonempty array of actionable filming requirements in patch.materialRequirements.'}
         const currentContext=options.readContext?await options.readContext(actor):await brandContext(actor)
         if(candidate.contextDigest!==digest(currentContext))return {verified:false,feedback:'Brand context changed or its digest is missing. Read amc.context again and revise the candidate against current facts.'}
-        if(row.intent.adaptToBrand&&!validateSkuReferences(candidate,currentContext))return {verified:false,feedback:'Use skuIds from current productCatalog and include their exact names in the full adapted planning script. No invented SKU IDs. When catalog is empty, use empty skuIds AND explicitly set patch.product to the literal 品牌内容 so the reference product is not retained.'}
+        if(row.intent.adaptToBrand&&!validateSkuReferences(candidate,currentContext))return {verified:false,feedback:skuReferenceFeedback(candidate,currentContext)}
         const current=await readCreative({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,row.intent.month,row.intent.creativeId)
         if(current.expectedRevision!==row.intent.expectedRevision||candidate.sourceCreativeId!==(current.current?.inspirationCreativeId||null))return {verified:false,feedback:'Original creative or source changed; do not invent a new source or overwrite the changed creative.'}
         return {verified:true}
