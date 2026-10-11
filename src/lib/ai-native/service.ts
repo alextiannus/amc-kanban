@@ -1,3 +1,4 @@
+import {assertTaskAllowance} from './model-guards'
 import {AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {autopilotRun} from './autopilot'
 import {selectPoolIdea} from './idea-pool'
@@ -164,7 +165,7 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
   const {actor,app}=await taskHost(userId,brandId,id)
   if(!['cancel','resume','provide_input','control_result'].includes(body?.action))throw nativeError('invalid_task_action')
   const key=requestKey(body.requestKey)
-  if(body.action==='resume'&&!(await app.ledger.taskUsage(await app.scope(actor),id)).complete)throw nativeError('usage_reconciliation_required',409)
+  if(['resume','provide_input'].includes(body.action))assertTaskAllowance(await app.ledger.taskUsage(await app.scope(actor),id))
   const input={id,...(body.action==='provide_input'?{input:body.input}:{}),...(body.action==='control_result'?{requestKey:key}:{})}
   const receipt=await app.dispatcher.invoke(`tasks.${body.action}`,input,{actor,callId:key})
   return {receipt,task:await app.runtime.state(actor,id).then(t=>({id:t.id,status:t.status,waitingReason:t.waiting_reason}))}

@@ -1,3 +1,4 @@
+import {assertTaskAllowance} from './model-guards'
 import {autopilotCapabilities,AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {readAutopilot,autopilotRun} from './autopilot'
 import { brandLibrary, discoveryFrom, discoveryContract, type LibrarySnapshot } from './library'
@@ -10,7 +11,7 @@ import path from 'node:path'
 import { prisma } from '../prisma'
 import { canUserAccessBrand } from '../user-management/brandAccess'
 import { readCreativeRevisions } from '../brand-plan/creativeRevisions'
-import { brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, TASK_ALLOWANCE, type NativeIntent, type NativeActor } from './contract'
+import { brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
 import { intentBy } from './store'
 import { readBrandFacts, validateSkuReferences } from './facts'
 import { principalFromUser } from '../auth-v2/types'
@@ -29,7 +30,7 @@ export async function brandContext(actor:NativeActor){
 }
 export async function applicationVersion(root=process.cwd()){
   const hash=createHash('sha256').update(CORE_ARCHIVE_SHA)
-  for(const file of ['src/lib/ai-native/calendar-planning.ts','src/lib/brand-plan/matchingContract.ts','src/lib/brand-plan/revisionFeedback.ts','src/lib/ai-native/application.ts','src/lib/ai-native/idea-pool.ts','src/lib/ai-native/daily-planning.ts','src/lib/ai-native/daily-recovery.ts','src/lib/ai-native/creative-diversity.ts','src/lib/ai-native/contract.ts','src/lib/ai-native/recommendations.ts','src/lib/ai-native/library.ts','src/lib/promotion-strategy/clients.ts','src/lib/ai-native/facts.ts','src/lib/ai-native/operations.ts','src/lib/ai-native/models.ts','src/lib/ai-native/store.ts','src/lib/ai-native/service.ts','src/lib/ai-native/preferences.ts','src/lib/global-text/transport.ts','src/lib/brand-plan/creativeRevisions.ts','src/lib/brand-plan/creativeRevisionContract.ts','src/lib/model-management/types.ts','src/lib/model-management/registry.ts','skills/amc-creative/SKILL.md','skills/amc-discovery/SKILL.md','skills/amc-brief/SKILL.md','skills/amc-autopilot/SKILL.md','src/lib/ai-native/autopilot.ts','src/lib/ai-native/autopilot-store.ts','src/lib/ai-native/autopilot-capabilities.ts'])hash.update(file).update(await readFile(path.join(root,file)))
+  for(const file of ['src/lib/ai-native/calendar-planning.ts','src/lib/brand-plan/matchingContract.ts','src/lib/brand-plan/revisionFeedback.ts','src/lib/ai-native/application.ts','src/lib/ai-native/idea-pool.ts','src/lib/ai-native/daily-planning.ts','src/lib/ai-native/daily-recovery.ts','src/lib/ai-native/creative-diversity.ts','src/lib/ai-native/contract.ts','src/lib/ai-native/recommendations.ts','src/lib/ai-native/library.ts','src/lib/promotion-strategy/clients.ts','src/lib/ai-native/facts.ts','src/lib/ai-native/operations.ts','src/lib/ai-native/models.ts','src/lib/ai-native/model-guards.ts','src/lib/ai-native/store.ts','src/lib/ai-native/service.ts','src/lib/ai-native/preferences.ts','src/lib/global-text/transport.ts','src/lib/brand-plan/creativeRevisions.ts','src/lib/brand-plan/creativeRevisionContract.ts','src/lib/model-management/types.ts','src/lib/model-management/registry.ts','skills/amc-creative/SKILL.md','skills/amc-discovery/SKILL.md','skills/amc-brief/SKILL.md','skills/amc-autopilot/SKILL.md','src/lib/ai-native/autopilot.ts','src/lib/ai-native/autopilot-store.ts','src/lib/ai-native/autopilot-capabilities.ts'])hash.update(file).update(await readFile(path.join(root,file)))
   return hash.digest('hex')
 }
 type TaskBinding={trusted_context:{reference:string}|null}
@@ -90,7 +91,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         }
         if(allowed&&capability.implementation.kind==='agent'){
           const usage=await app.ledger.taskUsage(await app.scope(actor),taskId)
-          allowed=Number(usage.platformUnits)+150000<=TASK_ALLOWANCE
+          assertTaskAllowance(usage)
           reason='task_allowance_admission_bound'
         }
       }

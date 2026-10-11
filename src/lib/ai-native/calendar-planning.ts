@@ -83,6 +83,7 @@ export async function advanceCalendarMatching(brandId:string,now=new Date()){
     }
     const task=await host.app.runtime.get(actor,state.run.taskId,{history:true})
     if(['failed','cancelled'].includes(task.status)){await update({status:'error',error:`task_${task.status}`,run:{...state.run,finished:true}});continue}
+    if(task.status==='waiting'){const reason=task.waiting_reason||'interrupted';await update({status:['limit','token_balance'].includes(reason)?'deferred':'error',error:`task_${reason}`,run:{...state.run,finished:true}});continue}
     if(task.status!=='succeeded')continue
     const binding=await intentForTask(host.pool,host.app,actor,task.id),intent=binding.intent as DiscoveryIntent
     if(intent.kind!=='creative_discovery'||intent.planningRequest?.id!==request.id)throw nativeError('planning_task_mismatch')

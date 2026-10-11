@@ -7,6 +7,7 @@ import { runtimeConfig } from '../model-management/registry'
 import { selectModel } from '../model-management/types'
 import { recordExecution } from '../model-management/runtime'
 import { complete } from '../global-text/transport'
+import { boundInvalidActions, MODEL_INVOCATION_ALLOWANCE } from './model-guards'
 import { nativeError } from './contract'
 
 export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'|'resolveSecret'|'modelFactory'|'tokenPolicies'>>{
@@ -29,8 +30,8 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       const model=selectModel(config,'mm','ai_native','text')
       return config.secrets?.[model.secretRef]
     },
-    tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:150000,price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
-    modelFactory:configuration=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:6000,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
+    tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:MODEL_INVOCATION_ALLOWANCE,price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
+    modelFactory:configuration=>boundInvalidActions(createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:6000,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
       let result;try{
@@ -39,6 +40,6 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       }finally{
         await recordExecution({source:'mm',executor:'kanban',task:'ai_native',version,modelId:model.id,connectionId:model.connectionId,targetModel:model.definition.modelName,responseModel:result?.responseModel||undefined,status:result?'success':'failed',latencyMs:Date.now()-started})
       }
-    }}),
+    }})),
   }
 }

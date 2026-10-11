@@ -104,7 +104,7 @@ try{
  assert.equal((await composition.app.runtime.get(actor,unknown.id)).waiting_reason,'usage_reconciliation')
  const hold=await composition.app.ledger.taskUsage(await composition.app.scope(actor),unknown.id);assert.equal(hold.complete,false);assert.equal(Number(hold.pending),1)
  const count=modelCalls
- await composition.app.dispatcher.invoke('tasks.resume',{id:unknown.id},{actor,callId:'unknown-resume'})
+ await assert.rejects(()=>composition!.app.dispatcher.invoke('tasks.resume',{id:unknown.id},{actor,callId:'unknown-resume'}),(error:any)=>error.code==='usage_reconciliation_required'&&error.statusCode===409)
  await composition.app.runtime.tick()
  assert.equal((await composition.app.runtime.get(actor,unknown.id)).waiting_reason,'usage_reconciliation')
  assert.equal(modelCalls,count,'unknown usage must never trigger a repeated provider call')

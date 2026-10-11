@@ -1,4 +1,4 @@
-import {randomUUID} from 'node:crypto'
+import {randomUUID,randomBytes} from 'node:crypto'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
@@ -18,17 +18,17 @@ import {summarizeCreativeFeedback,validateCreativeFeedback} from '../src/lib/bra
 const url=new URL(process.env.DATABASE_URL||'');assert(url.hostname==='127.0.0.1'&&url.pathname==='/amc_lineage_test_unified')
 const pool=new Pool({connectionString:url.href}),brandId='unified-test',userId='unified-user',month='2026-12'
 const plan={annualPlan:{strategy:'Match real educational creative requirements',quarterlyPlans:[{startMonth:month,endMonth:month}]}}
-const tasks=new Map<string,any>(),keys=new Map<string,string>();let count=0,matchCount=8,libraryFailures=false,revoked=false,crashAfterSave=false,rejectCandidate=false
+const tasks=new Map<string,any>(),keys=new Map<string,string>();let waitingReason:string|null=null;let count=0,matchCount=8,libraryFailures=false,revoked=false,crashAfterSave=false,rejectCandidate=false
 const host={pool,app:{runtime:{get:async(_actor:any,id:string)=>tasks.get(id).task},workspace:{read:async(_actor:any,ref:any)=>({content:tasks.get(ref.path).content})}}}
 const createTask=async(_u:string,_b:string,body:any,_daily:any,_autopilot:any,binding:any)=>{
  if(keys.has(body.requestKey))return {id:keys.get(body.requestKey),status:'succeeded'}
  const id=`task-${++count}`,facts=await readBrandFacts(prisma,brandId),n=Math.min(3,matchCount);matchCount-=n
  const sources=Array.from({length:n},(_,i)=>({inspirationCreativeId:`cre_fixture_${count}_${i}`,contentAngle:`${count} ${i}`,sourcePost:{title:randomUUID(),sourceUrl:`https://example.invalid/${count}/${i}`},scriptContent:{kind:'post'}}))
  const library={contextPortfolio:facts.creativePortfolio,sources,libraryDigest:'a'.repeat(64),contextDigest:nativeContract.digest(facts),retrievedAt:new Date().toISOString(),contentMatchRequestId:id,gaps:libraryFailures?[{status:503}]:[],libraryVersions:{}}
- const result={kind:'creative_discovery',brandId,libraryDigest:library.libraryDigest,contextDigest:library.contextDigest,summary:'fixture',recommendations:sources.map((s:any)=>({sourceCreativeId:s.inspirationCreativeId,title:s.sourcePost.title,planning:`Full script ${s.sourcePost.title}`,aiCaption:'Caption',materialRequirements:['Owned footage'],rationale:'Planning fit',skuIds:[]}))}
+ const result={kind:'creative_discovery',brandId,libraryDigest:library.libraryDigest,contextDigest:library.contextDigest,summary:'fixture',recommendations:sources.map((s:any)=>({sourceCreativeId:s.inspirationCreativeId,title:s.sourcePost.title,planning:`Full isolated script ${s.sourcePost.title}: ${randomBytes(768).toString("base64url")}`,aiCaption:'Caption',materialRequirements:['Owned footage'],rationale:'Planning fit',skuIds:[]}))}
  const intent={kind:'creative_discovery',brandId,userId,goal:body.goal,requestKey:body.requestKey,artifactPath:id,requireMaterials:true,planningRequest:binding},ref={path:id,revision:1,digest:'b'.repeat(64)}
  const persisted=(await prisma.$queryRawUnsafe('SELECT $1::jsonb AS snapshot',JSON.stringify(library)) as any[])[0].snapshot
- tasks.set(id,{intent,content:JSON.stringify(result),task:{id,status:'succeeded',result:{artifacts:[ref]},calls:[{capability:'amc.library',status:'succeeded',result:persisted}]}});keys.set(body.requestKey,id);return{id,status:'succeeded'}
+ tasks.set(id,{intent,content:JSON.stringify(result),task:{id,status:waitingReason?'waiting':'succeeded',waiting_reason:waitingReason,result:{artifacts:[ref]},calls:[{capability:'amc.library',status:'succeeded',result:persisted}]}});keys.set(body.requestKey,id);return{id,status:'succeeded'}
 }
 const deps:any={
  '../prisma':{prisma},'../brand-plan/creativeRevisionContract':revisionContract,
@@ -65,8 +65,10 @@ try{
  matchCount=0;libraryFailures=false;await advanceCalendarMatching(brandId,new Date('2026-11-02T18:00:00Z'));assert.equal((await readCalendarMatching(userId,brandId,month)).request.message,MATCH_SHORTFALL_MESSAGE)
  revoked=true;await advanceCalendarMatching(brandId,new Date('2026-11-03T18:00:00Z'));assert.equal(count,5,'revoked authorization does not start task');revoked=false
  matchCount=2;rejectCandidate=true;await advanceCalendarMatching(brandId,new Date('2026-11-03T18:00:00Z'));assert.equal(count,6);assert.equal((await readCalendarMatching(userId,brandId,month)).request.lastRun.finished,true,'invalid immutable candidate ends batch');rejectCandidate=false;const retry=await requestCalendarMatching(userId,brandId,body);assert.equal(retry.request.lastRun.finished,false);await advanceCalendarMatching(brandId,new Date('2026-11-03T19:00:00Z'));assert.equal(count,6,'explicit retry reuses original task');await advanceCalendarMatching(brandId,new Date('2026-11-04T04:00:00Z'));assert.equal(count,6);matchCount=0;await advanceCalendarMatching(brandId,new Date('2026-11-04T18:00:00Z'));assert.equal(count,7,'next night starts fresh after rejected candidate');
+ waitingReason='invalid_model_action';await advanceCalendarMatching(brandId,new Date('2026-11-05T18:00:00Z'));let halted=(await readCalendarMatching(userId,brandId,month)).request;assert.equal(halted.status,'error');assert.equal(halted.error,'task_invalid_model_action');assert.equal(halted.message,null);assert.equal(halted.lastRun.finished,true);
+ waitingReason='limit';await advanceCalendarMatching(brandId,new Date('2026-11-06T18:00:00Z'));assert.equal((await readCalendarMatching(userId,brandId,month)).request.status,'deferred');waitingReason=null;
  knowledge=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}});await prisma.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...(knowledge.marketingSolution as any),annualPlan:{strategy:'Changed'}}}})
- await advanceCalendarMatching(brandId,new Date('2026-11-03T18:00:00Z'));assert.equal((await readCalendarMatching(userId,brandId,month)).request.status,'plan_changed');assert.equal(count,7)
+ await advanceCalendarMatching(brandId,new Date('2026-11-03T18:00:00Z'));assert.equal((await readCalendarMatching(userId,brandId,month)).request.status,'plan_changed');assert.equal(count,9)
  assert.throws(()=>validateCreativeFeedback({reasons:['made_up'],note:''}),CreativeRevisionError)
  const rows=await prisma.brandMarketingSolution.findMany({where:{brandId,kind:'CREATIVE_ITEM'}});assert.equal(summarizeCreativeFeedback(rows).reasons.transitions,1)
  assert(localPlanningTime('Asia/Singapore',new Date('2026-11-01T18:00:00Z')).night)
