@@ -3,7 +3,7 @@ import { matchPromotionStrategyCreativeCandidates } from '../promotion-strategy/
 import { digest, nativeError, type DiscoveryIntent } from './contract'
 import { validateCreativePatch } from '../brand-plan/creativeRevisionContract'
 
-export type LibrarySnapshot = {libraryDigest:string;contextDigest:string;retrievedAt:string;contentMatchRequestId:string;sources:Array<Record<string,any>>;gaps:Array<Record<string,unknown>>;libraryVersions:Record<string,unknown>}
+export type LibrarySnapshot = {contextPortfolio?:any[];libraryDigest:string;contextDigest:string;retrievedAt:string;contentMatchRequestId:string;sources:Array<Record<string,any>>;gaps:Array<Record<string,unknown>>;libraryVersions:Record<string,unknown>}
 // Keep authoritative IDs/links, but give the agent a bounded, explicitly partial source excerpt.
 export function sourceExcerpt(source:Record<string,any>){
   const text=(v:unknown,n=500)=>typeof v==='string'?v.slice(0,n):''
@@ -22,7 +22,7 @@ export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<Lib
   const seen=new Set<string>()
   const sources=(response.creativeCandidates||[]).filter(c=>typeof c.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(c.inspirationCreativeId)&&!seen.has(c.inspirationCreativeId)&&!!seen.add(c.inspirationCreativeId)).slice(0,3).map(sourceExcerpt)
   if(!sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
-  const payload={contentMatchRequestId:response.contentMatchRequestId,sources,gaps:response.contentLibraryGaps||[],libraryVersions:response.libraryVersions||{},contextDigest:digest(facts)}
+  const payload={...(intent.planningRequest?{contextPortfolio:facts.creativePortfolio||[]}:{}),contentMatchRequestId:response.contentMatchRequestId,sources,gaps:response.contentLibraryGaps||[],libraryVersions:response.libraryVersions||{},contextDigest:digest(facts)}
   // A read is bounded; oversized source text must never silently become different evidence.
   if(Buffer.byteLength(JSON.stringify(payload))>60000)throw nativeError('library_evidence_too_large',502)
   return {...payload,libraryDigest:digest(payload),retrievedAt:new Date().toISOString()}

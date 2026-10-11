@@ -10,7 +10,7 @@ import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creative
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
-type AiProvenance = { instruction?:string;planningRequest?:{id:string;slotId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
+type AiProvenance = { contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;slotId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
 async function authorize(db: any, actor: Actor, brandId: string, write = false) {
   if (!await canUserAccessBrand(brandId, actor.id, write ? 'WRITE' : 'READ', db)) throw new CreativeRevisionError('creative_access_denied',404)
@@ -67,7 +67,10 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     if(ai){
       await tx.$queryRaw`SELECT "id" FROM "Brand" WHERE "id" = ${brandId} FOR SHARE`
       currentFacts=await readBrandFacts(tx,brandId)
-      if(createHash('sha256').update(JSON.stringify(currentFacts)).digest('hex')!==ai.contextDigest)throw new CreativeRevisionError('brand_context_changed',409)
+      // A batch adds to its own portfolio. Revalidate merchant facts against the
+      // trusted original portfolio; current duplicates/SKU limits are checked below.
+      const evidenceFacts=ai.planningRequest&&Array.isArray(ai.contextPortfolio)?{...currentFacts,creativePortfolio:ai.contextPortfolio}:currentFacts
+      if(createHash('sha256').update(JSON.stringify(evidenceFacts)).digest('hex')!==ai.contextDigest)throw new CreativeRevisionError('brand_context_changed',409)
     }
     const knowledge = await tx.brandKnowledge.findUnique({where:{brandId}})
     const workspace = creativeWorkspace(knowledge)
