@@ -5,12 +5,12 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, getHuaweiObsPresignedPutUrl, makeBrandAssetKey, makeBrandVideoOriginalKey } from '@/lib/integrations/huaweiObs'
 import { assertUploadMedia, inspectMediaUrl, MediaValidationError, mediaValidationResponse, mediaValidationStatus, type MediaTechnicalMetadata } from '@/lib/mediaValidation'
 import { prisma } from '@/lib/prisma'
-import { publicThumbnail, thumbnailWorkerAction } from '@/lib/assetThumbnails'
+import { prepareAssetThumbnails, publicThumbnail, thumbnailWorkerAction } from '@/lib/assetThumbnails'
 
 export const maxDuration = 30
 
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'x-amc-thumbnail-protocol': '2' } })
   const body = await request.json().catch(() => null) as any
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   if (body.action === 'thumbnailClaim' || body.action === 'thumbnailFinish') {
@@ -25,6 +25,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  if (body.action === 'prepareThumbnails') {
+    try { return NextResponse.json(await prepareAssetThumbnails(brandId,body.assetIds,body.retry ?? false)) }
+    catch (error: any) { if ([404,422,503].includes(error?.status)) return NextResponse.json({error:error.message},{status:error.status}); throw error }
+  }
   if (body.action === 'list') return listAssets(brandId, body, new URL(request.url).origin)
   if (body.action === 'createShootBatch') return createShootBatch(brandId, actorId, body)
   if (body.action === 'updateShootBatch') return updateShootBatch(brandId, body)

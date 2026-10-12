@@ -8,9 +8,10 @@ async function main() {
   await db.exec(`CREATE TABLE "MediaAsset" (id text PRIMARY KEY, "brandId" text, url text, "mimeType" text, "sizeBytes" int, "technicalMetadata" jsonb, "createdAt" timestamptz DEFAULT now());`)
   const query = async (strings,...values) => db.query(strings.map((s,i)=>s+(i<values.length?`$${i+1}`:'')).join(''),values)
   const prisma = { $queryRaw:async (...a)=>(await query(...a)).rows, $executeRaw:async (...a)=>(await query(...a)).affectedRows }
+  prisma.$transaction=async task=>{await db.exec('BEGIN');try{const result=await task(prisma);await db.exec('COMMIT');return result}catch(error){await db.exec('ROLLBACK');throw error}}
   let storage=true
   const exports={}
-  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/assetThumbnails.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText, {
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/assetThumbnails.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText, {
     exports, require:name=>name==='./prisma'?{prisma}:name.includes('huaweiObs')?{getHuaweiObsConfig:()=>storage?{}:null,
       getHuaweiObsPresignedPutUrl:({key})=>({uploadUrl:'https://obs.test/upload',publicUrl:`https://obs.test/${key}`,headers:{}})}:require(name), console,
   })
@@ -51,8 +52,39 @@ async function main() {
   assert.notEqual(job.token,expired.token)
   assert.equal((await act({action:'thumbnailFinish',...expired})).ok,false)
   assert.equal((await act({action:'thumbnailFinish',...job})).ok,true)
+  const prepare=exports.prepareAssetThumbnails
+  await insert('old');await db.exec(`UPDATE "MediaAsset" SET "createdAt"=now()-interval '1 year' WHERE id='old'`)
+  await insert('new')
+  const prioritized=await prepare('brand',['old'],false)
+  assert.equal(prioritized.scheduled,1)
+  assert.equal((await prepare('brand',['old'],false)).scheduled,0,'Repeated priorities are deduplicated')
+  job=(await act({action:'thumbnailClaim'})).job
+  assert.equal(job.assetId,'old','Visible older material wins over newer historical work')
+  await prepare('brand',['old'],true)
+  assert.equal((await db.query(`SELECT "technicalMetadata"->'thumbnail'->>'token' AS token FROM "MediaAsset" WHERE id='old'`)).rows[0].token,job.token,'Prepare/retry never steals an active lease')
+  await act({action:'thumbnailFinish',...job})
+  await assert.rejects(prepare('brand',[]),error=>error.status===422)
+  await assert.rejects(prepare('brand',Array.from({length:61},(_,i)=>String(i))),error=>error.status===422)
+  await assert.rejects(prepare('brand',['new'],'true'),error=>error.status===422)
+  await insert('foreign');await db.exec(`UPDATE "MediaAsset" SET "brandId"='other' WHERE id='foreign'`)
+  await assert.rejects(prepare('brand',['new','foreign']),error=>error.status===404)
+  assert.equal((await db.query(`SELECT "technicalMetadata"->'thumbnailPriority' AS priority FROM "MediaAsset" WHERE id='new'`)).rows[0].priority,null,'Mixed foreign IDs roll back all changes')
+  const failed=(await db.query('SELECT * FROM "MediaAsset" WHERE id=$1',[second.assetId])).rows[0]
+  assert.equal(exports.publicThumbnail(failed).thumbnailRetryable,true)
+  await prepare('brand',[second.assetId],true)
+  assert.equal((await db.query('SELECT "technicalMetadata" FROM "MediaAsset" WHERE id=$1',[second.assetId])).rows[0].technicalMetadata.thumbnail.attempts,0)
+  job=(await act({action:'thumbnailClaim'})).job
+  assert.equal(job.assetId,second.assetId)
+  await act({action:'thumbnailFinish',...job,error:'temporary'})
+  let retrying=(await db.query('SELECT * FROM "MediaAsset" WHERE id=$1',[job.assetId])).rows[0]
+  assert.equal(exports.publicThumbnail(retrying).thumbnailStatus,'retrying')
+  assert.equal(exports.publicThumbnail(retrying).thumbnailRetryable,false)
+  await prepare('brand',[job.assetId],true)
+  retrying=(await db.query('SELECT * FROM "MediaAsset" WHERE id=$1',[job.assetId])).rows[0]
+  assert.equal(retrying.technicalMetadata.thumbnail.attempts,1,'Explicit retry cannot reset automatic retry budget')
   const route=fs.readFileSync('src/app/api/internal/content-assets/route.ts','utf8')
   assert.ok(route.indexOf('if (!isAuthorized(request))')<route.indexOf('thumbnailWorkerAction(body'))
+  assert.ok(route.indexOf('if (!await canSessionAccessBrandProject')<route.indexOf("body.action === 'prepareThumbnails'"),'Brand access is checked before preparation')
   assert.match(route,/orderBy: \[\{ createdAt: 'desc' \}, \{ id: 'desc' \}\]/)
   await db.close()
   console.log('PASS: PostgreSQL thumbnail leases, retry budget, source revision, storage gating and public fields')
