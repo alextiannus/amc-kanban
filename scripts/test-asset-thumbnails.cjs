@@ -82,6 +82,19 @@ async function main() {
   await prepare('brand',[job.assetId],true)
   retrying=(await db.query('SELECT * FROM "MediaAsset" WHERE id=$1',[job.assetId])).rows[0]
   assert.equal(retrying.technicalMetadata.thumbnail.attempts,1,'Explicit retry cannot reset automatic retry budget')
+  await insert('inaccessible');await prepare('brand',['inaccessible'],false)
+  job=(await act({action:'thumbnailClaim'})).job
+  assert.equal(job.assetId,'inaccessible')
+  await act({action:'thumbnailFinish',...job,error:'Media HTTP 403',errorCode:'SOURCE_ACCESS_DENIED'})
+  let inaccessible=(await db.query('SELECT * FROM "MediaAsset" WHERE id=$1',[job.assetId])).rows[0]
+  assert.equal(exports.publicThumbnail(inaccessible).thumbnailStatus,'failed','Unavailable originals are failures, not queued work')
+  assert.equal(exports.publicThumbnail(inaccessible).thumbnailRetryable,true)
+  await db.query(`UPDATE "MediaAsset" SET "technicalMetadata"=jsonb_set("technicalMetadata",'{thumbnail,retryAt}',to_jsonb(now()-interval '1 minute')) WHERE id=$1`,[job.assetId])
+  const other=(await act({action:'thumbnailClaim'})).job
+  assert.notEqual(other?.assetId,job.assetId,'Unavailable originals do not consume automatic retry loops')
+  await prepare('brand',[job.assetId],true)
+  inaccessible=(await db.query('SELECT * FROM "MediaAsset" WHERE id=$1',[job.assetId])).rows[0]
+  assert.equal(inaccessible.technicalMetadata.thumbnail.attempts,0,'An explicit retry can restart after source repair')
   const route=fs.readFileSync('src/app/api/internal/content-assets/route.ts','utf8')
   assert.ok(route.indexOf('if (!isAuthorized(request))')<route.indexOf('thumbnailWorkerAction(body'))
   assert.ok(route.indexOf('if (!await canSessionAccessBrandProject')<route.indexOf("body.action === 'prepareThumbnails'"),'Brand access is checked before preparation')

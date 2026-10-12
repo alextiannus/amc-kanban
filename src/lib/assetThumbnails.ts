@@ -28,6 +28,7 @@ export async function thumbnailWorkerAction(body: any, readable: (asset: any) =>
               AND ("technicalMetadata"->'thumbnail'->>'leaseUntil')::timestamptz < now())
             OR ("technicalMetadata"->'thumbnail'->>'status' = 'failed'
               AND COALESCE(("technicalMetadata"->'thumbnail'->>'attempts')::int, 0) < 3
+              AND COALESCE("technicalMetadata"->'thumbnail'->>'error','') NOT IN ('Media HTTP 401','Media HTTP 403','Media HTTP 404','Media HTTP 410')
               AND ("technicalMetadata"->'thumbnail'->>'retryAt')::timestamptz <= now())
           )
         ORDER BY CASE WHEN ("technicalMetadata"->'thumbnailPriority'->>'until')::timestamptz > now() THEN 0 ELSE 1 END,
@@ -89,7 +90,10 @@ export function publicThumbnail(asset: any) {
   const revision = createHash('md5').update(`${asset.url}:${asset.sizeBytes ?? ''}:${asset.mimeType}`).digest('hex')
   if (t?.revision !== revision) return { thumbnailStatus: 'pending', thumbnailRetryable: false }
   let status = ['pending','processing','ready','failed'].includes(t?.status) ? t.status : 'pending'
-  if (status === 'failed' && (t.attempts || 0) < 3) status = 'retrying'
+  // A missing/inaccessible source needs a repaired URL or new upload, not a
+  // countdown that presents it as still waiting for a cover.
+  const sourceUnavailable = /^Media HTTP (401|403|404|410)$/.test(t.error || '')
+  if (status === 'failed' && (t.attempts || 0) < 3 && !sourceUnavailable) status = 'retrying'
   if (status === 'processing' && new Date(t.leaseUntil).getTime() <= Date.now()) status = (t.attempts || 0) < 3 ? 'retrying' : 'failed'
   if (status === 'ready' && !t.url) status = 'failed'
   // Keep the original metadata private. A pending thumbnail is always a placeholder.
@@ -121,7 +125,8 @@ export async function prepareAssetThumbnails(brandId: string, input: unknown, re
         || jsonb_build_object('thumbnailPriority', jsonb_build_object('until', now() + interval '10 minutes'))
         || CASE WHEN ${retry}::boolean AND (
             ("technicalMetadata"->'thumbnail'->>'status' = 'failed' AND
-              COALESCE(("technicalMetadata"->'thumbnail'->>'attempts')::int,0) >= 3)
+              (COALESCE(("technicalMetadata"->'thumbnail'->>'attempts')::int,0) >= 3
+                OR "technicalMetadata"->'thumbnail'->>'error' IN ('Media HTTP 401','Media HTTP 403','Media HTTP 404','Media HTTP 410')))
             OR ("technicalMetadata"->'thumbnail'->>'status' = 'processing'
               AND ("technicalMetadata"->'thumbnail'->>'leaseUntil')::timestamptz <= now()
               AND COALESCE(("technicalMetadata"->'thumbnail'->>'attempts')::int,0) >= 3)

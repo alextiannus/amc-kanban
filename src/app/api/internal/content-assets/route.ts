@@ -10,7 +10,7 @@ import { prepareAssetThumbnails, publicThumbnail, thumbnailWorkerAction } from '
 export const maxDuration = 30
 
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'x-amc-thumbnail-protocol': '2' } })
+  if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: { 'x-amc-thumbnail-protocol': '2.1' } })
   const body = await request.json().catch(() => null) as any
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   if (body.action === 'thumbnailClaim' || body.action === 'thumbnailFinish') {
