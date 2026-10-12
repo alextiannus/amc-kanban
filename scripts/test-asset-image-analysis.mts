@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import * as policy from '../src/lib/asset-analysis/policy.ts'
+import * as templates from '../src/lib/asset-library/templates.ts'
 
 const clone = (value: any) => structuredClone(value)
 let rows: Record<string, any[]> = { brand: [{ id: 'brand', industry: 'Fitness', name: 'Studio', description: 'Reformer studio' }], mediaAsset: [], brandFolder: [], assetAnalysisBatch: [], assetAnalysisItem: [], assetVideoSegment: [] }
@@ -11,7 +12,7 @@ const stamp = () => new Date(++time)
 const matches = (row: any, where: any = {}): boolean => Object.entries(where).every(([key, value]: [string, any]) => {
   if (key === 'OR') return value.some((v: any) => matches(row, v))
   if (key === 'NOT') return !matches(row, value)
-  if (key === 'brandId_batchKey' || key === 'brandId_name') return matches(row, value)
+  if (key === 'brandId_batchKey' || key === 'brandId_name' || key === 'brandId_systemKey') return matches(row, value)
   if (key === 'analysisItems') { const list = rows.assetAnalysisItem.filter(i => i.assetId === row.id); return value.none ? !list.some(i => matches(i, value.none)) : list.some(i => matches(i, value.some)) }
   if (value instanceof Date) return +row[key] === +value
   if (value && typeof value === 'object') {
@@ -84,10 +85,17 @@ const service = load('../src/lib/asset-analysis/service.ts', {
   '@/lib/asset-analysis/db': { prisma: db }, '@/lib/systemConfig': { getAssetAnalysisConfig: async () => enabled ? { baseUrl: 'https://content', token: 'test' } : null },
   '@/lib/amc-credit/service': { getCreditSnapshot: async () => ({ account: { allowNightlyOverage: false }, summary: { usagePercent: 0 } }), settleCredit: async () => ({}) },
   '@/lib/amc-credit/policy': { analysisCredit: (task: string) => task === 'asset_video_analysis' ? 4 : 2 },
-  '@/lib/integrations/huaweiObs': { getHuaweiObsConfig: () => null }, './content': { analysisContent: gateway }, './folders': { ensureAssetFolders: async () => {} }, './policy': policy,
+  '@/lib/integrations/huaweiObs': { getHuaweiObsConfig: () => null }, './content': { analysisContent: gateway }, './folders': { ensureAssetFolders: async (brandId: string) => {
+    for (const folder of templates.templateForIndustry('Fitness').folders) {
+      if (!rows.brandFolder.some(row => row.brandId === brandId && row.systemKey === folder.key)) {
+        rows.brandFolder.push({ id: `folder-${folder.key}`, brandId, name: folder.zh, systemKey: folder.key, folderKind: 'STANDARD', templateVersion: 'general-v1', createdAt: stamp(), updatedAt: stamp() })
+      }
+    }
+  } }, './policy': policy,
+  '../asset-library/templates.ts': templates,
 })
-const addImage = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', mimeType: 'image/jpeg', url: `https://images.example/${id}.jpg`, aiCategory: '素材库', aiCaption: null, aiTags: ['排期发布', 'manual'], aiReady: false, imageAnalysis: null, duplicateGroupId: null, perceptualHash: null, updatedAt: stamp() })
-const addVideo = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', mimeType: 'video/mp4', url: `https://videos.example/${id}.mp4`, aiCategory: '素材库', aiCaption: null, aiTags: [], aiReady: false, imageAnalysis: null, duplicateGroupId: null, perceptualHash: null, technicalMetadata: { durationSeconds: 3 }, updatedAt: stamp() })
+const addImage = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', folderId: null, mimeType: 'image/jpeg', url: `https://images.example/${id}.jpg`, aiCategory: '素材库', aiCaption: null, aiTags: ['排期发布', 'manual'], aiReady: false, imageAnalysis: null, duplicateGroupId: null, perceptualHash: null, updatedAt: stamp() })
+const addVideo = (id: string) => rows.mediaAsset.push({ id, brandId: 'brand', folderId: null, mimeType: 'video/mp4', url: `https://videos.example/${id}.mp4`, aiCategory: '素材库', aiCaption: null, aiTags: [], aiReady: false, imageAnalysis: null, duplicateGroupId: null, perceptualHash: null, technicalMetadata: { durationSeconds: 3 }, updatedAt: stamp() })
 addImage('one'); addImage('two'); addVideo('video-one')
 rows.mediaAsset.push({ id: 'foreign', brandId: 'other', mimeType: 'image/jpeg', aiCategory: '素材库', updatedAt: stamp() })
 
@@ -149,7 +157,10 @@ assert.throws(() => policy.parseImageAnalysis({ tags: ['only'] }), /Invalid/)
 assert.deepEqual(policy.mergeAnalysisTags(['manual', 'old-ai'], ['old-ai'], ['new-ai']), ['manual', 'new-ai'])
 
 rows.brand[0].assetFoldersInitialized = false
-const folderService = load('../src/lib/asset-analysis/folders.ts', { '@/lib/asset-analysis/db': { prisma: db }, './policy': policy })
+const folderService = load('../src/lib/asset-analysis/folders.ts', {
+  '@/lib/asset-analysis/db': { prisma: db },
+  '../asset-library/templates.ts': templates,
+})
 const foldersApi = load('../src/app/api/brands/[id]/folders/route.ts', {
   'next/server': { NextResponse: { json: (body: any, options: any) => ({ body, status: options?.status || 200 }) } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN', role: 'USER' } }), extractApiKey: () => null },
@@ -159,14 +170,16 @@ const foldersApi = load('../src/app/api/brands/[id]/folders/route.ts', {
 const context = { params: Promise.resolve({ id: 'brand' }) }
 const response = await foldersApi.GET(new Request('https://test/folders'), context)
 assert.equal(response.status, 200)
-const product = rows.brandFolder.find(f => f.name === '菜品')!
-rows.mediaAsset[0].aiCategory = '菜品'
+assert.equal((await foldersApi.POST(new Request('https://test/folders', { method: 'POST', body: JSON.stringify({ name: '产品' }) }), context)).status, 201)
+const product = rows.brandFolder.find(f => f.name === '产品')!
+rows.mediaAsset[0].aiCategory = '产品'
+rows.mediaAsset[0].folderId = product.id
 assert.equal((await foldersApi.PATCH(new Request('https://test/folders', { method: 'PATCH', body: JSON.stringify({ folderId: product.id, name: 'Portfolio' }) }), context)).status, 200)
 assert.equal(rows.mediaAsset[0].aiCategory, 'Portfolio')
 assert.equal((await foldersApi.DELETE(new Request(`https://test/folders?folderId=${product.id}`, { method: 'DELETE' }), context)).status, 200)
-assert.equal(rows.mediaAsset[0].aiCategory, '素材库')
+assert.equal(rows.mediaAsset[0].aiCategory, '待确认')
 await foldersApi.GET(new Request('https://test/folders'), context)
-assert.ok(!rows.brandFolder.some(f => ['菜品', 'Portfolio'].includes(f.name)), 'deleted default folders stay deleted')
+assert.ok(!rows.brandFolder.some(f => ['产品', 'Portfolio'].includes(f.name)), 'deleted custom folders stay deleted')
 const videoFolder = rows.brandFolder.find(f => f.name === '视频原片')!
 assert.notEqual((await foldersApi.DELETE(new Request(`https://test/folders?folderId=${videoFolder.id}`, { method: 'DELETE' }), context)).status, 200)
 assert.ok(rows.brandFolder.some(f => f.id === videoFolder.id))

@@ -31,6 +31,8 @@ import {
   mediaValidationStatus,
 } from '@/lib/mediaValidation'
 import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calendarSync'
+import { assertCollectionTarget, findReusableAsset, linkAssetToCollection } from '@/lib/asset-library/collections'
+import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -46,6 +48,8 @@ interface UploadAssetRequest {
   aiTags?: string[]
   aiCaption?: string
   creativeId?: string
+  collectionId?: string
+  slotId?: string
 }
 
 function sanitizeFilename(filename: string) {
@@ -101,6 +105,16 @@ export async function POST(request: Request, { params }: Params) {
   const body: UploadAssetRequest = await request.json()
   const { filename, mimeType, fileBase64, imageUrl } = body
 
+  if (body.collectionId) {
+    try {
+      await assertCollectionTarget(brandId, body.collectionId, body.slotId)
+    } catch (error: any) {
+      return NextResponse.json({ error: error?.message || 'Asset collection not found' }, { status: error?.status || 404 })
+    }
+  } else if (body.slotId) {
+    return NextResponse.json({ error: 'collectionId is required when slotId is provided' }, { status: 400 })
+  }
+
   if (!filename) {
     return NextResponse.json(
       { error: 'filename is required' },
@@ -150,9 +164,29 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const contentHash = createHash('sha256').update(fileBuffer).digest('hex')
-  const duplicate = await prisma.mediaAsset.findFirst({ where: { brandId, contentHash }, select: { id: true, duplicateGroupId: true } })
-  const duplicateGroupId = duplicate?.duplicateGroupId || duplicate?.id || null
-  if (duplicate && !duplicate.duplicateGroupId) await prisma.mediaAsset.update({ where: { id: duplicate.id }, data: { duplicateGroupId } })
+  const reusable = await findReusableAsset(brandId, contentHash)
+  if (reusable) {
+    if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: reusable.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
+    if (body.creativeId) await submitAssetToCalendarCreativeRequirement({ brandId, assetId: reusable.id, creativeId: body.creativeId, submittedBy: user.id })
+    return NextResponse.json({
+      ok: true,
+      assetId: reusable.id,
+      assetUrl: reusable.url,
+      asset: reusable,
+      exactDuplicateReused: true,
+      uploadedAt: reusable.createdAt.toISOString(),
+    })
+  }
+
+  await ensureAssetFolders(brandId)
+  const reviewFolder = body.collectionId
+    ? await prisma.brandFolder.findUnique({ where: { brandId_systemKey: { brandId, systemKey: 'needs_review' } } })
+    : null
+  const initialCategory = reviewFolder?.name || body.folder || body.aiCategory || '素材库'
+  const attachAsset = async (assetId: string) => {
+    if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
+    if (body.creativeId) await submitAssetToCalendarCreativeRequirement({ brandId, assetId, creativeId: body.creativeId, submittedBy: user.id })
+  }
 
   try {
     const isProduction = process.env.NODE_ENV === 'production'
@@ -164,7 +198,7 @@ export async function POST(request: Request, { params }: Params) {
 
     const obsConfig = getHuaweiObsConfig()
     if (obsConfig) {
-      const key = makeBrandAssetKey({ brandId, folder: body.folder || body.aiCategory || '素材库', filename })
+      const key = makeBrandAssetKey({ brandId, folder: initialCategory, filename })
       const uploadResult = await uploadHuaweiObsObject({ key, body: fileBuffer, contentType: resolvedMimeType })
 
       if (!uploadResult.ok) {
@@ -183,9 +217,9 @@ export async function POST(request: Request, { params }: Params) {
           technicalMetadata,
           assetKind: resolvedMimeType.startsWith('video/') ? 'video' : 'image',
           contentHash,
-          duplicateGroupId,
+          folderId: reviewFolder?.id || null,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-          aiCategory: body.folder || body.aiCategory || (duplicate ? '重复素材' : '素材库'),
+          aiCategory: initialCategory,
           aiCaption: body.aiCaption || null,
           creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
           aiReady: true,
@@ -193,14 +227,7 @@ export async function POST(request: Request, { params }: Params) {
           sourceType: 'huawei_obs',
         },
       })
-      if (body.creativeId) {
-        await submitAssetToCalendarCreativeRequirement({
-          brandId,
-          assetId: asset.id,
-          creativeId: body.creativeId,
-          submittedBy: user.id,
-        })
-      }
+      await attachAsset(asset.id)
 
       await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
 
@@ -270,9 +297,9 @@ export async function POST(request: Request, { params }: Params) {
           technicalMetadata,
           assetKind: resolvedMimeType.startsWith('video/') ? 'video' : 'image',
           contentHash,
-          duplicateGroupId,
+          folderId: reviewFolder?.id || null,
           aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-          aiCategory: body.folder || body.aiCategory || (duplicate ? '重复素材' : '素材库'),
+          aiCategory: initialCategory,
           aiCaption: body.aiCaption || null,
           creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
           aiReady: true,
@@ -280,14 +307,7 @@ export async function POST(request: Request, { params }: Params) {
           sourceType: 'postfast',
         },
       })
-      if (body.creativeId) {
-        await submitAssetToCalendarCreativeRequirement({
-          brandId,
-          assetId: asset.id,
-          creativeId: body.creativeId,
-          submittedBy: user.id,
-        })
-      }
+      await attachAsset(asset.id)
 
       await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
 
@@ -326,9 +346,9 @@ export async function POST(request: Request, { params }: Params) {
         technicalMetadata,
         assetKind: resolvedMimeType.startsWith('video/') ? 'video' : 'image',
         contentHash,
-        duplicateGroupId,
+        folderId: reviewFolder?.id || null,
         aiTags: Array.isArray(body.aiTags) ? body.aiTags : [],
-        aiCategory: body.folder || body.aiCategory || (duplicate ? '重复素材' : '素材库'),
+        aiCategory: initialCategory,
         aiCaption: body.aiCaption || null,
         creativeId: typeof body.creativeId === 'string' ? body.creativeId.trim() || null : null,
         aiReady: true,
@@ -336,14 +356,7 @@ export async function POST(request: Request, { params }: Params) {
         sourceType: 'local',
       },
     })
-    if (body.creativeId) {
-      await submitAssetToCalendarCreativeRequirement({
-        brandId,
-        assetId: asset.id,
-        creativeId: body.creativeId,
-        submittedBy: user.id,
-      })
-    }
+    await attachAsset(asset.id)
 
     await triggerDesignerAutoTag(asset.id, body.analysisBatchKey, body.analysisLanguage).catch(error => console.error('[Asset analysis enqueue]', error instanceof Error ? error.message : 'Failed'))
 
@@ -524,6 +537,14 @@ export async function PATCH(request: Request, { params }: Params) {
   const aiCategory = typeof body.aiCategory === 'string' ? body.aiCategory.trim() : ''
   const aiCaption = typeof body.aiCaption === 'string' ? body.aiCaption.trim() : ''
   const creativeId = typeof body.creativeId === 'string' ? body.creativeId.trim() : ''
+  const requestedFolder = folder || aiCategory
+  if (requestedFolder) await ensureAssetFolders(brandId)
+  const folderRecord = requestedFolder && requestedFolder !== '素材库'
+    ? await prisma.brandFolder.findFirst({ where: { brandId, name: requestedFolder }, select: { id: true, name: true } })
+    : null
+  if (requestedFolder && requestedFolder !== '素材库' && !folderRecord) {
+    return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+  }
 
   if (!Array.isArray(assetIds) || assetIds.length === 0) {
     return NextResponse.json({ error: 'assetIds must be a non-empty array' }, { status: 400 })
@@ -548,7 +569,7 @@ export async function PATCH(request: Request, { params }: Params) {
           data: {
             aiTags: merged,
             ...(aiReady !== undefined ? { aiReady } : {}),
-            ...(folder || aiCategory ? { aiCategory: folder || aiCategory || '素材库' } : {}),
+            ...(requestedFolder ? { folderId: folderRecord?.id || null, aiCategory: requestedFolder } : {}),
             ...(aiCaption ? { aiCaption } : {}),
             ...(creativeId ? { creativeId } : {}),
           }
@@ -560,7 +581,10 @@ export async function PATCH(request: Request, { params }: Params) {
     const dataToUpdate: any = {}
     if (aiTags !== undefined) dataToUpdate.aiTags = aiTags
     if (aiReady !== undefined) dataToUpdate.aiReady = aiReady
-    if (folder || aiCategory) dataToUpdate.aiCategory = folder || aiCategory || '素材库'
+    if (requestedFolder) {
+      dataToUpdate.folderId = folderRecord?.id || null
+      dataToUpdate.aiCategory = requestedFolder
+    }
     if (aiCaption) dataToUpdate.aiCaption = aiCaption
     if (creativeId) dataToUpdate.creativeId = creativeId
 

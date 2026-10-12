@@ -37,6 +37,11 @@ assert.equal(kanbanRoutePermission('/api/subscription/confirm', 'POST'), 'subscr
 assert.equal(kanbanRoutePermission('/api/agents/a', 'PATCH'), 'agent.manage')
 assert.equal(kanbanRoutePermission('/api/agents/register', 'POST'), null, 'system registration retains its own authentication')
 assert.equal(kanbanRoutePermission('/api/brands/a/drafts/b/retry-publish', 'POST'), 'content.retry')
+assert.equal(kanbanRoutePermission('/api/brands/a/asset-collections', 'GET'), 'asset.read')
+assert.equal(kanbanRoutePermission('/api/brands/a/asset-collections', 'POST'), 'asset.create')
+assert.equal(kanbanRoutePermission('/api/brands/a/asset-collections/c/items', 'POST'), 'asset.update')
+assert.equal(kanbanRoutePermission('/api/brands/a/asset-collections/c/items', 'DELETE'), 'asset.update')
+assert.equal(kanbanRoutePermission('/api/brands/a/asset-collections/c', 'DELETE'), 'asset.archive')
 const admin: AuthPrincipal = { userId: 'admin', globalRoles: ['ADMIN'], actorType: 'HUMAN', source: 'session', authVersion: 1 }
 process.env.AMC_CONTENT_LAB_TOKEN_SECRET = 'permission-test-secret'
 const token = signAccessIdentity(admin, 'brand-a')
