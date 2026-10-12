@@ -6,6 +6,7 @@
     "node": "20.x"
   },
   "scripts": {
+    "test:asset-thumbnails": "node scripts/test-asset-thumbnails.cjs",
     "test:access-overview": "tsx scripts/test-access-overview.mts",
     "dev": "next dev",
     "build": "next build",

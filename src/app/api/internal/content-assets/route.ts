@@ -5,6 +5,7 @@ import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, getHuaweiObsPresignedPutUrl, makeBrandAssetKey, makeBrandVideoOriginalKey } from '@/lib/integrations/huaweiObs'
 import { assertUploadMedia, inspectMediaUrl, MediaValidationError, mediaValidationResponse, mediaValidationStatus, type MediaTechnicalMetadata } from '@/lib/mediaValidation'
 import { prisma } from '@/lib/prisma'
+import { publicThumbnail, thumbnailWorkerAction } from '@/lib/assetThumbnails'
 
 export const maxDuration = 30
 
@@ -12,6 +13,9 @@ export async function POST(request: Request) {
   if (!isAuthorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await request.json().catch(() => null) as any
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  if (body.action === 'thumbnailClaim' || body.action === 'thumbnailFinish') {
+    return NextResponse.json(await thumbnailWorkerAction(body, asset => readableAssetUrl(asset.brandId, asset, new URL(request.url).origin)))
+  }
   const brandId = text(body.brandId)
   const actorId = text(body.actorId)
   const actorType = text(body.actorType) || 'HUMAN'
@@ -97,12 +101,13 @@ async function listAssets(brandId: string, body: any, requestOrigin: string) {
     ...(videoProjectId ? { videoProjectId } : {}),
   }
   const [assets, total] = await Promise.all([
-    prisma.mediaAsset.findMany({ where, include: { shootBatch: true }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.mediaAsset.findMany({ where, include: { shootBatch: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
     prisma.mediaAsset.count({ where }),
   ])
   return NextResponse.json({
     items: assets.map((asset: any) => ({
       id: asset.id, url: readableAssetUrl(brandId, asset, requestOrigin), filename: asset.filename, mimeType: asset.mimeType,
+      ...publicThumbnail(asset),
       width: asset.width, height: asset.height, sizeBytes: asset.sizeBytes,
       caption: asset.aiCaption, category: asset.aiCategory, tags: asset.aiTags,
       shootBatchId: asset.shootBatchId, shootBatchName: asset.shootBatch?.name,
