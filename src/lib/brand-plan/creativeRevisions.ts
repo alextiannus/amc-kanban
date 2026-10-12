@@ -26,7 +26,8 @@ function present(row: any) {
 export async function readCreativeRevisions(actor: Actor, brandId: string, month: string, creativeId: string, revisionId?: string, db = prisma, beforeVersion?: number) {
   validateCreativeAddress(month, creativeId)
   if (beforeVersion !== undefined && (!Number.isSafeInteger(beforeVersion) || beforeVersion < 0)) throw new CreativeRevisionError('invalid_revision_cursor')
-  await authorize(db,actor,brandId)
+  const reader=await authorize(db,actor,brandId)
+  const canWrite=await canUserAccessBrand(brandId,actor.id,'WRITE',db)
   const period = revisionPeriod(month,creativeId)
   const [knowledge, revisions, brand] = await Promise.all([
     db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}}),
@@ -37,18 +38,23 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   const items = monthItems(creativeWorkspace(knowledge),month)
   const current = items.find(item=>item.id===creativeId) || null
   if (!current && !revisions.length) throw new CreativeRevisionError('creative_not_found_or_ambiguous',404)
-  return {ok:true, brand, creativeId, month, current, source:revisions[0]?record(revisions[0].input).source:current?originalSource(current,new Date().toISOString()):null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
+  return {ok:true, brand, creativeId, month, current, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:revisions[0]?record(revisions[0].input).source:current?originalSource(current,new Date().toISOString()):null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
 export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>) {
   validateCreativeAddress(month,creativeId)
   if (typeof body?.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision) || typeof body?.idempotencyKey !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.idempotencyKey)) throw new CreativeRevisionError('creative_revision_and_request_key_required')
+  if(body?.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw new CreativeRevisionError('invalid_script_save_mode')
+  const copy=body.saveMode==='copy'
+  if(copy&&seed)throw new CreativeRevisionError('invalid_script_save_mode')
+  const sourceCreativeId=creativeId
   const patch = validateCreativePatch(body.patch,month)
   const feedback=validateCreativeFeedback(body.feedback)
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
+  if(copy)creativeId=`script_${creativeDigest([brandId,month,sourceCreativeId,requestKey]).slice(0,32)}`
   // Instruction is trusted task metadata; excluding it preserves pre-upgrade retry hashes.
   const {instruction:_instruction,...hashAi}=ai||{}
-  const requestHash = creativeDigest({expectedRevision:body.expectedRevision,patch,...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
+  const requestHash = creativeDigest({...(body.saveMode?{saveMode:body.saveMode,sourceCreativeId}:{}),expectedRevision:body.expectedRevision,patch,...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
   const period = revisionPeriod(month,creativeId)
   const saved = await db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Internal library enrollment uses the same lock, revision chain and audit as manual edits.
@@ -59,7 +65,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     // All saves for this brand serialize before reading the current card or version.
     await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
     const user = await authorize(tx,actor,brandId,true)
-    const existing = await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,...(seed?{}:{period}),input:{path:['requestKey'],equals:requestKey}}})
+    const existing = await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,...(seed||body.saveMode?{}:{period}),input:{path:['requestKey'],equals:requestKey}}})
     if (existing) {
       if (record(existing.input).requestHash !== requestHash) throw new CreativeRevisionError('creative_request_key_reused',409)
       return {ok:true,replayed:true,receipt:present(existing)}
@@ -107,7 +113,8 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     }
     const known = monthItems(workspace,month).find(item=>item.id===creativeId)
     if(seed&&known)throw new CreativeRevisionError('recommendation_already_saved',409)
-    const current = seed || findCreative(workspace,month,creativeId)
+    const current = seed || findCreative(workspace,month,sourceCreativeId)
+    if(!copy&&current.scriptOwner?.id&&current.scriptOwner.id!==actor.id)throw new CreativeRevisionError('script_owner_required',403)
     if (creativeDigest(current) !== body.expectedRevision) throw new CreativeRevisionError('creative_revision_conflict',409)
     const brand = await tx.brand.findUnique({
       where: { id: brandId },
@@ -129,11 +136,20 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const parentInput = record(parent.input)
     const revision = parent.version+1
     const next:Record<string,any> = {...current,...patch,...((current.nativeDaily||current.planningRequest)&&!ai?.automaticDaily&&!ai?.autopilotRunId&&!ai?.planningRequest?{nativeReviewStatus:'reviewed',status:'planned_unimplemented'}:{})}
+    if(body.saveMode)next.aiTags=Array.isArray(current.aiTags)?current.aiTags:[]
+    if(copy){
+      next.id=creativeId
+      next.aiTags=Array.isArray(current.aiTags)?current.aiTags:[]
+      next.scriptOwner={id:user.id,name:user.nickname||user.id}
+      next.copiedFrom={creativeId:sourceCreativeId,month,contentHash:body.expectedRevision}
+      next.status='planned_unimplemented'
+      for(const key of ['nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt'])delete next[key]
+    }else if(body.saveMode==='overwrite'&&!next.scriptOwner){next.scriptOwner={id:user.id,name:user.nickname||user.id}}
     if((next.nativeDaily||next.planningRequest)&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')
     const automatic=ai?.automaticDaily===true||!!ai?.autopilotRunId||!!ai?.planningRequest
     const revisionActor=automatic?{id:'amc-mm-user-ai',name:'AMC-MM AI User Assistant',type:'AI',authorizedBy:user.id}:{id:user.id,name:user.nickname || user.id,type:user.type,roles:[user.role,...user.businessRoles.map((role:{role:string})=>role.role)]}
     const entry = await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period,version:revision,status:'DRAFT',generationMode:ai?.planningRequest?'AI_PLAN_MATCHING':ai?.autopilotRunId?'AI_AUTOPILOT_ADAPTATION':automatic?'AI_DAILY_ADAPTATION':'MANUAL_EDIT',createdById:user.id,input:{creativeId,month,brand:brandSnapshot,actor:revisionActor,principals,origin:ai?.planningRequest?'plan_matching':ai?.autopilotRunId?'automatic_user_ai_adaptation':automatic?'automatic_daily_adaptation':ai?'ai_assisted':user.type==='HUMAN'?'human':'agent',...(ai?{ai}:{}),feedback:feedback||null,changes:creativeChanges(current,next),source:parentInput.source,parentRevisionId:parent.id,originalRevisionId:parentInput.originalRevisionId || parent.id,requestKey,requestHash},output:next as Prisma.InputJsonValue}})
-    const nextWorkspace = {...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar?.months,[month]:(seed ? [...monthItems(workspace,month),next] : monthItems(workspace,month).map(item=>item.id===creativeId ? next : item))}}}
+    const nextWorkspace = {...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar?.months,[month]:(seed||copy ? [...monthItems(workspace,month),next] : monthItems(workspace,month).map(item=>item.id===creativeId ? next : item))}}}
     await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:nextWorkspace as Prisma.InputJsonValue}})
     await tx.auditLog.create({data:{actorId:user.id,actorType:automatic?'AI':user.type,actorName:automatic?'AMC-MM AI User Assistant':user.nickname,action:'CREATIVE_REVISION_SAVED',resourceType:'BrandCreative',resourceId:creativeId,oldValue:{hash:body.expectedRevision,parentRevisionId:parent.id},newValue:{revisionId:entry.id,revision,hash:creativeDigest(next)},metadata:{brandId,month,...(ai?{ai}:{}),principalIds:principals.map(member=>member.userId),sourceCreativeId:parentInput.source?.creativeId || null}}})
     return {ok:true,replayed:false,receipt:present(entry)}

@@ -8,8 +8,12 @@ try {
  await prisma.brand.create({data:{id,name:id}})
  await prisma.socialAccount.create({data:{id,brandId:id,platformId:'instagram',handle:'fixture'}})
  await prisma.videoProductionJob.create({data:{id,brandId:id,title:id,platform:'instagram',idea:'fixture',status:'completed',finalVideoUrl:url,scenes:[]}})
- const save=()=>prisma.$transaction(async tx=>{const receipt=await videoDraftReceipt(tx,id,id,[url]);assert(!('error' in receipt));if(receipt.existingId)return receipt.existingId;return (await tx.contentDraft.create({data:{brandId:id,accountId:id,caption:'Reviewed caption',status:'draft',mediaUrls:[url],agentNote:receipt.marker}})).id})
+ const save=()=>prisma.$transaction(async tx=>{const receipt=await videoDraftReceipt(tx,id,id,[url],id);assert(!('error' in receipt));if(receipt.existingId)return receipt.existingId;return (await tx.contentDraft.create({data:{brandId:id,accountId:id,caption:'Reviewed caption',status:'draft',mediaUrls:[url],agentNote:receipt.marker}})).id})
  const receipts=await Promise.all(Array.from({length:6},save));assert.equal(new Set(receipts).size,1)
+ const otherAccount=id+'-facebook'
+ await prisma.socialAccount.create({data:{id:otherAccount,brandId:id,platformId:'facebook',handle:'fixture-facebook'}})
+ const other=await prisma.$transaction(async tx=>{const receipt=await videoDraftReceipt(tx,id,id,[url],otherAccount);assert(!('error' in receipt));assert.equal(receipt.existingId,null);return (await tx.contentDraft.create({data:{brandId:id,accountId:otherAccount,caption:'Facebook draft',status:'draft',mediaUrls:[url],agentNote:receipt.marker}})).id})
+ assert.notEqual(other,receipts[0]);assert.equal((await prisma.$transaction(tx=>videoDraftReceipt(tx,id,id,[url],otherAccount)) as any).existingId,other)
  await prisma.contentDraft.update({where:{id:receipts[0]},data:{caption:'User edited text'}})
  assert.equal(await save(),receipts[0]);assert.equal((await prisma.contentDraft.findUniqueOrThrow({where:{id:receipts[0]}})).caption,'User edited text')
  assert.equal((await prisma.$transaction(tx=>videoDraftReceipt(tx,'other',id,[url])) as any).status,404)

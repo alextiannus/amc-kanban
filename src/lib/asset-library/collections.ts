@@ -105,7 +105,7 @@ export async function ensureScriptCollection(input: EnsureScriptCollectionInput,
   const month = clean(input.month, 20) || null
   if (!input.brandId || !creativeId || !name) throw Object.assign(new Error('Invalid asset collection'), { status: 400 })
   const slots = normalizedSlots(input.slots || [])
-  return db.$transaction(async tx => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     const collection = await tx.assetCollection.upsert({
       where: { brandId_kind_creativeId: { brandId: input.brandId, kind: 'SCRIPT', creativeId } },
       create: { brandId: input.brandId, kind: 'SCRIPT', creativeId, creativeVersion: input.creativeVersion ?? 0, month, name, createdById: input.createdById },
@@ -147,7 +147,7 @@ export async function assertCollectionTarget(brandId: string, collectionId: stri
 }
 
 export async function linkAssetToCollection(input: LinkAssetInput, db: typeof prisma = prisma) {
-  return db.$transaction(async tx => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     const collection = await tx.assetCollection.findFirst({ where: { id: input.collectionId, brandId: input.brandId }, select: { id: true } })
     const asset = await tx.mediaAsset.findFirst({ where: { id: input.assetId, brandId: input.brandId }, select: { id: true } })
     if (!collection || !asset) throw Object.assign(new Error('Asset collection or asset not found'), { status: 404 })
@@ -169,7 +169,7 @@ export async function linkAssetToCollection(input: LinkAssetInput, db: typeof pr
 }
 
 export async function unlinkAssetFromCollection(input: { brandId: string; collectionId: string; assetId: string }, db: typeof prisma = prisma) {
-  return db.$transaction(async tx => {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
     const item = await tx.assetCollectionItem.findFirst({
       where: { collectionId: input.collectionId, assetId: input.assetId, collection: { brandId: input.brandId } },
       select: { id: true, slotId: true },

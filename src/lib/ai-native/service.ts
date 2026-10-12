@@ -77,7 +77,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     if(body.recoveryOfTaskId&&!recoveryOfTaskId)throw nativeError('invalid_recovery_task')
     const recoveryVersion=recoveryOfTaskId?await applicationVersion():null
     const idea=await selectPoolIdea(brandId,body.poolIdeaId)
-    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'仅借鉴选中原创意的创作方向，根据当前品牌资料改写可直接审阅的完整脚本，包含开场、分镜/正文、口播、行动提示及对应素材需求。有产品目录时使用真实 SKU；无目录时直接完成品牌通用稿并返回空 skuIds，不补问产品、不留待填内容、不要求先补 SKU。未知产品、价格、优惠与卖点改为不依赖它们的表达；使用当前品牌名称。供主理人审阅后保存或添加素材。',requestKey:recoveryOfTaskId?recoveryRequestKey(brandId,idea.id,recoveryVersion!):automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`,...(recoveryOfTaskId?{recoveryOfTaskId,recoveryVersion}:{})}
+    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'先读取amc-discovery/SKILL.md，以选中原创意为底稿做最小必要适配，主要替换当前品牌和真实产品，保留原钩子、情节转折、镜头顺序、节奏及口播句式，输出可直接审阅的完整脚本，包含开场、分镜/正文、口播、行动提示及对应素材需求。有产品目录时使用真实 SKU；无目录且原机制可保留时完成品牌通用稿并返回空 skuIds，不因空目录补问产品、不留待填内容。未知产品、价格、优惠与卖点仅局部中性化；若原机制无法成立则跳过该来源并说明缺口，不另写新创意；使用当前品牌名称。供主理人审阅后保存或添加素材。',requestKey:recoveryOfTaskId?recoveryRequestKey(brandId,idea.id,recoveryVersion!):automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`,...(recoveryOfTaskId?{recoveryOfTaskId,recoveryVersion}:{})}
   }
   if(body?.kind==='creative_discovery'&&body.proactive===true){
     body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}
@@ -85,7 +85,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if(body?.kind==='creative'&&body.adaptToBrand===true){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string')throw nativeError('invalid_creative_task')
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
-    body={kind:'creative',adaptToBrand:true,creativeId:body.creativeId,month:body.month,expectedRevision:current.expectedRevision,goal:'自动把选中创意改写为当前品牌可直接审阅的完整脚本。先读取amc-creative/SKILL.md、品牌与productCatalog。有目录时选择真实SKU并写出其名称；无目录时直接完成品牌通用稿，skuIds为空，并将product设为品牌内容，不补问产品、不留待填内容、不要求先补SKU。planning包含当前品牌名称、开场、分镜/正文、口播、行动提示及对应素材需求。原稿只借鉴表达结构，未知产品、价格、优惠或卖点改写为不依赖这些信息的表达。只有本次明确任务不可缺少的事实才补问。供主理人修改后保存或制作。',requestKey:`adapt-general-v3-${digest([brandId,userId,body.creativeId,body.month,current.expectedRevision,await brandContext(actor),new Date().toISOString().slice(0,10)])}`}
+    body={kind:'creative',adaptToBrand:true,creativeId:body.creativeId,month:body.month,expectedRevision:current.expectedRevision,goal:'以当前选中脚本为底稿做最小必要的品牌和产品替换，输出可直接审阅的完整适配稿，保留已有人工修改。先读取amc-creative/SKILL.md、品牌与productCatalog。有目录时选择真实SKU并写出其名称；无目录且原机制可保留时完成品牌通用稿，skuIds为空，并将product设为品牌内容，不因空目录补问产品、不留待填内容。planning包含当前品牌名称、开场、分镜/正文、口播、行动提示及对应素材需求。保留原钩子、人物关系、情节转折、镜头顺序、节奏、口播句式及CTA意图，不新增剧情或改成通用产品广告。未知产品、价格、优惠或卖点仅局部删除或中性化；关键机制因此无法成立时说明冲突，询问必要事实或是否允许改变该机制。素材需求沿用原镜头并替换拍摄主体，rationale简述替换和必要例外。只有本次明确任务不可缺少的事实才补问。供主理人修改后保存或制作。',requestKey:`adapt-general-v3-${digest([brandId,userId,body.creativeId,body.month,current.expectedRevision,await brandContext(actor),new Date().toISOString().slice(0,10)])}`}
   }
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
@@ -95,7 +95,8 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   let intent:NativeIntent
   if(kind==='autopilot'){if(key!==`autopilot-${body.runId}`)throw nativeError('autopilot_request_key_required');await autopilotRun(userId,brandId,body.runId);intent={...common,kind,runId:body.runId}}else if(kind==='creative'){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string'||typeof body.expectedRevision!=='string')throw nativeError('invalid_creative_task')
-    intent={...common,kind,...(autopilotRunId?{autopilotRunId}:{}),requireMaterials:true,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
+    if(body.draftScript!==undefined&&(typeof body.draftScript!=='string'||!body.draftScript.trim()||body.draftScript.length>20000))throw nativeError('invalid_draft_script')
+    intent={...common,kind,...(body.draftScript!==undefined?{draftScript:body.draftScript}:{}),...(autopilotRunId?{autopilotRunId}:{}),requireMaterials:true,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
   }else if(kind==='creative_discovery'){intent={...common,kind,requireMaterials:true,...(planningRequest?{planningRequest}:{}),...(body.poolIdeaId?{poolIdeaId:body.poolIdeaId}:{}),...(automaticDaily?{automaticDaily:true}:{})}}else{
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
@@ -172,6 +173,7 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
 export async function adoptNativeCandidate(userId:string,brandId:string,id:string,body:any){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
   requestKey(body?.requestKey)
+  if(body.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw nativeError('invalid_script_save_mode')
   const task=await app.runtime.get(actor,id,{history:true})
   if(task.status!=='succeeded'||!task.result)throw nativeError('candidate_not_ready',409)
   const row=await intentForTask(pool,app,actor,id),ref=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)
@@ -186,10 +188,10 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   const reviewed=body.patch===undefined?candidate.patch:body.patch
   if(!reviewed||Object.keys(reviewed).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k)))throw nativeError('candidate_patch_invalid')
   if(row.intent.requireMaterials&&row.intent.adaptToBrand&&(!Array.isArray(reviewed.materialRequirements)||!reviewed.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))throw nativeError('material_requirements_required')
-  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`ai-${digest([id,ref.digest])}`,patch:reviewed,feedback:body.feedback},undefined,{instruction:row.intent.goal,taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
-  const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
+  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:body.saveMode?`ai-${digest([id,ref.digest,body.requestKey])}`:`ai-${digest([id,ref.digest])}`,...(body.saveMode?{saveMode:body.saveMode}:{}),patch:reviewed,feedback:body.feedback},undefined,{instruction:row.intent.goal,taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
+  const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,saved.receipt.content.id,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
-  return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}
+  return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:saved.receipt.content.id}
 }
 
 export async function nativePreference(userId:string,brandId:string,body?:unknown){

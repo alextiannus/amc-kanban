@@ -43,7 +43,7 @@ try{
  await initializeHost(pool)
  composition=await composeApplication(pool,models,options)
  const first=await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')
- const intent:CreativeIntent={kind:'creative',adaptToBrand:true,requireMaterials:true,userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
+ const intent:CreativeIntent={kind:'creative',draftScript:'User unsaved draft supplied to Agent',adaptToBrand:true,requireMaterials:true,userId:id,brandId:id,creativeId:'idea',month,goal:'改写创意，必须先问我希望突出什么卖点。',expectedRevision:first.expectedRevision!,artifactPath:`creative/${id}.json`,requestKey:'native-test-request'}
  const row=await admitIntent(pool,actor,intent)
  assert.equal((await intentBy(pool,actor,'request_key',intent.requestKey)).digest,digest(intent),'replay uses persisted admission digest, not reordered JSONB object serialization')
  await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
@@ -60,6 +60,9 @@ try{
  for(let i=0;i<20&&(await composition.app.runtime.state(actor,receipt.id)).status==='queued';i++)await composition.app.runtime.tick()
  let task=await composition.app.runtime.get(actor,receipt.id)
  assert.equal(task.status,'waiting');assert.equal(task.waiting_reason,'input');assert.ok(task.inputRequest.question.includes('卖点'))
+ const creativeCall=(await composition.app.runtime.get(actor,receipt.id,{history:true})).calls.find((c:any)=>c.capability==='amc.creative')
+ assert.equal(creativeCall.result.current.planning,intent.draftScript);assert.equal(creativeCall.result.editingUnsavedDraft,true)
+ assert.equal((await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')).current?.planning,'Original','Agent reads draft without saving it')
  const contextCall=(await composition.app.runtime.get(actor,receipt.id,{history:true})).calls.find((c:any)=>c.capability==='amc.context')
  assert.equal(contextCall.result.productCatalog[0].id,'sku_fixture');assert.equal(contextCall.result.evidence.partial,true);assert.ok(JSON.stringify(contextCall.result.knowledge).length<24000)
  await assert.rejects(()=>composition.app.runtime.get(actorFor(id,other),receipt.id))

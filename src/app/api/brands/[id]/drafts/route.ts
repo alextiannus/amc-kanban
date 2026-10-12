@@ -348,7 +348,7 @@ export async function POST(request: Request, { params }: Params) {
   let videoReplay = false
   const draft = await prisma.$transaction(async (tx: any) => {
     if (videoJobId) {
-      const receipt = await videoDraftReceipt(tx, brandId, videoJobId, normalizeStringArray(body.mediaUrls))
+      const receipt = await videoDraftReceipt(tx, brandId, videoJobId, normalizeStringArray(body.mediaUrls), accountId)
       if ('error' in receipt) return { videoError: receipt.error, status: receipt.status }
       if (receipt.existingId) {
         videoReplay = true
