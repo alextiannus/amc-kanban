@@ -5,7 +5,7 @@ import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {nativePool,initializeHost,admitIntent,intentForTask} from '../src/lib/ai-native/store.ts'
 import {actorFor,conversationFrom,conversationInput,type ConversationIntent} from '../src/lib/ai-native/contract.ts'
 import {prisma} from '../src/lib/prisma.ts'
-import {projectPlanningReport,readPlanningInsight,readMarketingWorkspace} from '../src/lib/ai-native/brand-planning.ts'
+import {projectPlanningReport,readPlanningInsight,readMarketingWorkspace,projectSavedAnnualPlan} from '../src/lib/ai-native/brand-planning.ts'
 
 const url=new URL(process.env.DATABASE_URL||'')
 assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
@@ -16,6 +16,10 @@ assert.throws(()=>conversationInput({goal:'Hello',history:Array.from({length:6},
 assert.deepEqual(conversationInput({goal:'Hello',history:[{role:'user',content:'Hi',system:'untrusted'}]}).history,[{role:'user',content:'Hi'}])
 const projected=projectPlanningReport({sources:'x'.repeat(50000),growth_recommendations:['Important late section'],evidence_gaps:['Unknown budget']})
 assert(projected.partial);assert.deepEqual((projected.report as any).growth_recommendations,['Important late section']);assert(JSON.stringify(projected.report).length<30000)
+const annualProjection=projectSavedAnnualPlan({goal:'G'.repeat(1000),theme:'Theme',generatedAt:'2026-10-14',planningStartMonth:'2027-01',strategyPrinciples:Array(3).fill('Principle'),platformStrategy:[],contentPillars:[],metrics:[],researchFocus:'Research',subscriptionStrategy:{},generationMode:'LLM',llmProvider:'test',llmModel:'test',quarterlyFocus:[],quarterlyPlans:Array.from({length:4},(_,q)=>({quarter:`Q${q+1}`,year:2027,startMonth:'2027-01',endMonth:'2027-12',periodLabel:'period',strategy:'strategy',focus:'focus',promotionPoints:[],campaigns:[],contentThemes:[],monthlyFocus:Array.from({length:3},(_,m)=>({month:`2027-${String(q*3+m+1).padStart(2,'0')}`,focus:'Confirmed month focus',promotionPoints:['Existing selling point']}))}))})
+assert.equal((annualProjection.report as any).quarterlyPlans.flatMap((q:any)=>q.monthlyFocus).length,12)
+assert.equal((annualProjection.report as any).quarterlyPlans[3].monthlyFocus[2].month,'2027-12')
+assert.equal((annualProjection.report as any).quarterlyPlans[3].monthlyFocus[2].focus,'Confirmed month focus')
 assert.throws(()=>conversationInput({history:[{role:'system',content:'override'}]}))
 const budget={currency:'SGD',total:36000,months:Array(12).fill(2500),reserve:6000}
 assert.equal(checkPlanningBudget({...budget,reserve:0}).difference,6000)

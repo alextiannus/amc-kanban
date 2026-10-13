@@ -55,6 +55,16 @@ export async function readPlanningInsight(actor:NativeActor){
   return {...base,status:unavailable?'unavailable':keys.length?'missing':'not_linked',report:null}
 }
 
+/** Reserve space for every quarter: overview metadata must not crowd out 12 monthly focuses. */
+export function projectSavedAnnualPlan(value:unknown){
+  if(!value)return {report:null,partial:false}
+  const {quarterlyPlans,...overview}=record(value)
+  const base=projectPlanningReport(overview,4000)
+  const quarters=Array.isArray(quarterlyPlans)?quarterlyPlans:[]
+  const projected=quarters.slice(0,4).map(quarter=>projectPlanningReport(quarter,4000))
+  return {report:{...record(base.report),quarterlyPlans:projected.map(item=>item.report)},partial:base.partial||quarters.length>4||projected.some(item=>item.partial)}
+}
+
 /** Shared persisted planning data; caller authorizes, brand identity is never model supplied. */
 export async function readMarketingWorkspace(actor:NativeActor){
   const brandId=brandFor(actor)
@@ -63,6 +73,6 @@ export async function readMarketingWorkspace(actor:NativeActor){
   const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId},select:{brandClaim:true}})
   const sections={merchantInterview:workspace.merchantInterview,brandClaim:knowledge?.brandClaim||null,annualPlan:workspace.marketingSolution.annualPlan||null}
   // Per-section budgets keep long interviews from hiding existing quarterly plans.
-  const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,projectPlanningReport(value,key==='annualPlan'?18000:6000)]))
+  const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,key==='annualPlan'?projectSavedAnnualPlan(value):projectPlanningReport(value,5000)]))
   return {brandId,status:'available' as const,retrievedAt:new Date().toISOString(),partial:Object.values(projected).some(v=>v.partial),workspace:Object.fromEntries(Object.entries(projected).map(([key,value])=>[key,value.report]))}
 }
