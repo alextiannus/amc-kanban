@@ -1,4 +1,5 @@
 import { prisma } from '../prisma'
+import {getBrandPlan} from '../brand-plan/service'
 import { findLatestGrowthV3ReportReference, readGrowthReportArtifact } from '../growthDataCenter'
 import { brandFor, type NativeActor } from './contract'
 
@@ -52,4 +53,16 @@ export async function readPlanningInsight(actor:NativeActor){
     return {...base,status:'cached',liveStatus:unavailable?'unavailable':'missing',snapshotId:snapshot.id,reportVersionId:typeof saved.reportVersionId==='string'?saved.reportVersionId:null,generatedAt:saved.generatedAt||snapshot.sourceVersion||null,...projectPlanningReport(structured)}
   }
   return {...base,status:unavailable?'unavailable':keys.length?'missing':'not_linked',report:null}
+}
+
+/** Shared persisted planning data; caller authorizes, brand identity is never model supplied. */
+export async function readMarketingWorkspace(actor:NativeActor){
+  const brandId=brandFor(actor)
+  const workspace=await getBrandPlan(brandId)
+  if(!workspace)return {brandId,status:'missing' as const,workspace:null}
+  const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId},select:{brandClaim:true}})
+  const sections={merchantInterview:workspace.merchantInterview,brandClaim:knowledge?.brandClaim||null,annualPlan:workspace.marketingSolution.annualPlan||null}
+  // Per-section budgets keep long interviews from hiding existing quarterly plans.
+  const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,projectPlanningReport(value,key==='annualPlan'?18000:6000)]))
+  return {brandId,status:'available' as const,retrievedAt:new Date().toISOString(),partial:Object.values(projected).some(v=>v.partial),workspace:Object.fromEntries(Object.entries(projected).map(([key,value])=>[key,value.report]))}
 }

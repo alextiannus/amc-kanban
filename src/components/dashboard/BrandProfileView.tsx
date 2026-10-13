@@ -2029,7 +2029,7 @@ ${storeLines}
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-purple-600">Section 2</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">营销计划</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">AMC 营销专家 · 年度计划</h3>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">

@@ -109,20 +109,8 @@ const SYSTEM_SECTION_COPY: Record<SystemSettingsSection, { title: string; descri
   },
 }
 
-const MARKETING_PLAN_PROMPT_TOOLTIP = [
-  '品牌营销方案生成认知：',
-  '1. 目标不是泛泛涨粉/曝光，而是让顾客找得到、看得懂、愿意来。',
-  '2. 先看品牌当前状态、门店资料、评论/菜单/素材/活动/订阅范围；缺数据就保守，不编成绩、爆款、折扣或评价。',
-  '3. 平台分工要清楚：Google Business/Profile 管搜索可见、营业信息、路线/预约/订单和评价信任；Instagram 管视觉识别、Reels/Stories/Carousel 和产品场景；TikTok 管短视频发现、真实人物/员工/顾客视角和平台原生表达；Facebook 管社区感、老客触达、本地活动和实用更新；小红书管中文用户搜索种草、真实体验、场景化笔记和收藏决策。',
-  '4. 如果店内有有效营销互动，内容发布必须配合活动窗口：提前预热、活动期间解释参与方式和到店理由、活动后复盘口碑/UGC/回访。',
-  '5. 如果没有活动或数据不支撑活动，不要强行生成节假日/折扣/campaign。',
-  '6. 当前订阅内只写可执行策略，超出范围只写升级讨论；不要保证流量、排名、销售额或到店人数。',
-].join('\n')
-
-function promptTemplateTooltip(taskKey?: string) {
-  return taskKey === 'marketing_plan_generation'
-    ? MARKETING_PLAN_PROMPT_TOOLTIP
-    : '编辑这个 Prompt 会影响对应 LLM 任务下一次生成结果。请保留必要变量占位符。'
+function promptTemplateTooltip(_taskKey?: string) {
+  return '编辑这个 Prompt 会影响对应 LLM 任务下一次生成结果。请保留必要变量占位符。'
 }
 
 function formatSystemLogDetails(log: SystemLog) {
@@ -562,7 +550,7 @@ return (
             <div className="px-6 pb-6 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800 animate-in slide-in-from-top-1 duration-150">
               <div className="flex items-start justify-between gap-4 pt-2">
                 <p className="max-w-3xl text-xs text-slate-500 dark:text-slate-400 font-bold leading-relaxed">
-                  管理 AMC-Kanban 调用 LLM 时使用的 Prompt。品牌营销方案使用 <span className="font-mono text-violet-600">marketing_plan_generation</span>，内容计划创意审核使用 <span className="font-mono text-violet-600">calendar_creative_review</span>，保存后下一次生成即生效。
+                  年度策划已统一使用 AMC 营销专家 Skill。此处管理其他 LLM 提示词；内容计划创意审核使用 <span className="font-mono text-violet-600">calendar_creative_review</span>，保存后下一次生成即生效。
                 </p>
                 <button
                   type="button"
@@ -1193,7 +1181,7 @@ return (
                     value={promptForm.taskKey}
                     disabled={Boolean(editingPrompt)}
                     onChange={event => setPromptForm(prev => ({ ...prev, taskKey: event.target.value }))}
-                    placeholder="marketing_plan_generation"
+                    placeholder="custom_task_key"
                     className="w-full rounded-xl border border-slate-250 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm dark:text-white disabled:bg-slate-100 disabled:text-slate-400"
                   />
                 </label>

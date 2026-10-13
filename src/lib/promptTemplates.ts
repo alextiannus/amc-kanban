@@ -15,25 +15,6 @@ export type PromptTemplateRecord = {
 
 export const DEFAULT_PROMPT_TEMPLATES = [
   {
-    taskKey: 'marketing_plan_generation',
-    name: '品牌营销方案生成',
-    description: 'AMC-Kanban 根据品牌信息、门店信息、品牌主张、Growth 摸底报告和订阅运营策略生成品牌营销方案时使用。',
-    variables: ['schemaInstruction', 'inputJson'],
-    template: [
-      '你是 AMC-Kanban 的本地商家营销方案策划师。按输入生成当前步骤需要的 JSON。',
-      '写给门店运营团队，不写空泛品牌大词，不承诺流量、排名、销量或到店人数。',
-      '不要编造折扣、赠品、暗号、排队、客流、顾客评价、达人合作或不存在的活动。没有明确资料时，只写常规内容方向和需要确认的素材。',
-      '核心目标：让顾客找得到、看得懂、愿意来。策略要能落到收藏、询问、路线、预约、到店或下单。',
-      '必须受 subscriptionStrategy 的平台、频次和服务范围约束。超出范围只能写成未来升级讨论，不写进当前交付。',
-      '平台分工：Google Business 负责搜索可见和到店信息；Instagram 负责视觉和场景；TikTok 负责短视频发现；Facebook 负责社区和老客触达；小红书负责中文用户搜索种草和收藏决策。',
-      '如果有 planningWindow.selectedStartMonth 和 planningWindow.quarters，必须从 selectedStartMonth 开始，按 quarters 的顺序和月份规划未来四个有效周期，不要改成自然年季度，也不要补起始月份之前的月份。',
-      '如果有 annualStrategy 和 previousQuarterPlans，当前季度必须承接前文，避免重复。',
-      '{{schemaInstruction}}',
-      '只输出合法 JSON。不要 Markdown，不要解释。字符串里不要换行，不要尾逗号。',
-      '{{inputJson}}',
-    ].join('\n\n'),
-  },
-  {
     taskKey: 'calendar_creative_review',
     name: '内容计划创意审核与去 AI',
     description: 'AMC-Kanban 使用 amc-content 返回的图文/短视频灵感生成内容发布计划时，对标题、创意概述、素材需求进行品牌化改写和质量审核。',
@@ -84,14 +65,18 @@ export async function ensureDefaultPromptTemplates() {
   return createdOrExisting as PromptTemplateRecord[]
 }
 
+export const RETIRED_MARKETING_TEMPLATE = 'marketing_plan_generation'
+
 export async function listPromptTemplates() {
   await ensureDefaultPromptTemplates()
   return promptTable().findMany({
+    where: { taskKey: { not: RETIRED_MARKETING_TEMPLATE } },
     orderBy: [{ updatedAt: 'desc' }],
   }) as Promise<PromptTemplateRecord[]>
 }
 
 export async function getPromptTemplate(taskKey: string) {
+  if (taskKey === RETIRED_MARKETING_TEMPLATE) return null
   await ensureDefaultPromptTemplates()
   const record = await promptTable().findUnique({ where: { taskKey } }) as PromptTemplateRecord | null
   if (record?.isEnabled) return record

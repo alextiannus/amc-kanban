@@ -5,7 +5,7 @@ import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {nativePool,initializeHost,admitIntent,intentForTask} from '../src/lib/ai-native/store.ts'
 import {actorFor,conversationFrom,conversationInput,type ConversationIntent} from '../src/lib/ai-native/contract.ts'
 import {prisma} from '../src/lib/prisma.ts'
-import {projectPlanningReport,readPlanningInsight} from '../src/lib/ai-native/brand-planning.ts'
+import {projectPlanningReport,readPlanningInsight,readMarketingWorkspace} from '../src/lib/ai-native/brand-planning.ts'
 
 const url=new URL(process.env.DATABASE_URL||'')
 assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
@@ -35,6 +35,7 @@ const model={next:async(request:any)=>{
   if(!find('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
   const ctx=find('amc.context').result
   if(!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
+  if(ctx.intent.topic==='brand_planning'&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
   if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
@@ -43,7 +44,7 @@ const model={next:async(request:any)=>{
 let app:any
 try{
   await initializeHost(pool)
-  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>facts,readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
+  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
   for(const topic of ['brand_planning','general'] as const){
     const intent:ConversationIntent={kind:'conversation',topic,history:[{role:'user',content:'我们的目标是吸引家庭顾客'}],brandId:id,userId:id,goal:'请继续讨论',artifactPath:`work/${topic}.json`,requestKey:`test-${topic}-${id}`}
@@ -72,6 +73,11 @@ try{
   }
   assert.equal(insightReads,1,'only planning invokes Growth')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
+  await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
+  const savedWorkspace=await readMarketingWorkspace(actor)
+  assert.equal((savedWorkspace.workspace as any).annualPlan.goal,'延续已保存目标')
+  assert.equal((savedWorkspace.workspace as any).brandClaim.focus,'家庭聚餐')
+  assert.equal((await readMarketingWorkspace(actorFor('missing-brand',id))).status,'missing')
   const originalFetch=globalThis.fetch
   const paths:string[]=[]
   try{

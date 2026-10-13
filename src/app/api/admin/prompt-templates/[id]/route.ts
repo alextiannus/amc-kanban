@@ -1,3 +1,4 @@
+import { RETIRED_MARKETING_TEMPLATE } from '@/lib/promptTemplates'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { isAmcOperator } from '@/lib/amcOperator'
@@ -34,6 +35,8 @@ export async function PATCH(request: Request, { params }: Params) {
   try {
     const previous = await promptTable().findUnique({ where: { id } })
     if (!previous) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    if (previous.taskKey === RETIRED_MARKETING_TEMPLATE) return NextResponse.json({ error: '年度策划已并入 AMC 营销专家 Skill，请更新 skills/amc-marketing-expert/SKILL.md' }, { status: 409 })
 
     const data: Record<string, unknown> = { updatedById: auth.session.user.id }
     if ('name' in body) data.name = String((body as any).name || '').trim()

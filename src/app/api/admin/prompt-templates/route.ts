@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { isAmcOperator } from '@/lib/amcOperator'
 import { prisma } from '@/lib/prisma'
-import { listPromptTemplates } from '@/lib/promptTemplates'
+import { listPromptTemplates, RETIRED_MARKETING_TEMPLATE } from '@/lib/promptTemplates'
 
 function promptTable() {
   return (prisma as any).promptTemplate
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
 
   const taskKey = normalizeTaskKey((body as any).taskKey)
+  if (taskKey === RETIRED_MARKETING_TEMPLATE) return NextResponse.json({ error: '年度策划已并入 AMC 营销专家 Skill，请更新 skills/amc-marketing-expert/SKILL.md' }, { status: 409 })
   const name = String((body as any).name || '').trim()
   const template = String((body as any).template || '').trim()
   if (!taskKey || !name || !template) {

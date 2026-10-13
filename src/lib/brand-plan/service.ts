@@ -1,3 +1,4 @@
+import {buildMarketingExpertPrompt,type MarketingPlanLLMScope} from './marketingExpert'
 import { protectTrackedCreativeChanges } from './creativeRevisions'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, revisionPeriod } from './creativeRevisionContract'
 import { Prisma } from '@prisma/client'
@@ -2973,7 +2974,8 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
       description: text(brand.description).slice(0, scope === 'quarter' ? 260 : 420),
     },
     stores: arrayValue(input.stores).slice(0, scope === 'quarter' ? 3 : 6),
-    storeActivities: scope === 'quarter' ? null : input.storeActivities || null,
+    storeActivities: input.storeActivities || null,
+    marketCalendar: input.marketCalendar || null,
     products: stringList(input.products).slice(0, 8),
     productCatalog: arrayValue(input.productCatalog).slice(0, scope === 'quarter' ? 12 : 24),
     brandClaim: scope === 'quarter' ? null : input.brandClaim || null,
@@ -3131,112 +3133,10 @@ function dateText(value: unknown) {
   return Number.isNaN(date.getTime()) ? textValue : date.toISOString()
 }
 
-type MarketingPlanLLMScope = 'annual_strategy' | 'quarter'
-
 async function callMarketingPlanLLM(scope: MarketingPlanLLMScope, input: Record<string, unknown>) {
-  const jsonShape = scope === 'annual_strategy'
-    ? {
-        goal: '一句年度经营目标',
-        theme: '一句年度策划主题',
-        strategyPrinciples: ['原则一', '原则二', '原则三'],
-        platformStrategy: [
-          {
-            platform: '平台名称',
-            role: '该平台承担的角色',
-            contentApproach: '内容打法',
-            customerAction: '希望顾客采取的行动',
-          },
-        ],
-        contentPillars: ['内容支柱一', '内容支柱二', '内容支柱三', '内容支柱四'],
-        metrics: ['指标一', '指标二', '指标三', '指标四'],
-        researchFocus: '承接摸底报告的一句重点',
-      }
-    : {
-        quarter: 'Q1',
-        year: 2026,
-        startMonth: '2026-09',
-        endMonth: '2026-11',
-        periodLabel: '2026-09 至 2026-11',
-        strategy: '一句季度策略',
-        focus: '一句季度重点',
-        promotionPoints: [
-          {
-            name: '推广重点一',
-            rationale: '选择原因',
-            targetAudience: '目标顾客',
-            customerAction: '希望顾客采取的行动',
-            platforms: ['平台 slug'],
-            suggestedMonthlyPosts: 2,
-          },
-        ],
-        campaigns: ['活动一', '活动二'],
-        contentThemes: ['主题一', '主题二', '主题三'],
-        monthlyFocus: [
-          {
-            month: '2026-09',
-            focus: '本月重点',
-            promotionPoints: ['推广重点一'],
-          },
-        ],
-      }
-  const schemaInstruction = scope === 'annual_strategy'
-    ? [
-      '只返回一个可被 JSON.parse 解析的 JSON 对象，不要 Markdown，不要解释，不要代码块。',
-      '字段：goal, theme, strategyPrinciples, platformStrategy, contentPillars, metrics, researchFocus。',
-      '数量限制：strategyPrinciples 3 条；platformStrategy 按订阅平台各 1 条；contentPillars 4 条；metrics 4 条。',
-      '不要生成 quarterlyFocus 或 quarterlyPlans；季度计划会在后续步骤逐个生成。',
-      '如果输入提供 planningWindow.selectedStartMonth，年度策略必须服务于从该月份开始的四个连续三个月周期，不要补起始月份之前的月份。',
-      '方案必须适合本地商家，围绕“让顾客找得到、看得懂、愿意来”；不得承诺流量、排名、销量或到店人数。',
-      '必须读取 productCatalog：把商品/服务/套餐按热销品、高复购品、商家当下主推/主理人判断有潜力、招牌、套餐等标签归类，允许一个 SKU 同时属于多类；多类重合的 SKU 应作为品牌推广重点。',
-      '同时识别 productCatalog 的 isNew 或新品标签；新品仅作为分类事实，不计入推广优先标签，不得仅因新品提高推广优先级，也不得推断上市日期、库存或优惠。',
-      '如果 productCatalog 提供明确价格、适合人数、套餐内容或搭配建议，可以用于策略判断和价格感知内容方向，例如人均、几个人吃、套餐怎么点；如果没有明确价格，不得编价格。',
-      '严格受 subscriptionStrategy 的平台、频次和服务范围约束；超出范围只能作为未来升级方向。',
-      '如果输入提供 postfastPlanningFeedback，必须用近期表现好的主题、弱平台信号、未回复评论和账号健康问题优化下一周期策略；不要编造不存在的数据。',
-    ].join('\n')
-    : [
-      '只返回一个可被 JSON.parse 解析的 JSON 对象，不要 Markdown，不要解释，不要代码块。',
-      '字段必须为：quarter, year, startMonth, endMonth, periodLabel, strategy, focus, promotionPoints, campaigns, contentThemes, monthlyFocus。',
-      'promotionPoints 每项含 name, rationale, targetAudience, customerAction, platforms, suggestedMonthlyPosts。',
-      'monthlyFocus 每项含 month, focus, promotionPoints。',
-      '数量限制：promotionPoints 必须刚好 2 项；campaigns 2 条；contentThemes 3 条；monthlyFocus 必须刚好 3 项。',
-      '所有字段都用短句。不要编折扣、赠品、暗号、排队、客流、顾客评价或不存在的活动。',
-      '必须使用 currentQuarter 里的 startMonth, endMonth, periodLabel 和 months；不要自行改成自然年季度。',
-      '必须参考 annualStrategy 和 previousQuarterPlans，当前季度要承接前面季度，避免重复。',
-      '必须参考 productCatalog 选择具体 SKU 或套餐进入 promotionPoints/contentThemes/monthlyFocus；优先使用同时命中热销、高复购、商家主推、招牌或套餐的项目。',
-      '新品标记仅供分类识别，不改变上述推广优先级，不得据此推断上市日期、库存或优惠。',
-      '如果 productCatalog 提供真实价格、适合人数或套餐内容，可以写入价格引导和点单判断；如果没有提供，不得写任何具体价格。',
-      '内容必须按平台原生策略生成，并受订阅平台、频次和服务范围约束。',
-      '如果输入提供 postfastPlanningFeedback，必须把近期 top post 主题、弱平台、发布失败/未知和未回复评论转化为本季度/月度内容重点；不要让分析只停留在报告里。',
-    ].join('\n')
-  const promptTemplate = await getPromptTemplate('marketing_plan_generation')
   const compactInput = compactMarketingPlanInputForLLM(input, scope)
-  const compactInputJson = JSON.stringify(compactInput)
-  const fallbackPrompt = [
-    '你是 AMC 的本地商家品牌营销策划负责人。请基于输入生成可执行的滚动营销方案。',
-    schemaInstruction,
-    '写法要求：中文、短句、具体、像给门店运营团队的计划；避免 AI 腔、空泛口号和无法验证承诺。',
-    '输出必须使用双引号；不要使用尾逗号；所有字符串内部如需换行请用空格代替。',
-    `JSON 形状参考，只替换里面的值，不要新增外层字段：${JSON.stringify(jsonShape)}`,
-    `输入 JSON：${compactInputJson}`,
-  ].join('\n\n')
-  const prompt = promptTemplate?.template
-    ? renderPromptTemplate(promptTemplate.template, {
-        schemaInstruction,
-        jsonShape: JSON.stringify(jsonShape),
-        inputJson: `输入 JSON：${compactInputJson}`,
-      })
-    : fallbackPrompt
-  const promptTrace = {
-    taskKey: 'marketing_plan_generation',
-    promptTemplateId: promptTemplate?.id || null,
-    promptTemplateUpdatedAt: promptTemplate?.updatedAt instanceof Date
-      ? promptTemplate.updatedAt.toISOString()
-      : promptTemplate?.updatedAt || null,
-    promptCharCount: prompt.length,
-    schemaInstructionCharCount: schemaInstruction.length,
-    inputCharCount: JSON.stringify(input).length,
-    compactInputCharCount: compactInputJson.length,
-  }
+  const {prompt,trace}=await buildMarketingExpertPrompt(scope,compactInput)
+  const promptTrace={...trace,inputCharCount:JSON.stringify(input).length}
   try {
     const result = await callLLM('marketing_plan', prompt, MARKETING_PLAN_OUTPUT_TOKENS, {
       temperature: 0.35,
@@ -3394,6 +3294,8 @@ async function writeMarketingPlanBusinessLog(input: {
       },
       prompt: {
         taskKey: text(input.llm.trace?.taskKey) || 'marketing_plan_generation',
+        skillId: text(input.llm.trace?.skillId) || null,
+        skillVersion: text(input.llm.trace?.skillVersion) || null,
         promptTemplateId: text(input.llm.trace?.promptTemplateId) || null,
         promptTemplateUpdatedAt: text(input.llm.trace?.promptTemplateUpdatedAt) || null,
         promptCharCount: positiveNumber(input.llm.trace?.promptCharCount),
