@@ -66,3 +66,12 @@ export async function matchPromotionStrategyCreativeBatch(input: unknown) {
     candidateMaterialPrintNeeds: Array<Record<string, unknown>>
   }
 }
+
+export async function fetchCreativeSourceEvidence(creativeId:string) {
+  const baseUrl=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'') || (isLocal?'http://localhost:4010':'')
+  if(!baseUrl)throw new Error('amc_content_service_not_configured')
+  const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal?'local-service-token':'')
+  const response=await fetch(`${baseUrl}/v1/content-library/source-evidence`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify({creativeId})})
+  if(!response.ok)throw new Error('original_evidence_unavailable')
+  return response.json()
+}

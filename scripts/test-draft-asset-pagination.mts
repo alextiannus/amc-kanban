@@ -16,6 +16,8 @@ function matches(row: any, where: any): boolean {
     if (key === 'AND') return value.every((item: any) => matches(row, item))
     if (key === 'OR') return value.some((item: any) => matches(row, item))
     if (typeof value === 'object' && value !== null) {
+      if ('in' in value) return value.in.includes(row[key])
+      if ('notIn' in value) return !value.notIn.includes(row[key])
       if ('contains' in value) return String(row[key] ?? '').toLowerCase().includes(value.contains.toLowerCase())
       if ('equals' in value) return String(row[key]).toLowerCase() === value.equals.toLowerCase()
       return false
@@ -43,6 +45,7 @@ const deps: Record<string, any> = {
     },
     brandFolder: { findMany: async ({ where }: any) => { assert.equal(where.brandId, 'brand-a'); return [{ name: '封面图' }] } },
   } },
+  '@/lib/designer': {}, '@/lib/asset-library/collections':{}, '@/lib/asset-analysis/folders':{ensureAssetFolders:async()=>{}},'node:crypto':{},
   '@/lib/integrations/postfast': {}, '@/lib/integrations/huaweiObs': {},
   '@/lib/mediaValidation': {}, '@/lib/brand-plan/calendarSync': {}, 'fs/promises': {}, path: {},
 }
@@ -88,3 +91,11 @@ for (const query of ['?page=0', '?page=-1', '?page=1.5', '?page=NaN', '?page=', 
   assert.equal((await request(query)).status, 400, query)
 }
 console.log('PASS draft asset pagination: authorization, brand isolation, legacy compatibility, stable pages, >200 assets, unused/cover/search filters, totals, URL mapping, empty/invalid pages')
+
+rows[0].sourceType='generated_video';rows[1].sourceType='ai_video'
+const original=await read('?page=1&sourceGroup=original');assert.equal(original.pagination.total,243);assert(original.assets.every((a:any)=>!['generated_video','ai_video'].includes(a.sourceType)))
+const finished=await read('?page=1&sourceGroup=finished');assert.deepEqual(finished.assets.map((a:any)=>a.id),[rows[0].id])
+assert.equal((await read('?page=1&sourceGroup=ai_clip')).assets[0].id,rows[1].id)
+assert.deepEqual((await read('?page=1&assetIds='+rows[0].id+',other-brand')).assets.map((a:any)=>a.id),[rows[0].id])
+assert.equal((await request('?sourceGroup=invalid')).status,400)
+console.log('PASS original/AI/finished filters, accurate totals, manual finished selection and brand-scoped ID lookup')

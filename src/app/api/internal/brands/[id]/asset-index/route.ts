@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: Params) {
   const query = (url.searchParams.get('q') || '').trim()
   const queryTokens = [...new Set(query.split(/[\s,，。.!！?？:：;；/\\|_-]+/).map(item => item.trim()).filter(item => item.length > 1))].slice(0, 8)
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 100))
-  const filters: any[] = [{ OR: [{ rightsStatus: null }, { rightsStatus: { not: 'restricted' } }] }]
+  const filters: any[] = [{ sourceType: { notIn: ['generated_video', 'ai_video', 'basic_video_reference'] } }, { OR: [{ rightsStatus: null }, { rightsStatus: { not: 'restricted' } }] }]
   if (queryTokens.length) filters.push({ OR: queryTokens.flatMap(token => [
     { searchText: { contains: token, mode: 'insensitive' as const } },
     { aiCaption: { contains: token, mode: 'insensitive' as const } },
@@ -37,7 +37,7 @@ export async function GET(request: Request, { params }: Params) {
     include: { videoSegments: { orderBy: { startMs: 'asc' }, take: 100 } }, orderBy: [{ aiReady: 'desc' }, { createdAt: 'desc' }], take: limit,
   })
   const candidates = assets.flatMap<Record<string, unknown>>(asset => {
-    const common = { assetId: asset.id, url: asset.url, mimeType: asset.mimeType, filename: asset.filename, caption: asset.aiCaption, tags: asset.aiTags, category: asset.aiCategory,
+    const common = { sourceType: asset.sourceType, assetId: asset.id, url: asset.url, mimeType: asset.mimeType, filename: asset.filename, caption: asset.aiCaption, tags: asset.aiTags, category: asset.aiCategory,
       subjects: asset.subjects, captureType: asset.captureType, qualityScore: qualityScore(asset.quality), duplicateGroupId: asset.duplicateGroupId,
       linkHealthy: (asset.linkHealth as any)?.status !== 'invalid', textRiskTypes: riskTypes(asset.textDetection), searchText: asset.searchText || asset.aiCaption || '' }
     if (asset.videoSegments.length) return asset.videoSegments.map(segment => ({ ...common, candidateId: `${asset.id}:${segment.segmentKey}`, startMs: segment.startMs, endMs: segment.endMs,

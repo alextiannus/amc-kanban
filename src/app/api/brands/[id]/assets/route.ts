@@ -420,6 +420,9 @@ export async function GET(request: Request, { params }: Params) {
   const url = new URL(request.url)
   const query = (url.searchParams.get('q') || '').trim().toLowerCase()
   const queryDate = /^\d{4}-\d{2}-\d{2}$/.test(query) ? new Date(`${query}T00:00:00.000Z`) : null
+  const sourceGroup = url.searchParams.get('sourceGroup') || 'all'
+  const assetIds = url.searchParams.get('assetIds')?.split(',').filter(Boolean)
+  if (!['all','original','ai_clip','finished'].includes(sourceGroup) || (assetIds && assetIds.length > 12)) return NextResponse.json({error:'Invalid asset filter'}, {status:400})
   const folder = (url.searchParams.get('folder') || '').trim()
   const paginated = url.searchParams.has('page') || url.searchParams.has('pageSize')
   const page = Number(url.searchParams.get('page') ?? 1)
@@ -455,6 +458,8 @@ export async function GET(request: Request, { params }: Params) {
       ] }],
     } : {}),
   }
+  if (sourceGroup !== 'all') where.sourceType = sourceGroup === 'finished' ? 'generated_video' : sourceGroup === 'ai_clip' ? 'ai_video' : { notIn: ['generated_video','ai_video','basic_video_reference'] }
+  if (assetIds) where.id = { in: assetIds }
   const [assets, total] = await Promise.all([
     prisma.mediaAsset.findMany({
       where,

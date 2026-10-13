@@ -1,3 +1,4 @@
+import {fetchCreativeSourceEvidence} from '../promotion-strategy/clients'
 import {assertUsageSettled,MODEL_INVOCATION_ALLOWANCE} from './model-guards'
 import {autopilotCapabilities,AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {readAutopilot,autopilotRun} from './autopilot'
@@ -60,7 +61,13 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     if(intent.kind!=='creative')throw nativeError('creative_task_required',403)
     const value=await readCreative({id:actor.subjectId,type:'HUMAN'},intent.brandId,intent.month,intent.creativeId)
     if(value.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
-    return {current:{...value.current,...(intent.draftScript!==undefined?{planning:intent.draftScript}:{}),...(intent.draftMaterialRequirements!==undefined?{materialRequirements:intent.draftMaterialRequirements}:{})},...(intent.draftScript!==undefined?{editingUnsavedDraft:true}:{}),expectedRevision:value.expectedRevision,source:value.revisions[0]?.source||{creativeId:value.current?.inspirationCreativeId||null,evidence:'plan_snapshot'},brandId:intent.brandId}
+    const savedSource=value.revisions[0]?.source||value.source||{creativeId:value.current?.inspirationCreativeId||null,evidence:'plan_snapshot'}
+    const sourceId=value.current?.inspirationCreativeId || savedSource?.creativeId || savedSource?.source?.inspirationCreativeId
+    let fullEvidence:any
+    if (!options.readCreative && typeof sourceId==='string' && /^cre_[a-zA-Z0-9_-]+$/.test(sourceId)) {
+      try {fullEvidence=await fetchCreativeSourceEvidence(sourceId)} catch {fullEvidence={status:'unavailable',note:'Original analysis unavailable; do not reconstruct unseen scenes.'}}
+    }
+    return {current:{...value.current,...(intent.draftScript!==undefined?{planning:intent.draftScript}:{}),...(intent.draftMaterialRequirements!==undefined?{materialRequirements:intent.draftMaterialRequirements}:{})},...(intent.draftScript!==undefined?{editingUnsavedDraft:true}:{}),expectedRevision:value.expectedRevision,source:{...savedSource,...(fullEvidence?{currentOriginalAnalysis:fullEvidence}:{})},brandId:intent.brandId}
   }
   const tools=[...AUTOPILOT_TOOLS,'assistant.skills.list','assistant.skills.read','my_list_assistant_memories','my_read_assistant_memory','my_write_workspace','my_read_workspace','amc.context','amc.creative','amc.operations','amc.library']
   const humanMemoryTools=['my_remember_assistant_memory','my_forget_assistant_memory','my_relearn_assistant_memory']

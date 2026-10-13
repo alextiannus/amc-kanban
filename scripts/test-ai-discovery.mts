@@ -15,7 +15,7 @@ const url=new URL(process.env.DATABASE_URL||'')
 assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
 const id=`discovery-${randomUUID()}`,actor=actorFor(id,id),pool=nativePool()
 const skillRoot=await mkdtemp('/private/tmp/amc-discovery-skills-')
-for(const name of ['amc-discovery','amc-creative','amc-brief']){await mkdir(`${skillRoot}/${name}`);await copyFile(`skills/${name}/SKILL.md`,`${skillRoot}/${name}/SKILL.md`)}
+for(const name of ['amc-discovery','amc-creative','amc-brief','amc-autopilot']){await mkdir(`${skillRoot}/${name}`);await copyFile(`skills/${name}/SKILL.md`,`${skillRoot}/${name}/SKILL.md`)}
 let app:any,allowed=true
 try{
  await prisma.user.create({data:{id,email:`${id}@example.invalid`,password:randomUUID(),businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
@@ -30,7 +30,8 @@ try{
  const intent:DiscoveryIntent={kind:'creative_discovery',requireMaterials:true,brandId:id,userId:id,goal:'Recommend brand-fit library ideas',requestKey:`discover-${randomUUID()}`,artifactPath:`work/${id}.json`}
  try{assert.equal((await brandLibrary(intent,facts)).sources.length,2)}finally{globalThis.fetch=realFetch}
  const value={kind:'creative_discovery',brandId:id,contextDigest:digest(facts),libraryDigest:library.libraryDigest,summary:'Craft suits handmade noodles.',recommendations:[{sourceCreativeId:source.inspirationCreativeId,title:'Handmade noodles',planning:'Show the brand’s actual preparation with its own footage.',aiCaption:'Made by hand.',materialRequirements:['Own preparation footage'],rationale:'Brand description confirms handmade noodles.'}]}
- assert(Buffer.byteLength(JSON.stringify(sourceExcerpt({...source,scriptContent:{kind:'video',body:'long'.repeat(30000),shots:Array.from({length:100},()=>({instruction:'long'.repeat(1000)}))}})))<6000,'source excerpts are bounded')
+ assert.throws(()=>sourceExcerpt({...source,scriptContent:{kind:'video',body:'long'.repeat(30000),shots:Array.from({length:100},()=>({instruction:'long'.repeat(1000)}))}}),/library_evidence_too_large/,'oversized sources are rejected, never silently truncated')
+ const sevenShots=Array.from({length:7},(_,index)=>({label:String(index),instruction:'scene '+index}));assert.deepEqual(sourceExcerpt({...source,scriptContent:{shots:sevenShots,voiceover:['one','two','three']}}).scriptContent,{shots:sevenShots,voiceover:['one','two','three']})
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],sourceCreativeId:'cre_forged'}]}),intent,library),/recommendation_source_mismatch/)
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,libraryDigest:'0'.repeat(64)}),intent,library),/recommendation_source_mismatch/)
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],materialRequirements:[]}]}),intent,library),/recommendation_invalid/)
@@ -60,7 +61,7 @@ try{
  const saved=results[0];assert.equal(saved.verified,true);assert.equal(saved.creative?.planning,'Human-reviewed brand plan')
  assert.equal(saved.receipt.actor.id,id);assert.equal(saved.receipt.principals[0].userId,id);assert.equal(saved.receipt.source.creativeId,'cre_real_fixture')
  assert.equal(saved.receipt.source.snapshot.nativeSourceSnapshot.version,null)
- assert.equal(digest(await readBrandFacts(prisma,id)),digest(facts),'empty knowledge enrollment does not change brand facts')
+ assert.equal(digest({...await readBrandFacts(prisma,id),creativePortfolio:[]}),digest({...facts,creativePortfolio:[]}),'saving adds portfolio evidence without changing merchant facts')
  const history=await readCreativeRevisions({id,type:'HUMAN'},id,saved.month,saved.creativeId)
  assert.equal(history.revisions.length,2);assert.equal(history.revisions[1].origin,'library_recommendation');assert.equal(history.revisions[1].content.planning,value.recommendations[0].planning)
  assert.equal((await listOpenCalendarCreativeOptions(id,saved.month))[0].id,saved.creativeId)
