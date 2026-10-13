@@ -1,3 +1,4 @@
+import {savePlanningDraft} from './planning-workspace-save'
 import {assertUsageSettled} from './model-guards'
 import {AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {autopilotRun} from './autopilot'
@@ -203,4 +204,11 @@ export async function nativePreference(userId:string,brandId:string,body?:unknow
   const facts=await brandContext(actor)
   if(!facts)throw nativeError('brand_context_unavailable',404)
   return preferenceSettings(preference,facts)
+}
+
+export async function adoptNativePlanningDraft(userId:string,brandId:string,taskId:string){
+ const task=await readNativeTask(userId,brandId,taskId)
+ const draft=task.kind==='conversation'&&task.status==='succeeded'?(task.report as any)?.planningDraft:null
+ if(!draft)throw nativeError('planning_draft_unavailable',409)
+ return savePlanningDraft(userId,brandId,taskId,draft)
 }

@@ -1,3 +1,4 @@
+import {planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
 import {checkPlanningBudget,type PlanningBudget} from './planning-budget'
 import { createHash } from 'node:crypto'
 import { validateCreativePatch } from '../brand-plan/creativeRevisionContract'
@@ -11,7 +12,7 @@ export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifac
 export type PlanningBinding={id:string;month:string;platform:string;excludeCreativeIds:string[]}
 export type DiscoveryIntent = {planningRequest?:PlanningBinding;kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;recoveryOfTaskId?:string;recoveryVersion?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type AutopilotIntent = {kind:'autopilot';runId:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type ConversationIntent = {kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type ConversationIntent = {planningDraftContext?:string;planningScope?:PlanningScope;kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
@@ -49,14 +50,26 @@ export function conversationFrom(content:string,intent:ConversationIntent){
   if(Buffer.byteLength(content)>32000)throw nativeError('reply_too_large')
   const value=JSON.parse(content)
   if(value.kind!=='conversation'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_evidence_invalid')
+  if(intent.planningScope&&(intent.planningScope.mode==='draft'||value.planningDraft!==undefined))value.planningDraft=validatePlanningDraft(value.planningDraft,{...intent.planningScope,mode:'draft'})
+  else if(value.planningDraft!==undefined)throw nativeError('unexpected_planning_draft')
+  if(value.planningDraft&&intent.planningScope?.stage==='quarter'){
+    for(const content of [value.content,value.planningDraft.content]){
+      const label=String(content).split('\n')[0].match(/年度第([1-4一二三四])季/)
+      const ordinal=label?(Number(label[1])||'一二三四'.indexOf(label[1])+1):null
+      if(ordinal&&ordinal!==intent.planningScope.quarter!+1)throw nativeError(`planning_reply_requires_annual_quarter_${intent.planningScope.quarter!+1}`)
+    }
+  }
+  if(value.suggestedReplies!==undefined&&(!Array.isArray(value.suggestedReplies)||value.suggestedReplies.length>3||value.suggestedReplies.some((s:unknown)=>typeof s!=='string'||!s.trim()||s.length>200)))throw nativeError('invalid_suggested_replies')
   if(value.annualBudget&&!checkPlanningBudget(value.annualBudget).balanced)throw nativeError('annual_budget_unbalanced')
-  return value as {annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
+  return value as {suggestedReplies?:string[];planningDraft?:PlanningDraft;annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
 }
 export function conversationInput(body:any){
   const history=body.history??[]
   if(!Array.isArray(history)||history.length>20||history.some((t:any)=>!t||!['user','assistant'].includes(t.role)||typeof t.content!=='string'||t.content.length>12000))throw nativeError('invalid_conversation_history')
   if(body.topic!==undefined&&!['general','brand_planning'].includes(body.topic))throw nativeError('invalid_conversation_topic')
-  const topic=body.topic==='brand_planning'||/AMC\s*营销专家|宣传重心|年度(?:推广|营销|行銷)计划|品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
+  if(body.planningDraftContext!==undefined&&(typeof body.planningDraftContext!=='string'||body.planningDraftContext.length>32000||!body.planningScope))throw nativeError('invalid_planning_draft_context')
+  const scope=body.planningScope===undefined?undefined:planningScope(body.planningScope)
+  const topic=scope||body.topic==='brand_planning'||/AMC\s*营销专家|宣传重心|年度(?:推广|营销|行銷)计划|品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
   if(history.reduce((length:number,turn:{content:string})=>length+turn.content.length,0)>60000)throw nativeError('conversation_history_too_large',413)
-  return {history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'history'|'topic'>
+  return {...(scope?{planningScope:scope}:{}),...(body.planningDraftContext!==undefined?{planningDraftContext:body.planningDraftContext}:{}),history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'history'|'topic'|'planningScope'|'planningDraftContext'>
 }

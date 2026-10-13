@@ -1,3 +1,4 @@
+import {planningRevision} from '../ai-native/planning-workspace-contract'
 import {buildMarketingExpertPrompt,type MarketingPlanLLMScope} from './marketingExpert'
 import { protectTrackedCreativeChanges } from './creativeRevisions'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, revisionPeriod } from './creativeRevisionContract'
@@ -356,6 +357,8 @@ export async function getBrandPlan(brandId: string) {
   return {
     brand: serializeBrandSummary(brand),
     marketingSolution,
+    marketingSolutionRevision: planningRevision(brand.knowledge?.marketingSolution),
+    brandClaim: brand.knowledge?.brandClaim || null,
     brandPlan: marketingSolution,
     merchantInterview,
     merchantInterviewRequired: !merchantInterview,
@@ -2918,6 +2921,7 @@ function buildMarketingPlanInput(
     products: primaryProducts(brand, { available: false }),
     productCatalog,
     brandClaim: brand.knowledge?.brandClaim || null,
+    coCreation: (current as any).coCreation || null,
     merchantInterview: interview,
     researchReport: current.researchReport || null,
     subscriptionStrategy: current.annualPlan?.subscriptionStrategy || null,
@@ -2979,6 +2983,7 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
     products: stringList(input.products).slice(0, 8),
     productCatalog: arrayValue(input.productCatalog).slice(0, scope === 'quarter' ? 12 : 24),
     brandClaim: scope === 'quarter' ? null : input.brandClaim || null,
+    coCreation: input.coCreation || null,
     merchantInterview: {
       summary: text(merchantInterview.summary).slice(0, scope === 'quarter' ? 220 : 500),
       rawNotes: text(merchantInterview.rawNotes).slice(0, scope === 'quarter' ? 360 : 900),

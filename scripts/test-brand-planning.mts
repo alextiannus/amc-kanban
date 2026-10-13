@@ -1,3 +1,4 @@
+import {planningDraftContract} from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {checkPlanningBudget} from '../src/lib/ai-native/planning-budget.ts'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -42,16 +43,16 @@ const model={next:async(request:any)=>{
   if(ctx.intent.topic==='brand_planning'&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
-  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
+  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget}:{}),...(ctx.intent.planningScope?{planningDraft:{...planningDraftContract(ctx.intent.planningScope).planningDraft,expectedRevision:'0'.repeat(64)}}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
   return {type:'finish',result:{summary:'Reply ready',artifacts:[find('my_write_workspace').result.reference]},usage}
 }}
 let app:any
 try{
   await initializeHost(pool)
-  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
+  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',revision:'0'.repeat(64),workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
-  for(const topic of ['brand_planning','general'] as const){
-    const intent:ConversationIntent={kind:'conversation',topic,history:[{role:'user',content:'我们的目标是吸引家庭顾客'}],brandId:id,userId:id,goal:'请继续讨论',artifactPath:`work/${topic}.json`,requestKey:`test-${topic}-${id}`}
+  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning'] as const).entries()){
+    const intent:ConversationIntent={kind:'conversation',topic,...(index>1?{planningScope:{stage:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:'我们的目标是吸引家庭顾客'}],brandId:id,userId:id,goal:'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
     await admitIntent(pool,actor,intent)
     await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
     const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot')&&(topic==='brand_planning'||t!=='amc.growth_insight'))}
@@ -75,7 +76,7 @@ try{
     await assert.rejects(()=>app.runtime.get(actorFor(id,'other-user'),receipt.id))
     assert.throws(()=>conversationFrom(artifact.content,{...intent,brandId:'other-brand'}))
   }
-  assert.equal(insightReads,1,'only planning invokes Growth')
+  assert.equal(insightReads,3,'only planning invokes Growth')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
   const savedWorkspace=await readMarketingWorkspace(actor)
