@@ -26,13 +26,31 @@ try {
   assert.equal(await tx.brandMarketingSolution.count({where:{brandId:id}}),2)
   assert.equal(await tx.auditLog.count({where:{actorId:id}}),1)
   assert.equal(await tx.contentDraft.count({where:{brandId:id}}),0)
+  const editorId=id+'-editor',roleId=id+'-role'
+  await tx.roleDefinition.create({data:{id:roleId,name:roleId,normalizedName:roleId,policy:{create:{grants:['brand.read','draft.read','draft.update']}}}})
+  await tx.user.create({data:{id:editorId,email:editorId+'@example.invalid',password:randomUUID(),businessRoles:{create:{role:roleId}}}})
+  const crew=await tx.marketingCrew.findUniqueOrThrow({where:{brandId:id}})
+  await tx.crewMember.create({data:{crewId:crew.id,userId:editorId,role:'EDITOR'}})
+  const editor={id:editorId,type:'HUMAN'}
+  const owned=await saveCreativeRevision(actor,id,month,content.id,{expectedRevision:read.expectedRevision,idempotencyKey:'owned-original',saveMode:'overwrite',patch:{planning:'Owned original'}},adapter)
+  const accessible=await readCreativeRevisions(editor,id,month,content.id,undefined,adapter)
+  assert.equal(accessible.canSaveAsNew,true);assert.equal(accessible.canOverwrite,false)
+  const copyRequest={expectedRevision:owned.receipt.contentHash,idempotencyKey:'scoped-copy',saveMode:'copy',patch:{planning:'Content editor copy'}}
+  const copy=await saveCreativeRevision(editor,id,month,content.id,copyRequest,adapter)
+  assert.equal(copy.receipt.content.scriptOwner.id,editorId)
+  assert.equal((await saveCreativeRevision(editor,id,month,content.id,copyRequest,adapter)).receipt.id,copy.receipt.id)
+  const copyRead=await readCreativeRevisions(editor,id,month,copy.receipt.content.id,copy.receipt.id,adapter)
+  assert.equal(copyRead.revisions[0].contentHash,copy.receipt.contentHash)
+  assert.deepEqual((await readCreativeRevisions(editor,id,month,content.id,undefined,adapter)).current,owned.receipt.content)
+  await assert.rejects(saveCreativeRevision(editor,id,month,content.id,{...copyRequest,saveMode:'overwrite',idempotencyKey:'denied-overwrite'},adapter),(e:any)=>e.code==='script_owner_required')
   throw rollback
  },{maxWait:15000,timeout:30000})
  throw new Error('Rollback sentinel was not reached')
 } catch(error) {
  if(error!==rollback) throw error
- assert.equal(await db.user.findUnique({where:{id}}),null)
+ assert.equal(await db.user.count({where:{id:{startsWith:id}}}),0)
+ assert.equal(await db.roleDefinition.findUnique({where:{id:id+'-role'}}),null)
  assert.equal(await db.brand.findUnique({where:{id}}),null)
  assert.equal(await db.auditLog.count({where:{actorId:id}}),0)
- console.log(JSON.stringify({ok:true,version:process.env.RENDER_GIT_COMMIT || 'local',mode:'rollback-only',checks:['save','source','actor','principal','readback','idempotency','audit','no-downstream-writes','complete-rollback']}))
+ console.log(JSON.stringify({ok:true,version:process.env.RENDER_GIT_COMMIT || 'local',mode:'rollback-only',checks:['save','source','actor','principal','readback','idempotency','audit','no-downstream-writes','content-editor-copy-without-brand-update','original-owner-protected','complete-rollback']}))
 } finally {await db.$disconnect()}

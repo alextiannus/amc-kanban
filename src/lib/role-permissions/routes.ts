@@ -14,6 +14,8 @@ export function kanbanRoutePermission(path: string, method: string): string | nu
     if (/\/social-insight(\/|$)/.test(path)) return 'analytics.read'
     if (/\/actions(\/|$)/.test(path)) return `action_item.${read ? 'read' : /\/(approve|reject)$/.test(path) ? 'resolve' : 'create'}`
     if (/\/(video-director|voiceover-tasks|voices)(\/|$)/.test(path)) return `content.video-making.${read ? 'read' : 'generate'}`
+    // Editing a brand script is a content operation, not a brand-profile change.
+    if (!read && (/^\/api\/brands\/[^/]+\/content-creatives\/[^/]+\/revisions$/.test(path) || /^\/api\/brands\/[^/]+\/ai\/tasks\/[^/]+\/adopt$/.test(path))) return 'draft.update'
     if (/\/copywriter(\/|$)/.test(path)) return `draft.${read ? 'read' : 'create'}`
     if (/\/(assets|folders|asset-analysis|asset-collections)(\/|$)/.test(path)) {
       if (read) return 'asset.read'

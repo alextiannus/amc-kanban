@@ -29,6 +29,16 @@ assert.equal(describePolicy([], { roles: ['RESEARCHER'], active: false }, polici
 assert.equal(describePolicy([], { roles: ['RESEARCHER'], brandScope: 'denied' }, policies, true).find(row => row.label === '视频制作')!.page.state, 'denied')
 assert.equal(describePolicy([], { roles: ['RESEARCHER'] }, policies, false).find(row => row.label === '视频制作')!.page.state, 'unknown')
 assert.equal(kanbanRoutePermission('/api/brands/a/drafts/b/approve', 'POST'), 'draft.approve')
+for (const path of ['/api/brands/a/content-creatives/idea/revisions', '/api/brands/a/ai/tasks/task/adopt']) {
+  assert.equal(kanbanRoutePermission(path, 'POST'), 'draft.update')
+  assert.equal(kanbanRoutePermission(path, 'GET'), 'brand.read')
+  const contentEditor = ['brand.read','draft.read','draft.update']
+  assert(contentEditor.includes(kanbanRoutePermission(path, 'POST')!))
+  assert(!contentEditor.includes(kanbanRoutePermission('/api/brands/a', 'PATCH')!))
+  assert(!['brand.read','asset.read','asset.create'].includes(kanbanRoutePermission(path, 'POST')!))
+}
+assert.equal(kanbanRoutePermission('/api/brands/a/ai/tasks', 'POST'), 'brand.update', 'other AI operations keep their existing policy')
+
 assert.equal(kanbanRoutePermission('/api/brands/a/posts/publish', 'POST'), 'content.publish')
 assert.equal(kanbanRoutePermission('/api/content/video/create', 'POST'), 'content.video-making.generate')
 assert.equal(kanbanRoutePermission('/api/game/config', 'POST'), 'game.update')

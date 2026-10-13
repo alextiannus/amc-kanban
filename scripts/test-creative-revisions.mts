@@ -91,6 +91,27 @@ try {
   const concurrent=await Promise.all(['same-copy-request','same-copy-request'].map(idempotencyKey=>saveCreativeRevision(actor,brandId,month,id,{...copyRequest,idempotencyKey},db)))
   assert.equal(concurrent[0].receipt.id,concurrent[1].receipt.id)
   console.log('PASS: copy/overwrite, trusted ownership, inherited tags, original preserved, concurrent copy replay and cross-user overwrite denial')
+  // A scoped content editor can copy another owner's script without brand.update.
+  const editorRole='lineage-content-editor',editor={id:'lineage-content-editor',type:'HUMAN'}
+  await db.roleDefinition.create({data:{id:editorRole,name:'Content editor',normalizedName:editorRole,policy:{create:{grants:['brand.read','draft.read','draft.update','asset.read','asset.create']}}}})
+  await db.user.create({data:{id:editor.id,email:editor.id+'@example.invalid',password:'not-login',businessRoles:{create:{role:editorRole}}}})
+  const crew=await db.marketingCrew.findUniqueOrThrow({where:{brandId}})
+  await db.crewMember.create({data:{crewId:crew.id,userId:editor.id,role:'EDITOR'}})
+  const editable=await readCreativeRevisions(editor,brandId,month,copiedId,undefined,db)
+  assert.equal(editable.canSaveAsNew,true);assert.equal(editable.canOverwrite,false)
+  const editorRequest={expectedRevision:editable.expectedRevision,idempotencyKey:'scoped-editor-copy',saveMode:'copy',patch:{planning:'Scoped editor copy'}}
+  const editorCopy=await saveCreativeRevision(editor,brandId,month,copiedId,editorRequest,db)
+  assert.equal(editorCopy.receipt.content.scriptOwner.id,editor.id)
+  assert.equal((await saveCreativeRevision(editor,brandId,month,copiedId,editorRequest,db)).receipt.id,editorCopy.receipt.id)
+  assert.deepEqual((await readCreativeRevisions(editor,brandId,month,copiedId,undefined,db)).current,editable.current)
+  await expectCode(()=>saveCreativeRevision(editor,brandId,month,copiedId,{...editorRequest,saveMode:'overwrite',idempotencyKey:'editor-no-overwrite'},db),'script_owner_required')
+  await expectCode(()=>saveCreativeRevision(editor,'lineage-other-brand',month,id,editorRequest,db),'creative_access_denied')
+  // Asset upload grants still allow brand WRITE, but never grant script editing.
+  await db.rolePermissionPolicy.update({where:{role:editorRole},data:{grants:['brand.read','asset.read','asset.create']}})
+  const revoked=await readCreativeRevisions(editor,brandId,month,copiedId,undefined,db)
+  assert.equal(revoked.canSaveAsNew,false);assert.equal(revoked.canOverwrite,false)
+  await expectCode(()=>saveCreativeRevision(editor,brandId,month,copiedId,editorRequest,db),'creative_edit_forbidden')
+  console.log('PASS: scoped content editor copy without brand.update; unrelated write grant and live revocation denied')
   await db.crewMember.updateMany({where:{userId:actor.id},data:{active:false}})
   await expectCode(()=>saveCreativeRevision(actor,brandId,month,id,request,db),'creative_access_denied')
   assert.throws(()=>validateCreativePatch({date:'2026-11-31'},month))

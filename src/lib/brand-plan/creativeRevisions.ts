@@ -5,6 +5,9 @@ import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma.ts'
 import { readBrandFacts, restorePortfolioContext } from '../ai-native/facts.ts'
 import { createHash } from 'node:crypto'
+import { readPolicies } from '../role-permissions/store.ts'
+import { effectiveGrants } from '../role-permissions/contract.ts'
+import { principalFromUser } from '../auth-v2/types.ts'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
@@ -13,10 +16,17 @@ export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
 type AiProvenance = { contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;slotId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
+async function canEditScript(db: any, user: any) {
+  const principal = principalFromUser(user, 'session')
+  if (principal.globalRoles.includes('ADMIN')) return true
+  const { policies } = await readPolicies(db)
+  return effectiveGrants((principal.permissionRoleIds || []).filter(id => Object.hasOwn(policies, id)), policies).includes('draft.update')
+}
 async function authorize(db: any, actor: Actor, brandId: string, write = false) {
   if (!await canUserAccessBrand(brandId, actor.id, write ? 'WRITE' : 'READ', db)) throw new CreativeRevisionError('creative_access_denied',404)
-  const user = await db.user.findUnique({ where: { id: actor.id }, select: { id:true, nickname:true, type:true, role:true, status:true, businessRoles:{select:{role:true}} } })
+  const user = await db.user.findUnique({ where: { id: actor.id }, select: { id:true, email:true, authVersion:true, nickname:true, type:true, role:true, status:true, businessRoles:{select:{role:true}}, owner:{select:{id:true,role:true,businessRoles:{select:{role:true}}}} } })
   if (!user || user.status !== 'ACTIVE') throw new CreativeRevisionError('creative_access_denied',404)
+  if (write && !await canEditScript(db, user)) throw new CreativeRevisionError('creative_edit_forbidden',403)
   return user
 }
 function present(row: any) {
@@ -27,7 +37,7 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   validateCreativeAddress(month, creativeId)
   if (beforeVersion !== undefined && (!Number.isSafeInteger(beforeVersion) || beforeVersion < 0)) throw new CreativeRevisionError('invalid_revision_cursor')
   const reader=await authorize(db,actor,brandId)
-  const canWrite=await canUserAccessBrand(brandId,actor.id,'WRITE',db)
+  const canWrite=await canUserAccessBrand(brandId,actor.id,'WRITE',db)&&await canEditScript(db,reader)
   const period = revisionPeriod(month,creativeId)
   const [knowledge, revisions, brand] = await Promise.all([
     db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}}),
