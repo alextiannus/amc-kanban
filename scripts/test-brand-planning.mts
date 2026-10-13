@@ -1,3 +1,4 @@
+import {checkPlanningBudget} from '../src/lib/ai-native/planning-budget.ts'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {composeApplication} from '../src/lib/ai-native/application.ts'
@@ -10,11 +11,18 @@ const url=new URL(process.env.DATABASE_URL||'')
 assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
 assert.equal(conversationInput({goal:'讨论品牌策划'}).topic,'brand_planning')
 assert.equal(conversationInput({goal:'Hello'}).topic,'general')
+assert.equal(conversationInput({goal:'用 AMC 营销专家讨论宣传重心'}).topic,'brand_planning')
 assert.throws(()=>conversationInput({goal:'Hello',history:Array.from({length:6},()=>({role:'user',content:'x'.repeat(12000)}))}),/conversation_history_too_large/)
 assert.deepEqual(conversationInput({goal:'Hello',history:[{role:'user',content:'Hi',system:'untrusted'}]}).history,[{role:'user',content:'Hi'}])
 const projected=projectPlanningReport({sources:'x'.repeat(50000),growth_recommendations:['Important late section'],evidence_gaps:['Unknown budget']})
 assert(projected.partial);assert.deepEqual((projected.report as any).growth_recommendations,['Important late section']);assert(JSON.stringify(projected.report).length<30000)
 assert.throws(()=>conversationInput({history:[{role:'system',content:'override'}]}))
+const budget={currency:'SGD',total:36000,months:Array(12).fill(2500),reserve:6000}
+assert.equal(checkPlanningBudget({...budget,reserve:0}).difference,6000)
+assert.equal(checkPlanningBudget(budget).balanced,true)
+assert.equal(checkPlanningBudget({currency:'SGD',total:1.2,months:Array(12).fill(0.1),reserve:0}).balanced,true)
+assert.throws(()=>checkPlanningBudget({...budget,months:[1,2]}))
+assert.throws(()=>checkPlanningBudget({...budget,reserve:-1}))
 const id=randomUUID(),actor=actorFor(id,id),pool=nativePool()
 let insightReads=0,modelCalls=0
 const facts={brand:{id,name:'Fixture brand'},productCatalog:[]}
@@ -28,7 +36,8 @@ const model={next:async(request:any)=>{
   const ctx=find('amc.context').result
   if(!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
-  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
+  if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
+  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
   return {type:'finish',result:{summary:'Reply ready',artifacts:[find('my_write_workspace').result.reference]},usage}
 }}
 let app:any
@@ -50,9 +59,10 @@ try{
     const artifact=await app.workspace.read(actor,task.result.artifacts[0])
     const reply=conversationFrom(artifact.content,intent)
     assert(reply.content.length>5)
+    if(topic==='brand_planning'){assert.deepEqual(reply.annualBudget,budget);assert.throws(()=>conversationFrom(JSON.stringify({...reply,annualBudget:{...budget,reserve:0}}),intent),/annual_budget_unbalanced/)}
     const ctx=task.calls.find((c:any)=>c.capability==='amc.context').result
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
-    assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-brand-planning/SKILL.md':'amc-conversation/SKILL.md')
+    assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
     const before=modelCalls
     await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal(modelCalls,before)

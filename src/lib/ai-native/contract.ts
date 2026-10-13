@@ -1,3 +1,4 @@
+import {checkPlanningBudget,type PlanningBudget} from './planning-budget'
 import { createHash } from 'node:crypto'
 import { validateCreativePatch } from '../brand-plan/creativeRevisionContract'
 
@@ -48,13 +49,14 @@ export function conversationFrom(content:string,intent:ConversationIntent){
   if(Buffer.byteLength(content)>32000)throw nativeError('reply_too_large')
   const value=JSON.parse(content)
   if(value.kind!=='conversation'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_evidence_invalid')
-  return value as {kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
+  if(value.annualBudget&&!checkPlanningBudget(value.annualBudget).balanced)throw nativeError('annual_budget_unbalanced')
+  return value as {annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
 }
 export function conversationInput(body:any){
   const history=body.history??[]
   if(!Array.isArray(history)||history.length>20||history.some((t:any)=>!t||!['user','assistant'].includes(t.role)||typeof t.content!=='string'||t.content.length>12000))throw nativeError('invalid_conversation_history')
   if(body.topic!==undefined&&!['general','brand_planning'].includes(body.topic))throw nativeError('invalid_conversation_topic')
-  const topic=body.topic==='brand_planning'||/品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
+  const topic=body.topic==='brand_planning'||/AMC\s*营销专家|宣传重心|年度(?:推广|营销|行銷)计划|品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
   if(history.reduce((length:number,turn:{content:string})=>length+turn.content.length,0)>60000)throw nativeError('conversation_history_too_large',413)
   return {history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'history'|'topic'>
 }

@@ -43,7 +43,7 @@ try{
   const {goal,topic}=prompts[i]
   const intent:ConversationIntent={kind:'conversation',topic,goal,history:[...history],brandId:brand.id,userId:actor.subjectId,requestKey:`live-review-${i}-${schema}`,artifactPath:`work/turn-${i}.json`}
   await admitIntent(pool,actor,intent)
-  const allowed=composition.tools.filter(t=>['assistant.skills.list','assistant.skills.read','my_list_assistant_memories','my_read_assistant_memory','my_write_workspace','my_read_workspace','amc.context',...(topic==='brand_planning'?['amc.growth_insight']:[])].includes(t))
+  const allowed=composition.tools.filter(t=>['assistant.skills.list','assistant.skills.read','my_list_assistant_memories','my_read_assistant_memory','my_write_workspace','my_read_workspace','amc.context',...(topic==='brand_planning'?['amc.growth_insight','amc.planning_budget']:[])].includes(t))
   const input={goal,requiredArtifacts:[intent.artifactPath],allowedTools:allowed}
   const receipt=await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
   console.log('PLANNING_LIVE '+JSON.stringify({phase:'started',turn:i,taskId:receipt.id,brandId:brand.id,actorId:actor.subjectId,schema}))
@@ -56,7 +56,7 @@ try{
   const reply=conversationFrom(artifact.content,intent)
   assert(usage.complete,'Actual usage receipt required')
   const calls=task.calls.filter((c:any)=>c.status==='succeeded')
-  assert(calls.some((c:any)=>c.capability==='assistant.skills.read'&&c.input.id===(topic==='brand_planning'?'amc-brand-planning/SKILL.md':'amc-conversation/SKILL.md')))
+  assert(calls.some((c:any)=>c.capability==='assistant.skills.read'&&c.input.id===(topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')))
   const growth=calls.find((c:any)=>c.capability==='amc.growth_insight')?.result
   if(topic==='brand_planning')assert(['available','cached'].includes(growth?.status))
   assert.equal((await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})).id,receipt.id)

@@ -1,0 +1,6 @@
+interface:
+  display_name: "AMC 营销专家"
+  short_description: "与品牌主逐步共创网络洞察、品牌访谈、宣传重心、卖点和年度推广计划"
+  default_prompt: "使用 $amc-marketing-expert，与我从品牌洞察和访谈开始，一步步共同制定年度推广计划。"
+policy:
+  allow_implicit_invocation: true
