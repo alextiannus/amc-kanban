@@ -60,7 +60,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     if(intent.kind!=='creative')throw nativeError('creative_task_required',403)
     const value=await readCreative({id:actor.subjectId,type:'HUMAN'},intent.brandId,intent.month,intent.creativeId)
     if(value.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
-    return {current:intent.draftScript!==undefined?{...value.current,planning:intent.draftScript}:value.current,...(intent.draftScript!==undefined?{editingUnsavedDraft:true}:{}),expectedRevision:value.expectedRevision,source:value.revisions[0]?.source||{creativeId:value.current?.inspirationCreativeId||null,evidence:'plan_snapshot'},brandId:intent.brandId}
+    return {current:{...value.current,...(intent.draftScript!==undefined?{planning:intent.draftScript}:{}),...(intent.draftMaterialRequirements!==undefined?{materialRequirements:intent.draftMaterialRequirements}:{})},...(intent.draftScript!==undefined?{editingUnsavedDraft:true}:{}),expectedRevision:value.expectedRevision,source:value.revisions[0]?.source||{creativeId:value.current?.inspirationCreativeId||null,evidence:'plan_snapshot'},brandId:intent.brandId}
   }
   const tools=[...AUTOPILOT_TOOLS,'assistant.skills.list','assistant.skills.read','my_list_assistant_memories','my_read_assistant_memory','my_write_workspace','my_read_workspace','amc.context','amc.creative','amc.operations','amc.library']
   const humanMemoryTools=['my_remember_assistant_memory','my_forget_assistant_memory','my_relearn_assistant_memory']
