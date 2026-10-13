@@ -883,6 +883,10 @@ Permanent QR contract:
 | DELETE | `/api/tasks/unassigned` |
 <!-- API_ROUTE_INVENTORY:END -->
 
+### SKU 新品字段（本地已实现，待发布）
+
+`GET/PATCH /api/brands/{id}/sku-library` 的商品项新增可选 `isNew: boolean`，与 `tags` 中的“新品”同步保存。缺少字段时兼容新品标签，显式 false 优先；取消时清除新品标签。GET 回读一致，沿用现有品牌权限与 JSON 存储，无数据库迁移。新品仅用于展示和 AI 分类，不改变推广分数或排序。
+
 ## AMC Growth SSO（内部）
 
 - `GET /api/integrations/amc-growth/sso/start?returnTo=/dashboard/...`

@@ -1,3 +1,5 @@
+import { skuIsNew } from '../sku-library/service.ts'
+
 // JSONB may reorder object keys. Restore the exact facts projection before
 // comparing existing (order-sensitive) context digests; array order stays intact.
 export function restorePortfolioContext(value:any[]){
@@ -39,7 +41,10 @@ export function skuFacts(items:unknown){
     const item=typeof raw==='string'?{name:raw}:raw&&typeof raw==='object'?raw:{}
     const rawId=text(item.id,150)
     const id=rawId&&!seen.has(rawId)?rawId:'';if(id)seen.add(id)
-    return {id:id||`snapshot-sku-${index}`,identity:id?'persisted':'snapshot_position',name:text(item.name||item.title,80),description:text(item.description),price:text(item.price,40),currency:text(item.currency,20),serves:text(item.serves||item.portion,80),bundleItems:Array.isArray(item.bundleItems)?item.bundleItems.filter((v:unknown)=>typeof v==='string').slice(0,10).map((v:string)=>v.slice(0,200)):text(item.bundleItems),tags:Array.isArray(item.tags)?item.tags.filter((v:unknown)=>typeof v==='string').slice(0,10).map((v:string)=>v.slice(0,100)):[],isMerchantPick:item.isMerchantPick===true,isSignature:item.isSignature===true}
+    const isNew=skuIsNew(item)
+    const tags=Array.isArray(item.tags)?item.tags.filter((v:unknown)=>typeof v==='string'&&(isNew||v!=='新品')).slice(0,10).map((v:string)=>v.slice(0,100)):[]
+    if(isNew&&!tags.includes('新品')){if(tags.length===10)tags.pop();tags.push('新品')}
+    return {id:id||`snapshot-sku-${index}`,identity:id?'persisted':'snapshot_position',name:text(item.name||item.title,80),description:text(item.description),price:text(item.price,40),currency:text(item.currency,20),serves:text(item.serves||item.portion,80),bundleItems:Array.isArray(item.bundleItems)?item.bundleItems.filter((v:unknown)=>typeof v==='string').slice(0,10).map((v:string)=>v.slice(0,200)):text(item.bundleItems),tags,isMerchantPick:item.isMerchantPick===true,isSignature:item.isSignature===true,isNew}
   }).filter(item=>item.name).slice(0,24)
 }
 export function validateSkuReferences(value:{skuIds?:unknown;planning?:string;patch?:Record<string,unknown>},facts:any){

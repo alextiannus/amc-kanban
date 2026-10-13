@@ -24,6 +24,16 @@ To provide deterministic guardrails and consistency checks on content creation w
 
 ### 1.4 Ownership Boundary
 
+#### SKU 新品标签
+
+状态：本地已实现，待发布。商品与服务库的单品、套餐和服务支持“新品”复选框与只读徽标，可与现有标签并存；只读卡展示全部分类徽标并换行，不因已有多个标签隐藏新品。新品由用户手动设置，仅作为商品分类供展示和 AI 识别，不计入推广分数或改变商品排序，不自动判定或到期取消。
+
+SKU 类型新增可选 `isNew?: boolean`，复用 `GET/PATCH /api/brands/{id}/sku-library` 与 `BrandKnowledge.menuItems` JSON，无数据库迁移。缺少字段时兼容 `tags` 中的“新品”；缺少两者默认为 false，显式 `isNew: false` 优先。序列化同步布尔字段与新品标签，取消后删除“新品”并保存 false，保留其他字段和自定义标签。AI 商品上下文和事实投影使用相同判定，不把新品分类加入推广优先标签。
+
+验收覆盖勾选及取消后的保存刷新、标签并存、旧数据兼容、AI 识别、推广分数与排序不变；执行 SKU 合约测试、类型检查及页面保存回读验证。发布前不得描述为线上已生效。
+
+本地验收：SKU 合约与 SKU 适配回归通过；刷新本地 Prisma 生成客户端后类型检查通过，无数据库迁移。Playwright 使用真实品牌资料组件与隔离测试接口，验证三种 SKU 的勾选/取消、保存刷新、多标签徽标以及 390/753px 布局；此验证不代表生产数据库或线上页面验收。
+
 Merchant cloned-voice records remain Kanban-owned execution data. The authenticated internal content-brand-voices API exposes a brand-scoped safe catalog and resolves voice selections for Content video production (implemented locally, pending release). Content stores a non-secret selection snapshot, checks current authorization/status before synthesis, and never falls back to another account or voice. No voice credentials or unscoped cloned-voice catalog are exposed to the browser.
 
 Growth is the canonical merchant data and knowledge center. Merchant identity, classification, locations, menu/product facts, positioning, audience, channels, reputation, evidence and confirmed competitors are read from Growth by stable `Brand.growthBrandKey`.

@@ -15,6 +15,7 @@ export type SkuLibraryItem = {
   isHighRepeat?: boolean
   isMerchantPick?: boolean
   isSignature?: boolean
+  isNew?: boolean
 }
 
 export type SkuLibraryResponse = {
@@ -74,10 +75,16 @@ function normalizeType(value: unknown, tags: string[]): SkuItemType {
   return 'single'
 }
 
+export function skuIsNew(item: { isNew?: unknown; tags?: unknown }) {
+  return typeof item.isNew === 'boolean' ? item.isNew : stringArray(item.tags).includes('新品')
+}
+
 export function normalizeSkuLibraryItem(item: unknown): SkuLibraryItem {
-  if (typeof item === 'string') return { id: createSkuId(), type: 'single', name: stringValue(item) }
+  if (typeof item === 'string') return { id: createSkuId(), type: 'single', name: stringValue(item), isNew: false }
   const raw = rawObject(item)
-  const tags = stringArray(raw.tags)
+  const isNew = skuIsNew(raw)
+  const tags = stringArray(raw.tags).filter(tag => isNew || tag !== '新品')
+  if (isNew && !tags.includes('新品')) tags.push('新品')
   const imageUrls = stringArray(raw.image_urls)
   return {
     id: stringValue(raw.id) || createSkuId(),
@@ -96,6 +103,7 @@ export function normalizeSkuLibraryItem(item: unknown): SkuLibraryItem {
     isHighRepeat: Boolean(raw.isHighRepeat || tags.includes('高复购品') || tags.includes('高复购') || tags.includes('high_repeat')),
     isMerchantPick: Boolean(raw.isMerchantPick || tags.includes('商家主推') || tags.includes('主推品') || tags.includes('主推') || tags.includes('merchant_pick')),
     isSignature: Boolean(raw.isSignature || raw.signature || tags.includes('招牌') || tags.includes('signature')),
+    isNew,
   }
 }
 
@@ -155,6 +163,9 @@ export function validateSkuLibrary(items: unknown): SkuLibraryValidationIssue[] 
 
 export function serializeSkuLibraryItem(item: SkuLibraryItem): SkuLibraryItem {
   const tags = new Set(item.tags || [])
+  const isNew = skuIsNew(item)
+  if (isNew) tags.add('新品')
+  else tags.delete('新品')
   if (item.isHotSeller) tags.add('热销品')
   if (item.isHighRepeat) tags.add('高复购品')
   if (item.isMerchantPick) tags.add('商家主推')
@@ -178,6 +189,7 @@ export function serializeSkuLibraryItem(item: SkuLibraryItem): SkuLibraryItem {
     isHighRepeat: Boolean(item.isHighRepeat),
     isMerchantPick: Boolean(item.isMerchantPick),
     isSignature: Boolean(item.isSignature),
+    isNew,
   }
 }
 
@@ -205,6 +217,7 @@ export function skuBadges(item: SkuLibraryItem) {
     item.isHighRepeat ? '高复购' : '',
     item.isMerchantPick ? '主推' : '',
     item.isSignature ? '招牌' : '',
+    item.isNew ? '新品' : '',
     item.type === 'bundle' ? '套餐' : item.type === 'service' ? '服务' : '',
   ].filter(Boolean)
 }
@@ -251,6 +264,7 @@ export function skuLibraryForLLM(items: unknown, limit = 24) {
         ? item.bundleItems
         : stringValue(item.bundleItems).split(/[、,，/]/).map(value => value.trim()).filter(Boolean),
       tags: item.tags || [],
+      isNew: Boolean(item.isNew),
       priorityLabels: [
         item.isHotSeller ? '热销品' : '',
         item.isHighRepeat ? '高复购品' : '',
@@ -278,6 +292,7 @@ export function skuContextLines(items: unknown, limit = 15) {
         item.isHighRepeat ? 'high repeat' : '',
         item.isMerchantPick ? 'merchant pick' : '',
         item.isSignature ? 'signature' : '',
+        item.isNew ? 'new product' : '',
         tags,
       ].filter(Boolean).join(', ')
       return `  - ${item.name}${price ? ` (${price})` : ''}${labels ? ` [${labels}]` : ''}${serves}${bundle}${item.description ? `: ${item.description}` : ''}`

@@ -87,6 +87,10 @@ AMCMM AI Native 的主要业务目标是：根据当前品牌资料主动从 AMC
 
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
+### SKU 新品标签（本地已实现，待发布）
+
+品牌信息的商品与服务库在“招牌”后增加“新品”复选框，适用于单品、套餐和服务，可与其他标签并存；只读商品卡展示新品徽标。新品由用户手动标记，不自动判定或到期取消，仅用于展示与 AI 识别，不增加推广分数，不改变排序或重点商品数量。保存、刷新及取消标记后的回读必须一致。数据兼容与接口契约见 [品牌知识与合规](prd_brand_knowledge_compliance.md#sku-新品标签)。
+
 ## Google 账号自动补充商家资料（已上线，2026-09-30）
 
 Google OAuth 授权与明确门店绑定、PostFast Google 账号同步完成后，自动触发持久资料导入。只读取当前品牌绑定的精确门店；多个门店必须选择，不按商家名称模糊检索。空白商家字段自动补充，商家维护的真实菜单按来源去重进入 SKU，顾客评价以注明样本范围的统计摘要展示，并与产品事实分开。已有人工资料保留；重试和账号解绑不能产生重复商品或旧绑定写入。菜单及评价取决于实际读取权限，PostFast 门店元数据不等于 Google 商家菜单/评价授权。数据来源、缺项与重试入口在 AMC 设置及 AMC-MM 商家资料中可见。品牌、门店、菜单与评价观察通过 Growth 来源快照同步，具体契约见 [品牌知识与来源](prd_brand_knowledge_compliance.md)。

@@ -1857,7 +1857,7 @@ ${storeLines}
                             </div>
                             {badges.length ? (
                               <div className="mt-1 flex flex-wrap gap-1">
-                                {badges.slice(0, 3).map(badge => (
+                                {badges.map(badge => (
                                   <span key={badge} className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">{badge}</span>
                                 ))}
                               </div>
@@ -2421,6 +2421,7 @@ ${storeLines}
                           <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isHighRepeat)} onChange={event => updateProductServiceItem(index, { isHighRepeat: event.target.checked })} /> 高复购品</label>
                           <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isMerchantPick)} onChange={event => updateProductServiceItem(index, { isMerchantPick: event.target.checked })} /> 商家主推 / 有潜力</label>
                           <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isSignature)} onChange={event => updateProductServiceItem(index, { isSignature: event.target.checked })} /> 招牌</label>
+                          <label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={Boolean(item.isNew)} onChange={event => updateProductServiceItem(index, { isNew: event.target.checked })} /> 新品</label>
                         </div>
                       </div>
                     ))}
