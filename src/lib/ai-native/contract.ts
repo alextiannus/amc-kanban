@@ -10,7 +10,8 @@ export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifac
 export type PlanningBinding={id:string;month:string;platform:string;excludeCreativeIds:string[]}
 export type DiscoveryIntent = {planningRequest?:PlanningBinding;kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;recoveryOfTaskId?:string;recoveryVersion?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type AutopilotIntent = {kind:'autopilot';runId:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent
+export type ConversationIntent = {kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
 export function actorFor(brandId:string,userId:string):NativeActor {
@@ -41,4 +42,19 @@ export function briefFrom(content:string,intent:BriefIntent){
   const value=JSON.parse(content)
   if(value.kind!=='brand_brief'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||typeof value.title!=='string'||!value.title.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest)||!/^[a-f0-9]{64}$/.test(value.operationsDigest))throw nativeError('report_evidence_invalid')
   return value as {kind:'brand_brief';brandId:string;title:string;content:string;contextDigest:string;operationsDigest:string}
+}
+
+export function conversationFrom(content:string,intent:ConversationIntent){
+  if(Buffer.byteLength(content)>32000)throw nativeError('reply_too_large')
+  const value=JSON.parse(content)
+  if(value.kind!=='conversation'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_evidence_invalid')
+  return value as {kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
+}
+export function conversationInput(body:any){
+  const history=body.history??[]
+  if(!Array.isArray(history)||history.length>20||history.some((t:any)=>!t||!['user','assistant'].includes(t.role)||typeof t.content!=='string'||t.content.length>12000))throw nativeError('invalid_conversation_history')
+  if(body.topic!==undefined&&!['general','brand_planning'].includes(body.topic))throw nativeError('invalid_conversation_topic')
+  const topic=body.topic==='brand_planning'||/品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
+  if(history.reduce((length:number,turn:{content:string})=>length+turn.content.length,0)>60000)throw nativeError('conversation_history_too_large',413)
+  return {history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'history'|'topic'>
 }
