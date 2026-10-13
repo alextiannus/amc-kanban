@@ -1,6 +1,6 @@
 # AMCMM 菜单工作区与 Assistant 页面交接
 
-状态：2026-10-14，已验证，待部署。
+状态：2026-10-14，已上线。Kanban `3750ee48`／AMCMM `ad11b95`，Render 均为 live。
 
 ## 看板设计同步
 
@@ -39,3 +39,5 @@ Kanban `ui-navigation.ts` 和 MM `assistant-navigation.ts` 使用同一页面目
 - `scripts/verify-ui-navigation-live.mts`（Kanban）使用中央真实模型，在隔离 Core schema 中验证多轮页面交接；不改真实品牌数据。
 
 已通过：全部 13 个页面 × 4 种屏宽、错误重试、资料保存与继续对话、策划会话跳转恢复、BD 页面组件、原文字／语音和策划回归、IAIC 原任务与权限回归、两端生产构建。真实模型四轮完成，隔离 schema `navigation_acceptance_f61b0d1d0caf47c990365ada744a8b32`；未提交真实品牌业务变更。
+
+生产验收：真实 AMCMM 代理对话任务 `b4793d42-f6f0-42b1-a864-c8e42af58e88`（2027-03 日历）与 `4a675bd5-48dc-4163-bd5a-09e0ef0bea2f`（设置）成功，均有完整用量、同键复用及匿名 401。任务跨前端滚动部署完成；最终 `/api/health` 确认新前端 `ad11b95` 与 Content 服务健康。线上 Skill Markdown SHA-256 与当前源一致。测试没有提交真实品牌保存、采购、内容制作或社交发布。真实用户操作衔接由实际组件＋模拟 API 验证（含个人资料保存和回到对话），不表述为已执行生产业务提交。
