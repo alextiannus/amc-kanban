@@ -43,7 +43,7 @@ const model={next:async(request:any)=>{
   if(ctx.intent.topic==='brand_planning'&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
-  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget}:{}),...(ctx.intent.planningScope?{planningDraft:{...planningDraftContract(ctx.intent.planningScope).planningDraft,expectedRevision:'0'.repeat(64)}}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
+  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget}:{}),...(ctx.intent.planningScope?{planningDraft:{...planningDraftContract(ctx.intent.planningScope).planningDraft,expectedRevision:'0'.repeat(64)}}:{}),...(ctx.intent.topic==='general'?{uiAction:{page:'calendar',mode:'open',month:'2027-03'}}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
   return {type:'finish',result:{summary:'Reply ready',artifacts:[find('my_write_workspace').result.reference]},usage}
 }}
 let app:any
@@ -65,8 +65,11 @@ try{
     const artifact=await app.workspace.read(actor,task.result.artifacts[0])
     const reply=conversationFrom(artifact.content,intent)
     assert(reply.content.length>5)
+    if(topic==='general')assert.deepEqual(reply.uiAction,{page:'calendar',mode:'open',month:'2027-03'})
     if(topic==='brand_planning'){assert.deepEqual(reply.annualBudget,budget);assert.throws(()=>conversationFrom(JSON.stringify({...reply,annualBudget:{...budget,reserve:0}}),intent),/annual_budget_unbalanced/)}
     const ctx=task.calls.find((c:any)=>c.capability==='amc.context').result
+    assert(ctx.uiCapabilities.pages.calendar)
+    assert(!ctx.uiCapabilities.pages.bd,'BD pages are absent without the current user role')
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
     assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
     const before=modelCalls

@@ -124,3 +124,5 @@ Growth 来源状态：
 按 `amc.context.artifactContract`，用 `my_write_workspace` 写 application/json 到可信 `intent.artifactPath`：
 `{"kind":"conversation","brandId":"exact trusted brandId","content":"完整自然语言回复，包含当轮问题或年度计划及简短共创进度","contextDigest":"exact amc.context.contextDigest"}`。
 有明确金额的年度计划在同一 JSON 增加 `annualBudget:{"currency":"SGD","total":36000,"months":[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],"reserve":0}`（这是结构示例，金额使用本次实际讨论值），并先用预算工具核对完全相同的数据；没有预算或尚未进入年度计划时省略此字段。返回此 artifact reference。不要把工具名、内部 digest、技术状态码写成面向品牌主的说明。不虚构业务执行成功。
+
+When the user asks to open or use an existing AMCMM function, follow `amc.context.uiCapabilities` if present and include its optional `uiAction` in the conversation artifact. Use `open` for the requested workflow, `suggest` for optional next steps. Ordinary planning discussion stays in chat. Presenting a page does not execute its save, purchase, content generation or publishing operations. External installations without this host capability should not emit invented UI links.
