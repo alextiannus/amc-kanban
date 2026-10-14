@@ -1,10 +1,12 @@
 # 品牌素材库图片分析
 
+Seed 2.1 Pro switch: local implementation, pending deployment and live analysis acceptance. Release Gateway, Content and Kanban together; update the gateway shared `.env` and publish the existing model catalog entries through `/admin`. Keep historical job IDs and policy revisions.
+
 状态：代码已实现，待迁移、配置与部署验证。仅图片，不涉及视频分析或发布。
 
 ## 行为
 
-上传后持久化入队，使用 doubao-seed-2.1-turbo；同次上传携带 analysisBatchKey，结束上传后封闭批次。独立入口的上传按单张批次处理。历史操作在服务器固定选中或全库未分析图片范围，不受页面 200 条限制。任务在服务器定时推进，刷新、关页不丢失。仅重试失败项，结果未知不自动重新收费提交。
+上传后持久化入队，使用 doubao-seed-2.1-pro；同次上传携带 analysisBatchKey，结束上传后封闭批次。独立入口的上传按单张批次处理。历史操作在服务器固定选中或全库未分析图片范围，不受页面 200 条限制。任务在服务器定时推进，刷新、关页不丢失。仅重试失败项，结果未知不自动重新收费提交。
 
 优先 Brand.industry，结合品牌介绍，不猜测身份或具体菜名。内容类型、3–7 个标签、一句说明、需人工确认标志独立保存。模型只提供建议，不直接修改 aiCategory 或 aiReady。重分析保留人工标签；用户编辑说明后不得被正在运行的分析覆盖。
 
