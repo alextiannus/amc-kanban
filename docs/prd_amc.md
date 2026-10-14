@@ -262,7 +262,7 @@ Kanban 登录后的品牌订阅门禁使用已授权品牌列表中的有效订�
     *   大视频任务从 OBS 以流式请求体直接写入 PostFast 签名地址，不得把完整文件载入 Node.js 内存，也不得压缩、转码或替换原始文件。任务保存上传后的 PostFast storage key，重试时复用已完成的传输。
     *   大视频任务状态统一为 `QUEUED -> TRANSFERRING -> CREATING_POST -> SUCCEEDED / FAILED / RESULT_UNKNOWN`。上传前的暂时性错误可重试；创建帖子请求结果不确定时必须先对账，禁止盲目重发和制造重复帖子。
 *   **AI 自动化处理：** 
-    *   **图片分析与推荐归类（代码已实现，待部署）：** 新上传图片经 Kanban → amc-content → CN-gateway 使用 `doubao-seed-2.1-turbo` 分析；Kanban 仅保留启用开关，复用已有 Content 服务连接，网关连接统一由 Content 管理，历史素材支持选中分析及全库未分析补全。优先采用品牌行业资料，逐图保存内容类型、说明及标签，汇总为推荐文件夹；用户可改名、选择已有目录、调整图片或跳过，确认后才移动素材。分析与实际目录独立，保留人工标签及发布状态。详细流程、接口和验收见 [素材库图片分析](asset-image-analysis.md)。
+    *   **图片分析与推荐归类（代码已实现，待部署）：** 新上传图片经 Kanban → amc-content → CN-gateway 使用 `doubao-seed-2.1-pro` (model switch implemented locally; deployment and live acceptance pending) 分析；Kanban 仅保留启用开关，复用已有 Content 服务连接，网关连接统一由 Content 管理，历史素材支持选中分析及全库未分析补全。优先采用品牌行业资料，逐图保存内容类型、说明及标签，汇总为推荐文件夹；用户可改名、选择已有目录、调整图片或跳过，确认后才移动素材。分析与实际目录独立，保留人工标签及发布状态。详细流程、接口和验收见 [素材库图片分析](asset-image-analysis.md)。
     *   **图片信息入口：** 图片左上角常驻半透明 `ⓘ` 按钮，悬停显示说明，点击打开可编辑详情（移动端底部面板）；多选框位于右上角，分析中显示转圈，失败显示橙色提醒和重试入口。
     *   **分类目录管理：** 产品、环境、活动及自建分类支持新增、改名、删除，普通默认分类仅初始化一次。删除目录将素材移回根目录，改名同步素材归属，不移动原文件；根目录、封面图、视频原片、AI视频等功能目录保留保护。
     *   **Designer AI 智能对话修改：** 老板可以在素材洞察面板中直接与 Designer AI 对话，输入自然语言修改指令（如“裁剪为 1:1”、“添加水印”、“黑白滤镜”、“调亮”等）。Designer AI 会自动识别意图并对图片进行精细调整，并且**默认将修改后的图片保存为新素材，不会覆盖原始图片**，确保老板的原始素材安全。
@@ -1894,6 +1894,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 - V3 的完整增长建议不受套餐限制；“当前计划内可执行”只允许使用 Kanban 根据计划和附加服务确定后传入的能力 ID，其余建议进入升级讨论。没有有效订阅时统一显示“订阅计划待确认”。报告生成不得自动创建任务、排期、ContentDraft 或发布文案。
 - 品牌用户通过 Kanban 权限查看并下载 V3 Markdown、PDF 和 JSON；不得因此获得 Growth Dashboard 权限。`ADMIN`、`AMC_PRINCIPAL` 仍可通过现有 SSO 深链进入 Growth 原报告版本。重新生成必须创建不可变的新版本并保留旧版本。
 - Kanban 的最新报告“查看”对 `ADMIN`、`AMC_PRINCIPAL` 使用 Growth SSO 深链 `/dashboard/reports/versions/:id?view=standalone`。这两个角色访问 Kanban `/dashboard/brands/:id/research-report` 时，服务端应先按品牌解析 Growth 最新 V3 版本，再自动进入同一 SSO 沉浸页；该模式继续校验 Growth Session，但不渲染后台左侧导航、账户退出、返回报告库、分享和删除，只显示封面、目录、正文以及 PDF/Markdown 下载。普通 Growth 后台报告链接保持不变；品牌用户、API Key 请求，或 Growth 查询失败且本地也缺少合法版本 ID 时仍使用 Kanban 本地报告页，不得借沉浸展示模式绕过授权或形成重定向循环。
+- 品牌主张访谈沿用品牌写权限和已保存 Growth 调研报告校验。访谈记录与 `BrandKnowledge.brandClaim` 必须在同一事务内保存，任一步失败全部回滚；访谈保存只更新这两项，不重写营销方案、调研报告或发布频率，也不因本次品牌主张更新时间变化误报创意版本冲突。营销方案编辑仍保留版本冲突保护。本项为本地修复，服务层替身回归已验证保存、回读、并发方案保留与失败回滚，待发布及生产验收。
 - Kanban 品牌计划读取报告时，`BrandKnowledge.marketingSolution.researchReport` 是当前权威值；旧 `BrandKnowledge.researchReport` 和 `brandPlan.researchReport` 仅在当前工作区没有报告时兜底，历史高级报告不得覆盖后来生成的 V3。点击“查看”统一先进入受品牌权限保护的 Kanban 报告入口；对 `ADMIN`、`AMC_PRINCIPAL`，服务端使用稳定 `growthBrandKey` 调用 Growth 报告版本接口，筛选 V3 初级报告并按生成时间打开最新不可变版本，不得从不含 `report_versions` 的任务列表推测版本号；Growth 暂不可用时才回退已保存版本或 Kanban 本地页。
 - Kanban 到 Growth 的 SSO 重定向必须使用部署配置中的公网 Origin：Kanban 为 `NEXT_PUBLIC_APP_URL`（生产缺失或误配为回环地址时固定回退 `https://amc-kanban.immedi.ai`），Growth 为 `AMC_GROWTH_URL`（缺失时回退 `https://amc-growth.immedi.ai`）。Render 内部 `localhost:10000`、`127.0.0.1`、`0.0.0.0` 或 `[::1]` 只能用于进程监听，绝不能出现在浏览器 `Location`。
 - `/api/internal/llm-generate` 只对持有内部服务令牌的调用方接受可选生成策略，包括 JSON 输出、温度、总截止时间、分次超时和最大尝试次数；调用取消必须向 Provider 传播。Provider、模型、尝试次数和耗时只进入内部响应与审计，不通过公开评估 API 暴露。

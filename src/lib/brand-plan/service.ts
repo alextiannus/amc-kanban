@@ -403,7 +403,19 @@ export async function runBrandPlanAction(input: {
     }
     const report = current.researchReport
     latestInterview = await saveMerchantInterview(brand.id, input.body, report)
-    next = { ...current, researchReport: report }
+    // An interview changes the claim, not the plan. Rewriting the workspace here
+    // would compare against the timestamp changed by our own claim save, and
+    // could also overwrite a concurrent manual plan revision.
+    return {
+      ok: true,
+      action: input.action,
+      brand: serializeBrandSummary(brand),
+      marketingSolution: current,
+      brandPlan: current,
+      merchantInterview: latestInterview,
+      merchantInterviewRequired: false,
+      merchantInterviewGuideline: buildMerchantInterviewGuideline(report),
+    }
   } else if (input.action === 'save_workspace_patch') {
     next = await saveWorkspacePatch(brand.id, current, input.body)
   } else if (input.action === 'generate_annual_plan') {
@@ -1015,33 +1027,35 @@ async function saveMerchantInterview(
   if (!rawNotes && !answers.length) {
     throw new BrandPlanError('merchant_interview_required', 400)
   }
-  const saved = await prisma.brandPlanInterview.create({
-    data: {
-      brandId,
-      rawNotes: rawNotes || answers.map((item) => `${item.question}\n${item.answer}`).join('\n\n'),
-      answers: answers.length ? answers as Prisma.InputJsonValue : undefined,
-      summary: text(body?.summary) || `已记录品牌主张访谈，后续营销方案会结合 ${report.missingQuestions.length || 0} 个待确认点。`,
-    },
-    select: {
-      id: true,
-      rawNotes: true,
-      answers: true,
-      summary: true,
-      completedAt: true,
-    },
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const saved = await tx.brandPlanInterview.create({
+      data: {
+        brandId,
+        rawNotes: rawNotes || answers.map((item) => `${item.question}\n${item.answer}`).join('\n\n'),
+        answers: answers.length ? answers as Prisma.InputJsonValue : undefined,
+        summary: text(body?.summary) || `已记录品牌主张访谈，后续营销方案会结合 ${report.missingQuestions.length || 0} 个待确认点。`,
+      },
+      select: {
+        id: true,
+        rawNotes: true,
+        answers: true,
+        summary: true,
+        completedAt: true,
+      },
+    })
+    const interview = serializeMerchantInterview(saved)
+    if (!interview) throw new BrandPlanError('merchant_interview_required', 400)
+    await tx.brandKnowledge.upsert({
+      where: { brandId },
+      update: { brandClaim: buildBrandClaimFromInterview(interview) as Prisma.InputJsonValue },
+      create: {
+        brandId,
+        negPrompts: [],
+        brandClaim: buildBrandClaimFromInterview(interview) as Prisma.InputJsonValue,
+      },
+    })
+    return interview
   })
-  const interview = serializeMerchantInterview(saved)
-  if (!interview) throw new BrandPlanError('merchant_interview_required', 400)
-  await prisma.brandKnowledge.upsert({
-    where: { brandId },
-    update: { brandClaim: buildBrandClaimFromInterview(interview) as Prisma.InputJsonValue },
-    create: {
-      brandId,
-      negPrompts: [],
-      brandClaim: buildBrandClaimFromInterview(interview) as Prisma.InputJsonValue,
-    },
-  })
-  return interview
 }
 
 async function saveWorkspacePatch(
