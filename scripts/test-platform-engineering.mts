@@ -9,9 +9,11 @@ import {encryptSecret} from '../src/lib/model-management/secrets.ts'
 import {sourcePath,validatePatch} from '../src/lib/platform-ai/engineering-policy.ts'
 import {operation} from '../src/lib/platform-ai/engineering-store.ts'
 import {prisma} from '../src/lib/prisma.ts'
+import {reconcileEngineeringTask} from '../src/lib/platform-ai/recovery.ts'
 const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
 process.env.MODEL_CONFIG_ENCRYPTION_KEY='a'.repeat(64)
 const pool=new Pool({connectionString:url.toString()}),schema='platform_test_'+randomUUID().replaceAll('-',''),user=randomUUID(),base='a'.repeat(40),sha='b'.repeat(40)
+const originalFetch=globalThis.fetch
 let app:any,taskPool:Pool|undefined,reportId='',patches=0,dispatches=0,pushes=0,reviews=0
 try{
  const template=await readFile('node_modules/@immedi/iaic-core/examples/core-platform-team/application.mjs','utf8')
@@ -22,7 +24,7 @@ try{
  await pool.query("INSERT INTO public.amc_platform_settings(id,encrypted_config) VALUES('engineering-v1',$1) ON CONFLICT(id) DO UPDATE SET encrypted_config=excluded.encrypted_config",[encryptSecret(JSON.stringify({enabled:true,githubToken:'fixture-only'}))])
  reportId=(await saveBugReport(pool,user,'fixture-brand',{goal:'/bug fixture function adds incorrectly',requestKey:randomUUID(),history:[]})).id
  await pool.query(`CREATE SCHEMA ${schema}`);taskPool=new Pool({connectionString:url.toString(),options:`-c search_path=${schema}`})
- const fakeGitHub:any={head:async()=>base,tree:async()=>['src/example.ts'],source:async()=>({path:'src/example.ts',ref:base,content:'export const add=(a,b)=>a-b'}),patch:async(_report:any,_id:any,input:any)=>{patches++;return {repo:input.repo,base,sha,branch:'fixture',testPath:'scripts/platform-regressions/'+reportId+'.test.mts'}},checks:async(_patch:any,_id:any,dispatch:boolean)=>{if(dispatch)dispatches++;return {ready:true,passed:true,runId:1,sha,conclusion:'success'}},publish:async()=>{pushes++;return {repo:'amc-mm',sha,pushed:true}}}
+ const fakeGitHub:any={head:async()=>base,tree:async()=>['src/example.ts'],source:async()=>({path:'src/example.ts',ref:base,content:'export const add=(a,b)=>a-b'}),patch:async(_report:any,_id:any,input:any)=>{patches++;if(patches===1)throw Error('fixture response lost after branch creation');return {repo:input.repo,base,sha,branch:'fixture',testPath:'scripts/platform-regressions/'+reportId+'.test.mts'}},checks:async(_patch:any,_id:any,dispatch:boolean)=>{if(dispatch)dispatches++;return {ready:true,passed:true,runId:1,sha,conclusion:'success'}},publish:async()=>{pushes++;return {repo:'amc-mm',sha,pushed:true}}}
  const capabilities=engineeringCapabilities(pool,()=>app,{github:()=>fakeGitHub,review:async()=>{reviews++;return {verdict:'no_findings',findings:'Fixture independent review',usage:{input_tokens:4,output_tokens:2}}},deployed:async()=>({ready:true,sha,origin:'fixture'})})
  const modelFactory=()=>({next:async({messages}:any)=>{
   const c=JSON.parse(messages[1].content),calls=c.calls.filter((call:any)=>call.status==='succeeded'),find=(name:string)=>calls.find((call:any)=>call.capability==='engineering.'+name)?.result
@@ -44,7 +46,16 @@ try{
  const receipt=await app.dispatcher.invoke('platform.team.request',request,{actor:PLATFORM_ACTOR,callId:'fixture-request'})
  assert.equal((await app.dispatcher.invoke('platform.team.request',request,{actor:PLATFORM_ACTOR,callId:'fixture-retry'})).task.id,receipt.task.id)
  // Intentionally do not write task_id; first trusted tool must recover the report binding.
- for(let i=0;i<20;i++){await app.runtime.tick();const state=await app.runtime.state(PLATFORM_ACTOR,receipt.task.id);if(state.status==='succeeded')break;if(['failed','paused','waiting'].includes(state.status))console.log('STATE',state.status,state.waiting_reason)}
+ let reconciled=false
+ for(let i=0;i<20;i++){
+  await app.runtime.tick();const state=await app.runtime.state(PLATFORM_ACTOR,receipt.task.id)
+  if(state.status==='succeeded')break
+  if(state.status==='waiting'&&state.waiting_reason==='external_result'){
+   globalThis.fetch=async(url:any,options:any)=>{assert.equal(options.method,'GET','recovery only reads the original provider effect');assert(String(url).includes('/git/ref/heads/amc-platform/'));return Response.json({object:{sha}})}
+   try{assert.equal(await reconcileEngineeringTask(pool,app,reportId,receipt.task.id),'recovered');reconciled=true}finally{globalThis.fetch=originalFetch}
+  }
+ }
+ assert(reconciled,'actual Core unknown-call state was reconciled using the original branch')
  const terminal=await app.runtime.get(PLATFORM_ACTOR,receipt.task.id,{history:true})
  if(terminal.status!=='succeeded')console.log(JSON.stringify({status:terminal.status,events:terminal.events,calls:terminal.calls.map((c:any)=>({name:c.capability,status:c.status,error:c.error}))}))
  assert.equal(terminal.status,'succeeded');assert.equal((await readBugReport(pool,user,'fixture-brand',reportId)).status,'fixed')
@@ -56,5 +67,5 @@ try{
  assert.equal(attempts,1);assert(recovered.recovered)
  console.log('PASS real IAIC TaskStore/Runtime, native identity, receipt retry/index recovery, bound source/patch/test/review/publish flow, Core PeerReviews and independent usage. GitHub, deployment and models are deterministic test adapters.')
 }finally{
- await app?.close();await taskPool?.end();await pool.query('DELETE FROM public.amc_platform_operations WHERE report_id=$1',[reportId||randomUUID()]);await pool.query('DELETE FROM public.amc_bug_reports WHERE user_id=$1',[user]);await pool.query("DELETE FROM public.amc_platform_settings WHERE id='engineering-v1'");await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await pool.end();await prisma.$disconnect()
+ globalThis.fetch=originalFetch;await app?.close();await taskPool?.end();await pool.query('DELETE FROM public.amc_platform_operations WHERE report_id=$1',[reportId||randomUUID()]);await pool.query('DELETE FROM public.amc_bug_reports WHERE user_id=$1',[user]);await pool.query("DELETE FROM public.amc_platform_settings WHERE id='engineering-v1'");await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await pool.end();await prisma.$disconnect()
 }

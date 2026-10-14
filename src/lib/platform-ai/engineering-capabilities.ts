@@ -106,7 +106,9 @@ export function engineeringCapabilities(pool:Pool,getTeam:()=>any,ports:{github?
         if(recover)throw Error('review_inference_outcome_unknown')
         const gh=await client(),before=await Promise.all(patch.input.files.map(async(file:any)=>{try{return await gh.source(patch.input.repo,patch.input.base,file.path)}catch(error){if((error as {status?:number}).status===404)return {path:file.path,content:null};throw error}}))
         const reportRow=(await pool.query('SELECT evidence FROM public.amc_bug_reports WHERE id=$1',[input.reportId])).rows[0]
-        const assessment=await (ports.review||reviewPatch)({reportedProblem:reportRow.evidence.description,before,patch:patch.input,checks})
+        const prior=(await pool.query("SELECT result FROM public.amc_platform_operations WHERE report_id=$1 AND action='review' AND result IS NOT NULL ORDER BY created_at DESC LIMIT 5",[input.reportId])).rows
+        const previousReviews=prior.map(row=>({verdict:row.result.verdict,findings:row.result.findings,patchOperationId:row.result.patchOperationId}))
+        const assessment=await (ports.review||reviewPatch)({reportedProblem:reportRow.evidence.description,before,patch:patch.input,checks,previousReviews})
         return {...assessment,patchOperationId:patch.id,checkOperationId:check.id,artifact:artifact.reference}
       })
       await team.reviews.record(REVIEW_ACTOR,{id:result.operationId,target:result.artifact,verdict:result.verdict,findings:result.findings})
