@@ -1,3 +1,5 @@
+import {laneCursors,nextLaneCursor} from './runtime-routing'
+import {activeConversationStatus,wakeConversationWorker} from './conversation-status'
 import {conversationProgress,conversationInsight} from './conversation-progress'
 import {savePlanningDraft} from './planning-workspace-save'
 import {assertUsageSettled} from './model-guards'
@@ -13,60 +15,76 @@ import type { Application, ArtifactReference, TaskView } from '@immedi/iaic-core
 import type { Pool } from 'pg'
 import { composeApplication, requireActor, type WorkspacePort } from './application'
 import { centralModels } from './models'
-import { nativePool, initializeHost, admitIntent, intentBy, intentForTask, type PublicTaskIndex } from './store'
+import { nativePool, initializeHost, admitIntent, intentBy, intentForTask, type PublicTaskIndex, type RuntimeLane } from './store'
 import { conversationFrom, conversationInput, actorFor, dailyActorFor, candidateFrom, briefFrom, digest, nativeError, requestKey, USAGE_POLICY, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
 import { readCreativeRevisions, saveCreativeRevision } from '../brand-plan/creativeRevisions'
 import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
 
-type Host={pool:Pool;app:Application;tools:string[];modelRevision:number}
-const globalState=globalThis as typeof globalThis & {amcNativeHost?:Promise<Host>;amcNativeStartup?:boolean;amcNativeError?:string;amcNativeStopping?:boolean}
-export async function getNativeHost(start=true):Promise<Host>{
-  if(!globalState.amcNativeHost)globalState.amcNativeHost=(async()=>{
-    const pool=nativePool()
+type Host={pool:Pool;taskPool?:Pool;lane?:RuntimeLane;app:Application;tools:string[];modelRevision:number}
+const globalState=globalThis as typeof globalThis & {amcNativeHost?:Promise<Host>;amcConversationHost?:Promise<Host>;amcNativeStartup?:boolean;amcNativeError?:string;amcNativeStopping?:boolean}
+const hostKey=(lane:RuntimeLane)=>lane==='conversation'?'amcConversationHost' as const:'amcNativeHost' as const
+async function closeHostPools(host:Host){if(host.taskPool)await host.taskPool.end();await host.pool.end()}
+export async function getNativeHost(start=true,lane:RuntimeLane='default'):Promise<Host>{
+  const key=hostKey(lane)
+  if(!globalState[key])globalState[key]=(async()=>{
+    const pool=nativePool(),taskPool=lane==='conversation'?nativePool(process.env.DATABASE_URL,'conversation'):undefined
     try{
-      await initializeHost(pool)
       const lock=await pool.connect()
       try{
         await lock.query("SELECT pg_advisory_lock(hashtextextended('amc-iaic-initialize',0))")
-        const models=await centralModels(),{app,tools}=await composeApplication(pool,models)
+        await initializeHost(pool)
+        if(taskPool)await pool.query('CREATE SCHEMA IF NOT EXISTS amc_iaic_conversation')
+        const models=await centralModels(),{app,tools}=await composeApplication(pool,models,{taskPool})
         if(start)app.start()
         else await app.runtime.drain({timeoutMs:0})
-        return {pool,app,tools,modelRevision:Number(models.profiles[0].id.replace('central-',''))}
+        return {pool,taskPool,lane,app,tools,modelRevision:Number(models.profiles[0].id.replace('central-',''))}
       }finally{await lock.query("SELECT pg_advisory_unlock(hashtextextended('amc-iaic-initialize',0))");lock.release()}
-    }catch(e){await pool.end();throw e}
-  })().catch(e=>{globalState.amcNativeHost=undefined;globalState.amcNativeError='ai_runtime_unavailable';throw e})
-  return globalState.amcNativeHost
+    }catch(e){if(taskPool)await taskPool.end();await pool.end();throw e}
+  })().catch(e=>{globalState[key]=undefined;globalState.amcNativeError='ai_runtime_unavailable';throw e})
+  return globalState[key]!
 }
 export function startNativeWorker(){
   if(globalState.amcNativeStartup)return
   globalState.amcNativeStartup=true
-  let checking=false
-  const maintain=async()=>{
-    if(checking||globalState.amcNativeStopping)return
-    checking=true
+  const checking=new Set<RuntimeLane>()
+  const maintain=async(lane:RuntimeLane)=>{
+    if(checking.has(lane)||globalState.amcNativeStopping)return
+    checking.add(lane)
     try{
-      const host=await getNativeHost(),current=await runtimeConfig()
+      const host=await getNativeHost(true,lane),current=await runtimeConfig()
       if(current.version!==host.modelRevision){
         const result=await host.app.runtime.drain({timeoutMs:20000})
-        if(result.drained){await host.pool.end();globalState.amcNativeHost=undefined;await getNativeHost()}
+        if(result.drained){await closeHostPools(host);globalState[hostKey(lane)]=undefined;await getNativeHost(true,lane)}
       }
-    }catch(e){console.error('[amc-ai] host unavailable',e instanceof Error?e.name:'unknown')}finally{checking=false}
+    }catch(e){console.error('[amc-ai] host unavailable',lane,e instanceof Error?e.name:'unknown')}finally{checking.delete(lane)}
   }
-  void maintain()
-  const timer=setInterval(()=>void maintain(),60000);timer.unref()
-  process.once('SIGTERM',()=>{globalState.amcNativeStopping=true;clearInterval(timer);void (async()=>{if(!globalState.amcNativeHost)return;const host=await globalState.amcNativeHost.catch(()=>null);if(host){const result=await host.app.runtime.drain({timeoutMs:20000});if(result.drained)await host.pool.end()}})()})
+  const maintainAll=()=>{void maintain('default');void maintain('conversation')}
+  maintainAll()
+  const timer=setInterval(maintainAll,60000);timer.unref()
+  process.once('SIGTERM',()=>{globalState.amcNativeStopping=true;clearInterval(timer);void Promise.allSettled((['default','conversation'] as const).map(async lane=>{const pending=globalState[hostKey(lane)];if(!pending)return;const host=await pending.catch(()=>null);if(host){const result=await host.app.runtime.drain({timeoutMs:20000});if(result.drained)await closeHostPools(host)}}))})
 }
 async function authorizedHost(userId:string,brandId:string,daily=false){const actor=daily?dailyActorFor(brandId,userId):actorFor(brandId,userId);await requireActor(actor);return {actor,...await getNativeHost()}}
 async function taskHost(userId:string,brandId:string,id:string){
- const host=await authorizedHost(userId,brandId)
+ let host=await authorizedHost(userId,brandId)
  if(!/^[0-9a-f-]{36}$/i.test(id))throw nativeError('task_not_found',404)
- const daily=(await host.pool.query("SELECT 1 FROM amc_ai_requests WHERE task_id=$1 AND subject_id=$2 AND intent->>'brandId'=$3 AND intent->>'automaticDaily'='true'",[id,userId,brandId])).rowCount
- if(daily){const actor=dailyActorFor(brandId,userId);await requireActor(actor);return {...host,actor}}
+ const row=(await host.pool.query("SELECT runtime_lane,intent->>'automaticDaily' AS daily FROM amc_ai_requests WHERE task_id=$1 AND subject_id=$2 AND intent->>'brandId'=$3",[id,userId,brandId])).rows[0]
+ if(row?.runtime_lane==='conversation')host={...host,...await getNativeHost(true,'conversation')}
+ else if(!row){
+   // Recover accepted conversation tasks whose application index update was lost.
+   const conversation=await getNativeHost(true,'conversation')
+   try{await (conversation.app.tasks as PublicTaskIndex).get(host.actor,id);host={...host,...conversation}}catch(error){if((error as {statusCode?:number}).statusCode!==404)throw error}
+ }
+ if(row?.daily==='true'){const actor=dailyActorFor(brandId,userId);await requireActor(actor);return {...host,actor}}
  return host
 }
 export async function createNativeTask(userId:string,brandId:string,body:any,automaticDaily=false,autopilotRunId?:string,planningRequest?:import('./contract').PlanningBinding){
-  const {actor,pool,app,tools,modelRevision}=await authorizedHost(userId,brandId,automaticDaily)
+  let host=await authorizedHost(userId,brandId,automaticDaily)
+  if(body?.kind==='conversation'){
+    let prior;try{prior=await intentBy(host.pool,host.actor,'request_key',requestKey(body.requestKey))}catch(error){if((error as {statusCode?:number}).statusCode!==404)throw error}
+    if(!prior||prior.runtime_lane==='conversation')host={...host,...await getNativeHost(true,'conversation')}
+  }
+  const {actor,pool,app,tools,modelRevision}=host
   // A rolling-deploy standby can admit durable interactive work, but automatic
   // tasks must wait until this process owns the sole Core executor. Otherwise
   // the retiring executor can claim a new-version task and pause it immediately.
@@ -111,10 +129,13 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     if(current.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
   }
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
-  const row=await admitIntent(pool,actor,intent)
+  const row=await admitIntent(pool,actor,intent,host.lane||'default')
+  if((row.runtime_lane||'default')!==(host.lane||'default'))return createNativeTask(userId,brandId,body,automaticDaily,autopilotRunId,planningRequest)
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':intent.kind==='conversation'?'':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
-  return publicTask(app,actor,receipt.id)
+  const task=await publicTask(app,actor,receipt.id)
+  if(intent.kind==='conversation')wakeConversationWorker(app)
+  return task
 }
 async function publicTask(app:Application,actor:NativeActor,id:string){
   return projectTask({...await app.runtime.state(actor,id),result:null,inputRequest:null,trusted_context:null})
@@ -124,17 +145,26 @@ function projectTask(task:TaskView){
 }
 export async function listNativeTasks(userId:string,brandId:string,cursor?:string){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
-  const page=await app.dispatcher.invoke('tasks.list',{limit:20,...(cursor?{cursor}:{})},{actor})
-  const listing=page as {items:Array<{id:string}>;nextCursor:string|null}
-  const items=await Promise.all(listing.items.map(async item=>{try{const row=await intentForTask(pool,app,actor,item.id);return {...item,goal:row.intent.goal,kind:row.intent.kind,creativeId:row.intent.kind==='creative'?row.intent.creativeId:null}}catch{return item}}))
+  const cursors=laneCursors(cursor)
+  const readPage=async(lane:RuntimeLane)=>{
+    if(cursors[lane]===null)return {items:[],nextCursor:null}
+    const selected=lane==='default'?{app,pool}:await getNativeHost(true,lane)
+    const page=await selected.app.dispatcher.invoke('tasks.list',{limit:20,...(cursors[lane]?{cursor:cursors[lane]}:{})},{actor}) as {items:Array<{id:string}>;nextCursor:string|null}
+    const items=await Promise.all(page.items.map(async item=>{const row=await intentForTask(selected.pool,selected.app,actor,item.id);return {...item,createdAt:row.created_at,goal:row.intent.goal,kind:row.intent.kind,creativeId:row.intent.kind==='creative'?row.intent.creativeId:null}}))
+    return {items,nextCursor:page.nextCursor}
+  }
+  const [background,conversation]=await Promise.all([readPage('default'),readPage('conversation')])
+  const items=[...background.items,...conversation.items]
+  const listing={nextCursor:nextLaneCursor({default:background.nextCursor,conversation:conversation.nextCursor})}
   if(!cursor){
     const dailyActor=dailyActorFor(brandId,userId)
     try{
       await requireActor(dailyActor)
       const daily=await app.dispatcher.invoke('tasks.list',{limit:20},{actor:dailyActor}) as {items:Array<{id:string}>}
-      for(const item of daily.items){const row=await intentForTask(pool,app,dailyActor,item.id);items.push({...item,goal:'每日自动策划 · '+row.intent.goal,kind:row.intent.kind,creativeId:null} as any)}
+      for(const item of daily.items){const row=await intentForTask(pool,app,dailyActor,item.id);items.push({...item,createdAt:row.created_at,goal:'每日自动策划 · '+row.intent.goal,kind:row.intent.kind,creativeId:null} as any)}
     }catch{/* A normal brand collaborator need not have principal delegation. */}
   }
+  items.sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime())
   return {page:{...listing,items},coreVersion:CORE_VERSION,limits:USAGE_POLICY}
 }
 // Status/control must remain available when Core refuses stale source or Skill revisions.
@@ -148,8 +178,18 @@ export async function nativeTaskHistory(app:Application,actor:NativeActor,id:str
   }
 }
 export async function readNativeTask(userId:string,brandId:string,id:string){
-  const {actor,app,pool}=await taskHost(userId,brandId,id)
-  const row=await intentForTask(pool,app,actor,id),view=await nativeTaskHistory(app,actor,id),history=view.history,task=projectTask(history)
+  const host=await taskHost(userId,brandId,id)
+  const row=await intentForTask(host.pool,host.app,host.actor,id)
+  return readNativeTaskResult(host,userId,brandId,id,row)
+}
+export async function readNativeTaskStatus(userId:string,brandId:string,id:string){
+  const host=await taskHost(userId,brandId,id)
+  const row=await intentForTask(host.pool,host.app,host.actor,id)
+  return await activeConversationStatus(host.app,host.actor,id,row.intent.kind)||readNativeTaskResult(host,userId,brandId,id,row)
+}
+async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
+  const view=await nativeTaskHistory(app,actor,id),history=view.history,task=projectTask(history)
+  // Read usage after the result snapshot: otherwise completion can race an earlier pending ledger read.
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
   let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null
   if(task.status==='succeeded'&&task.result){

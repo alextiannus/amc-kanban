@@ -1,3 +1,5 @@
+import {activeConversationStatus,wakeConversationWorker} from '../src/lib/ai-native/conversation-status.ts'
+import {getBrandPlan,getBrandPlanningContext} from '../src/lib/brand-plan/service.ts'
 import {planningDraftContract} from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {checkPlanningBudget} from '../src/lib/ai-native/planning-budget.ts'
 import assert from 'node:assert/strict'
@@ -64,9 +66,16 @@ try{
     const receipt=await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal((await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})).id,receipt.id)
     await intentForTask(pool,app,actor,receipt.id)
+    const sourceCount=insightReads
+    const active=await activeConversationStatus(app,actor,receipt.id,'conversation')
+    assert.equal(active?.status,'queued');assert.equal(insightReads,sourceCount,'status does not read/revalidate source bundles')
+    await assert.rejects(()=>activeConversationStatus(app,actorFor('other-brand',id),receipt.id,'conversation'))
+    wakeConversationWorker(app)
+    wakeConversationWorker(app) // Core coalesces concurrent wakeups, preserving one executor.
     for(let i=0;i<20&&['queued','running'].includes((await app.runtime.state(actor,receipt.id)).status);i++)await app.runtime.tick()
     const task=await app.runtime.get(actor,receipt.id,{history:true})
     assert.equal(task.status,'succeeded',JSON.stringify(task))
+    assert.equal(await activeConversationStatus(app,actor,receipt.id,'conversation'),null,'completed tasks require the full validated result')
     const artifact=await app.workspace.read(actor,task.result.artifacts[0])
     const reply=conversationFrom(artifact.content,intent)
     assert(reply.content.length>5)
@@ -91,6 +100,10 @@ try{
   assert.equal(insightReads,6,'four legacy turns plus one shared session load and one revision invalidation')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
+  await prisma.brandPlanInterview.create({data:{brandId:id,rawNotes:'访谈原始记录',answers:[{question:'目标',answer:'家庭聚餐'}]}})
+  await prisma.brandKnowledge.update({where:{brandId:id},data:{brandPlan:{coCreation:{focus:'legacy focus'}},researchReport:{summary:'Saved evidence'}}})
+  const narrow=await getBrandPlanningContext(id),full=await getBrandPlan(id)
+  for(const key of ['marketingSolution','marketingSolutionRevision','brandClaim','merchantInterview'])assert.deepEqual((narrow as any)[key],(full as any)[key],'narrow query preserves '+key)
   const savedWorkspace=await readMarketingWorkspace(actor)
   assert.equal((savedWorkspace.workspace as any).annualPlan.goal,'延续已保存目标')
   assert.equal((savedWorkspace.workspace as any).brandClaim.focus,'家庭聚餐')

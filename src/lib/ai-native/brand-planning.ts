@@ -1,6 +1,6 @@
 import {planningRevision} from './planning-workspace-contract'
 import { prisma } from '../prisma'
-import {getBrandPlan} from '../brand-plan/service'
+import {getBrandPlanningContext} from '../brand-plan/service'
 import { findLatestGrowthV3ReportReference, readGrowthReportArtifact } from '../growthDataCenter'
 import { brandFor, type NativeActor } from './contract'
 
@@ -69,7 +69,7 @@ export function projectSavedAnnualPlan(value:unknown){
 /** Shared persisted planning data; caller authorizes, brand identity is never model supplied. */
 export async function readMarketingWorkspace(actor:NativeActor){
   const brandId=brandFor(actor)
-  const workspace=await getBrandPlan(brandId)
+  const workspace=await getBrandPlanningContext(brandId)
   if(!workspace)return {brandId,status:'missing' as const,revision:planningRevision({}),workspace:null}
   const sections={coCreation:record(workspace.marketingSolution).coCreation||null,merchantInterview:workspace.merchantInterview,brandClaim:workspace.brandClaim||null,annualPlan:workspace.marketingSolution.annualPlan||null}
   // Per-section budgets keep long interviews from hiding existing quarterly plans.

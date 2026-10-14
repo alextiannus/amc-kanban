@@ -2,9 +2,10 @@ import type { Application } from '@immedi/iaic-core/developer/templates/agent/ap
 import { Pool } from 'pg'
 import { isDailyActor, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
 
-export function nativePool(connectionString=process.env.DATABASE_URL){
+export type RuntimeLane='default'|'conversation'
+export function nativePool(connectionString=process.env.DATABASE_URL,lane:RuntimeLane='default'){
   if(!connectionString)throw nativeError('database_unavailable',503)
-  return new Pool({connectionString,max:8,connectionTimeoutMillis:10000,idleTimeoutMillis:30000,options:'-c search_path=amc_iaic -c statement_timeout=30000'})
+  return new Pool({connectionString,max:8,connectionTimeoutMillis:10000,idleTimeoutMillis:30000,options:`-c search_path=${lane==='conversation'?'amc_iaic_conversation':'amc_iaic'} -c statement_timeout=30000`})
 }
 export async function initializeHost(pool:Pool){
   await pool.query('CREATE SCHEMA IF NOT EXISTS amc_iaic')
@@ -18,9 +19,10 @@ export async function initializeHost(pool:Pool){
     request_key text NOT NULL, digest text NOT NULL, intent jsonb NOT NULL,
     allowance integer NOT NULL, task_id uuid, created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE(scope_id,subject_id,request_key));
-    CREATE INDEX IF NOT EXISTS amc_ai_requests_daily ON amc_ai_requests(subject_id,created_at);`)
+    CREATE INDEX IF NOT EXISTS amc_ai_requests_daily ON amc_ai_requests(subject_id,created_at);
+    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS runtime_lane text NOT NULL DEFAULT 'default';`)
 }
-export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeIntent){
+export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeIntent,lane:RuntimeLane='default'){
   const id=digest([actor.scopeId,actor.subjectId,intent.requestKey]),hash=digest(intent)
   const c=await pool.connect()
   try{
@@ -29,14 +31,14 @@ export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeInten
     await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['amc-ai-admission:'+(autopilot?`autopilot:${intent.brandId}`:isDailyActor(actor)?actor.scopeId:actor.subjectId)])
     const old=(await c.query('SELECT * FROM amc_ai_requests WHERE id=$1',[id])).rows[0]
     if(old){if(old.digest!==hash)throw nativeError('request_key_reused',409);await c.query('COMMIT');return old}
-    const row=(await c.query('INSERT INTO amc_ai_requests(id,scope_id,subject_id,request_key,digest,intent,allowance) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[id,actor.scopeId,actor.subjectId,intent.requestKey,hash,JSON.stringify(intent),0])).rows[0]
+    const row=(await c.query('INSERT INTO amc_ai_requests(id,scope_id,subject_id,request_key,digest,intent,allowance,runtime_lane) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[id,actor.scopeId,actor.subjectId,intent.requestKey,hash,JSON.stringify(intent),0,lane])).rows[0]
     await c.query('COMMIT');return row
   }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
 export async function intentBy(pool:Pool,actor:NativeActor,field:'id'|'request_key'|'task_id',value:string){
   const row=(await pool.query(`SELECT * FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND ${field}=$3`,[actor.scopeId,actor.subjectId,value])).rows[0]
   if(!row)throw nativeError('task_not_found',404)
-  return row as {id:string;digest:string;intent:NativeIntent;task_id:string|null;request_key:string;allowance:number}
+  return row as {id:string;digest:string;intent:NativeIntent;task_id:string|null;request_key:string;allowance:number;runtime_lane:RuntimeLane;created_at:Date}
 }
 
 // Recover the application index from Core's public binding after an accepted

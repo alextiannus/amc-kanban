@@ -349,6 +349,16 @@ export async function loadBrandPlanBrand(brandId: string) {
   })
 }
 
+/** Assistant source read: preserve the same workspace projection without dashboard joins. */
+export async function getBrandPlanningContext(brandId: string) {
+  const brand=await prisma.brand.findUnique({where:{id:brandId},select:{
+    knowledge:{select:{brandPlan:true,marketingSolution:true,researchReport:true,brandClaim:true}},
+    brandPlanInterviews:{select:{id:true,rawNotes:true,answers:true,summary:true,completedAt:true},orderBy:{completedAt:'desc'},take:1},
+  }})
+  if(!brand)return null
+  return {marketingSolution:readMarketingSolutionWorkspace(brand),marketingSolutionRevision:planningRevision(brand.knowledge?.marketingSolution),brandClaim:brand.knowledge?.brandClaim||null,merchantInterview:serializeMerchantInterview(brand.brandPlanInterviews[0])}
+}
+
 export async function getBrandPlan(brandId: string) {
   const brand = await loadBrandPlanBrand(brandId)
   if (!brand) return null
@@ -3606,7 +3616,7 @@ function serializeBrandSummary(brand: BrandPlanBrand) {
   }
 }
 
-function readMarketingSolutionWorkspace(brand: BrandPlanBrand): BrandPlanWorkspaceData {
+function readMarketingSolutionWorkspace(brand: {knowledge:{brandPlan:unknown;marketingSolution:unknown;researchReport:unknown}|null}): BrandPlanWorkspaceData {
   const legacyWorkspace = normalizeBrandPlan(brand.knowledge?.brandPlan)
   const marketingSolution = normalizeBrandPlan(brand.knowledge?.marketingSolution)
   const researchReport = normalizeResearchReport(marketingSolution.researchReport)
