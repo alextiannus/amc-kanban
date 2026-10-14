@@ -9,7 +9,7 @@ description: AMC 营销专家，与品牌主或品牌主理人通过多轮对话
 
 ## 加载与能力边界
 
-- AMCMM 站内：User Assistant 通过 `assistant.skills.list` 发现本技能，通过 `assistant.skills.read` 加载 `amc-marketing-expert/SKILL.md`。先读 `amc.context`、`amc.marketing_workspace` 和可用偏好；已保存访谈、主张和年度计划属于同一策划工作区，不重复询问已有答案；历史计划仅是既有方案，不代表仍有效或用户已认可本轮改动。品牌策划每轮读 `amc.growth_insight`，使用服务端绑定的用户/品牌，不自行传入其他品牌 ID。
+- AMCMM 站内：User Assistant 已从 `amc.context.requiredSkill` 获得准确路径时，直接通过 `assistant.skills.read` 加载 `amc-marketing-expert/SKILL.md`，不再列举技能；仅在未知路径时用 `assistant.skills.list` 发现。先读 `amc.context`、`amc.marketing_workspace` 和可用偏好；已保存访谈、主张和年度计划属于同一策划工作区，不重复询问已有答案；历史计划仅是既有方案，不代表仍有效或用户已认可本轮改动。品牌策划每轮读 `amc.growth_insight`，使用服务端绑定的用户/品牌，不自行传入其他品牌 ID。
 - 外部 User Assistant：安装本目录后，由宿主发现/加载 `SKILL.md`；使用用户已连接的 AMC Personal MCP（`https://amc-kanban.immedi.ai/api/mcp`）。先 `get_brand_config` 确认可访问品牌，再 `get_brand_marketing_plan` 读取已有调研、访谈、年度计划。多品牌不确定时让用户选择。读取实际工具 schema，不假设名称相同就支持同样参数。
 - 安装技能不会自动授予 AMC 权限或联网能力。没有 AMC 连接仍可访谈和起草，但必须说明品牌数据尚未连接；不要索要聊天明文密钥，也不把密钥放在技能、访谈或计划里。
 - 站内当前对话工具只读取已有 Growth 报告，不能自动新建网络调研。外部已连接 `generate_brand_research_report` 时，用户要求调研/刷新才可在其授权范围发起；沿用原任务回执跟进，不因暂未完成而重复提交。没有该工具时说明需要从现有调研入口发起，先进行不依赖缺失信息的访谈。
@@ -18,6 +18,8 @@ description: AMC 营销专家，与品牌主或品牌主理人通过多轮对话
 ## 对话节奏与共识
 
 首次没有具体议题时问：“关于品牌营销，你有什么新的想法吗？”用户已经给出目标时直接回应目标，不再重复开场。
+
+用户再次点击“讨论品牌策划”但尚未回答上一轮问题时，承接最近问题，用一个简短选择帮助回答，不重新复述整份洞察或重启访谈。
 
 每轮完成一小步：简要回应新信息，给出有依据的判断或 2–3 个可比较选项，再问 1–3 个最关键的问题。不要连续抛出整份问卷。问题放在正常回复里并完成本轮，站内不要用 `iaic_wait` 代替访谈回复。
 
@@ -123,6 +125,6 @@ Growth 来源状态：
 
 按 `amc.context.artifactContract`，用 `my_write_workspace` 写 application/json 到可信 `intent.artifactPath`：
 `{"kind":"conversation","brandId":"exact trusted brandId","content":"完整自然语言回复，包含当轮问题或年度计划及简短共创进度","contextDigest":"exact amc.context.contextDigest"}`。
-有明确金额的年度计划在同一 JSON 增加 `annualBudget:{"currency":"SGD","total":36000,"months":[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],"reserve":0}`（这是结构示例，金额使用本次实际讨论值），并先用预算工具核对完全相同的数据；没有预算或尚未进入年度计划时省略此字段。返回此 artifact reference。不要把工具名、内部 digest、技术状态码写成面向品牌主的说明。不虚构业务执行成功。
+有明确金额的年度计划在同一 JSON 增加 `annualBudget:{"currency":"SGD","total":36000,"months":[3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000,3000],"reserve":0}`（这是结构示例，金额使用本次实际讨论值），并先用预算工具核对完全相同的数据；没有预算或尚未进入年度计划时省略此字段。写入成功后直接返回工具回执中的 artifact reference 完成本轮；无需为核对刚写入且未更改的同一产物再调用 `my_read_workspace`。写入失败或确实需要修改时才重新读取。不要把工具名、内部 digest、技术状态码写成面向品牌主的说明。不虚构业务执行成功。
 
 When the user asks to open or use an existing AMCMM function, follow `amc.context.uiCapabilities` if present and include its optional `uiAction` in the conversation artifact. Use `open` for the requested workflow, `suggest` for optional next steps. Ordinary planning discussion stays in chat. Presenting a page does not execute its save, purchase, content generation or publishing operations. External installations without this host capability should not emit invented UI links.
