@@ -1,5 +1,5 @@
 import {isUiPage,parseUiAction,type UiAction,type UiPage} from './ui-navigation'
-import {planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
+import {PLANNING_STAGES,planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
 import {checkPlanningBudget,type PlanningBudget} from './planning-budget'
 import { createHash } from 'node:crypto'
 import { validateCreativePatch } from '../brand-plan/creativeRevisionContract'
@@ -60,10 +60,19 @@ export function conversationFrom(content:string,intent:ConversationIntent){
       if(ordinal&&ordinal!==intent.planningScope.quarter!+1)throw nativeError(`planning_reply_requires_annual_quarter_${intent.planningScope.quarter!+1}`)
     }
   }
+  if(value.planningProgress!==undefined){
+    const p=value.planningProgress
+    if(intent.topic!=='brand_planning'||!p||Array.isArray(p)||typeof p!=='object'||Object.keys(p).some(k=>!['stage','summary'].includes(k))||!PLANNING_STAGES.includes(p.stage)||typeof p.summary!=='string'||!p.summary.trim()||p.summary.length>500)throw nativeError('invalid_planning_progress')
+    if(intent.planningScope&&p.stage!==intent.planningScope.stage)throw nativeError('planning_progress_scope_mismatch')
+  }
   if(value.uiAction!==undefined)value.uiAction=parseUiAction(value.uiAction)
-  if(value.suggestedReplies!==undefined&&(!Array.isArray(value.suggestedReplies)||value.suggestedReplies.length>3||value.suggestedReplies.some((s:unknown)=>typeof s!=='string'||!s.trim()||s.length>200)))throw nativeError('invalid_suggested_replies')
+  if(value.suggestedReplies!==undefined){
+    if(!Array.isArray(value.suggestedReplies)||value.suggestedReplies.some((s:unknown)=>typeof s!=='string'||!s.trim()||s.length>200))throw nativeError('invalid_suggested_replies')
+    // Display normalization only: do not spend another model turn rewriting a valid reply for a fourth chip.
+    value.suggestedReplies=[...new Set((value.suggestedReplies as string[]).map(s=>s.trim()))].slice(0,3)
+  }
   if(value.annualBudget&&!checkPlanningBudget(value.annualBudget).balanced)throw nativeError('annual_budget_unbalanced')
-  return value as {uiAction?:UiAction;suggestedReplies?:string[];planningDraft?:PlanningDraft;annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
+  return value as {planningProgress?:{stage:PlanningScope['stage'];summary:string};uiAction?:UiAction;suggestedReplies?:string[];planningDraft?:PlanningDraft;annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
 }
 export function conversationInput(body:any){
   if(body.currentPage!==undefined&&!isUiPage(body.currentPage))throw nativeError('invalid_current_page')

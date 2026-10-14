@@ -17,3 +17,18 @@ assert.equal(conversationProgress('running',[{capability:'my_write_workspace',st
 assert.equal(conversationProgress('running',[],true).stage,'checking')
 assert.equal(conversationProgress('succeeded',[]).stage,'complete')
 console.log('PASS: factual progress and deduplicated non-mutating conversation context')
+
+const {conversationFrom}=await import('../src/lib/ai-native/contract.ts')
+const intent={kind:'conversation' as const,topic:'brand_planning' as const,brandId:'brand',userId:'user',history:[],goal:'Discuss',artifactPath:'work/test.json',requestKey:'key'}
+const reply={kind:'conversation',brandId:'brand',content:'Which direction?',contextDigest:'0'.repeat(64)}
+const parse=(extra:Record<string,unknown>)=>conversationFrom(JSON.stringify({...reply,...extra}),intent)
+assert.equal(parse({}).planningProgress,undefined,'old replies remain readable')
+assert.deepEqual(parse({planningProgress:{stage:'interview',summary:'User prefers families; budget unknown.'}}).planningProgress,{stage:'interview',summary:'User prefers families; budget unknown.'})
+for(const value of [null,[],{stage:'complete',summary:'Done'},{stage:'interview',summary:''},{stage:'interview',summary:'x'.repeat(501)},{stage:'interview',summary:'Save',approved:true}])assert.throws(()=>parse({planningProgress:value}),/invalid_planning_progress/)
+assert.throws(()=>conversationFrom(JSON.stringify({...reply,planningProgress:{stage:'interview',summary:'Text'}}),{...intent,topic:'general'}),/invalid_planning_progress/)
+assert.throws(()=>conversationFrom(JSON.stringify({...reply,planningProgress:{stage:'annual',summary:'Text'}}),{...intent,planningScope:{stage:'quarter',mode:'discuss',startMonth:'2027-01',quarter:0}}),/planning_progress_scope_mismatch/)
+console.log('PASS: discussion stage bounds, scope binding, no approval fields, old reply compatibility')
+assert.deepEqual(parse({suggestedReplies:['A','B','C','D']}).suggestedReplies,['A','B','C'],'a fourth presentation choice does not trigger another model turn')
+assert.deepEqual(parse({suggestedReplies:['A',' A ','B']}).suggestedReplies,['A','B'])
+assert.throws(()=>parse({suggestedReplies:[{content:'not text'}]}),/invalid_suggested_replies/)
+console.log('PASS: choice presentation normalization preserves reply content without generation retries')
