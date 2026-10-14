@@ -1,7 +1,7 @@
 import type {Pool} from 'pg'
 import {PLATFORM_ACTOR,REVIEW_ACTOR} from './engineering-capabilities'
 import {engineeringConfig,evidence} from './engineering-store'
-import {hash} from './engineering-policy'
+import {hash,expandPatch} from './engineering-policy'
 import {EngineeringGitHub} from './github'
 
 // Reconcile original effects through read-only provider queries. Never dispatch a replacement.
@@ -11,7 +11,7 @@ export async function recoverEngineeringCall(pool:Pool,team:any,reportId:string,
   const config=await engineeringConfig(pool);if(!config?.enabled)return null
   const gh=new EngineeringGitHub(config)
   let original:any
-  if(action==='patch')original={repo:input.repo,base:input.base,files:input.files,test:input.test}
+  if(action==='patch')original=await expandPatch(input,async path=>(await gh.source(input.repo,input.base,path)).content)
   else if(action==='check_start')original={patchOperationId:input.patchOperationId}
   else if(action==='review')original={checkOperationId:input.checkOperationId}
   else if(action==='publish')original={reviewOperationId:input.reviewOperationId}

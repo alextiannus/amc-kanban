@@ -6,7 +6,7 @@ import {openPlatformTeam} from '../src/lib/platform-ai/team-application.mjs'
 import {initializeBugReports,saveBugReport,readBugReport} from '../src/lib/platform-ai/bug-report-store.ts'
 import {engineeringCapabilities,PLATFORM_ACTOR,REVIEW_ACTOR} from '../src/lib/platform-ai/engineering-capabilities.ts'
 import {encryptSecret} from '../src/lib/model-management/secrets.ts'
-import {sourcePath,validatePatch} from '../src/lib/platform-ai/engineering-policy.ts'
+import {sourcePath,validatePatch,expandPatch} from '../src/lib/platform-ai/engineering-policy.ts'
 import {operation} from '../src/lib/platform-ai/engineering-store.ts'
 import {prisma} from '../src/lib/prisma.ts'
 import {reconcileEngineeringTask} from '../src/lib/platform-ai/recovery.ts'
@@ -20,6 +20,7 @@ try{
  assert.equal(await readFile('src/lib/platform-ai/team-application.mjs','utf8'),template.replace('modelFactory,workCapabilities=[]})','modelFactory,workCapabilities=[],executionPolicy})').replace('new CapabilityDispatcher({capabilities:[...nativeTools,agent]})','new CapabilityDispatcher({capabilities:[...nativeTools,agent],executionPolicy})').replace('new AgentRuntime({maxBatchCalls:4,','new AgentRuntime({maxTurns:40,maxCalls:48,maxBatchCalls:1,modelTimeoutMs:110000,taskTimeoutMs:600000,').replace('return {dispatcher:publicDispatcher,runtime,self,','return {dispatcher:publicDispatcher,runtime,tasks,self,'))
  for(const path of ['../secrets.ts','src/../a.ts','src/lib/auth.ts','src/lib/platform-ai/worker.ts','src/app/api/admin/route.ts','src/lib/ai-native/application.ts','scripts/configure-platform-engineering.mts'])assert.throws(()=>sourcePath(path,true))
  assert.equal(sourcePath('src/components/companion/CompanionTextChat.tsx',true),'src/components/companion/CompanionTextChat.tsx')
+ const compact={repo:'amc-mm',base,files:[{path:'src/example.ts',edits:[{before:'a-b',after:'a+b'}]}],test:"import assert from 'node:assert'"};assert.equal((await expandPatch(compact,async()=> 'export const add=(a,b)=>a-b')).files[0].content,'export const add=(a,b)=>a+b');await assert.rejects(()=>expandPatch(compact,async()=> 'a-b a-b'),/match_once/);await assert.rejects(()=>expandPatch(compact,async()=> 'a+b'),/match_once/);
  await initializeBugReports(pool)
  await pool.query("INSERT INTO public.amc_platform_settings(id,encrypted_config) VALUES('engineering-v1',$1) ON CONFLICT(id) DO UPDATE SET encrypted_config=excluded.encrypted_config",[encryptSecret(JSON.stringify({enabled:true,githubToken:'fixture-only'}))])
  reportId=(await saveBugReport(pool,user,'fixture-brand',{goal:'/bug fixture function adds incorrectly',requestKey:randomUUID(),history:[]})).id
@@ -31,7 +32,7 @@ try{
   let name,input:any={reportId}
   if(!find('context'))name='context'
   else if(!find('source')){name='source';input={...input,repo:'amc-mm',ref:base,path:'src/example.ts'}}
-  else if(!find('patch')){name='patch';input={...input,repo:'amc-mm',base,files:[{path:'src/example.ts',content:'export const add=(a,b)=>a+b'}],test:"import assert from 'node:assert/strict'; import {add} from '../../src/example.ts'; assert.equal(add(2,1),3)"}}
+  else if(!find('patch')){name='patch';input={...input,repo:'amc-mm',base,files:[{path:'src/example.ts',edits:[{before:'a-b',after:'a+b'}]}],test:"import assert from 'node:assert/strict'; import {add} from '../../src/example.ts'; assert.equal(add(2,1),3)"}}
   else if(!find('check_start')){name='check_start';input.checkOperationId=undefined;input.patchOperationId=find('patch').operationId;delete input.checkOperationId}
   else if(!find('check_status')){name='check_status';input.checkOperationId=find('check_start').operationId}
   else if(!find('review')){name='review';input.checkOperationId=find('check_start').operationId}
@@ -51,8 +52,8 @@ try{
   await app.runtime.tick();const state=await app.runtime.state(PLATFORM_ACTOR,receipt.task.id)
   if(state.status==='succeeded')break
   if(state.status==='waiting'&&state.waiting_reason==='external_result'){
-   globalThis.fetch=async(url:any,options:any)=>{assert.equal(options.method,'GET','recovery only reads the original provider effect');assert(String(url).includes('/git/ref/heads/amc-platform/'));return Response.json({object:{sha}})}
-   try{const recovery=await reconcileEngineeringTask(pool,app,reportId,receipt.task.id);if(recovery==='recovered')reconciled=true;else {assert.equal(recovery,'none');await new Promise(resolve=>setTimeout(resolve,1100))}}finally{globalThis.fetch=originalFetch}
+   globalThis.fetch=async(url:any,options:any)=>{assert.equal(options.method,'GET','recovery only reads the original provider effect');if(String(url).includes('/contents/'))return Response.json({content:Buffer.from('export const add=(a,b)=>a-b').toString('base64'),encoding:'base64',type:'file',size:29});assert(String(url).includes('/git/ref/heads/amc-platform/'));return Response.json({object:{sha}})}
+   try{const recovery=await reconcileEngineeringTask(pool,app,reportId,receipt.task.id);if(recovery==='recovered')reconciled=true;else {assert.equal(recovery,'none');assert(['testing','deploying','fixed'].includes((await readBugReport(pool,user,'fixture-brand',reportId)).status),'context revalidation must not reset the visible stage');await new Promise(resolve=>setTimeout(resolve,1100))}}finally{globalThis.fetch=originalFetch}
   }
  }
  assert(checkReads>1&&releaseReads>1,'real Core readiness polling resumed CI and deployment waits');
