@@ -12,6 +12,7 @@ try{
  globalThis.fetch=async(_url,init)=>{sent=JSON.parse(String(init?.body));return Response.json({usage:{prompt_tokens:10,completion_tokens:20},choices:[{finish_reason:'stop',message:{content:'ok'}}]})}
  const glm={id:'fixture',provider:'openai',displayName:'fixture',modelName:'glm-5.3',baseUrl:'https://fixture.invalid/v1',apiKey:'not-real'}
  await complete(glm,{messages:[{role:'user',content:'tool step'}],task:'ai_native',maxTokens:6000});assert.equal(sent.reasoning_effort,'low');assert.equal(sent.max_tokens,6000)
+ await complete(glm,{messages:[{role:'user',content:'review step'}],task:'platform_review',maxTokens:6000});assert.equal(sent.reasoning_effort,'low');
  await complete({...glm,reasoningEffort:'high'},{messages:[{role:'user',content:'tool step'}],task:'ai_native',maxTokens:6000});assert.equal(sent.reasoning_effort,'high','explicit central reasoning must win')
  await complete({...glm,modelName:'other'},{messages:[{role:'user',content:'tool step'}],task:'ai_native'});assert.equal(sent.reasoning_effort,undefined,'no new fallback for unrelated models')
 }finally{globalThis.fetch=original}
