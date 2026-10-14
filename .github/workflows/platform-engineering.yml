@@ -1,0 +1,67 @@
+name: AMC Platform Engineering
+run-name: 'amc-platform:${{ inputs.operation }}:${{ inputs.candidate }}'
+on:
+  workflow_dispatch:
+    inputs:
+      operation: {required: true, type: string}
+      base: {required: true, type: string}
+      candidate: {required: true, type: string}
+      test: {required: true, type: string}
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE: ${{ inputs.base }}
+      CANDIDATE: ${{ inputs.candidate }}
+      REGRESSION: ${{ inputs.test }}
+      OPERATION: ${{ inputs.operation }}
+    steps:
+      - name: Validate immutable inputs
+        run: |
+          node -e 'for(const k of ["BASE","CANDIDATE"])if(!/^[0-9a-f]{40}$/.test(process.env[k]))process.exit(1);if(!/^[0-9a-f]{64}$/.test(process.env.OPERATION)||!/^scripts\/platform-regressions\/[0-9a-f-]{36}\.test\.mts$/.test(process.env.REGRESSION))process.exit(1)'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.base }}
+          path: baseline
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.candidate }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '20'
+      - name: Install fixed baseline dependencies
+        timeout-minutes: 4
+        working-directory: baseline
+        run: |
+          npm ci --ignore-scripts
+          if test -d prisma; then npx --no-install prisma generate; fi
+          cp -a node_modules ../candidate/node_modules
+          mkdir -p scripts/platform-regressions
+          cp "../candidate/$REGRESSION" "$REGRESSION"
+          docker pull node:20-bookworm-slim
+          rm -rf .git ../candidate/.git
+      - name: Reproduce baseline
+        timeout-minutes: 4
+        run: |
+          set +e
+          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/baseline:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION" > baseline-result.txt 2>&1
+          code=$?
+          set -e
+          test "$code" -ne 0
+          test "$code" -ne 124
+          grep -q 'AssertionError' baseline-result.txt
+      - name: Verify patch
+        timeout-minutes: 4
+        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/candidate:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION"
+      - name: Typecheck
+        timeout-minutes: 4
+        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 5g --cpus 2 -v "$PWD/candidate:/work" -w /work node:20-bookworm-slim timeout 230 node node_modules/typescript/bin/tsc --noEmit --incremental false
+      - name: Build
+        timeout-minutes: 4
+        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 5g --cpus 2 -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture -e NEXT_TELEMETRY_DISABLED=1 -v "$PWD/candidate:/work" -w /work node:20-bookworm-slim timeout 230 npm run build
