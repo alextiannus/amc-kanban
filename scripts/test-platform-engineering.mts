@@ -14,7 +14,7 @@ const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0
 process.env.MODEL_CONFIG_ENCRYPTION_KEY='a'.repeat(64)
 const pool=new Pool({connectionString:url.toString()}),schema='platform_test_'+randomUUID().replaceAll('-',''),user=randomUUID(),base='a'.repeat(40),sha='b'.repeat(40)
 const originalFetch=globalThis.fetch
-let app:any,taskPool:Pool|undefined,reportId='',patches=0,dispatches=0,pushes=0,reviews=0
+let app:any,taskPool:Pool|undefined,reportId='',patches=0,dispatches=0,pushes=0,reviews=0,checkReads=0,releaseReads=0
 try{
  const template=await readFile('node_modules/@immedi/iaic-core/examples/core-platform-team/application.mjs','utf8')
  assert.equal(await readFile('src/lib/platform-ai/team-application.mjs','utf8'),template.replace('modelFactory,workCapabilities=[]})','modelFactory,workCapabilities=[],executionPolicy})').replace('new CapabilityDispatcher({capabilities:[...nativeTools,agent]})','new CapabilityDispatcher({capabilities:[...nativeTools,agent],executionPolicy})').replace('new AgentRuntime({maxBatchCalls:4,','new AgentRuntime({maxTurns:40,maxCalls:48,maxBatchCalls:1,modelTimeoutMs:110000,taskTimeoutMs:600000,').replace('return {dispatcher:publicDispatcher,runtime,self,','return {dispatcher:publicDispatcher,runtime,tasks,self,'))
@@ -24,8 +24,8 @@ try{
  await pool.query("INSERT INTO public.amc_platform_settings(id,encrypted_config) VALUES('engineering-v1',$1) ON CONFLICT(id) DO UPDATE SET encrypted_config=excluded.encrypted_config",[encryptSecret(JSON.stringify({enabled:true,githubToken:'fixture-only'}))])
  reportId=(await saveBugReport(pool,user,'fixture-brand',{goal:'/bug fixture function adds incorrectly',requestKey:randomUUID(),history:[]})).id
  await pool.query(`CREATE SCHEMA ${schema}`);taskPool=new Pool({connectionString:url.toString(),options:`-c search_path=${schema}`})
- const fakeGitHub:any={head:async()=>base,tree:async()=>['src/example.ts'],source:async()=>({path:'src/example.ts',ref:base,content:'export const add=(a,b)=>a-b'}),patch:async(_report:any,_id:any,input:any)=>{patches++;if(patches===1)throw Error('fixture response lost after branch creation');return {repo:input.repo,base,sha,branch:'fixture',testPath:'scripts/platform-regressions/'+reportId+'.test.mts'}},checks:async(_patch:any,_id:any,dispatch:boolean)=>{if(dispatch)dispatches++;return {ready:true,passed:true,runId:1,sha,conclusion:'success'}},publish:async()=>{pushes++;return {repo:'amc-mm',sha,pushed:true}}}
- const capabilities=engineeringCapabilities(pool,()=>app,{github:()=>fakeGitHub,review:async()=>{reviews++;return {verdict:'no_findings',findings:'Fixture independent review',usage:{input_tokens:4,output_tokens:2}}},deployed:async()=>({ready:true,sha,origin:'fixture'})})
+ const fakeGitHub:any={head:async()=>base,tree:async()=>['src/example.ts'],source:async()=>({path:'src/example.ts',ref:base,content:'export const add=(a,b)=>a-b'}),patch:async(_report:any,_id:any,input:any)=>{patches++;if(patches===1)throw Error('fixture response lost after branch creation');return {repo:input.repo,base,sha,branch:'fixture',testPath:'scripts/platform-regressions/'+reportId+'.test.mts'}},checks:async(_patch:any,_id:any,dispatch:boolean)=>{if(dispatch)dispatches++;else checkReads++;return {ready:checkReads>1,passed:true,runId:1,sha,conclusion:'success'}},publish:async()=>{pushes++;return {repo:'amc-mm',sha,pushed:true}}}
+ const capabilities=engineeringCapabilities(pool,()=>app,{github:()=>fakeGitHub,review:async()=>{reviews++;return {verdict:'no_findings',findings:'Fixture independent review',usage:{input_tokens:4,output_tokens:2}}},deployed:async()=>({ready:++releaseReads>1,sha,origin:'fixture'})})
  const modelFactory=()=>({next:async({messages}:any)=>{
   const c=JSON.parse(messages[1].content),calls=c.calls.filter((call:any)=>call.status==='succeeded'),find=(name:string)=>calls.find((call:any)=>call.capability==='engineering.'+name)?.result
   let name,input:any={reportId}
@@ -52,9 +52,10 @@ try{
   if(state.status==='succeeded')break
   if(state.status==='waiting'&&state.waiting_reason==='external_result'){
    globalThis.fetch=async(url:any,options:any)=>{assert.equal(options.method,'GET','recovery only reads the original provider effect');assert(String(url).includes('/git/ref/heads/amc-platform/'));return Response.json({object:{sha}})}
-   try{assert.equal(await reconcileEngineeringTask(pool,app,reportId,receipt.task.id),'recovered');reconciled=true}finally{globalThis.fetch=originalFetch}
+   try{const recovery=await reconcileEngineeringTask(pool,app,reportId,receipt.task.id);if(recovery==='recovered')reconciled=true;else {assert.equal(recovery,'none');await new Promise(resolve=>setTimeout(resolve,1100))}}finally{globalThis.fetch=originalFetch}
   }
  }
+ assert(checkReads>1&&releaseReads>1,'real Core readiness polling resumed CI and deployment waits');
  assert(reconciled,'actual Core unknown-call state was reconciled using the original branch')
  const terminal=await app.runtime.get(PLATFORM_ACTOR,receipt.task.id,{history:true})
  if(terminal.status!=='succeeded')console.log(JSON.stringify({status:terminal.status,events:terminal.events,calls:terminal.calls.map((c:any)=>({name:c.capability,status:c.status,error:c.error}))}))

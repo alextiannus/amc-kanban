@@ -53,6 +53,7 @@ jobs:
           docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/baseline:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION" > baseline-result.txt 2>&1
           code=$?
           set -e
+          tail -c 16000 baseline-result.txt
           test "$code" -ne 0
           test "$code" -ne 124
           grep -q 'AssertionError' baseline-result.txt
