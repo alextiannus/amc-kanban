@@ -44,10 +44,25 @@ export class EngineeringGitHub {
       const jobs=await this.api(patch.repo,`actions/runs/${found.id}/jobs?per_page=100`)
       const steps=jobs.jobs.flatMap((job:any)=>job.steps||[])
       const passed=found.conclusion==='success'&&['Reproduce baseline','Verify patch','Typecheck','Build'].every(name=>steps.some((step:any)=>step.name===name&&step.conclusion==='success'))
-      return {ready:found.status==='completed',passed,runId:found.id,sha:patch.sha,conclusion:found.conclusion,url:found.html_url}
+      let failureLog:string|null=null
+      const failed=jobs.jobs.find((job:any)=>job.conclusion==='failure')
+      if(failed&&Number.isSafeInteger(failed.id))try{failureLog=await this.failureLog(patch.repo,failed.id)}catch{/* A missing log never converts a failed check into a pass. */}
+      return {ready:found.status==='completed',passed,runId:found.id,sha:patch.sha,conclusion:found.conclusion,url:found.html_url,steps:steps.map((step:any)=>({name:step.name,conclusion:step.conclusion})),failureLog}
     }
     if(dispatch)await this.api(patch.repo,'actions/workflows/platform-engineering.yml/dispatches','POST',{ref:'main',inputs:{operation:id,base:patch.base,candidate:patch.sha,test:patch.testPath}})
     return {ready:false,passed:false,sha:patch.sha,runId:null}
+  }
+  async failureLog(repo:Repository,jobId:number){
+    const response=await this.fetcher(`https://api.github.com/repos/${REPOSITORIES[repo].owner}/${repo}/actions/jobs/${jobId}/logs`,{headers:{Authorization:`Bearer ${this.config.githubToken}`,Accept:'application/vnd.github+json'},signal:AbortSignal.timeout(15000),redirect:'manual'})
+    if(response.status!==302)throw Error('ci_log_unavailable')
+    const url=new URL(response.headers.get('location')||'')
+    if(url.protocol!=='https:'||url.username||url.password||!(url.hostname.endsWith('.blob.core.windows.net')||url.hostname.endsWith('.actions.githubusercontent.com')))throw Error('ci_log_host_not_allowed')
+    // Credentials never follow the redirect. Read a bounded tail; signed URLs are not exposed.
+    const log=await this.fetcher(url,{signal:AbortSignal.timeout(15000),redirect:'error'})
+    if(!log.ok||!log.body)throw Error('ci_log_unavailable')
+    const reader=log.body.getReader(),decoder=new TextDecoder();let size=0,tail=''
+    try{while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;tail=(tail+decoder.decode(chunk.value,{stream:true})).slice(-16000);if(size>1000000)break}}finally{await reader.cancel()}
+    return tail.replace(/(?:gh[pousr]_[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,})/g,'[redacted]')
   }
   async publish(patch:any,recover:boolean){
     const head=await this.head(patch.repo)

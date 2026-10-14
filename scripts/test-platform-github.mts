@@ -23,3 +23,14 @@ run.head_sha=base;assert.equal((await github.checks(patch,'test',false)).passed,
 assert.equal((await deployedRevision('amc-mm',sha,async()=>Response.json({commit:base}))).ready,false)
 assert.equal((await deployedRevision('amc-mm',sha,async()=>Response.json({commit:sha}))).ready,true)
 console.log('PASS GitHub guards: non-force update, no duplicate publish/dispatch after uncertainty, branch conflict, exact workflow baseline and production commit binding; HTTP mocked')
+const logRequests:any[]=[]
+const logs=new EngineeringGitHub({enabled:true,githubToken:'fixture-only'},async(url:any,options:any)=>{
+ logRequests.push({url:String(url),headers:options.headers})
+ if(logRequests.length===1)return new Response(null,{status:302,headers:{location:'https://fixture.blob.core.windows.net/log?sig=fixture'}})
+ return new Response('AssertionError: expected sanitized receipt')
+})
+assert.match(await logs.failureLog('amc-mm',1),/AssertionError/)
+assert.equal(logRequests[1].headers,undefined,'never forward credentials to the log storage host')
+const hostile=new EngineeringGitHub({enabled:true,githubToken:'fixture-only'},async()=>new Response(null,{status:302,headers:{location:'https://untrusted.example/log'}}))
+await assert.rejects(()=>hostile.failureLog('amc-mm',1),/host_not_allowed/)
+console.log('PASS bounded CI failure logs, redirect host restriction and credential stripping')
