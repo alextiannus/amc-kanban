@@ -29,7 +29,8 @@ assert.equal(checkPlanningBudget({currency:'SGD',total:1.2,months:Array(12).fill
 assert.throws(()=>checkPlanningBudget({...budget,months:[1,2]}))
 assert.throws(()=>checkPlanningBudget({...budget,reserve:-1}))
 const id=randomUUID(),actor=actorFor(id,id),pool=nativePool()
-let insightReads=0,modelCalls=0
+let insightReads=0,modelCalls=0,sourceRevision='one'
+const contextSessionId=randomUUID()
 const facts={brand:{id,name:'Fixture brand'},productCatalog:[]}
 const usage={inputTokens:100,outputTokens:30}
 const model={next:async(request:any)=>{
@@ -52,10 +53,11 @@ const model={next:async(request:any)=>{
 let app:any
 try{
   await initializeHost(pool)
-  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',revision:'0'.repeat(64),workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
+  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContextRevision:async()=>sourceRevision,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',revision:'0'.repeat(64),workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
-  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning'] as const).entries()){
-    const intent:ConversationIntent={kind:'conversation',topic,...((index===2||index===3)?{planningScope:{stage:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:'我们的目标是吸引家庭顾客'}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
+  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning'] as const).entries()){
+    if(index===7)sourceRevision='two'
+    const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3)?{planningScope:{stage:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
     await admitIntent(pool,actor,intent)
     await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
     const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot')&&(topic==='brand_planning'||t!=='amc.growth_insight'))}
@@ -78,6 +80,7 @@ try{
     assert(!ctx.uiCapabilities.pages.bd,'BD pages are absent without the current user role')
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
     assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
+    if(index===5||index===6)assert.equal(insightReads,5,'a new task and all revalidations reuse session context')
     const before=modelCalls
     await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal(modelCalls,before)
@@ -85,7 +88,7 @@ try{
     await assert.rejects(()=>app.runtime.get(actorFor(id,'other-user'),receipt.id))
     assert.throws(()=>conversationFrom(artifact.content,{...intent,brandId:'other-brand'}))
   }
-  assert.equal(insightReads,4,'only planning invokes Growth')
+  assert.equal(insightReads,6,'four legacy turns plus one shared session load and one revision invalidation')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
   const savedWorkspace=await readMarketingWorkspace(actor)

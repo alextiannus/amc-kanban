@@ -8,6 +8,10 @@ export function nativePool(connectionString=process.env.DATABASE_URL){
 }
 export async function initializeHost(pool:Pool){
   await pool.query('CREATE SCHEMA IF NOT EXISTS amc_iaic')
+  await pool.query(`CREATE TABLE IF NOT EXISTS amc_conversation_context (
+    cache_key text PRIMARY KEY, source_revision text NOT NULL, payload text NOT NULL,
+    expires_at timestamptz NOT NULL);
+    CREATE INDEX IF NOT EXISTS amc_conversation_context_expiry ON amc_conversation_context(expires_at);`)
   // This application-owned table binds admission, not a duplicate task lifecycle.
   await pool.query(`CREATE TABLE IF NOT EXISTS amc_ai_requests (
     id text PRIMARY KEY, scope_id text NOT NULL, subject_id text NOT NULL,
