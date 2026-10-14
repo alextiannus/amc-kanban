@@ -1,4 +1,4 @@
-import {conversationProgress} from './conversation-progress'
+import {conversationProgress,conversationInsight} from './conversation-progress'
 import {savePlanningDraft} from './planning-workspace-save'
 import {assertUsageSettled} from './model-guards'
 import {AUTOPILOT_TOOLS} from './autopilot-capabilities'
@@ -156,7 +156,7 @@ export async function readNativeTask(userId:string,brandId:string,id:string){
     artifact=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)||null
     if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else if(row.intent.kind==='brand_brief')report=briefFrom(content,row.intent);else if(row.intent.kind==='conversation')report=conversationFrom(content,row.intent);else report=JSON.parse(content)}
   }
-  const sourceInsight=history.calls.slice().reverse().find(c=>c.capability==='amc.growth_insight'&&c.status==='succeeded')?.result as {status?:string;reportVersionId?:string;partial?:boolean;generatedAt?:unknown}|undefined
+  const sourceInsight=conversationInsight(history.calls)
   const insight=row.intent.kind==='conversation'&&sourceInsight?{status:sourceInsight.status,reportVersionId:sourceInsight.reportVersionId||null,partial:sourceInsight.partial===true,generatedAt:typeof sourceInsight.generatedAt==='string'?sourceInsight.generatedAt:null}:null
   const operations=history.calls.find(c=>c.capability==='amc.operations'&&c.status==='succeeded')?.result as {draftTotal?:number;accountTotal?:number;operationsDigest?:string;retrievedAt?:string}|undefined
   const currentOperations=report&&typeof operations?.draftTotal==='number'&&typeof operations?.accountTotal==='number'?{draftTotal:operations.draftTotal,accountTotal:operations.accountTotal,retrievedAt:operations.retrievedAt,changed:operations.operationsDigest!==report.operationsDigest}:null

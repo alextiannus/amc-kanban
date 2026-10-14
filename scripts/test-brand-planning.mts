@@ -36,14 +36,17 @@ const model={next:async(request:any)=>{
   modelCalls++
   const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content)
   const calls=data.calls.filter((c:any)=>c.status==='succeeded')
-  const find=(name:string)=>calls.find((c:any)=>c.capability===name)
+  const find=(name:string)=>calls.findLast((c:any)=>c.capability===name)
   if(!find('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
   const ctx=find('amc.context').result
-  if(!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
-  if(ctx.intent.topic==='brand_planning'&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
-  if(ctx.intent.topic==='brand_planning'&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
+  if(!ctx.planningContext&&!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
+  if(ctx.intent.topic==='brand_planning'&&!ctx.planningContext&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
+  if(ctx.intent.topic==='brand_planning'&&!ctx.planningContext&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
-  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget,planningProgress:{stage:ctx.intent.planningScope?.stage||'interview',summary:'家庭客群是用户目标；预算为测试假设。'},suggestedReplies:['先讨论家庭聚餐','先比较宣传方向']}:{}),...(ctx.intent.planningScope?{planningDraft:{...planningDraftContract(ctx.intent.planningScope).planningDraft,expectedRevision:'0'.repeat(64)}}:{}),...(ctx.intent.topic==='general'?{uiAction:{page:'calendar',mode:'open',month:'2027-03'}}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
+  const rejected=data.events?.at(-1)?.kind==='verification'&&data.events.at(-1).data.verified===false
+  if(rejected)assert(request.tools.some((t:any)=>t.name==='my_write_workspace'),'verification rejection restores repair tools')
+  if(!find('my_write_workspace')||rejected)return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:find('my_write_workspace')?.result.reference.revision||0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget,...(ctx.intent.goal==='check rejection'&&!rejected?{}:{planningProgress:{stage:ctx.intent.planningScope?.stage||'interview',summary:'家庭客群是用户目标；预算为测试假设。'}})}:{}),...(ctx.intent.planningScope?{planningDraft:{...planningDraftContract(ctx.intent.planningScope).planningDraft,expectedRevision:'0'.repeat(64)}}:{}),...(ctx.intent.topic==='general'?{uiAction:{page:'calendar',mode:'open',month:'2027-03'}}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
+  if(ctx.intent.topic==='brand_planning')assert.equal(request.tools.length,0,'written planning reply must submit to verifier before rewriting')
   return {type:'finish',result:{summary:'Reply ready',artifacts:[find('my_write_workspace').result.reference]},usage}
 }}
 let app:any
@@ -51,8 +54,8 @@ try{
   await initializeHost(pool)
   const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',revision:'0'.repeat(64),workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
-  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning'] as const).entries()){
-    const intent:ConversationIntent={kind:'conversation',topic,...(index>1?{planningScope:{stage:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:'我们的目标是吸引家庭顾客'}],brandId:id,userId:id,goal:'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
+  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning'] as const).entries()){
+    const intent:ConversationIntent={kind:'conversation',topic,...((index===2||index===3)?{planningScope:{stage:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:'我们的目标是吸引家庭顾客'}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
     await admitIntent(pool,actor,intent)
     await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
     const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot')&&(topic==='brand_planning'||t!=='amc.growth_insight'))}
@@ -65,10 +68,13 @@ try{
     const artifact=await app.workspace.read(actor,task.result.artifacts[0])
     const reply=conversationFrom(artifact.content,intent)
     assert(reply.content.length>5)
+    if(index===4)assert(task.events.some((e:any)=>e.kind==='verification'&&e.data.verified===false),'invalid metadata is rejected before repaired completion')
+    if(topic==='brand_planning'){assert(!task.calls.some((c:any)=>['assistant.skills.read','amc.marketing_workspace','amc.growth_insight'].includes(c.capability)),'bundled sources avoid separate model tool turns');assert.equal(reply.suggestedReplies,undefined,'useful replies need no forced choices')}
     if(topic==='general')assert.deepEqual(reply.uiAction,{page:'calendar',mode:'open',month:'2027-03'})
     if(topic==='brand_planning'){assert.deepEqual(reply.annualBudget,budget);assert.throws(()=>conversationFrom(JSON.stringify({...reply,annualBudget:{...budget,reserve:0}}),intent),/annual_budget_unbalanced/)}
     const ctx=task.calls.find((c:any)=>c.capability==='amc.context').result
     assert(ctx.uiCapabilities.pages.calendar)
+    assert.equal(!!ctx.planningContext,topic==='brand_planning','general chat never loads planning sources')
     assert(!ctx.uiCapabilities.pages.bd,'BD pages are absent without the current user role')
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
     assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
@@ -79,7 +85,7 @@ try{
     await assert.rejects(()=>app.runtime.get(actorFor(id,'other-user'),receipt.id))
     assert.throws(()=>conversationFrom(artifact.content,{...intent,brandId:'other-brand'}))
   }
-  assert.equal(insightReads,3,'only planning invokes Growth')
+  assert.equal(insightReads,4,'only planning invokes Growth')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
   const savedWorkspace=await readMarketingWorkspace(actor)

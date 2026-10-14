@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import {conversationKnowledge,conversationProgress} from '../src/lib/ai-native/conversation-progress.ts'
+import {conversationKnowledge,conversationProgress,conversationInsight} from '../src/lib/ai-native/conversation-progress.ts'
 const sku={id:'sku',name:'招牌',price:'20',isSignature:true}
 const facts={name:'Brand',productCatalog:[sku],creativePortfolio:[{id:'creative'}],knowledge:{menuItems:[sku],researchEvidence:{excerpt:'old'},brandTone:'friendly'}}
 const before=JSON.stringify(facts),view=conversationKnowledge(facts,true)
@@ -32,3 +32,10 @@ assert.deepEqual(parse({suggestedReplies:['A','B','C','D']}).suggestedReplies,['
 assert.deepEqual(parse({suggestedReplies:['A',' A ','B']}).suggestedReplies,['A','B'])
 assert.throws(()=>parse({suggestedReplies:[{content:'not text'}]}),/invalid_suggested_replies/)
 console.log('PASS: choice presentation normalization preserves reply content without generation retries')
+
+const bundled={capability:'amc.context',status:'succeeded',result:{planningContext:{insight:{status:'missing'}}}}
+assert.equal(conversationProgress('running',[bundled]).stage,'reply')
+assert.deepEqual(conversationInsight([bundled]),{status:'missing'})
+assert.deepEqual(conversationInsight([bundled,{capability:'amc.growth_insight',status:'succeeded',result:{status:'available'}}]),{status:'available'})
+assert.equal(conversationInsight([{...bundled,status:'failed'}]),undefined)
+console.log('PASS: bundled current-source progress, explicit missing report, legacy source compatibility')
