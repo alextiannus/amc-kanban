@@ -50,7 +50,7 @@ jobs:
         timeout-minutes: 4
         run: |
           set +e
-          docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/baseline:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION" > baseline-result.txt 2>&1
+          docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/baseline:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION" > baseline-result.txt 2>&1
           code=$?
           set -e
           tail -c 16000 baseline-result.txt
@@ -59,10 +59,10 @@ jobs:
           grep -q 'AssertionError' baseline-result.txt
       - name: Verify patch
         timeout-minutes: 4
-        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/candidate:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION"
+        run: docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges --memory 4g --cpus 2 -v "$PWD/candidate:/work:ro" -w /work node:20-bookworm-slim timeout 180 node --import tsx "$REGRESSION"
       - name: Typecheck
         timeout-minutes: 4
-        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 5g --cpus 2 -v "$PWD/candidate:/work" -w /work node:20-bookworm-slim timeout 230 node node_modules/typescript/bin/tsc --noEmit --incremental false
+        run: docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges --memory 5g --cpus 2 -v "$PWD/candidate:/work" -w /work node:20-bookworm-slim timeout 230 node node_modules/typescript/bin/tsc --noEmit --incremental false
       - name: Build
         timeout-minutes: 4
-        run: docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges --memory 5g --cpus 2 -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture -e NEXT_TELEMETRY_DISABLED=1 -v "$PWD/candidate:/work" -w /work node:20-bookworm-slim timeout 230 npm run build
+        run: docker run --rm --user "$(id -u):$(id -g)" --network none --cap-drop ALL --security-opt no-new-privileges --memory 5g --cpus 2 -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture -e NEXT_TELEMETRY_DISABLED=1 -v "$PWD/candidate:/work" -w /work node:20-bookworm-slim timeout 230 npm run build
