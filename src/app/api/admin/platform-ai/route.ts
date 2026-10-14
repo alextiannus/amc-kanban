@@ -1,7 +1,7 @@
 import {authenticateCurrentRequest,isAdmin} from '@/lib/auth-v2'
 import {allowedRoleWriteOrigin} from '@/lib/role-permissions/request-origin'
 import {reportPool} from '@/lib/platform-ai/bug-reports'
-import {engineeringConfig} from '@/lib/platform-ai/engineering-store'
+import {engineeringConfig,setEngineeringEnabled} from '@/lib/platform-ai/engineering-store'
 import {getPlatformTeam} from '@/lib/platform-ai/worker'
 import {PLATFORM_ACTOR} from '@/lib/platform-ai/engineering-capabilities'
 import {prisma} from '@/lib/prisma'
@@ -19,6 +19,10 @@ export async function POST(request:Request){
   try{
     const raw=await request.text();if(raw.length>10000)return nativeJson({error:'payload_too_large'},413)
     const body=JSON.parse(raw)
+    if(body.action==='set_enabled'&&typeof body.enabled==='boolean'){
+      await prisma.auditLog.create({data:{actorId:actor.userId,actorType:actor.actorType,action:'platform.engineering.enable_requested',resourceType:'PlatformEngineering',resourceId:'engineering-v1',newValue:{enabled:body.enabled}}})
+      return nativeJson(await setEngineeringEnabled(await reportPool(),body.enabled))
+    }
     if(!/^[0-9a-f-]{36}$/.test(body.reportId)||!['resume','cancel','provide_input'].includes(body.action)||! /^[a-zA-Z0-9_-]{8,100}$/.test(body.requestKey))return nativeJson({error:'invalid_control'},400)
     const pool=await reportPool(),row=(await pool.query('SELECT task_id FROM public.amc_bug_reports WHERE id=$1',[body.reportId])).rows[0]
     if(!row?.task_id)return nativeJson({error:'task_not_found'},404)

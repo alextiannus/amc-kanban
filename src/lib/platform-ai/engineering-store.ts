@@ -1,10 +1,21 @@
 import type {Pool} from 'pg'
-import {decryptSecret} from '../model-management/secrets'
+import {decryptSecret,encryptSecret} from '../model-management/secrets'
 import {hash} from './engineering-policy'
 export type EngineeringConfig={enabled:boolean;githubToken:string}
 export async function engineeringConfig(pool:Pool):Promise<EngineeringConfig|null>{
   const row=(await pool.query("SELECT encrypted_config FROM public.amc_platform_settings WHERE id='engineering-v1'")).rows[0]
   return row?JSON.parse(decryptSecret(row.encrypted_config)):null
+}
+export async function setEngineeringEnabled(pool:Pool,enabled:boolean){
+  const client=await pool.connect()
+  try{
+    await client.query('BEGIN')
+    const row=(await client.query("SELECT encrypted_config FROM public.amc_platform_settings WHERE id='engineering-v1' FOR UPDATE")).rows[0]
+    if(!row)throw Error('platform_executor_not_configured')
+    const config=JSON.parse(decryptSecret(row.encrypted_config))
+    await client.query("UPDATE public.amc_platform_settings SET encrypted_config=$1,updated_at=now() WHERE id='engineering-v1'",[encryptSecret(JSON.stringify({...config,enabled}))])
+    await client.query('COMMIT');return {enabled}
+  }catch(error){await client.query('ROLLBACK');throw error}finally{client.release()}
 }
 export async function operation(pool:Pool,reportId:string,action:string,input:unknown,perform:(id:string,recover:boolean)=>Promise<unknown>){
   const id=hash([reportId,action,input])

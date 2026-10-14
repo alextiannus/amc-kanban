@@ -13,7 +13,7 @@ import {MODEL_INVOCATION_ALLOWANCE,assertUsageSettled} from '../ai-native/model-
 const state=globalThis as typeof globalThis&{amcPlatformTeam?:Promise<any>;amcPlatformWorker?:boolean}
 export async function platformVersion(){
   const hash=createHash('sha256')
-  for(const name of ['worker.ts','recovery.ts','team-application.mjs','resources.mjs','engineering-policy.ts','engineering-store.ts','engineering-capabilities.ts','github.ts','reviewer.ts'])hash.update(await readFile(path.join(process.cwd(),'src/lib/platform-ai',name)))
+  for(const name of ['worker.ts','recovery.ts','diagnostics.ts','team-application.mjs','resources.mjs','engineering-policy.ts','engineering-store.ts','engineering-capabilities.ts','github.ts','reviewer.ts'])hash.update(await readFile(path.join(process.cwd(),'src/lib/platform-ai',name)))
   return hash.digest('hex')
 }
 export async function getPlatformTeam(){

@@ -16,7 +16,7 @@ let app:any,taskPool:Pool|undefined,reportId='',patches=0,dispatches=0,pushes=0,
 try{
  const template=await readFile('node_modules/@immedi/iaic-core/examples/core-platform-team/application.mjs','utf8')
  assert.equal(await readFile('src/lib/platform-ai/team-application.mjs','utf8'),template.replace('modelFactory,workCapabilities=[]})','modelFactory,workCapabilities=[],executionPolicy})').replace('new CapabilityDispatcher({capabilities:[...nativeTools,agent]})','new CapabilityDispatcher({capabilities:[...nativeTools,agent],executionPolicy})').replace('new AgentRuntime({maxBatchCalls:4,','new AgentRuntime({maxTurns:40,maxCalls:48,maxBatchCalls:1,modelTimeoutMs:110000,taskTimeoutMs:600000,').replace('return {dispatcher:publicDispatcher,runtime,self,','return {dispatcher:publicDispatcher,runtime,tasks,self,'))
- for(const path of ['../secrets.ts','src/../a.ts','src/lib/auth.ts','src/lib/platform-ai/worker.ts','src/app/api/admin/route.ts'])assert.throws(()=>sourcePath(path,true))
+ for(const path of ['../secrets.ts','src/../a.ts','src/lib/auth.ts','src/lib/platform-ai/worker.ts','src/app/api/admin/route.ts','src/lib/ai-native/application.ts','scripts/configure-platform-engineering.mts'])assert.throws(()=>sourcePath(path,true))
  assert.equal(sourcePath('src/components/companion/CompanionTextChat.tsx',true),'src/components/companion/CompanionTextChat.tsx')
  await initializeBugReports(pool)
  await pool.query("INSERT INTO public.amc_platform_settings(id,encrypted_config) VALUES('engineering-v1',$1) ON CONFLICT(id) DO UPDATE SET encrypted_config=excluded.encrypted_config",[encryptSecret(JSON.stringify({enabled:true,githubToken:'fixture-only'}))])

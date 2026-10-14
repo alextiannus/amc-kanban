@@ -4,6 +4,7 @@ import {EngineeringGitHub,deployedRevision} from './github'
 import {engineeringConfig,operation,evidence} from './engineering-store'
 import {repository,validatePatch,hash} from './engineering-policy'
 import {reviewPatch} from './reviewer'
+import {reportDiagnostics} from './diagnostics'
 
 export const PLATFORM_ACTOR={scopeId:'amc-platform-engineering',subjectId:'platform-engineer'}
 export const REVIEW_ACTOR={scopeId:'amc-platform-engineering',subjectId:'platform-reviewer'}
@@ -64,6 +65,7 @@ export function engineeringCapabilities(pool:Pool,getTeam:()=>any,ports:{github?
       return operation(pool,row.id,'context',{},async()=>{const gh=await client();return {reportId:row.id,source:row.evidence,repositories:await Promise.all(['amc-mm','amc-kanban'].map(async repo=>({repo,base:await gh.head(repository(repo))})))}})
     }),
     tool('files','List allowed repository source paths at an immutable revision.',{repo:string,ref:string},['repo','ref'],'read',async input=>({paths:await (await client()).tree(repository(input.repo),input.ref)})),
+    tool('diagnostics','Read current model configuration availability and lifecycle states for only the conversation session attached to this report. No inference and no unrelated user histories.',{},[],'read',async(input,ctx)=>reportDiagnostics(pool,await report(input.reportId,ctx))),
     tool('source','Read an allowed source file at an immutable revision.',{repo:string,ref:string,path:string},['repo','ref','path'],'read',async input=>{
       return operation(pool,input.reportId,'source',{repo:input.repo,ref:input.ref,path:input.path},()=>client().then(gh=>gh.source(repository(input.repo),input.ref,input.path)))
     }),

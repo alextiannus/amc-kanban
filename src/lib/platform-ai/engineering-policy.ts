@@ -8,7 +8,7 @@ export const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(va
 export function repository(value:string):Repository{if(!(value in REPOSITORIES)||!Object.hasOwn(REPOSITORIES,value))throw Error('repository_not_allowed');return value as Repository}
 export function sourcePath(path:string,write=false){
   if(typeof path!=='string'||path.length>240||! /^(src|scripts|docs)\/[A-Za-z0-9_\-./\[\]]+\.(tsx?|mts|mjs|md|css)$/.test(path)||path.split('/').some(p=>p==='.'||p==='..'))throw Error('source_path_not_allowed')
-  if(write&&(/(?:^|\/)(?:platform-ai|auth[^/]*|model-management|user-management|role-permissions|billing|payments|subscriptions|admin|api)(?:\/|\.)/i.test(path)||/prisma|middleware|instrumentation|proxy|secret|credential|permission/i.test(path)))throw Error('protected_source_path')
+  if(write&&(/(?:^|\/)(?:platform-ai|ai-native|global-text|auth[^/]*|model-management|user-management|role-permissions|billing|payments|subscriptions|admin|api)(?:\/|\.)/i.test(path)||/prisma|middleware|instrumentation|proxy|secret|credential|permission|platform-engineering|platform-github|configure-platform/i.test(path)))throw Error('protected_source_path')
   return path
 }
 export type Patch={repo:Repository;base:string;files:{path:string;content:string}[];test:string}
