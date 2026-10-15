@@ -67,6 +67,9 @@ assert.equal((await service.scheduleCreative(actor,'brand-a','idea-one',start,{m
 assert.equal(drafts.length,1)
 await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-13T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-one'},db,now),'creative_request_key_reused')
 await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-new'},db,now),'creative_revision_conflict')
+drafts[0].status='publishing'
+await expectCode(()=>service.unscheduleCreative(actor,'brand-a','idea-one',scheduled.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-locked'},db,now),'creative_schedule_locked')
+drafts[0].status='draft'
 permitted=false
 await expectCode(()=>service.unscheduleCreative(actor,'brand-a','idea-one',scheduled.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-one'},db,now),'creative_access_denied')
 permitted=true

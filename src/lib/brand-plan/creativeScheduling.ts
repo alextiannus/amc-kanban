@@ -86,7 +86,7 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
       await tx.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${previous.draftId} FOR UPDATE`
       draft = await tx.contentDraft.findUnique({where:{id:previous.draftId},select:{id:true,brandId:true,status:true,agentNote:true}})
       if (!draft || draft.brandId !== brandId || !draft.agentNote?.includes(calendarSyncMarker(creativeId))) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
-      if (['scheduled','publishing','published','done','archived'].includes(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
+      if (!['draft','pending_review','planned_unimplemented','needs_materials','needs_revision'].includes(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
     }
     let link: CreativeScheduleLink | null = null
     if (schedule) {
