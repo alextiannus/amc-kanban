@@ -26,6 +26,7 @@ const prisma = {
   $transaction: async (task: any) => task({ contentDraft }),
 }
 const deps: Record<string, any> = {
+  '@/lib/postfastPublishAccount': { checkPostfastPublishAccount: async () => { throw new Error('Unexpected provider check') } },
   'next/server': { NextResponse: { json: Response.json } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN' } }), extractApiKey: () => null },
   '@/lib/prisma': { prisma },

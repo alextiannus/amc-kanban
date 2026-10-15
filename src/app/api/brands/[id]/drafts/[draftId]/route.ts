@@ -69,6 +69,31 @@ const DRAFT_SELECT = {
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
+const CREATIVE_DRAFT_MARKERS = ['brand-plan-calendar-item:', 'brand-plan-creative-unscheduled:']
+function hasCreativeDraftMarker(note: unknown): note is string {
+  return typeof note === 'string' && CREATIVE_DRAFT_MARKERS.some(marker => note.startsWith(marker))
+}
+
+async function isLinkedCreativeDraft(client: any, brandId: string, draftId: string, note: unknown) {
+  if (!hasCreativeDraftMarker(note)) return false
+  // An unscheduled draft remains reserved for the creative so that the next
+  // explicit schedule reuses it instead of silently creating a duplicate.
+  if (note.startsWith('brand-plan-creative-unscheduled:')) return true
+  const knowledge = await client.brandKnowledge.findUnique({where: {brandId}, select: {marketingSolution: true, brandPlan: true}})
+  const solution = knowledge?.marketingSolution as any
+  const plan = knowledge?.brandPlan as any
+  const months = solution?.publishingCalendar?.months ?? plan?.publishingCalendar?.months ?? {}
+  return Object.values(months).some((items: any) => Array.isArray(items) && items.some(item => item?.schedule?.draftId === draftId))
+}
+
+function changesCreativeSchedule(body: any, draft: {accountId: string | null; scheduledAt: Date | null; agentNote?: string | null}) {
+  const accountChanged = Object.prototype.hasOwnProperty.call(body, 'accountId') && body.accountId !== draft.accountId
+  const dateChanged = Object.prototype.hasOwnProperty.call(body, 'scheduledAt')
+    && (typeof body.scheduledAt === 'string' && body.scheduledAt ? new Date(body.scheduledAt).getTime() : null) !== (draft.scheduledAt?.getTime() ?? null)
+  const markerChanged = Object.prototype.hasOwnProperty.call(body, 'agentNote') && body.agentNote !== draft.agentNote
+  return accountChanged || dateChanged || markerChanged
+}
+
 async function getActor(request: Request) {
   const session = await getSession()
   const apiKey = extractApiKey(request)
@@ -151,11 +176,15 @@ export async function PATCH(request: Request, { params }: Params) {
       gbpLocationId: true,
       instagramPublishType: true,
       postfastControls: true,
+      agentNote: true,
     },
   })
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
+  if (changesCreativeSchedule(body, existing) && await isLinkedCreativeDraft(prisma, brandId, draftId, existing.agentNote)) {
+    return NextResponse.json({error: '请通过创意排期入口修改账号或时间。'}, {status: 409})
+  }
 
   const hasInstagramPublishTypeUpdate = Object.prototype.hasOwnProperty.call(body, 'instagramPublishType')
   const instagramPublishTypeUpdate = hasInstagramPublishTypeUpdate
@@ -351,6 +380,13 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const draft = await prisma.$transaction(async (tx: any) => {
+    if (hasCreativeDraftMarker(existing.agentNote)) {
+      await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
+      const current = await tx.contentDraft.findUnique({where: {id: draftId}, select: {accountId: true, scheduledAt: true, agentNote: true}})
+      if (current && changesCreativeSchedule(body, current) && await isLinkedCreativeDraft(tx, brandId, draftId, current.agentNote)) {
+        throw new CreativeDraftLinkConflict()
+      }
+    }
     const updated = await tx.contentDraft.update({
       // Prevent controls from overwriting a concurrent edit or publication transition.
       where: { id: draftId, ...(hasPostfastControlsUpdate ? { updatedAt: existing.updatedAt } : {}) },
@@ -461,10 +497,12 @@ export async function PATCH(request: Request, { params }: Params) {
 
     return tx.contentDraft.findUniqueOrThrow({ where: { id: draftId }, select: DRAFT_SELECT })
   }).catch((error: unknown) => {
+    if (error instanceof CreativeDraftLinkConflict) return 'creative-link-conflict' as const
     if (hasPostfastControlsUpdate && (error as { code?: string })?.code === 'P2025') return null
     throw error
   })
 
+  if (draft === 'creative-link-conflict') return NextResponse.json({error: '请通过创意排期入口修改账号或时间。'}, {status: 409})
   if (!draft) return NextResponse.json({ error: 'Draft changed while saving controls. Reload and retry.' }, { status: 409 })
 
   void persistDraftSnapshotToObs({ brandId, draftId: draft.id, data: draft }).catch((error) => {
@@ -531,6 +569,9 @@ export async function DELETE(request: Request, { params }: Params) {
 
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId } })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (await isLinkedCreativeDraft(prisma, brandId, draftId, draft.agentNote)) {
+    return NextResponse.json({error: '请先从创意排期中解除关联，再处理该草稿。'}, {status: 409})
+  }
 
   const activeJob = await findActivePostfastDeliveryJob(draftId)
   if (activeJob) {
@@ -591,6 +632,20 @@ export async function DELETE(request: Request, { params }: Params) {
     console.error(`Failed to clean up assets for deleted draft ${draftId}:`, err)
   }
 
-  await prisma.contentDraft.delete({ where: { id: draftId } })
+  try {
+    await prisma.$transaction(async (tx: any) => {
+      if (hasCreativeDraftMarker(draft.agentNote)) {
+        await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
+        const current = await tx.contentDraft.findUnique({where: {id: draftId}, select: {agentNote: true}})
+        if (current && await isLinkedCreativeDraft(tx, brandId, draftId, current.agentNote)) throw new CreativeDraftLinkConflict()
+      }
+      await tx.contentDraft.delete({where: {id: draftId}})
+    })
+  } catch (error) {
+    if (error instanceof CreativeDraftLinkConflict) return NextResponse.json({error: '请先从创意排期中解除关联，再处理该草稿。'}, {status: 409})
+    throw error
+  }
   return NextResponse.json({ ok: true, deleted: true, draftId })
 }
+
+class CreativeDraftLinkConflict extends Error {}
