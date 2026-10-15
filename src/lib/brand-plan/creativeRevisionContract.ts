@@ -32,7 +32,7 @@ export function findCreative(workspace: any, month: string, id: string) {
 // Only pre-workspace AI matching may still submit this historical calendar shape.
 // Merchant revision writes use validateCreativeWorkspacePatch instead.
 export const CREATIVE_EDIT_FIELDS = ['date','title','platform','contentType','product','planning','materialRequirements','aiCaption','aiTags'] as const
-export function validateCreativePatch(value: unknown, month: string) {
+export function validateCreativePatch(value: unknown, month: string, options: {allowUndatedEditor?:boolean} = {}) {
   const input = record(value)
   if (!Object.keys(input).length || Object.keys(input).some(key => !CREATIVE_EDIT_FIELDS.includes(key as any))) throw new CreativeRevisionError('invalid_creative_patch')
   const patch: Record<string, any> = {}
@@ -43,7 +43,7 @@ export function validateCreativePatch(value: unknown, month: string) {
     } else {
       if (typeof value !== 'string' || value.length > (['planning','aiCaption'].includes(key) ? 20000 : 500)) throw new CreativeRevisionError('invalid_creative_patch')
       patch[key] = value.trim()
-      if (['date','title','platform','contentType','product'].includes(key) && !patch[key]) throw new CreativeRevisionError('invalid_creative_patch')
+      if (['date','title','platform','contentType','product'].includes(key) && !patch[key] && !(options.allowUndatedEditor && !input.date && ['date','platform','product'].includes(key))) throw new CreativeRevisionError('invalid_creative_patch')
     }
   }
   if (patch.date) {
@@ -60,6 +60,19 @@ export function validateCreativePatch(value: unknown, month: string) {
 }
 // Historical plans carry excerpts, not the immutable full Content creative.
 export function originalSource(item: Record<string, any>, capturedAt: string) {
+  const canonical = record(item.source)
+  if (typeof canonical.inspirationCreativeId === 'string' && canonical.inspirationCreativeId.trim()) {
+    return {system:'amc-content',creativeId:canonical.inspirationCreativeId,inspirationCreativeId:canonical.inspirationCreativeId,
+      version:typeof canonical.sourceRevision==='string'?canonical.sourceRevision:null,
+      evidence:canonical.evidenceStatus || 'source_unavailable',evidenceStatus:canonical.evidenceStatus || 'source_unavailable',
+      capturedAt:canonical.capturedAt || capturedAt,snapshot:canonical,
+      digest:typeof canonical.libraryDigest==='string'&&canonical.libraryDigest?canonical.libraryDigest:creativeDigest(canonical)}
+  }
   const snapshot = Object.fromEntries(['inspirationCreativeId','inspirationSourceTitle','inspirationSourceSummary','selectedCreativeCandidateId','sampleOriginalUrl','sampleVideoUrl','sampleSourcePlatform','creativeMechanism','videoScript','nativeSourceSnapshot','nativeCandidate'].filter(key => item[key] !== undefined).map(key => [key,item[key]]))
   return { system: item.inspirationCreativeId ? 'amc-content' : 'amc-kanban', creativeId: item.inspirationCreativeId || null, version: null, evidence: item.inspirationCreativeId ? 'plan_snapshot' : 'unresolved', capturedAt, snapshot, digest: creativeDigest(snapshot) }
+}
+export function revisionSource(item: Record<string, any>, stored: unknown, capturedAt: string): Record<string, any> {
+  const canonicalId = record(item.source).inspirationCreativeId
+  if (typeof canonicalId === 'string' && canonicalId.trim()) return originalSource(item,capturedAt)
+  return stored && typeof stored === 'object' && !Array.isArray(stored) ? record(stored) : originalSource(item,capturedAt)
 }

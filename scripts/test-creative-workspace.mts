@@ -32,6 +32,11 @@ assert.deepEqual(legacyClient.patch.platformTargets, ['Instagram'])
 assert.equal(legacyClient.legacyProduct, 'Lunch')
 assert.equal('date' in legacyClient.patch, false)
 assert.throws(() => validateCreativeRevisionClientPatch({ date: '2026-11-01' }, '2026-11'), /invalid_creative_patch/)
+assert.throws(() => validateCreativeWorkspacePatch({ date: '' }), /invalid_creative_patch/)
+const undatedEditorPatch = { date: '', title: 'Undated title', platform: '', contentType: '图文', product: '', planning: 'Editor update', materialRequirements: [], aiCaption: '', aiTags: [] }
+assert.equal(validateCreativeRevisionClientPatch(undatedEditorPatch, '2026-11').patch.planning, 'Editor update')
+assert.throws(() => validateCreativeRevisionClientPatch({ date: '', planning: 'partial forged legacy request' }, '2026-11'), /invalid_creative_patch/)
+assert.throws(() => validateCreativeRevisionClientPatch({ ...undatedEditorPatch, schedule: { draftId: 'forged' } }, '2026-11'), /invalid_creative_patch/)
 const editedLegacy = normalizeCreativeWorkspaceItem({ id: 'legacy', legacy: { date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' }, status: 'idea_pending', platformTargets: ['TikTok'] })
 assert.equal(editedLegacy.legacy?.date, '2026-11-01')
 assert.equal(editedLegacy.legacy?.status, 'planned_unimplemented')
@@ -114,6 +119,7 @@ const copyDb: any = {
   },
   brandMarketingSolution: {
     findFirst: async ({ where }: any) => where.input ? null : savedRows.find(row => row.period === where.period) || null,
+    findMany: async ({ where }: any) => savedRows.filter(row => row.period === where.period && (!where.id || row.id === where.id) && (!where.version || row.version < where.version.lt)).reverse(),
     create: async ({ data }: any) => { const row = { ...data, id: `saved-${savedRows.length}`, createdAt: new Date('2026-11-05T00:00:00Z') }; savedRows.push(row); return row },
   },
   brand: { findUnique: async () => ({ id: 'brand-1', name: 'Brand', crew: { id: 'crew-1', members: [] } }) },
@@ -134,4 +140,31 @@ assert.equal(copy.derivedFromCreativeId, 'old-idea')
 assert.equal(copied.receipt.source.creativeId, 'viral-1')
 assert.equal(copied.receipt.parentRevisionId, 'saved-0')
 assert.equal(copiedWorkspace.publishingCalendar.months['2026-11'][0].date, '2026-11-04')
-console.log('PASS: undated/legacy reads, MM compatibility, revision IDs, no draft writes, and clean copy lineage')
+const editedUndated = await module.exports.saveCreativeRevision(actor, 'brand-1', '2026-11', copy.id, {
+  expectedRevision: revisionContract.creativeDigest(copy), idempotencyKey: 'editor-undated-save', saveMode: 'overwrite', patch: undatedEditorPatch,
+}, copyDb)
+assert.equal(editedUndated.receipt.content.date, undefined)
+assert.equal(editedUndated.receipt.content.schedule, null)
+assert.equal(editedUndated.receipt.content.planning, 'Editor update')
+
+const canonicalSource = { inspirationCreativeId: 'viral-canonical', creativeCandidateId: 'candidate-1', sourceRevision: 'source-v2', contentMatchRequestId: 'match-1', capturedAt: '2026-11-06T00:00:00Z', evidenceStatus: 'full_source', libraryDigest: 'digest-canonical', title: 'Source', platform: 'TikTok', originalPostUrl: null, originalVideoUrl: null, internalDetailPath: '/internal/viral-canonical', scriptContent: { scenes: ['one'] }, timeline: [{ id: 'shot-1' }] }
+const canonicalCard = { id: 'canonical-idea', title: 'Canonical idea', planning: 'Original', status: 'idea_pending', source: canonicalSource, materialRequirements: [], aiTags: [] }
+copiedWorkspace.publishingCalendar.months['2026-11'].push(canonicalCard)
+const canonicalCopy = await module.exports.saveCreativeRevision(actor, 'brand-1', '2026-11', canonicalCard.id, {
+  expectedRevision: revisionContract.creativeDigest(canonicalCard), idempotencyKey: 'copy-canonical-source', saveMode: 'copy', patch: { planning: 'Copied canonical source' },
+}, copyDb)
+assert.equal(canonicalCopy.receipt.source.creativeId, canonicalSource.inspirationCreativeId)
+assert.equal(canonicalCopy.receipt.source.inspirationCreativeId, canonicalSource.inspirationCreativeId)
+assert.equal(canonicalCopy.receipt.source.evidence, canonicalSource.evidenceStatus)
+assert.deepEqual(canonicalCopy.receipt.source.snapshot, canonicalSource)
+assert.deepEqual(canonicalCopy.receipt.workspaceItem.source, canonicalSource)
+assert.deepEqual(canonicalCopy.receipt.content.source, canonicalSource)
+const canonicalRead = await module.exports.readCreativeRevisions(actor, 'brand-1', '2026-11', canonicalCopy.receipt.content.id, undefined, copyDb)
+assert.equal(canonicalRead.source.creativeId, canonicalSource.inspirationCreativeId)
+assert.equal(canonicalRead.source.inspirationCreativeId, canonicalSource.inspirationCreativeId)
+assert.equal(canonicalRead.source.evidence, canonicalSource.evidenceStatus)
+assert.deepEqual(canonicalRead.source.snapshot, canonicalSource)
+assert.deepEqual(canonicalRead.workspaceItem.source, canonicalSource)
+assert.deepEqual(canonicalRead.revisions[0].source.snapshot, canonicalSource)
+assert.deepEqual(canonicalRead.revisions[0].workspaceItem.source, canonicalSource)
+console.log('PASS: undated editor save, canonical copy source, legacy reads, revision IDs, and no draft writes')

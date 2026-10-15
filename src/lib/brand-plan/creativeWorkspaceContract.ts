@@ -90,9 +90,9 @@ export function validateCreativeRevisionClientPatch(value: unknown, month: strin
   }
   // The deployed MM editor submits every historical field. Accept that exact
   // shape while mapping its platform and ignoring its date for scheduling.
-  const old = validateCreativePatch(input, month)
+  const old = validateCreativePatch(input, month, {allowUndatedEditor:input.date === ''})
   const { date: _date, platform: _platform, platformSlug: _platformSlug, product, ...canonical } = old
-  return { patch: validateCreativeWorkspacePatch({ ...canonical, platformTargets: [old.platform] }), legacyProduct: product }
+  return { patch: validateCreativeWorkspacePatch({ ...canonical, ...(old.platform ? {platformTargets:[old.platform]} : {}) }), legacyProduct: product }
 }
 
 export function normalizeCreativeWorkspaceItem(value: unknown, context: { brandId?: string; currentRevisionId?: string; createdAt?: string; updatedAt?: string } = {}): CreativeWorkspaceItem {
