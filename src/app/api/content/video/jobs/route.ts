@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
+import {pinVideoEditor} from '@/lib/videoLineage'
+import {requireActorPermission} from '@/lib/role-permissions/delegation'
+import {allowedRoleWriteOrigin} from '@/lib/role-permissions/request-origin'
+import {canUserAccessBrand} from '@/lib/user-management/brandAccess'
+import {verifyVideoReceipt,videoReceiptDigest} from '@/lib/videoReceipt'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +50,10 @@ export async function POST(request: Request) {
     const actor = await getActor(request)
     if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = await request.json().catch(() => null)
+    if(!allowedRoleWriteOrigin(request))return NextResponse.json({error:'Forbidden'},{status:403})
+    const raw=await request.text()
+    if(Buffer.byteLength(raw,'utf8')>9*1024*1024)return NextResponse.json({error:'video_payload_too_large'},{status:413})
+    const body = JSON.parse(raw)
     if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
 
     const id = text(body.id)
@@ -56,15 +64,55 @@ export async function POST(request: Request) {
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const existing = await prisma.videoProductionJob.findUnique({
+    const job=await prisma.$transaction(async tx=>{
+    if(!await canUserAccessBrand(brandId,actor.id,'WRITE'))throw Object.assign(new Error('Not found'),{status:404})
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${brandId+':'+id}))`
+    const existing = await tx.videoProductionJob.findUnique({
       where: { id },
-      select: { brandId: true },
+      select: { brandId: true, createdBy:true, plan:true, creativeId:true },
     })
     if (existing && existing.brandId !== brandId) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+      throw Object.assign(new Error('Not found'),{status:404})
     }
+    await requireActorPermission(actor.id,'content.video-making.create',brandId)
+    if(existing?.createdBy&&existing.createdBy!==actor.id)throw Object.assign(new Error('video_owner_required'),{status:403})
+    const oldEditor=(existing?.plan as any)?._mmVideoJob?.editor
+    const metadata=body.plan?._mmVideoJob||{}
+    const oldMetadata=(existing?.plan as any)?._mmVideoJob||{}
+    const projectId=text(body.plan?.basicVideoProjectId)||text(metadata.basicVideoProjectId)
+    const oldProjectId=text((existing?.plan as any)?.basicVideoProjectId)||text(oldMetadata.basicVideoProjectId)
+    if(oldProjectId&&projectId!==oldProjectId)throw Object.assign(new Error('video_project_immutable'),{status:409})
+    if(projectId){
+      const legacy=metadata.videoReceipt?.editorDigest===videoReceiptDigest(null)
+      verifyVideoReceipt({receipt:metadata.videoReceipt,projectId,brandId,ownerId:actor.id,editor:legacy?null:metadata.editor,revisions:metadata.revisions||[],revisionsHasMore:Boolean(metadata.revisionsHasMore),existing:oldMetadata.videoReceipt})
+      if(legacy&&metadata.editor?.creativeRevisionId)throw Object.assign(new Error('video_lineage_unverified'),{status:409})
+      metadata.basicVideoProjectId=projectId
+      body.plan={...body.plan,basicVideoProjectId:projectId,_mmVideoJob:metadata}
+    }else{
+      metadata.revisions=[]
+      metadata.revisionsHasMore=false
+      delete metadata.videoReceipt
+      body.plan={...body.plan,_mmVideoJob:metadata}
+    }
+    if(!metadata.editor&&body.creativeId&&!existing)throw Object.assign(new Error('video_lineage_required'),{status:409})
+    if(existing&&(existing.creativeId||null)!==(body.creativeId||null))throw Object.assign(new Error('video_lineage_immutable'),{status:409})
+    if(metadata.editor){
+      metadata.editor=await pinVideoEditor(tx,brandId,metadata.editor,oldEditor)
+      if(!oldEditor){
+        const ids=metadata.editor.assets.map((asset:any)=>asset.id)
+        if(ids.some((id:any)=>typeof id!=='string')||new Set(ids).size!==ids.length)throw Object.assign(new Error('invalid_video_assets'),{status:400})
+        const trusted=await tx.mediaAsset.findMany({where:{brandId,id:{in:ids}},select:{id:true,url:true,mimeType:true,aiCaption:true}})
+        if(trusted.length!==ids.length)throw Object.assign(new Error('video_asset_not_found'),{status:404})
+        if(!projectId)metadata.editor.assets=ids.map((id:string)=>trusted.find(asset=>asset.id===id))
+      }
+      if(metadata.editor.creativeId!==(body.creativeId||null))throw Object.assign(new Error('video_lineage_immutable'),{status:409})
+      if(projectId&&metadata.videoReceipt.editorDigest!==videoReceiptDigest(null))verifyVideoReceipt({receipt:metadata.videoReceipt,projectId,brandId,ownerId:actor.id,editor:metadata.editor,revisions:metadata.revisions||[],revisionsHasMore:Boolean(metadata.revisionsHasMore),existing:oldMetadata.videoReceipt})
+      body.assetIds=metadata.editor.assets.map((asset:any)=>asset.id)
+      body.mediaUrls=metadata.editor.assets.map((asset:any)=>asset.url)
+      body.plan={...body.plan,_mmVideoJob:metadata}
+    }else if(oldEditor){throw Object.assign(new Error('video_lineage_required'),{status:409})}
 
-    const job = await prisma.videoProductionJob.upsert({
+    return tx.videoProductionJob.upsert({
       where: { id },
       create: {
         id,
@@ -115,6 +163,7 @@ export async function POST(request: Request) {
       },
     })
 
+    })
     return NextResponse.json({ success: true, job: serializeJob(job) })
   } catch (err: any) {
     console.error('[VideoJobs] save failed:', err)
@@ -124,6 +173,7 @@ export async function POST(request: Request) {
 
 function serializeJob(job: any) {
   return {
+    createdBy:job.createdBy,
     ...(job.voiceoverState || {}),
     id: job.id,
     brandId: job.brandId,
@@ -152,6 +202,7 @@ function serializeJob(job: any) {
 }
 
 function statusFromError(err: any) {
+  if(err instanceof SyntaxError)return 400
   return typeof err?.status === 'number' && err.status >= 400 && err.status < 600 ? err.status : 500
 }
 

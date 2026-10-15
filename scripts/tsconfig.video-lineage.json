@@ -1,0 +1,6 @@
+{
+  "extends":"../tsconfig.json",
+  "compilerOptions":{"incremental":false,"types":["node"]},
+  "include":["../src/lib/videoLineage.ts","../src/lib/videoReceipt.ts","./test-video-lineage.mts","./test-video-receipt-signature.mts"],
+  "exclude":[]
+}
