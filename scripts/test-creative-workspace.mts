@@ -69,6 +69,7 @@ assert.equal(listed.find(item => item.id === 'legacy')?.workspaceItem?.legacy?.d
 listDb.contentDraft.findMany=async()=>[
   {id:'legacy-draft',agentNote:'Historical BRAND-PLAN-CALENDAR-ITEM:LEGACY',status:'draft'},
   {id:'other-draft',agentNote:'brand-plan-calendar-item:legacy-other',status:'draft'},
+  {id:'dotted-draft',agentNote:'Historical BRAND-PLAN-CALENDAR-ITEM:LEGACY.V1',status:'draft'},
 ]
 const historicalListed=await listOpenCalendarCreativeOptions('brand-1','2026-11',listDb as any)
 assert.equal(historicalListed.find(item=>item.id==='legacy')?.draftId,'legacy-draft')

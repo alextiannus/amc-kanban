@@ -57,7 +57,7 @@ const modules:Record<string,any> = {
   '../role-permissions/store.ts':{readPolicies:async()=>({policies:{AMC_PRINCIPAL:['content.schedule']}})},
   '../role-permissions/contract.ts':{effectiveGrants:()=>['content.schedule']},
   '../auth-v2/types.ts':{principalFromUser:()=>({permissionRoleIds:['AMC_PRINCIPAL'],globalRoles:[]})},
-  './calendarSync.ts':{calendarSyncMarker:(id:string)=>`brand-plan-calendar-item:${id}`},
+  './calendarSync.ts':{calendarSyncMarker:(id:string)=>draftMarkers.creativeDraftMarker('calendar',id)},
   './creativeDraftMarker.ts':draftMarkers,
   './creativeRevisionContract.ts':contract,
   './creativeWorkspaceContract.ts':workspaceContract,
@@ -75,7 +75,7 @@ assert.equal(scheduled.schedule.scheduledAtRevisionId,'revision-1')
 assert.equal(drafts.length,1)
 assert.equal(drafts[0].status,'draft')
 assert.equal(drafts[0].scheduledAt.toISOString(),'2026-11-12T02:00:00.000Z')
-assert.match(drafts[0].agentNote,/idea-one.*revision-1/)
+assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('calendar','idea-one')} creative-revision:revision-1`)
 assert.equal(current().planning,'Original script')
 assert.equal((await service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-12T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-one'},db,now)).replayed,true)
 assert.equal((await service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-12T02:00:00Z',platform:'ig',idempotencyKey:'schedule-one'},db,new Date('2026-12-01T00:00:00Z'))).replayed,true)
@@ -94,7 +94,7 @@ const unscheduled=await service.unscheduleCreative(actor,'brand-a','idea-one',sc
 assert.equal(unscheduled.schedule,null)
 assert.equal(drafts[0].status,'pending_review')
 assert.equal(drafts[0].scheduledAt,null)
-assert.match(drafts[0].agentNote,/^brand-plan-creative-unscheduled:idea-one creative-revision:revision-1$/)
+assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('unscheduled','idea-one')} creative-revision:revision-1`)
 assert.equal(current().planning,'Original script')
 assert.equal((await service.unscheduleCreative(actor,'brand-a','idea-one',scheduled.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-one'},db,now)).replayed,true)
 accountEnabled=false
@@ -245,11 +245,11 @@ assert.equal(adopted.draftId,'legacy-1')
 assert.equal(drafts.length,1)
 assert.equal(drafts[0].caption,'Merchant-edited historical copy')
 assert.equal(drafts[0].status,'pending_review')
-assert.match(drafts[0].agentNote,/^brand-plan-calendar-item:idea-one creative-revision:/)
+assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('calendar','idea-one')} creative-revision:${adopted.schedule.scheduledAtRevisionId}`)
 assert.equal(current().planning,'Original historical script')
 const legacyUnscheduled=await service.unscheduleCreative(actor,'brand-a','idea-one',adopted.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-adopted'},db,now)
 assert.equal(legacyUnscheduled.draftId,'legacy-1')
-assert.match(drafts[0].agentNote,/^brand-plan-creative-unscheduled:idea-one/)
+assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('unscheduled','idea-one')} creative-revision:${adopted.schedule.scheduledAtRevisionId}`)
 drafts[0].agentNote=`Historical reserved ${drafts[0].agentNote.toUpperCase()}`
 const legacyRescheduled=await service.scheduleCreative(actor,'brand-a','idea-one',legacyUnscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'reschedule-adopted'},db,now)
 assert.equal(legacyRescheduled.draftId,'legacy-1')
@@ -388,3 +388,122 @@ for (const note of [null,'ordinary merchant note','Historical BRAND-PLAN-CALENDA
   assert.equal(row,null)
 }
 console.log('PASS: active links always protected; unlinked normal/legacy and untimed reserved drafts remain explicitly deletable')
+
+// A marker for a longer legal ID must never transfer that creative's draft to
+// its prefix. Exercise the service (including canonical-link validation), not
+// only the string helper, and preserve the other creative's current schedule.
+const identityFailures: string[] = []
+const otherLink={draftId:'other-draft',scheduledAt:'2026-11-12T02:00:00.000Z',platform:'instagram',scheduledBy:'owner',scheduledAtRevisionId:'other-revision'}
+const legacyMarker=(kind:'calendar'|'unscheduled',id:string)=>`${kind==='calendar'?'brand-plan-calendar-item:':'brand-plan-creative-unscheduled:'}${id}`
+let identityCase=0
+for (const mode of ['canonical','unscheduled','legacy-linked','legacy-calendar','legacy-unscheduled'] as const) {
+  for (const suffix of ['.v1','-other','_other','2','/v1',':v1','%2Ev1','中文']) {
+    for (const historicalCase of [false,true]) {
+      const otherId=`idea-one${suffix}`
+      const kind=mode.includes('unscheduled')?'unscheduled':'calendar'
+      let marker=mode.startsWith('legacy')?legacyMarker(kind,otherId):draftMarkers.creativeDraftMarker(kind,otherId)
+      if(historicalCase) marker=`Historical note ${marker.toUpperCase()}`
+      const otherDraft={...legacyDraft,id:'other-draft',agentNote:`${marker} creative-revision:other-revision`}
+      const target={...item,...(mode==='legacy-calendar'?{date:'2026-11-12'}:{}),schedule:mode==='canonical'||mode==='legacy-linked'?{...otherLink}:null}
+      const otherCreative={...item,id:otherId,schedule:{...otherLink}}
+      knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[target,otherCreative]}}}}
+      drafts.splice(0,drafts.length,otherDraft)
+      const beforeDraft=structuredClone(otherDraft)
+      const beforeOther=structuredClone(otherCreative)
+      try {
+        let result:any
+        try {
+          result=await service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:`exact-identity-${++identityCase}`},db,now)
+        } catch(error:any) {
+          assert(['creative_schedule_draft_missing','creative_schedule_draft_in_use'].includes(error.code),error.message)
+        }
+        if(result) assert.notEqual(result.draftId,'other-draft','a prefix creative must never adopt the other draft')
+        assert.deepEqual(drafts.find(row=>row.id==='other-draft'),beforeDraft,'other draft must stay unchanged')
+        assert.deepEqual(knowledge.marketingSolution.publishingCalendar.months['2026-11'][1],beforeOther,'other schedule must stay unchanged')
+      } catch(error) { identityFailures.push(`${mode}/${suffix}/${historicalCase}: ${(error as Error).message}`) }
+    }
+  }
+}
+assert.deepEqual(identityFailures,[])
+console.log('PASS: canonical, unscheduled and legacy prefix/dot/case variants never mutate another creative draft')
+
+// Even an exact marker is insufficient when a different current creative owns
+// the candidate. The brand workspace and candidate must be checked under the
+// same transaction's BrandKnowledge -> ContentDraft locks, across all months.
+for (const mode of ['canonical','unscheduled','legacy-linked','legacy-calendar','legacy-unscheduled'] as const) {
+  for (const otherMonth of ['2026-11','2026-12']) {
+    const kind=mode.includes('unscheduled')?'unscheduled':'calendar'
+    const marker=mode.startsWith('legacy')?legacyMarker(kind,'idea-one'):draftMarkers.creativeDraftMarker(kind,'idea-one')
+    const reserved={...legacyDraft,id:'other-draft',agentNote:`History ${marker.toUpperCase()} creative-revision:other-revision`}
+    const target={...item,...(mode==='legacy-calendar'?{date:'2026-11-12'}:{}),schedule:mode==='canonical'||mode==='legacy-linked'?{...otherLink}:null}
+    const other={...item,id:otherMonth==='2026-11'?'idea-one.v1':'idea-one',schedule:{...otherLink}}
+    knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[target],...(otherMonth==='2026-12'?{'2026-12':[other]}:{})}}}}
+    if(otherMonth==='2026-11') knowledge.marketingSolution.publishingCalendar.months['2026-11'].push(other)
+    drafts.splice(0,drafts.length,reserved)
+    const before=structuredClone({knowledge,drafts})
+    let brandLocked=false
+    let draftLocked=false
+    const lockedTx={...tx,
+      $queryRaw:async(parts:TemplateStringsArray,...values:any[])=>{
+        const query=parts.join('?')
+        if(query.includes('"BrandKnowledge"')) {assert.equal(values[0],'brand-a');brandLocked=true}
+        if(query.includes('"ContentDraft"')) {assert(brandLocked);assert.equal(values[0],'other-draft');draftLocked=true}
+        return []
+      },
+      brandKnowledge:{...tx.brandKnowledge,findUnique:async()=>{assert(brandLocked,'current links must be read with the brand lock held');return structuredClone(knowledge)}},
+      contentDraft:{...tx.contentDraft,findUnique:async(args:any)=>{assert(brandLocked&&draftLocked,'candidate must be re-read under both locks');return tx.contentDraft.findUnique(args)}},
+    }
+    const lockedDb={$transaction:async(work:Function)=>work(lockedTx)}
+    await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:`owned-candidate-${++identityCase}`},lockedDb,now),'creative_schedule_draft_in_use')
+    assert.equal(draftLocked,true)
+    assert.deepEqual({knowledge,drafts},before,'conflicted adoption must not write either creative or draft')
+  }
+}
+console.log('PASS: exact-marker candidates referenced by another current schedule fail closed under both locks')
+
+// Complete dotted and punctuation IDs still reuse their own unique draft,
+// despite a longer-ID draft also appearing in the database substring search.
+for (const mode of ['canonical','unscheduled','legacy-linked','legacy-calendar','legacy-unscheduled'] as const) {
+  for (const id of ['idea-one.v1','idea/one?version=1','Idea-One']) {
+    const kind=mode.includes('unscheduled')?'unscheduled':'calendar'
+    const markerFor=(value:string)=>mode.startsWith('legacy')?legacyMarker(kind,value):draftMarkers.creativeDraftMarker(kind,value)
+    const ownDraft={...legacyDraft,id:'own-draft',agentNote:`History ${markerFor(id).toUpperCase()} creative-revision:own-revision`}
+    const otherDraft={...legacyDraft,id:'other-draft',agentNote:`History ${markerFor(`${id}.v2`).toUpperCase()} creative-revision:other-revision`}
+    const ownLink={...otherLink,draftId:'own-draft'}
+    knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[
+      {...item,id,...(mode==='legacy-calendar'?{date:'2026-11-12'}:{}),schedule:mode==='canonical'||mode==='legacy-linked'?ownLink:null},
+      {...item,id:`${id}.v2`,schedule:{...otherLink}},
+    ]}}}}
+    drafts.splice(0,drafts.length,ownDraft,otherDraft)
+    const beforeOther=structuredClone(otherDraft)
+    const result=await service.scheduleCreative(actor,'brand-a',id,contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:`reuse-exact-${++identityCase}`},db,now)
+    assert.equal(result.draftId,'own-draft')
+    assert.equal(drafts.length,2)
+    assert.equal(ownDraft.caption,legacyDraft.caption)
+    assert.equal(ownDraft.status,legacyDraft.status)
+    assert.deepEqual(otherDraft,beforeOther)
+  }
+}
+console.log('PASS: exact dotted/punctuation IDs reuse their own unique canonical, unscheduled and historical draft')
+
+for (const kind of ['calendar','unscheduled'] as const) {
+  for (const id of ['idea-one.v1','idea/one?version=1#shot','idea:one%20two','创意一','Idea-One','idea one','idea\tone','idea\none','idea"one','idea\\one','\ud800','idea\u0000one','idea😀','brand-plan-calendar-item-v2:0069']) {
+    contract.validateCreativeAddress('2026-11',id)
+    const marker=draftMarkers.creativeDraftMarker(kind,id)
+    assert.equal(draftMarkers.hasCreativeDraftMarker(`${marker} creative-revision:revision-1`,kind,id),true,`valid address round-trip: ${JSON.stringify(id)}`)
+    assert.equal(draftMarkers.hasCreativeDraftMarker(marker,kind,`${id}.v1`),false)
+    assert.equal(draftMarkers.hasCreativeDraftMarker(draftMarkers.creativeDraftMarker(kind,`${id}.v1`),kind,id),false)
+  }
+  assert.equal(draftMarkers.hasCreativeDraftMarker(draftMarkers.creativeDraftMarker(kind,'Idea-One'),kind,'idea-one'),false,'new encoded identity preserves ID casing')
+  assert.equal(draftMarkers.hasCreativeDraftMarker(`History ${legacyMarker(kind,'IDEA-ONE.V1')}`,kind,'idea-one'),false)
+  assert.equal(draftMarkers.hasCreativeDraftMarker(`History ${legacyMarker(kind,'IDEA-ONE.V1')}`,kind,'idea-one.v1'),true)
+  const otherMarker=draftMarkers.creativeDraftMarker(kind,'idea-one.v1')
+  assert.equal(draftMarkers.hasCreativeDraftMarker(`${legacyMarker(kind,'idea-one')} ${otherMarker}`,kind,'idea-one'),false,'encoded identity must override the raw projection')
+  assert.equal(draftMarkers.hasCreativeDraftMarker(`${otherMarker}-invalid`,kind,'idea-one.v1'),false,'malformed encoded identity must not fall back to the raw projection')
+  assert.equal(draftMarkers.hasCreativeDraftMarker(`${otherMarker} ${draftMarkers.creativeDraftMarker(kind,'idea-one')}`,kind,'idea-one'),false,'conflicting encoded identities fail closed')
+}
+console.log('PASS: every accepted address character round-trips without token or casing collisions; historical case variants remain readable')
+
+// Existing Kanban/MM calendar consumers still display the whitespace-free raw
+// identity. Keep that read projection while the encoded token owns validation.
+assert.equal(draftMarkers.creativeDraftMarker('calendar','idea-one.v1').match(/brand-plan-calendar-item:([^\s]+)/)?.[1],'idea-one.v1')

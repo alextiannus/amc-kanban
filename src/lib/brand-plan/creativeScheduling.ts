@@ -5,7 +5,7 @@ import { readPolicies } from '../role-permissions/store.ts'
 import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { calendarSyncMarker } from './calendarSync.ts'
-import { creativeDraftMarker, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
+import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, record, revisionPeriod, validateCreativeAddress } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeScheduleLink } from './creativeWorkspaceContract.ts'
 
@@ -96,10 +96,9 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
       if (!draft || draft.brandId !== brandId || !hasCreativeDraftMarker(draft.agentNote,'calendar',creativeId)) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
       if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
     } else if (schedule) {
-      const markerPrefix = creativeDraftMarker('unscheduled',creativeId)
-      const legacyMarker = calendarSyncMarker(creativeId)
+      const markers = [...creativeDraftMarkerSearches('unscheduled',creativeId),...(normalized.legacy?.date?creativeDraftMarkerSearches('calendar',creativeId):[])]
       const isCandidate = (note: string | null) => Boolean(hasCreativeDraftMarker(note,'unscheduled',creativeId) || normalized.legacy?.date && hasCreativeDraftMarker(note,'calendar',creativeId))
-      const possible = await tx.contentDraft.findMany({where:{brandId,OR:[{agentNote:{contains:markerPrefix,mode:'insensitive'}},...(normalized.legacy?.date?[{agentNote:{contains:legacyMarker,mode:'insensitive' as const}}]:[])]},select:{id:true,brandId:true,status:true,agentNote:true}})
+      const possible = await tx.contentDraft.findMany({where:{brandId,OR:markers.map(marker=>({agentNote:{contains:marker,mode:'insensitive' as const}}))},select:{id:true,brandId:true,status:true,agentNote:true}})
       const candidates = possible.filter(row => isCandidate(row.agentNote))
       if (candidates.length > 1) throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
       if (candidates.length === 1) {
@@ -109,6 +108,12 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
         if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
       }
     }
+    // The workspace was read after taking the brand lock, which remains held
+    // together with this draft's lock. A marker never overrides another current
+    // schedule, including a same-ID creative in a different month.
+    if (draft && Object.entries(record(workspace.publishingCalendar?.months)).some(([linkedMonth,items]) =>
+      Array.isArray(items) && items.some(item => (linkedMonth !== month || item?.id !== creativeId) && item?.schedule?.draftId === draft!.id)
+    )) throw new CreativeRevisionError('creative_schedule_draft_in_use',409)
     let link: CreativeScheduleLink | null = null
     if (schedule) {
       const accounts = await tx.socialAccount.findMany({where:{brandId,unboundAt:null,...(schedule.accountId?{id:schedule.accountId}:{})},select:{id:true,platformId:true,handle:true,postfastAccountId:true,connectionStatus:true,disabledReason:true}})

@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { creativeWorkspace, monthItems, revisionPeriod, CREATIVE_REVISION_KIND } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeWorkspaceItem } from './creativeWorkspaceContract.ts'
-import { creativeDraftMarker, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
+import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
 
 export type CalendarCreativeItem = {
   nativeDaily?: {poolIdeaId:string;taskId:string}
@@ -179,7 +179,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
   // Marker lookup only projects historical dated plans. New undated ideas
   // receive draft links solely from the explicit scheduling transaction.
   const legacyOptions = options.filter(item => item.date && !item.draftId)
-  const markers = legacyOptions.map(item => calendarSyncMarker(item.id))
+  const markers = legacyOptions.flatMap(item => creativeDraftMarkerSearches('calendar',item.id))
   const revisions = await db.brandMarketingSolution.findMany({
     where: { brandId, kind: CREATIVE_REVISION_KIND, period: { in: options.map(item => revisionPeriod(month,item.id)) } },
     orderBy: { version: 'desc' },
