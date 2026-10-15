@@ -6,6 +6,7 @@ assert.deepEqual(REVISION_REASONS,['sku_mismatch','selling_point','transitions',
 assert.equal(revisionReasons.length,10)
 assert.equal(scriptForSourceShot('Human prose mentions shot-1','shot-1',['shot-1']),null)
 assert.equal(scriptForSourceShot('1. shot-1 Hook\nServe\n2. shot-2 Close','shot-1',['shot-1','shot-2']),'1. shot-1 Hook\nServe')
+if(!process.env.AMC_MM_REPO){console.error('SKIP: cross-repo parity requires AMC_MM_REPO; required gate FAILED');process.exit(1)}
 if(process.env.AMC_MM_REPO){
  const mm=await readFile(process.env.AMC_MM_REPO+'/src/lib/creativeRevisions.ts','utf8')
  const local=await readFile(new URL('../src/lib/creativeReviewContract.ts',import.meta.url),'utf8')

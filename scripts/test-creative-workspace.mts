@@ -57,7 +57,7 @@ const listDb = {
     { id: 'undated', title: 'New idea', status: 'idea_pending', platformTargets: ['TikTok'] },
     { id: 'legacy', title: 'Edited old idea', status: 'idea_pending', legacy: { date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } },
   ] } } } }) },
-  brandMarketingSolution: { findMany: async () => [{ id: 'revision-new', period: revisionContract.revisionPeriod('2026-11', 'undated'), createdAt: new Date('2026-11-02T00:00:00Z') }] },
+  $queryRaw: async () => [{ id: 'revision-new', period: revisionContract.revisionPeriod('2026-11', 'undated'), createdAt: new Date('2026-11-02T00:00:00Z'),revisionCount:1n }],
   contentDraft: { findMany: async () => [{ id: previousDraft.id, agentNote: 'brand-plan-calendar-item:undated', status: 'draft' }] },
 }
 const listed = await listOpenCalendarCreativeOptions('brand-1', '2026-11', listDb as any)
@@ -117,6 +117,47 @@ assert.equal(historical.workspaceItem.currentRevisionId, 'revision-1')
 assert.equal(historical.revisions[0].workspaceItem.currentRevisionId, 'revision-0')
 const page = await module.exports.readCreativeRevisions(actor, 'brand-1', '2026-11', 'idea-1', undefined, dbMock, 1)
 assert.equal(page.workspaceItem.currentRevisionId, 'revision-1')
+
+// Independent schedule permission is not script ownership or draft.update.
+deps['../auth-v2/types.ts'].principalFromUser=()=>({globalRoles:[],permissionRoleIds:['OPERATOR']})
+deps['../role-permissions/store.ts'].readPolicies=async()=>({policies:{OPERATOR:[]}})
+let grants=['content.schedule'],brandWrite=true
+deps['../role-permissions/contract.ts'].effectiveGrants=()=>grants
+deps['../user-management/brandAccess.ts'].canUserAccessBrand=async(_brand:string,_user:string,mode:string)=>mode==='READ'||brandWrite
+Object.assign(current,{scriptOwner:{id:'someone-else'}})
+const scheduleOnly=await module.exports.readCreativeRevisions(actor,'brand-1','2026-11','idea-1',undefined,dbMock)
+assert.equal(scheduleOnly.capabilities.canSchedule,true);assert.equal(scheduleOnly.canSaveAsNew,false);assert.equal(scheduleOnly.canOverwrite,false)
+grants=['draft.update']
+const editOnly=await module.exports.readCreativeRevisions(actor,'brand-1','2026-11','idea-1',undefined,dbMock)
+assert.equal(editOnly.capabilities.canSchedule,false);assert.equal(editOnly.canSaveAsNew,true)
+grants=['content.schedule','draft.update'];brandWrite=false
+const readOnly=await module.exports.readCreativeRevisions(actor,'brand-1','2026-11','idea-1',undefined,dbMock)
+assert.equal(readOnly.capabilities.canSchedule,false);assert.equal(readOnly.canSaveAsNew,false)
+brandWrite=true
+deps['../auth-v2/types.ts'].principalFromUser=()=>({globalRoles:['ADMIN']})
+
+// Execute the production aggregate against PostgreSQL WASM with 50k versions.
+// Accurate counts, one latest row per period, no raw content/history transfer.
+const {PGlite}=await import('@electric-sql/pglite')
+const pg=new PGlite()
+try{
+ await pg.exec('CREATE TABLE "BrandMarketingSolution"(id text PRIMARY KEY,"brandId" text,kind text,period text,version integer,"createdAt" timestamp(3),output jsonb); CREATE INDEX revision_period ON "BrandMarketingSolution"("brandId",kind,period)')
+ const periods=['undated','legacy'].map(id=>revisionContract.revisionPeriod('2026-11',id))
+ for(const period of periods)await pg.query(`INSERT INTO "BrandMarketingSolution" SELECT $1||n,$2,$3,$1,n,'2026-11-02'::timestamp,'{"planning":"SECRET SCRIPT"}'::jsonb FROM generate_series(1,25000)n`,[period,'brand-1',revisionContract.CREATIVE_REVISION_KIND])
+ await pg.query(`INSERT INTO "BrandMarketingSolution" VALUES('foreign','foreign',$1,$2,99999,'2026-11-03','{}'),('wrong-kind','brand-1','OTHER',$2,99999,'2026-11-03','{}')`,[revisionContract.CREATIVE_REVISION_KIND,periods[0]])
+ let returned=0,queries=0
+ const start=performance.now()
+ const counted=await listOpenCalendarCreativeOptions('brand-1','2026-11',{...listDb,$queryRaw:async(strings:TemplateStringsArray,...args:any[])=>{
+  queries++;const sql=strings.reduce((query,part,i)=>query+(i?`$${i}`:'')+part,'')
+  assert.match(sql,/COUNT\(\*\)/);assert.match(sql,/GROUP BY "period"/);assert.match(sql,/LIMIT 1/);assert(!sql.includes('SELECT *'))
+  const result=await pg.query(sql,args);returned=result.rows.length
+  assert(!JSON.stringify(result.rows).includes('SECRET'))
+  return result.rows.map((row:any)=>({...row,createdAt:new Date(row.createdAt)}))
+ }} as any)
+ assert.equal(queries,1);assert.equal(returned,2)
+ for(const item of counted){assert.equal(item.revisionCount,25000);assert.equal(item.workspaceItem?.currentRevisionId,revisionContract.revisionPeriod('2026-11',item.id)+'25000')}
+ console.log(`PASS: 50000 revisions -> ${returned} aggregate rows in ${Math.round(performance.now()-start)}ms`)
+}finally{await pg.close()}
 
 const legacySource = { id: 'old-idea', date: '2026-11-04', platform: 'Instagram', platformSlug: 'instagram', status: 'planned_unimplemented', title: 'Old idea', planning: 'Original', inspirationCreativeId: 'viral-1', aiTags: [], materialRequirements: [] }
 let copiedWorkspace: any = { publishingCalendar: { months: { '2026-11': [legacySource] } } }

@@ -18,11 +18,11 @@ export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
 type AiProvenance = { candidatePatch?:Record<string,unknown>; reviewChanges?:ReturnType<typeof creativeChanges>; adoptionRequest?:{requestKey:string;payloadDigest:string}; skuBinding?:SkuBinding & {decisionDigest:string}; skuSource?:SkuSource|null; contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;targetId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
-async function canEditScript(db: any, user: any) {
+async function canEditScript(db: any, user: any, permission='draft.update') {
   const principal = principalFromUser(user, 'session')
   if (principal.globalRoles.includes('ADMIN')) return true
   const { policies } = await readPolicies(db)
-  return effectiveGrants((principal.permissionRoleIds || []).filter(id => Object.hasOwn(policies, id)), policies).includes('draft.update')
+  return effectiveGrants((principal.permissionRoleIds || []).filter(id => Object.hasOwn(policies, id)), policies).includes(permission)
 }
 async function authorize(db: any, actor: Actor, brandId: string, write = false) {
   if (!await canUserAccessBrand(brandId, actor.id, write ? 'WRITE' : 'READ', db)) throw new CreativeRevisionError('creative_access_denied',404)
@@ -39,7 +39,9 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   validateCreativeAddress(month, creativeId)
   if (beforeVersion !== undefined && (!Number.isSafeInteger(beforeVersion) || beforeVersion < 0)) throw new CreativeRevisionError('invalid_revision_cursor')
   const reader=await authorize(db,actor,brandId)
-  const canWrite=await canUserAccessBrand(brandId,actor.id,'WRITE',db)&&await canEditScript(db,reader)
+  const brandWrite=await canUserAccessBrand(brandId,actor.id,'WRITE',db)
+  const canWrite=brandWrite&&await canEditScript(db,reader)
+  const canSchedule=brandWrite&&await canEditScript(db,reader,'content.schedule')
   const period = revisionPeriod(month,creativeId)
   const [knowledge, revisions, brand] = await Promise.all([
     db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}}),
@@ -53,7 +55,7 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   const items = monthItems(creativeWorkspace(knowledge),month)
   const current = items.find(item=>item.id===creativeId) || null
   if (!current && !revisions.length) throw new CreativeRevisionError('creative_not_found_or_ambiguous',404)
-  return {ok:true, brand, creativeId, month, current, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:latest?.id,createdAt:current.createdAt,updatedAt:latest?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:current?revisionSource(current,record(latest?.input).source,new Date().toISOString()):revisions[0]?record(revisions[0].input).source:null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
+  return {ok:true, brand, creativeId, month, current, capabilities:{canSchedule}, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:latest?.id,createdAt:current.createdAt,updatedAt:latest?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:current?revisionSource(current,record(latest?.input).source,new Date().toISOString()):revisions[0]?record(revisions[0].input).source:null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
 export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>, skuConfirmation?:{input:any;source?:SkuSource|null;resolveSource?:()=>Promise<SkuSource|null>}) {

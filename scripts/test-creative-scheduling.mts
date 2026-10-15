@@ -68,6 +68,10 @@ const service=mod.exports
 const current=()=>knowledge.marketingSolution.publishingCalendar.months['2026-11'][0]
 const expectCode=(run:()=>Promise<any>,code:string)=>assert.rejects(run,(error:any)=>error.code===code)
 const now=new Date('2026-10-16T00:00:00Z')
+modules['../role-permissions/contract.ts'].effectiveGrants=()=>['draft.update']
+await assert.rejects(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'editor-cannot-schedule'},db,now),(error:any)=>error.status===403&&error.code==='creative_schedule_forbidden')
+assert.equal(drafts.length,0)
+modules['../role-permissions/contract.ts'].effectiveGrants=()=>['content.schedule']
 for(const state of ['awaiting_sku','sku_confirmed']){
   current().adaptationStatus=state
   await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:`sku-gate-${state}`},db,now),'creative_adaptation_required')

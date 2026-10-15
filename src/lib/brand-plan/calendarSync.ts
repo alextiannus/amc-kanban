@@ -181,14 +181,25 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
   // receive draft links solely from the explicit scheduling transaction.
   const legacyOptions = options.filter(item => item.date && !item.draftId)
   const markers = legacyOptions.flatMap(item => creativeDraftMarkerSearches('calendar',item.id))
-  const revisions = await db.brandMarketingSolution.findMany({
-    where: { brandId, kind: CREATIVE_REVISION_KIND, period: { in: options.map(item => revisionPeriod(month,item.id)) } },
-    orderBy: { version: 'desc' },
-    select: { id: true, period: true, createdAt: true },
-  })
+  // Count in the database and return exactly one latest receipt per period.
+  // The polling response must not grow with the number of historical versions.
+  const periods=options.map(item=>revisionPeriod(month,item.id))
+  const revisions = await db.$queryRaw<Array<{period:string;id:string;createdAt:Date;revisionCount:bigint}>>`
+    WITH stats AS (
+      SELECT "period", COUNT(*) AS "revisionCount" FROM "BrandMarketingSolution"
+      WHERE "brandId"=${brandId} AND "kind"=${CREATIVE_REVISION_KIND}
+        AND "period"=ANY(${periods}::text[])
+      GROUP BY "period"
+    )
+    SELECT stats."period", stats."revisionCount", latest."id", latest."createdAt"
+    FROM stats CROSS JOIN LATERAL (
+      SELECT "id", "createdAt" FROM "BrandMarketingSolution"
+      WHERE "brandId"=${brandId} AND "kind"=${CREATIVE_REVISION_KIND} AND "period"=stats."period"
+      ORDER BY "version" DESC, "id" DESC LIMIT 1
+    ) latest`
   const latest = new Map<string,{id:string;createdAt:Date}>()
   const revisionCounts = new Map<string,number>()
-  for (const row of revisions) revisionCounts.set(row.period,(revisionCounts.get(row.period)||0)+1)
+  for (const row of revisions) revisionCounts.set(row.period,Number(row.revisionCount))
   for (const row of revisions) if (!latest.has(row.period)) latest.set(row.period,row)
   const drafts = markers.length ? await db.contentDraft.findMany({
     where: {
