@@ -47,6 +47,7 @@ export function confirmSkuDecision(input:any,catalog:CatalogSku[],source:SkuSour
   return {...value,digest:creativeDigest(value)}
 }
 export function assertConfirmedDecision(decision:any,binding:Pick<SkuBinding,'catalogDigest'|'sourceRevision'|'sourceDigest'>&{decisionDigest:string},catalog:CatalogSku[],source:SkuSource|null):asserts decision is ConfirmedSkuDecision{
+  if(typeof binding.decisionDigest!=='string'||!/^[a-f0-9]{64}$/.test(binding.decisionDigest))fail('sku_confirmation_required',409)
   if(!decision||!['confirmed','adjusted'].includes(decision.status)||decision.digest!==binding.decisionDigest||!decision.decidedBy)fail('sku_confirmation_required',409)
   const {digest,...value}=decision
   if(creativeDigest(value)!==digest)fail('sku_decision_changed',409)

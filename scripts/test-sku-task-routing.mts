@@ -4,7 +4,7 @@ import ts from 'typescript'
 import * as contract from '../src/lib/ai-native/contract.ts'
 import * as sku from '../src/lib/brand-plan/creativeSkuContract.ts'
 const compile=(path:string,deps:any)=>{const mod={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports);return mod.exports}
-let revoked=false,currentRevision='a'.repeat(64),dispatches=0,lastIntent:any,allowedTools:string[]=[]
+let revoked=false,currentRevision='a'.repeat(64),dispatches=0,lastIntent:any,allowedTools:string[]=[],saves=0,savedReceipt:any=null
 const facts={id:'brand',name:'Brand',knowledge:{menuItems:[{id:'a',name:'Alpha'},{id:'b',name:'Beta'}]}},catalog=sku.skuCatalog(facts)
 const source:any={inspirationCreativeId:'cre_source',sourceRevision:'s1',sourceDigest:'b'.repeat(64),evidenceStatus:'full_source',timeline:[{id:'shot-1',order:1,startSec:0,endSec:3}]}
 const binding=()=>({brandId:'brand',creativeId:'idea',month:'2026-11',expectedRevision:currentRevision,catalogDigest:sku.catalogDigest(catalog),sourceRevision:source.sourceRevision,sourceDigest:source.sourceDigest})
@@ -13,7 +13,7 @@ const ctx=()=>({binding:binding(),current:{canOverwrite:!revoked,current:{skuDec
 const skuDeps={readSkuContext:async()=>ctx(),readBoundSkuContext:async(_actor:any,b:any)=>{
   if(b.expectedRevision!==currentRevision)throw contract.nativeError('creative_revision_conflict',409)
   sku.checkSkuBinding(b,catalog,source)
-  if(b.decisionDigest)sku.assertConfirmedDecision(confirmed,b,catalog,source)
+  if('decisionDigest' in b)sku.assertConfirmedDecision(confirmed,b,catalog,source)
   return ctx()
 }}
 const workflow=compile('src/lib/ai-native/sku-workflow.ts',{'../brand-plan/creativeSkuDecision':skuDeps,'../brand-plan/creativeSkuContract':sku,'./contract':contract})
@@ -23,7 +23,9 @@ const pool={query:async()=>({rows:[]})},app={runtime:{state:async()=>({id:taskId
 const service=compile('src/lib/ai-native/service.ts',{
   './contract':contract,'./application':{requireActor:async()=>{if(revoked)throw contract.nativeError('ai_access_denied',403)}},'../model-management/registry':{runtimeConfig:async()=>({version:1})},
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[]},'../brand-plan/creativeSkuDecision':skuDeps,'./sku-workflow':workflow,
-  './recommendations':{adaptedScriptReceipt:async()=>null},
+  './recommendations':{adaptedScriptReceipt:async()=>savedReceipt},
+  './autopilot':{autopilotRun:async()=>({})},
+  '../brand-plan/creativeRevisions':{saveCreativeRevision:async(...args:any[])=>{saves++;assert(args[6].skuBinding.decisionDigest);return {receipt:{id:'saved-adaptation',contentHash:'saved-hash',content:{id:'idea',adaptationStatus:'adapted'}}}},readCreativeRevisions:async()=>({revisions:[{contentHash:'saved-hash'}]})},
   './store':{intentBy:async(_p:any,_a:any,_f:any,key:string)=>{const r=rows.get(key);if(!r)throw contract.nativeError('not_found',404);return r},admitIntent:async(_p:any,_a:any,intent:any)=>{lastIntent=intent;const r={id:'request',intent,digest:contract.digest(intent),task_id:taskId};rows.set(intent.requestKey,r);return r},intentForTask:async()=>({intent:lastIntent})},
 })
 const body={kind:'sku_proposal',creativeId:'idea',month:'2026-11',expectedRevision:currentRevision,goal:'Suggest SKU roles',requestKey:'proposal-one'}
@@ -35,7 +37,14 @@ assert.equal(proposalContext.productCatalog.length,2)
 assert.equal(proposalContext.artifactContract.example.finalScript,undefined)
 const recommendation={skuId:'a',skuName:'Alpha',roles:['hero'],rationale:'Fits action',sourceShotIds:['shot-1']}
 await assert.rejects(()=>service.createNativeTask('human','brand',{...body,kind:'creative_adaptation',requestKey:'adapt-no-decision'}),/sku_confirmation_required/)
+const beforeInvalid=dispatches
+for(const decisionDigest of ['', ' ', 'a', 'g'.repeat(64), 'a'.repeat(65)]){
+  await assert.rejects(()=>service.createNativeTask('human','brand',{...body,kind:'creative_adaptation',requestKey:'adapt-invalid-digest',decisionDigest}),/sku_confirmation_required/)
+}
+assert.equal(dispatches,beforeInvalid,'invalid digest is rejected before dispatch or metering')
 confirmed=sku.confirmSkuDecision({...binding(),selectedSkuIds:['a'],recommendations:[recommendation]},catalog,source,'human',currentRevision)
+await assert.rejects(()=>service.createNativeTask('human','brand',{...body,kind:'creative_adaptation',requestKey:'adapt-wrong-digest',decisionDigest:'0'.repeat(64)}),/sku_confirmation_required/)
+assert.equal(dispatches,beforeInvalid)
 await service.createNativeTask('human','brand',{...body,kind:'creative_adaptation',requestKey:'adapt-confirmed',decisionDigest:confirmed.digest})
 const adaptationContext=await workflow.skuTaskContext(lastIntent)
 assert.deepEqual(adaptationContext.productCatalog.map((s:any)=>s.id),['a'])
@@ -52,5 +61,61 @@ lastIntent={...body,kind:'creative',adaptToBrand:true,brandId:'brand',artifactPa
 ;(app.runtime as any).get=async()=>({status:'succeeded',result:{artifacts:[{path:lastIntent.artifactPath,digest:'legacy-digest'}]},calls:[]})
 await assert.rejects(()=>service.adoptNativeCandidate('human','brand',taskId,{requestKey:'adopt-legacy',artifactDigest:'legacy-digest'}),/sku_confirmation_required_use_creative_adaptation/)
 revoked=true;await assert.rejects(()=>service.createNativeTask('human','brand',body),/ai_access_denied/)
+revoked=false;currentRevision='a'.repeat(64)
+// Exercise the actual application verifier closure, not a substitute verifier.
+const libraryModule=compile('src/lib/ai-native/library.ts',{'./contract':contract,'../brand-plan/creativeRevisionContract':await import('../src/lib/brand-plan/creativeRevisionContract.ts')})
+let configured:any,artifactContent=''
+const application=compile('src/lib/ai-native/application.ts',{
+  './runtime-application.mjs':{openApplication:async(config:any)=>{configured=config;return {workspace:{read:async()=>({content:artifactContent})}}}},
+  './contract':contract,'./store':{intentBy:async()=>({intent:lastIntent})},'./library':libraryModule,'./sku-workflow':workflow,
+  './autopilot-capabilities':{AUTOPILOT_TOOLS:[],autopilotCapabilities:()=>[]},
+  '@immedi/iaic-core/capabilities/index.js':{defineCapability:(v:any)=>v},'node:crypto':await import('node:crypto'),'node:path':await import('node:path'),
+})
+await application.composeApplication(pool,{}, {version:'fixture',authorize:async()=>true,readContext:async()=>facts})
+const snapshot={libraryDigest:'c'.repeat(64),contextDigest:contract.digest(facts),sources:[{inspirationCreativeId:'cre_source'}]}
+const verify=async(skill='amc-discovery/SKILL.md')=>configured.verifyOutcome({}, {artifacts:[{path:lastIntent.artifactPath}]},{actor:contract.actorFor('brand','human'),history:{calls:[
+  {capability:'amc.context',status:'succeeded',result:{intent:lastIntent}},
+  {capability:'assistant.skills.read',status:'succeeded',input:{id:skill}},
+  {capability:'amc.library',status:'succeeded',result:snapshot},
+]}})
+lastIntent={kind:'creative_discovery',brandId:'brand',skuWorkflow:true,requestKey:'verify-discovery',artifactPath:'work/test.json'}
+const discovery={kind:'creative_discovery',brandId:'brand',contextDigest:snapshot.contextDigest,libraryDigest:snapshot.libraryDigest,summary:'Awaiting confirmation',recommendations:[{sourceCreativeId:'cre_source',title:'Source',rationale:'Fits brand'}]}
+artifactContent=JSON.stringify({...discovery,recommendations:[{...discovery.recommendations[0],planning:'legacy full script'}]})
+let outcome=await verify();assert.equal(outcome.verified,false);assert.match(outcome.feedback,/ONLY sourceCreativeId, title, rationale/);assert.doesNotMatch(outcome.feedback,/requires.*planning/)
+artifactContent=JSON.stringify(discovery);assert.equal((await verify()).verified,true)
+lastIntent={...body,...binding(),kind:'sku_proposal',userId:'human',artifactPath:'work/test.json'}
+artifactContent='{}';outcome=await verify('amc-creative/SKILL.md');assert.equal(outcome.verified,false);assert.match(outcome.feedback,/recommendations/);assert.doesNotMatch(outcome.feedback,/Return title, aiCaption/)
+lastIntent={...lastIntent,kind:'creative_adaptation',decisionDigest:confirmed.digest}
+artifactContent='{}';outcome=await verify('amc-creative/SKILL.md');assert.equal(outcome.verified,false);assert.match(outcome.feedback,/complete ordered shots/)
+artifactContent=JSON.stringify(produced);assert.equal((await verify('amc-creative/SKILL.md')).verified,true)
+// Actual executeAutopilot delegates to the same real adoption service.
+const run:any={id:'run',enabled:true,current_owner:'human',current_account:'account',account_id:'account',daily_limit:2,current_limit:2,evidence:{adaptations:{idea:taskId}}}
+let legacyTask=true,unlocks=0
+const autopilotPool={connect:async()=>({query:async(sql:string)=>{if(sql.includes('unlock'))unlocks++;return {rows:[]}},release:()=>{}}),query:async(sql:string,args:any[])=>{
+  if(sql.includes('SELECT r.*'))return {rows:[structuredClone(run)]}
+  if(sql.includes('SET step=')){run.evidence=JSON.parse(args[2]);return {rows:[]}}
+  throw Error(sql)
+}}
+const autopilot=compile('src/lib/ai-native/autopilot.ts',{
+  '../prisma':{prisma:{socialAccount:{findFirst:async()=>({id:'account'})}}},
+  './autopilot-store':{autopilotDb:async()=>autopilotPool,requireAutopilotOwner:async()=>{}},'./contract':contract,
+  './service':{adoptNativeCandidate:service.adoptNativeCandidate,readNativeTask:async()=>({kind:legacyTask?'creative':'creative_adaptation',status:'succeeded',creativeId:'idea',month:'2026-11',candidate:{patch:{planning:'old one-stage'}},artifact:{path:lastIntent.artifactPath,digest:'artifact-digest'}})},
+})
+;(app as any).workspace={read:async()=>({content:artifactContent})}
+;(app.runtime as any).get=async()=>({status:'succeeded',result:{artifacts:[{path:lastIntent.artifactPath,digest:'artifact-digest'}]},calls:[]})
+await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/sku_confirmation_required_use_creative_adaptation/);assert.equal(saves,0)
+legacyTask=false;const oldDecision=confirmed;confirmed=null
+await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/sku_confirmation_required/);assert.equal(saves,0)
+confirmed=oldDecision
+artifactContent=JSON.stringify({...produced,shots:[]})
+await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/adapted_script_required/);assert.equal(saves,0)
+artifactContent=JSON.stringify({...produced,sourceDigest:'0'.repeat(64)})
+await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/sku_artifact_binding_mismatch/);assert.equal(saves,0)
+artifactContent=JSON.stringify(produced)
+const adopted=await autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'})
+assert.equal(adopted.revisionId,'saved-adaptation');assert.equal(saves,1)
+legacyTask=true;assert.equal((await autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'})).revisionId,'saved-adaptation');assert.equal(saves,1);assert.equal(unlocks,6)
+assert.match(readFileSync('src/lib/ai-native/calendar-planning.ts','utf8'),/每条仅输出 sourceCreativeId、title、rationale/)
 delete (globalThis as any).amcNativeHost
+console.log('PASS actual composeApplication verifier correction and executeAutopilot legacy rejection, confirmed adoption and historical receipt')
 console.log('PASS SKU task admission, restricted tools, selected-only context, validated artifact, replay and revoked access')

@@ -56,7 +56,7 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   return {ok:true, brand, creativeId, month, current, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:latest?.id,createdAt:current.createdAt,updatedAt:latest?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:current?revisionSource(current,record(latest?.input).source,new Date().toISOString()):revisions[0]?record(revisions[0].input).source:null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
-export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>, skuConfirmation?:{input:any;source:SkuSource|null}) {
+export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>, skuConfirmation?:{input:any;source?:SkuSource|null;resolveSource?:()=>Promise<SkuSource|null>}) {
   validateCreativeAddress(month,creativeId)
   if (typeof body?.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision) || typeof body?.idempotencyKey !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.idempotencyKey)) throw new CreativeRevisionError('creative_revision_and_request_key_required')
   if(body?.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw new CreativeRevisionError('invalid_script_save_mode')
@@ -135,7 +135,10 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     if (creativeDigest(current) !== body.expectedRevision) throw new CreativeRevisionError('creative_revision_conflict',409)
     // The same brand knowledge row contains the authoritative catalog. Validation
     // happens under its write lock, after current permissions and CAS, before audit.
-    const skuDecision=skuConfirmation ? confirmSkuDecision(skuConfirmation.input,skuCatalog(await readBrandFacts(tx,brandId)),skuConfirmation.source,user.id,body.expectedRevision) : null
+    const confirmationCatalog=skuConfirmation?skuCatalog(await readBrandFacts(tx,brandId)):null
+    const confirmationSource=skuConfirmation&&confirmationCatalog!.length?(skuConfirmation.resolveSource?await skuConfirmation.resolveSource():skuConfirmation.source||null):null
+    const skuDecision=skuConfirmation ? confirmSkuDecision(skuConfirmation.input,confirmationCatalog!,confirmationSource,user.id,body.expectedRevision) : null
+    if(ai?.autopilotRunId&&!ai.skuBinding)throw new CreativeRevisionError('sku_confirmation_required_use_creative_adaptation',409)
     if(ai?.skuBinding)assertConfirmedDecision(current.skuDecision,ai.skuBinding,skuCatalog(currentFacts),ai.skuSource||null)
     if(ai&&!ai.skuBinding&&!seed&&['awaiting_sku','sku_confirmed'].includes(current.adaptationStatus)&&patch.planning!==undefined&&patch.planning!==current.planning)throw new CreativeRevisionError('sku_confirmation_required_use_creative_adaptation',409)
     const brand = await tx.brand.findUnique({

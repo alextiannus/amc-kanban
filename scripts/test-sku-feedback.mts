@@ -10,7 +10,7 @@ const compile=(path:string,deps:any)=>{
   return mod.exports
 }
 const actor={id:'human',type:'HUMAN'},month='2026-11',brandId='brand',creativeId='idea'
-let allowed=true,edit=true,auditFailure=false,locks=0
+let allowed=true,edit=true,auditFailure=false,locks=0,sourceUnavailable=false,sourceReads=0
 let catalog=[{id:'a',name:'Alpha'},{id:'b',name:'Beta'},{id:'c',name:'Gamma'}]
 const source:any={inspirationCreativeId:'cre_source',sourceRevision:'source-v1',sourceDigest:'a'.repeat(64),evidenceStatus:'full_source',timeline:[{id:'shot-1',order:1},{id:'shot-2',order:2}]}
 let item:any={id:creativeId,title:'Original',planning:'Original',status:'idea_pending',platformTargets:['instagram'],materialRequirements:[],inspirationCreativeId:'cre_source'}
@@ -40,7 +40,7 @@ const revision=compile('src/lib/brand-plan/creativeRevisions.ts',{
   '../role-permissions/store.ts':{readPolicies:async()=>({policies:{EDITOR:[]}})},'../role-permissions/contract.ts':{effectiveGrants:()=>edit?['draft.update']:[]},'../auth-v2/types.ts':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['EDITOR']})},
   '../user-management/brandAccess.ts':{canUserAccessBrand:async(brand:string)=>allowed&&brand===brandId},'./creativeRevisionContract.ts':contract,'./creativeWorkspaceContract.ts':workspace,'./creativeCollections.ts':{},'./creativeSkuContract':sku,
 })
-const decision=compile('src/lib/brand-plan/creativeSkuDecision.ts',{'../prisma':{prisma:db},'../ai-native/facts':{readBrandFacts:async()=>facts()},'./creativeRevisions':revision,'./creativeSource':{readCreativeSource:async()=>source},'./creativeRevisionContract':contract,'./creativeSkuContract':sku})
+const decision=compile('src/lib/brand-plan/creativeSkuDecision.ts',{'../prisma':{prisma:db},'../ai-native/facts':{readBrandFacts:async()=>facts()},'./creativeRevisions':revision,'./creativeSource':{readCreativeSource:async()=>{sourceReads++;if(sourceUnavailable)throw new contract.CreativeRevisionError('content_unavailable',503);return source}},'./creativeRevisionContract':contract,'./creativeSkuContract':sku})
 const current=()=>knowledge.marketingSolution.publishingCalendar.months[month][0]
 const hash=()=>contract.creativeDigest(current())
 const input=(key:string)=>({month,idempotencyKey:key,catalogDigest:sku.catalogDigest(sku.skuCatalog(facts())),sourceRevision:source.sourceRevision,sourceDigest:source.sourceDigest,selectedSkuIds:['a','b'],recommendations:catalog.slice(0,2).map(s=>({skuId:s.id,skuName:s.name,roles:['hero'],rationale:'Product fits action',sourceShotIds:['shot-1']})),adjustmentNote:'Choose this mix'})
@@ -50,9 +50,13 @@ assert.equal(first.receipt.content.skuDecision.decidedBy,actor.id)
 assert.equal(first.receipt.content.skuDecision.status,'adjusted')
 assert.equal(first.receipt.content.planning,'Original')
 assert.equal(rows.length,2);assert.equal(audits.length,1);assert(locks>0)
-const replay=await decision.saveSkuDecision(actor,brandId,creativeId,before,request,db)
+sourceUnavailable=true;const readsAfterSave=sourceReads
+const replay=await decision.saveSkuDecision(actor,brandId,creativeId,before,{...request,adjustmentNote:'  Choose this mix  '},db)
 assert(replay.replayed);assert.equal(rows.length,2)
+assert.equal(replay.receipt.id,first.receipt.id);assert.equal(sourceReads,readsAfterSave,'lost-response replay does not consult unavailable Content')
 await assert.rejects(()=>decision.saveSkuDecision(actor,brandId,creativeId,before,{...request,adjustmentNote:'Different'},db),/creative_request_key_reused/)
+assert.equal(sourceReads,readsAfterSave)
+sourceUnavailable=false
 await assert.rejects(()=>decision.saveSkuDecision(actor,brandId,creativeId,before,input('stale-request'),db),/creative_revision_conflict/)
 await assert.rejects(()=>decision.saveSkuDecision(actor,'other-brand',creativeId,hash(),input('cross-brand'),db),/creative_access_denied/)
 await assert.rejects(()=>decision.saveSkuDecision({id:'ai',type:'AI'},brandId,creativeId,hash(),input('ai-request'),db),/human_sku_confirmation_required/)

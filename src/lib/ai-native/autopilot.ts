@@ -10,8 +10,9 @@ import {digest,nativeError,actorFor} from './contract'
 import {queueGoogleBrandImport} from '../googleBrandImportQueue'
 import {loadBrandPlanBrand,buildGrowthResearchReport,saveResearchReport} from '../brand-plan/service'
 import {readGrowthResearchJob,growthAutopilotEvidence} from '../growthDataCenter'
-import {createNativeTask,readNativeTask,getNativeHost} from './service'
-import {readCreativeRevisions,saveCreativeRevision} from '../brand-plan/creativeRevisions'
+import {createNativeTask,readNativeTask,getNativeHost,adoptNativeCandidate} from './service'
+import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
+import {readSkuContext} from '../brand-plan/creativeSkuDecision'
 import {generateContentDirect} from '../amc-content/contentGenerationService'
 
 export async function autopilotRun(userId:string,brandId:string,runId:string,active=true){
@@ -153,7 +154,8 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    if(Object.keys(evidence.adaptations||{}).length>=run.daily_limit)throw nativeError('autopilot_daily_limit')
    const idea=(await pool.query('SELECT plan_month FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND plan_id=$2 AND replaced_at IS NULL',[brandId,input.creativeId])).rows[0]
    if(!idea)throw nativeError('adapted_idea_required')
-   const task=await createNativeTask(userId,brandId,{kind:'creative',adaptToBrand:true,creativeId:input.creativeId,month:idea.plan_month},false,runId)
+   const ctx=await readSkuContext({id:userId,type:'HUMAN'},brandId,idea.plan_month,input.creativeId)
+   const task=await createNativeTask(userId,brandId,{...ctx.binding,kind:'creative_adaptation',goal:'依据人工已确认 SKU 与固定来源生成完整逐镜脚本和素材需求。',decisionDigest:ctx.current.current.skuDecision?.digest,requestKey:`autopilot-adapt-${digest([runId,input.creativeId,ctx.binding.expectedRevision])}`},false,runId)
    evidence.adaptations={...evidence.adaptations,[input.creativeId]:task.id};await progress(pool,run,'ideas',evidence)
    return {taskId:task.id}
   }
@@ -162,10 +164,12 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    if(!taskId)throw nativeError('adaptation_not_started')
    if(evidence.adapted?.[input.creativeId])return {revisionId:evidence.adapted[input.creativeId]}
    const task=await readNativeTask(userId,brandId,taskId)
-   if(task.status!=='succeeded'||!task.candidate||!task.artifact||task.creativeId!==input.creativeId||!task.month)throw nativeError('adaptation_not_ready')
+   if(task.kind!=='creative_adaptation')throw nativeError('sku_confirmation_required_use_creative_adaptation',409)
+   if(task.status!=='succeeded'||!task.artifact||task.creativeId!==input.creativeId||!task.month)throw nativeError('adaptation_not_ready')
    await gate()
-   const candidate=task.candidate
-   const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,task.month,input.creativeId,{expectedRevision:candidate.expectedRevision,idempotencyKey:`autopilot-adapt-${digest([runId,taskId])}`,patch:candidate.patch},undefined,{autopilotRunId:runId,taskId,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:candidate.contextDigest,artifact:task.artifact})
+   // Use the same artifact validation, current decision/source binding and replay
+   // receipt as interactive adoption. Never save a legacy candidate patch here.
+   const saved:any=await adoptNativeCandidate(userId,brandId,taskId,{requestKey:`autopilot-adopt-${digest([runId,taskId])}`,artifactDigest:task.artifact.digest},runId)
    evidence.adapted={...evidence.adapted,[input.creativeId]:saved.receipt.id};await progress(pool,run,'ideas',evidence)
    return {revisionId:saved.receipt.id,creative:saved.receipt.content}
   }

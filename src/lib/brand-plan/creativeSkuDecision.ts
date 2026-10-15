@@ -24,13 +24,14 @@ export async function saveSkuDecision(actor:Actor,brandId:string,creativeId:stri
   if(actor.type!=='HUMAN')throw new CreativeRevisionError('human_sku_confirmation_required',403)
   const allowed=['month','idempotencyKey','catalogDigest','sourceRevision','sourceDigest','selectedSkuIds','recommendations','adjustmentNote']
   if(!input||typeof input!=='object'||Object.keys(input).some(k=>!allowed.includes(k)))throw new CreativeRevisionError('invalid_sku_decision')
-  const ctx=await readSkuContext(actor,brandId,input.month,creativeId,db)
-  return saveCreativeRevision(actor,brandId,input.month,creativeId,{expectedRevision,idempotencyKey:input.idempotencyKey,patch:{}},db,undefined,undefined,{input,source:ctx.source})
+  const normalized={...input,adjustmentNote:typeof input.adjustmentNote==='string'?input.adjustmentNote.trim()||null:input.adjustmentNote??null}
+  // The revision transaction authorizes and replays before consulting Content.
+  return saveCreativeRevision(actor,brandId,input.month,creativeId,{expectedRevision,idempotencyKey:input.idempotencyKey,patch:{}},db,undefined,undefined,{input:normalized,resolveSource:()=>readCreativeSource(actor,brandId,input.month,creativeId)})
 }
-export async function readBoundSkuContext(actor:Actor,binding:SkuBinding&{decisionDigest?:string}){
+export async function readBoundSkuContext(actor:Actor,binding:SkuBinding&{decisionDigest?:string;kind?:string}){
   const ctx=await readSkuContext(actor,binding.brandId,binding.month,binding.creativeId)
   if(ctx.binding.expectedRevision!==binding.expectedRevision)throw new CreativeRevisionError('creative_revision_conflict',409)
   checkSkuBinding(binding,ctx.catalog,ctx.source)
-  if(binding.decisionDigest)assertConfirmedDecision(ctx.current.current.skuDecision,{...binding,decisionDigest:binding.decisionDigest},ctx.catalog,ctx.source)
+  if(binding.kind==='creative_adaptation'||'decisionDigest' in binding)assertConfirmedDecision(ctx.current.current.skuDecision,{...binding,decisionDigest:binding.decisionDigest!},ctx.catalog,ctx.source)
   return ctx
 }
