@@ -1,4 +1,3 @@
-import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 export type CalendarCreativeItem = {
@@ -148,90 +147,12 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
   }
 }
 
-function scheduledAtForDate(date: string) {
-  return new Date(`${date}T10:00:00.000+08:00`)
-}
-
-async function ensurePlaceholderAccount(tx: Prisma.TransactionClient, brandId: string, platformSlug: string) {
-  const existing = await tx.socialAccount.findFirst({
-    where: { unboundAt: null, brandId, platformId: platformSlug, handle: 'unconfigured' },
-    select: { id: true },
-  })
-  if (existing) return existing.id
-  const created = await tx.socialAccount.create({
-    data: {
-      brandId,
-      platformId: platformSlug,
-      handle: 'unconfigured',
-      displayName: `${platformLabel(platformSlug)} (未配置)`,
-    },
-    select: { id: true },
-  })
-  return created.id
-}
-
 export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month: string, items: CalendarCreativeItem[]) {
-  const confirmed = items
-    .filter((item) => !['ai_pending_review','已删除', '归档', 'archived', 'deleted'].includes(text(item.status).toLowerCase()))
-    .map(calendarCreativeOption)
-    .filter((item): item is CalendarCreativeOption => Boolean(item))
-
-  if (!confirmed.length) return { syncedCount: 0 }
-
-  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    let syncedCount = 0
-    for (const item of confirmed) {
-      const marker = calendarSyncMarker(item.id)
-      const accountId = await ensurePlaceholderAccount(tx, brandId, item.platformSlug)
-      const caption = `${item.title}\n\n${item.planning || item.product}`.trim()
-      const agentNote = [
-        marker,
-        `month:${month}`,
-        `platform:${item.platform}`,
-        item.materialRequirements.length ? `material:${item.materialRequirements.join('；')}` : '',
-      ].filter(Boolean).join('\n')
-      const existing = await tx.contentDraft.findFirst({
-        where: { brandId, agentNote: { contains: marker, mode: 'insensitive' } },
-        select: { id: true, status: true },
-      })
-      if (existing && !['publishing', 'published', 'done', 'scheduled'].includes(existing.status)) {
-        await tx.contentDraft.update({
-          where: { id: existing.id },
-          data: {
-            accountId,
-            caption,
-            captionLang: 'zh',
-            scheduledAt: scheduledAtForDate(item.date),
-            status: CALENDAR_PLAN_UNIMPLEMENTED_STATUS,
-            agentNote,
-            creativeHooks: item.aiCaption,
-            postfastControls: item.postfastControls as Prisma.InputJsonValue | undefined,
-            hashtags: item.aiTags.filter((tag) => !tag.includes(':')).slice(0, 12),
-          },
-        })
-        syncedCount += 1
-      } else if (!existing) {
-        await tx.contentDraft.create({
-          data: {
-            brandId,
-            accountId,
-            caption,
-            captionLang: 'zh',
-            scheduledAt: scheduledAtForDate(item.date),
-            status: CALENDAR_PLAN_UNIMPLEMENTED_STATUS,
-            agentNote,
-            creativeHooks: item.aiCaption,
-            postfastControls: item.postfastControls as Prisma.InputJsonValue | undefined,
-            hashtags: item.aiTags.filter((tag) => !tag.includes(':')).slice(0, 12),
-          },
-        })
-        syncedCount += 1
-      }
-    }
-    return syncedCount
-  })
-
-  return { syncedCount: result }
+  // Plan generation and creative approval do not authorize publishing. The
+  // schedule endpoint owns draft creation; this legacy hook remains for callers
+  // until their calendar workflow is migrated.
+  void brandId; void month; void items
+  return { syncedCount: 0 }
 }
 
 export async function listOpenCalendarCreativeOptions(brandId: string, month: string) {

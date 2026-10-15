@@ -10,6 +10,7 @@ import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
+import { normalizeCreativeWorkspaceItem, validateCreativeWorkspacePatch } from './creativeWorkspaceContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
@@ -31,7 +32,7 @@ async function authorize(db: any, actor: Actor, brandId: string, write = false) 
 }
 function present(row: any) {
   const input = record(row.input)
-  return { id:row.id, revision:row.version, parentRevisionId:input.parentRevisionId || null, originalRevisionId:input.originalRevisionId || row.id, createdAt:row.createdAt.toISOString(), actor:input.actor || null, principals:input.principals || [], brand:input.brand, origin:input.origin, ai:input.ai || null, source:input.source, feedback:input.feedback||null, changes:input.changes||[], content:row.output, contentHash:creativeDigest(row.output) }
+  return { id:row.id, revision:row.version, parentRevisionId:input.parentRevisionId || null, originalRevisionId:input.originalRevisionId || row.id, createdAt:row.createdAt.toISOString(), actor:input.actor || null, principals:input.principals || [], brand:input.brand, origin:input.origin, ai:input.ai || null, source:input.source, feedback:input.feedback||null, changes:input.changes||[], content:row.output, workspaceItem:normalizeCreativeWorkspaceItem(row.output,{brandId:input.brand?.id,currentRevisionId:row.id,createdAt:row.createdAt.toISOString(),updatedAt:row.createdAt.toISOString()}), contentHash:creativeDigest(row.output) }
 }
 export async function readCreativeRevisions(actor: Actor, brandId: string, month: string, creativeId: string, revisionId?: string, db = prisma, beforeVersion?: number) {
   validateCreativeAddress(month, creativeId)
@@ -48,7 +49,7 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   const items = monthItems(creativeWorkspace(knowledge),month)
   const current = items.find(item=>item.id===creativeId) || null
   if (!current && !revisions.length) throw new CreativeRevisionError('creative_not_found_or_ambiguous',404)
-  return {ok:true, brand, creativeId, month, current, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:revisions[0]?record(revisions[0].input).source:current?originalSource(current,new Date().toISOString()):null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
+  return {ok:true, brand, creativeId, month, current, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:revisionId || beforeVersion !== undefined ? undefined : revisions[0]?.id,createdAt:revisionId || beforeVersion !== undefined ? undefined : revisions.at(-1)?.createdAt?.toISOString(),updatedAt:revisionId || beforeVersion !== undefined ? undefined : revisions[0]?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:revisions[0]?record(revisions[0].input).source:current?originalSource(current,new Date().toISOString()):null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
 export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>) {
@@ -58,7 +59,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
   const copy=body.saveMode==='copy'
   if(copy&&seed)throw new CreativeRevisionError('invalid_script_save_mode')
   const sourceCreativeId=creativeId
-  const patch = validateCreativePatch(body.patch,month)
+  const patch: Record<string, any> = ai ? validateCreativePatch(body.patch,month) : validateCreativeWorkspacePatch(body.patch)
   const feedback=validateCreativeFeedback(body.feedback)
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
   if(copy)creativeId=`script_${creativeDigest([brandId,month,sourceCreativeId,requestKey]).slice(0,32)}`
@@ -145,14 +146,27 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     }
     const parentInput = record(parent.input)
     const revision = parent.version+1
-    const next:Record<string,any> = {...current,...patch,...((current.nativeDaily||current.planningRequest)&&!ai?.automaticDaily&&!ai?.autopilotRunId&&!ai?.planningRequest?{nativeReviewStatus:'reviewed',status:'planned_unimplemented'}:{})}
+    const normalized = normalizeCreativeWorkspaceItem(current,{brandId})
+    const next:Record<string,any> = {...current,...patch,brandId,
+      status:patch.status || normalized.status,
+      platformTargets:patch.platformTargets || (patch.platform ? [patch.platform] : normalized.platformTargets),
+      source:normalized.source,skuDecision:normalized.skuDecision,
+      schedule:normalized.schedule,derivedFromCreativeId:normalized.derivedFromCreativeId,
+      createdAt:normalized.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString(),
+      ...((current.nativeDaily||current.planningRequest)&&!ai?.automaticDaily&&!ai?.autopilotRunId&&!ai?.planningRequest?{nativeReviewStatus:'reviewed'}:{})}
+    // Calendar fields are historical input. A revision is an undated creative until
+    // the explicit scheduling service links a real draft and its revision.
+    for(const key of ['date','platform','platformSlug'])delete next[key]
     if(body.saveMode)next.aiTags=Array.isArray(current.aiTags)?current.aiTags:[]
     if(copy){
       next.id=creativeId
       next.aiTags=Array.isArray(current.aiTags)?current.aiTags:[]
       next.scriptOwner={id:user.id,name:user.nickname||user.id}
       next.copiedFrom={creativeId:sourceCreativeId,month,contentHash:body.expectedRevision}
-      next.status='planned_unimplemented'
+      next.derivedFromCreativeId=sourceCreativeId
+      next.createdAt=new Date().toISOString()
+      next.schedule=null
+      next.status='idea_pending'
       for(const key of ['nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt'])delete next[key]
     }else if(body.saveMode==='overwrite'&&!next.scriptOwner){next.scriptOwner={id:user.id,name:user.nickname||user.id}}
     if((next.nativeDaily||next.planningRequest)&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')

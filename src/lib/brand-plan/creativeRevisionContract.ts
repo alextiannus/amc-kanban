@@ -29,6 +29,8 @@ export function findCreative(workspace: any, month: string, id: string) {
   if (found.length !== 1) throw new CreativeRevisionError('creative_not_found_or_ambiguous', 404)
   return found[0]
 }
+// Only pre-workspace AI matching may still submit this historical calendar shape.
+// Merchant revision writes use validateCreativeWorkspacePatch instead.
 export const CREATIVE_EDIT_FIELDS = ['date','title','platform','contentType','product','planning','materialRequirements','aiCaption','aiTags'] as const
 export function validateCreativePatch(value: unknown, month: string) {
   const input = record(value)
