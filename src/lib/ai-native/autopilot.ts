@@ -242,7 +242,7 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
   const run=await autopilotRun(settings.owner_id,brandId,id)
   let taskId=run.task_id
-  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划、匹配并自动适配创意，选择合适的品牌素材，生成并保存每日额度内的图文发布草稿。无需逐步人工批准，缺少必要素材或未知执行结果才等待。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
+  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划、匹配来源候选、建议 SKU，等待人工确认后再基于固定来源与确认摘要生成完整逐镜适配脚本，选择合适的品牌素材，生成并保存每日额度内的图文发布草稿。SKU 决策必须由人工确认；空目录也须人工确认「普通品牌内容，非爆款复刻」决策。确认缺失或失效、必要素材缺失、执行结果未知时明确等待，不得自动确认或绕过门槛。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
   let task=await readNativeTask(settings.owner_id,brandId,taskId)
   if(task.status==='waiting'&&task.waitingReason==='interrupted'&&task.version===await applicationVersion()){
    const host=await getNativeHost(),actor=actorFor(brandId,settings.owner_id),history=await host.app.runtime.get(actor,taskId,{history:true})

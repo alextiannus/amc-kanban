@@ -22,6 +22,8 @@ import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
 import {readSkuContext,readBoundSkuContext} from '../brand-plan/creativeSkuDecision'
 import {validateSkuArtifact} from './sku-workflow'
+import {assertModelHistory} from '@immedi/iaic-core/capabilities/visibility.js'
+import type {Capability,History} from '@immedi/iaic-core/capabilities/index.js'
 
 type Host={pool:Pool;taskPool?:Pool;lane?:RuntimeLane;app:Application;tools:string[];modelRevision:number}
 const globalState=globalThis as typeof globalThis & {amcNativeHost?:Promise<Host>;amcConversationHost?:Promise<Host>;amcNativeStartup?:boolean;amcNativeError?:string;amcNativeStopping?:boolean}
@@ -81,6 +83,9 @@ async function taskHost(userId:string,brandId:string,id:string){
  return host
 }
 export async function createNativeTask(userId:string,brandId:string,body:any,automaticDaily=false,autopilotRunId?:string,planningRequest?:import('./contract').PlanningBinding){
+  if(!body||typeof body!=='object'||Array.isArray(body)||body.kind!==undefined&&typeof body.kind!=='string'||body.adaptToBrand!==undefined&&typeof body.adaptToBrand!=='boolean')throw nativeError('invalid_input')
+  body={...body,kind:body.kind===undefined?'creative':body.kind}
+  if(body.kind==='creative'&&body.adaptToBrand===true)throw nativeError('sku_confirmation_required_use_sku_proposal',409)
   let host=await authorizedHost(userId,brandId,automaticDaily)
   if(body?.kind==='conversation'){
     let prior;try{prior=await intentBy(host.pool,host.actor,'request_key',requestKey(body.requestKey))}catch(error){if((error as {statusCode?:number}).statusCode!==404)throw error}
@@ -107,7 +112,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if(body?.kind==='creative'&&body.adaptToBrand===true)throw nativeError('sku_confirmation_required_use_sku_proposal',409)
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
-  const kind=body.kind||'creative'
+  const kind=body.kind
   if(!['creative','brand_brief','creative_discovery','autopilot','conversation','sku_proposal','creative_adaptation'].includes(kind))throw nativeError('invalid_task_kind')
   const common={brandId,userId,goal:body.goal.trim(),requestKey:key,artifactPath:`work/${digest([actor,key])}.json`}
   let intent:NativeIntent
@@ -182,15 +187,33 @@ export async function listNativeTasks(userId:string,brandId:string,cursor?:strin
   items.sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime())
   return {page:{...listing,items},coreVersion:CORE_VERSION,limits:USAGE_POLICY}
 }
-// Status/control must remain available when Core refuses stale source or Skill revisions.
-// This never returns unvalidated historical sources or bypasses current authorization.
-export async function nativeTaskHistory(app:Application,actor:NativeActor,id:string){
-  try{return {history:await app.runtime.get(actor,id,{history:true}),historyUnavailable:null as string|null}}
+// Status/control remain available on revision conflict. Terminal SKU display may
+// use fixed evidence, but never bypasses current task/Host/capability authority.
+export async function nativeTaskHistory(app:Application,actor:NativeActor,id:string,terminalSnapshot=false){
+  let live:TaskView&History,stale=false
+  try{live=await app.runtime.get(actor,id,{history:true})}
   catch(error){
-    if((error as {statusCode?:number}).statusCode!==409)throw error
-    const state=await app.runtime.state(actor,id)
-    return {history:{...state,result:null,inputRequest:null,trusted_context:null,calls:[],events:[]},historyUnavailable:'revision_conflict'}
+    if(Number((error as any).statusCode??(error as any).status)!==409)throw error
+    stale=true
+    live={...await app.runtime.state(actor,id),result:null,inputRequest:null,trusted_context:null,calls:[],events:[]}
   }
+  if(terminalSnapshot&&['succeeded','failed','cancelled'].includes(live.status)){
+    // Current task/Host identity authorization above remains mandatory. For
+    // display only, retain immutable evidence instead of refreshing old context.
+    const store=app.tasks as unknown as {get(actor:NativeActor,id:string):Promise<TaskView>;history(actor:NativeActor,id:string):Promise<History>}
+    const fixed=await store.get(actor,id),records=await store.history(actor,id)
+    assertModelHistory(records,app.dispatcher)
+    const calls=[]
+    for(const call of records.calls){
+      const capability=app.dispatcher.capabilities.get(call.capability)! as Capability<unknown,unknown,NativeActor>
+      if(await capability.authorize(actor,call.input)!==true)throw nativeError('historical_call_forbidden',403)
+      const input=typeof capability.projectHistoryInput==='function'?await capability.projectHistoryInput(structuredClone(call.input),{actor,callId:String(call.id),status:call.status}):call.input
+      if(capability.projectHistoryInput&&(!input||typeof input!=='object'||Array.isArray(input)))throw nativeError('invalid_history_input_projection',503)
+      calls.push({...call,input,...(capability.projectHistoryInput?{inputProjected:true}:{})})
+    }
+    return {history:{...fixed,inputRequest:null,...records,calls},historyUnavailable:null,contextState:stale?'stale':'was_current'}
+  }
+  return stale?{history:{...live,result:null,inputRequest:null,trusted_context:null,calls:[],events:[]},historyUnavailable:'revision_conflict',contextState:'stale'}:{history:live,historyUnavailable:null,contextState:null}
 }
 export async function readNativeTask(userId:string,brandId:string,id:string){
   const host=await taskHost(userId,brandId,id)
@@ -203,7 +226,7 @@ export async function readNativeTaskStatus(userId:string,brandId:string,id:strin
   return await activeConversationStatus(host.app,host.actor,id,row.intent.kind)||readNativeTaskResult(host,userId,brandId,id,row)
 }
 async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
-  const view=await nativeTaskHistory(app,actor,id),history=view.history,task=projectTask(history)
+  const view=await nativeTaskHistory(app,actor,id,row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'),history=view.history,task=projectTask(history)
   // Read usage after the result snapshot: otherwise completion can race an earlier pending ledger read.
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
   let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null,skuAdoption=null
@@ -214,12 +237,10 @@ async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHo
   const sourceInsight=conversationInsight(history.calls)
   if(artifact&&(row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation')){
     skuAdoption=row.intent.kind==='creative_adaptation'?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null
-    if(skuAdoption){candidate={...report,historical:true};report=null}
-    else{
-      const validated=await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,artifact)).content,row.intent)
-      if(row.intent.kind==='sku_proposal')report=validated.result
-      else{candidate=validated.result;report=null}
-    }
+    // Succeeded artifacts were verified against this task's fixed context.
+    // Reading them is not a new adoption; that operation revalidates live data.
+    if(row.intent.kind==='sku_proposal')report={...report,historical:true,contextState:view.contextState}
+    else{candidate={...report,historical:true,contextState:view.contextState};report=null}
   }
   const insight=row.intent.kind==='conversation'&&sourceInsight?{status:sourceInsight.status,reportVersionId:sourceInsight.reportVersionId||null,partial:sourceInsight.partial===true,generatedAt:typeof sourceInsight.generatedAt==='string'?sourceInsight.generatedAt:null}:null
   const operations=history.calls.find(c=>c.capability==='amc.operations'&&c.status==='succeeded')?.result as {draftTotal?:number;accountTotal?:number;operationsDigest?:string;retrievedAt?:string}|undefined
@@ -228,7 +249,8 @@ async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHo
   const adoptions=row.intent.kind==='creative_discovery'?await recommendationReceipts(userId,brandId,id):[]
   const adoption=skuAdoption||(row.intent.kind==='creative'&&row.intent.adaptToBrand?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null)
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
-  return {...task,...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,kind:row.intent.kind,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
+  const contextSnapshot=row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'?history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result||null:null
+  return {...task,...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await taskHost(userId,brandId,id)
@@ -242,11 +264,27 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
 export async function adoptNativeCandidate(userId:string,brandId:string,id:string,body:any,autopilotRunId?:string){
   const {actor,app,pool}=await authorizedHost(userId,brandId)
   if(autopilotRunId)await autopilotRun(userId,brandId,autopilotRunId)
-  requestKey(body?.requestKey)
+  const adoptionKey=requestKey(body?.requestKey)
   if(body.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw nativeError('invalid_script_save_mode')
+  // Core's scoped task store and immutable trusted binding prove ownership
+  // without revalidating a source revision changed by our own successful save.
+  const row=await intentForTask(pool,app,actor,id)
+  let adoptionRequest:{requestKey:string;payloadDigest:string}|undefined
+  if(row.intent.kind==='creative_adaptation'){
+    await app.runtime.state(actor,id)
+    if(Object.keys(body).some(key=>!['requestKey','artifactDigest'].includes(key)))throw nativeError('adaptation_artifact_must_be_adopted_exactly')
+    if(typeof body.artifactDigest!=='string'||!body.artifactDigest||body.artifactDigest.length>200)throw nativeError('invalid_input')
+    adoptionRequest={requestKey:adoptionKey,payloadDigest:digest({artifactDigest:body.artifactDigest})}
+    const prior=await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId)
+    if(prior){
+      const ai=prior.receipt.ai
+      if(ai?.adoptionRequest?ai.adoptionRequest.payloadDigest!==adoptionRequest.payloadDigest:ai?.artifact?.digest!==body.artifactDigest)throw nativeError('creative_request_key_reused',409)
+      return {...prior,replayed:true}
+    }
+  }
   const task=await app.runtime.get(actor,id,{history:true})
   if(task.status!=='succeeded'||!task.result)throw nativeError('candidate_not_ready',409)
-  const row=await intentForTask(pool,app,actor,id),ref=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)
+  const ref=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)
   if(!ref||body.artifactDigest!==ref.digest)throw nativeError('candidate_changed',409)
   if(row.intent.kind==='creative_discovery'){
     const library=task.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
@@ -255,11 +293,8 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   }
   if(row.intent.kind==='sku_proposal')throw nativeError('human_sku_confirmation_required',409)
   if(row.intent.kind==='creative_adaptation'){
-    if(body.patch!==undefined||body.saveMode!==undefined)throw nativeError('adaptation_artifact_must_be_adopted_exactly')
-    const prior=await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId)
-    if(prior)return {...prior,replayed:true}
     const {result,ctx}=await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
-    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{...(autopilotRunId?{autopilotRunId}:{}),taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
+    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{...(autopilotRunId?{autopilotRunId}:{}),adoptionRequest,taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
     const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
     if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
     return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}
