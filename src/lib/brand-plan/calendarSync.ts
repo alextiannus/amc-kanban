@@ -29,7 +29,7 @@ export type CalendarCreativeOption = {
   nativeDaily?: {poolIdeaId:string;taskId:string}
   nativeReviewStatus?: string
   id: string
-  date: string
+  date: string | null
   title: string
   platform: string
   platformSlug: string
@@ -136,7 +136,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
 
   return {
     id,
-    date,
+    date: date || null,
     title,
     platform: platform ? platformLabel(platformSlug, platform) : '',
     platformSlug,
@@ -172,7 +172,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
   const options = items
     .map(calendarCreativeOption)
     .filter((item): item is CalendarCreativeOption => Boolean(item))
-    .sort((a, b) => a.date.localeCompare(b.date))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
   if (!options.length) return []
 

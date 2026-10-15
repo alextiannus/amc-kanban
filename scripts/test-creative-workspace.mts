@@ -57,7 +57,7 @@ const listDb = {
 }
 const listed = await listOpenCalendarCreativeOptions('brand-1', '2026-11', listDb as any)
 assert.deepEqual(listed.map(item => item.id).sort(), ['legacy', 'undated'])
-assert.equal(listed.find(item => item.id === 'undated')?.date, '')
+assert.equal(listed.find(item => item.id === 'undated')?.date, null)
 assert.equal(listed.find(item => item.id === 'undated')?.workspaceItem?.currentRevisionId, 'revision-new')
 assert.equal(listed.find(item => item.id === 'legacy')?.workspaceItem?.legacy?.date, '2026-11-01')
 
@@ -69,7 +69,7 @@ const rows = [
   { id: 'revision-0', version: 0, createdAt: new Date('2026-11-01T00:00:00Z'), input: { brand: { id: 'brand-1' } }, output: { id: 'idea-1', date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } },
 ]
 const deps: Record<string, any> = {
-  './matchingContract': {}, './revisionFeedback': {}, '../ai-native/creative-diversity.ts': {},
+  './matchingContract': {}, './revisionFeedback': { validateCreativeFeedback: () => null, creativeChanges: () => [] }, '../ai-native/creative-diversity.ts': {},
   '../prisma.ts': { prisma: {} }, '../ai-native/facts.ts': {},
   '../role-permissions/store.ts': {}, '../role-permissions/contract.ts': {},
   '../auth-v2/types.ts': { principalFromUser: () => ({ globalRoles: ['ADMIN'] }) },
@@ -101,4 +101,37 @@ assert.equal(historical.workspaceItem.currentRevisionId, 'revision-1')
 assert.equal(historical.revisions[0].workspaceItem.currentRevisionId, 'revision-0')
 const page = await module.exports.readCreativeRevisions(actor, 'brand-1', '2026-11', 'idea-1', undefined, dbMock, 1)
 assert.equal(page.workspaceItem.currentRevisionId, 'revision-1')
-console.log('PASS: undated/legacy list reads, controlled MM compatibility, current revision IDs, and zero implicit draft writes')
+
+const legacySource = { id: 'old-idea', date: '2026-11-04', platform: 'Instagram', platformSlug: 'instagram', status: 'planned_unimplemented', title: 'Old idea', planning: 'Original', inspirationCreativeId: 'viral-1', aiTags: [], materialRequirements: [] }
+let copiedWorkspace: any = { publishingCalendar: { months: { '2026-11': [legacySource] } } }
+const savedRows: any[] = []
+const copyDb: any = {
+  $transaction: async (run: any) => run(copyDb), $queryRaw: async () => [],
+  user: { findUnique: async () => ({ id: 'owner', status: 'ACTIVE', nickname: 'Owner', type: 'HUMAN', role: 'ADMIN', businessRoles: [] }) },
+  brandKnowledge: {
+    findUnique: async () => ({ marketingSolution: copiedWorkspace }),
+    update: async ({ data }: any) => { copiedWorkspace = data.marketingSolution },
+  },
+  brandMarketingSolution: {
+    findFirst: async ({ where }: any) => where.input ? null : savedRows.find(row => row.period === where.period) || null,
+    create: async ({ data }: any) => { const row = { ...data, id: `saved-${savedRows.length}`, createdAt: new Date('2026-11-05T00:00:00Z') }; savedRows.push(row); return row },
+  },
+  brand: { findUnique: async () => ({ id: 'brand-1', name: 'Brand', crew: { id: 'crew-1', members: [] } }) },
+  auditLog: { create: async () => ({}) },
+  contentDraft: { create: () => { throw new Error('implicit draft create') }, upsert: () => { throw new Error('implicit draft upsert') }, update: () => { throw new Error('implicit draft update') }, delete: () => { throw new Error('implicit draft delete') } },
+}
+const copied = await module.exports.saveCreativeRevision(actor, 'brand-1', '2026-11', 'old-idea', {
+  expectedRevision: revisionContract.creativeDigest(legacySource), idempotencyKey: 'copy-legacy-one', saveMode: 'copy', patch: { planning: 'New copy' },
+}, copyDb)
+const copy = copied.receipt.content
+assert.equal(copy.schedule, null)
+assert.equal(copy.legacy?.date, undefined)
+assert.equal(copy.legacy?.platform, undefined)
+assert.equal(copy.legacy?.status, undefined)
+assert.equal(normalizeCreativeWorkspaceItem(copy).legacy, undefined)
+assert.equal(calendarCreativeOption(copy)?.date, null)
+assert.equal(copy.derivedFromCreativeId, 'old-idea')
+assert.equal(copied.receipt.source.creativeId, 'viral-1')
+assert.equal(copied.receipt.parentRevisionId, 'saved-0')
+assert.equal(copiedWorkspace.publishingCalendar.months['2026-11'][0].date, '2026-11-04')
+console.log('PASS: undated/legacy reads, MM compatibility, revision IDs, no draft writes, and clean copy lineage')

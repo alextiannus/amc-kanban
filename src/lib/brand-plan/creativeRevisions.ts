@@ -173,7 +173,9 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       next.createdAt=new Date().toISOString()
       next.schedule=null
       next.status='idea_pending'
-      for(const key of ['nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt'])delete next[key]
+      // A new creative inherits lineage and source evidence, never the source
+      // card's historical calendar placement or status.
+      for(const key of ['legacy','nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt'])delete next[key]
     }else if(body.saveMode==='overwrite'&&!next.scriptOwner){next.scriptOwner={id:user.id,name:user.nickname||user.id}}
     if((next.nativeDaily||next.planningRequest)&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')
     const automatic=ai?.automaticDaily===true||!!ai?.autopilotRunId||!!ai?.planningRequest
