@@ -30,6 +30,14 @@ const model={next:async(request:any)=>{
    return {type:'finish',result:{summary:'Evidence-backed brief ready.',artifacts:[calls.find((c:any)=>c.capability==='my_write_workspace').result.reference]},usage}
  }
  if(!has('amc.creative'))return {type:'call',name:'amc.creative',input:{},usage}
+ if(host.editMode==='materials'){
+   const context=calls.find((c:any)=>c.capability==='amc.context').result
+   assert.equal(context.artifactContract.example.patch.planning,undefined)
+   assert.ok(context.artifactContract.instructions.includes('patch.materialRequirements ONLY'))
+   assert.equal(calls.find((c:any)=>c.capability==='amc.creative').result.editMode,'materials')
+   if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({...context.artifactContract.example,sourceCreativeId:'cre_fixture',patch:{materialRequirements:['Human eating noodles, 3 seconds','Noodles leaving the pot, 4 seconds']}})},usage}
+   return {type:'finish',result:{summary:'Requirements ready',artifacts:[calls.find((c:any)=>c.capability==='my_write_workspace').result.reference]},usage}
+ }
  if(!data.events.some((e:any)=>e.kind==='input'))return {type:'wait',question:'请提供希望突出的一项真实卖点。',usage}
  if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'creative_candidate',brandId:id,creativeId:'idea',month,expectedRevision:host.expectedRevision,contextDigest:calls.find((c:any)=>c.capability==='amc.context').result.contextDigest,patch:{title:'品牌适配脚本',planning:'Fixture Noodles：手工制作，每日现做。开场展示面条，口播介绍，邀请了解。',aiCaption:'Fixture Noodles',product:'Fixture Noodles',materialRequirements:['拍摄 Fixture Noodles 成品特写，竖屏 5 秒']},skuIds:['sku_fixture'],rationale:'采用用户补充的真实卖点',sourceCreativeId:'cre_fixture',factsUsed:['user clarification: handmade daily']})},usage}
  const ref=calls.find((c:any)=>c.capability==='my_write_workspace').result.reference
@@ -100,6 +108,15 @@ try{
  await assert.rejects(()=>saveCreativeRevision({id,type:'HUMAN'},id,month,'idea',{...body,expectedRevision:latest.expectedRevision,idempotencyKey:'changed-brand-facts'},undefined,provenance),(error:any)=>error.code==='brand_context_changed')
  assert.equal((await saveCreativeRevision({id,type:'HUMAN'},id,month,'idea',body,undefined,provenance)).receipt.id,saved.receipt.id,'facts change must not hide existing adoption receipt')
  const next=await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')
+ const materialsIntent:CreativeIntent={...intent,adaptToBrand:undefined,editMode:'materials',draftScript:'真人吃面。大面条出锅。',requestKey:'materials-only-request',artifactPath:`creative/${id}-materials.json`,expectedRevision:next.expectedRevision!}
+ await admitIntent(pool,actor,materialsIntent)
+ const materialsReceipt=await composition.app.dispatcher.invoke('agent.work',{goal:'Update materials only',requiredArtifacts:[materialsIntent.artifactPath],allowedTools:composition.tools},{actor,callId:materialsIntent.requestKey})
+ await composition.app.runtime.tick()
+ const materialsTask=await composition.app.runtime.get(actor,materialsReceipt.id)
+ assert.equal(materialsTask.status,'succeeded','materials update completes without waiting, re-adapting SKUs or reproducing the human script')
+ const materialsArtifact=await composition.app.workspace.read(actor,materialsTask.result.artifacts[0])
+ assert.equal(candidateFrom(materialsArtifact.content,materialsIntent).patch.planning,materialsIntent.draftScript)
+ assert.equal((await readCreativeRevisions({id,type:'HUMAN'},id,month,'idea')).current.planning,next.current.planning,'updating requirements does not save automatically')
  const uncertain={...intent,requestKey:'unknown-model-request',artifactPath:`creative/${id}-unknown.json`,expectedRevision:next.expectedRevision!}
  await admitIntent(pool,actor,uncertain)
  const unknown=await composition.app.dispatcher.invoke('agent.work',{goal:uncertain.goal,requiredArtifacts:[uncertain.artifactPath],allowedTools:composition.tools},{actor,callId:uncertain.requestKey})

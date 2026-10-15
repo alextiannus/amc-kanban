@@ -8,7 +8,7 @@ export const CORE_VERSION = '0.1.0-candidate.114'
 export const CORE_ARCHIVE_SHA = '1eb1b87bcef1c1191eff788ca77cee678a1ac979c91ac0bcbecc77a525d79f24'
 export const USAGE_POLICY = {enforced:false,taskAllowance:null,dailyAllowance:null,mode:"meter_only"} as const
 export type NativeActor = { scopeId:string; subjectId:string }
-export type CreativeIntent = {kind:'creative';draftScript?:string;draftMaterialRequirements?:string[];autopilotRunId?:string;requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
+export type CreativeIntent = {kind:'creative';editMode?:'materials';draftScript?:string;draftMaterialRequirements?:string[];autopilotRunId?:string;requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type PlanningBinding={id:string;month:string;platform:string;excludeCreativeIds:string[]}
 export type DiscoveryIntent = {planningRequest?:PlanningBinding;kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;recoveryOfTaskId?:string;recoveryVersion?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
@@ -37,7 +37,13 @@ export function candidateFrom(content:string,intent:CreativeIntent){
   if(!c.patch||Object.keys(c.patch).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k))||!Object.keys(c.patch).length)throw nativeError('candidate_patch_invalid')
   if(c.patch.materialRequirements===undefined&&c.materialRequirements!==undefined)c.patch.materialRequirements=c.materialRequirements
   if(intent.adaptToBrand&&(!c.patch.planning?.trim()||!c.patch.title?.trim()||typeof c.patch.aiCaption!=='string'||!Array.isArray(c.skuIds)||(intent.requireMaterials&&(!Array.isArray(c.patch.materialRequirements)||!c.patch.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))))throw nativeError('adapted_script_required')
+  if(intent.editMode==='materials'){
+    if(typeof intent.draftScript!=='string'||!intent.draftScript.trim()||intent.draftScript.length>20000||Object.keys(c.patch).some(k=>!['planning','materialRequirements'].includes(k))||(c.patch.planning!==undefined&&c.patch.planning!==intent.draftScript)||!Array.isArray(c.patch.materialRequirements))throw nativeError('materials_only_patch_required')
+    // Bind the script on the server: the model need not copy a long human draft.
+    c.patch.planning=intent.draftScript
+  }
   validateCreativePatch(c.patch,intent.month)
+  if(intent.editMode==='materials')c.patch.planning=intent.draftScript
   return c as {kind:'creative_candidate';brandId:string;creativeId:string;month:string;expectedRevision:string;contextDigest:string;patch:Record<string,unknown>;rationale:string;sourceCreativeId:string|null;factsUsed:string[];skuIds?:string[]}
 }
 export function briefFrom(content:string,intent:BriefIntent){
