@@ -2,7 +2,7 @@ import {isUiPage,parseUiAction,type UiAction,type UiPage} from './ui-navigation'
 import {PLANNING_STAGES,planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
 import {checkPlanningBudget,type PlanningBudget} from './planning-budget'
 import { createHash } from 'node:crypto'
-import { validateCreativePatch } from '../brand-plan/creativeRevisionContract'
+import { stableJson, validateCreativePatch } from '../brand-plan/creativeRevisionContract'
 import type {SkuBinding} from '../brand-plan/creativeSkuContract'
 
 export const CORE_VERSION = '0.1.0-candidate.114'
@@ -19,6 +19,13 @@ export type SkuIntent = SkuBinding & {kind:'sku_proposal'|'creative_adaptation';
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent | SkuIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
+// Compare SKU JSON values, not their historical order-sensitive digest. JSONB
+// reorders objects recursively; optional undefined fields disappear on storage.
+// Keep every bound field (including source, decision and autopilot) and array
+// order significant. Other intent kinds retain their original digest contract.
+export function sameSkuIntent(left:NativeIntent,right:NativeIntent){
+  return (left.kind==='sku_proposal'||left.kind==='creative_adaptation')&&left.kind===right.kind&&stableJson(left)===stableJson(right)
+}
 export function actorFor(brandId:string,userId:string):NativeActor {
   if(!brandId||!userId||brandId.length>150||userId.length>150)throw nativeError('invalid_scope')
   return {scopeId:JSON.stringify(['amc-mm','user_ai',brandId]),subjectId:userId}

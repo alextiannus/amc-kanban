@@ -1,6 +1,6 @@
 import type { Application } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import { Pool } from 'pg'
-import { isDailyActor, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
+import { isDailyActor, digest, sameSkuIntent, nativeError, type NativeIntent, type NativeActor } from './contract'
 
 export type RuntimeLane='default'|'conversation'
 export function nativePool(connectionString=process.env.DATABASE_URL,lane:RuntimeLane='default'){
@@ -30,7 +30,7 @@ export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeInten
     const autopilot=intent.kind==='autopilot'||intent.kind==='creative'&&!!intent.autopilotRunId
     await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['amc-ai-admission:'+(autopilot?`autopilot:${intent.brandId}`:isDailyActor(actor)?actor.scopeId:actor.subjectId)])
     const old=(await c.query('SELECT * FROM amc_ai_requests WHERE id=$1',[id])).rows[0]
-    if(old){if(old.digest!==hash)throw nativeError('request_key_reused',409);await c.query('COMMIT');return old}
+    if(old){if(old.digest!==hash&&!sameSkuIntent(old.intent,intent))throw nativeError('request_key_reused',409);await c.query('COMMIT');return old}
     const row=(await c.query('INSERT INTO amc_ai_requests(id,scope_id,subject_id,request_key,digest,intent,allowance,runtime_lane) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[id,actor.scopeId,actor.subjectId,intent.requestKey,hash,JSON.stringify(intent),0,lane])).rows[0]
     await c.query('COMMIT');return row
   }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}

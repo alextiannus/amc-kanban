@@ -16,7 +16,7 @@ import type { Pool } from 'pg'
 import { composeApplication, requireActor, type WorkspacePort } from './application'
 import { centralModels } from './models'
 import { nativePool, initializeHost, admitIntent, intentBy, intentForTask, type PublicTaskIndex, type RuntimeLane } from './store'
-import { conversationFrom, conversationInput, actorFor, dailyActorFor, candidateFrom, briefFrom, digest, nativeError, requestKey, USAGE_POLICY, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
+import { conversationFrom, conversationInput, actorFor, dailyActorFor, candidateFrom, briefFrom, digest, sameSkuIntent, nativeError, requestKey, USAGE_POLICY, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
 import { readCreativeRevisions, saveCreativeRevision } from '../brand-plan/creativeRevisions'
 import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
@@ -122,7 +122,11 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     try{existing=await intentBy(pool,actor,'request_key',key)}catch(error){if((error as any).statusCode!==404)throw error}
     if(existing){
       const saved=existing.intent
-      if(saved.kind!==kind||!('creativeId' in saved)||saved.creativeId!==body.creativeId||saved.month!==body.month||saved.expectedRevision!==body.expectedRevision||saved.goal!==common.goal||('decisionDigest' in saved?saved.decisionDigest:undefined)!==body.decisionDigest||('autopilotRunId' in saved?saved.autopilotRunId:undefined)!==autopilotRunId)throw nativeError('request_key_reused',409)
+      if((saved.kind!=='sku_proposal'&&saved.kind!=='creative_adaptation')||saved.kind!==kind)throw nativeError('request_key_reused',409)
+      // Only these normalized request fields come from the caller. Catalog and
+      // source pins remain the admitted server snapshot, even after it changes.
+      const requested={...saved,...common,creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision,decisionDigest:body.decisionDigest,autopilotRunId}
+      if(!sameSkuIntent(saved,requested))throw nativeError('request_key_reused',409)
       intent=saved
     }else{
       const ctx=await readSkuContext({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
@@ -142,14 +146,22 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     intent={...common,kind:'brand_brief'}
   }
   let prior;try{prior=await intentBy(pool,actor,'request_key',key)}catch(e){if((e as any).statusCode!==404)throw e}
-  if(prior){if(prior.intent.kind!=='brand_brief'&&prior.intent.kind!=='autopilot'&&prior.intent.kind!=='conversation'&&!prior.intent.requireMaterials&&'requireMaterials' in intent)delete intent.requireMaterials;if(prior.digest!==digest(intent))throw nativeError('request_key_reused',409);const existing=prior.task_id?{id:prior.task_id}:await (app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',key);if(existing){await intentForTask(pool,app,actor,existing.id);return publicTask(app,actor,existing.id)}}
+  const skuIntent=intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'
+  if(prior){
+    if(!skuIntent&&prior.intent.kind!=='brand_brief'&&prior.intent.kind!=='autopilot'&&prior.intent.kind!=='conversation'&&!prior.intent.requireMaterials&&'requireMaterials' in intent)delete intent.requireMaterials
+    if(skuIntent?!sameSkuIntent(prior.intent,intent):prior.digest!==digest(intent))throw nativeError('request_key_reused',409)
+    const existing=prior.task_id?{id:prior.task_id}:await (app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',key)
+    if(existing){await intentForTask(pool,app,actor,existing.id);return publicTask(app,actor,existing.id)}
+  }
   if(intent.kind==='creative'){
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,intent.month,intent.creativeId)
     if(current.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
     if(intent.editMode!=='materials'&&['awaiting_sku','sku_confirmed'].includes(current.current?.adaptationStatus))throw nativeError('sku_confirmation_required_use_creative_adaptation',409)
   }
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
-  const row=await admitIntent(pool,actor,intent,host.lane||'default')
+  // An admitted SKU request may not yet have reached Core. Resume it with the
+  // same identity and stored digest instead of re-admitting its JSONB readback.
+  const row=skuIntent&&prior?prior:await admitIntent(pool,actor,intent,host.lane||'default')
   if((row.runtime_lane||'default')!==(host.lane||'default'))return createNativeTask(userId,brandId,body,automaticDaily,autopilotRunId,planningRequest)
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':['conversation','sku_proposal','creative_adaptation'].includes(intent.kind)?'':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
