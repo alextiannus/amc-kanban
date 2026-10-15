@@ -58,11 +58,12 @@ const listDb = {
     { id: 'legacy', title: 'Edited old idea', status: 'idea_pending', legacy: { date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } },
   ] } } } }) },
   brandMarketingSolution: { findMany: async () => [{ id: 'revision-new', period: revisionContract.revisionPeriod('2026-11', 'undated'), createdAt: new Date('2026-11-02T00:00:00Z') }] },
-  contentDraft: { findMany: async () => [{ id: previousDraft.id, agentNote: 'unrelated', status: 'draft' }] },
+  contentDraft: { findMany: async () => [{ id: previousDraft.id, agentNote: 'brand-plan-calendar-item:undated', status: 'draft' }] },
 }
 const listed = await listOpenCalendarCreativeOptions('brand-1', '2026-11', listDb as any)
 assert.deepEqual(listed.map(item => item.id).sort(), ['legacy', 'undated'])
 assert.equal(listed.find(item => item.id === 'undated')?.date, null)
+assert.equal(listed.find(item => item.id === 'undated')?.draftId, null)
 assert.equal(listed.find(item => item.id === 'undated')?.workspaceItem?.currentRevisionId, 'revision-new')
 assert.equal(listed.find(item => item.id === 'legacy')?.workspaceItem?.legacy?.date, '2026-11-01')
 

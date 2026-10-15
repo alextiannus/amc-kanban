@@ -31,7 +31,6 @@ import {
 import type { CalendarCreativeMatchStatus } from '@/lib/brand-plan/calendarCreativeMatching'
 import { resolveCalendarCreativeCandidateWithRetry } from '@/lib/brand-plan/calendarCreativeMatching'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
-import { syncConfirmedCalendarItemsToDrafts } from '@/lib/brand-plan/calendarSync'
 import {
   researchReportTimezone,
   researchReviewLocationId,
@@ -505,7 +504,6 @@ export async function runBrandPlanAction(input: {
       },
     }
     await syncCalendarMaterialRequirements(brand.id, month, monthItems)
-    await syncConfirmedCalendarItemsToDrafts(brand.id, month, monthItems)
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'CALENDAR',
@@ -545,7 +543,6 @@ export async function runBrandPlanAction(input: {
       },
     }
     await syncCalendarMaterialRequirements(brand.id, month, monthItems)
-    await syncConfirmedCalendarItemsToDrafts(brand.id, month, monthItems)
     await saveMarketingSolutionVersion({
       brandId: brand.id,
       kind: 'CALENDAR',

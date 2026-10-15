@@ -27,7 +27,7 @@ export type CreativeSkuDecision = {
 }
 export type CreativeScheduleLink = {
   draftId: string
-  scheduledAt: string
+  scheduledAt: string | null
   platform: string
   scheduledBy: string
   scheduledAtRevisionId: string
@@ -105,7 +105,7 @@ export function normalizeCreativeWorkspaceItem(value: unknown, context: { brandI
   if (typeof storedLegacy.status === 'string' || rawStatus && !statuses.includes(rawStatus as CreativeStatus)) legacy.status = string(storedLegacy.status || rawStatus)
   const status: CreativeStatus = statuses.includes(rawStatus as CreativeStatus) ? rawStatus as CreativeStatus : rawStatus === 'archived' || rawStatus === '归档' ? 'archived' : 'idea_pending'
   const schedule = record(input.schedule)
-  const completeSchedule = ['draftId', 'scheduledAt', 'platform', 'scheduledBy', 'scheduledAtRevisionId'].every(key => typeof schedule[key] === 'string' && schedule[key])
+  const completeSchedule = ['draftId', 'platform', 'scheduledBy', 'scheduledAtRevisionId'].every(key => typeof schedule[key] === 'string' && schedule[key]) && (schedule.scheduledAt === null || typeof schedule.scheduledAt === 'string' && !!schedule.scheduledAt)
   return {
     id: string(input.id), brandId: string(context.brandId || input.brandId), title: string(input.title), status,
     platformTargets: Array.isArray(input.platformTargets) ? list(input.platformTargets) : input.platform || legacy.platform ? [string(input.platform || legacy.platform)] : [],

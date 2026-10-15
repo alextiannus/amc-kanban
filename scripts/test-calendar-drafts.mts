@@ -24,6 +24,7 @@ let user: any = null
 let allowed = false
 let reads = 0
 const deps: Record<string, any> = {
+  '@/lib/videoDraftReceipt': {},
   'next/server': { NextResponse: { json: (data: any, init: any) => Response.json(data, init) } },
   '@/lib/auth': { getSession: async () => user ? { user } : null, extractApiKey: () => null },
   '@/lib/brandAccess': { canSessionAccessBrandProject: async () => allowed },

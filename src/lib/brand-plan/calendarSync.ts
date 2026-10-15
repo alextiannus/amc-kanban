@@ -176,7 +176,9 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
 
   if (!options.length) return []
 
-  const markers = options.map((item) => calendarSyncMarker(item.id))
+  // Marker lookup only projects historical dated plans. New undated ideas
+  // receive draft links solely from the explicit scheduling transaction.
+  const markers = options.filter(item => item.date && !item.draftId).map(item => calendarSyncMarker(item.id))
   const revisions = await db.brandMarketingSolution.findMany({
     where: { brandId, kind: CREATIVE_REVISION_KIND, period: { in: options.map(item => revisionPeriod(month,item.id)) } },
     orderBy: { version: 'desc' },
@@ -184,14 +186,14 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
   })
   const latest = new Map<string,{id:string;createdAt:Date}>()
   for (const row of revisions) if (!latest.has(row.period)) latest.set(row.period,row)
-  const drafts = await db.contentDraft.findMany({
+  const drafts = markers.length ? await db.contentDraft.findMany({
     where: {
       brandId,
       OR: markers.map((marker) => ({ agentNote: { contains: marker, mode: 'insensitive' } })),
       status: { notIn: ['archived'] },
     },
     select: { id: true, agentNote: true, status: true },
-  })
+  }) : []
   const generated = new Map<string, string>()
   drafts.forEach((draft: { id: string; agentNote: string | null; status: string }) => {
     markers.forEach((marker) => {
@@ -202,7 +204,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
   return options.map((item) => {
     const raw = items.find(value => value.id === item.id)
     const revision = latest.get(revisionPeriod(month,item.id))
-    return { ...item, draftId: item.draftId || generated.get(calendarSyncMarker(item.id)) || null,
+    return { ...item, draftId: item.draftId || (item.date ? generated.get(calendarSyncMarker(item.id)) : null) || null,
       workspaceItem: normalizeCreativeWorkspaceItem(raw,{brandId,currentRevisionId:revision?.id,updatedAt:revision?.createdAt.toISOString()}) }
   })
 }
