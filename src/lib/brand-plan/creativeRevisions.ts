@@ -1,5 +1,5 @@
 import {MATCH_REQUEST_KIND,planningHash,openTargets,requestTargets} from './matchingContract'
-import {validateCreativeFeedback,readCreativeFeedback,creativeChanges,creativeFeedbackDimensions,CANDIDATE_FEEDBACK_KIND,FEEDBACK_WINDOW,feedbackCursor,parseFeedbackCursor,summarizeCreativeFeedback} from './revisionFeedback'
+import {validateCreativeFeedback,readCreativeFeedback,creativeChanges,creativeCandidateChanges,creativeFeedbackDimensions,CANDIDATE_FEEDBACK_KIND,FEEDBACK_WINDOW,feedbackCursor,parseFeedbackCursor,summarizeCreativeFeedback} from './revisionFeedback'
 import {creativeDirection,duplicateCreative,exceedsCreativeSubjectLimit} from '../ai-native/creative-diversity.ts'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma.ts'
@@ -16,7 +16,7 @@ import {confirmSkuDecision, assertConfirmedDecision, skuCatalog, type SkuSource,
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
-type AiProvenance = { reviewChanges?:ReturnType<typeof creativeChanges>; adoptionRequest?:{requestKey:string;payloadDigest:string}; skuBinding?:SkuBinding & {decisionDigest:string}; skuSource?:SkuSource|null; contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;targetId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
+type AiProvenance = { candidatePatch?:Record<string,unknown>; reviewChanges?:ReturnType<typeof creativeChanges>; adoptionRequest?:{requestKey:string;payloadDigest:string}; skuBinding?:SkuBinding & {decisionDigest:string}; skuSource?:SkuSource|null; contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;targetId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
 async function canEditScript(db: any, user: any) {
   const principal = principalFromUser(user, 'session')
@@ -69,7 +69,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
   if(copy)creativeId=`script_${creativeDigest([brandId,month,sourceCreativeId,requestKey]).slice(0,32)}`
   // Derived review metadata and instruction never change pre-upgrade retry hashes.
-  const {instruction:_instruction,reviewChanges:_reviewChanges,...hashAi}=ai||{}
+  const {instruction:_instruction,reviewChanges:_reviewChanges,candidatePatch:_candidatePatch,...hashAi}=ai||{}
   const requestHash = creativeDigest({...(body.saveMode?{saveMode:body.saveMode,sourceCreativeId}:{}),expectedRevision:body.expectedRevision,patch,...(skuConfirmation?{skuConfirmation:skuConfirmation.input}:{}),...('legacyProduct' in clientPatch?{legacyProduct:clientPatch.legacyProduct}:{}),...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
   const period = revisionPeriod(month,creativeId)
   const saved = await db.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -82,6 +82,9 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
     const user = await authorize(tx,actor,brandId,true)
     if(skuConfirmation&&user.type!=='HUMAN')throw new CreativeRevisionError('human_sku_confirmation_required',403)
+    // Every candidate adoption (including automatic paths) shares this brand
+    // lock with discard. Task/artifact identity is authoritative across copies.
+    if(ai&&await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CANDIDATE_FEEDBACK_KIND,AND:[{input:{path:['taskId'],equals:ai.taskId}},{input:{path:['artifact','digest'],equals:ai.artifact.digest}}]}}))throw new CreativeRevisionError('candidate_already_discarded',409)
     const existing = await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,...(seed||body.saveMode?{}:{period}),input:{path:['requestKey'],equals:requestKey}}})
     if (existing) {
       if (record(existing.input).requestHash !== requestHash) throw new CreativeRevisionError('creative_request_key_reused',409)
@@ -193,10 +196,12 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const automatic=ai?.automaticDaily===true||!!ai?.autopilotRunId||!!ai?.planningRequest
     const revisionActor=automatic?{id:'amc-mm-user-ai',name:'AMC-MM AI User Assistant',type:'AI',authorizedBy:user.id}:{id:user.id,name:user.nickname || user.id,type:user.type,roles:[user.role,...user.businessRoles.map((role:{role:string})=>role.role)]}
     const sourceReference=revisionSource(next,parentInput.source,new Date().toISOString())
-    const entry = await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period,version:revision,status:'DRAFT',generationMode:ai?.planningRequest?'AI_PLAN_MATCHING':ai?.autopilotRunId?'AI_AUTOPILOT_ADAPTATION':automatic?'AI_DAILY_ADAPTATION':'MANUAL_EDIT',createdById:user.id,input:{creativeId,month,brand:brandSnapshot,actor:revisionActor,principals,origin:ai?.planningRequest?'plan_matching':ai?.autopilotRunId?'automatic_user_ai_adaptation':automatic?'automatic_daily_adaptation':ai?'ai_assisted':user.type==='HUMAN'?'human':'agent',...(ai?{ai}:{}),feedback:feedback||null,changes:creativeChanges(current,next),dimensions:creativeFeedbackDimensions(next,sourceReference),source:sourceReference,parentRevisionId:parent.id,originalRevisionId:parentInput.originalRevisionId || parent.id,requestKey,requestHash},output:next as Prisma.InputJsonValue}})
+    const {candidatePatch,...aiMetadata}=ai||{}
+    const persistedAi=ai?{...aiMetadata,...(candidatePatch?{reviewChanges:creativeCandidateChanges(current,candidatePatch,next,month,!!body.saveMode)}:{})}:undefined
+    const entry = await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period,version:revision,status:'DRAFT',generationMode:ai?.planningRequest?'AI_PLAN_MATCHING':ai?.autopilotRunId?'AI_AUTOPILOT_ADAPTATION':automatic?'AI_DAILY_ADAPTATION':'MANUAL_EDIT',createdById:user.id,input:{creativeId,month,brand:brandSnapshot,actor:revisionActor,principals,origin:ai?.planningRequest?'plan_matching':ai?.autopilotRunId?'automatic_user_ai_adaptation':automatic?'automatic_daily_adaptation':ai?'ai_assisted':user.type==='HUMAN'?'human':'agent',...(persistedAi?{ai:persistedAi}:{}),feedback:feedback||null,changes:creativeChanges(current,next),dimensions:creativeFeedbackDimensions(next,sourceReference),source:sourceReference,parentRevisionId:parent.id,originalRevisionId:parentInput.originalRevisionId || parent.id,requestKey,requestHash},output:next as Prisma.InputJsonValue}})
     const nextWorkspace = {...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar?.months,[month]:(seed||copy ? [...monthItems(workspace,month),next] : monthItems(workspace,month).map(item=>item.id===creativeId ? next : item))}}}
     await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:nextWorkspace as Prisma.InputJsonValue}})
-    await tx.auditLog.create({data:{actorId:user.id,actorType:automatic?'AI':user.type,actorName:automatic?'AMC-MM AI User Assistant':user.nickname,action:'CREATIVE_REVISION_SAVED',resourceType:'BrandCreative',resourceId:creativeId,oldValue:{hash:body.expectedRevision,parentRevisionId:parent.id},newValue:{revisionId:entry.id,revision,hash:creativeDigest(next)},metadata:{brandId,month,...(ai?{ai}:{}),principalIds:principals.map(member=>member.userId),sourceCreativeId:sourceReference.creativeId || null}}})
+    await tx.auditLog.create({data:{actorId:user.id,actorType:automatic?'AI':user.type,actorName:automatic?'AMC-MM AI User Assistant':user.nickname,action:'CREATIVE_REVISION_SAVED',resourceType:'BrandCreative',resourceId:creativeId,oldValue:{hash:body.expectedRevision,parentRevisionId:parent.id},newValue:{revisionId:entry.id,revision,hash:creativeDigest(next)},metadata:{brandId,month,...(persistedAi?{ai:persistedAi}:{}),principalIds:principals.map(member=>member.userId),sourceCreativeId:sourceReference.creativeId || null}}})
     return {ok:true,replayed:false,receipt:present(entry)}
   },{maxWait:10000,timeout:15000})
   if (db === prisma) {
@@ -271,7 +276,7 @@ export async function recordCreativeCandidateDiscard(actor:Actor,brandId:string,
     const user=await authorize(tx,actor,brandId,true)
     if(user.type!=='HUMAN')throw new CreativeRevisionError('human_feedback_required',403)
     const prior=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CANDIDATE_FEEDBACK_KIND,OR:[{period:candidateKey},{input:{path:['requestKey'],equals:requestKey}}]}})
-    if(prior){if(record(prior.input).requestHash!==requestHash)throw new CreativeRevisionError('creative_request_key_reused',409);return {ok:true,replayed:true,receipt:presentEvent(prior)}}
+    if(prior){if(record(prior.input).requestKey!==requestKey||record(prior.input).requestHash!==requestHash)throw new CreativeRevisionError('creative_request_key_reused',409);return {ok:true,replayed:true,receipt:presentEvent(prior)}}
     const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}}),current=findCreative(creativeWorkspace(knowledge),month,creativeId)
     if(current.scriptOwner?.id&&current.scriptOwner.id!==user.id)throw new CreativeRevisionError('script_owner_required',403)
     if(creativeDigest(current)!==body.expectedRevision)throw new CreativeRevisionError('creative_revision_conflict',409)

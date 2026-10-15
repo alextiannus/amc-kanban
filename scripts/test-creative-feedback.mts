@@ -11,7 +11,10 @@ assert.throws(()=>feedback.validateCreativeFeedback({reasons:['other'],note:'x'.
 const before={title:'A',planning:'plain',platform:'Instagram',date:'2026-11-01',status:'planned_unimplemented'}
 const after={title:'A',planning:'plain',platformTargets:['instagram'],status:'idea_pending'}
 assert.deepEqual(feedback.creativeChanges(before,after),[])
-assert.deepEqual(feedback.creativeCandidateChanges({planning:' Candidate '},{planning:'Candidate'},'2026-11'),[])
+const base={title:'Original',planning:'Old',materialRequirements:['old'],aiCaption:'Keep',aiTags:['base']}
+assert.deepEqual(feedback.creativeCandidateChanges(base,{title:'Original',planning:' Candidate ',materialRequirements:['film']},{...base,planning:'Candidate',materialRequirements:['film']},'2026-11'),[])
+assert.deepEqual(feedback.creativeCandidateChanges(base,{planning:'Candidate'},{...base,planning:'Old',aiCaption:''},'2026-11').map(c=>c.field),['planning','aiCaption'])
+assert.deepEqual(feedback.creativeCandidateChanges(base,{planning:'Candidate',aiTags:['model']},{...base,planning:'Candidate'},'2026-11',true),[])
 assert.deepEqual(feedback.creativeChanges(after,{...after,planning:'wrong SKU, voiceover',skuDecision:{selectedSkuIds:['sku1']}}).map(c=>c.field),['planning','skuDecision'])
 const row=(id:string,changes:any,extra:any={})=>({kind:'CREATIVE_ITEM',version:1,input:{creativeId:id,month:'2026-11',actor:{type:'HUMAN'},changes,dimensions:{source:['source1'],sku:['sku1'],platform:['instagram'],contentType:['video']},...extra}})
 const rows=[row('direct',[]),row('edited',[{field:'planning'},{field:'planning'}],{feedback:{reasons:['sku','sku_mismatch','material_feasibility'],note:'private note'}}),row('edited',[{field:'aiCaption'}]),row('edited2',[{field:'planning'}]),row('unknown',undefined),row('ai-direct',[{field:'planning'}],{ai:{reviewChanges:[]}}),row('ai-edited',[{field:'planning'}],{ai:{reviewChanges:[{field:'planning'}]}}),row('ai-old',[{field:'planning'}],{ai:{taskId:'legacy'}}),{kind:'CREATIVE_CANDIDATE_FEEDBACK',version:1,input:{...row('discard',[]).input,event:'candidate_discarded',candidateKey:'candidate1',feedback:{reasons:['other'],note:'hidden'}}},row('bot',[],{actor:{type:'AI'}}),{...row('base',[]),version:0}]

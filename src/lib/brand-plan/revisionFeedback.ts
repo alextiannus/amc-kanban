@@ -27,8 +27,12 @@ export function creativeChanges(before:unknown,after:unknown){
   const left=comparison(before),right=comparison(after)
   return FEEDBACK_FIELDS.filter(field=>stableJson(left[field])!==stableJson(right[field])).map(field=>({field,before:left[field]??null,after:right[field]??null}))
 }
-export function creativeCandidateChanges(before:unknown,after:unknown,month:string){
-  return creativeChanges(validateCreativePatch(before,month),validateCreativePatch(after,month))
+export function creativeCandidateChanges(base:unknown,candidatePatch:unknown,final:unknown,month:string,preserveTags=false){
+  const original=record(base),candidate={...original,...validateCreativePatch(candidatePatch,month)}
+  if(preserveTags)candidate.aiTags=Array.isArray(original.aiTags)?original.aiTags:[]
+  // Compare complete effective contents under the same fixed base. Metadata and
+  // copy-only lineage/schedule changes are not edits to the generated candidate.
+  return creativeChanges(candidate,final).filter(change=>['title','planning','materialRequirements','aiCaption','aiTags','product','contentType'].includes(change.field))
 }
 const keys=(value:unknown):string[]=>[...new Set((Array.isArray(value)?value:[]).filter((v):v is string=>typeof v==='string'&&v.trim().length>0&&v.length<=200).map(v=>v.trim()))].slice(0,100)
 export function creativeFeedbackDimensions(value:unknown,source?:unknown){

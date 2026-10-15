@@ -11,17 +11,19 @@ const compile=(path:string,deps:any)=>{const mod={exports:{} as any};new Functio
 const actor={id:'owner',type:'HUMAN'},brandId='brand',month='2026-11',creativeId='idea'
 let access=true,edit=true,auditFailure=false,candidateReads=0,rows:any[]=[],audits:any[]=[],queue=Promise.resolve()
 let item:any={id:creativeId,brandId,title:'A',planning:'Original',status:'idea_pending',platformTargets:['instagram'],source:{inspirationCreativeId:'source1',evidenceStatus:'full_source',timeline:[{id:'shot1'}]},skuDecision:{selectedSkuIds:['sku1']},schedule:{draftId:'draft1',scheduledAt:null,platform:'instagram',scheduledBy:'owner',scheduledAtRevisionId:'rev1'}}
+const facts={id:brandId}
 const matches=(r:any,w:any):boolean=>Object.entries(w).every(([key,value]:[string,any])=>key==='input'?value.path.reduce((v:any,k:string)=>v?.[k],r.input)===value.equals:key==='AND'?value.every((v:any)=>matches(r,v)):key==='OR'?value.some((v:any)=>matches(r,v)):r[key]===value)
 const tx:any={
   $queryRaw:async()=>[],
   user:{findUnique:async()=>({id:actor.id,nickname:'Owner',status:'ACTIVE',type:'HUMAN',role:'USER',businessRoles:[]})},
-  brandKnowledge:{findUnique:async()=>({marketingSolution:{publishingCalendar:{months:{[month]:[structuredClone(item)]}}}})},
+  brand:{findUnique:async()=>({id:brandId,name:'Brand',crew:{id:'crew',members:[]}})},
+  brandKnowledge:{findUnique:async()=>({marketingSolution:{publishingCalendar:{months:{[month]:[structuredClone(item)]}}}}),update:async({data}:any)=>{item=structuredClone(data.marketingSolution.publishingCalendar.months[month][0])}},
   brandMarketingSolution:{findFirst:async({where}:any)=>rows.find(r=>matches(r,where))||null,create:async({data}:any)=>{const row={...structuredClone(data),id:`event${rows.length}`,createdAt:new Date('2026-10-16T00:00:00Z')};rows.push(row);return row}},
   auditLog:{create:async({data}:any)=>{if(auditFailure)throw Error('audit failure');audits.push(data)}},
 }
-const db:any={...tx,$transaction:async(fn:any)=>{const previous=queue;let release:any;queue=new Promise(r=>release=r);await previous;const snapshot=structuredClone({rows,audits});try{return await fn(tx)}catch(e){({rows,audits}=snapshot);throw e}finally{release()}}}
+const db:any={...tx,$transaction:async(fn:any)=>{const previous=queue;let release:any;queue=new Promise(r=>release=r);await previous;const snapshot=structuredClone({rows,audits,item});try{return await fn(tx)}catch(e){({rows,audits,item}=snapshot);throw e}finally{release()}}}
 const service=compile('src/lib/brand-plan/creativeRevisions.ts',{
-  './matchingContract':{},'./revisionFeedback':feedback,'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},'../ai-native/facts.ts':{},'node:crypto':await import('node:crypto'),
+  './matchingContract':{},'./revisionFeedback':feedback,'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},'../ai-native/facts.ts':{readBrandFacts:async()=>facts},'node:crypto':await import('node:crypto'),
   '../role-permissions/store.ts':{readPolicies:async()=>({policies:{EDITOR:[]}})},'../role-permissions/contract.ts':{effectiveGrants:()=>edit?['draft.update']:[]},'../auth-v2/types.ts':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['EDITOR']})},
   '../user-management/brandAccess.ts':{canUserAccessBrand:async(brand:string)=>access&&brand===brandId},'./creativeRevisionContract.ts':contract,'./creativeWorkspaceContract.ts':workspace,'./creativeCollections.ts':{},'./creativeSkuContract':{},
 })
@@ -34,6 +36,11 @@ const [first,replay]=await Promise.all([discard(),discard()])
 assert.equal(first.receipt.id,replay.receipt.id);assert(replay.replayed);assert.equal(rows.length,1);assert.equal(audits.length,1);assert.equal(candidateReads,1)
 assert.equal(rows[0].kind,feedback.CANDIDATE_FEEDBACK_KIND);assert.deepEqual(item,original)
 assert.deepEqual(rows[0].input.dimensions.sku,['sku1']);assert.deepEqual(rows[0].input.dimensions.source,['source1'])
+await assert.rejects(()=>discard({idempotencyKey:'new-key-same-candidate'}),/creative_request_key_reused/)
+const refusedAdoption={taskId:body.taskId,artifact:candidate.artifact,requestedBy:actor.id,agentId:'agent',contextDigest:'unused'}
+for(const provenance of [refusedAdoption,{...refusedAdoption,autopilotRunId:'run1'},{...refusedAdoption,automaticDaily:true}]){
+  await assert.rejects(()=>service.saveCreativeRevision(actor,brandId,month,creativeId,{expectedRevision:body.expectedRevision,idempotencyKey:'adopt-discarded',patch:{planning:'candidate'}},db,provenance),(e:any)=>e.code==='candidate_already_discarded'&&e.status===409)
+}
 item={...item,title:'Later edit'};candidate=null
 assert.equal((await discard()).receipt.id,first.receipt.id,'replay survives changed current and unavailable candidate')
 await assert.rejects(()=>discard({feedback:{reasons:['brand_facts'],note:''}}),/creative_request_key_reused/)
@@ -62,6 +69,49 @@ const legacyReplay=await service.saveCreativeRevision(actor,brandId,month,creati
 assert(legacyReplay.replayed);assert.equal(legacyReplay.receipt.id,'legacy-revision')
 assert.deepEqual(legacyReplay.receipt.feedback.reasons,['sku_mismatch']);assert.deepEqual(legacyRow.input.feedback.reasons,['sku'])
 assert.deepEqual(legacyReplay.receipt.content,original)
+
+// Both decisions serialize on the exact same brand transaction. Exercise both
+// race orders and actual sparse-patch saves, not just standalone diff helpers.
+const retained=structuredClone({rows,audits,item})
+for(const firstDecision of ['adopt','discard']){
+  rows=[];audits=[];item=structuredClone(original)
+  const candidatePatch={title:'A',planning:'Candidate',materialRequirements:['Film product']}
+  const ai={...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch}
+  candidate={status:'succeeded',kind:'creative',month,creativeId,candidate:{expectedRevision:body.expectedRevision,patch:candidatePatch},artifact:refusedAdoption.artifact}
+  const adopt=()=>service.saveCreativeRevision(actor,brandId,month,creativeId,{expectedRevision:body.expectedRevision,idempotencyKey:'sparse-adopt',patch:{planning:'Candidate',materialRequirements:['Film product']}},db,ai)
+  const calls=firstDecision==='adopt'?[adopt(),discard()]:[discard(),adopt()]
+  const results=await Promise.allSettled(calls)
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1)
+  assert.equal((results.find(r=>r.status==='rejected') as PromiseRejectedResult).reason.status,409)
+  const decisionRows=rows.filter(r=>r.version>0)
+  assert.equal(decisionRows.length,1)
+  const summary=feedback.summarizeCreativeFeedback(rows)
+  assert.equal(summary.directlyAdoptedScripts+summary.discardedCandidates,1)
+  assert.equal(summary.editedScripts,0)
+  if(firstDecision==='adopt'){
+    assert.deepEqual(decisionRows[0].input.ai.reviewChanges,[])
+    assert.equal(decisionRows[0].input.ai.candidatePatch,undefined)
+    assert.deepEqual(item.source,original.source);assert.deepEqual(item.skuDecision,original.skuDecision);assert.deepEqual(item.schedule,original.schedule)
+    await assert.rejects(()=>discard({expectedRevision:contract.creativeDigest(item)}),/candidate_changed|candidate_already_adopted/)
+  }else{
+    assert.deepEqual(item,original)
+    await assert.rejects(adopt,/candidate_already_discarded/)
+  }
+}
+rows=[];audits=[];item={...structuredClone(original),aiCaption:'Original caption'}
+const actualPatch={planning:'Original',materialRequirements:[],aiCaption:''}
+const edited=await service.saveCreativeRevision(actor,brandId,month,creativeId,{expectedRevision:contract.creativeDigest(item),idempotencyKey:'real-edits',patch:actualPatch},db,{...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch:{title:'A',planning:'Candidate',materialRequirements:['Film product']}})
+assert.deepEqual(edited.receipt.ai.reviewChanges.map((v:any)=>v.field),['planning','materialRequirements','aiCaption'])
+assert.equal(feedback.summarizeCreativeFeedback(rows).editedScripts,1)
+;({rows,audits,item}=retained)
+
+// A new key is never silently accepted as an unrecorded alias of an old result.
+candidate={status:'succeeded',kind:'creative',month,creativeId,candidate:{expectedRevision:body.expectedRevision},artifact:{digest:'artifact3'}}
+const newCandidate={taskId:'task3',artifactDigest:'artifact3',idempotencyKey:'candidate-three-a'}
+const aliasRace=await Promise.allSettled([discard(newCandidate),discard({...newCandidate,idempotencyKey:'candidate-three-b'})])
+assert.equal(aliasRace.filter(r=>r.status==='fulfilled').length,1)
+assert.equal((aliasRace.find(r=>r.status==='rejected') as PromiseRejectedResult).reason.code,'creative_request_key_reused')
+await assert.rejects(()=>discard({...newCandidate,artifactDigest:'different-candidate'}),/creative_request_key_reused/)
 
 // Execute the production aggregate SQL, migration, JSONB projection and keyset
 // pagination using PostgreSQL WASM. No external database or model is contacted.

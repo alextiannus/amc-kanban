@@ -18,7 +18,6 @@ import { centralModels } from './models'
 import { nativePool, initializeHost, admitIntent, intentBy, intentForTask, type PublicTaskIndex, type RuntimeLane } from './store'
 import { conversationFrom, conversationInput, actorFor, dailyActorFor, candidateFrom, briefFrom, digest, sameSkuIntent, nativeError, requestKey, USAGE_POLICY, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
 import { readCreativeRevisions, saveCreativeRevision } from '../brand-plan/creativeRevisions'
-import {creativeCandidateChanges} from '../brand-plan/revisionFeedback'
 import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
 import {readSkuContext,readBoundSkuContext} from '../brand-plan/creativeSkuDecision'
@@ -334,7 +333,7 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   const reviewed=body.patch===undefined?candidate.patch:body.patch
   if(!reviewed||Object.keys(reviewed).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k)))throw nativeError('candidate_patch_invalid')
   if(row.intent.requireMaterials&&row.intent.adaptToBrand&&(!Array.isArray(reviewed.materialRequirements)||!reviewed.materialRequirements.some((item:unknown)=>typeof item==='string'&&item.trim())))throw nativeError('material_requirements_required')
-  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:body.saveMode?`ai-${digest([id,ref.digest,body.requestKey])}`:`ai-${digest([id,ref.digest])}`,...(body.saveMode?{saveMode:body.saveMode}:{}),patch:reviewed,feedback:body.feedback},undefined,{reviewChanges:creativeCandidateChanges(candidate.patch,reviewed,row.intent.month),instruction:row.intent.goal,taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
+  const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:body.saveMode?`ai-${digest([id,ref.digest,body.requestKey])}`:`ai-${digest([id,ref.digest])}`,...(body.saveMode?{saveMode:body.saveMode}:{}),patch:reviewed,feedback:body.feedback},undefined,{candidatePatch:candidate.patch,instruction:row.intent.goal,taskId:id,agentId:'amc-mm-user-ai',artifact:ref,requestedBy:userId,contextDigest:candidate.contextDigest})
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,saved.receipt.content.id,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
   return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:saved.receipt.content.id}
