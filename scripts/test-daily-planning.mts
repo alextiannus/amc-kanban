@@ -76,13 +76,15 @@ try{
  assert.equal(history.revisions.length,2);assert.equal(history.revisions[0].actor.type,'AI');assert.equal(history.revisions[0].principals[0].userId,id);assert.equal(history.current.nativeReviewStatus,'pending_review')
  const options=await listOpenCalendarCreativeOptions(id,row.plan_month);assert(options.every(item=>item.nativeDaily));assert.equal(options.length,6)
  const knowledge=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId:id}}),items=(knowledge.marketingSolution as any).publishingCalendar.months[row.plan_month]
+ assert(items.every((item:any)=>item.date===undefined&&item.schedule===null&&item.status==='idea_pending'))
+ assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
  assert.equal((await syncConfirmedCalendarItemsToDrafts(id,row.plan_month,items)).syncedCount,0,'pending AI plans must not become production drafts')
  const human=await saveCreativeRevision({id,type:'HUMAN'},id,row.plan_month,row.plan_id,{expectedRevision:history.expectedRevision,idempotencyKey:'daily-human-review',patch:{planning:history.current.planning+' Human reviewed.'}})
  assert.equal((human.receipt.content as any).nativeReviewStatus,'reviewed');assert.equal(human.receipt.actor.type,'HUMAN')
- // Automatic replacement retires pending drafts while retaining human-reviewed versions.
+ // Automatic replacement retires pending ideas while retaining human-reviewed versions.
  await pool.query('UPDATE amc_iaic.brand_ideas SET replaced_at=now() WHERE brand_id=$1',[id]);await advanceDailyPlanning(pool,id,ports as any)
  const current=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId:id}}),cards=(current.marketingSolution as any).publishingCalendar.months[row.plan_month]
- assert.equal(cards.filter((card:any)=>card.status==='archived').length,5);assert.equal(cards.find((card:any)=>card.id===row.plan_id).status,'planned_unimplemented')
+ assert.equal(cards.filter((card:any)=>card.status==='archived').length,5);assert.equal(cards.find((card:any)=>card.id===row.plan_id).status,'idea_pending')
  assert.equal(await prisma.contentDraft.count({where:{brandId:id}}),0)
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
  await assert.rejects(()=>app.runtime.get(actor,row.task_id))

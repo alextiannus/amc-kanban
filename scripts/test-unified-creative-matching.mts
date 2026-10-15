@@ -5,7 +5,7 @@ import ts from 'typescript'
 import {Pool} from 'pg'
 import {prisma} from '../src/lib/prisma.ts'
 import {creativeDigest,creativeWorkspace,CreativeRevisionError} from '../src/lib/brand-plan/creativeRevisionContract.ts'
-import {MATCH_SHORTFALL_MESSAGE,openSlots,localPlanningTime} from '../src/lib/brand-plan/matchingContract.ts'
+import {MATCH_SHORTFALL_MESSAGE,openTargets,localPlanningTime} from '../src/lib/brand-plan/matchingContract.ts'
 import * as matching from '../src/lib/brand-plan/matchingContract.ts'
 import * as revisionContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import * as nativeContract from '../src/lib/ai-native/contract.ts'
@@ -15,6 +15,11 @@ import * as diversity from '../src/lib/ai-native/creative-diversity.ts'
 import {readBrandFacts} from '../src/lib/ai-native/facts.ts'
 import {readCreativeRevisions,saveCreativeRevision} from '../src/lib/brand-plan/creativeRevisions.ts'
 import {summarizeCreativeFeedback,validateCreativeFeedback} from '../src/lib/brand-plan/revisionFeedback.ts'
+const targets=[{id:'2026-12-0-instagram',platform:'instagram'},{id:'2026-12-1-tiktok',platform:'tiktok'}]
+assert.deepEqual(openTargets(targets,[{planningRequest:{targetId:targets[0].id},status:'idea_pending',schedule:null}]),[targets[1]])
+assert.deepEqual(openTargets(targets,[{planningRequest:{targetId:targets[0].id},status:'archived'}]),targets,'archived ideas release a target')
+assert(!MATCH_SHORTFALL_MESSAGE.includes('排期空档'))
+if(process.argv.includes('--contract-only'))process.exit(0)
 const url=new URL(process.env.DATABASE_URL||'');assert(url.hostname==='127.0.0.1'&&url.pathname==='/amc_lineage_test_unified')
 const pool=new Pool({connectionString:url.href}),brandId='unified-test',userId='unified-user',month='2026-12'
 const plan={annualPlan:{strategy:'Match real educational creative requirements',quarterlyPlans:[{startMonth:month,endMonth:month}]}}
@@ -32,7 +37,6 @@ const createTask=async(_u:string,_b:string,body:any,_daily:any,_autopilot:any,bi
 }
 const deps:any={
  '../prisma':{prisma},'../brand-plan/creativeRevisionContract':revisionContract,
- '../brand-plan/service':{buildMonthlyPublishingSchedule:(_month:string,_freq:any,_fallback:any,total:number)=>Array.from({length:total},(_,i)=>({date:`${month}-${String(i+1).padStart(2,'0')}`,platform:{slug:'instagram'}}))},
  '../brand-plan/matchingContract':matching,'./contract':nativeContract,'./application':{applicationVersion:async()=> 'upgraded-fixture',requireActor:async()=>{if(revoked)throw nativeContract.nativeError('ai_access_denied',403)}},
  './service':{getNativeHost:async()=>host,createNativeTask:createTask},'./store':{intentForTask:async(_pool:any,_app:any,_actor:any,id:string)=>({intent:tasks.get(id).intent})},'./library':libraryModule,
  './recommendations':{saveRecommendation:async(...args:any[])=>{if(qualityReject&&(args[7] as any).sourceCreativeId.endsWith('_0'))throw nativeContract.nativeError('creative_subject_limit',409);if(rejectCandidate)throw nativeContract.nativeError('recommendation_sku_mismatch',409);const result=await (recommendations.saveRecommendation as any)(...args);if(crashAfterSave){crashAfterSave=false;throw Error('lost receipt')}return result}},'./creative-diversity':diversity,
@@ -47,12 +51,19 @@ try{
  const body={month,publishingFreqOverride:{platforms:{instagram:{postsPerMonth:20}}}}
  await Promise.all([requestCalendarMatching(userId,brandId,body),requestCalendarMatching(userId,brandId,body)])
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId,kind:matching.MATCH_REQUEST_KIND}}),1)
+ const requestRow=await prisma.brandMarketingSolution.findFirstOrThrow({where:{brandId,kind:matching.MATCH_REQUEST_KIND}})
+ assert.equal((requestRow.input as any).targetCount,20)
+ assert.deepEqual((requestRow.input as any).platformTargets,[{platform:'instagram',count:20}])
+ assert.equal((requestRow.input as any).slots,undefined)
+ assert((requestRow.input as any).targets.every((target:any)=>target.date===undefined))
  const day=new Date('2026-11-01T06:00:00Z')
  crashAfterSave=true;await advanceCalendarMatching(brandId,day);await advanceCalendarMatching(brandId,day);await advanceCalendarMatching(brandId,day);await advanceCalendarMatching(brandId,day)
  let status=(await readCalendarMatching(userId,brandId,month)).request
  assert.equal(count,3);assert.equal(status.filled,8);assert.equal(status.pending.length,12);assert.equal(status.message,MATCH_SHORTFALL_MESSAGE)
  let knowledge=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}}),items=(knowledge.marketingSolution as any).publishingCalendar.months[month]
  assert.equal(new Set(items.map((x:any)=>x.inspirationCreativeId)).size,8)
+ assert(items.every((x:any)=>x.date===undefined&&x.schedule===null&&x.status==='idea_pending'&&x.platformTargets[0]==='instagram'))
+ assert.equal(await prisma.contentDraft.count({where:{brandId}}),0)
  const item=items[0],actor={id:userId,type:'HUMAN'},read=await readCreativeRevisions(actor,brandId,month,item.id)
  assert.equal(read.revisions[0].actor.type,'AI');assert.equal(read.current.nativeReviewStatus,'pending_review')
  const saved=await saveCreativeRevision(actor,brandId,month,item.id,{expectedRevision:read.expectedRevision,idempotencyKey:'manual-edit-test',patch:{planning:'Human revised transitions'},feedback:{reasons:['transitions'],note:'Connect shots'}})
@@ -75,6 +86,6 @@ try{
  assert.throws(()=>validateCreativeFeedback({reasons:['made_up'],note:''}),CreativeRevisionError)
  const rows=await prisma.brandMarketingSolution.findMany({where:{brandId,kind:'CREATIVE_ITEM'}});assert.equal(summarizeCreativeFeedback(rows).reasons.transitions,1)
  assert(localPlanningTime('Asia/Singapore',new Date('2026-11-01T18:00:00Z')).night)
- assert.equal(openSlots([{id:'1',date:'2026-01-01',platform:'instagram'}],[],'2026-11-01').expired.length,1)
- console.log('PASS: real PostgreSQL request concurrency; 20 targets/8 matches/12 gaps; zero match; nightly-only replenishment; unknown save recovery; no duplicates; human edit preservation; conflict; source lineage; reason metrics; revoked access; changed plan; expired slots. Model/matcher are fixtures.')
+ assert.deepEqual(openTargets([{id:'1',platform:'instagram'}],[]),[{id:'1',platform:'instagram'}])
+ console.log('PASS: real PostgreSQL request concurrency; 20 undated targets/8 matches/12 pending; zero drafts; zero match; nightly continuation; unknown save recovery; no duplicates; human edit preservation; conflict; source lineage; reason metrics; revoked access; changed plan. Model/matcher are fixtures.')
 }finally{await pool.end();await prisma.$disconnect()}

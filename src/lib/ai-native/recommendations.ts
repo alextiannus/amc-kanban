@@ -1,8 +1,9 @@
 import {readBrandFacts,validateSkuReferences} from './facts'
 import { prisma } from '../prisma'
-import { creativeDigest, validateCreativePatch } from '../brand-plan/creativeRevisionContract'
+import { creativeDigest } from '../brand-plan/creativeRevisionContract'
+import { validateCreativeWorkspacePatch } from '../brand-plan/creativeWorkspaceContract'
 import { readCreativeRevisions,saveCreativeRevision } from '../brand-plan/creativeRevisions'
-import { calendarCreativeOption, CALENDAR_PLAN_UNIMPLEMENTED_STATUS } from '../brand-plan/calendarSync'
+import { calendarCreativeOption } from '../brand-plan/calendarSync'
 import { digest,nativeError,type NativeIntent } from './contract'
 import { discoveryFrom,type LibrarySnapshot } from './library'
 import type { ArtifactReference } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
@@ -11,26 +12,28 @@ export async function recommendationReceipts(userId:string,brandId:string,taskId
   const rows=await prisma.brandMarketingSolution.findMany({where:{brandId,kind:'CREATIVE_ITEM',createdById:userId,version:1,input:{path:['ai','taskId'],equals:taskId}},orderBy:{createdAt:'asc'}})
   return rows.map((row:{id:string;version:number;input:unknown;output:unknown})=>{const input=row.input as any;return {revisionId:row.id,revision:row.version,sourceCreativeId:input.source?.creativeId,creativeId:input.creativeId,month:input.month,creative:calendarCreativeOption(row.output as any)}})
 }
-export async function saveRecommendation(userId:string,brandId:string,taskId:string,intent:NativeIntent,ref:ArtifactReference,content:string,library:LibrarySnapshot,body:any,automaticDaily=false,planningRequest?:{id:string;slotId:string;month:string}){
+export async function saveRecommendation(userId:string,brandId:string,taskId:string,intent:NativeIntent,ref:ArtifactReference,content:string,library:LibrarySnapshot,body:any,automaticDaily=false,planningRequest?:{id:string;targetId:string;month:string}){
   if(intent.kind!=='creative_discovery')throw nativeError('discovery_task_required')
   const result=discoveryFrom(content,intent,library)
   const candidate=result.recommendations.find(c=>c.sourceCreativeId===body.sourceCreativeId)
   const source=library.sources.find(c=>c.inspirationCreativeId===body.sourceCreativeId)
   if(!candidate||!source)throw nativeError('recommendation_source_mismatch',409)
-  if(!body.patch||!['title','planning','aiCaption','materialRequirements','date','platform'].every(k=>Object.hasOwn(body.patch,k))||Object.keys(body.patch).some(k=>!['title','planning','aiCaption','materialRequirements','date','platform'].includes(k)))throw nativeError('reviewed_creative_required')
-  const month=typeof body.patch.date==='string'?body.patch.date.slice(0,7):''
-  const patch=validateCreativePatch(body.patch,month)
+  const fields=['title','planning','aiCaption','materialRequirements','platformTargets']
+  if(!body?.patch||!fields.every(k=>Object.hasOwn(body.patch,k))||Object.keys(body.patch).some(k=>!fields.includes(k)))throw nativeError('reviewed_creative_required')
+  const patch=validateCreativeWorkspacePatch(body.patch)
+  if(!Array.isArray(patch.platformTargets)||patch.platformTargets.some(platform=>!['instagram','facebook','tiktok','xiaohongshu','google_business'].includes(platform))||(planningRequest&&patch.platformTargets.length!==1))throw nativeError('invalid_creative_platform')
   if(intent.requireMaterials&&!patch.materialRequirements?.some((item:string)=>item.trim()))throw nativeError('material_requirements_required')
   if(!patch.planning)throw nativeError('reviewed_creative_required')
   const creativeId=`ai_${digest([taskId,candidate.sourceCreativeId]).slice(0,40)}`
   if(automaticDaily&&!intent.automaticDaily)throw nativeError('daily_task_required')
-  if(planningRequest&&intent.planningRequest?.id!==planningRequest.id)throw nativeError('planning_task_mismatch',409)
+  if(planningRequest&&(intent.planningRequest?.id!==planningRequest.id||intent.planningRequest.platform!==patch.platformTargets[0]))throw nativeError('planning_task_mismatch',409)
   const facts=await readBrandFacts(prisma,brandId)
   if(!facts)throw nativeError('brand_context_unavailable',404)
+  const month=planningRequest?.month||body.month||new Intl.DateTimeFormat('en-CA',{timeZone:facts.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).format(new Date())
   if(planningRequest&&!validateSkuReferences(candidate,facts))throw nativeError('recommendation_sku_mismatch',409)
   const skuIds=Array.isArray(candidate.skuIds)?candidate.skuIds.filter((id:string)=>typeof id==='string'):[]
   const selectedProducts=(facts.productCatalog||[]).filter((sku:any)=>skuIds.includes(sku.id)).map((sku:any)=>sku.name)
-  const seed={...(planningRequest?{planningRequest,nativeReviewStatus:'pending_review'}:{}),...(automaticDaily?{nativeDaily:{poolIdeaId:intent.poolIdeaId,taskId},nativeReviewStatus:'pending_review',creativeDirection:source.creativeDirection}:{}),id:creativeId,date:patch.date,platform:patch.platform,platformSlug:patch.platformSlug,title:candidate.title,planning:candidate.planning,aiCaption:candidate.aiCaption,materialRequirements:candidate.materialRequirements,contentType:source.scriptContent?.kind==='video'?'视频':'图文',product:selectedProducts.join(' / ')||'品牌内容',skuIds,status:automaticDaily||planningRequest?'ai_pending_review':CALENDAR_PLAN_UNIMPLEMENTED_STATUS,inspirationCreativeId:candidate.sourceCreativeId,inspirationSourceTitle:source.sourceVideo?.title||source.sourcePost?.title||source.contentAngle,inspirationSourceSummary:source.sourcePost?.copySummary||source.contentAngle,selectedCreativeCandidateId:source.creativeCandidateId,sampleOriginalUrl:source.sourceVideo?.sourceUrl||source.sourcePost?.sourceUrl||'',sampleVideoUrl:source.sourceVideo?.videoUrl||'',sampleSourcePlatform:source.sourceVideo?.platform||source.sourcePost?.platform||'',nativeSourceSnapshot:{retrievedAt:library.retrievedAt,libraryDigest:library.libraryDigest,contentMatchRequestId:library.contentMatchRequestId,version:null,versionStatus:'snapshot_only',source},nativeCandidate:{taskId,artifact:ref,candidate}}
+  const seed={...(planningRequest?{planningRequest,nativeReviewStatus:'pending_review'}:{}),...(automaticDaily?{nativeDaily:{poolIdeaId:intent.poolIdeaId,taskId},nativeReviewStatus:'pending_review',creativeDirection:source.creativeDirection}:{}),id:creativeId,platformTargets:patch.platformTargets,schedule:null,title:candidate.title,planning:candidate.planning,aiCaption:candidate.aiCaption,materialRequirements:candidate.materialRequirements,contentType:source.scriptContent?.kind==='video'?'视频':'图文',product:selectedProducts.join(' / ')||'品牌内容',skuIds,status:'idea_pending',inspirationCreativeId:candidate.sourceCreativeId,inspirationSourceTitle:source.sourceVideo?.title||source.sourcePost?.title||source.contentAngle,inspirationSourceSummary:source.sourcePost?.copySummary||source.contentAngle,selectedCreativeCandidateId:source.creativeCandidateId,sampleOriginalUrl:source.sourceVideo?.sourceUrl||source.sourcePost?.sourceUrl||'',sampleVideoUrl:source.sourceVideo?.videoUrl||'',sampleSourcePlatform:source.sourceVideo?.platform||source.sourcePost?.platform||'',nativeSourceSnapshot:{retrievedAt:library.retrievedAt,libraryDigest:library.libraryDigest,contentMatchRequestId:library.contentMatchRequestId,version:null,versionStatus:'snapshot_only',source},nativeCandidate:{taskId,artifact:ref,candidate}}
   const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,month,creativeId,{expectedRevision:creativeDigest(seed),idempotencyKey:`discovery-${digest([taskId,candidate.sourceCreativeId])}`,patch:body.patch},undefined,{taskId,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,...(planningRequest?{planningRequest,contextPortfolio:library.contextPortfolio}:{}),...(automaticDaily?{automaticDaily:true,poolIdeaId:intent.poolIdeaId}:{})},seed)
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,month,creativeId,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)

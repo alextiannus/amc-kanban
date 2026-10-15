@@ -1,4 +1,4 @@
-import {MATCH_REQUEST_KIND,planningHash,openSlots,localPlanningTime} from './matchingContract'
+import {MATCH_REQUEST_KIND,planningHash,openTargets,requestTargets} from './matchingContract'
 import {validateCreativeFeedback,creativeChanges} from './revisionFeedback'
 import {creativeDirection,duplicateCreative,exceedsCreativeSubjectLimit} from '../ai-native/creative-diversity.ts'
 import type { Prisma } from '@prisma/client'
@@ -10,12 +10,12 @@ import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, revisionSource, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
-import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch } from './creativeWorkspaceContract.ts'
+import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch, validateCreativeWorkspacePatch } from './creativeWorkspaceContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
-type AiProvenance = { contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;slotId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
+type AiProvenance = { contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;targetId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
 async function canEditScript(db: any, user: any) {
   const principal = principalFromUser(user, 'session')
@@ -62,7 +62,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
   const copy=body.saveMode==='copy'
   if(copy&&seed)throw new CreativeRevisionError('invalid_script_save_mode')
   const sourceCreativeId=creativeId
-  const clientPatch = ai ? {patch:validateCreativePatch(body.patch,month)} : validateCreativeRevisionClientPatch(body.patch,month)
+  const clientPatch = ai ? {patch:seed?validateCreativeWorkspacePatch(body.patch):validateCreativePatch(body.patch,month)} : validateCreativeRevisionClientPatch(body.patch,month)
   const patch: Record<string, any> = clientPatch.patch
   const feedback=validateCreativeFeedback(body.feedback)
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
@@ -101,10 +101,10 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       const request=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:MATCH_REQUEST_KIND,period:month},orderBy:{version:'desc'}})
       const input=record(request?.input)
       if(!seed||request?.id!==binding.id||input.requestedBy!==actor.id||input.planHash!==planningHash(workspace))throw new CreativeRevisionError('planning_request_changed',409)
-      const brand=await tx.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true,status:true}})
+      const brand=await tx.brand.findUniqueOrThrow({where:{id:brandId},select:{status:true}})
       if(brand.status!=='ACTIVE')throw new CreativeRevisionError('planning_request_changed',409)
-      const slots=openSlots(input.slots,monthItems(workspace,month),localPlanningTime(brand.timezone).day)
-      if(!slots.pending.some(slot=>slot.id===binding.slotId&&slot.date===patch.date&&slot.platform===patch.platformSlug))throw new CreativeRevisionError('planning_slot_filled',409)
+      const targets=openTargets(requestTargets(input),monthItems(workspace,month))
+      if(!targets.some(target=>target.id===binding.targetId&&patch.platformTargets?.includes(target.platform)))throw new CreativeRevisionError('planning_target_filled',409)
       const existing=Object.values(workspace.publishingCalendar?.months||{}).flat() as any[]
       if(existing.some(item=>duplicateCreative(seed,item)))throw new CreativeRevisionError('planning_duplicate_source',409)
     }

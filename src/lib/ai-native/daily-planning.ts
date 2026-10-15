@@ -58,10 +58,12 @@ export async function advanceDailyPlanning(pool:Pool,brandId:string,ports={creat
     const content=(await (host.app.workspace as WorkspacePort).read(actor,ref)).content
     const candidate=discoveryFrom(content,binding.intent,library).recommendations.find(item=>item.sourceCreativeId===row.source_id)
     if(!candidate)throw new Error('daily_no_adapted_script')
-    // Pin the planning date before the save so an unknown commit can be reconciled across midnight.
+    // Pin only the idea's planning month; retries keep its original pool binding.
     const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}})
-    const date=(await pool.query('UPDATE amc_iaic.brand_ideas SET plan_date=COALESCE(plan_date,$2) WHERE id=$1 RETURNING plan_date',[row.id,brandDay(brand.timezone)])).rows[0].plan_date
-    const saved=await saveRecommendation(owner,brandId,taskId,binding.intent,ref,content,library,{sourceCreativeId:row.source_id,patch:{title:candidate.title,planning:candidate.planning,aiCaption:candidate.aiCaption,materialRequirements:candidate.materialRequirements,date,platform:['instagram','tiktok','xiaohongshu','facebook','google_business'].includes(row.source.sourceVideo?.platform||row.source.sourcePost?.platform)?row.source.sourceVideo?.platform||row.source.sourcePost?.platform:'instagram'}},true)
+    const month=(await pool.query('UPDATE amc_iaic.brand_ideas SET plan_month=COALESCE(plan_month,$2) WHERE id=$1 RETURNING plan_month',[row.id,brandDay(brand.timezone).slice(0,7)])).rows[0].plan_month
+    const sourcePlatform=row.source.sourceVideo?.platform||row.source.sourcePost?.platform
+    const platformTargets=['instagram','tiktok','xiaohongshu','facebook','google_business'].includes(sourcePlatform)?[sourcePlatform]:[]
+    const saved=await saveRecommendation(owner,brandId,taskId,binding.intent,ref,content,library,{sourceCreativeId:row.source_id,month,patch:{title:candidate.title,planning:candidate.planning,aiCaption:candidate.aiCaption,materialRequirements:candidate.materialRequirements,platformTargets}},true)
     await pool.query('UPDATE amc_iaic.brand_ideas SET plan_id=$2,plan_month=$3,last_error=NULL WHERE id=$1',[row.id,saved.creativeId,saved.month])
    }catch(error){
     const raw=String((error as any).code||(error as Error).message),code=/^[a-z][a-z0-9_]{2,100}$/.test(raw)?raw:'daily_planning_unavailable'
