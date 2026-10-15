@@ -1,10 +1,19 @@
+import { normalizeHuaweiObsEndpoint } from '../integrations/huaweiObsEndpoint'
+
 export function sourceMediaAllowedHosts() {
-  const configured=(process.env.AMC_SOURCE_MEDIA_ALLOWED_HOSTS||'').split(',').map(host=>host.trim().toLowerCase()).filter(Boolean)
-  const endpoint=(process.env.HUAWEI_OBS_ENDPOINT||process.env.OBS_ENDPOINT||'obs.ap-southeast-3.myhuaweicloud.com').replace(/^https?:\/\//,'').replace(/\/+$/,'')
+  const allowed=new Set<string>()
+  const add=(value:string,rootOnly=false)=>{
+    const url=sourceMediaLocation(value)
+    if(url&&!url.search&&!url.hostname.includes('*')&&(!rootOnly||url.pathname==='/'))allowed.add(url.hostname)
+  }
+  for(const host of (process.env.AMC_SOURCE_MEDIA_ALLOWED_HOSTS||'').split(',').map(value=>value.trim()).filter(Boolean))add(`https://${host}`,true)
   const bucket=process.env.HUAWEI_OBS_BUCKET||process.env.OBS_BUCKET||'robotics'
-  const base=process.env.HUAWEI_OBS_PUBLIC_BASE_URL||process.env.OBS_PUBLIC_BASE_URL||`https://${bucket}.${endpoint}`
-  try {configured.push(new URL(base).hostname.toLowerCase())} catch {/* Invalid infrastructure configuration cannot expand access. */}
-  return new Set(configured)
+  const endpoint=normalizeHuaweiObsEndpoint(process.env.HUAWEI_OBS_ENDPOINT||process.env.OBS_ENDPOINT||'obs.ap-southeast-3.myhuaweicloud.com',bucket)
+  // Private signed reads use bucket+endpoint even when public delivery uses a CDN.
+  add(`https://${bucket}.${endpoint}`,true)
+  const publicBase=process.env.HUAWEI_OBS_PUBLIC_BASE_URL||process.env.OBS_PUBLIC_BASE_URL
+  if(publicBase)add(publicBase)
+  return allowed
 }
 
 export function sourceMediaLocation(value:unknown) {

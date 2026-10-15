@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { normalizeHuaweiObsEndpoint } from './huaweiObsEndpoint'
 
 const DEFAULT_REGION = 'ap-southeast-3'
 
@@ -23,10 +24,6 @@ function encodePathSegment(value: string) {
   return encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`)
 }
 
-function normalizeEndpoint(endpoint: string) {
-  return endpoint.replace(/^https?:\/\//, '').replace(/\/+$/, '')
-}
-
 function encodeObjectKey(key: string) {
   return key.split('/').map(encodePathSegment).join('/')
 }
@@ -35,8 +32,7 @@ export function getHuaweiObsConfig(): ObsConfig | null {
   const accessKeyId = process.env.HUAWEI_OBS_ACCESS_KEY_ID || process.env.OBS_ACCESS_KEY_ID
   const secretAccessKey = process.env.HUAWEI_OBS_SECRET_ACCESS_KEY || process.env.OBS_SECRET_ACCESS_KEY
   const bucket = process.env.HUAWEI_OBS_BUCKET || process.env.OBS_BUCKET || 'robotics'
-  let endpoint = normalizeEndpoint(process.env.HUAWEI_OBS_ENDPOINT || process.env.OBS_ENDPOINT || 'obs.ap-southeast-3.myhuaweicloud.com')
-  if (endpoint.startsWith(`${bucket}.`)) endpoint = endpoint.slice(bucket.length + 1)
+  const endpoint = normalizeHuaweiObsEndpoint(process.env.HUAWEI_OBS_ENDPOINT || process.env.OBS_ENDPOINT || 'obs.ap-southeast-3.myhuaweicloud.com',bucket)
   
   let region = process.env.HUAWEI_OBS_REGION || process.env.OBS_REGION
   if (!region) {
@@ -329,4 +325,3 @@ export function getHuaweiObsPresignedPutUrl(input: {
     },
   }
 }
-
