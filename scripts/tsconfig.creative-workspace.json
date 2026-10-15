@@ -1,0 +1,5 @@
+{
+  "extends": "../tsconfig.check.json",
+  "compilerOptions": {"incremental": false, "types": ["react", "react-dom"]},
+  "include": ["../src/components/creatives/*.tsx", "../src/lib/creativeReviewContract.ts", "../src/lib/downloadCreative.ts"]
+}

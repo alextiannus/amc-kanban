@@ -1,7 +1,8 @@
 import {CreativeRevisionError,record,stableJson,validateCreativePatch} from './creativeRevisionContract'
 import {normalizeCreativeWorkspaceItem} from './creativeWorkspaceContract'
+import {revisionReasons} from '../creativeReviewContract'
 
-export const REVISION_REASONS=['sku_mismatch','selling_point','transitions','visual_description','voiceover','subtitle','platform_style','material_feasibility','brand_facts','other'] as const
+export const REVISION_REASONS=revisionReasons.map(([key])=>key)
 export const CANDIDATE_FEEDBACK_KIND='CREATIVE_CANDIDATE_FEEDBACK'
 export const FEEDBACK_WINDOW=2000
 export const FEEDBACK_DIMENSION_KEYS=50

@@ -757,7 +757,6 @@ function BrandProfileContent({
   const [calendarMonth, setCalendarMonth] = useState(() => {
     return firstCompleteNaturalMonthValue()
   })
-  const [calendarPlatformFilter, setCalendarPlatformFilter] = useState('all')
   const planningStartMonthInitializedRef = useRef('')
   const calendarMonthInitializedRef = useRef('')
 
@@ -1537,16 +1536,6 @@ ${storeLines}
   const minimumCalendarMonth = minimumContentPlanMonthValue()
   const canGoPreviousCalendarMonth = addMonths(calendarMonth, -1) >= minimumCalendarMonth
   const currentCalendarItems = brandPlanData.publishingCalendar?.months?.[calendarMonth] || []
-  const currentCalendarItemsWithIndex = currentCalendarItems.map((item, index) => ({ item, index }))
-  const calendarPlatformCounts = currentCalendarItems.reduce<Record<string, number>>((acc, item) => {
-    const slug = normalizeSchedulePlatform(item.platformSlug || item.platform || '')
-    acc[slug] = (acc[slug] || 0) + 1
-    return acc
-  }, {})
-  const calendarFilterPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) => calendarPlatformCounts[platform.slug])
-  const filteredCalendarItems = calendarPlatformFilter === 'all'
-    ? currentCalendarItemsWithIndex
-    : currentCalendarItemsWithIndex.filter(({ item }) => normalizeSchedulePlatform(item.platformSlug || item.platform || '') === calendarPlatformFilter)
   const activePublishingPlatforms = PUBLISHING_PLATFORM_OPTIONS.filter((platform) =>
     publishingScheduleDraft[platform.slug] !== undefined ||
     annualPlan?.subscriptionStrategy?.platformCoverage?.includes(platform.slug)
@@ -2185,7 +2174,7 @@ ${storeLines}
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-rose-600">Section 4</p>
-                <h3 className="text-lg font-black text-slate-900 dark:text-white">内容计划</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">内容创意工作台</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -2242,37 +2231,7 @@ ${storeLines}
                 ))}
               </div>
             </div>
-            {currentCalendarItems.length ? (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCalendarPlatformFilter('all')}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-black transition ${
-                    calendarPlatformFilter === 'all'
-                      ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-950'
-                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'
-                  }`}
-                >
-                  全部 {currentCalendarItems.length}
-                </button>
-                {calendarFilterPlatforms.map((platform) => (
-                  <button
-                    key={platform.slug}
-                    type="button"
-                    onClick={() => setCalendarPlatformFilter(platform.slug)}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-black transition ${
-                      calendarPlatformFilter === platform.slug
-                        ? socialPlatformColor(platform.slug)
-                        : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'
-                    }`}
-                  >
-                    <span className={`h-2 w-2 rounded-full border ${socialPlatformColor(platform.slug)}`} />
-                    {platform.label} {calendarPlatformCounts[platform.slug] || 0}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-            <CreativePlanPanel key={brandId+calendarMonth} brandId={brandId} month={calendarMonth} refresh={matchingRefresh} platformFilter={calendarPlatformFilter} onSaved={loadBrandPlanWorkspace} />
+            <CreativePlanPanel key={brandId+calendarMonth} brandId={brandId} month={calendarMonth} refresh={matchingRefresh} onSaved={loadBrandPlanWorkspace} />
           </section>
         </div>
       </div>

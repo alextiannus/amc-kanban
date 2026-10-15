@@ -45,6 +45,7 @@ export type CalendarCreativeOption = {
   productionFormats?: Array<'post' | 'video'>
   draftId?: string | null
   workspaceItem?: CreativeWorkspaceItem
+  revisionCount?: number
 }
 
 export const CALENDAR_PLAN_UNIMPLEMENTED_STATUS = 'planned_unimplemented'
@@ -186,6 +187,8 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
     select: { id: true, period: true, createdAt: true },
   })
   const latest = new Map<string,{id:string;createdAt:Date}>()
+  const revisionCounts = new Map<string,number>()
+  for (const row of revisions) revisionCounts.set(row.period,(revisionCounts.get(row.period)||0)+1)
   for (const row of revisions) if (!latest.has(row.period)) latest.set(row.period,row)
   const drafts = markers.length ? await db.contentDraft.findMany({
     where: {
@@ -206,6 +209,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
     const raw = items.find(value => value.id === item.id)
     const revision = latest.get(revisionPeriod(month,item.id))
     return { ...item, draftId: item.draftId || (item.date ? generated.get(calendarSyncMarker(item.id)) : null) || null,
+      revisionCount: revisionCounts.get(revisionPeriod(month,item.id)) || 0,
       workspaceItem: normalizeCreativeWorkspaceItem(raw,{brandId,currentRevisionId:revision?.id,updatedAt:revision?.createdAt.toISOString()}) }
   })
 }

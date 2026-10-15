@@ -1,5 +1,9 @@
 # 品牌创意修改与版本追溯
 
+## Task 8 运营工作台（本地已实现，未发布）
+
+实际挂载入口为 `BrandProfileView` 内的内容创意区域，不是 `src/app/planning/page.tsx`。状态驱动卡片展示平台、来源身份、已选 SKU、素材准备情况、修订数量及已有排期入口；无日期创意不显示日期或排期空档，不承诺夜间补齐。编辑器保持 Kanban 唯一状态所有权，使用当前权限、CAS、幂等及回读核验。反馈汇总仅显示服务端计数，不暴露原始说明；版本内经授权的反馈说明仍可追溯。支持桌面及 390px、键盘焦点和减少动态效果。
+
 ## 反馈统计（Task 6 本地已实现，未发布）
 
 审查修复 round 1（本地已实现，未发布）：采用与放弃均在同一品牌锁内互查，不允许同一 task/artifact 同时成为已采用和已放弃；所有采用入口复用修订服务检查。放弃回执只接受原请求键重放，新键命中同一候选明确 409，不把未绑定的新键视为已保存。人工候选差异以 CAS 固定的同一原稿为基础，把候选 patch 和实际最终保存内容分别按保存规则投影后比较；缺少且未改变的字段不计编辑，恢复与清空仍计编辑。
@@ -10,7 +14,7 @@
 
 来源/SKU/平台/内容类型使用保存时固定上下文，各维度最多 49 个按字典序选择的真实键与 `other`；缺失、非法或剩余键归入 other。同一事件落入多个 SKU/平台时每桶只计一次；other 也按脚本/候选去重。聚合不返回说明、脚本、AI 指令或原始 revision；数据库只投影统计所需 JSON 字段。
 
-`POST /api/brands/:brandId/content-creatives/feedback` 接收 `action:discard_candidate`、`month`、`creativeId`、`taskId`、`artifactDigest`、`expectedRevision`、`idempotencyKey` 与可选 feedback。服务端核对当前用户的成功 AI 任务、创意/月、候选绑定版本及固定产物，再在品牌锁内重验内容编辑权限和 CAS。独立 `CREATIVE_CANDIDATE_FEEDBACK` 事件及审计记录放弃，不新增 CREATIVE_ITEM 修订、不改当前脚本/source/SKU/schedule、不调用制作或发布。原请求键和规范化载荷匹配时返回原事件回执；同键异载荷或同候选换新键均 409，不改写旧事件。已采用的候选拒绝放弃，已放弃的候选不能再次采用。两端按钮接入属于 Task 7/8。
+`POST /api/brands/:brandId/content-creatives/feedback` 接收 `action:discard_candidate`、`month`、`creativeId`、`taskId`、`artifactDigest`、`expectedRevision`、`idempotencyKey` 与可选 feedback。服务端核对当前用户的成功 AI 任务、创意/月、候选绑定版本及固定产物，再在品牌锁内重验内容编辑权限和 CAS。独立 `CREATIVE_CANDIDATE_FEEDBACK` 事件及审计记录放弃，不新增 CREATIVE_ITEM 修订、不改当前脚本/source/SKU/schedule、不调用制作或发布。原请求键和规范化载荷匹配时返回原事件回执；同键异载荷或同候选换新键均 409，不改写旧事件。已采用的候选拒绝放弃，已放弃的候选不能再次采用。MM 已本地接入；Kanban（Task 8）已本地接入并验证，尚未发布。
 
 部署需执行 `20261016060000_creative_feedback_window` 索引迁移；brandId/kind/createdAt/id 索引分别读取至多 2001 个修订和事件，再合并取窗口。此任务不回填或重写历史数据。
 
@@ -20,7 +24,7 @@
 
 来源候选先进入待确认创意。`sku_proposal` 仅建议 2–4 个当前品牌真实 SKU，目录仅一项时允许一项；每项包含精确名称、角色、理由与来源镜头 ID，不包含最终脚本。人工可调整并经 `POST .../sku-decision?month=YYYY-MM` 确认；服务端校验目录摘要、SKU 身份、固定来源版本/摘要、镜头 ID、当前创意版本、内容编辑权限和保管人，使用既有品牌行锁、CAS、幂等修订和审计保存。
 
-`creative_adaptation` 必须携带已确认决策摘要，逐镜覆盖固定来源并生成素材清单，只可使用人工选中的 SKU。目录为空时明确输出普通品牌内容（非爆款复刻）；来源不完整时拒绝伪装来源复刻。新 discovery 只保存来源候选，不再将自动选品稿视为已确认适配。商户确认界面属于 Task 7/8，当前未实现；本任务不制作视频或发布。
+`creative_adaptation` 必须携带已确认决策摘要，逐镜覆盖固定来源并生成素材清单，只可使用人工选中的 SKU。目录为空时明确输出普通品牌内容（非爆款复刻）；来源不完整时拒绝伪装来源复刻。新 discovery 只保存来源候选，不再将自动选品稿视为已确认适配。MM 确认界面已本地实现；Kanban 确认界面（Task 8）已本地实现，未发布；本任务不制作视频或发布。
 
 保存输入为 `expectedRevision`、`idempotencyKey`、`catalogDigest`、`sourceRevision`、`sourceDigest`、`selectedSkuIds`、逐项 `recommendations`（含 skuId/skuName/roles/rationale/sourceShotIds）、可选 `adjustmentNote`；月份来自 URL。人工可选择 1–4 项，推荐必须为 2–4 项（单项目录例外）。GET 返回当前目录、固定来源、版本绑定、已保存决策及 canConfirm。无权限返回 403/404，版本/目录/来源/决策冲突为 409，非法映射为 400，来源上游错误沿用 413/503；响应均 no-store。确认沿用 draft.update 和保管人规则；AI 任务仍沿用现有 User AI 准入权限，并额外要求当前创意可覆盖。
 
@@ -41,7 +45,7 @@ AI 改写素材需求应保存到 patch.materialRequirements。对既有产物�
 
 Task 4 本地来源接口（未发布）：`GET /api/brands/:brandId/content-creatives/:creativeId/source?month=YYYY-MM` 通过既有修订读取服务校验品牌 READ 权限，再用服务凭据读取 Content 完整来源。真实来源 ID 冲突或无法解析返回 404；固定 sourceRevision/sourceDigest 不符返回 409；Content 服务失败返回 503。新候选在匹配时保存完整来源的 revision/digest，历史 nativeSourceSnapshot.libraryDigest 仍是批次摘要，不用于单条摘要比较。无时间线为 source_unavailable；缺字段或历史未固定版本为 partial_source；全部字段和固定版本均完整才为 full_source。保留全部镜头，不生成占位。
 
-商户仅接收允许的文本/镜头字段及无 query、fragment、用户凭据、管理/内部路径的公开 HTTPS 链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。受控/OBS/签名视频返回 `/api/brands/:brandId/content-creatives/:creativeId/source/media?month=YYYY-MM`，代理每次重验品牌访问与固定来源，再校验精确主机白名单和公网 IPv4 DNS；连接固定解析出的地址，拒绝重定向及非视频内容。不转发浏览器 Cookie/Authorization，不回传上游签名、Location、Set-Cookie。代理默认最多 64 MiB、配置 `AMC_SOURCE_MEDIA_MAX_BYTES`，提前拒绝声明超限，chunked 超限中止传输。允许主机来自 `AMC_SOURCE_MEDIA_ALLOWED_HOSTS`（逗号分隔精确媒体主机）及已有 OBS 公开主机配置，无通配主机；IPv6-only 源暂不支持。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&panel=source`，对应来源在 Task 7 商户详情面板展示原脚本拆解与原视频；当前仅定义该深链契约，尚未接入 UI。
+商户仅接收允许的文本/镜头字段及无 query、fragment、用户凭据、管理/内部路径的公开 HTTPS 链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。受控/OBS/签名视频返回 `/api/brands/:brandId/content-creatives/:creativeId/source/media?month=YYYY-MM`，代理每次重验品牌访问与固定来源，再校验精确主机白名单和公网 IPv4 DNS；连接固定解析出的地址，拒绝重定向及非视频内容。不转发浏览器 Cookie/Authorization，不回传上游签名、Location、Set-Cookie。代理默认最多 64 MiB、配置 `AMC_SOURCE_MEDIA_MAX_BYTES`，提前拒绝声明超限，chunked 超限中止传输。允许主机来自 `AMC_SOURCE_MEDIA_ALLOWED_HOSTS`（逗号分隔精确媒体主机）及已有 OBS 公开主机配置，无通配主机；IPv6-only 源暂不支持。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&month=YYYY-MM&panel=source`，MM 已本地接入品牌与月份绑定的来源面板；Kanban 在当前运营编辑器直接展示同一来源证据。
 
 Content 在完整序列化后按 UTF-8 字节检查 `AMC_SOURCE_EVIDENCE_MAX_BYTES`（默认 8 MiB，上限配置不超过 64 MiB），等于限额允许；超限为 413/library_evidence_too_large。Kanban S2S 同时检查 Content-Length 与逐块累计的真实字节，伪造/缺失长度不绕过限制；超限取消读取，来源接口保留明确 413 错误。时间线从不为满足限额而截断。
 
@@ -51,7 +55,7 @@ GET/POST /api/brands/:id/content-creatives/:creativeId/revisions?month=YYYY-MM �
 
 保存不修改现有 ContentDraft、排期、发布或付费视频。不需要跨服务 outbox；制作/下游采用版本属于后续阶段。原整月接口不允许覆盖或删除已有追溯的卡片；改用逐条版本入口。新月份通过统一策划匹配请求创建待审核创意；包含已追溯创意的整月生成与覆盖入口统一拒绝，防止丢失人工修改。历史作者不猜测，首次快照不声称是原创作者投稿。
 
-AMCMM 编辑窗口只展示当前脚本、标签、保管人、素材需求和原视频链接，不展示版本历史或对比。覆盖保存仍追加后台审计修订；另存新脚本保留原稿、继承标签、绑定当前用户保管。此界面与另存能力已部署；2026-10-13 的内容编辑权限修复已随 Kanban 03eead30 / MM 8ffa3dd 部署，生产隔离回滚验证通过。保存失败保留输入，冲突可显式重载；结果不明重试沿用同一请求键。原始来源链接按当前已有授权打开，不授予新权限。所有响应 no-store，当前品牌访问在每次读取和写入时重验。
+当前目标：两端编辑器展示来源对比、原视频、SKU 推荐与人工确认、当前脚本、素材需求、AI 候选审阅、修订时间线和显式排期。MM 已本地实现；Kanban（Task 8）已本地实现，未发布。覆盖保存仍追加后台审计修订；另存新脚本保留原稿、继承标签、绑定当前用户保管。既有另存能力已部署；本次来源／SKU／修订界面未发布；2026-10-13 的内容编辑权限修复已随 Kanban 03eead30 / MM 8ffa3dd 部署，生产隔离回滚验证通过。保存失败保留输入，冲突可显式重载；结果不明重试沿用同一请求键。原始来源链接按当前已有授权打开，不授予新权限。所有响应 no-store，当前品牌访问在每次读取和写入时重验。
 
 验收：原始快照和二次修改链；品牌和用户隔离；真实用户身份；主理人变更不改历史；并发；幂等；事务审计失败回滚；来源字段不可伪造；旧整月写入拒绝；刷新与历史回读；手机桌面交互。
 
@@ -79,4 +83,4 @@ AI 辅助版本扩展：用户明确采用固定候选摘要后，复用同一�
 
 ## 统一策划匹配与编辑（2026-10-11，已部署，收费品牌 CLI 验收及补充修复状态见文首）
 
-当前增量契约见 [统一创意工作流](unified-creative-planning.md)。看板与 MM 共用逐条修订服务；MM 使用单页脚本编辑和一键 AI 修改，字段差异及审核记录在后台保留。旧整月生成、重写和整月覆盖入口拒绝写入。已确定策划的匹配请求以 CREATIVE_MATCH_REQUEST 保存，初次即时认领，后续按品牌时区 01:00–05:59 补全；单任务最多三条，每日最多五批，消耗仅记录而不限制额度。未耗尽候选或达到批次执行边界时不冒充匹配不足；匹配不足使用用户确定的提示。服务异常、策划变更及过期空档分别展示。已有通用品牌创意池仍保留，常规每日检索改为夜间；策划请求为独立有界任务，不能将两者误写成只会检索一次。
+当前增量契约见 [统一创意工作流](unified-creative-planning.md)。看板与 MM 共用逐条修订服务；两端使用来源对比、SKU 确认、候选审阅和修订时间线，字段差异及审核记录由同一服务维护。旧整月生成、重写和整月覆盖入口拒绝写入。已确定策划的匹配请求以 CREATIVE_MATCH_REQUEST 保存，初次即时认领，后续按品牌时区 01:00–05:59 补全；单任务最多三条，每日最多五批，消耗仅记录而不限制额度。未耗尽候选或达到批次执行边界时不冒充匹配不足；匹配不足使用用户确定的提示。服务异常和策划变更分别展示；新创意没有日期空档或过期空档语义。已有通用品牌创意池仍保留，常规每日检索改为夜间；策划请求为独立有界任务，不能将两者误写成只会检索一次。

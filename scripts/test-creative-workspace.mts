@@ -65,6 +65,8 @@ assert.deepEqual(listed.map(item => item.id).sort(), ['legacy', 'undated'])
 assert.equal(listed.find(item => item.id === 'undated')?.date, null)
 assert.equal(listed.find(item => item.id === 'undated')?.draftId, null)
 assert.equal(listed.find(item => item.id === 'undated')?.workspaceItem?.currentRevisionId, 'revision-new')
+assert.equal(listed.find(item => item.id === 'undated')?.revisionCount, 1)
+assert.equal(listed.find(item => item.id === 'legacy')?.revisionCount, 0)
 assert.equal(listed.find(item => item.id === 'legacy')?.workspaceItem?.legacy?.date, '2026-11-01')
 listDb.contentDraft.findMany=async()=>[
   {id:'legacy-draft',agentNote:'Historical BRAND-PLAN-CALENDAR-ITEM:LEGACY',status:'draft'},
