@@ -18,6 +18,11 @@ import {summarizeCreativeFeedback,validateCreativeFeedback} from '../src/lib/bra
 const targets=[{id:'2026-12-0-instagram',platform:'instagram'},{id:'2026-12-1-tiktok',platform:'tiktok'}]
 assert.deepEqual(openTargets(targets,[{planningRequest:{targetId:targets[0].id},status:'idea_pending',schedule:null}]),[targets[1]])
 assert.deepEqual(openTargets(targets,[{planningRequest:{targetId:targets[0].id},status:'archived'}]),targets,'archived ideas release a target')
+const revisedTargets=Array.from({length:20},(_,index)=>({id:`2026-12-v2-${index}-instagram`,platform:'instagram'}))
+const oldIdeas=Array.from({length:8},(_,index)=>({status:'idea_pending',planningRequest:{targetId:`2026-12-v1-${index}-instagram`,month:'2026-12'},platformTargets:['instagram']}))
+assert.equal(openTargets(revisedTargets,oldIdeas).length,12,'new request version retains eight same-month matches')
+const platformRevision=[...revisedTargets.slice(0,3),{id:'2026-12-v2-0-tiktok',platform:'tiktok'}]
+assert.deepEqual(openTargets(platformRevision,oldIdeas).map(target=>target.platform),['tiktok'],'old matches cannot consume another platform quota')
 assert(!MATCH_SHORTFALL_MESSAGE.includes('排期空档'))
 if(process.argv.includes('--contract-only'))process.exit(0)
 const url=new URL(process.env.DATABASE_URL||'');assert(url.hostname==='127.0.0.1'&&url.pathname==='/amc_lineage_test_unified')

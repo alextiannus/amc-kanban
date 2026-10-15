@@ -14,8 +14,18 @@ export function requestTargets(input:Record<string,any>):CreativeTarget[]{
  return source.filter((target:any)=>target&&typeof target.id==='string'&&typeof target.platform==='string').map((target:any)=>({id:target.id,platform:target.platform}))
 }
 export function openTargets(targets:CreativeTarget[],items:any[]):CreativeTarget[]{
- const used=new Set(items.filter(item=>!['archived','deleted','归档','已删除'].includes(item?.status)).map(item=>item.planningRequest?.targetId||item.planningRequest?.slotId).filter(Boolean))
- return targets.filter(target=>!used.has(target.id))
+ const active=items.filter(item=>!['archived','deleted','归档','已删除'].includes(item?.status)&&item?.planningRequest&&(item.planningRequest.targetId||item.planningRequest.slotId))
+ const occupied=new Set<string>(),matched=new Set<any>()
+ // Preserve exact bindings first; an older request must not displace a newer receipt.
+ for(const item of active){const id=item.planningRequest.targetId||item.planningRequest.slotId;if(targets.some(target=>target.id===id)&&!occupied.has(id)){occupied.add(id);matched.add(item)}}
+ for(const item of active){
+  if(matched.has(item))continue
+  const binding=item.planningRequest,id=binding.targetId||binding.slotId
+  const platform=typeof binding.platform==='string'?binding.platform:targets.find(target=>id.endsWith(`-${target.platform}`))?.platform||(Array.isArray(item.platformTargets)&&item.platformTargets.length===1?item.platformTargets[0]:undefined)
+  const target=targets.find(target=>target.platform===platform&&!occupied.has(target.id))
+  if(target)occupied.add(target.id)
+ }
+ return targets.filter(target=>!occupied.has(target.id))
 }
 export function requestView(row:any,workspace:any,_today?:string){
  if(!row)return null

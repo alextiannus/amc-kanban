@@ -14,7 +14,7 @@ const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('h
 const deps={
   './facts':{readBrandFacts:async()=>({timezone:'Asia/Singapore',productCatalog:[]}),validateSkuReferences:()=>true},
   '../prisma':{prisma:{}},
-  '../brand-plan/creativeRevisionContract':{creativeDigest:digest},
+  '../brand-plan/creativeRevisionContract':{creativeDigest:digest,validateCreativePatch:revisionContract.validateCreativePatch},
   '../brand-plan/creativeWorkspaceContract':{validateCreativeWorkspacePatch},
   '../brand-plan/creativeRevisions':{
     saveCreativeRevision:async(...args)=>{saved={month:args[2],body:args[4],seed:args[7]};return {receipt:{id:'revision-1',contentHash:'hash',content:saved.seed}}},
@@ -41,6 +41,27 @@ const patch={title:'Reviewed title',planning:'Reviewed script',aiCaption:'Review
   assert.equal(saved.body.patch.date,undefined)
   assert.deepEqual(saved.seed.platformTargets,['instagram'])
   await assert.rejects(()=>saveRecommendation('user','brand','task',intent,{path:'artifact',revision:1,digest:'artifact'},'{}',library,{sourceCreativeId:'cre_fixture',month:'2026-12',patch:{...patch,date:'2026-12-01'}},false,{id:'request-1',targetId:'target-1',month:'2026-12'}),error=>error.code==='reviewed_creative_required')
+  const oldPatch={title:'Reviewed title',planning:'Reviewed script',aiCaption:'Reviewed caption',materialRequirements:['Owned footage'],date:'2099-12-18',platform:'instagram'}
+  const legacyIntent={kind:'creative_discovery'}
+  await saveRecommendation('user','brand','legacy-task',legacyIntent,{path:'artifact',revision:1,digest:'artifact'},'{}',library,{sourceCreativeId:'cre_fixture',patch:oldPatch})
+  assert.equal(saved.month,'2099-12')
+  assert.equal(saved.seed.date,undefined)
+  assert.equal(saved.seed.schedule,null)
+  assert.deepEqual(saved.seed.platformTargets,['instagram'])
+  assert.deepEqual(saved.body.patch.platformTargets,['instagram'])
+  assert.equal(saved.body.patch.date,undefined)
+  await assert.rejects(()=>saveRecommendation('user','brand','legacy-task',legacyIntent,{path:'artifact',revision:1,digest:'artifact'},'{}',library,{sourceCreativeId:'cre_fixture',patch:{...oldPatch,source:'forged'}}),error=>error.code==='reviewed_creative_required')
+  await assert.rejects(()=>saveRecommendation('user','brand','legacy-task',legacyIntent,{path:'artifact',revision:1,digest:'artifact'},'{}',library,{sourceCreativeId:'cre_fixture',patch:{title:'Only title',date:'2099-12-18',platform:'instagram'}}),error=>error.code==='reviewed_creative_required')
+  await assert.rejects(()=>saveRecommendation('user','brand','legacy-task',legacyIntent,{path:'artifact',revision:1,digest:'artifact'},'{}',library,{sourceCreativeId:'cre_fixture',patch:oldPatch,schedule:{scheduledAt:'2099-12-18'}}),error=>error.code==='reviewed_creative_required')
+  const twenty=Array.from({length:20},(_,index)=>({id:`2099-12-v2-${index}-instagram`,platform:'instagram'}))
+  const oldEight=Array.from({length:8},(_,index)=>({id:`idea-${index}`,status:'idea_pending',planningRequest:{id:'old-request',targetId:`2099-12-v1-${index}-instagram`,month:'2099-12'},platformTargets:['instagram']}))
+  assert.equal(matchingContract.openTargets(twenty,oldEight).length,12,'old-version ideas occupy the new monthly target')
+  const revisedWorkspace={annualPlan:{strategy:'Fixture strategy'},publishingCalendar:{months:{'2099-12':oldEight}}}
+  const revisedRow={id:'new-request',period:'2099-12',input:{targets:twenty,targetCount:20,planHash:matchingContract.planningHash(revisedWorkspace)},output:{status:'queued'}}
+  assert.equal(matchingContract.requestView(revisedRow,revisedWorkspace).filled,8)
+  assert.equal(matchingContract.requestView(revisedRow,revisedWorkspace).pending.length,12)
+  const quotas=[...Array.from({length:3},(_,index)=>({id:`v2-${index}-instagram`,platform:'instagram'})),...Array.from({length:2},(_,index)=>({id:`v2-${index}-tiktok`,platform:'tiktok'}))]
+  assert.deepEqual(matchingContract.openTargets(quotas,oldEight).map(target=>target.platform),['tiktok','tiktok'],'platform occupancy is capped at its own quota')
   let requestRow=null
   const knowledge={marketingSolution:{annualPlan:{strategy:'Fixture strategy'}}}
   const tx={
@@ -72,5 +93,5 @@ const patch={title:'Reviewed title',planning:'Reviewed script',aiCaption:'Review
   assert.equal(requestRow.input.slots,undefined)
   assert(requestRow.input.targets.every(target=>target.date===undefined))
   assert.equal(response.request.pending.length,3)
-  console.log('PASS: monthly request has undated targets; recommendation seeds an undated idea and rejects dated input')
+  console.log('PASS: versioned monthly occupancy and platform quotas; undated request and ideas; strict legacy adoption mapping')
 })().catch(error=>{console.error(error);process.exitCode=1})

@@ -54,11 +54,12 @@ try{
  for(let n=0;n<20&&(await app.runtime.state(actor,receipt.id)).status==='queued';n++)await app.runtime.tick()
  const task=await app.runtime.get(actor,receipt.id,{history:true});assert.equal(task.status,'succeeded')
  const ref=task.result.artifacts[0],content=(await app.workspace.read(actor,ref)).content
- const body={sourceCreativeId:source.inspirationCreativeId,patch:{...value.recommendations[0],date:'2099-12-18',platform:'instagram'}}
+ const body={sourceCreativeId:source.inspirationCreativeId,month:'2099-12',patch:{...value.recommendations[0],platformTargets:['instagram']}}
  delete (body.patch as any).rationale;delete (body.patch as any).sourceCreativeId;body.patch.planning='Human-reviewed brand plan'
  const save=()=>saveRecommendation(id,id,task.id,intent,ref,content,library,body)
  const results=await Promise.all([save(),save()]);assert.equal(results[0].receipt.id,results[1].receipt.id)
  const saved=results[0];assert.equal(saved.verified,true);assert.equal(saved.creative?.planning,'Human-reviewed brand plan')
+ assert.equal(saved.receipt.content.status,'idea_pending');assert.equal(saved.receipt.content.schedule,null);assert.equal(saved.receipt.content.date,undefined);assert.deepEqual(saved.receipt.content.platformTargets,['instagram'])
  assert.equal(saved.receipt.actor.id,id);assert.equal(saved.receipt.principals[0].userId,id);assert.equal(saved.receipt.source.creativeId,'cre_real_fixture')
  assert.equal(saved.receipt.source.snapshot.nativeSourceSnapshot.version,null)
  assert.equal(digest({...await readBrandFacts(prisma,id),creativePortfolio:[]}),digest({...facts,creativePortfolio:[]}),'saving adds portfolio evidence without changing merchant facts')
@@ -66,8 +67,8 @@ try{
  assert.equal(history.revisions.length,2);assert.equal(history.revisions[1].origin,'library_recommendation');assert.equal(history.revisions[1].content.planning,value.recommendations[0].planning)
  assert.equal((await listOpenCalendarCreativeOptions(id,saved.month))[0].id,saved.creativeId)
  assert.equal((await recommendationReceipts(id,id,task.id))[0].creative?.id,saved.creativeId)
- await assert.rejects(()=>saveRecommendation(id,id,task.id,intent,ref,content,library,{...body,patch:{...body.patch,date:'2100-01-02'}}),/creative_request_key_reused/)
- await assert.rejects(()=>saveRecommendation(id,id,task.id,intent,ref,content,library,{...body,patch:{...body.patch,date:'2099-02-30'}}),/creative_date_must_remain_in_month/)
+ await assert.rejects(()=>saveRecommendation(id,id,task.id,intent,ref,content,library,{...body,patch:{...body.patch,platformTargets:['tiktok']}}),/creative_request_key_reused/)
+ await assert.rejects(()=>saveRecommendation(id,id,task.id,intent,ref,content,library,{...body,patch:{...body.patch,date:'2099-12-18'}}),/reviewed_creative_required/)
  await assert.rejects(()=>saveRecommendation(id,id,task.id,intent,ref,content,library,{...body,patch:{...body.patch,inspirationCreativeId:'forged'}}),/reviewed_creative_required/)
  await prisma.brand.update({where:{id},data:{description:'Changed facts'}})
  assert.equal((await save()).receipt.id,saved.receipt.id,'original receipt survives fact changes')
