@@ -98,4 +98,8 @@ const finished=await read('?page=1&sourceGroup=finished');assert.deepEqual(finis
 assert.equal((await read('?page=1&sourceGroup=ai_clip')).assets[0].id,rows[1].id)
 assert.deepEqual((await read('?page=1&assetIds='+rows[0].id+',other-brand')).assets.map((a:any)=>a.id),[rows[0].id])
 assert.equal((await request('?sourceGroup=invalid')).status,400)
+const thirty=rows.slice(0,30).map(row=>row.id)
+assert.deepEqual((await read('?page=1&pageSize=30&assetIds='+thirty.join(','))).assets.map((row:any)=>row.id),thirty,'return every selected reference, including 10-30')
+assert.equal((await request('?assetIds='+Array.from({length:41},(_,i)=>'id-'+i).join(','))).status,400)
+assert.equal((await request('?assetIds='+rows[0].id+','+rows[0].id)).status,400,'duplicate asset filters are rejected')
 console.log('PASS original/AI/finished filters, accurate totals, manual finished selection and brand-scoped ID lookup')
