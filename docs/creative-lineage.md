@@ -1,5 +1,17 @@
 # 品牌创意修改与版本追溯
 
+## 反馈统计（Task 6 本地已实现，未发布）
+
+原因固定为 `sku_mismatch`、`selling_point`、`transitions`、`visual_description`、`voiceover`、`subtitle`、`platform_style`、`material_feasibility`、`brand_facts`、`other`。历史 `sku` 在读取时映射 `sku_mismatch`，原 revision 不改写；旧客户端 sku 写入继续兼容，以保持既有幂等载荷。结构化差异记录实际字段变化，不从文本猜测原因；旧日历字段投影到 workspace 后比较，迁移本身不算编辑。
+
+`GET /api/brands/:brandId/content-creatives/feedback?cursor=...` 每次重验品牌 READ 权限，按 createdAt/id 倒序返回最多 2000 条修订/放弃事件的计数和 nextCursor（游标为不透明分页位置）。审核和修改按窗口内唯一 month/creativeId 计数；直接采用是明确未改动的人工保存，或与可信 AI 候选规范化字段一致的采用。AI 采用的当前版本差异仍保留，人工候选改动单独记录；缺少旧差异/候选证据不推断直接采用。审核、直接采用、修改是窗口内可重叠集合，不能把多页 distinct 计数相加当全历史去重数。SKU 确认算人工审核/修改；自动生成、自动排期和系统修订不算人工审核。字段与原因计数按事件去重；无原因的修改只计字段。
+
+来源/SKU/平台/内容类型使用保存时固定上下文，各维度最多 49 个按字典序选择的真实键与 `other`；缺失、非法或剩余键归入 other。同一事件落入多个 SKU/平台时每桶只计一次；other 也按脚本/候选去重。聚合不返回说明、脚本、AI 指令或原始 revision；数据库只投影统计所需 JSON 字段。
+
+`POST /api/brands/:brandId/content-creatives/feedback` 接收 `action:discard_candidate`、`month`、`creativeId`、`taskId`、`artifactDigest`、`expectedRevision`、`idempotencyKey` 与可选 feedback。服务端核对当前用户的成功 AI 任务、创意/月、候选绑定版本及固定产物，再在品牌锁内重验内容编辑权限和 CAS。独立 `CREATIVE_CANDIDATE_FEEDBACK` 事件及审计记录放弃，不新增 CREATIVE_ITEM 修订、不改当前脚本/source/SKU/schedule、不调用制作或发布。相同请求和同一用户/候选重试返回原事件回执，异载荷冲突；已采用的候选拒绝放弃。两端按钮接入属于 Task 7/8。
+
+部署需执行 `20261016060000_creative_feedback_window` 索引迁移；brandId/kind/createdAt/id 索引分别读取至多 2001 个修订和事件，再合并取窗口。此任务不回填或重写历史数据。
+
 ## SKU 二阶段适配（Task 5，本地已实现，未发布）
 
 任务历史使用固定产物与上下文快照展示，并标注 was_current / stale；当前品牌权限、Core 任务归属与调用可见性仍逐次检查。采用重试先查权威回执，匹配任务及规范化请求时返回原回执；不同载荷冲突，只有新采用才进入当前来源/决策/版本验证。省略 kind 按 creative 严格解析，adaptToBrand 只接受布尔值；任何旧一阶段 true 请求都在 dispatch 前拒绝。自动驾驶的持久任务目标也须明确等待人工 SKU 决策，包括空目录普通品牌内容，不得以自动驾驶授权替代确认。

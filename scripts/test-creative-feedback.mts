@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict'
+import * as feedback from '../src/lib/brand-plan/revisionFeedback.ts'
+
+assert.deepEqual(feedback.REVISION_REASONS,['sku_mismatch','selling_point','transitions','visual_description','voiceover','subtitle','platform_style','material_feasibility','brand_facts','other'])
+const legacy={reasons:['sku'],note:'private note'}
+assert.deepEqual(feedback.readCreativeFeedback(legacy),{reasons:['sku_mismatch'],note:'private note'})
+assert.deepEqual(legacy.reasons,['sku'])
+assert.equal(feedback.validateCreativeFeedback({reasons:[...feedback.REVISION_REASONS],note:''})?.reasons.length,10)
+assert.throws(()=>feedback.validateCreativeFeedback({reasons:['guessed'],note:''}),/invalid_creative_feedback/)
+assert.throws(()=>feedback.validateCreativeFeedback({reasons:['other'],note:'x'.repeat(2001)}),/invalid_creative_feedback/)
+const before={title:'A',planning:'plain',platform:'Instagram',date:'2026-11-01',status:'planned_unimplemented'}
+const after={title:'A',planning:'plain',platformTargets:['instagram'],status:'idea_pending'}
+assert.deepEqual(feedback.creativeChanges(before,after),[])
+assert.deepEqual(feedback.creativeCandidateChanges({planning:' Candidate '},{planning:'Candidate'},'2026-11'),[])
+assert.deepEqual(feedback.creativeChanges(after,{...after,planning:'wrong SKU, voiceover',skuDecision:{selectedSkuIds:['sku1']}}).map(c=>c.field),['planning','skuDecision'])
+const row=(id:string,changes:any,extra:any={})=>({kind:'CREATIVE_ITEM',version:1,input:{creativeId:id,month:'2026-11',actor:{type:'HUMAN'},changes,dimensions:{source:['source1'],sku:['sku1'],platform:['instagram'],contentType:['video']},...extra}})
+const rows=[row('direct',[]),row('edited',[{field:'planning'},{field:'planning'}],{feedback:{reasons:['sku','sku_mismatch','material_feasibility'],note:'private note'}}),row('edited',[{field:'aiCaption'}]),row('edited2',[{field:'planning'}]),row('unknown',undefined),row('ai-direct',[{field:'planning'}],{ai:{reviewChanges:[]}}),row('ai-edited',[{field:'planning'}],{ai:{reviewChanges:[{field:'planning'}]}}),row('ai-old',[{field:'planning'}],{ai:{taskId:'legacy'}}),{kind:'CREATIVE_CANDIDATE_FEEDBACK',version:1,input:{...row('discard',[]).input,event:'candidate_discarded',candidateKey:'candidate1',feedback:{reasons:['other'],note:'hidden'}}},row('bot',[],{actor:{type:'AI'}}),{...row('base',[]),version:0}]
+const summary=feedback.summarizeCreativeFeedback(rows)
+assert.equal(summary.reviewedScripts,8)
+assert.equal(summary.directlyAdoptedScripts,2)
+assert.equal(summary.editedScripts,4)
+assert.equal(summary.discardedCandidates,1)
+assert.equal(summary.bySku.sku1.editedScripts,4)
+assert.equal(summary.reasons.sku_mismatch,1)
+assert.equal(summary.reasons.material_feasibility,1)
+assert.equal(summary.fields.planning,5)
+assert.equal(summary.fields.voiceover,undefined)
+assert.equal(JSON.stringify(summary).includes('private note'),false)
+assert.equal(JSON.stringify(summary).includes('hidden'),false)
+assert.equal(feedback.summarizeCreativeFeedback([row('alone',[{field:'planning'}])]).reasons.voiceover,undefined)
+const many=Array.from({length:100},(_,i)=>row(`idea${i}`,[],{dimensions:{source:[`source${String(i).padStart(3,'0')}`],sku:['__proto__'],platform:[],contentType:[]}}))
+const bounded=feedback.summarizeCreativeFeedback(many)
+assert.equal(Object.keys(bounded.bySource).length,50)
+assert.equal(bounded.bySource.other.reviewedScripts,51)
+assert.deepEqual(feedback.summarizeCreativeFeedback([...many].reverse()),bounded)
+assert.equal(bounded.bySku.other.reviewedScripts,100)
+assert.equal(bounded.byPlatform.other.reviewedScripts,100)
+assert.equal(feedback.summarizeCreativeFeedback(Array.from({length:2100},(_,i)=>row(`bounded${i}`,[]))).reviewedScripts,2000)
+assert.equal(feedback.summarizeCreativeFeedback([row('alias',[],{dimensions:{platform:['Instagram','ig','instagram']}})]).byPlatform.instagram.reviewedScripts,1)
+assert.throws(()=>feedback.parseFeedbackCursor('not-a-cursor'),/invalid_feedback_cursor/)
+const cursor=feedback.feedbackCursor({createdAt:new Date('2026-10-16T00:00:00.000Z'),id:'row1'})
+assert.equal(feedback.parseFeedbackCursor(cursor)?.id,'row1')
+console.log('PASS: ten reasons, legacy read projection, objective diff, review/adoption/edit/discard counts, private notes, bounded stable dimensions and cursor')

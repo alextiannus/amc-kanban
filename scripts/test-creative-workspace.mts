@@ -82,7 +82,7 @@ const rows = [
   { id: 'revision-0', version: 0, createdAt: new Date('2026-11-01T00:00:00Z'), input: { brand: { id: 'brand-1' } }, output: { id: 'idea-1', date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } },
 ]
 const deps: Record<string, any> = {
-  './matchingContract': {}, './revisionFeedback': { validateCreativeFeedback: () => null, creativeChanges: () => [] }, '../ai-native/creative-diversity.ts': {},
+  './matchingContract': {}, './revisionFeedback': await import('../src/lib/brand-plan/revisionFeedback.ts'), '../ai-native/creative-diversity.ts': {},
   '../prisma.ts': { prisma: {} }, '../ai-native/facts.ts': {},
   '../role-permissions/store.ts': {}, '../role-permissions/contract.ts': {},
   '../auth-v2/types.ts': { principalFromUser: () => ({ globalRoles: ['ADMIN'] }) },

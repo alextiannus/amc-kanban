@@ -1880,6 +1880,7 @@ model BrandMarketingSolution {
   updatedAt          DateTime                     @updatedAt
 
   @@index([brandId, kind, period])
+  @@index([brandId, kind, createdAt, id], map: "BrandMarketingSolution_feedback_window_idx")
   @@index([researchSnapshotId])
 }
 
