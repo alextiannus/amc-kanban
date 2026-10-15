@@ -66,6 +66,12 @@ assert.equal(listed.find(item => item.id === 'undated')?.date, null)
 assert.equal(listed.find(item => item.id === 'undated')?.draftId, null)
 assert.equal(listed.find(item => item.id === 'undated')?.workspaceItem?.currentRevisionId, 'revision-new')
 assert.equal(listed.find(item => item.id === 'legacy')?.workspaceItem?.legacy?.date, '2026-11-01')
+listDb.contentDraft.findMany=async()=>[
+  {id:'legacy-draft',agentNote:'Historical BRAND-PLAN-CALENDAR-ITEM:LEGACY',status:'draft'},
+  {id:'other-draft',agentNote:'brand-plan-calendar-item:legacy-other',status:'draft'},
+]
+const historicalListed=await listOpenCalendarCreativeOptions('brand-1','2026-11',listDb as any)
+assert.equal(historicalListed.find(item=>item.id==='legacy')?.draftId,'legacy-draft')
 
 // Exercise the authorized revision read path with a precise persistence mock:
 // a historical-page query must still project the actual current revision ID.

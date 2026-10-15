@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import * as draftMarkers from '../src/lib/brand-plan/creativeDraftMarker.ts'
 import { sanitizePostFastDraftControls } from '../src/lib/integrations/postfast.ts'
 
 let allowed = true
@@ -16,6 +17,7 @@ const original = {
 let record: any = { ...original }
 const contentDraft = {
   findFirst: async () => record,
+  findUnique: async () => record,
   findUniqueOrThrow: async () => record,
   update: async ({ data, where }: any) => {
     if (stale) throw Object.assign(new Error('Stale'), { code: 'P2025' })
@@ -26,11 +28,15 @@ const contentDraft = {
   },
 }
 const prisma = {
+  $queryRaw: async () => [],
+  brandKnowledge: { findUnique: async () => null },
   contentDraft,
   socialAccount: { findFirst: async () => ({ platformId: 'tiktok' }) },
-  $transaction: async (task: any) => task({ contentDraft }),
+  $transaction: async (task: any) => task(prisma),
 }
 const deps: Record<string, any> = {
+  '@/lib/brand-plan/creativeDraftMarker': draftMarkers,
+  '@/lib/postfastPublishAccount': {checkPostfastPublishAccount:async()=>{throw Error('Unexpected provider check')}},
   'next/server': { NextResponse: { json: Response.json } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN' } }), extractApiKey: () => null },
   '@/lib/prisma': { prisma },

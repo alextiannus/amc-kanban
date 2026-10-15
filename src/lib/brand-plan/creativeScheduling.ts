@@ -5,6 +5,7 @@ import { readPolicies } from '../role-permissions/store.ts'
 import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { calendarSyncMarker } from './calendarSync.ts'
+import { creativeDraftMarker, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, record, revisionPeriod, validateCreativeAddress } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeScheduleLink } from './creativeWorkspaceContract.ts'
 
@@ -58,20 +59,7 @@ function draftMarker(creativeId: string, revisionId: string) {
 }
 
 function unscheduledMarker(creativeId: string, revisionId: string) {
-  return `brand-plan-creative-unscheduled:${creativeId} creative-revision:${revisionId}`
-}
-
-function hasLegacyDraftMarker(note: string | null, creativeId: string) {
-  if (!note) return false
-  const marker = calendarSyncMarker(creativeId).toLowerCase()
-  const value = note.toLowerCase()
-  let at = value.indexOf(marker)
-  while (at >= 0) {
-    const after = value.charAt(at + marker.length)
-    if (!after || !/[a-z0-9_-]/.test(after)) return true
-    at = value.indexOf(marker, at + marker.length)
-  }
-  return false
+  return `${creativeDraftMarker('unscheduled',creativeId)} creative-revision:${revisionId}`
 }
 
 async function writeSchedule(actor: Actor, brandId: string, creativeId: string, expectedRevision: string, input: unknown, unschedule: boolean, db = prisma, now = new Date()) {
@@ -105,13 +93,13 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
     if (previous) {
       await tx.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${previous.draftId} FOR UPDATE`
       draft = await tx.contentDraft.findUnique({where:{id:previous.draftId},select:{id:true,brandId:true,status:true,agentNote:true}})
-      if (!draft || draft.brandId !== brandId || !draft.agentNote?.includes(calendarSyncMarker(creativeId))) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
+      if (!draft || draft.brandId !== brandId || !hasCreativeDraftMarker(draft.agentNote,'calendar',creativeId)) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
       if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
     } else if (schedule) {
-      const markerPrefix = `brand-plan-creative-unscheduled:${creativeId} creative-revision:`
+      const markerPrefix = creativeDraftMarker('unscheduled',creativeId)
       const legacyMarker = calendarSyncMarker(creativeId)
-      const isCandidate = (note: string | null) => Boolean(note?.startsWith(markerPrefix) || normalized.legacy?.date && hasLegacyDraftMarker(note,creativeId))
-      const possible = await tx.contentDraft.findMany({where:{brandId,OR:[{agentNote:{startsWith:markerPrefix}},...(normalized.legacy?.date?[{agentNote:{contains:legacyMarker,mode:'insensitive' as const}}]:[])]},select:{id:true,brandId:true,status:true,agentNote:true}})
+      const isCandidate = (note: string | null) => Boolean(hasCreativeDraftMarker(note,'unscheduled',creativeId) || normalized.legacy?.date && hasCreativeDraftMarker(note,'calendar',creativeId))
+      const possible = await tx.contentDraft.findMany({where:{brandId,OR:[{agentNote:{contains:markerPrefix,mode:'insensitive'}},...(normalized.legacy?.date?[{agentNote:{contains:legacyMarker,mode:'insensitive' as const}}]:[])]},select:{id:true,brandId:true,status:true,agentNote:true}})
       const candidates = possible.filter(row => isCandidate(row.agentNote))
       if (candidates.length > 1) throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
       if (candidates.length === 1) {

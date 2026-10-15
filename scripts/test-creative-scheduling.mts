@@ -18,6 +18,17 @@ console.log('PASS: explicit route and schedule input validation')
 // authorization, revision, draft and replay contract testable without a DB.
 const contract = await import('../src/lib/brand-plan/creativeRevisionContract.ts')
 const workspaceContract = await import('../src/lib/brand-plan/creativeWorkspaceContract.ts')
+const draftMarkers = await import('../src/lib/brand-plan/creativeDraftMarker.ts')
+for (const kind of ['calendar','unscheduled'] as const) {
+  const marker=draftMarkers.creativeDraftMarker(kind,'idea-one')
+  for (const note of [marker,`${marker} creative-revision:revision-1`,`Historical note ${marker.toUpperCase()} creative-revision:revision-1`]) {
+    assert.equal(draftMarkers.hasCreativeDraftMarker(note,kind,'idea-one'),true)
+    assert.equal(draftMarkers.hasCreativeDraftMarker(note,kind),true)
+  }
+  for (const suffix of ['-other','_other','2']) assert.equal(draftMarkers.hasCreativeDraftMarker(`${marker}${suffix}`,kind,'idea-one'),false)
+  assert.equal(draftMarkers.hasCreativeDraftMarker(`History ${draftMarkers.creativeDraftMarker(kind,'idea.v1')}`,kind,'idea.v1'),true)
+  assert.equal(draftMarkers.hasCreativeDraftMarker(null,kind),false)
+}
 const item: any = {id:'idea-one',title:'Original',planning:'Original script',status:'idea_pending',platformTargets:['instagram'],materialRequirements:[],schedule:null}
 let knowledge: any = {marketingSolution:{publishingCalendar:{months:{'2026-11':[item]}}}}
 let permitted = true
@@ -47,6 +58,7 @@ const modules:Record<string,any> = {
   '../role-permissions/contract.ts':{effectiveGrants:()=>['content.schedule']},
   '../auth-v2/types.ts':{principalFromUser:()=>({permissionRoleIds:['AMC_PRINCIPAL'],globalRoles:[]})},
   './calendarSync.ts':{calendarSyncMarker:(id:string)=>`brand-plan-calendar-item:${id}`},
+  './creativeDraftMarker.ts':draftMarkers,
   './creativeRevisionContract.ts':contract,
   './creativeWorkspaceContract.ts':workspaceContract,
 }
@@ -197,6 +209,7 @@ const draftModules:Record<string,any>={
   '@/lib/events':{eventEmitter:{}},
   '@/lib/postfastDelivery':{findActivePostfastDeliveryJob:async()=>null},
   '@/lib/integrations/postfast':{sanitizePostFastDraftControls:()=>({})},
+  '@/lib/brand-plan/creativeDraftMarker':draftMarkers,
 }
 const draftMod={exports:{} as any}
 new Function('require','module','exports',draftRouteCompiled)((key:string)=>{assert(key in draftModules,key);return draftModules[key]},draftMod,draftMod.exports)
@@ -237,10 +250,14 @@ assert.equal(current().planning,'Original historical script')
 const legacyUnscheduled=await service.unscheduleCreative(actor,'brand-a','idea-one',adopted.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-adopted'},db,now)
 assert.equal(legacyUnscheduled.draftId,'legacy-1')
 assert.match(drafts[0].agentNote,/^brand-plan-creative-unscheduled:idea-one/)
+drafts[0].agentNote=`Historical reserved ${drafts[0].agentNote.toUpperCase()}`
 const legacyRescheduled=await service.scheduleCreative(actor,'brand-a','idea-one',legacyUnscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'reschedule-adopted'},db,now)
 assert.equal(legacyRescheduled.draftId,'legacy-1')
 assert.equal(drafts.length,1)
 assert.equal(drafts[0].status,'pending_review')
+drafts[0].agentNote=`Historical canonical ${drafts[0].agentNote.toUpperCase()}`
+await service.unscheduleCreative(actor,'brand-a','idea-one',legacyRescheduled.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-canonical-variant'},db,now)
+assert.equal(drafts.length,1)
 
 for (const status of ['scheduled','publishing','published','failed']) {
   resetLegacy([{...legacyDraft,id:`legacy-${status}`,status}])
@@ -252,3 +269,122 @@ resetLegacy([{...legacyDraft},{...legacyDraft,id:'legacy-2',agentNote:'brand-pla
 await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'adopt-ambiguous'},db,now),'creative_schedule_draft_ambiguous')
 assert.equal(drafts.length,2)
 console.log('PASS: unique legacy dated draft adopted; provider-facing/failed and ambiguous legacy candidates fail closed')
+
+// Hold each legacy route immediately before its write transaction. The initial
+// draft is a detached snapshot; the real scheduler adopts it before we resume.
+// This order must fail closed even when a historical note uses mixed case or
+// embeds its marker after human text.
+const interleavingCases = [
+  {method:'DELETE',body:undefined},
+  {method:'PATCH',body:{scheduledAt:'2026-11-21T02:00:00Z'}},
+  {method:'PATCH',body:{accountId:'account-2'}},
+  {method:'PATCH',body:{agentNote:'Removed historical link'}},
+]
+const raceFailures: string[] = []
+for (const [index, scenario] of interleavingCases.entries()) {
+  resetLegacy([{...legacyDraft,agentNote:'Historical link BRAND-PLAN-CALENDAR-ITEM:IDEA-ONE',platformPostId:null,publishedAt:null,postfastControls:null}])
+  const events: string[] = []
+  let transactionReady!: () => void
+  let resumeMutation!: () => void
+  const ready = new Promise<void>(resolve => { transactionReady=resolve })
+  const resume = new Promise<void>(resolve => { resumeMutation=resolve })
+  let brandLocked=false
+  let draftLocked=false
+  const latestDraft=()=>drafts.find(d=>d.id===legacyDraft.id)
+  const mutationTx:any={
+    $queryRaw:async(parts:TemplateStringsArray,...values:any[])=>{
+      const query=parts.join('?')
+      if(query.includes('"BrandKnowledge"')) {
+        assert.equal(values[0],'brand-a')
+        brandLocked=true
+        events.push('brand-lock')
+      } else if(query.includes('"ContentDraft"')) {
+        assert(brandLocked,'brand lock must precede draft lock')
+        assert.equal(values[0],legacyDraft.id)
+        draftLocked=true
+        events.push('draft-lock')
+      }
+      return []
+    },
+    brandKnowledge:{findUnique:async()=>{
+      assert(brandLocked,'current creative links must be read under the brand lock')
+      events.push('current-link-read')
+      return structuredClone(knowledge)
+    }},
+    contentDraft:{
+      findUnique:async()=>{
+        assert(brandLocked && draftLocked,'latest draft must be read under brand and draft locks')
+        events.push('current-draft-read')
+        return structuredClone(latestDraft() ?? null)
+      },
+      update:async({data}:any)=>{
+        events.push('draft-update')
+        Object.assign(latestDraft(),Object.fromEntries(Object.entries(data).filter(([,value])=>value!==undefined)))
+        return latestDraft()
+      },
+      findUniqueOrThrow:async()=>structuredClone(latestDraft()),
+      delete:async()=>{events.push('draft-delete');return drafts.splice(drafts.findIndex(d=>d.id===legacyDraft.id),1)[0]},
+    },
+  }
+  const mutationDb:any={
+    contentDraft:{findFirst:async()=>{events.push('initial-legacy-snapshot');return structuredClone(latestDraft())}},
+    brandKnowledge:{findUnique:async()=>structuredClone(knowledge)},
+    socialAccount:{findFirst:async()=>({platformId:'instagram'})},
+    contentAssetRef:{findMany:async()=>[]},
+    $transaction:async(work:Function)=>{events.push('mutation-ready');transactionReady();await resume;return work(mutationTx)},
+  }
+  const raceMod={exports:{} as any}
+  new Function('require','module','exports',draftRouteCompiled)((key:string)=>key==='@/lib/prisma'?{prisma:mutationDb}:draftModules[key],raceMod,raceMod.exports)
+  const mutation=raceMod.exports[scenario.method](
+    new Request(`http://localhost/api/brands/brand-a/drafts/${legacyDraft.id}`,{method:scenario.method,...(scenario.body?{body:JSON.stringify(scenario.body)}:{})}),
+    {params:Promise.resolve({id:'brand-a',draftId:legacyDraft.id})},
+  )
+  await ready
+  const adoption=await service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:'2026-11-18T02:00:00Z',platform:'instagram',idempotencyKey:`concurrent-adoption-${index}`},db,now)
+  assert.equal(adoption.draftId,legacyDraft.id)
+  events.push('adoption-committed')
+  const adoptedSnapshot=structuredClone(latestDraft())
+  resumeMutation()
+  const response=await mutation
+  try {
+    assert.equal(response.status,409,`${scenario.method} must reject after legacy adoption`)
+    assert.equal(drafts.length,1,'adopted draft must remain present')
+    assert.equal(current().schedule.draftId,latestDraft().id,'active schedule must still resolve to its draft')
+    assert.deepEqual(latestDraft(),adoptedSnapshot,'conflicted mutation must preserve the adopted draft')
+    assert.deepEqual(events,['initial-legacy-snapshot','mutation-ready','adoption-committed','brand-lock','draft-lock','current-draft-read','current-link-read'])
+  } catch(error) { raceFailures.push(`${scenario.method} ${JSON.stringify(scenario.body)}: ${(error as Error).message}`) }
+}
+assert.deepEqual(raceFailures,[])
+console.log('PASS: deterministic legacy snapshot → adoption → locked PATCH/DELETE recheck preserves the active draft and schedule link')
+
+// An active link is authoritative regardless of the note. Ordinary drafts and
+// untimed reservations retain their original deletion behavior.
+for (const note of [null,'ordinary merchant note','Historical BRAND-PLAN-CALENDAR-ITEM:IDEA-ONE','Historical BRAND-PLAN-CALENDAR-ITEM:IDEA-ONE CREATIVE-REVISION:revision-1','Historical BRAND-PLAN-CREATIVE-UNSCHEDULED:IDEA-ONE CREATIVE-REVISION:revision-1']) {
+  let row:any={...legacyDraft,agentNote:note,scheduledAt:null,platformPostId:null,publishedAt:null}
+  let linked=true
+  let deletes=0
+  const standaloneDb:any={
+    $queryRaw:async()=>[],
+    brandKnowledge:{findUnique:async()=>({marketingSolution:{publishingCalendar:{months:{'2026-11':[{id:'idea-one',schedule:linked?{draftId:legacyDraft.id}:null}]}}}})},
+    contentDraft:{
+      findFirst:async()=>structuredClone(row),findUnique:async()=>structuredClone(row),findUniqueOrThrow:async()=>structuredClone(row),
+      update:async({data}:any)=>{Object.assign(row,Object.fromEntries(Object.entries(data).filter(([,value])=>value!==undefined)));return row},
+      delete:async()=>{deletes++;const removed=row;row=null;return removed},
+    },
+    socialAccount:{findFirst:async()=>({platformId:'instagram'})},contentAssetRef:{findMany:async()=>[]},
+    $transaction:async(work:Function)=>work(standaloneDb),
+  }
+  const standaloneMod={exports:{} as any}
+  new Function('require','module','exports',draftRouteCompiled)((key:string)=>key==='@/lib/prisma'?{prisma:standaloneDb}:draftModules[key],standaloneMod,standaloneMod.exports)
+  const call=(method:string,body?:any)=>standaloneMod.exports[method](new Request('http://localhost',{method,...(body?{body:JSON.stringify(body)}:{})}),{params:Promise.resolve({id:'brand-a',draftId:legacyDraft.id})})
+  assert.equal((await call('DELETE')).status,409)
+  assert.equal((await call('PATCH',{accountId:'account-2'})).status,409)
+  assert.equal((await call('PATCH',{scheduledAt:'2026-11-21T02:00:00Z'})).status,409)
+  linked=false
+  const reserved=draftMarkers.hasCreativeDraftMarker(note,'unscheduled')
+  assert.equal((await call('PATCH',{scheduledAt:'2026-11-21T02:00:00Z'})).status,reserved?409:200)
+  assert.equal((await call('DELETE')).status,200)
+  assert.equal(deletes,1)
+  assert.equal(row,null)
+}
+console.log('PASS: active links always protected; unlinked normal/legacy and untimed reserved drafts remain explicitly deletable')

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import * as draftMarkers from '../src/lib/brand-plan/creativeDraftMarker.ts'
 
 let allowed = true
 let writes = 0
@@ -13,6 +14,7 @@ const original = {
 let record: any = { ...original }
 const contentDraft = {
   findFirst: async () => record,
+  findUnique: async () => record,
   findUniqueOrThrow: async () => record,
   update: async ({ data }: any) => {
     writes++
@@ -21,11 +23,14 @@ const contentDraft = {
   },
 }
 const prisma = {
+  $queryRaw: async () => [],
+  brandKnowledge: { findUnique: async () => null },
   contentDraft,
   socialAccount: { findFirst: async () => ({ platformId: 'facebook' }) },
-  $transaction: async (task: any) => task({ contentDraft }),
+  $transaction: async (task: any) => task(prisma),
 }
 const deps: Record<string, any> = {
+  '@/lib/brand-plan/creativeDraftMarker': draftMarkers,
   '@/lib/postfastPublishAccount': { checkPostfastPublishAccount: async () => { throw new Error('Unexpected provider check') } },
   'next/server': { NextResponse: { json: Response.json } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN' } }), extractApiKey: () => null },

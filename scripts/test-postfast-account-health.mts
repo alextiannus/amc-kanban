@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import * as draftMarkers from '../src/lib/brand-plan/creativeDraftMarker.ts'
 import { postfastAccountHealthError } from '../src/lib/postfastAccountHealth.ts'
 function compile(path:string,deps:Record<string,unknown>){const m={exports:{} as any};const code=ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;new Function('require','module','exports',code)((name:string)=>{assert(name in deps,name);return deps[name]},m,m.exports);return m.exports}
 const revoked={id:'pf',platformId:'instagram',handle:'zwashsg',connectionStatus:'DISABLED',disabledReason:'TOKEN_REVOKED'}
@@ -27,11 +28,13 @@ available=false;assert.equal((await health(input)).status,503);available=true
 let state:any, deleted=0,writes=0,checks=0,allow=false,resubmitMode='success'
 function reset(){state={id:'draft',brandId:'brand',accountId:'local',caption:'Keep this draft',gbpLocationId:null,status:'scheduled',scheduledAt:new Date('2026-10-01T00:00:00Z'),platformPostId:'old-post',publishedAt:null,updatedAt:new Date()};deleted=0;writes=0;checks=0}
 const prisma:any={
+ $queryRaw:async()=>[],brandKnowledge:{findUnique:async()=>null},
  contentDraft:{findFirst:async()=>({...state}),findUnique:async()=>({...state}),findUniqueOrThrow:async()=>({...state}),update:async({data}:any)=>{writes++;for(const[k,v]of Object.entries(data))if(v!==undefined)state[k]=v;return {...state}}},
  socialAccount:{findFirst:async()=>({platformId:'instagram'})},brand:{findUnique:async()=>({postfastApiKey:'mock-only',timezone:'Asia/Singapore'})},
  $transaction:async(work:Function)=>work(prisma),
 }
 const route=compile('src/app/api/brands/[id]/drafts/[draftId]/route.ts',{
+ '@/lib/brand-plan/creativeDraftMarker':draftMarkers,
  'next/server':{NextResponse:{json:(data:any,init:any)=>Response.json(data,init)}},
  '@/lib/auth':{getSession:async()=>({user:{id:'operator',type:'HUMAN',role:'ADMIN'}}),extractApiKey:()=>null},
  '@/lib/prisma':{prisma},'@/lib/brandAccess':{canSessionAccessBrandProject:async()=>true},

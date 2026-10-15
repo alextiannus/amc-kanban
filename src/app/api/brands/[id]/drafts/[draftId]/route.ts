@@ -9,6 +9,7 @@ import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
 import { findActivePostfastDeliveryJob } from '@/lib/postfastDelivery'
 import { sanitizePostFastDraftControls } from '@/lib/integrations/postfast'
+import { hasCreativeDraftMarker } from '@/lib/brand-plan/creativeDraftMarker'
 
 const DRAFT_SELECT = {
   id: true,
@@ -69,13 +70,7 @@ const DRAFT_SELECT = {
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
-const CREATIVE_DRAFT_MARKERS = ['brand-plan-calendar-item:', 'brand-plan-creative-unscheduled:']
-function hasCreativeDraftMarker(note: unknown): note is string {
-  return typeof note === 'string' && CREATIVE_DRAFT_MARKERS.some(marker => note.startsWith(marker))
-}
-
-async function isLinkedCreativeDraft(client: any, brandId: string, draftId: string, note: unknown) {
-  if (!hasCreativeDraftMarker(note)) return false
+async function isLinkedCreativeDraft(client: any, brandId: string, draftId: string) {
   const knowledge = await client.brandKnowledge.findUnique({where: {brandId}, select: {marketingSolution: true, brandPlan: true}})
   const solution = knowledge?.marketingSolution as any
   const plan = knowledge?.brandPlan as any
@@ -84,7 +79,17 @@ async function isLinkedCreativeDraft(client: any, brandId: string, draftId: stri
 }
 
 function isReservedCreativeDraft(note: unknown) {
-  return typeof note === 'string' && note.startsWith('brand-plan-creative-unscheduled:')
+  return hasCreativeDraftMarker(note, 'unscheduled')
+}
+
+async function lockCurrentDraft(client: any, brandId: string, draftId: string) {
+  // Use the scheduler's lock order even if the initial note has no marker:
+  // adoption can establish a link after the route's first read.
+  await client.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
+  await client.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${draftId} FOR UPDATE`
+  const current = await client.contentDraft.findUnique({where: {id: draftId}, select: {brandId: true, accountId: true, scheduledAt: true, agentNote: true}})
+  if (!current || current.brandId !== brandId) throw new CreativeDraftLinkConflict()
+  return {current, linked: await isLinkedCreativeDraft(client, brandId, draftId)}
 }
 
 function changesCreativeSchedule(body: any, draft: {accountId: string | null; scheduledAt: Date | null; agentNote?: string | null}) {
@@ -183,7 +188,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
-  if (changesCreativeSchedule(body, existing) && (isReservedCreativeDraft(existing.agentNote) || await isLinkedCreativeDraft(prisma, brandId, draftId, existing.agentNote))) {
+  if (changesCreativeSchedule(body, existing) && (isReservedCreativeDraft(existing.agentNote) || await isLinkedCreativeDraft(prisma, brandId, draftId))) {
     return NextResponse.json({error: '请通过创意排期入口修改账号或时间。'}, {status: 409})
   }
 
@@ -381,12 +386,9 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const draft = await prisma.$transaction(async (tx: any) => {
-    if (hasCreativeDraftMarker(existing.agentNote)) {
-      await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
-      const current = await tx.contentDraft.findUnique({where: {id: draftId}, select: {accountId: true, scheduledAt: true, agentNote: true}})
-      if (current && changesCreativeSchedule(body, current) && (isReservedCreativeDraft(current.agentNote) || await isLinkedCreativeDraft(tx, brandId, draftId, current.agentNote))) {
-        throw new CreativeDraftLinkConflict()
-      }
+    const {current, linked} = await lockCurrentDraft(tx, brandId, draftId)
+    if (changesCreativeSchedule(body, current) && (isReservedCreativeDraft(current.agentNote) || linked)) {
+      throw new CreativeDraftLinkConflict()
     }
     const updated = await tx.contentDraft.update({
       // Prevent controls from overwriting a concurrent edit or publication transition.
@@ -570,7 +572,7 @@ export async function DELETE(request: Request, { params }: Params) {
 
   const draft = await prisma.contentDraft.findFirst({ where: { id: draftId, brandId } })
   if (!draft) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  if (await isLinkedCreativeDraft(prisma, brandId, draftId, draft.agentNote)) {
+  if (await isLinkedCreativeDraft(prisma, brandId, draftId)) {
     return NextResponse.json({error: '请先从创意排期中解除关联，再处理该草稿。'}, {status: 409})
   }
 
@@ -610,11 +612,8 @@ export async function DELETE(request: Request, { params }: Params) {
 
   try {
     await prisma.$transaction(async (tx: any) => {
-      if (hasCreativeDraftMarker(draft.agentNote)) {
-        await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
-        const current = await tx.contentDraft.findUnique({where: {id: draftId}, select: {agentNote: true}})
-        if (current && await isLinkedCreativeDraft(tx, brandId, draftId, current.agentNote)) throw new CreativeDraftLinkConflict()
-      }
+      const {linked} = await lockCurrentDraft(tx, brandId, draftId)
+      if (linked) throw new CreativeDraftLinkConflict()
       await tx.contentDraft.delete({where: {id: draftId}})
     })
   } catch (error) {
