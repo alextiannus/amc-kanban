@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { CreativeRevisionError, record } from '../src/lib/brand-plan/creativeRevisionContract.ts'
+import * as mediaPolicy from '../src/lib/brand-plan/creativeSourceMediaPolicy.ts'
 
 function load(path:string,deps:Record<string,unknown>) {
   const mod={exports:{} as any}
@@ -16,6 +17,7 @@ const reset=()=>{
 }
 reset()
 const resolver=load('src/lib/brand-plan/creativeSource.ts',{
+ './creativeSourceMediaPolicy':mediaPolicy,
  './creativeRevisions':{readCreativeRevisions:async(actor:any,brand:string,month:string,id:string)=>{
    assert.equal(actor.id,'trusted');assert.equal(month,'2026-11')
    if(brand!=='brand'||id!=='idea')throw new CreativeRevisionError('creative_access_denied',404)
@@ -67,6 +69,12 @@ assert.equal((await get()).status,404)
 reset();creative.current={id:'idea'};creative.source={creativeId:sourceId,snapshot:{inspirationCreativeId:sourceId,sourceRevision:'revision-1',libraryDigest:sourceDigest}}
 source.sourceRevision='changed';assert.equal((await get()).status,409,'stored canonical source remains pinned')
 const previousFetch=globalThis.fetch
+reset();source.originalVideoUrl='https://media.example/video.mp4?X-Amz-Signature=secret&X-Amz-Credential=secret'
+assert.equal((await (await get()).json()).originalVideoUrl,'/api/brands/brand/content-creatives/idea/source/media?month=2026-11')
+for(const unsafe of ['https://public.example/admin/private','https://public.example/%61dmin/private','https://public.example/internal/video','https://public.example/a#token','https://public.example/a#','https://public.example/a?token=secret','https://public.example/a?signature=secret','https://public.example/a?X-Amz-Credential=secret','https://127.0.0.1/a','https://service.local./a']) {
+  reset();source.originalPostUrl=unsafe;source.thumbnailUrl=unsafe
+  const result=await (await get()).json();assert.equal(result.originalPostUrl,null);assert.equal(result.thumbnailUrl,null)
+}
 const previousUrl=process.env.AMC_CONTENT_SERVICE_URL,previousToken=process.env.AMC_CONTENT_SERVICE_TOKEN
 try {
   process.env.AMC_CONTENT_SERVICE_URL='https://content.test'
@@ -80,6 +88,24 @@ try {
     return Response.json({creativeId:sourceId})
   }
   assert.equal((await client.fetchCreativeSourceEvidence(sourceId)).creativeId,sourceId)
+  const priorLimit=process.env.AMC_SOURCE_EVIDENCE_MAX_BYTES
+  try {
+    const bytes=new TextEncoder().encode(JSON.stringify({creativeId:sourceId}))
+    process.env.AMC_SOURCE_EVIDENCE_MAX_BYTES=String(bytes.length)
+    globalThis.fetch=async()=>new Response(bytes,{headers:{'content-length':String(bytes.length)}})
+    assert.equal((await client.fetchCreativeSourceEvidence(sourceId)).creativeId,sourceId)
+    globalThis.fetch=async()=>new Response(bytes,{headers:{'content-length':String(bytes.length+1)}})
+    await assert.rejects(client.fetchCreativeSourceEvidence(sourceId),/library_evidence_too_large/)
+    const chunked=(extra=false)=>new Response(new ReadableStream({start(controller){controller.enqueue(bytes.slice(0,5));controller.enqueue(bytes.slice(5));if(extra)controller.enqueue(new Uint8Array([32]));controller.close()}}))
+    globalThis.fetch=async()=>chunked()
+    assert.equal((await client.fetchCreativeSourceEvidence(sourceId)).creativeId,sourceId)
+    globalThis.fetch=async()=>chunked(true)
+    await assert.rejects(client.fetchCreativeSourceEvidence(sourceId),/library_evidence_too_large/)
+    globalThis.fetch=async()=>new Response(new Uint8Array(bytes.length+1),{headers:{'content-length':'1'}})
+    await assert.rejects(client.fetchCreativeSourceEvidence(sourceId),/library_evidence_too_large/)
+    globalThis.fetch=async()=>Response.json({error:'library_evidence_too_large'},{status:413})
+    await assert.rejects(client.fetchCreativeSourceEvidence(sourceId),/library_evidence_too_large/)
+  } finally {if(priorLimit===undefined)delete process.env.AMC_SOURCE_EVIDENCE_MAX_BYTES;else process.env.AMC_SOURCE_EVIDENCE_MAX_BYTES=priorLimit}
   globalThis.fetch=async()=>Response.json({error:'not found'},{status:404})
   await assert.rejects(client.fetchCreativeSourceEvidence(sourceId),/original_evidence_not_found/)
 } finally {

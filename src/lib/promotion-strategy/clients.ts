@@ -72,6 +72,21 @@ export async function fetchCreativeSourceEvidence(creativeId:string) {
   if(!baseUrl)throw new Error('amc_content_service_not_configured')
   const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal?'local-service-token':'')
   const response=await fetch(`${baseUrl}/v1/content-library/source-evidence`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify({creativeId})})
-  if(!response.ok)throw new Error(response.status===404?'original_evidence_not_found':'original_evidence_unavailable')
-  return response.json()
+  if(!response.ok){await response.body?.cancel();throw new Error(response.status===413?'library_evidence_too_large':response.status===404?'original_evidence_not_found':'original_evidence_unavailable')}
+  const configured=Number(process.env.AMC_SOURCE_EVIDENCE_MAX_BYTES)
+  const limit=Number.isSafeInteger(configured)&&configured>0&&configured<=64*1024*1024?configured:8*1024*1024
+  if(Number(response.headers.get('content-length'))>limit){await response.body?.cancel();throw new Error('library_evidence_too_large')}
+  if(!response.body)throw new Error('original_evidence_unavailable')
+  const reader=response.body.getReader(),chunks:Uint8Array[]=[]
+  let size=0
+  try {
+    while(true){
+      const {done,value}=await reader.read()
+      if(done)break
+      size+=value.byteLength
+      if(size>limit){await reader.cancel();throw new Error('library_evidence_too_large')}
+      chunks.push(value)
+    }
+  } finally {reader.releaseLock()}
+  return JSON.parse(Buffer.concat(chunks,size).toString('utf8'))
 }

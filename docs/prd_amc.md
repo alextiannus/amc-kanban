@@ -103,6 +103,8 @@ Content 人像库（已本地实现，待发布及供应商验收）：保留 AM
 
 ## 统一创意生成、显式排期与发布日历（Task 3 本地开发中；既有生产验收属于旧排期版本）
 
+Task 4 审查修订目标（未发布）：Content 与 Kanban S2S 均强制完整来源响应字节上限，默认 8 MiB、可配置；超限明确 413/library_evidence_too_large，不截断镜头。商户来源链接不得包含管理路径、fragment 或敏感 query；受控或签名视频通过品牌授权的同源 source/media 接口播放，服务端校验来源身份/版本、精确主机白名单、公网 DNS、类型、大小和重定向，隐藏上游签名与凭据。
+
 Kanban 确定策划后的内容生成与 MM 共用 User Assistant AI、amc-discovery / amc-creative Skill、逐条版本服务及 BrandKnowledge.marketingSolution。月度频率定义目标创意数量和平台目标，不生成发布日期；只保存原创意库中满足系统匹配标准且符合策划要求的品牌适配创意。禁止为凑数降低标准、编造创意或以通用脚本代替未满足的策划要求。新创意为 `idea_pending`，`schedule: null`，保存及每日补充不创建 `ContentDraft`；显式安排发布属于后续独立流程。
 
 显式排期由品牌授权的 `POST /api/brands/:brandId/content-creatives/:creativeId/schedule?month=YYYY-MM` 完成，取消用同路径 `DELETE`。请求须带当前创意摘要、幂等键、真实品牌平台账号及未来发布时间；允许明确选择暂不定时间并建立待处理草稿。Kanban 在事务中锁定品牌工作区、核对最新 revision，仅此动作创建或更新关联 `ContentDraft`，将草稿 ID、平台、时间、操作者及排期时的不可变 revision ID 写入创意 `schedule`；脚本正文不因排期改写。取消只解除关联和日期，不删创意或历史版本；已进入发布中／已发布的草稿不得取消。发布日历只读取草稿，默认“待处理”，包括未审核、缺素材、需修改、未定发布时间及失败草稿，不包括已排期、发布中、已发布。未排期的无日期创意不进入日历日期格。

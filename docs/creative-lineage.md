@@ -15,7 +15,9 @@ AI 改写素材需求应保存到 patch.materialRequirements。对既有产物�
 
 Task 4 本地来源接口（未发布）：`GET /api/brands/:brandId/content-creatives/:creativeId/source?month=YYYY-MM` 通过既有修订读取服务校验品牌 READ 权限，再用服务凭据读取 Content 完整来源。真实来源 ID 冲突或无法解析返回 404；固定 sourceRevision/sourceDigest 不符返回 409；Content 服务失败返回 503。新候选在匹配时保存完整来源的 revision/digest，历史 nativeSourceSnapshot.libraryDigest 仍是批次摘要，不用于单条摘要比较。无时间线为 source_unavailable；缺字段或历史未固定版本为 partial_source；全部字段和固定版本均完整才为 full_source。保留全部镜头，不生成占位。
 
-商户仅接收允许的文本/镜头字段及 HTTPS 媒体链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&panel=source`，对应来源在 Task 7 商户详情面板展示原脚本拆解与原视频；当前仅定义该深链契约，尚未接入 UI。
+商户仅接收允许的文本/镜头字段及无 query、fragment、用户凭据、管理/内部路径的公开 HTTPS 链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。受控/OBS/签名视频返回 `/api/brands/:brandId/content-creatives/:creativeId/source/media?month=YYYY-MM`，代理每次重验品牌访问与固定来源，再校验精确主机白名单和公网 IPv4 DNS；连接固定解析出的地址，拒绝重定向及非视频内容。不转发浏览器 Cookie/Authorization，不回传上游签名、Location、Set-Cookie。代理默认最多 64 MiB、配置 `AMC_SOURCE_MEDIA_MAX_BYTES`，提前拒绝声明超限，chunked 超限中止传输。允许主机来自 `AMC_SOURCE_MEDIA_ALLOWED_HOSTS`（逗号分隔精确媒体主机）及已有 OBS 公开主机配置，无通配主机；IPv6-only 源暂不支持。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&panel=source`，对应来源在 Task 7 商户详情面板展示原脚本拆解与原视频；当前仅定义该深链契约，尚未接入 UI。
+
+Content 在完整序列化后按 UTF-8 字节检查 `AMC_SOURCE_EVIDENCE_MAX_BYTES`（默认 8 MiB，上限配置不超过 64 MiB），等于限额允许；超限为 413/library_evidence_too_large。Kanban S2S 同时检查 Content-Length 与逐块累计的真实字节，伪造/缺失长度不绕过限制；超限取消读取，来源接口保留明确 413 错误。时间线从不为满足限额而截断。
 
 GET/POST /api/brands/:id/content-creatives/:creativeId/revisions?month=YYYY-MM 提供读取及保存。保存接收 expectedRevision（当前卡片摘要）、idempotencyKey、白名单 patch。脚本保存与既有 AI 修改采用按 draft.update 校验角色权限，不要求 brand.update；canSaveAsNew / canOverwrite 使用同一内容编辑权限和品牌访问范围，覆盖还须符合保管人限制。保存事务锁定品牌知识记录并复核当前权限，追加版本和审计、更新唯一卡片。幂等键绑定品牌、卡片、月份、实际用户和载荷；同键异内容409；并发旧版本409。响应与后续 GET 指定 revisionId 回读相互核对。
 
