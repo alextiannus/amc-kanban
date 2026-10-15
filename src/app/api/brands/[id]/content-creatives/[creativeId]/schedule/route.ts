@@ -24,12 +24,9 @@ async function handle(request:Request,context:Context,remove:boolean) {
     if (Object.keys(body).some(key => !allowed.has(key))) return json({error:'invalid_schedule_input'},400)
     const month = new URL(request.url).searchParams.get('month') || ''
     const {expectedRevision} = body
-    const input = remove
-      ? {month,idempotencyKey:body.idempotencyKey}
-      : {month,idempotencyKey:body.idempotencyKey,platform:body.platform,scheduledAt:body.scheduledAt,...(body.accountId !== undefined?{accountId:body.accountId}:{})}
     const result = remove
-      ? await unscheduleCreative(auth.user,id,creativeId,expectedRevision,input)
-      : await scheduleCreative(auth.user,id,creativeId,expectedRevision,input)
+      ? await unscheduleCreative(auth.user,id,creativeId,expectedRevision,{month,idempotencyKey:body.idempotencyKey})
+      : await scheduleCreative(auth.user,id,creativeId,expectedRevision,{month,idempotencyKey:body.idempotencyKey,platform:body.platform,scheduledAt:body.scheduledAt,...(body.accountId !== undefined?{accountId:body.accountId}:{})})
     return json(result)
   } catch(error) {
     if (error instanceof CreativeRevisionError) return json({error:error.code},error.status)

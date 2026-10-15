@@ -13,6 +13,10 @@ AI 改写素材需求应保存到 patch.materialRequirements。对既有产物�
 
 复用 BrandMarketingSolution，kind=CREATIVE_ITEM，以品牌、月份和卡片 ID 的摘要为 period。版本0保留首次编辑时的策划原稿，作者未知标记 legacy_unknown；版本1起保存真实会话操作者、角色快照、当时有效 Crew PRINCIPAL 关系、父版本、原始来源 ID/已知内容快照及摘要。来源仅有策划摘录时明确 plan_snapshot，不能冒充 Content 原文或原创意准确发行版本。已有版本只读保留。
 
+Task 4 本地来源接口（未发布）：`GET /api/brands/:brandId/content-creatives/:creativeId/source?month=YYYY-MM` 通过既有修订读取服务校验品牌 READ 权限，再用服务凭据读取 Content 完整来源。真实来源 ID 冲突或无法解析返回 404；固定 sourceRevision/sourceDigest 不符返回 409；Content 服务失败返回 503。新候选在匹配时保存完整来源的 revision/digest，历史 nativeSourceSnapshot.libraryDigest 仍是批次摘要，不用于单条摘要比较。无时间线为 source_unavailable；缺字段或历史未固定版本为 partial_source；全部字段和固定版本均完整才为 full_source。保留全部镜头，不生成占位。
+
+商户仅接收允许的文本/镜头字段及 HTTPS 媒体链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&panel=source`，对应来源在 Task 7 商户详情面板展示原脚本拆解与原视频；当前仅定义该深链契约，尚未接入 UI。
+
 GET/POST /api/brands/:id/content-creatives/:creativeId/revisions?month=YYYY-MM 提供读取及保存。保存接收 expectedRevision（当前卡片摘要）、idempotencyKey、白名单 patch。脚本保存与既有 AI 修改采用按 draft.update 校验角色权限，不要求 brand.update；canSaveAsNew / canOverwrite 使用同一内容编辑权限和品牌访问范围，覆盖还须符合保管人限制。保存事务锁定品牌知识记录并复核当前权限，追加版本和审计、更新唯一卡片。幂等键绑定品牌、卡片、月份、实际用户和载荷；同键异内容409；并发旧版本409。响应与后续 GET 指定 revisionId 回读相互核对。
 
 保存不修改现有 ContentDraft、排期、发布或付费视频。不需要跨服务 outbox；制作/下游采用版本属于后续阶段。原整月接口不允许覆盖或删除已有追溯的卡片；改用逐条版本入口。新月份通过统一策划匹配请求创建待审核创意；包含已追溯创意的整月生成与覆盖入口统一拒绝，防止丢失人工修改。历史作者不猜测，首次快照不声称是原创作者投稿。
