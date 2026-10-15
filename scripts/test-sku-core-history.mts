@@ -14,7 +14,7 @@ import {CreativeRevisionError} from '../src/lib/brand-plan/creativeRevisionContr
 const compile=(path:string,deps:any)=>{const mod={exports:{} as any};const source=process.env.TASK5_BASELINE?execFileSync('git',['show',process.env.TASK5_BASELINE+':'+path],{encoding:'utf8'}):readFileSync(path,'utf8');new Function('require','module','exports',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports);return mod.exports}
 const actor=contract.actorFor('brand','human'),taskId='11111111-1111-4111-8111-111111111111'
 let currentRevision='a'.repeat(64),revoked=false,historyReads=0,saves=0,receiptReads=0,dispatches=0,fault:any=null,receipt:any=null
-const facts={id:'brand',name:'Brand',knowledge:{menuItems:[{id:'sku',name:'Alpha'}]}},catalog=sku.skuCatalog(facts)
+const facts={id:'brand',name:'Brand',description:'Original description',knowledge:{menuItems:[{id:'sku',name:'Alpha'}]}},catalog=sku.skuCatalog(facts)
 const source:any={inspirationCreativeId:'cre_source',sourceRevision:'s1',sourceDigest:'b'.repeat(64),evidenceStatus:'full_source',timeline:[{id:'shot-1',order:1,startSec:0,endSec:3}]}
 const binding={brandId:'brand',creativeId:'idea',month:'2026-11',expectedRevision:currentRevision,catalogDigest:sku.catalogDigest(catalog),sourceRevision:source.sourceRevision,sourceDigest:source.sourceDigest}
 const decision=sku.confirmSkuDecision({...binding,selectedSkuIds:['sku'],recommendations:[{skuId:'sku',skuName:'Alpha',roles:['hero'],rationale:'Fits source',sourceShotIds:['shot-1']}]},catalog,source,'human',currentRevision)
@@ -64,6 +64,19 @@ const service=compile('src/lib/ai-native/service.ts',{
 })
 const body={requestKey:'adopt-core-history',artifactDigest:artifact.digest}
 assert.equal((await service.readNativeTask('human','brand',taskId)).candidate.title,produced.title)
+assert.equal((await service.readNativeTask('human','brand',taskId)).contextState,'was_current')
+for(const field of ['name','description'] as const){
+  const original=facts[field];facts[field]='Changed '+field
+  const live=await app.runtime.get(actor,taskId,{history:true})
+  assert.notEqual(live.calls[0].result.contextDigest,fixedContext.contextDigest,'Core returns current authoritative facts digest without a revision conflict')
+  const changed=await service.readNativeTask('human','brand',taskId)
+  assert.equal(changed.contextState,'stale')
+  assert.equal(changed.candidate.title,produced.title)
+  assert.equal(changed.contextSnapshot.contextDigest,fixedContext.contextDigest)
+  assert.equal(changed.contextSnapshot.brand[field],original,'history remains the original immutable snapshot')
+  facts[field]=original
+}
+assert.equal((await service.readNativeTask('human','brand',taskId)).contextState,'was_current')
 const saved=await service.adoptNativeCandidate('human','brand',taskId,body)
 assert.equal(saved.receipt.id,'revision-saved');assert.equal(saves,1)
 // Real Core AgentRuntime.get invokes real ContextAssembler revalidation and fails.

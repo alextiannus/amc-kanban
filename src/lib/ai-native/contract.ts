@@ -15,7 +15,7 @@ export type PlanningBinding={id:string;month:string;platform:string;excludeCreat
 export type DiscoveryIntent = {skuWorkflow?:true;planningRequest?:PlanningBinding;kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;recoveryOfTaskId?:string;recoveryVersion?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type AutopilotIntent = {kind:'autopilot';runId:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type ConversationIntent = {contextSessionId?:string;currentPage?:UiPage;planningDraftContext?:string;planningScope?:PlanningScope;kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type SkuIntent = SkuBinding & {kind:'sku_proposal'|'creative_adaptation';decisionDigest?:string;requireMaterials?:boolean;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type SkuIntent = SkuBinding & {kind:'sku_proposal'|'creative_adaptation';decisionDigest?:string;autopilotRunId?:string;requireMaterials?:boolean;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent | SkuIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}

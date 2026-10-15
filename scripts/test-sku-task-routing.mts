@@ -89,6 +89,7 @@ lastIntent={...lastIntent,kind:'creative_adaptation',decisionDigest:confirmed.di
 artifactContent='{}';outcome=await verify('amc-creative/SKILL.md');assert.equal(outcome.verified,false);assert.match(outcome.feedback,/complete ordered shots/)
 artifactContent=JSON.stringify(produced);assert.equal((await verify('amc-creative/SKILL.md')).verified,true)
 // Actual executeAutopilot delegates to the same real adoption service.
+lastIntent={...lastIntent,autopilotRunId:'run'}
 const run:any={id:'run',enabled:true,current_owner:'human',current_account:'account',account_id:'account',daily_limit:2,current_limit:2,evidence:{adaptations:{idea:taskId}}}
 let legacyTask=true,unlocks=0
 const autopilotPool={connect:async()=>({query:async(sql:string)=>{if(sql.includes('unlock'))unlocks++;return {rows:[]}},release:()=>{}}),query:async(sql:string,args:any[])=>{

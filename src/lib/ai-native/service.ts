@@ -122,13 +122,13 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     try{existing=await intentBy(pool,actor,'request_key',key)}catch(error){if((error as any).statusCode!==404)throw error}
     if(existing){
       const saved=existing.intent
-      if(saved.kind!==kind||!('creativeId' in saved)||saved.creativeId!==body.creativeId||saved.month!==body.month||saved.expectedRevision!==body.expectedRevision||saved.goal!==common.goal||('decisionDigest' in saved?saved.decisionDigest:undefined)!==body.decisionDigest)throw nativeError('request_key_reused',409)
+      if(saved.kind!==kind||!('creativeId' in saved)||saved.creativeId!==body.creativeId||saved.month!==body.month||saved.expectedRevision!==body.expectedRevision||saved.goal!==common.goal||('decisionDigest' in saved?saved.decisionDigest:undefined)!==body.decisionDigest||('autopilotRunId' in saved?saved.autopilotRunId:undefined)!==autopilotRunId)throw nativeError('request_key_reused',409)
       intent=saved
     }else{
       const ctx=await readSkuContext({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
       if(!ctx.current.canOverwrite)throw nativeError('creative_edit_forbidden',403)
       if(body.expectedRevision!==ctx.binding.expectedRevision)throw nativeError('creative_revision_conflict',409)
-      intent={...common,...ctx.binding,kind,...(kind==='creative_adaptation'?{decisionDigest:body.decisionDigest}:{})}
+      intent={...common,...ctx.binding,kind,...(autopilotRunId?{autopilotRunId}:{}),...(kind==='creative_adaptation'?{decisionDigest:body.decisionDigest}:{})}
       await readBoundSkuContext({id:userId,type:'HUMAN'},{...ctx.binding,...(kind==='creative_adaptation'?{decisionDigest:body.decisionDigest}:{})})
     }
   }else if(kind==='conversation'){intent={...common,kind,...conversationInput(body)}}else if(kind==='autopilot'){if(key!==`autopilot-${body.runId}`)throw nativeError('autopilot_request_key_required');await autopilotRun(userId,brandId,body.runId);intent={...common,kind,runId:body.runId}}else if(kind==='creative'){
@@ -203,6 +203,15 @@ export async function nativeTaskHistory(app:Application,actor:NativeActor,id:str
     const store=app.tasks as unknown as {get(actor:NativeActor,id:string):Promise<TaskView>;history(actor:NativeActor,id:string):Promise<History>}
     const fixed=await store.get(actor,id),records=await store.history(actor,id)
     assertModelHistory(records,app.dispatcher)
+    if(!stale){
+      // Core returns the currently revalidated host digest. Compare it with the
+      // durable call's digest, never mutable copy or heuristics about text.
+      for(const call of records.calls.filter(c=>c.capability==='amc.context'&&c.status==='succeeded')){
+        const original=(call.result as {contextDigest?:unknown})?.contextDigest
+        const current=(live.calls.find(c=>c.id===call.id&&c.capability==='amc.context'&&c.status==='succeeded')?.result as {contextDigest?:unknown})?.contextDigest
+        if(typeof original!=='string'||!/^[a-f0-9]{64}$/.test(original)||current!==original)stale=true
+      }
+    }
     const calls=[]
     for(const call of records.calls){
       const capability=app.dispatcher.capabilities.get(call.capability)! as Capability<unknown,unknown,NativeActor>
@@ -250,7 +259,7 @@ async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHo
   const adoption=skuAdoption||(row.intent.kind==='creative'&&row.intent.adaptToBrand?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null)
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
   const contextSnapshot=row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'?history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result||null:null
-  return {...task,...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
+  return {...task,...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await taskHost(userId,brandId,id)
@@ -269,6 +278,9 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   // Core's scoped task store and immutable trusted binding prove ownership
   // without revalidating a source revision changed by our own successful save.
   const row=await intentForTask(pool,app,actor,id)
+  const boundRunId='autopilotRunId' in row.intent?row.intent.autopilotRunId:undefined
+  if(autopilotRunId&&boundRunId!==autopilotRunId)throw nativeError('autopilot_task_binding_mismatch',409)
+  if(boundRunId)await autopilotRun(userId,brandId,boundRunId)
   let adoptionRequest:{requestKey:string;payloadDigest:string}|undefined
   if(row.intent.kind==='creative_adaptation'){
     await app.runtime.state(actor,id)
@@ -294,7 +306,7 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   if(row.intent.kind==='sku_proposal')throw nativeError('human_sku_confirmation_required',409)
   if(row.intent.kind==='creative_adaptation'){
     const {result,ctx}=await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
-    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{...(autopilotRunId?{autopilotRunId}:{}),adoptionRequest,taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
+    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{...(boundRunId?{autopilotRunId:boundRunId}:{}),adoptionRequest,taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
     const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
     if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
     return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}
