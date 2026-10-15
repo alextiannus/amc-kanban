@@ -10,7 +10,7 @@ import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
-import { normalizeCreativeWorkspaceItem, validateCreativeWorkspacePatch } from './creativeWorkspaceContract.ts'
+import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch } from './creativeWorkspaceContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
@@ -46,10 +46,13 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
     db.brand.findUnique({where:{id:brandId},select:{id:true,name:true}}),
   ])
   if (revisionId && !revisions.length) throw new CreativeRevisionError('creative_revision_not_found',404)
+  const latest = revisionId || beforeVersion !== undefined
+    ? await db.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,period},orderBy:{version:'desc'}})
+    : revisions[0]
   const items = monthItems(creativeWorkspace(knowledge),month)
   const current = items.find(item=>item.id===creativeId) || null
   if (!current && !revisions.length) throw new CreativeRevisionError('creative_not_found_or_ambiguous',404)
-  return {ok:true, brand, creativeId, month, current, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:revisionId || beforeVersion !== undefined ? undefined : revisions[0]?.id,createdAt:revisionId || beforeVersion !== undefined ? undefined : revisions.at(-1)?.createdAt?.toISOString(),updatedAt:revisionId || beforeVersion !== undefined ? undefined : revisions[0]?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:revisions[0]?record(revisions[0].input).source:current?originalSource(current,new Date().toISOString()):null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
+  return {ok:true, brand, creativeId, month, current, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:latest?.id,createdAt:current.createdAt,updatedAt:latest?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:revisions[0]?record(revisions[0].input).source:current?originalSource(current,new Date().toISOString()):null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
 export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>) {
@@ -59,13 +62,14 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
   const copy=body.saveMode==='copy'
   if(copy&&seed)throw new CreativeRevisionError('invalid_script_save_mode')
   const sourceCreativeId=creativeId
-  const patch: Record<string, any> = ai ? validateCreativePatch(body.patch,month) : validateCreativeWorkspacePatch(body.patch)
+  const clientPatch = ai ? {patch:validateCreativePatch(body.patch,month)} : validateCreativeRevisionClientPatch(body.patch,month)
+  const patch: Record<string, any> = clientPatch.patch
   const feedback=validateCreativeFeedback(body.feedback)
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
   if(copy)creativeId=`script_${creativeDigest([brandId,month,sourceCreativeId,requestKey]).slice(0,32)}`
   // Instruction is trusted task metadata; excluding it preserves pre-upgrade retry hashes.
   const {instruction:_instruction,...hashAi}=ai||{}
-  const requestHash = creativeDigest({...(body.saveMode?{saveMode:body.saveMode,sourceCreativeId}:{}),expectedRevision:body.expectedRevision,patch,...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
+  const requestHash = creativeDigest({...(body.saveMode?{saveMode:body.saveMode,sourceCreativeId}:{}),expectedRevision:body.expectedRevision,patch,...('legacyProduct' in clientPatch?{legacyProduct:clientPatch.legacyProduct}:{}),...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
   const period = revisionPeriod(month,creativeId)
   const saved = await db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Internal library enrollment uses the same lock, revision chain and audit as manual edits.
@@ -152,6 +156,8 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       platformTargets:patch.platformTargets || (patch.platform ? [patch.platform] : normalized.platformTargets),
       source:normalized.source,skuDecision:normalized.skuDecision,
       schedule:normalized.schedule,derivedFromCreativeId:normalized.derivedFromCreativeId,
+      ...(normalized.legacy?{legacy:normalized.legacy}:{}),
+      ...('legacyProduct' in clientPatch?{product:clientPatch.legacyProduct}:{}),
       createdAt:normalized.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString(),
       ...((current.nativeDaily||current.planningRequest)&&!ai?.automaticDaily&&!ai?.autopilotRunId&&!ai?.planningRequest?{nativeReviewStatus:'reviewed'}:{})}
     // Calendar fields are historical input. A revision is an undated creative until

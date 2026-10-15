@@ -1,8 +1,13 @@
 import { prisma } from '@/lib/prisma'
+import { creativeWorkspace, monthItems, revisionPeriod, CREATIVE_REVISION_KIND } from './creativeRevisionContract.ts'
+import { normalizeCreativeWorkspaceItem, type CreativeWorkspaceItem } from './creativeWorkspaceContract.ts'
 
 export type CalendarCreativeItem = {
   nativeDaily?: {poolIdeaId:string;taskId:string}
   nativeReviewStatus?: string
+  legacy?: {date?:string;platform?:string;status?:string}
+  platformTargets?: string[]
+  schedule?: {draftId?:string} | null
   id?: string
   date?: string
   title?: string
@@ -38,6 +43,7 @@ export type CalendarCreativeOption = {
   postfastControls?: Record<string, unknown>
   productionFormats?: Array<'post' | 'video'>
   draftId?: string | null
+  workspaceItem?: CreativeWorkspaceItem
 }
 
 const SYNC_MARKER_PREFIX = 'brand-plan-calendar-item:'
@@ -64,7 +70,7 @@ function normalizePlatformSlug(value: unknown) {
   if (['tiktok', 'tik tok'].includes(raw)) return 'tiktok'
   if (['google', 'google_business', 'google maps', 'google_maps', 'gbp', 'gmb'].includes(raw)) return 'google_business'
   if (['facebook', 'fb'].includes(raw)) return 'facebook'
-  return raw || 'instagram'
+  return raw
 }
 
 function platformLabel(slug: string, fallback?: string) {
@@ -97,21 +103,22 @@ export function calendarSyncMarker(itemId: string) {
 export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCreativeOption | null {
   if(['archived','deleted','归档','已删除'].includes(text(item.status).toLowerCase()))return null
   const id = text(item.id)
-  const date = text(item.date)
-  if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
-  const platformSlug = normalizePlatformSlug(item.platformSlug || item.platform)
+  const date = text(item.legacy?.date || item.date)
+  if (!id) return null
+  const platform = text(item.platformTargets?.[0] || item.platform || item.legacy?.platform)
+  const platformSlug = normalizePlatformSlug(item.platformSlug || platform)
   const title = text(item.title) || '内容创意'
   const contentType = text(item.contentType) || '图文'
   const product = text(item.product) || '品牌内容'
   const planning = text(item.planning)
   const materialRequirements = stringList(item.materialRequirements)
-  const suggestedFolder = `${date}-${slugPart(title) || id.slice(0, 8)}`
+  const suggestedFolder = `${date ? `${date}-` : ''}${slugPart(title) || id.slice(0, 8)}`
   const storedAiTags = stringList(item.aiTags)
   const aiTags = Array.from(new Set([
     '内容创意素材',
     calendarSyncMarker(id),
-    date,
-    platformLabel(platformSlug, text(item.platform)),
+    ...(date ? [date] : []),
+    ...(platform ? [platformLabel(platformSlug, platform)] : []),
     contentType,
     product,
     ...stringList(item.matchedTags).slice(0, 6),
@@ -119,8 +126,8 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
   ]))
   const aiCaption = text(item.aiCaption) || [
     `对应创意：${title}`,
-    `计划日期：${date}`,
-    `发布平台：${platformLabel(platformSlug, text(item.platform))}`,
+    date ? `计划日期：${date}` : '',
+    platform ? `发布平台：${platformLabel(platformSlug, platform)}` : '',
     `内容形式：${contentType}`,
     product ? `主题产品：${product}` : '',
     planning ? `创意说明：${planning}` : '',
@@ -131,7 +138,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     id,
     date,
     title,
-    platform: platformLabel(platformSlug, text(item.platform)),
+    platform: platform ? platformLabel(platformSlug, platform) : '',
     platformSlug,
     contentType,
     product,
@@ -144,26 +151,24 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     aiCaption,
     postfastControls: objectValue(item.postfastControls),
     productionFormats: item.productionFormats,
+    draftId: text(item.schedule?.draftId) || null,
   }
 }
 
-export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month: string, items: CalendarCreativeItem[]) {
+export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month: string, items: CalendarCreativeItem[], db = prisma) {
   // Plan generation and creative approval do not authorize publishing. The
   // schedule endpoint owns draft creation; this legacy hook remains for callers
   // until their calendar workflow is migrated.
-  void brandId; void month; void items
+  void brandId; void month; void items; void db
   return { syncedCount: 0 }
 }
 
-export async function listOpenCalendarCreativeOptions(brandId: string, month: string) {
-  const knowledge = await prisma.brandKnowledge.findUnique({
+export async function listOpenCalendarCreativeOptions(brandId: string, month: string, db = prisma) {
+  const knowledge = await db.brandKnowledge.findUnique({
     where: { brandId },
-    select: { marketingSolution: true },
+    select: { marketingSolution: true, brandPlan: true },
   })
-  const solution = knowledge?.marketingSolution as { publishingCalendar?: { months?: Record<string, CalendarCreativeItem[]> } } | null
-  const items = Array.isArray(solution?.publishingCalendar?.months?.[month])
-    ? solution!.publishingCalendar!.months![month]
-    : []
+  const items = monthItems(creativeWorkspace(knowledge),month) as CalendarCreativeItem[]
   const options = items
     .map(calendarCreativeOption)
     .filter((item): item is CalendarCreativeOption => Boolean(item))
@@ -172,7 +177,14 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
   if (!options.length) return []
 
   const markers = options.map((item) => calendarSyncMarker(item.id))
-  const drafts = await prisma.contentDraft.findMany({
+  const revisions = await db.brandMarketingSolution.findMany({
+    where: { brandId, kind: CREATIVE_REVISION_KIND, period: { in: options.map(item => revisionPeriod(month,item.id)) } },
+    orderBy: { version: 'desc' },
+    select: { id: true, period: true, createdAt: true },
+  })
+  const latest = new Map<string,{id:string;createdAt:Date}>()
+  for (const row of revisions) if (!latest.has(row.period)) latest.set(row.period,row)
+  const drafts = await db.contentDraft.findMany({
     where: {
       brandId,
       OR: markers.map((marker) => ({ agentNote: { contains: marker, mode: 'insensitive' } })),
@@ -187,7 +199,12 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
     })
   })
 
-  return options.map((item) => ({ ...item, draftId: generated.get(calendarSyncMarker(item.id)) || null }))
+  return options.map((item) => {
+    const raw = items.find(value => value.id === item.id)
+    const revision = latest.get(revisionPeriod(month,item.id))
+    return { ...item, draftId: item.draftId || generated.get(calendarSyncMarker(item.id)) || null,
+      workspaceItem: normalizeCreativeWorkspaceItem(raw,{brandId,currentRevisionId:revision?.id,updatedAt:revision?.createdAt.toISOString()}) }
+  })
 }
 
 export async function submitAssetToCalendarCreativeRequirement(input: {

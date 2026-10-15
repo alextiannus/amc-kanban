@@ -1,4 +1,4 @@
-import { CreativeRevisionError, record } from './creativeRevisionContract.ts'
+import { CreativeRevisionError, record, validateCreativePatch } from './creativeRevisionContract.ts'
 
 export type CreativeStatus = 'idea_pending' | 'needs_materials' | 'needs_revision' | 'ready' | 'archived'
 export type CreativeSourceReference = {
@@ -81,19 +81,34 @@ export function validateCreativeWorkspacePatch(value: unknown): Partial<Pick<Cre
   return patch
 }
 
+const legacyClientFields = ['date', 'title', 'platform', 'contentType', 'product', 'planning', 'materialRequirements', 'aiCaption', 'aiTags']
+export function validateCreativeRevisionClientPatch(value: unknown, month: string): { patch: Record<string, any>; legacyProduct?: string } {
+  const input = record(value)
+  const keys = Object.keys(input)
+  if (keys.length !== legacyClientFields.length || !legacyClientFields.every(key => Object.hasOwn(input, key))) {
+    return { patch: validateCreativeWorkspacePatch(value) }
+  }
+  // The deployed MM editor submits every historical field. Accept that exact
+  // shape while mapping its platform and ignoring its date for scheduling.
+  const old = validateCreativePatch(input, month)
+  const { date: _date, platform: _platform, platformSlug: _platformSlug, product, ...canonical } = old
+  return { patch: validateCreativeWorkspacePatch({ ...canonical, platformTargets: [old.platform] }), legacyProduct: product }
+}
+
 export function normalizeCreativeWorkspaceItem(value: unknown, context: { brandId?: string; currentRevisionId?: string; createdAt?: string; updatedAt?: string } = {}): CreativeWorkspaceItem {
   const input = record(value)
   const rawStatus = string(input.status)
   const legacy: NonNullable<CreativeWorkspaceItem['legacy']> = {}
-  if (typeof input.date === 'string') legacy.date = input.date
-  if (typeof input.platform === 'string') legacy.platform = input.platform
-  if (rawStatus && !statuses.includes(rawStatus as CreativeStatus)) legacy.status = rawStatus
+  const storedLegacy = record(input.legacy)
+  if (typeof storedLegacy.date === 'string' || typeof input.date === 'string') legacy.date = string(storedLegacy.date || input.date)
+  if (typeof storedLegacy.platform === 'string' || typeof input.platform === 'string') legacy.platform = string(storedLegacy.platform || input.platform)
+  if (typeof storedLegacy.status === 'string' || rawStatus && !statuses.includes(rawStatus as CreativeStatus)) legacy.status = string(storedLegacy.status || rawStatus)
   const status: CreativeStatus = statuses.includes(rawStatus as CreativeStatus) ? rawStatus as CreativeStatus : rawStatus === 'archived' || rawStatus === '归档' ? 'archived' : 'idea_pending'
   const schedule = record(input.schedule)
   const completeSchedule = ['draftId', 'scheduledAt', 'platform', 'scheduledBy', 'scheduledAtRevisionId'].every(key => typeof schedule[key] === 'string' && schedule[key])
   return {
     id: string(input.id), brandId: string(context.brandId || input.brandId), title: string(input.title), status,
-    platformTargets: Array.isArray(input.platformTargets) ? list(input.platformTargets) : input.platform ? [string(input.platform)] : [],
+    platformTargets: Array.isArray(input.platformTargets) ? list(input.platformTargets) : input.platform || legacy.platform ? [string(input.platform || legacy.platform)] : [],
     contentType: string(input.contentType), planning: string(input.planning), materialRequirements: list(input.materialRequirements),
     aiCaption: string(input.aiCaption), aiTags: list(input.aiTags),
     source: input.source && typeof input.source === 'object' && !Array.isArray(input.source) ? input.source as CreativeSourceReference : null,

@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
-import { normalizeCreativeWorkspaceItem, validateCreativeWorkspacePatch } from '../src/lib/brand-plan/creativeWorkspaceContract.ts'
+import * as requireCrypto from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import ts from 'typescript'
+import { normalizeCreativeWorkspaceItem, validateCreativeWorkspacePatch, validateCreativeRevisionClientPatch } from '../src/lib/brand-plan/creativeWorkspaceContract.ts'
+import * as revisionContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
 
 const undated = normalizeCreativeWorkspaceItem({ id: 'idea-1', title: 'A', planning: 'B' })
 assert.equal(undated.schedule, null)
@@ -23,8 +27,78 @@ assert.deepEqual(legacy.platformTargets, ['Instagram'])
 const linked = normalizeCreativeWorkspaceItem({ id: 'linked', schedule: { draftId: 'draft-1', scheduledAt: '2026-11-01T10:00:00Z', platform: 'Instagram', scheduledBy: 'owner', scheduledAtRevisionId: 'revision-1' } })
 assert.equal(linked.schedule?.draftId, 'draft-1')
 assert.equal(linked.legacy, undefined)
+const legacyClient = validateCreativeRevisionClientPatch({ date: '2026-11-01', title: 'A', platform: 'Instagram', contentType: '图文', product: 'Lunch', planning: 'B', materialRequirements: [], aiCaption: '', aiTags: [] }, '2026-11')
+assert.deepEqual(legacyClient.patch.platformTargets, ['Instagram'])
+assert.equal(legacyClient.legacyProduct, 'Lunch')
+assert.equal('date' in legacyClient.patch, false)
+assert.throws(() => validateCreativeRevisionClientPatch({ date: '2026-11-01' }, '2026-11'), /invalid_creative_patch/)
+const editedLegacy = normalizeCreativeWorkspaceItem({ id: 'legacy', legacy: { date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' }, status: 'idea_pending', platformTargets: ['TikTok'] })
+assert.equal(editedLegacy.legacy?.date, '2026-11-01')
+assert.equal(editedLegacy.legacy?.status, 'planned_unimplemented')
+assert.deepEqual(editedLegacy.platformTargets, ['TikTok'])
 process.env.DATABASE_URL ||= 'postgresql://local@127.0.0.1:5432/amc_lineage_test_contract'
-const { syncConfirmedCalendarItemsToDrafts } = await import('../src/lib/brand-plan/calendarSync.ts')
-assert.deepEqual(await syncConfirmedCalendarItemsToDrafts('brand-1', '2026-11', [{ id: 'legacy', date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' }]), { syncedCount: 0 })
-assert.deepEqual(await syncConfirmedCalendarItemsToDrafts('brand-1', '2026-11', [{ id: 'undated', title: 'A', status: 'idea_pending' }]), { syncedCount: 0 })
-console.log('PASS: undated creative workspace normalization, editable patch boundary and read-only legacy inputs')
+const { calendarCreativeOption, listOpenCalendarCreativeOptions, syncConfirmedCalendarItemsToDrafts } = await import('../src/lib/brand-plan/calendarSync.ts')
+assert.equal(calendarCreativeOption({ id: 'undated', title: 'A', status: 'idea_pending' })?.id, 'undated')
+assert.equal(calendarCreativeOption({ id: 'legacy', title: 'A', legacy: { date: '2026-11-01', platform: 'Instagram' }, status: 'idea_pending' })?.date, '2026-11-01')
+const draftCalls: string[] = []
+const previousDraft = { id: 'existing-draft', caption: 'Keep me' }
+const db = { contentDraft: { create: () => draftCalls.push('create'), upsert: () => draftCalls.push('upsert'), update: () => draftCalls.push('update'), delete: () => draftCalls.push('delete') } }
+assert.deepEqual(await syncConfirmedCalendarItemsToDrafts('brand-1', '2026-11', [{ id: 'legacy', date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' }], db as any), { syncedCount: 0 })
+assert.deepEqual(await syncConfirmedCalendarItemsToDrafts('brand-1', '2026-11', [{ id: 'undated', title: 'A', status: 'idea_pending' }], db as any), { syncedCount: 0 })
+assert.deepEqual(draftCalls, [])
+assert.deepEqual(previousDraft, { id: 'existing-draft', caption: 'Keep me' })
+const listDb = {
+  brandKnowledge: { findUnique: async () => ({ marketingSolution: { publishingCalendar: { months: { '2026-11': [
+    { id: 'undated', title: 'New idea', status: 'idea_pending', platformTargets: ['TikTok'] },
+    { id: 'legacy', title: 'Edited old idea', status: 'idea_pending', legacy: { date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } },
+  ] } } } }) },
+  brandMarketingSolution: { findMany: async () => [{ id: 'revision-new', period: revisionContract.revisionPeriod('2026-11', 'undated'), createdAt: new Date('2026-11-02T00:00:00Z') }] },
+  contentDraft: { findMany: async () => [{ id: previousDraft.id, agentNote: 'unrelated', status: 'draft' }] },
+}
+const listed = await listOpenCalendarCreativeOptions('brand-1', '2026-11', listDb as any)
+assert.deepEqual(listed.map(item => item.id).sort(), ['legacy', 'undated'])
+assert.equal(listed.find(item => item.id === 'undated')?.date, '')
+assert.equal(listed.find(item => item.id === 'undated')?.workspaceItem?.currentRevisionId, 'revision-new')
+assert.equal(listed.find(item => item.id === 'legacy')?.workspaceItem?.legacy?.date, '2026-11-01')
+
+// Exercise the authorized revision read path with a precise persistence mock:
+// a historical-page query must still project the actual current revision ID.
+const current = { id: 'idea-1', brandId: 'brand-1', title: 'Edited', planning: 'Current', status: 'idea_pending', legacy: { date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } }
+const rows = [
+  { id: 'revision-1', version: 1, createdAt: new Date('2026-11-02T00:00:00Z'), input: { brand: { id: 'brand-1' } }, output: current },
+  { id: 'revision-0', version: 0, createdAt: new Date('2026-11-01T00:00:00Z'), input: { brand: { id: 'brand-1' } }, output: { id: 'idea-1', date: '2026-11-01', platform: 'Instagram', status: 'planned_unimplemented' } },
+]
+const deps: Record<string, any> = {
+  './matchingContract': {}, './revisionFeedback': {}, '../ai-native/creative-diversity.ts': {},
+  '../prisma.ts': { prisma: {} }, '../ai-native/facts.ts': {},
+  '../role-permissions/store.ts': {}, '../role-permissions/contract.ts': {},
+  '../auth-v2/types.ts': { principalFromUser: () => ({ globalRoles: ['ADMIN'] }) },
+  '../user-management/brandAccess.ts': { canUserAccessBrand: async () => true },
+  './creativeRevisionContract.ts': revisionContract,
+  './creativeWorkspaceContract.ts': await import('../src/lib/brand-plan/creativeWorkspaceContract.ts'),
+  './creativeCollections.ts': {},
+}
+const module = { exports: {} as any }
+new Function('require', 'module', 'exports', ts.transpileModule(readFileSync('src/lib/brand-plan/creativeRevisions.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(
+  (key: string) => { if (key === 'node:crypto') return requireCrypto; assert.ok(key in deps, `Unexpected dependency: ${key}`); return deps[key] }, module, module.exports,
+)
+const dbMock = {
+  user: { findUnique: async () => ({ id: 'owner', status: 'ACTIVE', nickname: 'Owner' }) },
+  brandKnowledge: { findUnique: async () => ({ marketingSolution: { publishingCalendar: { months: { '2026-11': [current] } } } }) },
+  brandMarketingSolution: {
+    findMany: async ({ where }: any) => rows.filter(row => (!where.id || row.id === where.id) && (!where.version || row.version < where.version.lt)),
+    findFirst: async () => rows[0],
+  },
+  brand: { findUnique: async () => ({ id: 'brand-1', name: 'Brand' }) },
+}
+const actor = { id: 'owner', type: 'HUMAN' }
+const full = await module.exports.readCreativeRevisions(actor, 'brand-1', '2026-11', 'idea-1', undefined, dbMock)
+assert.equal(full.workspaceItem.currentRevisionId, 'revision-1')
+assert.equal(full.workspaceItem.legacy.date, '2026-11-01')
+assert.equal(full.revisions[1].workspaceItem.currentRevisionId, 'revision-0')
+const historical = await module.exports.readCreativeRevisions(actor, 'brand-1', '2026-11', 'idea-1', 'revision-0', dbMock)
+assert.equal(historical.workspaceItem.currentRevisionId, 'revision-1')
+assert.equal(historical.revisions[0].workspaceItem.currentRevisionId, 'revision-0')
+const page = await module.exports.readCreativeRevisions(actor, 'brand-1', '2026-11', 'idea-1', undefined, dbMock, 1)
+assert.equal(page.workspaceItem.currentRevisionId, 'revision-1')
+console.log('PASS: undated/legacy list reads, controlled MM compatibility, current revision IDs, and zero implicit draft writes')
