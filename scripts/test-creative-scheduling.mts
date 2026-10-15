@@ -33,7 +33,7 @@ const tx: any = {
   user:{findUnique:async()=>({id:'owner',type:'HUMAN',role:'USER',status:'ACTIVE',nickname:'Owner'})},
   auditLog:{findFirst:async({where}:any)=>audits.find(a=>a.resourceId===where.resourceId&&a.metadata.requestKey===where.metadata.equals)||null,create:async({data}:any)=>{audits.push(data);return data}},
   brandKnowledge:{findUnique:async()=>knowledge,update:async({data}:any)=>{knowledge={...knowledge,marketingSolution:data.marketingSolution};return knowledge}},
-  contentDraft:{findUnique:async({where}:any)=>drafts.find(d=>d.id===where.id)||null,findMany:async({where}:any)=>drafts.filter(d=>d.brandId===where.brandId&&d.agentNote?.startsWith(where.agentNote.startsWith)),create:async({data}:any)=>{const d={id:`draft-${++draftSequence}`,...data};drafts.push(d);return d},update:async({where,data}:any)=>{const d=drafts.find(row=>row.id===where.id);Object.assign(d,data);return d}},
+  contentDraft:{findUnique:async({where}:any)=>drafts.find(d=>d.id===where.id)||null,findMany:async({where}:any)=>drafts.filter(d=>d.brandId===where.brandId&&(where.OR ?? [where]).some((clause:any)=>clause.agentNote?.startsWith?d.agentNote?.startsWith(clause.agentNote.startsWith):clause.agentNote?.contains?d.agentNote?.toLowerCase().includes(clause.agentNote.contains.toLowerCase()):false)),create:async({data}:any)=>{const d={id:`draft-${++draftSequence}`,...data};drafts.push(d);return d},update:async({where,data}:any)=>{const d=drafts.find(row=>row.id===where.id);Object.assign(d,data);return d}},
   socialAccount:{findMany:async()=>accountEnabled?[{id:'account-1',platformId:'instagram',handle:['real','not_connected','disabled'].includes(accountKind)?'real_handle':accountKind==='blank'?'':accountKind==='placeholder_named'?'placeholder':'unconfigured',postfastAccountId:accountKind==='not_connected'?null:'pf-account-1',connectionStatus:accountKind==='disabled'?'DISABLED':'CONNECTED',disabledReason:null}]:[]},
   brandMarketingSolution:{findFirst:async()=>revisions.at(-1)||null,create:async({data}:any)=>{const r={id:`revision-${revisions.length+1}`,...data};revisions.push(r);return r}},
 }
@@ -220,3 +220,35 @@ const afterExplicitDelete=await service.scheduleCreative(actor,'brand-a','idea-o
 assert.equal(drafts.length,1)
 assert.notEqual(afterExplicitDelete.draftId,scheduled.draftId)
 console.log('PASS: linked draft PATCH schedule fields and DELETE blocked; content/status edits remain allowed')
+
+// Historical dated plans may already have a marker-linked draft even though
+// they have no canonical schedule link. Explicit scheduling must adopt it.
+const legacyItem={id:'idea-one',title:'Historical idea',planning:'Original historical script',date:'2026-11-12',status:'planned_unimplemented',schedule:null}
+const resetLegacy=(rows:any[])=>{knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[{...legacyItem}]}}}};drafts.splice(0,drafts.length,...rows)}
+const legacyDraft={id:'legacy-1',brandId:'brand-a',accountId:'account-1',caption:'Merchant-edited historical copy',status:'pending_review',scheduledAt:new Date('2026-11-12T02:00:00Z'),agentNote:'Historical link brand-plan-calendar-item:idea-one'}
+resetLegacy([{...legacyDraft}])
+const adopted=await service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:'2026-11-18T02:00:00Z',platform:'instagram',idempotencyKey:'adopt-legacy-one'},db,now)
+assert.equal(adopted.draftId,'legacy-1')
+assert.equal(drafts.length,1)
+assert.equal(drafts[0].caption,'Merchant-edited historical copy')
+assert.equal(drafts[0].status,'pending_review')
+assert.match(drafts[0].agentNote,/^brand-plan-calendar-item:idea-one creative-revision:/)
+assert.equal(current().planning,'Original historical script')
+const legacyUnscheduled=await service.unscheduleCreative(actor,'brand-a','idea-one',adopted.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-adopted'},db,now)
+assert.equal(legacyUnscheduled.draftId,'legacy-1')
+assert.match(drafts[0].agentNote,/^brand-plan-creative-unscheduled:idea-one/)
+const legacyRescheduled=await service.scheduleCreative(actor,'brand-a','idea-one',legacyUnscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'reschedule-adopted'},db,now)
+assert.equal(legacyRescheduled.draftId,'legacy-1')
+assert.equal(drafts.length,1)
+assert.equal(drafts[0].status,'pending_review')
+
+for (const status of ['scheduled','publishing','published','failed']) {
+  resetLegacy([{...legacyDraft,id:`legacy-${status}`,status}])
+  await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:`adopt-locked-${status}`},db,now),'creative_schedule_locked')
+  assert.equal(drafts.length,1)
+  assert.equal(drafts[0].id,`legacy-${status}`)
+}
+resetLegacy([{...legacyDraft},{...legacyDraft,id:'legacy-2',agentNote:'brand-plan-calendar-item:idea-one'}])
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'adopt-ambiguous'},db,now),'creative_schedule_draft_ambiguous')
+assert.equal(drafts.length,2)
+console.log('PASS: unique legacy dated draft adopted; provider-facing/failed and ambiguous legacy candidates fail closed')

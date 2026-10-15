@@ -61,6 +61,19 @@ function unscheduledMarker(creativeId: string, revisionId: string) {
   return `brand-plan-creative-unscheduled:${creativeId} creative-revision:${revisionId}`
 }
 
+function hasLegacyDraftMarker(note: string | null, creativeId: string) {
+  if (!note) return false
+  const marker = calendarSyncMarker(creativeId).toLowerCase()
+  const value = note.toLowerCase()
+  let at = value.indexOf(marker)
+  while (at >= 0) {
+    const after = value.charAt(at + marker.length)
+    if (!after || !/[a-z0-9_-]/.test(after)) return true
+    at = value.indexOf(marker, at + marker.length)
+  }
+  return false
+}
+
 async function writeSchedule(actor: Actor, brandId: string, creativeId: string, expectedRevision: string, input: unknown, unschedule: boolean, db = prisma, now = new Date()) {
   const body = record(input)
   const {idempotencyKey} = validateRequest(expectedRevision,body)
@@ -96,12 +109,15 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
       if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
     } else if (schedule) {
       const markerPrefix = `brand-plan-creative-unscheduled:${creativeId} creative-revision:`
-      const candidates = await tx.contentDraft.findMany({where:{brandId,agentNote:{startsWith:markerPrefix}},select:{id:true,brandId:true,status:true,agentNote:true}})
+      const legacyMarker = calendarSyncMarker(creativeId)
+      const isCandidate = (note: string | null) => Boolean(note?.startsWith(markerPrefix) || normalized.legacy?.date && hasLegacyDraftMarker(note,creativeId))
+      const possible = await tx.contentDraft.findMany({where:{brandId,OR:[{agentNote:{startsWith:markerPrefix}},...(normalized.legacy?.date?[{agentNote:{contains:legacyMarker,mode:'insensitive' as const}}]:[])]},select:{id:true,brandId:true,status:true,agentNote:true}})
+      const candidates = possible.filter(row => isCandidate(row.agentNote))
       if (candidates.length > 1) throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
       if (candidates.length === 1) {
         await tx.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${candidates[0].id} FOR UPDATE`
         draft = await tx.contentDraft.findUnique({where:{id:candidates[0].id},select:{id:true,brandId:true,status:true,agentNote:true}})
-        if (!draft || draft.brandId !== brandId || !draft.agentNote?.startsWith(markerPrefix)) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
+        if (!draft || draft.brandId !== brandId || !isCandidate(draft.agentNote)) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
         if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
       }
     }
