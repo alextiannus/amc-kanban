@@ -47,7 +47,7 @@ export async function readCreativeSource(actor:{id:string;type:string},brandId:s
   const evidenceStatus = !timeline.length || scope === 'source_unavailable' ? 'source_unavailable'
     : scope === 'full_source' && completeTimeline && expectedRevision && expectedDigest ? 'full_source' : 'partial_source'
   const originalText = text(record(raw.sourceEvidence).originalText) || ''
-  const query = new URLSearchParams({brandId,sub:'ai_workspace',creativeId,panel:'source'})
+  const query = new URLSearchParams({brandId,sub:'ai_workspace',creativeId,month,panel:'source'})
   const video=sourceMediaLocation(raw.originalVideoUrl)
   const controlled=video && (video.search || sourceMediaAllowedHosts().has(video.hostname) || /\.myhuaweicloud\.com$/i.test(video.hostname))
   const videoUrl=video ? controlled ? `/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(creativeId)}/source/media?${new URLSearchParams({month})}` : video.href : null
