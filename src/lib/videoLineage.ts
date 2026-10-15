@@ -14,13 +14,13 @@ function evidenceSnapshot(value:any):any{
   if(source.snapshot){const snapshot=record(source.snapshot);result.snapshot=snapshot.sourceRevision?evidenceSnapshot(snapshot):Object.fromEntries(['inspirationCreativeId','inspirationSourceTitle','inspirationSourceSummary','creativeMechanism','videoScript'].filter(key=>typeof snapshot[key]==='string').map(key=>[key,snapshot[key]]))}
   return result
 }
-const pinnedKeys=['creativeId','creativeRevisionId','sourceReference','skuDecision','shotMappings','lineageWarning','assets','submittedScript'] as const
+const pinnedKeys=['creativeId','creativeRevisionId','sourceReference','skuDecision','shotMappings','lineageWarning','assets','submittedScript','originVideoJobId'] as const
 export async function pinVideoEditor(db:any,brandId:string,input:any,existing?:any) {
   if(!input||typeof input!=='object'||Array.isArray(input))throw fail('invalid_video_editor')
   if(typeof input.script!=='string'||input.script.length>20000||!Array.isArray(input.assets)||input.assets.length>40||JSON.stringify(input).length>8*1024*1024)throw fail('video_editor_too_large',413)
   if(existing){
     if(existing.brandId!==brandId||(input.creativeId||null)!==(existing.creativeId||null)||(input.creativeRevisionId||null)!==(existing.creativeRevisionId||null))throw fail('video_lineage_immutable',409)
-    return copy({...input,brandId,...Object.fromEntries(pinnedKeys.map(key=>[key,existing[key]??null]))})
+    return copy({...input,brandId,...Object.fromEntries(pinnedKeys.map(key=>[key,key==='originVideoJobId'?existing[key]:existing[key]??null]))})
   }
   if(!input.creativeId&&!input.creativeRevisionId)return copy({...input,brandId,creativeId:null,creativeRevisionId:null,sourceReference:null,skuDecision:null,shotMappings:[],lineageWarning:'legacy_evidence_unavailable'})
   if(typeof input.creativeId!=='string'||typeof input.creativeRevisionId!=='string'||input.creativeId.length>200||input.creativeRevisionId.length>200)throw fail('video_creative_revision_required',409)
@@ -41,10 +41,10 @@ export async function pinVideoEditor(db:any,brandId:string,input:any,existing?:a
 export function editorForLibrary(job:any,rows:any[]) {
   const metadata=job.plan?._mmVideoJob||{}
   const editor=metadata.editor||{brandId:job.brandId,script:metadata.script||job.voiceoverState?.script||job.idea,templateId:metadata.templateId||null,targetDurationSec:10,creativeId:job.creativeId,creativeRevisionId:null,sourceReference:null,skuDecision:null,shotMappings:[],lineageWarning:'legacy_evidence_unavailable',assets:rows}
-  return copy({...editor,missingAssetIds:(job.assetIds||[]).filter((id:string)=>!rows.some(a=>a.id===id))})
+  return copy({...editor,...(!editor.creativeRevisionId?{originVideoJobId:editor.originVideoJobId||job.id,submittedScript:editor.submittedScript||editor.script,lineageWarning:'legacy_evidence_missing',sourceReference:null,skuDecision:null,shotMappings:[]}:{}),missingAssetIds:(job.assetIds||[]).filter((id:string)=>!rows.some(a=>a.id===id))})
 }
 
 export function videoDraftForLibrary(job:any,rows:any[]){
   const metadata=job.plan?._mmVideoJob||{}
-  return {version:2,jobId:job.id,editor:editorForLibrary(job,rows),revisions:copy(metadata.revisions||[]),revisionsHasMore:Boolean(metadata.revisionsHasMore),savedAt:new Date().toISOString()}
+  return {version:2,jobId:job.id,editor:editorForLibrary(job,rows),revisions:copy(metadata.revisions||[]),revisionsHasMore:Boolean(metadata.revisionsHasMore),revisionsCursor:metadata.videoReceipt?.historyCursor||null,savedAt:new Date().toISOString()}
 }

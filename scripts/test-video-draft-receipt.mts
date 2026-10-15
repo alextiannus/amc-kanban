@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import ts from 'typescript'
 import {readFileSync} from 'node:fs'
 import {execFileSync} from 'node:child_process'
-import {pinVideoEditor,editorForLibrary} from '../src/lib/videoLineage.ts'
+import {pinVideoEditor,editorForLibrary,videoDraftForLibrary} from '../src/lib/videoLineage.ts'
 import {videoDraftReceipt} from '../src/lib/videoDraftReceipt.ts'
 import {verifyVideoReceipt,videoReceiptDigest} from '../src/lib/videoReceipt.ts'
 import {createHmac} from 'node:crypto'
@@ -14,7 +14,7 @@ const creative:any={id:'rev1',brandId:'brand',kind:'CREATIVE_ITEM',input:{creati
 const tx:any={$queryRaw:async()=>[],brandMarketingSolution:{findFirst:async({where}:any)=>where.id==='rev1'&&where.brandId==='brand'?creative:null},videoProductionJob:{findUnique:async({where}:any)=>rows.find(row=>row.id===where.id),upsert:async({where,create,update}:any)=>{writes++;let row=rows.find(row=>row.id===where.id);if(row)Object.assign(row,structuredClone(update));else rows.push(row=structuredClone(create));return row}}}
 const db:any={...tx,$transaction:async(fn:any)=>{const previous=queue;let release:any;queue=new Promise(r=>release=r);await previous;try{return await fn(tx)}finally{release()}}}
 tx.mediaAsset={findMany:async()=>[{id:'asset',url:'https://example.invalid/trusted.jpg',mimeType:'image/jpeg',aiCaption:null}]}
-const route=compile('src/app/api/content/video/jobs/route.ts',{'next/server':{NextResponse:Response},'@/lib/auth':{getSession:async()=>actor?{user:actor}:null,extractApiKey:()=>null,getAgentFromApiKey:async()=>null},'@/lib/brandAccess':{canSessionAccessBrandProject:async(brand:string)=>access&&brand==='brand'},'@/lib/prisma':{prisma:db},'@/lib/user-management/brandAccess':{canUserAccessBrand:async()=>access},'@/lib/videoReceipt':{verifyVideoReceipt,videoReceiptDigest},'@/lib/videoLineage':{pinVideoEditor},'@/lib/role-permissions/delegation':{requireActorPermission:async()=>{if(!permission)throw Object.assign(new Error('forbidden'),{status:403})}},'@/lib/role-permissions/request-origin':{allowedRoleWriteOrigin:()=>origin}})
+const route=compile('src/app/api/content/video/jobs/route.ts',{'next/server':{NextResponse:Response},'@/lib/auth':{getSession:async()=>actor?{user:actor}:null,extractApiKey:()=>null,getAgentFromApiKey:async()=>null},'@/lib/brandAccess':{canSessionAccessBrandProject:async(brand:string)=>access&&brand==='brand'},'@/lib/prisma':{prisma:db},'@/lib/user-management/brandAccess':{canUserAccessBrand:async()=>access},'@/lib/videoReceipt':{verifyVideoReceipt,videoReceiptDigest},'@/lib/videoLineage':{pinVideoEditor,editorForLibrary},'@/lib/role-permissions/delegation':{requireActorPermission:async()=>{if(!permission)throw Object.assign(new Error('forbidden'),{status:403})}},'@/lib/role-permissions/request-origin':{allowedRoleWriteOrigin:()=>origin}})
 const body:any={id:'video',brandId:'brand',creativeId:'idea',idea:'idea',assetIds:['asset'],plan:{_mmVideoJob:{editor:{brandId:'brand',creativeId:'idea',creativeRevisionId:'rev1',script:'actual script',assets:[{id:'asset',url:'https://example.invalid/a.jpg',mimeType:'image/jpeg'}],sourceReference:{libraryDigest:'FORGED'},skuDecision:{selectedSkuIds:['FORGED']},shotMappings:[{sourceShotId:'FORGED'}]}}}}
 const post=(payload:any=body)=>route.POST(new Request('https://kanban.test/api/content/video/jobs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}))
 assert.equal((await post()).status,200)
@@ -44,11 +44,23 @@ console.log('PASS actual video receipt route: authoritative round-trip, current 
 console.log('Real PostgreSQL multi-connection suite retained as test-video-draft-receipt-postgres.mts')
 
 let active=true,write=true
-const lineageAccess=compile('src/lib/videoLineageAccess.ts',{'./prisma':{prisma:{...tx,user:{findUnique:async()=>({status:active?'ACTIVE':'DISABLED'})}}},'./user-management/brandAccess':{canUserAccessBrand:async()=>write},'./role-permissions/delegation':{requireActorPermission:async()=>{if(!permission)throw Object.assign(new Error('forbidden'),{status:403})}},'./videoLineage':{pinVideoEditor}})
+const lineageAccess=compile('src/lib/videoLineageAccess.ts',{'./prisma':{prisma:{...tx,user:{findUnique:async()=>({status:active?'ACTIVE':'DISABLED'})}}},'./user-management/brandAccess':{canUserAccessBrand:async()=>write},'./role-permissions/delegation':{requireActorPermission:async()=>{if(!permission)throw Object.assign(new Error('forbidden'),{status:403})}},'./videoLineage':{pinVideoEditor,editorForLibrary}})
 const input=body.plan._mmVideoJob.editor
 assert.equal((await lineageAccess.readVideoLineage('owner','brand',input)).sourceReference.libraryDigest,'newest')
 active=false;await assert.rejects(()=>lineageAccess.readVideoLineage('owner','brand',input),/not_found/);active=true
 write=false;await assert.rejects(()=>lineageAccess.readVideoLineage('owner','brand',input),/not_found/);write=true
+rows.push({id:'legacy-video',brandId:'brand',createdBy:'owner',creativeId:'idea',idea:'original old script',assetIds:['asset'],plan:{}})
+const legacyInput={...input,creativeRevisionId:null,originVideoJobId:'legacy-video'}
+const legacy=await lineageAccess.readVideoLineage('owner','brand',legacyInput)
+assert.equal(legacy.lineageWarning,'legacy_evidence_missing');assert.equal(legacy.creativeRevisionId,null);assert.equal(legacy.sourceReference,null);assert.equal(legacy.submittedScript,'original old script')
+assert.equal((await post({...body,id:'legacy-video',plan:{_mmVideoJob:{editor:legacyInput}}})).status,200)
+assert.equal(editorForLibrary(rows.find(row=>row.id==='legacy-video'),[]).lineageWarning,'legacy_evidence_missing')
+await assert.rejects(()=>lineageAccess.readVideoLineage('other','brand',legacyInput),/not_found/)
+await assert.rejects(()=>lineageAccess.readVideoLineage('owner','other',legacyInput),/not_found/)
+await assert.rejects(()=>lineageAccess.readVideoLineage('owner','brand',{...legacyInput,originVideoJobId:'missing'}),/not_found/)
+await assert.rejects(()=>lineageAccess.readVideoLineage('owner','brand',{...legacyInput,originVideoJobId:'video'}),/immutable/)
+assert.equal((await post({...body,id:'fake-legacy',plan:{_mmVideoJob:{editor:{...legacyInput,originVideoJobId:undefined}}}})).status,409)
+console.log('PASS server-record legacy reopen/edit, no latest-source lookup, owner/brand and forged downgrade denial')
 const originalToken=process.env.CONTENT_SERVICE_INTERNAL_TOKEN
 try{
  process.env.CONTENT_SERVICE_INTERNAL_TOKEN='test-only-video-lineage-token'
@@ -77,5 +89,16 @@ try{
  process.env.CONTENT_SERVICE_INTERNAL_TOKEN='test-only-rotated-key'
  assert.equal((await post(signed)).status,200)
  assert.equal((await post({...signed,id:'unseen-old-key'})).status,409)
+ const content=compile('../amc-content/src/videoWorkspace/videoReceipt.ts',{'node:crypto':await import('node:crypto'),'../config.ts':{getConfig:()=>({})}})
+ const legacyReceipt=content.signVideoReceipt({projectId:'legacy-recreated-project',brandId:'brand',ownerId:'owner',editorActorId:'owner',editor:legacy,revisions:[],revisionsHasMore:false},process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
+ assert.equal((await post({...body,id:'legacy-recreated-job',plan:{basicVideoProjectId:'legacy-recreated-project',_mmVideoJob:{editor:legacy,revisions:[],videoReceipt:legacyReceipt}}})).status,200,'signed Content recreation uses original server legacy record')
+ const longHistory=Array.from({length:30},(_,i)=>({id:`long-${i}`,sceneId:'scene',method:'video_scene_edit',fields:[{field:'prompt',before:'中'.repeat(12000),after:'新'.repeat(12000)}],note:'n'.repeat(2000),instruction:'i'.repeat(4000)}))
+ const summaries=content.projectVideoHistory(longHistory)
+ const v2=content.signVideoReceipt({projectId:'large-history-project',brandId:'brand',ownerId:'owner',editorActorId:'owner',editor,revisions:summaries,revisionsHasMore:true,revisionsCursor:'signed-cursor'},process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
+ const large={...body,id:'large-history-video',plan:{basicVideoProjectId:'large-history-project',_mmVideoJob:{editor,revisions:summaries,revisionsHasMore:true,videoReceipt:v2}}}
+ assert.equal((await post(large)).status,200)
+ const reopened=videoDraftForLibrary(rows.find(row=>row.id==='large-history-video'),[])
+ assert.equal(reopened.revisions.length,30);assert.equal(reopened.revisions[29].fields[0].beforeLength,12000);assert.equal(reopened.revisionsHasMore,true);assert.equal(reopened.revisionsCursor,'signed-cursor')
+ assert.equal((await post({...large,plan:{...large.plan,_mmVideoJob:{...large.plan._mmVideoJob,videoReceipt:{...v2,historyCursor:'forged'}}}})).status,409)
 }finally{if(previousReceiptToken===undefined)delete process.env.CONTENT_SERVICE_INTERNAL_TOKEN;else process.env.CONTENT_SERVICE_INTERNAL_TOKEN=previousReceiptToken}
 console.log('PASS actual jobs route: signed Content history, immutable project, forged history rejection and rotation retry')

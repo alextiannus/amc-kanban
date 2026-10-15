@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
-import {pinVideoEditor} from '@/lib/videoLineage'
+import {pinVideoEditor,editorForLibrary} from '@/lib/videoLineage'
 import {requireActorPermission} from '@/lib/role-permissions/delegation'
 import {allowedRoleWriteOrigin} from '@/lib/role-permissions/request-origin'
 import {canUserAccessBrand} from '@/lib/user-management/brandAccess'
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${brandId+':'+id}))`
     const existing = await tx.videoProductionJob.findUnique({
       where: { id },
-      select: { brandId: true, createdBy:true, plan:true, creativeId:true },
+      select: { id:true,brandId: true, createdBy:true, plan:true, creativeId:true,idea:true,assetIds:true,mediaUrls:true },
     })
     if (existing && existing.brandId !== brandId) {
       throw Object.assign(new Error('Not found'),{status:404})
@@ -87,17 +87,25 @@ export async function POST(request: Request) {
       verifyVideoReceipt({receipt:metadata.videoReceipt,projectId,brandId,ownerId:actor.id,editor:legacy?null:metadata.editor,revisions:metadata.revisions||[],revisionsHasMore:Boolean(metadata.revisionsHasMore),existing:oldMetadata.videoReceipt})
       if(legacy&&metadata.editor?.creativeRevisionId)throw Object.assign(new Error('video_lineage_unverified'),{status:409})
       metadata.basicVideoProjectId=projectId
+      metadata.revisionsCursor=metadata.videoReceipt.historyCursor||null
       body.plan={...body.plan,basicVideoProjectId:projectId,_mmVideoJob:metadata}
     }else{
       metadata.revisions=[]
       metadata.revisionsHasMore=false
+      metadata.revisionsCursor=null
       delete metadata.videoReceipt
       body.plan={...body.plan,_mmVideoJob:metadata}
     }
     if(!metadata.editor&&body.creativeId&&!existing)throw Object.assign(new Error('video_lineage_required'),{status:409})
     if(existing&&(existing.creativeId||null)!==(body.creativeId||null))throw Object.assign(new Error('video_lineage_immutable'),{status:409})
     if(metadata.editor){
-      metadata.editor=await pinVideoEditor(tx,brandId,metadata.editor,oldEditor)
+      const original=existing||(!metadata.editor.creativeRevisionId&&metadata.editor.originVideoJobId?await tx.videoProductionJob.findUnique({where:{id:metadata.editor.originVideoJobId}}):null)
+      if(original&&(original.brandId!==brandId||original.createdBy!==actor.id))throw Object.assign(new Error('video_lineage_not_found'),{status:404})
+      const originalEditor=(original?.plan as any)?._mmVideoJob?.editor
+      const legacyExisting=original?.creativeId&&!originalEditor?.creativeRevisionId&&!metadata.editor.creativeRevisionId
+        ?editorForLibrary(original,await tx.mediaAsset.findMany({where:{brandId,id:{in:original.assetIds||[]}},select:{id:true,url:true,mimeType:true,aiCaption:true}})):null
+      if(legacyExisting&&!originalEditor?.assets)legacyExisting.assets=(original!.assetIds||[]).flatMap(id=>legacyExisting.assets.filter((asset:any)=>asset.id===id))
+      metadata.editor=await pinVideoEditor(tx,brandId,metadata.editor,legacyExisting||oldEditor)
       if(!oldEditor){
         const ids=metadata.editor.assets.map((asset:any)=>asset.id)
         if(ids.some((id:any)=>typeof id!=='string')||new Set(ids).size!==ids.length)throw Object.assign(new Error('invalid_video_assets'),{status:400})

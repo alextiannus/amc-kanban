@@ -27,3 +27,8 @@ await assert.rejects(()=>pinVideoEditor(db,'brand',{...input,creativeRevisionId:
 await assert.rejects(()=>pinVideoEditor(db,'brand',{...input,script:'x'.repeat(20001)}),/video_editor_too_large/)
 assert.equal((await pinVideoEditor(db,'brand',{brandId:'brand',script:'legacy',assets:[]})).lineageWarning,'legacy_evidence_unavailable')
 console.log('PASS video authoritative pins, immutable reopen, forgery, scope, size and legacy')
+const legacyRecord={id:'legacy-job',brandId:'brand',createdBy:'owner',creativeId:'creative',idea:'old script',assetIds:[],plan:{}}
+const legacyEditor=editorForLibrary(legacyRecord,[])
+assert.equal(legacyEditor.lineageWarning,'legacy_evidence_missing')
+assert.equal(legacyEditor.originVideoJobId,'legacy-job')
+await assert.rejects(()=>pinVideoEditor(db,'brand',{...input,creativeRevisionId:null,originVideoJobId:'legacy-job'}),/video_creative_revision_required/,'a client origin claim alone is not authority')
