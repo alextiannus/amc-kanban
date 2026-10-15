@@ -22,7 +22,9 @@ const item: any = {id:'idea-one',title:'Original',planning:'Original script',sta
 let knowledge: any = {marketingSolution:{publishingCalendar:{months:{'2026-11':[item]}}}}
 let permitted = true
 let accountEnabled = true
+let accountKind: 'real' | 'placeholder' | 'blank' | 'placeholder_named' | 'not_connected' | 'disabled' = 'real'
 const drafts: any[] = []
+let draftSequence=0
 const revisions: any[] = []
 const audits: any[] = []
 const actor = {id:'owner',type:'HUMAN'}
@@ -31,8 +33,8 @@ const tx: any = {
   user:{findUnique:async()=>({id:'owner',type:'HUMAN',role:'USER',status:'ACTIVE',nickname:'Owner'})},
   auditLog:{findFirst:async({where}:any)=>audits.find(a=>a.resourceId===where.resourceId&&a.metadata.requestKey===where.metadata.equals)||null,create:async({data}:any)=>{audits.push(data);return data}},
   brandKnowledge:{findUnique:async()=>knowledge,update:async({data}:any)=>{knowledge={...knowledge,marketingSolution:data.marketingSolution};return knowledge}},
-  contentDraft:{findUnique:async({where}:any)=>drafts.find(d=>d.id===where.id)||null,findMany:async({where}:any)=>drafts.filter(d=>d.brandId===where.brandId&&d.agentNote?.startsWith(where.agentNote.startsWith)),create:async({data}:any)=>{const d={id:`draft-${drafts.length+1}`,...data};drafts.push(d);return d},update:async({where,data}:any)=>{const d=drafts.find(row=>row.id===where.id);Object.assign(d,data);return d}},
-  socialAccount:{findMany:async()=>accountEnabled?[{id:'account-1',platformId:'instagram'}]:[]},
+  contentDraft:{findUnique:async({where}:any)=>drafts.find(d=>d.id===where.id)||null,findMany:async({where}:any)=>drafts.filter(d=>d.brandId===where.brandId&&d.agentNote?.startsWith(where.agentNote.startsWith)),create:async({data}:any)=>{const d={id:`draft-${++draftSequence}`,...data};drafts.push(d);return d},update:async({where,data}:any)=>{const d=drafts.find(row=>row.id===where.id);Object.assign(d,data);return d}},
+  socialAccount:{findMany:async()=>accountEnabled?[{id:'account-1',platformId:'instagram',handle:['real','not_connected','disabled'].includes(accountKind)?'real_handle':accountKind==='blank'?'':accountKind==='placeholder_named'?'placeholder':'unconfigured',postfastAccountId:accountKind==='not_connected'?null:'pf-account-1',connectionStatus:accountKind==='disabled'?'DISABLED':'CONNECTED',disabledReason:null}]:[]},
   brandMarketingSolution:{findFirst:async()=>revisions.at(-1)||null,create:async({data}:any)=>{const r={id:`revision-${revisions.length+1}`,...data};revisions.push(r);return r}},
 }
 const db:any = {$transaction:async(fn:any)=>fn(tx)}
@@ -64,8 +66,11 @@ assert.equal(drafts[0].scheduledAt.toISOString(),'2026-11-12T02:00:00.000Z')
 assert.match(drafts[0].agentNote,/idea-one.*revision-1/)
 assert.equal(current().planning,'Original script')
 assert.equal((await service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-12T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-one'},db,now)).replayed,true)
+assert.equal((await service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-12T02:00:00Z',platform:'ig',idempotencyKey:'schedule-one'},db,new Date('2026-12-01T00:00:00Z'))).replayed,true)
 assert.equal(drafts.length,1)
 await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-13T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-one'},db,now),'creative_request_key_reused')
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-13T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-one'},db,new Date('2026-12-01T00:00:00Z')),'creative_request_key_reused')
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-12T02:00:00Z',platform:'instagram',idempotencyKey:'past-new-key'},db,new Date('2026-12-01T00:00:00Z')),'invalid_schedule_time')
 await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-new'},db,now),'creative_revision_conflict')
 drafts[0].status='publishing'
 await expectCode(()=>service.unscheduleCreative(actor,'brand-a','idea-one',scheduled.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-locked'},db,now),'creative_schedule_locked')
@@ -84,6 +89,17 @@ accountEnabled=false
 await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-again'},db,now),'schedule_account_not_found')
 assert.equal(drafts.length,1)
 accountEnabled=true
+accountKind='placeholder'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-placeholder'},db,now),'schedule_account_not_found')
+accountKind='blank'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-blank'},db,now),'schedule_account_not_found')
+accountKind='placeholder_named'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-fake'},db,now),'schedule_account_not_found')
+accountKind='not_connected'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-unbound'},db,now),'schedule_account_not_found')
+accountKind='disabled'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-disabled'},db,now),'schedule_account_not_found')
+accountKind='real'
 const rescheduled=await service.scheduleCreative(actor,'brand-a','idea-one',unscheduled.expectedRevision,{month:'2026-11',scheduledAt:'2026-11-14T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-again-good'},db,now)
 assert.equal(rescheduled.draftId,scheduled.draftId)
 assert.equal(drafts.length,1)
@@ -120,7 +136,7 @@ const routeMod={exports:{} as any}
 new Function('require','module','exports',routeCompiled)((key:string)=>{assert(key in routeModules,key);return routeModules[key]},routeMod,routeMod.exports)
 const route=routeMod.exports
 const context={params:Promise.resolve({id:'brand-a',creativeId:'idea-one'})}
-const request=(method:string)=>new Request('http://localhost/api/brands/brand-a/content-creatives/idea-one/schedule?month=2026-11',{method,body:JSON.stringify({expectedRevision:start,idempotencyKey:'route-key',platform:'instagram',scheduledAt:null})})
+const request=(method:string)=>new Request('http://localhost/api/brands/brand-a/content-creatives/idea-one/schedule?month=2026-11',{method,body:JSON.stringify({expectedRevision:start,idempotencyKey:'route-key',...(method==='POST'?{platform:'instagram',scheduledAt:null}:{})})})
 authenticated=false
 assert.equal((await route.POST(request('POST'),context)).status,401)
 authenticated=true;originAllowed=false
@@ -132,22 +148,41 @@ assert.equal((await route.DELETE(request('DELETE'),context)).status,200)
 assert.equal(called,'DELETE')
 console.log('PASS: brand-scoped schedule route authentication, origin and method wiring')
 
+// Route + real service validator: expectedRevision is a transport field, not a
+// schedule input. Both methods must succeed, while unknown fields still fail.
+drafts[0].status='draft'
+const liveRouteMod={exports:{} as any}
+new Function('require','module','exports',routeCompiled)((key:string)=>key==='@/lib/brand-plan/creativeScheduling'?service:routeModules[key],liveRouteMod,liveRouteMod.exports)
+const liveRoute=liveRouteMod.exports
+const liveRequest=(method:string,revision:string,extra:any={})=>new Request('http://localhost/api/brands/brand-a/content-creatives/idea-one/schedule?month=2026-11',{method,body:JSON.stringify({expectedRevision:revision,idempotencyKey:`route-live-${method.toLowerCase()}`,...(method==='POST'?{platform:'instagram',scheduledAt:null}:{}),...extra})})
+const routePost=await liveRoute.POST(liveRequest('POST',contract.creativeDigest(current())),context)
+assert.equal(routePost.status,200)
+const routeResult=await routePost.json()
+assert.equal(routeResult.draftId,scheduled.draftId)
+assert.equal((await liveRoute.POST(liveRequest('POST',routeResult.expectedRevision,{unexpected:true}),context)).status,400)
+const routeDelete=await liveRoute.DELETE(liveRequest('DELETE',routeResult.expectedRevision),context)
+assert.equal(routeDelete.status,200)
+assert.equal((await liveRoute.DELETE(liveRequest('DELETE',contract.creativeDigest(current()),{unexpected:true}),context)).status,400)
+console.log('PASS: schedule route and real service validator compose for POST/DELETE; extra fields fail')
+
 // The legacy draft endpoint must not mutate or delete a linked creative's
 // schedule, while ordinary caption/status review remains usable.
 const draftRouteSource=readFileSync(new URL('../src/app/api/brands/[id]/drafts/[draftId]/route.ts',import.meta.url),'utf8')
 const draftRouteCompiled=ts.transpileModule(draftRouteSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
-const linkedDraft:any={id:'draft-linked',brandId:'brand-a',accountId:'account-1',scheduledAt:new Date('2026-11-14T02:00:00Z'),agentNote:'brand-plan-calendar-item:idea-one creative-revision:revision-1',status:'pending_review',updatedAt:new Date(),postfastControls:null,platformPostId:null,publishedAt:null}
-const linkedKnowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[{id:'idea-one',schedule:{draftId:'draft-linked'}}]}}}}
+const linkedDraft:any={id:scheduled.draftId,brandId:'brand-a',accountId:'account-1',scheduledAt:new Date('2026-11-14T02:00:00Z'),agentNote:'brand-plan-calendar-item:idea-one creative-revision:revision-1',status:'pending_review',updatedAt:new Date(),postfastControls:null,platformPostId:null,publishedAt:null}
+const linkedKnowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[{id:'idea-one',schedule:{draftId:scheduled.draftId}}]}}}}
+let draftDeleted=false
 const txDraft:any={
   $queryRaw:async()=>[],
   brandKnowledge:{findUnique:async()=>linkedKnowledge},
-  contentDraft:{findUnique:async()=>linkedDraft,update:async({data}:any)=>{Object.assign(linkedDraft,data);return {id:linkedDraft.id,caption:linkedDraft.caption,accountId:linkedDraft.accountId}},findUniqueOrThrow:async()=>linkedDraft,delete:async()=>{throw new Error('linked draft deleted')}},
+  contentDraft:{findUnique:async()=>linkedDraft,update:async({data}:any)=>{Object.assign(linkedDraft,data);return {id:linkedDraft.id,caption:linkedDraft.caption,accountId:linkedDraft.accountId}},findUniqueOrThrow:async()=>linkedDraft,delete:async()=>{draftDeleted=true;drafts.splice(drafts.findIndex(d=>d.id===linkedDraft.id),1);return linkedDraft}},
   actionItem:{upsert:async()=>({})},
 }
 const draftDb:any={
   brandKnowledge:txDraft.brandKnowledge,
   contentDraft:{findFirst:async()=>linkedDraft},
   socialAccount:{findFirst:async()=>({platformId:'instagram'})},
+  contentAssetRef:{findMany:async()=>[]},
   $transaction:async(fn:any)=>fn(txDraft),
 }
 const draftModules:Record<string,any>={
@@ -166,8 +201,8 @@ const draftModules:Record<string,any>={
 const draftMod={exports:{} as any}
 new Function('require','module','exports',draftRouteCompiled)((key:string)=>{assert(key in draftModules,key);return draftModules[key]},draftMod,draftMod.exports)
 const draftRoute=draftMod.exports
-const draftContext={params:Promise.resolve({id:'brand-a',draftId:'draft-linked'})}
-const draftRequest=(method:string,body?:any)=>new Request('http://localhost/api/brands/brand-a/drafts/draft-linked',{method,...(body?{body:JSON.stringify(body)}:{})})
+const draftContext={params:Promise.resolve({id:'brand-a',draftId:scheduled.draftId})}
+const draftRequest=(method:string,body?:any)=>new Request(`http://localhost/api/brands/brand-a/drafts/${scheduled.draftId}`,{method,...(body?{body:JSON.stringify(body)}:{})})
 for(const body of [{accountId:'account-2'},{scheduledAt:'2026-11-15T02:00:00Z'},{agentNote:'removed'}]){
   assert.equal((await draftRoute.PATCH(draftRequest('PATCH',body),draftContext)).status,409)
 }
@@ -175,4 +210,13 @@ assert.equal((await draftRoute.DELETE(draftRequest('DELETE'),draftContext)).stat
 assert.equal((await draftRoute.PATCH(draftRequest('PATCH',{caption:'Revised copy',status:'needs_revision'}),draftContext)).status,200)
 assert.equal(linkedDraft.caption,'Revised copy')
 assert.equal(linkedDraft.status,'needs_revision')
+linkedKnowledge.marketingSolution.publishingCalendar.months['2026-11'][0].schedule=null as any
+linkedDraft.agentNote='brand-plan-creative-unscheduled:idea-one creative-revision:revision-1'
+linkedDraft.scheduledAt=null
+assert.equal((await draftRoute.DELETE(draftRequest('DELETE'),draftContext)).status,200)
+assert.equal(draftDeleted,true)
+assert.equal(drafts.length,0)
+const afterExplicitDelete=await service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'schedule-after-delete'},db,now)
+assert.equal(drafts.length,1)
+assert.notEqual(afterExplicitDelete.draftId,scheduled.draftId)
 console.log('PASS: linked draft PATCH schedule fields and DELETE blocked; content/status edits remain allowed')

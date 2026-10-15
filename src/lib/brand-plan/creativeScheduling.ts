@@ -20,7 +20,7 @@ const requestKeyPattern = /^[a-zA-Z0-9_-]{8,100}$/
 const revisionPattern = /^[a-f0-9]{64}$/
 const EDITABLE_DRAFT_STATUSES = new Set(['draft','pending_review','planned_unimplemented','needs_materials','needs_revision','approved','rejected'])
 
-export function validateScheduleInput(value: unknown, now = new Date()): ScheduleInput {
+export function validateScheduleInput(value: unknown, now = new Date(), requireFuture = true): ScheduleInput {
   const input = record(value)
   if (Object.keys(input).some(key => !['platform','scheduledAt','idempotencyKey','accountId'].includes(key))) throw new CreativeRevisionError('invalid_schedule_input')
   const platform = typeof input.platform === 'string' ? platforms[input.platform.trim().toLowerCase()] : undefined
@@ -28,7 +28,7 @@ export function validateScheduleInput(value: unknown, now = new Date()): Schedul
   if (input.accountId !== undefined && (typeof input.accountId !== 'string' || !input.accountId.trim() || input.accountId.length > 200)) throw new CreativeRevisionError('invalid_schedule_input')
   if (input.scheduledAt !== null && (typeof input.scheduledAt !== 'string' || !/(?:Z|[+-]\d{2}:\d{2})$/i.test(input.scheduledAt))) throw new CreativeRevisionError('invalid_schedule_time')
   const scheduledAt = input.scheduledAt === null ? null : new Date(input.scheduledAt)
-  if (scheduledAt && (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= now.getTime())) throw new CreativeRevisionError('invalid_schedule_time')
+  if (scheduledAt && (!Number.isFinite(scheduledAt.getTime()) || requireFuture && scheduledAt.getTime() <= now.getTime())) throw new CreativeRevisionError('invalid_schedule_time')
   return {platform,scheduledAt:scheduledAt?.toISOString() ?? null,idempotencyKey:input.idempotencyKey,...(input.accountId?{accountId:input.accountId.trim()}:{})}
 }
 
@@ -64,10 +64,11 @@ function unscheduledMarker(creativeId: string, revisionId: string) {
 async function writeSchedule(actor: Actor, brandId: string, creativeId: string, expectedRevision: string, input: unknown, unschedule: boolean, db = prisma, now = new Date()) {
   const body = record(input)
   const {idempotencyKey} = validateRequest(expectedRevision,body)
+  const allowedKeys = unschedule ? ['month','idempotencyKey'] : ['month','idempotencyKey','platform','scheduledAt','accountId']
+  if (Object.keys(body).some(key => !allowedKeys.includes(key))) throw new CreativeRevisionError('invalid_schedule_input')
   const month = body.month
   validateCreativeAddress(month,creativeId)
-  const schedule = unschedule ? null : validateScheduleInput({platform:body.platform,scheduledAt:body.scheduledAt,idempotencyKey:body.idempotencyKey,...(body.accountId?{accountId:body.accountId}:{})},now)
-  if (unschedule && Object.keys(body).some(key => !['month','idempotencyKey'].includes(key))) throw new CreativeRevisionError('invalid_schedule_input')
+  const schedule = unschedule ? null : validateScheduleInput({platform:body.platform,scheduledAt:body.scheduledAt,idempotencyKey:body.idempotencyKey,...(body.accountId!==undefined?{accountId:body.accountId}:{})},now,false)
   const requestKey = creativeDigest([actor.id,idempotencyKey])
   const requestHash = creativeDigest({brandId,creativeId,month,expectedRevision,operation:unschedule?'unschedule':'schedule',schedule})
   return db.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -78,6 +79,7 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
       if (record(oldReceipt.metadata).requestHash !== requestHash) throw new CreativeRevisionError('creative_request_key_reused',409)
       return {...record(oldReceipt.newValue).result,replayed:true}
     }
+    if (schedule?.scheduledAt && new Date(schedule.scheduledAt).getTime() <= now.getTime()) throw new CreativeRevisionError('invalid_schedule_time')
     const knowledge = await tx.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}})
     const workspace = creativeWorkspace(knowledge)
     const current = findCreative(workspace,month,creativeId)
@@ -105,8 +107,16 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
     }
     let link: CreativeScheduleLink | null = null
     if (schedule) {
-      const accounts = await tx.socialAccount.findMany({where:{brandId,unboundAt:null,...(schedule.accountId?{id:schedule.accountId}:{})},select:{id:true,platformId:true}})
-      const matching = accounts.filter(account => platforms[account.platformId.toLowerCase()] === schedule.platform)
+      const accounts = await tx.socialAccount.findMany({where:{brandId,unboundAt:null,...(schedule.accountId?{id:schedule.accountId}:{})},select:{id:true,platformId:true,handle:true,postfastAccountId:true,connectionStatus:true,disabledReason:true}})
+      const matching = accounts.filter(account => {
+        const handle = account.handle?.trim().toLowerCase() || ''
+        const status = account.connectionStatus?.toUpperCase() || 'UNKNOWN'
+        return platforms[account.platformId.toLowerCase()] === schedule.platform
+          && handle !== '' && !['-','n/a','na','none','unknown'].includes(handle)
+          && !handle.startsWith('unconfigured') && !handle.startsWith('placeholder')
+          && Boolean(account.postfastAccountId)
+          && !account.disabledReason && !['DISABLED','DISCONNECTED','ERROR','EXPIRED'].includes(status)
+      })
       if (matching.length !== 1) throw new CreativeRevisionError(matching.length?'schedule_account_ambiguous':'schedule_account_not_found',409)
       const latest = await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId)},orderBy:{version:'desc'},select:{id:true}})
       const revision = latest || await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId),version:0,status:'BASELINE',generationMode:'LEGACY_SNAPSHOT',input:{creativeId,month,actor:null,origin:'legacy_unknown'},output:current as Prisma.InputJsonValue},select:{id:true}})

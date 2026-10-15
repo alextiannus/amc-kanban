@@ -17,11 +17,19 @@ async function handle(request:Request,context:Context,remove:boolean) {
     if (raw.length > 10000) return json({error:'schedule_payload_too_large'},413)
     let body: any
     try {body=JSON.parse(raw)} catch {return json({error:'invalid_json'},400)}
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json({error:'invalid_schedule_input'},400)
+    const allowed = remove
+      ? new Set(['expectedRevision','idempotencyKey'])
+      : new Set(['expectedRevision','idempotencyKey','platform','scheduledAt','accountId'])
+    if (Object.keys(body).some(key => !allowed.has(key))) return json({error:'invalid_schedule_input'},400)
     const month = new URL(request.url).searchParams.get('month') || ''
-    const input = {...body,month}
+    const {expectedRevision} = body
+    const input = remove
+      ? {month,idempotencyKey:body.idempotencyKey}
+      : {month,idempotencyKey:body.idempotencyKey,platform:body.platform,scheduledAt:body.scheduledAt,...(body.accountId !== undefined?{accountId:body.accountId}:{})}
     const result = remove
-      ? await unscheduleCreative(auth.user,id,creativeId,body?.expectedRevision,input)
-      : await scheduleCreative(auth.user,id,creativeId,body?.expectedRevision,input)
+      ? await unscheduleCreative(auth.user,id,creativeId,expectedRevision,input)
+      : await scheduleCreative(auth.user,id,creativeId,expectedRevision,input)
     return json(result)
   } catch(error) {
     if (error instanceof CreativeRevisionError) return json({error:error.code},error.status)

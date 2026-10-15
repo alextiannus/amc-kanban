@@ -76,14 +76,15 @@ function hasCreativeDraftMarker(note: unknown): note is string {
 
 async function isLinkedCreativeDraft(client: any, brandId: string, draftId: string, note: unknown) {
   if (!hasCreativeDraftMarker(note)) return false
-  // An unscheduled draft remains reserved for the creative so that the next
-  // explicit schedule reuses it instead of silently creating a duplicate.
-  if (note.startsWith('brand-plan-creative-unscheduled:')) return true
   const knowledge = await client.brandKnowledge.findUnique({where: {brandId}, select: {marketingSolution: true, brandPlan: true}})
   const solution = knowledge?.marketingSolution as any
   const plan = knowledge?.brandPlan as any
   const months = solution?.publishingCalendar?.months ?? plan?.publishingCalendar?.months ?? {}
   return Object.values(months).some((items: any) => Array.isArray(items) && items.some(item => item?.schedule?.draftId === draftId))
+}
+
+function isReservedCreativeDraft(note: unknown) {
+  return typeof note === 'string' && note.startsWith('brand-plan-creative-unscheduled:')
 }
 
 function changesCreativeSchedule(body: any, draft: {accountId: string | null; scheduledAt: Date | null; agentNote?: string | null}) {
@@ -182,7 +183,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
-  if (changesCreativeSchedule(body, existing) && await isLinkedCreativeDraft(prisma, brandId, draftId, existing.agentNote)) {
+  if (changesCreativeSchedule(body, existing) && (isReservedCreativeDraft(existing.agentNote) || await isLinkedCreativeDraft(prisma, brandId, draftId, existing.agentNote))) {
     return NextResponse.json({error: '请通过创意排期入口修改账号或时间。'}, {status: 409})
   }
 
@@ -383,7 +384,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (hasCreativeDraftMarker(existing.agentNote)) {
       await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
       const current = await tx.contentDraft.findUnique({where: {id: draftId}, select: {accountId: true, scheduledAt: true, agentNote: true}})
-      if (current && changesCreativeSchedule(body, current) && await isLinkedCreativeDraft(tx, brandId, draftId, current.agentNote)) {
+      if (current && changesCreativeSchedule(body, current) && (isReservedCreativeDraft(current.agentNote) || await isLinkedCreativeDraft(tx, brandId, draftId, current.agentNote))) {
         throw new CreativeDraftLinkConflict()
       }
     }
@@ -600,37 +601,12 @@ export async function DELETE(request: Request, { params }: Params) {
     }
   }
 
-  // Clean up AI-generated media assets associated with this draft
-  try {
-    const assetRefs = await prisma.contentAssetRef.findMany({
-      where: { draftId },
-      include: { asset: true }
-    })
-    for (const ref of assetRefs) {
-      const asset = ref.asset
-      if (asset && (asset.sourceType === 'designer' || asset.sourceType === 'postfast' || asset.sourceType === 'huawei_obs' || asset.aiCategory === 'optimized_media' || asset.aiCategory === 'watermarked_cover')) {
-        // Check if referenced by other drafts
-        const otherRefs = await prisma.contentAssetRef.count({
-          where: { assetId: asset.id, draftId: { not: draftId } }
-        })
-        if (otherRefs === 0) {
-          await prisma.mediaAsset.delete({ where: { id: asset.id } })
-          // Physically delete local file if any
-          if (asset.url.startsWith('/uploads/')) {
-            const fs = await import('fs')
-            const path = await import('path')
-            const localPath = path.join(process.cwd(), 'public', asset.url)
-            if (fs.existsSync(localPath)) {
-              fs.unlinkSync(localPath)
-            }
-          }
-          console.log(`Deleted orphaned AI asset ${asset.id} for draft ${draftId}`)
-        }
-      }
-    }
-  } catch (err) {
-    console.error(`Failed to clean up assets for deleted draft ${draftId}:`, err)
-  }
+  // Capture refs before cascade deletion, but defer physical cleanup until the
+  // guarded draft deletion commits; a concurrent schedule must not lose media.
+  const assetRefs = await prisma.contentAssetRef.findMany({where: {draftId}, include: {asset: true}}).catch((err: unknown) => {
+    console.error(`Failed to inspect assets for deleted draft ${draftId}:`, err)
+    return []
+  })
 
   try {
     await prisma.$transaction(async (tx: any) => {
@@ -644,6 +620,26 @@ export async function DELETE(request: Request, { params }: Params) {
   } catch (error) {
     if (error instanceof CreativeDraftLinkConflict) return NextResponse.json({error: '请先从创意排期中解除关联，再处理该草稿。'}, {status: 409})
     throw error
+  }
+  try {
+    for (const ref of assetRefs) {
+      const asset = ref.asset
+      if (asset && (asset.sourceType === 'designer' || asset.sourceType === 'postfast' || asset.sourceType === 'huawei_obs' || asset.aiCategory === 'optimized_media' || asset.aiCategory === 'watermarked_cover')) {
+        const otherRefs = await prisma.contentAssetRef.count({where: {assetId: asset.id, draftId: {not: draftId}}})
+        if (otherRefs === 0) {
+          await prisma.mediaAsset.delete({where: {id: asset.id}})
+          if (asset.url.startsWith('/uploads/')) {
+            const fs = await import('fs')
+            const path = await import('path')
+            const localPath = path.join(process.cwd(), 'public', asset.url)
+            if (fs.existsSync(localPath)) fs.unlinkSync(localPath)
+          }
+          console.log(`Deleted orphaned AI asset ${asset.id} for draft ${draftId}`)
+        }
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to clean up assets for deleted draft ${draftId}:`, err)
   }
   return NextResponse.json({ ok: true, deleted: true, draftId })
 }
