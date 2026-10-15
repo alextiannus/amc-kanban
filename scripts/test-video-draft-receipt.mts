@@ -92,13 +92,14 @@ try{
  const content=compile('../amc-content/src/videoWorkspace/videoReceipt.ts',{'node:crypto':await import('node:crypto'),'../config.ts':{getConfig:()=>({})}})
  const legacyReceipt=content.signVideoReceipt({projectId:'legacy-recreated-project',brandId:'brand',ownerId:'owner',editorActorId:'owner',editor:legacy,revisions:[],revisionsHasMore:false},process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
  assert.equal((await post({...body,id:'legacy-recreated-job',plan:{basicVideoProjectId:'legacy-recreated-project',_mmVideoJob:{editor:legacy,revisions:[],videoReceipt:legacyReceipt}}})).status,200,'signed Content recreation uses original server legacy record')
- const longHistory=Array.from({length:30},(_,i)=>({id:`long-${i}`,sceneId:'scene',method:'video_scene_edit',fields:[{field:'prompt',before:'中'.repeat(12000),after:'新'.repeat(12000)}],note:'n'.repeat(2000),instruction:'i'.repeat(4000)}))
+ const longHistory=Array.from({length:30},(_,i)=>({id:`long-${i}`,sceneId:i===0?'all-shots':'scene',affectedSceneIds:['scene','segment-2'],method:'video_scene_edit',fields:[{field:'prompt',before:'中'.repeat(12000),after:'新'.repeat(12000)}],note:'n'.repeat(2000),instruction:'i'.repeat(4000)}))
  const summaries=content.projectVideoHistory(longHistory)
  const v2=content.signVideoReceipt({projectId:'large-history-project',brandId:'brand',ownerId:'owner',editorActorId:'owner',editor,revisions:summaries,revisionsHasMore:true,revisionsCursor:'signed-cursor'},process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
  const large={...body,id:'large-history-video',plan:{basicVideoProjectId:'large-history-project',_mmVideoJob:{editor,revisions:summaries,revisionsHasMore:true,videoReceipt:v2}}}
  assert.equal((await post(large)).status,200)
  const reopened=videoDraftForLibrary(rows.find(row=>row.id==='large-history-video'),[])
  assert.equal(reopened.revisions.length,30);assert.equal(reopened.revisions[29].fields[0].beforeLength,12000);assert.equal(reopened.revisionsHasMore,true);assert.equal(reopened.revisionsCursor,'signed-cursor')
+ assert.equal(reopened.revisions[0].sceneId,'all-shots');assert.deepEqual(reopened.revisions[0].affectedSceneIds,['scene','segment-2'],'signed batch/segment associations survive library reopen')
  assert.equal((await post({...large,plan:{...large.plan,_mmVideoJob:{...large.plan._mmVideoJob,videoReceipt:{...v2,historyCursor:'forged'}}}})).status,409)
 }finally{if(previousReceiptToken===undefined)delete process.env.CONTENT_SERVICE_INTERNAL_TOKEN;else process.env.CONTENT_SERVICE_INTERNAL_TOKEN=previousReceiptToken}
 console.log('PASS actual jobs route: signed Content history, immutable project, forged history rejection and rotation retry')
