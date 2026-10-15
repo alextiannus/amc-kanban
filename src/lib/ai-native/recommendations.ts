@@ -1,4 +1,4 @@
-import {readBrandFacts,validateSkuReferences} from './facts'
+import {readBrandFacts} from './facts'
 import { prisma } from '../prisma'
 import { creativeDigest,validateCreativePatch } from '../brand-plan/creativeRevisionContract'
 import { validateCreativeWorkspacePatch } from '../brand-plan/creativeWorkspaceContract'
@@ -28,7 +28,7 @@ export async function saveRecommendation(userId:string,brandId:string,taskId:str
   const old=legacy?validateCreativePatch(body.patch,String(body.patch.date).slice(0,7)):null
   const patch=validateCreativeWorkspacePatch(legacy?{title:old!.title,planning:old!.planning,aiCaption:old!.aiCaption,materialRequirements:old!.materialRequirements,platformTargets:[old!.platformSlug]}:body.patch)
   if(!Array.isArray(patch.platformTargets)||patch.platformTargets.some(platform=>!['instagram','facebook','tiktok','xiaohongshu','google_business'].includes(platform))||(planningRequest&&patch.platformTargets.length!==1))throw nativeError('invalid_creative_platform')
-  if(intent.requireMaterials&&!patch.materialRequirements?.some((item:string)=>item.trim()))throw nativeError('material_requirements_required')
+  if(intent.requireMaterials&&!intent.skuWorkflow&&!patch.materialRequirements?.some((item:string)=>item.trim()))throw nativeError('material_requirements_required')
   if(!patch.planning)throw nativeError('reviewed_creative_required')
   const creativeId=`ai_${digest([taskId,candidate.sourceCreativeId]).slice(0,40)}`
   if(automaticDaily&&!intent.automaticDaily)throw nativeError('daily_task_required')
@@ -36,10 +36,13 @@ export async function saveRecommendation(userId:string,brandId:string,taskId:str
   const facts=await readBrandFacts(prisma,brandId)
   if(!facts)throw nativeError('brand_context_unavailable',404)
   const month=planningRequest?.month||(legacy?String(body.patch.date).slice(0,7):body.month)||new Intl.DateTimeFormat('en-CA',{timeZone:facts.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).format(new Date())
-  if(planningRequest&&!validateSkuReferences(candidate,facts))throw nativeError('recommendation_sku_mismatch',409)
+  if(!intent.skuWorkflow)throw nativeError('sku_confirmation_required_use_new_discovery',409)
+  // Discovery cannot sneak an adapted human/model patch across the SKU gate.
+  Object.assign(patch,{planning:candidate.planning,aiCaption:'',materialRequirements:[]})
   const skuIds=Array.isArray(candidate.skuIds)?candidate.skuIds.filter((id:string)=>typeof id==='string'):[]
   const selectedProducts=(facts.productCatalog||[]).filter((sku:any)=>skuIds.includes(sku.id)).map((sku:any)=>sku.name)
   const seed={...(planningRequest?{planningRequest,nativeReviewStatus:'pending_review'}:{}),...(automaticDaily?{nativeDaily:{poolIdeaId:intent.poolIdeaId,taskId},nativeReviewStatus:'pending_review',creativeDirection:source.creativeDirection}:{}),id:creativeId,platformTargets:patch.platformTargets,schedule:null,title:candidate.title,planning:candidate.planning,aiCaption:candidate.aiCaption,materialRequirements:candidate.materialRequirements,contentType:source.scriptContent?.kind==='video'?'视频':'图文',product:selectedProducts.join(' / ')||'品牌内容',skuIds,status:'idea_pending',inspirationCreativeId:candidate.sourceCreativeId,inspirationSourceTitle:source.sourceVideo?.title||source.sourcePost?.title||source.contentAngle,inspirationSourceSummary:source.sourcePost?.copySummary||source.contentAngle,selectedCreativeCandidateId:source.creativeCandidateId,sampleOriginalUrl:source.sourceVideo?.sourceUrl||source.sourcePost?.sourceUrl||'',sampleVideoUrl:source.sourceVideo?.videoUrl||'',sampleSourcePlatform:source.sourceVideo?.platform||source.sourcePost?.platform||'',nativeSourceSnapshot:{retrievedAt:library.retrievedAt,libraryDigest:library.libraryDigest,contentMatchRequestId:library.contentMatchRequestId,version:null,versionStatus:'snapshot_only',source},nativeCandidate:{taskId,artifact:ref,candidate}}
+  Object.assign(seed,{adaptationStatus:'awaiting_sku',skuDecision:null})
   const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,month,creativeId,{expectedRevision:creativeDigest(seed),idempotencyKey:`discovery-${digest([taskId,candidate.sourceCreativeId])}`,patch},undefined,{taskId,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,...(planningRequest?{planningRequest,contextPortfolio:library.contextPortfolio}:{}),...(automaticDaily?{automaticDaily:true,poolIdeaId:intent.poolIdeaId}:{})},seed)
   const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,month,creativeId,saved.receipt.id)
   if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)

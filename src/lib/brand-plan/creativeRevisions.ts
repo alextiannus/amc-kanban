@@ -12,10 +12,11 @@ import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, revisionSource, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch, validateCreativeWorkspacePatch } from './creativeWorkspaceContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
+import {confirmSkuDecision, assertConfirmedDecision, skuCatalog, type SkuSource, type SkuBinding} from './creativeSkuContract'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
-type AiProvenance = { contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;targetId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
+type AiProvenance = { skuBinding?:SkuBinding & {decisionDigest:string}; skuSource?:SkuSource|null; contextPortfolio?:any[]; instruction?:string;planningRequest?:{id:string;targetId:string;month:string}; autopilotRunId?:string;automaticDaily?:boolean;poolIdeaId?:string; taskId:string; agentId:string; requestedBy:string; contextDigest:string; artifact:{path:string;revision:number;digest:string} }
 
 async function canEditScript(db: any, user: any) {
   const principal = principalFromUser(user, 'session')
@@ -55,21 +56,21 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   return {ok:true, brand, creativeId, month, current, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:latest?.id,createdAt:current.createdAt,updatedAt:latest?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:current?revisionSource(current,record(latest?.input).source,new Date().toISOString()):revisions[0]?record(revisions[0].input).source:null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
-export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>) {
+export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>, skuConfirmation?:{input:any;source:SkuSource|null}) {
   validateCreativeAddress(month,creativeId)
   if (typeof body?.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision) || typeof body?.idempotencyKey !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.idempotencyKey)) throw new CreativeRevisionError('creative_revision_and_request_key_required')
   if(body?.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw new CreativeRevisionError('invalid_script_save_mode')
   const copy=body.saveMode==='copy'
   if(copy&&seed)throw new CreativeRevisionError('invalid_script_save_mode')
   const sourceCreativeId=creativeId
-  const clientPatch = ai ? {patch:seed?validateCreativeWorkspacePatch(body.patch):validateCreativePatch(body.patch,month)} : validateCreativeRevisionClientPatch(body.patch,month)
+  const clientPatch = skuConfirmation ? {patch:{}} : ai ? {patch:seed?validateCreativeWorkspacePatch(body.patch):validateCreativePatch(body.patch,month)} : validateCreativeRevisionClientPatch(body.patch,month)
   const patch: Record<string, any> = clientPatch.patch
   const feedback=validateCreativeFeedback(body.feedback)
   const requestKey = creativeDigest([actor.id,body.idempotencyKey])
   if(copy)creativeId=`script_${creativeDigest([brandId,month,sourceCreativeId,requestKey]).slice(0,32)}`
   // Instruction is trusted task metadata; excluding it preserves pre-upgrade retry hashes.
   const {instruction:_instruction,...hashAi}=ai||{}
-  const requestHash = creativeDigest({...(body.saveMode?{saveMode:body.saveMode,sourceCreativeId}:{}),expectedRevision:body.expectedRevision,patch,...('legacyProduct' in clientPatch?{legacyProduct:clientPatch.legacyProduct}:{}),...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
+  const requestHash = creativeDigest({...(body.saveMode?{saveMode:body.saveMode,sourceCreativeId}:{}),expectedRevision:body.expectedRevision,patch,...(skuConfirmation?{skuConfirmation:skuConfirmation.input}:{}),...('legacyProduct' in clientPatch?{legacyProduct:clientPatch.legacyProduct}:{}),...(feedback?{feedback}:{}),...(ai?{ai:hashAi}:{}),...(seed?{month,creativeId}:{})})
   const period = revisionPeriod(month,creativeId)
   const saved = await db.$transaction(async (tx: Prisma.TransactionClient) => {
     // Internal library enrollment uses the same lock, revision chain and audit as manual edits.
@@ -80,6 +81,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     // All saves for this brand serialize before reading the current card or version.
     await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
     const user = await authorize(tx,actor,brandId,true)
+    if(skuConfirmation&&user.type!=='HUMAN')throw new CreativeRevisionError('human_sku_confirmation_required',403)
     const existing = await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,...(seed||body.saveMode?{}:{period}),input:{path:['requestKey'],equals:requestKey}}})
     if (existing) {
       if (record(existing.input).requestHash !== requestHash) throw new CreativeRevisionError('creative_request_key_reused',409)
@@ -131,6 +133,11 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const current = seed || findCreative(workspace,month,sourceCreativeId)
     if(!copy&&current.scriptOwner?.id&&current.scriptOwner.id!==actor.id)throw new CreativeRevisionError('script_owner_required',403)
     if (creativeDigest(current) !== body.expectedRevision) throw new CreativeRevisionError('creative_revision_conflict',409)
+    // The same brand knowledge row contains the authoritative catalog. Validation
+    // happens under its write lock, after current permissions and CAS, before audit.
+    const skuDecision=skuConfirmation ? confirmSkuDecision(skuConfirmation.input,skuCatalog(await readBrandFacts(tx,brandId)),skuConfirmation.source,user.id,body.expectedRevision) : null
+    if(ai?.skuBinding)assertConfirmedDecision(current.skuDecision,ai.skuBinding,skuCatalog(currentFacts),ai.skuSource||null)
+    if(ai&&!ai.skuBinding&&!seed&&['awaiting_sku','sku_confirmed'].includes(current.adaptationStatus)&&patch.planning!==undefined&&patch.planning!==current.planning)throw new CreativeRevisionError('sku_confirmation_required_use_creative_adaptation',409)
     const brand = await tx.brand.findUnique({
       where: { id: brandId },
       select: { id: true, name: true, crew: { select: {
@@ -154,12 +161,14 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const next:Record<string,any> = {...current,...patch,brandId,
       status:patch.status || normalized.status,
       platformTargets:patch.platformTargets || (patch.platform ? [patch.platform] : normalized.platformTargets),
-      source:normalized.source,skuDecision:normalized.skuDecision,
+      source:normalized.source,skuDecision:skuDecision||normalized.skuDecision,
       schedule:normalized.schedule,derivedFromCreativeId:normalized.derivedFromCreativeId,
       ...(normalized.legacy?{legacy:normalized.legacy}:{}),
       ...('legacyProduct' in clientPatch?{product:clientPatch.legacyProduct}:{}),
       createdAt:normalized.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString(),
       ...((current.nativeDaily||current.planningRequest)&&!ai?.automaticDaily&&!ai?.autopilotRunId&&!ai?.planningRequest?{nativeReviewStatus:'reviewed'}:{})}
+    if(skuDecision){next.skuIds=skuDecision.selectedSkuIds;next.product=skuDecision.recommendations.map(r=>r.skuName).join(' / ')||'品牌内容';next.adaptationStatus='sku_confirmed'}
+    if(ai?.skuBinding)next.adaptationStatus='adapted'
     // Calendar fields are historical input. A revision is an undated creative until
     // the explicit scheduling service links a real draft and its revision.
     for(const key of ['date','platform','platformSlug'])delete next[key]
@@ -177,7 +186,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
       // card's historical calendar placement or status.
       for(const key of ['legacy','nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt'])delete next[key]
     }else if(body.saveMode==='overwrite'&&!next.scriptOwner){next.scriptOwner={id:user.id,name:user.nickname||user.id}}
-    if((next.nativeDaily||next.planningRequest)&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')
+    if((next.nativeDaily||next.planningRequest)&&next.adaptationStatus!=='awaiting_sku'&&!skuConfirmation&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')
     const automatic=ai?.automaticDaily===true||!!ai?.autopilotRunId||!!ai?.planningRequest
     const revisionActor=automatic?{id:'amc-mm-user-ai',name:'AMC-MM AI User Assistant',type:'AI',authorizedBy:user.id}:{id:user.id,name:user.nickname || user.id,type:user.type,roles:[user.role,...user.businessRoles.map((role:{role:string})=>role.role)]}
     const sourceReference=revisionSource(next,parentInput.source,new Date().toISOString())

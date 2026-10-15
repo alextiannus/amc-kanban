@@ -68,6 +68,14 @@ const service=mod.exports
 const current=()=>knowledge.marketingSolution.publishingCalendar.months['2026-11'][0]
 const expectCode=(run:()=>Promise<any>,code:string)=>assert.rejects(run,(error:any)=>error.code===code)
 const now=new Date('2026-10-16T00:00:00Z')
+for(const state of ['awaiting_sku','sku_confirmed']){
+  current().adaptationStatus=state
+  await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:`sku-gate-${state}`},db,now),'creative_adaptation_required')
+  assert.equal(drafts.length,0)
+}
+current().adaptationStatus='adapted'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'sku-no-materials'},db,now),'creative_adaptation_required')
+current().materialRequirements=['Film the confirmed source shots']
 const start=contract.creativeDigest(current())
 assert.equal(drafts.length,0)
 const scheduled=await service.scheduleCreative(actor,'brand-a','idea-one',start,{month:'2026-11',scheduledAt:'2026-11-12T10:00:00+08:00',platform:'instagram',idempotencyKey:'schedule-one'},db,now)

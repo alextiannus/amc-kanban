@@ -90,6 +90,7 @@ const deps: Record<string, any> = {
   './creativeRevisionContract.ts': revisionContract,
   './creativeWorkspaceContract.ts': await import('../src/lib/brand-plan/creativeWorkspaceContract.ts'),
   './creativeCollections.ts': {},
+  './creativeSkuContract': await import('../src/lib/brand-plan/creativeSkuContract.ts'),
 }
 const module = { exports: {} as any }
 new Function('require', 'module', 'exports', ts.transpileModule(readFileSync('src/lib/brand-plan/creativeRevisions.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText)(

@@ -27,14 +27,14 @@ try{
  // Test the real adapter via a transport fixture, including persisted IDs and library review metadata.
  const realFetch=globalThis.fetch
  globalThis.fetch=async(_url,init)=>{const request=JSON.parse(String(init?.body));assert.equal(request.requirePersistedCreative,true);assert.equal(request.merchantId,id);return Response.json({creativeCandidates:[source,{...source,inspirationCreativeId:'cre_unreviewed',libraryGap:{reviewStatus:'needs_content_review'}},{...source,inspirationCreativeId:'invented'}],contentLibraryGaps:[],libraryVersions:{},contentMatchRequestId:'transport-fixture'})}
- const intent:DiscoveryIntent={kind:'creative_discovery',requireMaterials:true,brandId:id,userId:id,goal:'Recommend brand-fit library ideas',requestKey:`discover-${randomUUID()}`,artifactPath:`work/${id}.json`}
+ const intent:DiscoveryIntent={kind:'creative_discovery',skuWorkflow:true,requireMaterials:true,brandId:id,userId:id,goal:'Recommend brand-fit source ideas awaiting SKU confirmation',requestKey:`discover-${randomUUID()}`,artifactPath:`work/${id}.json`}
  try{assert.equal((await brandLibrary(intent,facts)).sources.length,2)}finally{globalThis.fetch=realFetch}
- const value={kind:'creative_discovery',brandId:id,contextDigest:digest(facts),libraryDigest:library.libraryDigest,summary:'Craft suits handmade noodles.',recommendations:[{sourceCreativeId:source.inspirationCreativeId,title:'Handmade noodles',planning:'Show the brand’s actual preparation with its own footage.',aiCaption:'Made by hand.',materialRequirements:['Own preparation footage'],rationale:'Brand description confirms handmade noodles.'}]}
+ const value={kind:'creative_discovery',brandId:id,contextDigest:digest(facts),libraryDigest:library.libraryDigest,summary:'Craft source awaits SKU confirmation.',recommendations:[{sourceCreativeId:source.inspirationCreativeId,title:'Craft source',rationale:'Brand description confirms handmade noodles.'}]}
  assert.throws(()=>sourceExcerpt({...source,scriptContent:{kind:'video',body:'long'.repeat(30000),shots:Array.from({length:100},()=>({instruction:'long'.repeat(1000)}))}}),/library_evidence_too_large/,'oversized sources are rejected, never silently truncated')
  const sevenShots=Array.from({length:7},(_,index)=>({label:String(index),instruction:'scene '+index}));assert.deepEqual(sourceExcerpt({...source,scriptContent:{shots:sevenShots,voiceover:['one','two','three']}}).scriptContent,{shots:sevenShots,voiceover:['one','two','three']})
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],sourceCreativeId:'cre_forged'}]}),intent,library),/recommendation_source_mismatch/)
  assert.throws(()=>discoveryFrom(JSON.stringify({...value,libraryDigest:'0'.repeat(64)}),intent,library),/recommendation_source_mismatch/)
- assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],materialRequirements:[]}]}),intent,library),/recommendation_invalid/)
+ assert.throws(()=>discoveryFrom(JSON.stringify({...value,recommendations:[{...value.recommendations[0],planning:'premature final script'}]}),intent,library),/source_proposal_required/)
  const usage={inputTokens:100,outputTokens:30}
  const model={next:async(request:any)=>{
   const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded'),has=(n:string)=>calls.some((c:any)=>c.capability===n)
@@ -54,17 +54,18 @@ try{
  for(let n=0;n<20&&(await app.runtime.state(actor,receipt.id)).status==='queued';n++)await app.runtime.tick()
  const task=await app.runtime.get(actor,receipt.id,{history:true});assert.equal(task.status,'succeeded')
  const ref=task.result.artifacts[0],content=(await app.workspace.read(actor,ref)).content
- const body={sourceCreativeId:source.inspirationCreativeId,month:'2099-12',patch:{...value.recommendations[0],platformTargets:['instagram']}}
+ const projected=discoveryFrom(content,intent,library).recommendations[0]
+ const body={sourceCreativeId:source.inspirationCreativeId,month:'2099-12',patch:{title:projected.title,planning:projected.planning,aiCaption:projected.aiCaption,materialRequirements:projected.materialRequirements,platformTargets:['instagram']}}
  delete (body.patch as any).rationale;delete (body.patch as any).sourceCreativeId;body.patch.planning='Human-reviewed brand plan'
  const save=()=>saveRecommendation(id,id,task.id,intent,ref,content,library,body)
  const results=await Promise.all([save(),save()]);assert.equal(results[0].receipt.id,results[1].receipt.id)
- const saved=results[0];assert.equal(saved.verified,true);assert.equal(saved.creative?.planning,'Human-reviewed brand plan')
+ const saved=results[0];assert.equal(saved.verified,true);assert.equal(saved.creative?.planning,projected.planning);assert.equal(saved.receipt.content.adaptationStatus,'awaiting_sku');assert.equal(saved.receipt.content.skuDecision,null)
  assert.equal(saved.receipt.content.status,'idea_pending');assert.equal(saved.receipt.content.schedule,null);assert.equal(saved.receipt.content.date,undefined);assert.deepEqual(saved.receipt.content.platformTargets,['instagram'])
  assert.equal(saved.receipt.actor.id,id);assert.equal(saved.receipt.principals[0].userId,id);assert.equal(saved.receipt.source.creativeId,'cre_real_fixture')
  assert.equal(saved.receipt.source.snapshot.nativeSourceSnapshot.version,null)
  assert.equal(digest({...await readBrandFacts(prisma,id),creativePortfolio:[]}),digest({...facts,creativePortfolio:[]}),'saving adds portfolio evidence without changing merchant facts')
  const history=await readCreativeRevisions({id,type:'HUMAN'},id,saved.month,saved.creativeId)
- assert.equal(history.revisions.length,2);assert.equal(history.revisions[1].origin,'library_recommendation');assert.equal(history.revisions[1].content.planning,value.recommendations[0].planning)
+ assert.equal(history.revisions.length,2);assert.equal(history.revisions[1].origin,'library_recommendation');assert.equal(history.revisions[1].content.planning,projected.planning)
  assert.equal((await listOpenCalendarCreativeOptions(id,saved.month))[0].id,saved.creativeId)
  assert.equal((await recommendationReceipts(id,id,task.id))[0].creative?.id,saved.creativeId)
  await assert.rejects(()=>saveRecommendation(id,id,task.id,intent,ref,content,library,{...body,patch:{...body.patch,platformTargets:['tiktok']}}),/creative_request_key_reused/)

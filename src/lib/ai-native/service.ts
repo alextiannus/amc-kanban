@@ -20,6 +20,8 @@ import { conversationFrom, conversationInput, actorFor, dailyActorFor, candidate
 import { readCreativeRevisions, saveCreativeRevision } from '../brand-plan/creativeRevisions'
 import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
+import {readSkuContext,readBoundSkuContext} from '../brand-plan/creativeSkuDecision'
+import {validateSkuArtifact} from './sku-workflow'
 
 type Host={pool:Pool;taskPool?:Pool;lane?:RuntimeLane;app:Application;tools:string[];modelRevision:number}
 const globalState=globalThis as typeof globalThis & {amcNativeHost?:Promise<Host>;amcConversationHost?:Promise<Host>;amcNativeStartup?:boolean;amcNativeError?:string;amcNativeStopping?:boolean}
@@ -97,29 +99,40 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     if(body.recoveryOfTaskId&&!recoveryOfTaskId)throw nativeError('invalid_recovery_task')
     const recoveryVersion=recoveryOfTaskId?await applicationVersion():null
     const idea=await selectPoolIdea(brandId,body.poolIdeaId)
-    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'先读取amc-discovery/SKILL.md，以选中原创意为底稿做最小必要适配，主要替换当前品牌和真实产品，保留原钩子、情节转折、镜头顺序、节奏及口播句式，输出可直接审阅的完整脚本，包含开场、分镜/正文、口播、行动提示及对应素材需求。有产品目录时使用真实 SKU；无目录且原机制可保留时完成品牌通用稿并返回空 skuIds，不因空目录补问产品、不留待填内容。未知产品、价格、优惠与卖点仅局部中性化；若原机制无法成立则跳过该来源并说明缺口，不另写新创意；使用当前品牌名称。供主理人审阅后保存或添加素材。',requestKey:recoveryOfTaskId?recoveryRequestKey(brandId,idea.id,recoveryVersion!):automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`,...(recoveryOfTaskId?{recoveryOfTaskId,recoveryVersion}:{})}
+    body={kind:'creative_discovery',poolIdeaId:idea.id,goal:'读取 amc-discovery/SKILL.md 和 amc.library，仅选择适合品牌的来源候选，返回来源ID、标题和理由。等待人工确认 SKU 后才生成适配脚本；不得直接选品或生成最终脚本。',requestKey:recoveryOfTaskId?recoveryRequestKey(brandId,idea.id,recoveryVersion!):automaticDaily?`daily-general-v2-${digest([brandId,idea.id])}`:`pool-general-v2-${digest([brandId,userId,idea.id,await brandContext(actor)])}`,...(recoveryOfTaskId?{recoveryOfTaskId,recoveryVersion}:{})}
   }
   if(body?.kind==='creative_discovery'&&body.proactive===true){
     body={kind:'creative_discovery',goal:'根据当前品牌真实资料，从原创意库推荐最多三个适合该品牌的创意，供主理人审阅修改后制作或保存到发布计划。',requestKey:`proactive-${digest([brandId,userId,new Date().toISOString().slice(0,10),await brandContext(actor)])}`}
   }
-  if(body?.kind==='creative'&&body.adaptToBrand===true){
-    if(typeof body.creativeId!=='string'||typeof body.month!=='string')throw nativeError('invalid_creative_task')
-    const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
-    body={kind:'creative',adaptToBrand:true,creativeId:body.creativeId,month:body.month,expectedRevision:current.expectedRevision,goal:'以当前选中脚本为底稿做最小必要的品牌和产品替换，输出可直接审阅的完整适配稿，保留已有人工修改。先读取amc-creative/SKILL.md、品牌与productCatalog。有目录时选择真实SKU并写出其名称；无目录且原机制可保留时完成品牌通用稿，skuIds为空，并将product设为品牌内容，不因空目录补问产品、不留待填内容。planning包含当前品牌名称、开场、分镜/正文、口播、行动提示及对应素材需求。保留原钩子、人物关系、情节转折、镜头顺序、节奏、口播句式及CTA意图，不新增剧情或改成通用产品广告。未知产品、价格、优惠或卖点仅局部删除或中性化；关键机制因此无法成立时说明冲突，询问必要事实或是否允许改变该机制。素材需求沿用原镜头并替换拍摄主体，rationale简述替换和必要例外。只有本次明确任务不可缺少的事实才补问。供主理人修改后保存或制作。',requestKey:`adapt-general-v3-${digest([brandId,userId,body.creativeId,body.month,current.expectedRevision,await brandContext(actor),new Date().toISOString().slice(0,10)])}`}
-  }
+  if(body?.kind==='creative'&&body.adaptToBrand===true)throw nativeError('sku_confirmation_required_use_sku_proposal',409)
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
   const kind=body.kind||'creative'
-  if(!['creative','brand_brief','creative_discovery','autopilot','conversation'].includes(kind))throw nativeError('invalid_task_kind')
+  if(!['creative','brand_brief','creative_discovery','autopilot','conversation','sku_proposal','creative_adaptation'].includes(kind))throw nativeError('invalid_task_kind')
   const common={brandId,userId,goal:body.goal.trim(),requestKey:key,artifactPath:`work/${digest([actor,key])}.json`}
   let intent:NativeIntent
-  if(kind==='conversation'){intent={...common,kind,...conversationInput(body)}}else if(kind==='autopilot'){if(key!==`autopilot-${body.runId}`)throw nativeError('autopilot_request_key_required');await autopilotRun(userId,brandId,body.runId);intent={...common,kind,runId:body.runId}}else if(kind==='creative'){
+  if(kind==='sku_proposal'||kind==='creative_adaptation'){
+    let existing
+    try{existing=await intentBy(pool,actor,'request_key',key)}catch(error){if((error as any).statusCode!==404)throw error}
+    if(existing){
+      const saved=existing.intent
+      if(saved.kind!==kind||!('creativeId' in saved)||saved.creativeId!==body.creativeId||saved.month!==body.month||saved.expectedRevision!==body.expectedRevision||saved.goal!==common.goal||('decisionDigest' in saved?saved.decisionDigest:undefined)!==body.decisionDigest)throw nativeError('request_key_reused',409)
+      intent=saved
+    }else{
+      const ctx=await readSkuContext({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
+      if(!ctx.current.canOverwrite)throw nativeError('creative_edit_forbidden',403)
+      if(body.expectedRevision!==ctx.binding.expectedRevision)throw nativeError('creative_revision_conflict',409)
+      if(kind==='creative_adaptation'&&typeof body.decisionDigest!=='string')throw nativeError('sku_confirmation_required',409)
+      intent={...common,...ctx.binding,kind,...(kind==='creative_adaptation'?{decisionDigest:body.decisionDigest}:{})}
+      await readBoundSkuContext({id:userId,type:'HUMAN'},{...ctx.binding,...(kind==='creative_adaptation'?{decisionDigest:body.decisionDigest}:{})})
+    }
+  }else if(kind==='conversation'){intent={...common,kind,...conversationInput(body)}}else if(kind==='autopilot'){if(key!==`autopilot-${body.runId}`)throw nativeError('autopilot_request_key_required');await autopilotRun(userId,brandId,body.runId);intent={...common,kind,runId:body.runId}}else if(kind==='creative'){
     if(typeof body.creativeId!=='string'||typeof body.month!=='string'||typeof body.expectedRevision!=='string')throw nativeError('invalid_creative_task')
     if(body.draftScript!==undefined&&(typeof body.draftScript!=='string'||!body.draftScript.trim()||body.draftScript.length>20000))throw nativeError('invalid_draft_script')
     if(body.draftMaterialRequirements!==undefined&&(!Array.isArray(body.draftMaterialRequirements)||body.draftMaterialRequirements.length>100||body.draftMaterialRequirements.some((item:unknown)=>typeof item!=='string'||item.length>2000)))throw nativeError('invalid_draft_material_requirements')
     if(body.editMode!==undefined&&(body.editMode!=='materials'||typeof body.draftScript!=='string'||body.adaptToBrand))throw nativeError('invalid_creative_edit_mode')
     intent={...common,kind,...(body.editMode?{editMode:body.editMode}:{}),...(body.draftMaterialRequirements!==undefined?{draftMaterialRequirements:body.draftMaterialRequirements}:{}),...(body.draftScript!==undefined?{draftScript:body.draftScript}:{}),...(autopilotRunId?{autopilotRunId}:{}),requireMaterials:true,...(body.adaptToBrand?{adaptToBrand:true}:{}),creativeId:body.creativeId,month:body.month,expectedRevision:body.expectedRevision}
-  }else if(kind==='creative_discovery'){intent={...common,kind,requireMaterials:true,...(planningRequest?{planningRequest}:{}),...(body.poolIdeaId?{poolIdeaId:body.poolIdeaId}:{}),...(automaticDaily?{automaticDaily:true}:{})}}else{
+  }else if(kind==='creative_discovery'){intent={...common,kind,skuWorkflow:true,requireMaterials:true,...(planningRequest?{planningRequest}:{}),...(body.poolIdeaId?{poolIdeaId:body.poolIdeaId}:{}),...(automaticDaily?{automaticDaily:true}:{})}}else{
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
   }
@@ -128,11 +141,12 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if(intent.kind==='creative'){
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,intent.month,intent.creativeId)
     if(current.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
+    if(intent.editMode!=='materials'&&['awaiting_sku','sku_confirmed'].includes(current.current?.adaptationStatus))throw nativeError('sku_confirmation_required_use_creative_adaptation',409)
   }
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
   const row=await admitIntent(pool,actor,intent,host.lane||'default')
   if((row.runtime_lane||'default')!==(host.lane||'default'))return createNativeTask(userId,brandId,body,automaticDaily,autopilotRunId,planningRequest)
-  const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':intent.kind==='conversation'?'':'amc.operations')))},{actor,callId:key})
+  const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':['conversation','sku_proposal','creative_adaptation'].includes(intent.kind)?'':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
   const task=await publicTask(app,actor,receipt.id)
   if(intent.kind==='conversation')wakeConversationWorker(app)
@@ -192,18 +206,27 @@ async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHo
   const view=await nativeTaskHistory(app,actor,id),history=view.history,task=projectTask(history)
   // Read usage after the result snapshot: otherwise completion can race an earlier pending ledger read.
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
-  let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null
+  let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null,skuAdoption=null
   if(task.status==='succeeded'&&task.result){
     artifact=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)||null
     if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else if(row.intent.kind==='brand_brief')report=briefFrom(content,row.intent);else if(row.intent.kind==='conversation')report=conversationFrom(content,row.intent);else report=JSON.parse(content)}
   }
   const sourceInsight=conversationInsight(history.calls)
+  if(artifact&&(row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation')){
+    skuAdoption=row.intent.kind==='creative_adaptation'?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null
+    if(skuAdoption){candidate={...report,historical:true};report=null}
+    else{
+      const validated=await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,artifact)).content,row.intent)
+      if(row.intent.kind==='sku_proposal')report=validated.result
+      else{candidate=validated.result;report=null}
+    }
+  }
   const insight=row.intent.kind==='conversation'&&sourceInsight?{status:sourceInsight.status,reportVersionId:sourceInsight.reportVersionId||null,partial:sourceInsight.partial===true,generatedAt:typeof sourceInsight.generatedAt==='string'?sourceInsight.generatedAt:null}:null
   const operations=history.calls.find(c=>c.capability==='amc.operations'&&c.status==='succeeded')?.result as {draftTotal?:number;accountTotal?:number;operationsDigest?:string;retrievedAt?:string}|undefined
   const currentOperations=report&&typeof operations?.draftTotal==='number'&&typeof operations?.accountTotal==='number'?{draftTotal:operations.draftTotal,accountTotal:operations.accountTotal,retrievedAt:operations.retrievedAt,changed:operations.operationsDigest!==report.operationsDigest}:null
   const sourceCall=history.calls.find(c=>c.capability==='amc.creative'&&c.status==='succeeded')?.result as {current?:unknown}|undefined
   const adoptions=row.intent.kind==='creative_discovery'?await recommendationReceipts(userId,brandId,id):[]
-  const adoption=row.intent.kind==='creative'&&row.intent.adaptToBrand?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null
+  const adoption=skuAdoption||(row.intent.kind==='creative'&&row.intent.adaptToBrand?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null)
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
   return {...task,...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,kind:row.intent.kind,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(row.intent.kind==='creative'?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.adaptToBrand===true}:{})}
 }
@@ -229,7 +252,23 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
     if(!library)throw nativeError('recommendation_source_mismatch',409)
     return saveRecommendation(userId,brandId,id,row.intent,ref,(await (app.workspace as WorkspacePort).read(actor,ref)).content,library,body)
   }
+  if(row.intent.kind==='sku_proposal')throw nativeError('human_sku_confirmation_required',409)
+  if(row.intent.kind==='creative_adaptation'){
+    if(body.patch!==undefined||body.saveMode!==undefined)throw nativeError('adaptation_artifact_must_be_adopted_exactly')
+    const prior=await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId)
+    if(prior)return {...prior,replayed:true}
+    const {result,ctx}=await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
+    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
+    const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
+    if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
+    return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}
+  }
   if(row.intent.kind!=='creative')throw nativeError('creative_task_required',400)
+  if(row.intent.adaptToBrand){
+    const prior=await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId)
+    if(prior)return {...prior,replayed:true}
+    throw nativeError('sku_confirmation_required_use_creative_adaptation',409)
+  }
   const candidate=candidateFrom((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
   const reviewed=body.patch===undefined?candidate.patch:body.patch
   if(!reviewed||Object.keys(reviewed).some(k=>!['title','planning','aiCaption','aiTags','product','materialRequirements'].includes(k)))throw nativeError('candidate_patch_invalid')

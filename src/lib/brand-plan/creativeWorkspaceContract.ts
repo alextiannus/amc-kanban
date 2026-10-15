@@ -18,6 +18,12 @@ export type CreativeSourceReference = {
   timeline: Array<Record<string, unknown>>
 }
 export type CreativeSkuDecision = {
+  digest?: string
+  catalogDigest?: string
+  sourceRevision?: string | null
+  sourceDigest?: string | null
+  basedOnRevision?: string
+  mode?: 'source_adaptation' | 'ordinary_brand_content'
   status: 'proposed' | 'confirmed' | 'adjusted'
   recommendations: Array<{ skuId: string; skuName: string; roles: string[]; rationale: string; sourceShotIds: string[] }>
   selectedSkuIds: string[]
@@ -45,6 +51,7 @@ export type CreativeWorkspaceItem = {
   aiTags: string[]
   source: CreativeSourceReference | null
   skuDecision: CreativeSkuDecision | null
+  adaptationStatus?: 'awaiting_sku' | 'sku_confirmed' | 'adapted'
   currentRevisionId: string
   derivedFromCreativeId: string | null
   schedule: CreativeScheduleLink | null
@@ -113,6 +120,7 @@ export function normalizeCreativeWorkspaceItem(value: unknown, context: { brandI
     aiCaption: string(input.aiCaption), aiTags: list(input.aiTags),
     source: input.source && typeof input.source === 'object' && !Array.isArray(input.source) ? input.source as CreativeSourceReference : null,
     skuDecision: input.skuDecision && typeof input.skuDecision === 'object' && !Array.isArray(input.skuDecision) ? input.skuDecision as CreativeSkuDecision : null,
+    ...(['awaiting_sku','sku_confirmed','adapted'].includes(input.adaptationStatus)?{adaptationStatus:input.adaptationStatus as 'awaiting_sku'|'sku_confirmed'|'adapted'}:{}),
     currentRevisionId: string(context.currentRevisionId || input.currentRevisionId),
     derivedFromCreativeId: string(input.derivedFromCreativeId || input.copiedFrom?.creativeId) || null,
     schedule: completeSchedule ? schedule as CreativeScheduleLink : null,

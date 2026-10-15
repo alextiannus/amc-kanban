@@ -87,6 +87,7 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
     if (creativeDigest(current) !== expectedRevision) throw new CreativeRevisionError('creative_revision_conflict',409)
     const normalized = normalizeCreativeWorkspaceItem(current,{brandId})
     if (normalized.status === 'archived') throw new CreativeRevisionError('creative_archived',409)
+    if(!unschedule&&current.adaptationStatus&&(current.adaptationStatus!=='adapted'||!normalized.planning.trim()||!normalized.materialRequirements.some(item=>item.trim())))throw new CreativeRevisionError('creative_adaptation_required',409)
     const previous = normalized.schedule
     if (unschedule && !previous) throw new CreativeRevisionError('creative_not_scheduled',409)
     let draft: {id:string;brandId:string;status:string;agentNote:string|null} | null = null
