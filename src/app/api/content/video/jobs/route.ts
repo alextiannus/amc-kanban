@@ -34,10 +34,10 @@ export async function GET(request: Request) {
     const job = await prisma.videoProductionJob.findFirst({
       where: { id, ...(brandId ? { brandId } : {}) },
     })
-    if (!job) return NextResponse.json({ error: 'Video job not found' }, { status: 404 })
+    if (!job || !job.createdBy || job.createdBy !== actor.id) return videoJobNotFoundResponse()
 
     const ok = await canSessionAccessBrandProject(job.brandId, actor.id, actor.type, actor.role)
-    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!ok) return videoJobNotFoundResponse()
 
     return NextResponse.json({ success: true, job: serializeJob(job) })
   } catch (err: any) {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     if (!brandId) return NextResponse.json({ error: 'brandId is required' }, { status: 400 })
 
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
-    if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!ok) return videoJobNotFoundResponse()
 
     const job=await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
     if(!await canUserAccessBrand(brandId,actor.id,'WRITE'))throw Object.assign(new Error('Not found'),{status:404})
@@ -72,11 +72,10 @@ export async function POST(request: Request) {
       where: { id },
       select: { id:true,brandId: true, createdBy:true, plan:true, creativeId:true,idea:true,assetIds:true,mediaUrls:true },
     })
-    if (existing && existing.brandId !== brandId) {
+    if (existing && (existing.brandId !== brandId || !existing.createdBy || existing.createdBy !== actor.id)) {
       throw Object.assign(new Error('Not found'),{status:404})
     }
     await requireActorPermission(actor.id,'content.video-making.create',brandId)
-    if(existing?.createdBy&&existing.createdBy!==actor.id)throw Object.assign(new Error('video_owner_required'),{status:403})
     const oldEditor=(existing?.plan as any)?._mmVideoJob?.editor
     const metadata=body.plan?._mmVideoJob||{}
     const oldMetadata=(existing?.plan as any)?._mmVideoJob||{}
@@ -182,8 +181,8 @@ export async function POST(request: Request) {
 
 function serializeJob(job: any) {
   return {
-    createdBy:job.createdBy,
-    ...(job.voiceoverState || {}),
+    ...voiceoverState(job.voiceoverState || {}),
+    ownedByCurrentActor: true,
     id: job.id,
     brandId: job.brandId,
     creativeId: job.creativeId,
@@ -208,6 +207,10 @@ function serializeJob(job: any) {
     createdAt: job.createdAt instanceof Date ? job.createdAt.toISOString() : job.createdAt,
     updatedAt: job.updatedAt instanceof Date ? job.updatedAt.toISOString() : job.updatedAt,
   }
+}
+
+function videoJobNotFoundResponse() {
+  return NextResponse.json({ error: 'Not found' }, { status: 404 })
 }
 
 function statusFromError(err: any) {

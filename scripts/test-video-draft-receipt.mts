@@ -28,7 +28,7 @@ assert.equal((await post()).status,200);assert.equal(rows[0].plan._mmVideoJob.ed
 await Promise.all([post(),post()]);assert.equal(rows.length,1)
 assert.equal(editorForLibrary(rows[0],[]).script,'actual script');assert.equal(editorForLibrary(rows[0],[]).sourceReference.libraryDigest,'digest')
 const count=writes
-actor={...actor,id:'other'};assert.equal((await post()).status,403);actor.id='owner'
+actor={...actor,id:'other'};assert.equal((await post()).status,404);actor.id='owner'
 access=false;assert.equal((await post()).status,404);access=true
 permission=false;assert.equal((await post()).status,403);permission=true
 origin=false;assert.equal((await post()).status,403);origin=true
@@ -91,7 +91,15 @@ try{
  process.env.CONTENT_SERVICE_INTERNAL_TOKEN='test-only-rotated-key'
  assert.equal((await post(signed)).status,200)
  assert.equal((await post({...signed,id:'unseen-old-key'})).status,409)
- const content=compile('../amc-content/src/videoWorkspace/videoReceipt.ts',{'node:crypto':await import('node:crypto'),'../config.ts':{getConfig:()=>({})}})
+ const content=compile('../amc-content/src/videoWorkspace/videoReceipt.ts',{
+  'node:crypto':await import('node:crypto'),'../config.ts':{getConfig:()=>({})},
+  './shotTextContract.ts':{spokenTextHash:(value:string)=>videoReceiptDigest(value.normalize('NFKC').trim())},
+  '../inspiration/migrations.ts':{getInspirationPool:async()=>{throw new Error('not expected')}},
+  '../referenceVideo/repository.ts':{listVideoAssetChain:async()=>[],saveVideoAssetVersion:async()=>{}},
+  '../videoExecution/merchantVoices.ts':{measureAudioDuration:async()=>0},
+  '../errors.ts':{httpError:(status:number,message:string)=>Object.assign(new Error(message),{status})},
+  '../videoExecution/audioQuality.ts':{assertProductionSpeechProvider:()=>{}},
+ })
  const legacyReceipt=content.signVideoReceipt({projectId:'legacy-recreated-project',brandId:'brand',ownerId:'owner',editorActorId:'owner',editor:legacy,revisions:[],revisionsHasMore:false},process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
  assert.equal((await post({...body,id:'legacy-recreated-job',plan:{basicVideoProjectId:'legacy-recreated-project',_mmVideoJob:{editor:legacy,revisions:[],videoReceipt:legacyReceipt}}})).status,200,'signed Content recreation uses original server legacy record')
  const longHistory=Array.from({length:30},(_,i)=>({id:`long-${i}`,sceneId:i===0?'all-shots':'scene',affectedSceneIds:['scene','segment-2'],method:'video_scene_edit',fields:[{field:'prompt',before:'中'.repeat(12000),after:'新'.repeat(12000)}],note:'n'.repeat(2000),instruction:'i'.repeat(4000)}))

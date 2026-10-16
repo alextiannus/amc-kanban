@@ -573,6 +573,7 @@ Permanent QR contract:
 | ActionItem | brandId | Human / Agent | 是 | 审批和待办 |
 | ContentDraft | brandId | Human / Agent | 是 | autoPilot 决定审批或发布 |
 | MediaAsset | brandId | Human / Agent | 是 | OBS/PostFast/Lark/Local |
+| VideoProductionJob | brandId / createdBy | 创建者本人 | 是，仅本人任务 | 直接 GET/POST 同时校验品牌范围和不可变创建者；历史空创建者关闭访问 |
 | TopicFeed | brandId | Human / Agent | 是 | Markdown research docs |
 | SocialAccount | brandId | Human / Admin | 受限 | 凭证需谨慎返回 |
 | GameSession | brandId | Consumer / Brand | 否 | 门店活动参与记录 |
@@ -588,6 +589,7 @@ Permanent QR contract:
 7. 上传和外部请求失败应可恢复；品牌创建不应因可选 workspace 初始化失败而完全失败。
 8. `/api/brands/{id}/mcp/execute` 已关闭并返回 410；Agent 只使用 `/api/mcp`。
 9. 所有写操作以真实用户 actor 写入统一工作日志。
+10. `GET/POST /api/content/video/jobs` 对不存在、品牌拒绝、同品牌非创建者及缺少创建者统一返回相同 404；成功响应不返回 `createdBy`，只可返回 `ownedByCurrentActor: true`。既有任务更新不得替换 `createdBy`。
 
 ## 7. Open Questions / Follow-up
 
@@ -601,7 +603,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **276** 个 API 路径、**398** 个 HTTP 方法组合。
+共 **294** 个 API 路径、**426** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -631,6 +633,7 @@ Permanent QR contract:
 | GET | `/api/admin/model-tasks` |
 | GET, POST | `/api/admin/models` |
 | POST | `/api/admin/permissions` |
+| GET, POST | `/api/admin/platform-ai` |
 | GET, PATCH, POST | `/api/admin/postfast-keys` |
 | GET, POST | `/api/admin/prompt-templates` |
 | DELETE, PATCH | `/api/admin/prompt-templates/{id}` |
@@ -684,15 +687,21 @@ Permanent QR contract:
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
 | GET, POST | `/api/brands/{id}/ai/autopilot` |
+| POST | `/api/brands/{id}/ai/bug-reports` |
+| GET | `/api/brands/{id}/ai/bug-reports/{reportId}` |
 | GET | `/api/brands/{id}/ai/ideas` |
 | GET, POST | `/api/brands/{id}/ai/preference` |
 | GET, POST | `/api/brands/{id}/ai/tasks` |
 | GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
 | POST | `/api/brands/{id}/ai/tasks/{taskId}/adopt` |
+| POST | `/api/brands/{id}/ai/tasks/{taskId}/planning` |
 | GET | `/api/brands/{id}/amc-credit` |
 | GET | `/api/brands/{id}/analytics` |
 | GET, POST | `/api/brands/{id}/apify-sync` |
 | GET, PATCH, POST | `/api/brands/{id}/asset-analysis` |
+| GET, POST | `/api/brands/{id}/asset-collections` |
+| DELETE, GET | `/api/brands/{id}/asset-collections/{collectionId}` |
+| DELETE, POST | `/api/brands/{id}/asset-collections/{collectionId}/items` |
 | GET, PATCH, POST | `/api/brands/{id}/assets` |
 | DELETE, PATCH | `/api/brands/{id}/assets/{assetId}` |
 | POST | `/api/brands/{id}/assets/{assetId}/design` |
@@ -709,6 +718,12 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/content-calendar/generate` |
 | GET | `/api/brands/{id}/content-creatives` |
 | GET, POST | `/api/brands/{id}/content-creatives/{creativeId}/revisions` |
+| DELETE, GET, POST | `/api/brands/{id}/content-creatives/{creativeId}/schedule` |
+| GET, POST | `/api/brands/{id}/content-creatives/{creativeId}/sku-decision` |
+| GET | `/api/brands/{id}/content-creatives/{creativeId}/source` |
+| GET | `/api/brands/{id}/content-creatives/{creativeId}/source/media` |
+| GET, POST | `/api/brands/{id}/content-creatives/feedback` |
+| GET, POST | `/api/brands/{id}/content-creatives/matching` |
 | POST | `/api/brands/{id}/copywriter-log` |
 | POST | `/api/brands/{id}/copywriter/bulk-generate` |
 | POST | `/api/brands/{id}/copywriter/voice-chat` |
@@ -774,6 +789,7 @@ Permanent QR contract:
 | POST | `/api/content/video/assemble` |
 | POST | `/api/content/video/create` |
 | GET, POST | `/api/content/video/jobs` |
+| GET | `/api/content/video/lineage` |
 | GET | `/api/content/video/presets` |
 | POST | `/api/content/video/status` |
 | POST | `/api/copywriter/generate-hooks` |
@@ -801,6 +817,7 @@ Permanent QR contract:
 | GET | `/api/game/status` |
 | POST | `/api/game/tasks` |
 | POST | `/api/game/tasks/override` |
+| GET | `/api/health/version` |
 | GET, POST | `/api/inbox-state` |
 | GET | `/api/integrations/amc-growth/sso/start` |
 | GET | `/api/integrations/extension/download` |
@@ -830,9 +847,11 @@ Permanent QR contract:
 | POST | `/api/internal/content-context` |
 | POST | `/api/internal/content-lab-admin` |
 | POST | `/api/internal/content-log` |
+| POST | `/api/internal/content/video-lineage` |
 | GET, POST | `/api/internal/global-text` |
 | POST | `/api/internal/llm-generate` |
 | POST | `/api/internal/menu-service` |
+| GET, POST | `/api/internal/merchant-documents` |
 | GET, POST | `/api/internal/model-operations` |
 | GET, POST | `/api/internal/model-runtime` |
 | POST | `/api/internal/video-generate` |
@@ -850,6 +869,7 @@ Permanent QR contract:
 | GET | `/api/meta/avatar-guide` |
 | GET | `/api/meta/openapi` |
 | GET | `/api/meta/skills/amc-integrations` |
+| GET | `/api/meta/skills/amc-marketing-expert` |
 | GET | `/api/meta/sop` |
 | GET, PATCH, POST | `/api/mm/bd/leads` |
 | POST | `/api/mm/bd/onboard` |
