@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import {skuCatalog, catalogDigest, proposalFrom, adaptationFrom, confirmSkuDecision} from '../src/lib/brand-plan/creativeSkuContract.ts'
 import {skuFacts,validateSkuReferences} from '../src/lib/ai-native/facts.ts'
 const catalog=skuCatalog({knowledge:{menuItems:[{id:'a',name:'甲'},{id:'b',name:'乙'},{id:'c',name:'丙'}]}})
-const source:any={inspirationCreativeId:'cre_original',sourceRevision:'rev1',sourceDigest:'f'.repeat(64),evidenceStatus:'full_source',timeline:[{id:'s1',order:1},{id:'s2',order:2}]}
+const source:any={inspirationCreativeId:'cre_original',sourceRevision:'rev1',sourceDigest:'f'.repeat(64),evidenceStatus:'full_source',timeline:[{id:'s1',order:1,startSec:0,endSec:3,visualDescription:'两道菜端上桌',subjectAction:'手部向前送餐',voiceover:'你的招牌菜上桌了',onScreenText:'招牌菜快速上桌',sound:'餐具轻碰声',transition:'顺着盘子移动切近景',narrativePurpose:'用上桌动作建立开场钩子',continuityRequirements:['盘子从左向右移动']},{id:'s2',order:2,startSec:3,endSec:6,visualDescription:'展示菜品细节',subjectAction:'拉近两道菜',voiceover:'近看这两道菜',onScreenText:'近看招牌细节',sound:'延续餐具声',transition:'停留后淡出',narrativePurpose:'呈现商品细节',continuityRequirements:['沿用上一镜餐具与桌面']}]}
 const intent:any={kind:'sku_proposal',brandId:'brand',creativeId:'idea',month:'2026-11',expectedRevision:'r',sourceRevision:source.sourceRevision,sourceDigest:source.sourceDigest,catalogDigest:catalogDigest(catalog)}
 const rec=(skuId:string,skuName:string)=>({skuId,skuName,roles:['hero'],rationale:'Fits the source action',sourceShotIds:['s1','s2']})
 const base:any={...intent,contextDigest:'e'.repeat(64),mode:'source_adaptation',recommendations:[rec('a','甲'),rec('b','乙')]}
@@ -15,8 +15,12 @@ const input:any={...base,selectedSkuIds:['b','c'],recommendations:[rec('b','乙'
 const decision=confirmSkuDecision(input,catalog,source,'human','r')
 assert.deepEqual(decision.selectedSkuIds,['b','c'])
 const adaptIntent:any={...intent,kind:'creative_adaptation',decisionDigest:decision.digest}
-const output:any={...adaptIntent,contextDigest:'e'.repeat(64),mode:'source_adaptation',title:'Brand story',aiCaption:'',materialRequirements:['Film selected products'],shots:source.timeline.map((s:any)=>({sourceShotId:s.id,skuIds:['b','c'],visualDescription:'乙 丙',subjectAction:'Present products',voiceover:'',onScreenText:'',sound:'',transition:''}))}
-assert.equal(adaptationFrom(JSON.stringify(output),adaptIntent,catalog,source,decision).patch.planning.includes('甲'),false)
+const output:any={...adaptIntent,contextDigest:'e'.repeat(64),mode:'source_adaptation',title:'Brand story',aiCaption:'',materialRequirements:['Film selected products'],shots:source.timeline.map((s:any)=>({contractVersion:2,sourceShotId:s.id,skuIds:['b','c'],visualDescription:'乙 丙',subjectAction:'Present products',spokenText:'乙和丙上桌了',captionMode:'mirror_spoken',overlayText:s.onScreenText,soundDesign:s.sound,transition:s.transition,narrativePurpose:s.narrativePurpose,continuityRequirements:s.continuityRequirements,sourcePreservation:{hookRole:s.order===1?'preserved':'not_applicable',narrativeRole:'preserved',pacingRole:'preserved',changeReasons:[]}}))}
+const saved=adaptationFrom(JSON.stringify(output),adaptIntent,catalog,source,decision)
+assert.equal(saved.patch.planning.includes('甲'),false)
+assert.equal(saved.shots[0].overlayText,'招牌菜快速上桌')
+assert.equal(saved.shots[0].sourcePreservation.hookRole,'preserved')
+assert.throws(()=>adaptationFrom(JSON.stringify({...output,shots:[{...output.shots[0],spokenText:''},output.shots[1]]}),adaptIntent,catalog,source,decision),/source_voiceover_required/)
 assert.throws(()=>adaptationFrom(JSON.stringify({...output,shots:output.shots.slice(0,1)}),adaptIntent,catalog,source,decision),/shot/)
 assert.throws(()=>adaptationFrom(JSON.stringify({...output,title:'甲'}),adaptIntent,catalog,source,decision),/unselected/)
 assert.throws(()=>confirmSkuDecision({...input,catalogDigest:'stale'},catalog,source,'human','r'),/catalog/)

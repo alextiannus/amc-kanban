@@ -1,6 +1,37 @@
 import { CreativeRevisionError, record, validateCreativePatch } from './creativeRevisionContract.ts'
 
 export type CreativeStatus = 'idea_pending' | 'needs_materials' | 'needs_revision' | 'ready' | 'archived'
+export const SOURCE_ADAPTATION_CHANGE_REASONS = {
+  voiceover_removed_for_visual_storytelling: '视觉叙事：明确不使用口播',
+  overlay_removed_for_visual_storytelling: '视觉叙事：明确不使用画面文字',
+  sound_removed_for_visual_storytelling: '视觉叙事：明确不使用来源声音',
+  transition_removed_for_visual_storytelling: '视觉叙事：明确不使用来源转场',
+  brand_facts: '依据已确认品牌资料调整',
+  material_feasibility: '依据素材可行性调整',
+  platform_style: '依据目标平台风格调整',
+} as const
+export type SourceAdaptationChangeReason = keyof typeof SOURCE_ADAPTATION_CHANGE_REASONS
+export type AdaptedCreativeShotV2 = {
+  contractVersion: 2
+  sourceShotId: string | null
+  skuIds: string[]
+  visualDescription: string
+  subjectAction: string
+  /** Sole TTS and verbatim caption text; overlayText is never spoken. */
+  spokenText: string
+  captionMode: 'mirror_spoken' | 'off'
+  overlayText: string
+  soundDesign: string
+  transition: string
+  narrativePurpose: string
+  continuityRequirements: string[]
+  sourcePreservation: {
+    hookRole: 'preserved' | 'adapted' | 'not_applicable'
+    narrativeRole: 'preserved' | 'adapted'
+    pacingRole: 'preserved' | 'adapted'
+    changeReasons: SourceAdaptationChangeReason[]
+  }
+}
 export type CreativeSourceReference = {
   sourceDigest?: string
   inspirationCreativeId: string

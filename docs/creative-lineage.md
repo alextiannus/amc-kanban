@@ -42,7 +42,15 @@ Task 8 审查修复（本地实现，未部署）：指定 revisionId 的读取�
 
 来源候选先进入待确认创意。`sku_proposal` 仅建议 2–4 个当前品牌真实 SKU，目录仅一项时允许一项；每项包含精确名称、角色、理由与来源镜头 ID，不包含最终脚本。人工可调整并经 `POST .../sku-decision?month=YYYY-MM` 确认；服务端校验目录摘要、SKU 身份、固定来源版本/摘要、镜头 ID、当前创意版本、内容编辑权限和保管人，使用既有品牌行锁、CAS、幂等修订和审计保存。
 
-`creative_adaptation` 必须携带已确认决策摘要，逐镜覆盖固定来源并生成素材清单，只可使用人工选中的 SKU。目录为空时明确输出普通品牌内容（非爆款复刻）；来源不完整时拒绝伪装来源复刻。新 discovery 只保存来源候选，不再将自动选品稿视为已确认适配。MM 确认界面已本地实现；Kanban 确认界面（Task 8）已本地实现，未发布；本任务不制作视频或发布。
+`creative_adaptation` 必须携带已确认决策摘要，逐镜按原顺序覆盖固定来源并生成素材清单，只可使用人工选中的 SKU，且每镜 SKU 与确认映射完全一致。新产物采用下述 V2 契约；历史产物保留只读，不按新形状推断旧证据。目录为空时明确输出普通品牌内容（非爆款复刻）；来源不完整时拒绝伪装来源复刻。新 discovery 只保存来源候选，不再将自动选品稿视为已确认适配。MM 确认界面已本地实现；Kanban 确认界面（Task 8）已本地实现，未发布；本任务不制作视频或发布。
+
+### SKU 适配 V2 目标契约（未发布）
+
+状态：本地已实现与定向验证，待发布；完整 PostgreSQL 修订套件待专用测试库验证。新 `AdaptedCreativeShotV2` 保存 `contractVersion: 2`、`sourceShotId`、`skuIds`、`visualDescription`、`subjectAction`、`spokenText`、`captionMode`、`overlayText`、`soundDesign`、`transition`、`narrativePurpose`、`continuityRequirements` 及 `sourcePreservation`。`spokenText` 是 TTS 与逐字字幕的唯一文本；`mirror_spoken` 从它派生字幕，`off` 不显示逐字字幕；`overlayText` 只作画面文字。纯视觉空口播必须关闭字幕，不能将生成失败视作静音选择。新写入拒绝旧 `voiceover/onScreenText/sound` 和独立字幕正文；读取固定来源时兼容原字段，不批量改写历史。来源接口可选投影 `continuityRequirements`；历史缺字段不影响原 full_source 判定，明确提供但格式错误则为 partial_source，禁止丢弃后声称完整。
+
+`sourcePreservation` 记录 hookRole（preserved/adapted/not_applicable）、narrativeRole/pacingRole（preserved/adapted）与 `changeReasons`。改编状态须有可审核原因。允许的有限原因与显示标签为：`voiceover_removed_for_visual_storytelling`（视觉叙事：明确不使用口播）、`overlay_removed_for_visual_storytelling`（视觉叙事：明确不使用画面文字）、`sound_removed_for_visual_storytelling`（视觉叙事：明确不使用来源声音）、`transition_removed_for_visual_storytelling`（视觉叙事：明确不使用来源转场）、`brand_facts`（依据已确认品牌资料调整）、`material_feasibility`（依据素材可行性调整）、`platform_style`（依据目标平台风格调整）。删除非空源旁白、画面文字、声音或转场只能由该字段专用的原因解释，通用原因不能放行清空；非空叙事与连贯性不可丢失。全部保留状态、原因代码及标签进入保存的脚本文本，可由现有审核界面展示。
+
+来源数量、顺序、唯一 ID、确认 SKU 映射与实际名称使用继续由 `adaptationFrom(...)` 服务端验证；每个选中 SKU 的实际名称必须出现在分配给它的镜头内容，不能仅放在标题或素材清单。来源时间/景别/镜头运动由固定快照派生，不允许产物覆盖。产物示例按全部原镜头和确认映射生成，并在存在源字段时提供非空口播、画面文字、声音、转场、叙事作用和连贯性，不使用全空默认示例。
 
 保存输入为 `expectedRevision`、`idempotencyKey`、`catalogDigest`、`sourceRevision`、`sourceDigest`、`selectedSkuIds`、逐项 `recommendations`（含 skuId/skuName/roles/rationale/sourceShotIds）、可选 `adjustmentNote`；月份来自 URL。人工可选择 1–4 项，推荐必须为 2–4 项（单项目录例外）。GET 返回当前目录、固定来源、版本绑定、已保存决策及 canConfirm。无权限返回 403/404，版本/目录/来源/决策冲突为 409，非法映射为 400，来源上游错误沿用 413/503；响应均 no-store。确认沿用 draft.update 和保管人规则；AI 任务仍沿用现有 User AI 准入权限，并额外要求当前创意可覆盖。
 

@@ -1,4 +1,7 @@
-import {creativeDigest, CreativeRevisionError} from './creativeRevisionContract'
+import {creativeDigest, CreativeRevisionError} from './creativeRevisionContract.ts'
+import {SOURCE_ADAPTATION_CHANGE_REASONS, type AdaptedCreativeShotV2} from './creativeWorkspaceContract.ts'
+export {SOURCE_ADAPTATION_CHANGE_REASONS} from './creativeWorkspaceContract.ts'
+export type {AdaptedCreativeShotV2} from './creativeWorkspaceContract.ts'
 
 export type CatalogSku={id:string;name:string;description:string;price:string;currency:string;serves:string;bundleItems:string[];tags:string[]}
 export type SkuRecommendation={skuId:string;skuName:string;roles:string[];rationale:string;sourceShotIds:string[]}
@@ -77,15 +80,31 @@ export function adaptationFrom(content:string,intent:SkuBinding&{kind:string;dec
   if(v.decisionDigest!==intent.decisionDigest||v.mode!==decision.mode)fail('sku_decision_changed',409)
   if(!text(v.title,100)||typeof v.aiCaption!=='string'||v.aiCaption.length>800||!Array.isArray(v.materialRequirements)||!v.materialRequirements.length||v.materialRequirements.length>100||v.materialRequirements.some((s:unknown)=>!text(s,2000))||!Array.isArray(v.shots)||!v.shots.length)fail('adapted_script_required')
   if(!catalog.length&&v.notice!=='普通品牌内容，非爆款复刻')fail('ordinary_content_notice_required')
+  if(catalog.length&&v.shots.length!==source!.timeline.length)fail('adaptation_shot_coverage_invalid')
   const seen=new Set<string>(),used=new Set<string>()
-  const fields=['visualDescription','subjectAction','voiceover','onScreenText','sound','transition']
+  const fields=['visualDescription','subjectAction','spokenText','overlayText','soundDesign','transition','narrativePurpose'] as const
   for(const [index,shot] of v.shots.entries()){
-    if(!shot||Object.keys(shot).some(k=>!['sourceShotId','skuIds',...fields].includes(k))||!unique(shot.skuIds,4)||shot.skuIds.some((id:string)=>!decision.selectedSkuIds.includes(id))||!text(shot.visualDescription,10000)||!text(shot.subjectAction,10000)||fields.some(k=>typeof shot[k]!=='string'||shot[k].length>10000))fail('adaptation_shot_invalid')
+    if(!shot||Object.keys(shot).some(k=>!['contractVersion','sourceShotId','skuIds','captionMode','continuityRequirements','sourcePreservation',...fields].includes(k))||shot.contractVersion!==2||!['mirror_spoken','off'].includes(shot.captionMode)||!unique(shot.skuIds,4)||shot.skuIds.some((id:string)=>!decision.selectedSkuIds.includes(id))||!text(shot.visualDescription,10000)||!text(shot.subjectAction,10000)||fields.some(k=>typeof shot[k]!=='string'||shot[k].length>10000)||!Array.isArray(shot.continuityRequirements)||shot.continuityRequirements.length>100||shot.continuityRequirements.some((s:unknown)=>!text(s,2000)))fail('adaptation_shot_invalid')
+    const preservation=shot.sourcePreservation
+    if(!preservation||Object.keys(preservation).some(k=>!['hookRole','narrativeRole','pacingRole','changeReasons'].includes(k))||!['preserved','adapted','not_applicable'].includes(preservation.hookRole)||!['preserved','adapted'].includes(preservation.narrativeRole)||!['preserved','adapted'].includes(preservation.pacingRole)||!unique(preservation.changeReasons,7)||preservation.changeReasons.some((r:string)=>!Object.hasOwn(SOURCE_ADAPTATION_CHANGE_REASONS,r)))fail('source_preservation_invalid')
+    if([preservation.hookRole,preservation.narrativeRole,preservation.pacingRole].includes('adapted')&&!preservation.changeReasons.length)fail('source_change_reason_required')
     if(catalog.length&&(shot.sourceShotId!==source!.timeline[index]?.id||seen.has(shot.sourceShotId)))fail('adaptation_shot_coverage_invalid')
     if(catalog.length){
       const assigned=decision.recommendations.filter(r=>r.sourceShotIds.includes(shot.sourceShotId)).map(r=>r.skuId)
       if(assigned.length!==shot.skuIds.length||assigned.some(id=>!shot.skuIds.includes(id)))fail('adaptation_shot_sku_mapping_changed')
+      const original=source!.timeline[index]
+      for(const [aliases,field,reason,error] of [
+        [['spokenText','voiceover','voiceoverText'],'spokenText','voiceover_removed_for_visual_storytelling','source_voiceover_required'],
+        [['overlayText','onScreenText'],'overlayText','overlay_removed_for_visual_storytelling','source_overlay_required'],
+        [['soundDesign','sound'],'soundDesign','sound_removed_for_visual_storytelling','source_sound_required'],
+        [['transition'],'transition','transition_removed_for_visual_storytelling','source_transition_required'],
+      ] as const){
+        if(aliases.some(k=>text(original[k],Infinity))&&!shot[field].trim()&&!preservation.changeReasons.includes(reason))fail(error)
+      }
+      if(text(original.narrativePurpose,Infinity)&&!shot.narrativePurpose.trim())fail('source_narrative_required')
+      if(Array.isArray(original.continuityRequirements)&&original.continuityRequirements.some((s:unknown)=>text(s,Infinity))&&!shot.continuityRequirements.length)fail('source_continuity_required')
     }
+    if(!shot.spokenText.trim()&&shot.captionMode!=='off')fail('silent_caption_mode_invalid')
     if(!catalog.length&&shot.sourceShotId!==null)fail('ordinary_content_source_claim_invalid')
     seen.add(shot.sourceShotId);shot.skuIds.forEach((id:string)=>used.add(id))
   }
@@ -95,9 +114,12 @@ export function adaptationFrom(content:string,intent:SkuBinding&{kind:string;dec
   let unselectedText=normalize(rendered)
   for(const s of catalog.filter(s=>decision.selectedSkuIds.includes(s.id)).sort((a,b)=>b.name.length-a.name.length))unselectedText=unselectedText.split(normalize(s.name)).join('')
   if(catalog.some(s=>!decision.selectedSkuIds.includes(s.id)&&unselectedText.includes(normalize(s.name))))fail('adaptation_unselected_sku',409)
-  for(const id of decision.selectedSkuIds)if(!rendered.includes(catalog.find(s=>s.id===id)!.name))fail('adaptation_sku_name_required')
-  const shots=v.shots.map((s:any,i:number)=>({...s,...(source?{startSec:source.timeline[i].startSec,endSec:source.timeline[i].endSec,shotScale:source.timeline[i].shotScale,cameraMovement:source.timeline[i].cameraMovement,narrativePurpose:source.timeline[i].narrativePurpose}:{})}))
-  const planning=[...(catalog.length?[]:['普通品牌内容，非爆款复刻']),...shots.map((s:any,i:number)=>`${i+1}. ${s.sourceShotId||'品牌镜头'}${source?` [${s.startSec}–${s.endSec}s] ${s.shotScale||''} ${s.cameraMovement||''}`:''}\n${fields.map(k=>`${k}: ${s[k]}`).join('\n')}`)].join('\n\n')
+  for(const id of decision.selectedSkuIds){
+    const name=catalog.find(s=>s.id===id)!.name
+    if(!v.shots.some((s:AdaptedCreativeShotV2)=>s.skuIds.includes(id)&&fields.some(k=>s[k].includes(name))))fail('adaptation_sku_name_required')
+  }
+  const shots: Array<AdaptedCreativeShotV2 & {startSec?:number;endSec?:number;shotScale?:string;cameraMovement?:string}>=v.shots.map((s:AdaptedCreativeShotV2,i:number)=>({...s,...(source?{startSec:source.timeline[i].startSec,endSec:source.timeline[i].endSec,shotScale:source.timeline[i].shotScale,cameraMovement:source.timeline[i].cameraMovement}:{})}))
+  const planning=[...(catalog.length?[]:['普通品牌内容，非爆款复刻']),...shots.map((s,i)=>`${i+1}. ${s.sourceShotId||'品牌镜头'}${source?` [${s.startSec}–${s.endSec}s] ${s.shotScale||''} ${s.cameraMovement||''}`:''}\n${fields.map(k=>`${k}: ${s[k]}`).join('\n')}\ncaptionMode: ${s.captionMode}\ncontinuityRequirements: ${s.continuityRequirements.join('；')}\nhookRole: ${s.sourcePreservation.hookRole}\nnarrativeRole: ${s.sourcePreservation.narrativeRole}\npacingRole: ${s.sourcePreservation.pacingRole}\nchangeReasons: ${s.sourcePreservation.changeReasons.map(r=>`${r}（${SOURCE_ADAPTATION_CHANGE_REASONS[r]}）`).join('；')}`)].join('\n\n')
   if(planning.length>20000)fail('adaptation_script_too_large',413)
   return {...v,shots,skuIds:decision.selectedSkuIds,patch:{title:v.title,planning,aiCaption:v.aiCaption,materialRequirements:v.materialRequirements}}
 }

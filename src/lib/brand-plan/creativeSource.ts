@@ -37,12 +37,20 @@ export async function resolveCreativeSource(actor:{id:string;type:string},brandI
 
 export async function readCreativeSource(actor:{id:string;type:string},brandId:string,month:string,creativeId:string) {
   const {raw,identity,expectedRevision,expectedDigest}=await resolveCreativeSource(actor,brandId,month,creativeId)
-  const timeline = (Array.isArray(raw.timeline) ? raw.timeline : []).map((shot:unknown) => Object.fromEntries(shotFields.map(key=>{
-    const value=record(shot)[key]
-    return [key,['order','startSec','endSec'].includes(key) ? (typeof value==='number'&&Number.isFinite(value)?value:null) : text(value)]
-  })))
+  const timeline = (Array.isArray(raw.timeline) ? raw.timeline : []).map((shot:unknown) => {
+    const original=record(shot)
+    const projected:Record<string,any>=Object.fromEntries(shotFields.map(key=>{
+      const value=original[key]
+      return [key,['order','startSec','endSec'].includes(key) ? (typeof value==='number'&&Number.isFinite(value)?value:null) : text(value)]
+    }))
+    // Optional V2 metadata remains optional for legacy evidence, but a supplied
+    // malformed value cannot be dropped while claiming complete source proof.
+    if(Object.hasOwn(original,'continuityRequirements'))projected.continuityRequirements=Array.isArray(original.continuityRequirements)&&original.continuityRequirements.every((v:unknown)=>typeof v==='string'&&v.trim())?[...original.continuityRequirements]:null
+    return projected
+  })
   const scope = record(raw.sourceEvidence).scope
   const completeTimeline = timeline.every((shot:Record<string,any>) => typeof shot.id==='string' && shot.id && Number.isSafeInteger(shot.order) && typeof shot.startSec==='number' && typeof shot.endSec==='number' && shot.startSec >= 0 && shot.endSec > shot.startSec && shotFields.every(key=>shot[key]!==null))
+    && timeline.every((shot:Record<string,any>)=>!Object.hasOwn(shot,'continuityRequirements')||shot.continuityRequirements!==null)
     && new Set(timeline.map((shot:Record<string,any>)=>shot.id)).size===timeline.length
   const evidenceStatus = !timeline.length || scope === 'source_unavailable' ? 'source_unavailable'
     : scope === 'full_source' && completeTimeline && expectedRevision && expectedDigest ? 'full_source' : 'partial_source'

@@ -49,7 +49,7 @@ await service.createNativeTask('human','brand',{...body,kind:'creative_adaptatio
 const adaptationContext=await workflow.skuTaskContext(lastIntent)
 assert.deepEqual(adaptationContext.productCatalog.map((s:any)=>s.id),['a'])
 assert.equal(adaptationContext.decision.digest,confirmed.digest)
-const produced={...binding(),kind:'creative_adaptation',decisionDigest:confirmed.digest,contextDigest:contract.digest(facts),mode:'source_adaptation',title:'Alpha story',aiCaption:'',materialRequirements:['Film Alpha'],shots:[{sourceShotId:'shot-1',skuIds:['a'],visualDescription:'Alpha',subjectAction:'Present Alpha',voiceover:'',onScreenText:'',sound:'',transition:''}]}
+const produced={...binding(),kind:'creative_adaptation',decisionDigest:confirmed.digest,contextDigest:contract.digest(facts),mode:'source_adaptation',title:'Alpha story',aiCaption:'',materialRequirements:['Film Alpha'],shots:[{contractVersion:2,sourceShotId:'shot-1',skuIds:['a'],visualDescription:'Alpha',subjectAction:'Present Alpha',spokenText:'Meet Alpha',captionMode:'mirror_spoken',overlayText:'Alpha',soundDesign:'Continuous instrumental bed',transition:'Match cut',narrativePurpose:'Introduce Alpha',continuityRequirements:['Keep the same subject'],sourcePreservation:{hookRole:'preserved',narrativeRole:'preserved',pacingRole:'preserved',changeReasons:[]}}]}
 assert.equal((await workflow.validateSkuArtifact(JSON.stringify(produced),lastIntent)).result.shots.length,1)
 await assert.rejects(()=>workflow.validateSkuArtifact(JSON.stringify({...produced,title:'Beta'}),lastIntent),/unselected_sku/)
 const dispatched=dispatches;currentRevision='f'.repeat(64)

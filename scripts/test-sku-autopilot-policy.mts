@@ -68,7 +68,7 @@ assert.equal((await policy()).allowed,false);assert.equal(grants,1)
 await assert.rejects(()=>service.adoptNativeCandidate('human','brand',taskId,{requestKey:'adopt-no-account',artifactDigest:'c'.repeat(64)}),/autopilot_account_unavailable/)
 accountPresent=true
 await assert.rejects(()=>service.createNativeTask('human','brand',body),/request_key_reused/,'an interactive retry cannot strip the persisted run')
-const produced={...binding,kind:'creative_adaptation',decisionDigest:decision.digest,contextDigest:contract.digest(facts),mode:'ordinary_brand_content',notice:'普通品牌内容，非爆款复刻',title:'Brand story',aiCaption:'Brand',materialRequirements:['Film brand'],shots:[{sourceShotId:null,skuIds:[],visualDescription:'Brand shop',subjectAction:'Open door',voiceover:'',onScreenText:'',sound:'',transition:''}]}
+const produced={...binding,kind:'creative_adaptation',decisionDigest:decision.digest,contextDigest:contract.digest(facts),mode:'ordinary_brand_content',notice:'普通品牌内容，非爆款复刻',title:'Brand story',aiCaption:'Brand',materialRequirements:['Film brand'],shots:[{contractVersion:2,sourceShotId:null,skuIds:[],visualDescription:'Brand shop',subjectAction:'Open door',spokenText:'Meet Brand',captionMode:'mirror_spoken',overlayText:'Brand',soundDesign:'Continuous instrumental bed',transition:'Fade out',narrativePurpose:'Introduce brand',continuityRequirements:['Keep the same doorway'],sourcePreservation:{hookRole:'not_applicable',narrativeRole:'preserved',pacingRole:'preserved',changeReasons:[]}}]}
 const artifact={path:lastIntent.artifactPath,digest:contract.digest(produced),revision:1}
 app.runtime.get=async()=>{reads++;return {status:'succeeded',result:{artifacts:[artifact]},calls:[]}}
 app.workspace={read:async()=>({content:JSON.stringify(produced)})}
