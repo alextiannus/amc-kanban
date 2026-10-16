@@ -96,6 +96,7 @@ const deps: Record<string, any> = {
   '../user-management/brandAccess.ts': { canUserAccessBrand: async () => true },
   './creativeRevisionContract.ts': revisionContract,
   './creativeWorkspaceContract.ts': await import('../src/lib/brand-plan/creativeWorkspaceContract.ts'),
+  './creativeSourceReference': await import('../src/lib/brand-plan/creativeSourceReference.ts'),
   './creativeCollections.ts': {},
   './creativeSkuContract': await import('../src/lib/brand-plan/creativeSkuContract.ts'),
 }

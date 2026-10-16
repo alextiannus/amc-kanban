@@ -2,6 +2,12 @@
 
 ## 当前交付状态（2026-10-16）
 
+终审修复：发现与人工 SKU 确认将可信来源投影为 canonical source（sourceRevision + sourceDigest；libraryDigest 兼容字段使用单条 sourceDigest，而非查询批次摘要）。采用与复制原样保留确认快照，视频读取实际已保存修订，不按当前最新来源补造历史。完整源证据的新适配不再误报 legacy；未知历史仍明确缺证据。
+
+两端发布安排支持选择品牌当前可用账号；同平台有多个账号时不默认选择。提交时复验账号归属/连接，断连提示重新选择或先连接。取消安排经 schedule DELETE，带原 CAS/幂等键并读回 schedule:null；未知结果保留原请求重试，创意、历史与未排期草稿不删除。schedule GET 只返回有当前 content.schedule 权限的品牌可用账号最小字段，MM 仅放行精确 GET 路径，写入仍保留同源检查。
+
+排期在候选选择与加锁读回后检查唯一 marker；两个 raw 身份即使另一个创意缺失仍拒绝，未关联的跨月同 ID 也不得推断归属。重排/取消保留原 agentNote 并追加权威 marker，不覆盖历史文本。
+
 本文为 current-truth / fixed-reference。Task 1–10 的无日期内容创意、品牌授权来源/视频、二阶段 SKU、共享修订/反馈与固定视频追溯均已在隔离分支本地实现，尚未 push 或部署。历史已上线记录仅证明当时范围，不覆盖本轮。三仓完整 typecheck / production build、两端默认 UI suites、PGlite SQL 与一次性 PostgreSQL/Prisma 并发验证通过；最终独立全分支 review、最终集成 E2E 和上线仍需单独批准。
 
 月度频率只产生创意目标：20 个目标匹配 8 条仍需 12 条，不创建日期占位、草稿或发布任务。awaiting_sku / sku_confirmed 使用真实来源身份和证据去重，不拿通用等待文案做脚本文本判重；adapted 继续原文本质量校验。后台续检只增加合格来源候选，不承诺夜间补足或排期。内容编辑、SKU 确认、候选采用、显式 schedule、付费重做、正式发布是不同权限/确认动作。

@@ -25,7 +25,7 @@ const db:any={...tx,$transaction:async(fn:any)=>{const previous=queue;let releas
 const service=compile('src/lib/brand-plan/creativeRevisions.ts',{
   './matchingContract':{},'./revisionFeedback':feedback,'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},'../ai-native/facts.ts':{readBrandFacts:async()=>facts},'node:crypto':await import('node:crypto'),
   '../role-permissions/store.ts':{readPolicies:async()=>({policies:{EDITOR:[]}})},'../role-permissions/contract.ts':{effectiveGrants:()=>edit?['draft.update']:[]},'../auth-v2/types.ts':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['EDITOR']})},
-  '../user-management/brandAccess.ts':{canUserAccessBrand:async(brand:string)=>access&&brand===brandId},'./creativeRevisionContract.ts':contract,'./creativeWorkspaceContract.ts':workspace,'./creativeCollections.ts':{},'./creativeSkuContract':{},
+  '../user-management/brandAccess.ts':{canUserAccessBrand:async(brand:string)=>access&&brand===brandId},'./creativeRevisionContract.ts':contract,'./creativeWorkspaceContract.ts':workspace,'./creativeSourceReference':await import('../src/lib/brand-plan/creativeSourceReference.ts'),'./creativeCollections.ts':{},'./creativeSkuContract':{},
 })
 const body={action:'discard_candidate',month,creativeId,taskId:'task1',artifactDigest:'artifact1',expectedRevision:contract.creativeDigest(item),idempotencyKey:'discard-request',feedback:{reasons:['other'],note:'private note'}}
 let candidate:any={status:'succeeded',kind:'creative',month,creativeId,candidate:{expectedRevision:body.expectedRevision,patch:{planning:'candidate'}},artifact:{path:'artifact.json',revision:1,digest:'artifact1'}}

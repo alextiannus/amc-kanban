@@ -41,6 +41,8 @@ marker 判定先解析草稿中的全部权威身份，再核对工作区：即�
 
 ## 本地证据与发布边界
 
+终审后的显式排期也采用唯一身份规则：候选筛选与草稿锁后读回均拒绝多身份，跨月同 ID 的未关联项目不猜测归属。重排或取消追加当前 marker，保留完整历史 agentNote。两端通过同权限 schedule GET 读取最小可用账号字段，POST 提交显式账号，DELETE 取消并验证 schedule:null；这不改变迁移的默认只读、锁顺序、审计或幂等契约。
+
 `test-creative-workspace-migration.mts` 使用 PGlite 执行实际 SQL，覆盖默认只读、唯一关联、歧义、跨品牌、前缀碰撞、来源未知、审计失败回滚及重复 apply。PGlite 不代表多连接 Prisma/PostgreSQL 或生产验收；真实 PostgreSQL 结果单独记录。
 
 `test-creative-workspace-migration-pg.mts` 已在获准的一次性 loopback PostgreSQL 16 测试库通过：两个独立 PostgreSQL 连接池并发 apply 只写一次，Prisma 负责 schema/业务写入及权威回读；完整 dry-run 无变更、audit 触发失败全回滚、重复 apply 稳定、禁止客户端 legacy、取消后无伪造 null marker、显式重排固定真实 actor/revision 并复用旧草稿。另有真实 PG 20 目标/8 来源匹配矩阵与视频草稿并发入库回归。连接串由操作者显式提供，测试仅接受本机且名为 amc_lineage_test_* 的数据库。

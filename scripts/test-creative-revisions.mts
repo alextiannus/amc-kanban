@@ -16,6 +16,8 @@ try {
   await db.auditLog.deleteMany({where:{resourceId:{in:[id,'idea-two']}}})
   await db.brand.deleteMany({where:{id:{in:[brandId,'lineage-other-brand']}}})
   await db.user.deleteMany({where:{id:{startsWith:'lineage-'}}})
+  await db.rolePermissionPolicy.deleteMany({where:{role:'lineage-content-editor'}})
+  await db.roleDefinition.deleteMany({where:{id:'lineage-content-editor'}})
   await db.roleDefinition.upsert({where:{id:'AMC_PRINCIPAL'},create:{id:'AMC_PRINCIPAL',name:'Principal',normalizedName:'principal',builtIn:true},update:{enabled:true}})
   for(const userId of [actor.id,'lineage-next-principal','lineage-outsider']) await db.user.create({data:{id:userId,email:`${userId}@example.invalid`,password:'test-not-login',nickname:userId,businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
   await db.brand.create({data:{id:brandId,name:'Lineage isolated test',crew:{create:{members:{create:[{userId:actor.id,role:'PRINCIPAL'},{userId:'lineage-next-principal',role:'EDITOR'}]}}},knowledge:{create:{negPrompts:[],marketingSolution:workspace}}}})

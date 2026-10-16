@@ -13,6 +13,9 @@ const signatures = ['scheduleCreative', 'unscheduleCreative'].map(name => {
   assert(signature)
   return `export function ${name}(${signature}): Promise<unknown>;`
 })
+const accountSignature=service.match(/export async function readCreativeScheduleAccounts\(([^\n]+),db=prisma\)/)?.[1]
+assert(accountSignature)
+signatures.push(`export function readCreativeScheduleAccounts(${accountSignature}): Promise<unknown>;`)
 const files: Record<string,string> = {
   '/route.ts': readFileSync(route, 'utf8'),
   '/deps.d.ts': `declare module '@/lib/user-management/auth' { export function resolveSessionOrApiKey(r: Request): Promise<{user:{id:string;type:string}} | null>; }

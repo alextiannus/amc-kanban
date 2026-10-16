@@ -106,7 +106,7 @@ const unscheduled=await service.unscheduleCreative(actor,'brand-a','idea-one',sc
 assert.equal(unscheduled.schedule,null)
 assert.equal(drafts[0].status,'pending_review')
 assert.equal(drafts[0].scheduledAt,null)
-assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('unscheduled','idea-one')} creative-revision:revision-1`)
+assert(drafts[0].agentNote.endsWith(`${draftMarkers.creativeDraftMarker('unscheduled','idea-one')} creative-revision:revision-1`))
 assert.equal(current().planning,'Original script')
 assert.equal((await service.unscheduleCreative(actor,'brand-a','idea-one',scheduled.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-one'},db,now)).replayed,true)
 accountEnabled=false
@@ -257,11 +257,11 @@ assert.equal(adopted.draftId,'legacy-1')
 assert.equal(drafts.length,1)
 assert.equal(drafts[0].caption,'Merchant-edited historical copy')
 assert.equal(drafts[0].status,'pending_review')
-assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('calendar','idea-one')} creative-revision:${adopted.schedule.scheduledAtRevisionId}`)
+assert(drafts[0].agentNote.endsWith(`${draftMarkers.creativeDraftMarker('calendar','idea-one')} creative-revision:${adopted.schedule.scheduledAtRevisionId}`))
 assert.equal(current().planning,'Original historical script')
 const legacyUnscheduled=await service.unscheduleCreative(actor,'brand-a','idea-one',adopted.expectedRevision,{month:'2026-11',idempotencyKey:'unschedule-adopted'},db,now)
 assert.equal(legacyUnscheduled.draftId,'legacy-1')
-assert.equal(drafts[0].agentNote,`${draftMarkers.creativeDraftMarker('unscheduled','idea-one')} creative-revision:${adopted.schedule.scheduledAtRevisionId}`)
+assert(drafts[0].agentNote.endsWith(`${draftMarkers.creativeDraftMarker('unscheduled','idea-one')} creative-revision:${adopted.schedule.scheduledAtRevisionId}`))
 drafts[0].agentNote=`Historical reserved ${drafts[0].agentNote.toUpperCase()}`
 const legacyRescheduled=await service.scheduleCreative(actor,'brand-a','idea-one',legacyUnscheduled.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'reschedule-adopted'},db,now)
 assert.equal(legacyRescheduled.draftId,'legacy-1')
@@ -515,6 +515,38 @@ for (const kind of ['calendar','unscheduled'] as const) {
   assert.equal(draftMarkers.hasCreativeDraftMarker(`${otherMarker} ${draftMarkers.creativeDraftMarker(kind,'idea-one')}`,kind,'idea-one'),false,'conflicting encoded identities fail closed')
 }
 console.log('PASS: every accepted address character round-trips without token or casing collisions; historical case variants remain readable')
+
+for(const phase of ['before-lock','after-lock','other-month'] as const){
+ const note='Merchant historical note brand-plan-calendar-item:idea-one'
+ knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[{...item,date:'2026-11-12',schedule:null}],...(phase==='other-month'?{'2026-12':[{...item,schedule:null}]}:{})}}}}
+ drafts.splice(0,drafts.length,{...legacyDraft,id:'wave-draft',agentNote:note+(phase==='before-lock'?' brand-plan-calendar-item:missing-creative':'')})
+ const before=structuredClone({knowledge,drafts}),count=audits.length
+ const waveTx={...tx,$queryRaw:async(parts:TemplateStringsArray)=>{if(phase==='after-lock'&&parts.join('?').includes('"ContentDraft"'))drafts[0].agentNote+=' brand-plan-calendar-item:missing-creative';return []}}
+ await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'final-wave-'+phase},{$transaction:async(fn:Function)=>fn(waveTx)},now),'creative_schedule_draft_ambiguous')
+ assert.deepEqual(knowledge,before.knowledge);assert.equal(audits.length,count);assert(drafts[0].agentNote.startsWith(note))
+}
+knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[{...item,date:'2026-11-12',schedule:null}]}}}}
+const originalNote='Merchant historical note brand-plan-calendar-item:idea-one'
+drafts.splice(0,drafts.length,{...legacyDraft,id:'wave-preserved',agentNote:originalNote})
+const preserved=await service.scheduleCreative(actor,'brand-a','idea-one',contract.creativeDigest(current()),{month:'2026-11',scheduledAt:null,platform:'instagram',idempotencyKey:'final-wave-preserve'},db,now)
+assert(drafts[0].agentNote.includes(originalNote),'original historical note must be retained')
+const historyCount=revisions.length
+const removed=await service.unscheduleCreative(actor,'brand-a','idea-one',preserved.expectedRevision,{month:'2026-11',idempotencyKey:'final-wave-remove'},db,now)
+assert.equal(removed.schedule,null);assert.equal(current().schedule,null);assert.equal(drafts.length,1);assert.equal(drafts[0].scheduledAt,null);assert.equal(revisions.length,historyCount);assert(drafts[0].agentNote.includes(originalNote))
+accountKind='not_connected'
+await expectCode(()=>service.scheduleCreative(actor,'brand-a','idea-one',removed.expectedRevision,{month:'2026-11',scheduledAt:null,platform:'instagram',accountId:'account-1',idempotencyKey:'final-wave-stale-account'},db,now),'schedule_account_not_found')
+accountKind='real'
+console.log('PASS final-wave marker ambiguity before/after lock, unlinked cross-month identity, retained note/history and stale account')
+permitted=false
+await expectCode(()=>service.readCreativeScheduleAccounts(actor,'brand-a','2026-11','idea-one',tx),'creative_access_denied')
+permitted=true
+modules['../role-permissions/contract.ts'].effectiveGrants=()=>['draft.update']
+await expectCode(()=>service.readCreativeScheduleAccounts(actor,'brand-a','2026-11','idea-one',tx),'creative_schedule_forbidden')
+modules['../role-permissions/contract.ts'].effectiveGrants=()=>['content.schedule']
+const eligible=await service.readCreativeScheduleAccounts(actor,'brand-a','2026-11','idea-one',tx)
+assert.deepEqual(eligible.accounts,[{id:'account-1',platform:'instagram',handle:'real_handle'}])
+assert(!JSON.stringify(eligible).includes('postfast'))
+console.log('PASS account reads preserve current brand/schedule permission and return only safe fields')
 
 // Existing Kanban/MM calendar consumers still display the whitespace-free raw
 // identity. Keep that read projection while the encoded token owns validation.

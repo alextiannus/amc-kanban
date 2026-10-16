@@ -2,6 +2,7 @@ import { CreativeRevisionError, record, validateCreativePatch } from './creative
 
 export type CreativeStatus = 'idea_pending' | 'needs_materials' | 'needs_revision' | 'ready' | 'archived'
 export type CreativeSourceReference = {
+  sourceDigest?: string
   inspirationCreativeId: string
   creativeCandidateId: string | null
   sourceRevision: string | null
@@ -32,6 +33,7 @@ export type CreativeSkuDecision = {
   decidedAt: string | null
 }
 export type CreativeScheduleLink = {
+  accountId?: string
   draftId: string
   scheduledAt: string | null
   platform: string

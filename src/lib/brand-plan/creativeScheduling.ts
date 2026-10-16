@@ -5,7 +5,7 @@ import { readPolicies } from '../role-permissions/store.ts'
 import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { calendarSyncMarker } from './calendarSync.ts'
-import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
+import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker, creativeDraftMarkerIdentityCount } from './creativeDraftMarker.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, record, revisionPeriod, validateCreativeAddress } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeScheduleLink } from './creativeWorkspaceContract.ts'
 
@@ -62,6 +62,26 @@ function unscheduledMarker(creativeId: string, revisionId: string | null) {
   return `${creativeDraftMarker('unscheduled',creativeId)}${revisionId ? ` creative-revision:${revisionId}` : ''}`
 }
 
+function assertUniqueIdentity(note:string|null,id:string) {
+  for(const kind of ['calendar','unscheduled'] as const){
+    const count=creativeDraftMarkerIdentityCount(note,kind)
+    if(count>1||count===1&&!hasCreativeDraftMarker(note,kind,id))throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
+  }
+}
+const retainNote=(note:string|null,marker:string)=>note?.split('\n').includes(marker)?note:note?note+'\n'+marker:marker
+const eligibleAccount=(account:any,platform?:string)=>{
+ const handle=account.handle?.trim().toLowerCase()||'',status=account.connectionStatus?.toUpperCase()||'UNKNOWN'
+ return (!platform||platforms[account.platformId.toLowerCase()]===platform)&&!!platforms[account.platformId.toLowerCase()]&&handle!==''&&!['-','n/a','na','none','unknown'].includes(handle)&&!handle.startsWith('unconfigured')&&!handle.startsWith('placeholder')&&Boolean(account.postfastAccountId)&&!account.disabledReason&&!['DISABLED','DISCONNECTED','ERROR','EXPIRED'].includes(status)
+}
+export async function readCreativeScheduleAccounts(actor:Actor,brandId:string,month:string,creativeId:string,db=prisma){
+ validateCreativeAddress(month,creativeId)
+ await authorize(db as any,actor,brandId)
+ const knowledge=await db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}})
+ findCreative(creativeWorkspace(knowledge),month,creativeId)
+ const accounts=await db.socialAccount.findMany({where:{brandId,unboundAt:null},select:{id:true,platformId:true,handle:true,postfastAccountId:true,connectionStatus:true,disabledReason:true}})
+ return {ok:true,brandId,creativeId,month,accounts:accounts.filter((account:any)=>eligibleAccount(account)).map((account:any)=>({id:account.id,platform:platforms[account.platformId.toLowerCase()],handle:account.handle}))}
+}
+
 async function writeSchedule(actor: Actor, brandId: string, creativeId: string, expectedRevision: string, input: unknown, unschedule: boolean, db = prisma, now = new Date()) {
   const body = record(input)
   const {idempotencyKey} = validateRequest(expectedRevision,body)
@@ -95,17 +115,20 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
       await tx.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${previous.draftId} FOR UPDATE`
       draft = await tx.contentDraft.findUnique({where:{id:previous.draftId},select:{id:true,brandId:true,status:true,agentNote:true}})
       if (!draft || draft.brandId !== brandId || !hasCreativeDraftMarker(draft.agentNote,'calendar',creativeId)) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
+      assertUniqueIdentity(draft.agentNote,creativeId)
       if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
     } else if (schedule) {
       const markers = [...creativeDraftMarkerSearches('unscheduled',creativeId),...(normalized.legacy?.date?creativeDraftMarkerSearches('calendar',creativeId):[])]
       const isCandidate = (note: string | null) => Boolean(hasCreativeDraftMarker(note,'unscheduled',creativeId) || normalized.legacy?.date && hasCreativeDraftMarker(note,'calendar',creativeId))
       const possible = await tx.contentDraft.findMany({where:{brandId,OR:markers.map(marker=>({agentNote:{contains:marker,mode:'insensitive' as const}}))},select:{id:true,brandId:true,status:true,agentNote:true}})
       const candidates = possible.filter(row => isCandidate(row.agentNote))
+      for(const candidate of candidates)assertUniqueIdentity(candidate.agentNote,creativeId)
       if (candidates.length > 1) throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
       if (candidates.length === 1) {
         await tx.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${candidates[0].id} FOR UPDATE`
         draft = await tx.contentDraft.findUnique({where:{id:candidates[0].id},select:{id:true,brandId:true,status:true,agentNote:true}})
         if (!draft || draft.brandId !== brandId || !isCandidate(draft.agentNote)) throw new CreativeRevisionError('creative_schedule_draft_missing',409)
+        assertUniqueIdentity(draft.agentNote,creativeId)
         if (!EDITABLE_DRAFT_STATUSES.has(draft.status)) throw new CreativeRevisionError('creative_schedule_locked',409)
       }
     }
@@ -115,30 +138,25 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
     if (draft && Object.entries(record(workspace.publishingCalendar?.months)).some(([linkedMonth,items]) =>
       Array.isArray(items) && items.some(item => (linkedMonth !== month || item?.id !== creativeId) && item?.schedule?.draftId === draft!.id)
     )) throw new CreativeRevisionError('creative_schedule_draft_in_use',409)
+    if(draft&&!previous&&Object.entries(record(workspace.publishingCalendar?.months)).some(([otherMonth,items])=>otherMonth!==month&&Array.isArray(items)&&items.some(item=>typeof item?.id==='string'&&item.id.toLowerCase()===creativeId.toLowerCase()&&!item.schedule)))throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
     let link: CreativeScheduleLink | null = null
+    let expectedNote:string|null=null
     if (schedule) {
       const accounts = await tx.socialAccount.findMany({where:{brandId,unboundAt:null,...(schedule.accountId?{id:schedule.accountId}:{})},select:{id:true,platformId:true,handle:true,postfastAccountId:true,connectionStatus:true,disabledReason:true}})
-      const matching = accounts.filter(account => {
-        const handle = account.handle?.trim().toLowerCase() || ''
-        const status = account.connectionStatus?.toUpperCase() || 'UNKNOWN'
-        return platforms[account.platformId.toLowerCase()] === schedule.platform
-          && handle !== '' && !['-','n/a','na','none','unknown'].includes(handle)
-          && !handle.startsWith('unconfigured') && !handle.startsWith('placeholder')
-          && Boolean(account.postfastAccountId)
-          && !account.disabledReason && !['DISABLED','DISCONNECTED','ERROR','EXPIRED'].includes(status)
-      })
+      const matching = accounts.filter(account => eligibleAccount(account,schedule.platform))
       if (matching.length !== 1) throw new CreativeRevisionError(matching.length?'schedule_account_ambiguous':'schedule_account_not_found',409)
       const latest = await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId)},orderBy:{version:'desc'},select:{id:true}})
       const revision = latest || await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId),version:0,status:'BASELINE',generationMode:'LEGACY_SNAPSHOT',input:{creativeId,month,actor:null,origin:'legacy_unknown'},output:current as Prisma.InputJsonValue},select:{id:true}})
-      const marker = draftMarker(creativeId,revision.id)
+      const marker = retainNote(draft?.agentNote||null,draftMarker(creativeId,revision.id));expectedNote=marker
       // A time choice is not publication approval. The ordinary approve flow
       // owns transitions to the provider-facing scheduled state.
       const saved = draft
         ? await tx.contentDraft.update({where:{id:draft.id},data:{accountId:matching[0].id,scheduledAt:schedule.scheduledAt?new Date(schedule.scheduledAt):null,agentNote:marker},select:{id:true}})
         : await tx.contentDraft.create({data:{brandId,accountId:matching[0].id,caption:normalized.aiCaption || normalized.planning || normalized.title,captionLang:'zh',mediaUrls:[],hashtags:[],scheduledAt:schedule.scheduledAt?new Date(schedule.scheduledAt):null,status:'draft',agentNote:marker},select:{id:true}})
-      link = {draftId:saved.id,scheduledAt:schedule.scheduledAt,platform:schedule.platform,scheduledBy:user.id,scheduledAtRevisionId:revision.id}
+      link = {draftId:saved.id,accountId:matching[0].id,scheduledAt:schedule.scheduledAt,platform:schedule.platform,scheduledBy:user.id,scheduledAtRevisionId:revision.id}
     } else if (draft) {
-      await tx.contentDraft.update({where:{id:draft.id},data:{scheduledAt:null,agentNote:unscheduledMarker(creativeId,previous!.scheduledAtRevisionId)}})
+      expectedNote=retainNote(draft.agentNote,unscheduledMarker(creativeId,previous!.scheduledAtRevisionId))
+      await tx.contentDraft.update({where:{id:draft.id},data:{scheduledAt:null,agentNote:expectedNote}})
     }
     const next = {...current,schedule:link,updatedAt:now.toISOString()}
     await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:nextWorkspace(workspace,month,creativeId,next) as Prisma.InputJsonValue}})
@@ -146,9 +164,9 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
     const verified = findCreative(creativeWorkspace(verifiedKnowledge),month,creativeId)
     const verifiedDraft = await tx.contentDraft.findUnique({where:{id:link?.draftId || previous!.draftId},select:{id:true,status:true,scheduledAt:true,agentNote:true}})
     if (creativeDigest(verified) !== creativeDigest(next) || !verifiedDraft
-      || (link ? verifiedDraft.agentNote !== draftMarker(creativeId,link.scheduledAtRevisionId)
+      || (link ? verifiedDraft.agentNote !== expectedNote
         || verifiedDraft.scheduledAt?.toISOString() !== link.scheduledAt && !(verifiedDraft.scheduledAt === null && link.scheduledAt === null)
-        : verifiedDraft.scheduledAt !== null || verifiedDraft.agentNote !== unscheduledMarker(creativeId,previous!.scheduledAtRevisionId))) {
+        : verifiedDraft.scheduledAt !== null || verifiedDraft.agentNote !== expectedNote)) {
       throw new CreativeRevisionError('creative_schedule_write_unverified',503)
     }
     const result = {ok:true,replayed:false,creativeId,month,schedule:link,expectedRevision:creativeDigest(next),currentRevisionId:link?.scheduledAtRevisionId || null,draftId:link?.draftId || previous?.draftId || null}

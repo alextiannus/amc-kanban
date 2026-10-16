@@ -1,7 +1,7 @@
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 import { allowedRoleWriteOrigin } from '@/lib/role-permissions/request-origin'
 import { CreativeRevisionError } from '@/lib/brand-plan/creativeRevisionContract'
-import { scheduleCreative, unscheduleCreative } from '@/lib/brand-plan/creativeScheduling'
+import { scheduleCreative, unscheduleCreative, readCreativeScheduleAccounts } from '@/lib/brand-plan/creativeScheduling'
 
 export const dynamic = 'force-dynamic'
 type Context = {params:Promise<{id:string;creativeId:string}>}
@@ -36,3 +36,11 @@ async function handle(request:Request,context:Context,remove:boolean) {
 }
 export const POST = (request:Request,context:Context) => handle(request,context,false)
 export const DELETE = (request:Request,context:Context) => handle(request,context,true)
+export async function GET(request:Request,context:Context){
+ try{
+  const auth=await resolveSessionOrApiKey(request)
+  if(!auth)return json({error:'Unauthorized'},401)
+  const {id,creativeId}=await context.params
+  return json(await readCreativeScheduleAccounts(auth.user,id,new URL(request.url).searchParams.get('month')||'',creativeId))
+ }catch(error){return error instanceof CreativeRevisionError?json({error:error.code},error.status):json({error:'creative_schedule_unavailable'},503)}
+}

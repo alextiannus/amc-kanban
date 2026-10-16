@@ -12,6 +12,7 @@ import { canUserAccessBrand } from '../user-management/brandAccess.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, revisionSource, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch, validateCreativeWorkspacePatch } from './creativeWorkspaceContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
+import {canonicalCreativeSource} from './creativeSourceReference'
 import {confirmSkuDecision, assertConfirmedDecision, skuCatalog, type SkuSource, type SkuBinding} from './creativeSkuContract'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
@@ -166,10 +167,14 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const parentInput = record(parent.input)
     const revision = parent.version+1
     const normalized = normalizeCreativeWorkspaceItem(current,{brandId})
+    const verifiedSource=skuConfirmation
+      ? canonicalCreativeSource(confirmationSource,current.inspirationCreativeId,new Date().toISOString(),normalized.source||record(current.nativeSourceSnapshot))
+      : seed&&ai ? canonicalCreativeSource(record(current.nativeSourceSnapshot).source,current.inspirationCreativeId,record(current.nativeSourceSnapshot).retrievedAt||new Date().toISOString(),record(current.nativeSourceSnapshot))
+      : ai?.skuBinding&&!normalized.source ? canonicalCreativeSource(ai.skuSource,current.inspirationCreativeId,new Date().toISOString(),record(current.nativeSourceSnapshot)) : null
     const next:Record<string,any> = {...current,...patch,brandId,
       status:patch.status || normalized.status,
       platformTargets:patch.platformTargets || (patch.platform ? [patch.platform] : normalized.platformTargets),
-      source:normalized.source,skuDecision:skuDecision||normalized.skuDecision,
+      source:verifiedSource||normalized.source,skuDecision:skuDecision||normalized.skuDecision,
       schedule:normalized.schedule,derivedFromCreativeId:normalized.derivedFromCreativeId,
       ...(normalized.legacy?{legacy:normalized.legacy}:{}),
       ...('legacyProduct' in clientPatch?{product:clientPatch.legacyProduct}:{}),
