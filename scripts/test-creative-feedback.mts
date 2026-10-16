@@ -55,6 +55,32 @@ assert.deepEqual(measured.musicReplacementRate,{numerator:0,denominator:2,rate:0
 assert.deepEqual(feedback.summarizeCreativeFeedback(rows).voiceReplacementRate,{numerator:0,denominator:0,rate:null})
 assert.equal(JSON.stringify(measured).includes('voice1'),false)
 assert.equal(JSON.stringify(measured).includes('abcd'),false)
+// Per-string codepoint bounds alone do not bound JSON bytes: controls encode
+// as six-byte escapes. The entire event must be rejected, including its rates.
+const byteEvidence={...evidence,textChanges:feedback.VIDEO_FEEDBACK_FIELDS.map(field=>({field,before:'\u0001'.repeat(512),after:'\u0002'.repeat(512)}))}
+assert.equal(feedback.readVideoFeedback(byteEvidence)===null,true)
+const invalidBytes=feedback.summarizeCreativeFeedback([row('oversized',[],{videoFeedback:byteEvidence})])
+assert.deepEqual(invalidBytes.editDistanceByField,{})
+assert.equal(invalidBytes.captionMismatchBlocks,0)
+assert.equal(invalidBytes.voiceReplacementRate.denominator,0)
+assert.equal(invalidBytes.musicReplacementRate.denominator,0)
+const acceptedByteEvidence={...byteEvidence,textChanges:byteEvidence.textChanges.slice(0,5)}
+assert(feedback.readVideoFeedback(acceptedByteEvidence))
+assert(Buffer.byteLength(JSON.stringify(acceptedByteEvidence),'utf8')<feedback.VIDEO_FEEDBACK_MAX_BYTES)
+assert(feedback.VIDEO_FEEDBACK_MAX_BYTES<=32768)
+// Exercise the reserved-formatting boundary as well as the clearly oversized
+// report: converting one ordinary char to a control adds five JSON bytes.
+const nearLimit={...acceptedByteEvidence,textChanges:[...acceptedByteEvidence.textChanges,{field:feedback.VIDEO_FEEDBACK_FIELDS[5],before:'a'.repeat(512),after:''}]}
+const controlCount=Math.floor((feedback.VIDEO_FEEDBACK_MAX_BYTES-256-Buffer.byteLength(JSON.stringify(nearLimit),'utf8'))/5)
+assert(controlCount>=0&&controlCount<512)
+nearLimit.textChanges[5].before='\u0001'.repeat(controlCount)+'a'.repeat(512-controlCount)
+assert(feedback.readVideoFeedback(nearLimit))
+nearLimit.textChanges[5].before='\u0001'.repeat(controlCount+1)+'a'.repeat(511-controlCount)
+assert.equal(feedback.readVideoFeedback(nearLimit)===null,true)
+const acceptedBytes=feedback.summarizeCreativeFeedback([row('accepted-bytes',[],{videoFeedback:acceptedByteEvidence})])
+assert.equal(acceptedBytes.editDistanceByField.spokenText.total,512)
+assert.equal(acceptedBytes.captionMismatchBlocks,1)
+assert.equal(acceptedBytes.voiceReplacementRate.denominator,1)
 for(const invalid of [{...evidence,reason:'guessed'}, {...evidence,textChanges:[...evidence.textChanges,...evidence.textChanges]}, {...evidence,captionMismatchBlocked:'true'}, {...evidence,textChanges:[{field:'spokenText',before:'a'.repeat(513),after:'b'}]}, {...evidence,voiceReceiptChange:{beforeId:'v',afterId:'w',unknown:true}}, {...evidence,sourceShotId:'__proto__'}]){
   assert.equal(feedback.readVideoFeedback(invalid),null)
   assert.equal(feedback.summarizeCreativeFeedback([row('invalid',[],{videoFeedback:invalid})]).voiceReplacementRate.denominator,0)

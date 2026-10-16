@@ -9,6 +9,7 @@ export const FEEDBACK_WINDOW=2000
 export const FEEDBACK_DIMENSION_KEYS=50
 export const FEEDBACK_TEXT_LENGTH=512
 export const FEEDBACK_DISTANCE_CELLS=4_000_000
+export const VIDEO_FEEDBACK_MAX_BYTES=32_768
 export const VIDEO_FEEDBACK_FIELDS=['spokenText','overlayText','visualDescription','subjectAction','soundDesign','transition','narrativePurpose'] as const
 type VideoTextField=typeof VIDEO_FEEDBACK_FIELDS[number]
 type ReceiptChange={beforeId:string|null;afterId:string|null}
@@ -33,6 +34,9 @@ export function readVideoFeedback(value:unknown):VideoFeedback|null{
     const pair=value[name]
     if(!object(pair)||Object.keys(pair).length!==2||!Object.hasOwn(pair,'beforeId')||!Object.hasOwn(pair,'afterId')||[pair.beforeId,pair.afterId].some(v=>v!==null&&!identifier(v)))return null
   }
+  // PostgreSQL jsonb::text adds punctuation spaces to compact JSON. With this
+  // fixed schema (at most seven three-key changes), 256 bytes safely covers it.
+  if(Buffer.byteLength(JSON.stringify(value),'utf8')+256>VIDEO_FEEDBACK_MAX_BYTES)return null
   return value as VideoFeedback
 }
 const rate=(numerator:number,denominator:number)=>({numerator,denominator,rate:denominator?numerator/denominator:null})

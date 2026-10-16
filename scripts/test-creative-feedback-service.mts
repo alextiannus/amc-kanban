@@ -133,11 +133,12 @@ try{
   const input={creativeId:'idea',month,actor:{type:'HUMAN'},changes:[{field:'planning',before:'SECRET SCRIPT',after:'SECRET SCRIPT 2'}],feedback:{reasons:['sku'],note:'SECRET NOTE'},ai:{instruction:'SECRET PROMPT',reviewChanges:[]},source:{creativeId:'source1',snapshot:{private:'SECRET SOURCE'}}}
   await pg.query(`INSERT INTO "BrandMarketingSolution" SELECT 'row'||lpad(n::text,5,'0'),$1,'CREATIVE_ITEM',1,'2026-10-16'::timestamp,$2::jsonb,jsonb_build_object('skuIds',jsonb_build_array('sku1'),'platform','Instagram','contentType','video','planning','SECRET SCRIPT') FROM generate_series(1,2003) n`,[brandId,JSON.stringify(input)])
   await pg.query(`INSERT INTO "BrandMarketingSolution" VALUES('foreign','foreign','CREATIVE_ITEM',1,'2026-10-17',$1::jsonb,'{}')`,[JSON.stringify(input)])
-  let queries=0
+  let queries=0,lastProjection:any[]=[]
   const sqlDb={...db,$queryRaw:async(strings:TemplateStringsArray,...args:any[])=>{
     queries++;const sql=strings.reduce((q,s,i)=>q+(i?`$${i}`:'')+s,'')
     assert.equal((sql.match(/LIMIT/g)||[]).length,4);assert(args.includes(2001))
     const result=await pg.query(sql,args.map(v=>v instanceof Date?v.toISOString():v))
+    lastProjection=result.rows
     assert.equal(JSON.stringify(result.rows).includes('SECRET'),false,'database projection never returns raw content or notes')
     return result.rows.map((r:any)=>({...r,createdAt:new Date(r.createdAt)}))
   }}
@@ -156,6 +157,30 @@ try{
   assert.deepEqual(videoPage.voiceReplacementRate,{numerator:1,denominator:1,rate:1})
   assert.deepEqual(videoPage.fidelityPassRate,{numerator:1,denominator:2,rate:0.5})
   assert.equal(JSON.stringify(videoPage).includes('abcd'),false)
+  // Exercise the real authenticated GET, production SQL and aggregation with
+  // multiple maximum-length strings whose control characters expand in JSON.
+  const oversizedEvidence={...videoFeedback,sourceShotId:'oversized-shot',textChanges:feedback.VIDEO_FEEDBACK_FIELDS.map(field=>({field,before:'\u0001'.repeat(512),after:'\u0002'.repeat(512)}))}
+  const acceptedEvidence={...oversizedEvidence,sourceShotId:'accepted-shot',textChanges:oversizedEvidence.textChanges.slice(0,5)}
+  assert.equal(feedback.readVideoFeedback(oversizedEvidence)===null,true)
+  assert(feedback.readVideoFeedback(acceptedEvidence))
+  const byteSizes=await pg.query(`SELECT octet_length($1::jsonb::text) AS accepted,octet_length($2::jsonb::text) AS oversized`,[JSON.stringify(acceptedEvidence),JSON.stringify(oversizedEvidence)])
+  assert((byteSizes.rows[0] as any).accepted<=feedback.VIDEO_FEEDBACK_MAX_BYTES)
+  assert((byteSizes.rows[0] as any).oversized>feedback.VIDEO_FEEDBACK_MAX_BYTES)
+  await pg.query(`INSERT INTO "BrandMarketingSolution" VALUES('accepted-bytes',$1,'CREATIVE_ITEM',3,'2026-10-19',$2::jsonb,'{}'),('oversized-bytes',$1,'CREATIVE_ITEM',4,'2026-10-19',$3::jsonb,'{}')`,[brandId,JSON.stringify({...input,creativeId:'accepted-bytes',videoFeedback:acceptedEvidence}),JSON.stringify({...input,creativeId:'oversized-bytes',videoFeedback:oversizedEvidence})])
+  const bytesHttp=compile('src/lib/ai-native/http.ts',{'../user-management/auth':{resolveSessionOrApiKey:async()=>({user:actor})},'../role-permissions/request-origin':{allowedRoleWriteOrigin:()=>true}})
+  const bytesRoute=compile('src/app/api/brands/[id]/content-creatives/feedback/route.ts',{'@/lib/ai-native/http':bytesHttp,'@/lib/ai-native/service':{},'@/lib/brand-plan/creativeRevisions':{readCreativeFeedbackSummary:(a:any,b:string,c:string)=>service.readCreativeFeedbackSummary(a,b,c,sqlDb)}})
+  const byteResponse=await bytesRoute.GET(new Request('https://localhost/api/brands/brand/content-creatives/feedback'),{params:Promise.resolve({id:brandId})})
+  assert.equal(byteResponse.status,200)
+  const byteSummary=await byteResponse.json()
+  assert(lastProjection.find(r=>r.id==='accepted-bytes')?.input.videoFeedback,'accepted evidence survives actual SQL projection')
+  assert.equal(lastProjection.find(r=>r.id==='oversized-bytes')?.input.videoFeedback,null)
+  assert.equal(byteSummary.editDistanceByField.spokenText.total,516)
+  assert.equal(byteSummary.editDistanceByField.spokenText.comparisons,2)
+  assert.equal(byteSummary.captionMismatchBlocks,2)
+  assert.equal(byteSummary.voiceReplacementRate.denominator,2)
+  assert.equal(byteSummary.musicReplacementRate.denominator,2)
+  assert.equal(byteSummary.bySourceShot['accepted-shot'].editedScripts,1)
+  assert.equal(byteSummary.bySourceShot['oversized-shot'],undefined,'oversized evidence is excluded whole')
   const beforeQueries=queries
   await assert.rejects(()=>service.readCreativeFeedbackSummary(actor,brandId,'invalid',sqlDb),/invalid_feedback_cursor/)
   await assert.rejects(()=>service.readCreativeFeedbackSummary(actor,'foreign',null,sqlDb),/creative_access_denied/)

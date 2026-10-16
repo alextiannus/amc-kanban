@@ -1,5 +1,5 @@
 import {MATCH_REQUEST_KIND,planningHash,openTargets,requestTargets} from './matchingContract'
-import {validateCreativeFeedback,readCreativeFeedback,creativeChanges,creativeCandidateChanges,creativeFeedbackDimensions,CANDIDATE_FEEDBACK_KIND,FEEDBACK_WINDOW,feedbackCursor,parseFeedbackCursor,summarizeCreativeFeedback} from './revisionFeedback'
+import {validateCreativeFeedback,readCreativeFeedback,creativeChanges,creativeCandidateChanges,creativeFeedbackDimensions,CANDIDATE_FEEDBACK_KIND,FEEDBACK_WINDOW,VIDEO_FEEDBACK_MAX_BYTES,feedbackCursor,parseFeedbackCursor,summarizeCreativeFeedback} from './revisionFeedback'
 import {creativeDirection,duplicateCreative,exceedsCreativeSubjectLimit} from '../ai-native/creative-diversity.ts'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '../prisma.ts'
@@ -308,7 +308,7 @@ export async function readCreativeFeedbackSummary(actor:Actor,brandId:string,cur
       'taskId',CASE WHEN length(COALESCE(input->>'taskId',input->'ai'->>'taskId'))<=200 THEN COALESCE(input->'taskId',input->'ai'->'taskId') END,
       'actor',jsonb_build_object('type',input->'actor'->'type'),
       'event',input->'event','candidateKey',input->'candidateKey',
-      'videoFeedback',CASE WHEN octet_length((input->'videoFeedback')::text)<=32768 THEN input->'videoFeedback' END,
+      'videoFeedback',CASE WHEN octet_length((input->'videoFeedback')::text)<=${VIDEO_FEEDBACK_MAX_BYTES} THEN input->'videoFeedback' END,
       'qualityReview',CASE WHEN quality->'version'='1'::jsonb AND jsonb_typeof(quality->'attempts')='array' THEN jsonb_build_object('version',1,'attempts',
         (SELECT COALESCE(jsonb_agg(jsonb_build_object(
           'artifact',jsonb_build_object(

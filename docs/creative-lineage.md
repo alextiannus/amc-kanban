@@ -34,6 +34,8 @@ Task 7 统计扩展（本地已实现与定向验证，未发布）：`editDista
 
 `videoFeedback` 是服务端保存的显式证据契约，允许 sourceShotId、textChanges、captionMismatchBlocked、voiceReceiptChange、musicReceiptChange；拒绝未知键、超限与重复字段，不从主观原因推断任何变化。当前公共修订写接口不接受客户端提交此结构；MM/Content 可信生产者接线待后续任务完成，未写入的证据保持未知。聚合仅返回计数，不返回文本、媒体 ID 或问题原文。数据库只投影受限证据；来源脚本、说明及 AI 指令仍不得加载。
 
+证据总字节预算为统一的 `VIDEO_FEEDBACK_MAX_BYTES=32768`。reader 要求完整紧凑 JSON 的 UTF-8 字节数加 256 字节 JSONB 格式余量不超过预算；该严格结构最多七个文本字段，256 字节覆盖 JSONB 增加的分隔空格。SQL 投影使用同一个常量为上限，合法证据不会因控制字符转义或格式开销丢失；超预算整个 videoFeedback 无效，不保留其中字幕/音频计数。
+
 既有文案反馈服务复用同一 Unicode 编辑距离实现，单次最大 20000 码点与 4000000 计算单元；超限返回未知 diffRatio=null，不新增或自动批准训练样本，不将未知当作全文重写。
 
 来源/SKU/平台/内容类型使用保存时固定上下文，各维度最多 49 个按字典序选择的真实键与 `other`；缺失、非法或剩余键归入 other。同一事件落入多个 SKU/平台时每桶只计一次；other 也按脚本/候选去重。聚合不返回说明、脚本、AI 指令或原始 revision；数据库只投影统计所需 JSON 字段。
