@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     const job=await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
     if(!await canUserAccessBrand(brandId,actor.id,'WRITE'))throw Object.assign(new Error('Not found'),{status:404})
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${brandId+':'+id}))`
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${brandId+':'+id}))::text`
     const existing = await tx.videoProductionJob.findUnique({
       where: { id },
       select: { id:true,brandId: true, createdBy:true, plan:true, creativeId:true,idea:true,assetIds:true,mediaUrls:true },

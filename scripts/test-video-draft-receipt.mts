@@ -8,6 +8,8 @@ import {pinVideoEditor,editorForLibrary,videoDraftForLibrary} from '../src/lib/v
 import {videoDraftReceipt} from '../src/lib/videoDraftReceipt.ts'
 import {verifyVideoReceipt,videoReceiptDigest} from '../src/lib/videoReceipt.ts'
 import {createHmac} from 'node:crypto'
+const videoJobsRouteSource=readFileSync('src/app/api/content/video/jobs/route.ts','utf8')
+assert.match(videoJobsRouteSource,/pg_advisory_xact_lock\(hashtext\([^\n]+\)\)::text/,'Prisma must receive a supported type from the advisory-lock query')
 const compile=(file:string,deps:any)=>{const mod={exports:{} as any};new Function('require','module','exports','console',ts.transpileModule(process.env.VIDEO_LINEAGE_BASELINE&&file==='src/app/api/content/video/jobs/route.ts'?execFileSync('git',['show','b87f57b7:'+file],{encoding:'utf8'}):readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>{assert(key in deps,key);return deps[key]},mod,mod.exports,{...console,error:()=>{}});return mod.exports}
 let actor:any={id:'owner',type:'HUMAN',role:'USER'},access=true,permission=true,origin=true,rows:any[]=[],writes=0,queue=Promise.resolve()
 const creative:any={id:'rev1',brandId:'brand',kind:'CREATIVE_ITEM',input:{creativeId:'idea'},output:{id:'idea',source:{sourceRevision:'v1',libraryDigest:'digest',evidenceStatus:'full_source',timeline:[{id:'s1',narrativePurpose:'hook'}]},skuDecision:{selectedSkuIds:['sku'],recommendations:[{skuId:'sku',skuName:'Product',sourceShotIds:['s1']}]}}}

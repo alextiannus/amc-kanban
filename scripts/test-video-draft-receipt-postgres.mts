@@ -5,6 +5,8 @@ import {videoDraftReceipt} from '../src/lib/videoDraftReceipt.ts'
 assert(process.env.DATABASE_URL?.includes('localhost')&&process.env.DATABASE_URL.includes('_test_'))
 const id='video-receipt-'+randomUUID(),url='https://example.invalid/video.mp4'
 try {
+ const [lockResult]=await prisma.$queryRaw<Array<{lockResult:string}>>`SELECT pg_advisory_xact_lock(hashtext(${`video-job:${id}`}))::text AS "lockResult"`
+ assert.equal(typeof lockResult?.lockResult,'string','Prisma deserializes the advisory-lock result after the void value is cast')
  await prisma.brand.create({data:{id,name:id}})
  await prisma.socialAccount.create({data:{id,brandId:id,platformId:'instagram',handle:'fixture'}})
  await prisma.videoProductionJob.create({data:{id,brandId:id,title:id,platform:'instagram',idea:'fixture',status:'completed',finalVideoUrl:url,scenes:[]}})
