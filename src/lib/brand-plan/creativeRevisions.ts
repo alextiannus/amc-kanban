@@ -14,6 +14,7 @@ import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch, va
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
 import {canonicalCreativeSource} from './creativeSourceReference'
 import {confirmSkuDecision, assertConfirmedDecision, skuCatalog, type SkuSource, type SkuBinding} from './creativeSkuContract'
+import {beginFidelityAttempt,completeFidelityAttempt,assertPassedQualityReview,type CreativeQualityReview} from './creativeFidelity.ts'
 
 export { CreativeRevisionError } from './creativeRevisionContract.ts'
 type Actor = { id: string; type: string }
@@ -59,7 +60,50 @@ export async function readCreativeRevisions(actor: Actor, brandId: string, month
   return {ok:true, brand, creativeId, month, current, capabilities:{canSchedule}, workspaceItem:current?normalizeCreativeWorkspaceItem(current,{brandId,currentRevisionId:latest?.id,createdAt:current.createdAt,updatedAt:latest?.createdAt?.toISOString()}):null, currentUser:{id:reader.id,name:reader.nickname||reader.id}, canSaveAsNew:canWrite, canOverwrite:canWrite&&(!current?.scriptOwner?.id||current.scriptOwner.id===actor.id), source:current?revisionSource(current,record(latest?.input).source,new Date().toISOString()):revisions[0]?record(revisions[0].input).source:null, expectedRevision:current ? creativeDigest(current):null, revisions:revisions.slice(0,100).map(present), hasMore:!revisionId && revisions.length>100, nextBeforeVersion:!revisionId && revisions.length>100 ? revisions[99].version : null}
 }
 
-export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance, seed?:Record<string,any>, skuConfirmation?:{input:any;source?:SkuSource|null;resolveSource?:()=>Promise<SkuSource|null>}) {
+const FIDELITY_REVIEW_KIND='CREATIVE_FIDELITY_REVIEW'
+const fidelityPeriod=(actor:Actor,taskId:string)=>creativeDigest([actor.id,taskId])
+export async function readCreativeQualityReview(actor:Actor,brandId:string,taskId:string,db=prisma):Promise<CreativeQualityReview|null>{
+  await authorize(db,actor,brandId)
+  const row=await db.brandMarketingSolution.findFirst({where:{brandId,kind:FIDELITY_REVIEW_KIND,period:fidelityPeriod(actor,taskId)},orderBy:{version:'desc'}})
+  return record(row?.input).qualityReview||null
+}
+// Operational review evidence only: this never changes a creative, SKU decision,
+// source binding, schedule or draft. Every stage is append-only revision input.
+async function mutateCreativeQualityReview(actor:Actor,brandId:string,month:string,creativeId:string,taskId:string,mutate:(previous:CreativeQualityReview|null)=>CreativeQualityReview,db=prisma){
+  validateCreativeAddress(month,creativeId)
+  return db.$transaction(async (tx:Prisma.TransactionClient)=>{
+    await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
+    const user=await authorize(tx,actor,brandId,true)
+    const period=fidelityPeriod(actor,taskId)
+    const previous=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:FIDELITY_REVIEW_KIND,period},orderBy:{version:'desc'}})
+    const input=record(previous?.input),state:CreativeQualityReview|null=input.qualityReview||null
+    if(previous&&(input.creativeId!==creativeId||input.month!==month||input.taskId!==taskId))throw new CreativeRevisionError('fidelity_binding_changed',409)
+    const qualityReview=mutate(state)
+    if(state&&creativeDigest(qualityReview)===creativeDigest(state))return state
+    await tx.brandMarketingSolution.create({data:{brandId,kind:FIDELITY_REVIEW_KIND,period,version:(previous?.version||0)+1,status:'DRAFT',generationMode:'AI_FIDELITY_REVIEW',createdById:user.id,input:{taskId,creativeId,month,actor:{id:actor.id,type:actor.type},qualityReview:qualityReview as unknown as Prisma.InputJsonValue},output:{}}})
+    return qualityReview
+  })
+}
+export async function prepareCreativeQualityReview(actor:Actor,brandId:string,month:string,creativeId:string,taskId:string,source:SkuSource|null,adapted:Parameters<typeof beginFidelityAttempt>[2],artifact:Parameters<typeof beginFidelityAttempt>[3],db=prisma){
+  return mutateCreativeQualityReview(actor,brandId,month,creativeId,taskId,previous=>beginFidelityAttempt(previous,source,adapted,artifact),db)
+}
+export async function classifyCreativeQualityReview(actor:Actor,brandId:string,month:string,creativeId:string,taskId:string,classification:unknown,db=prisma){
+  return mutateCreativeQualityReview(actor,brandId,month,creativeId,taskId,previous=>{
+    if(!previous)throw new CreativeRevisionError('fidelity_candidate_required',409)
+    return completeFidelityAttempt(previous,classification)
+  },db)
+}
+export async function rejectCreativeQualityRepair(actor:Actor,brandId:string,month:string,creativeId:string,taskId:string,content:string,artifact:Parameters<typeof beginFidelityAttempt>[3],issue:string,db=prisma){
+  return mutateCreativeQualityReview(actor,brandId,month,creativeId,taskId,previous=>{
+    if(!previous)throw new CreativeRevisionError('fidelity_candidate_required',409)
+    if(previous.status==='needs_revision'&&previous.attempts.at(-1)?.artifact.digest===artifact.digest)return previous
+    if(previous.status!=='repair_required')throw new CreativeRevisionError('fidelity_repair_limit',409)
+    const pending=beginFidelityAttempt(previous,previous.attempts[0].source,{shots:[],rawArtifact:content,validationError:issue},artifact)
+    return completeFidelityAttempt(pending,{candidateDigest:artifact.digest,dimensions:pending.attempts[0].review!.dimensions.map(d=>({key:d.key,status:'failed',issues:[issue]}))})
+  },db)
+}
+
+export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance & {qualityReview?:CreativeQualityReview}, seed?:Record<string,any>, skuConfirmation?:{input:any;source?:SkuSource|null;resolveSource?:()=>Promise<SkuSource|null>}) {
   validateCreativeAddress(month,creativeId)
   if (typeof body?.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision) || typeof body?.idempotencyKey !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.idempotencyKey)) throw new CreativeRevisionError('creative_revision_and_request_key_required')
   if(body?.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw new CreativeRevisionError('invalid_script_save_mode')
@@ -145,7 +189,11 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const confirmationSource=skuConfirmation&&confirmationCatalog!.length?(skuConfirmation.resolveSource?await skuConfirmation.resolveSource():skuConfirmation.source||null):null
     const skuDecision=skuConfirmation ? confirmSkuDecision(skuConfirmation.input,confirmationCatalog!,confirmationSource,user.id,body.expectedRevision) : null
     if(ai?.autopilotRunId&&!ai.skuBinding)throw new CreativeRevisionError('sku_confirmation_required_use_creative_adaptation',409)
-    if(ai?.skuBinding)assertConfirmedDecision(current.skuDecision,ai.skuBinding,skuCatalog(currentFacts),ai.skuSource||null)
+    if(ai?.skuBinding){
+      assertConfirmedDecision(current.skuDecision,ai.skuBinding,skuCatalog(currentFacts),ai.skuSource||null)
+      assertPassedQualityReview(ai.qualityReview,ai.artifact.digest)
+      if(creativeDigest(validateCreativePatch(ai.qualityReview!.attempts.at(-1)!.adapted.patch,month))!==creativeDigest(patch))throw new CreativeRevisionError('creative_fidelity_candidate_changed',409)
+    }
     if(ai&&!ai.skuBinding&&!seed&&['awaiting_sku','sku_confirmed'].includes(current.adaptationStatus)&&patch.planning!==undefined&&patch.planning!==current.planning)throw new CreativeRevisionError('sku_confirmation_required_use_creative_adaptation',409)
     const brand = await tx.brand.findUnique({
       where: { id: brandId },

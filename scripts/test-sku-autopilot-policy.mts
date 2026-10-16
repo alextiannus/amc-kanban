@@ -4,6 +4,7 @@ import ts from 'typescript'
 import {CapabilityDispatcher,defineCapability} from '@immedi/iaic-core/capabilities/index.js'
 import * as contract from '../src/lib/ai-native/contract.ts'
 import * as sku from '../src/lib/brand-plan/creativeSkuContract.ts'
+import * as fidelity from '../src/lib/brand-plan/creativeFidelity.ts'
 import * as guards from '../src/lib/ai-native/model-guards.ts'
 const compile=(path:string,deps:any)=>{const mod={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports);return mod.exports}
 const runId='a'.repeat(64),taskId='11111111-1111-4111-8111-111111111111',actor=contract.actorFor('brand','human')
@@ -26,14 +27,16 @@ const pool={query:async()=>({rows:[]})}
 const app:any={tasks:{get:async()=>({id:taskId,trusted_context:{reference:'intent-record'}})},runtime:{state:async()=>({id:taskId,status:'succeeded',input:{goal:'Adapt'},version:1})},dispatcher:{invoke:async()=>{dispatches++;return {id:taskId}}},ledger:{taskUsage:async()=>({platformUnits:0,requests:0}),grant:async()=>{grants++}},scope:async()=>actor}
 ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:[],modelRevision:1})
 const service=compile('src/lib/ai-native/service.ts',{
+  '../brand-plan/creativeFidelity':fidelity,
   './contract':contract,'./store':store,'./autopilot':autopilot,'./application':{requireActor:async()=>{}},'../model-management/registry':{runtimeConfig:async()=>({version:1})},'./autopilot-capabilities':{AUTOPILOT_TOOLS:[]},
   '../brand-plan/creativeSkuDecision':skuDeps,'./sku-workflow':workflow,'./recommendations':{adaptedScriptReceipt:async()=>{receiptReads++;return null}},
-  '../brand-plan/creativeRevisions':{saveCreativeRevision:async(...args:any[])=>{saves++;assert.equal(args[6].autopilotRunId,runId);return {receipt:{id:'saved',contentHash:'hash'}}},readCreativeRevisions:async()=>({revisions:[{contentHash:'hash'}]})},
+  '../brand-plan/creativeRevisions':{readCreativeQualityReview:async()=>quality,saveCreativeRevision:async(...args:any[])=>{saves++;assert.equal(args[6].autopilotRunId,runId);return {receipt:{id:'saved',contentHash:'hash'}}},readCreativeRevisions:async()=>({revisions:[{contentHash:'hash'}]})},
 })
 const body={...binding,kind:'creative_adaptation',decisionDigest:decision.digest,requestKey:'autopilot-confirmed',goal:'Adapt after human confirmation'}
 await service.createNativeTask('human','brand',body,false,runId)
 assert.equal(lastIntent.autopilotRunId,runId,'admission must persist the trusted run binding across JSON serialization')
 const application=compile('src/lib/ai-native/application.ts',{
+  '../brand-plan/creativeFidelity':fidelity,
   './runtime-application.mjs':{openApplication:async(c:any)=>{config=c;return app}},'./contract':contract,'./store':store,'./autopilot':autopilot,'./model-guards':guards,
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[],autopilotCapabilities:()=>[]},'@immedi/iaic-core/capabilities/index.js':{defineCapability:(v:any)=>v},
   'node:crypto':await import('node:crypto'),'node:path':await import('node:path'),
@@ -70,6 +73,7 @@ accountPresent=true
 await assert.rejects(()=>service.createNativeTask('human','brand',body),/request_key_reused/,'an interactive retry cannot strip the persisted run')
 const produced={...binding,kind:'creative_adaptation',decisionDigest:decision.digest,contextDigest:contract.digest(facts),mode:'ordinary_brand_content',notice:'普通品牌内容，非爆款复刻',title:'Brand story',aiCaption:'Brand',materialRequirements:['Film brand'],shots:[{contractVersion:2,sourceShotId:null,skuIds:[],visualDescription:'Brand shop',subjectAction:'Open door',spokenText:'Meet Brand',captionMode:'mirror_spoken',overlayText:'Brand',soundDesign:'Continuous instrumental bed',transition:'Fade out',narrativePurpose:'Introduce brand',continuityRequirements:['Keep the same doorway'],sourcePreservation:{hookRole:'not_applicable',narrativeRole:'preserved',pacingRole:'preserved',changeReasons:[]}}]}
 const artifact={path:lastIntent.artifactPath,digest:contract.digest(produced),revision:1}
+const quality=fidelity.completeFidelityAttempt(fidelity.beginFidelityAttempt(null,null,sku.adaptationFrom(JSON.stringify(produced),lastIntent,catalog,null,decision),artifact),{candidateDigest:artifact.digest,dimensions:fidelity.FIDELITY_DIMENSIONS.map(key=>({key,status:'passed',issues:[]}))})
 app.runtime.get=async()=>{reads++;return {status:'succeeded',result:{artifacts:[artifact]},calls:[]}}
 app.workspace={read:async()=>({content:JSON.stringify(produced)})}
 await service.adoptNativeCandidate('human','brand',taskId,{requestKey:'adopt-enabled',artifactDigest:artifact.digest})

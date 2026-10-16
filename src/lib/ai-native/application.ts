@@ -21,7 +21,8 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { prisma } from '../prisma'
 import { canUserAccessBrand } from '../user-management/brandAccess'
-import { readCreativeRevisions } from '../brand-plan/creativeRevisions'
+import { readCreativeRevisions,readCreativeQualityReview,prepareCreativeQualityReview,classifyCreativeQualityReview,rejectCreativeQualityRepair } from '../brand-plan/creativeRevisions'
+import {FIDELITY_DIMENSIONS,fidelityReviewContract} from '../brand-plan/creativeFidelity'
 import { conversationFrom, brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
 import { intentBy } from './store'
 import { readBrandFacts, validateSkuReferences, skuReferenceFeedback } from './facts'
@@ -46,6 +47,7 @@ async function uiPagesFor(actor:NativeActor){
 }
 export async function applicationVersion(root=process.cwd()){
   const hash=createHash('sha256').update(CORE_ARCHIVE_SHA)
+  hash.update(await readFile(path.join(root,'src/lib/brand-plan/creativeFidelity.ts')))
   for(const file of ['src/lib/ai-native/runtime-routing.ts','src/lib/ai-native/runtime-application.mjs','src/lib/ai-native/conversation-status.ts','src/lib/ai-native/conversation-context.ts','src/lib/ai-native/conversation-completion.ts','src/lib/ai-native/conversation-progress.ts','src/lib/ai-native/ui-navigation.ts','skills/amc-conversation/SKILL.md','skills/amc-marketing-expert/SKILL.md','skills/amc-brand-planning/SKILL.md','src/lib/ai-native/planning-workspace-contract.ts','src/lib/ai-native/planning-workspace-save.ts','src/lib/brand-plan/marketingExpert.ts','src/lib/ai-native/planning-budget.ts','src/lib/ai-native/brand-planning.ts','src/lib/ai-native/calendar-planning.ts','src/lib/brand-plan/matchingContract.ts','src/lib/brand-plan/revisionFeedback.ts','src/lib/ai-native/application.ts','src/lib/ai-native/idea-pool.ts','src/lib/ai-native/daily-planning.ts','src/lib/ai-native/daily-recovery.ts','src/lib/ai-native/creative-diversity.ts','src/lib/ai-native/contract.ts','src/lib/ai-native/sku-workflow.ts','src/lib/brand-plan/creativeSkuContract.ts','src/lib/brand-plan/creativeSkuDecision.ts','src/lib/ai-native/recommendations.ts','src/lib/ai-native/library.ts','src/lib/promotion-strategy/clients.ts','src/lib/ai-native/facts.ts','src/lib/ai-native/operations.ts','src/lib/ai-native/models.ts','src/lib/ai-native/model-guards.ts','src/lib/ai-native/tool-wire.ts','src/lib/ai-native/store.ts','src/lib/ai-native/service.ts','src/lib/ai-native/preferences.ts','src/lib/global-text/transport.ts','src/lib/brand-plan/creativeRevisions.ts','src/lib/brand-plan/creativeRevisionContract.ts','src/lib/model-management/types.ts','src/lib/model-management/registry.ts','skills/amc-creative/SKILL.md','skills/amc-discovery/SKILL.md','skills/amc-brief/SKILL.md','skills/amc-autopilot/SKILL.md','src/lib/ai-native/autopilot.ts','src/lib/ai-native/autopilot-store.ts','src/lib/ai-native/autopilot-capabilities.ts'])hash.update(file).update(await readFile(path.join(root,file)))
   return hash.digest('hex')
 }
@@ -86,7 +88,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
   const contextRead=async(actor:NativeActor,taskId?:string,previousPlanningContext?:PlanningContext)=>{
     const intent=await getIntent(actor,taskId)
     const {knowledge,planningContext,loadedAt}=await sourceRead(actor,intent,intent.kind==='conversation'&&intent.contextSessionId?undefined:previousPlanningContext)
-    if(intent.kind==='sku_proposal'||intent.kind==='creative_adaptation')return {...await skuTaskContext(intent),requiredSkill:'amc-creative/SKILL.md'}
+    if(intent.kind==='sku_proposal'||intent.kind==='creative_adaptation')return {...await skuTaskContext(intent),requiredSkill:'amc-creative/SKILL.md',...(intent.kind==='creative_adaptation'?{fidelityReviewContract,qualityReview:await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,taskId!)}:{})}
     const text=JSON.stringify(intent.kind==='conversation'?conversationKnowledge(knowledge,intent.topic==='brand_planning'):knowledge)
     const partial=text.length>24000
     const projection=partial?{excerpt:text.slice(0,18000),scope:'Partial literal JSON excerpt; omitted material is unknown. Ask the user for any essential missing facts.'}:JSON.parse(text)
@@ -105,9 +107,21 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     }
     return {...(intent.editMode==='materials'?{editMode:'materials',instructions:'Only derive materialRequirements from current.planning. Source is provenance, not a request to re-adapt or re-analyze the original.'}:{}),current:{...value.current,...(intent.draftScript!==undefined?{planning:intent.draftScript}:{}),...(intent.draftMaterialRequirements!==undefined?{materialRequirements:intent.draftMaterialRequirements}:{})},...(intent.draftScript!==undefined?{editingUnsavedDraft:true}:{}),expectedRevision:value.expectedRevision,source:{...savedSource,...(fullEvidence?{currentOriginalAnalysis:fullEvidence}:{})},brandId:intent.brandId}
   }
-  const tools=['amc.marketing_workspace','amc.planning_budget','amc.growth_insight',...AUTOPILOT_TOOLS,'assistant.skills.list','assistant.skills.read','my_list_assistant_memories','my_read_assistant_memory','my_write_workspace','my_read_workspace','amc.context','amc.creative','amc.operations','amc.library']
+  const tools=['amc.creative_fidelity','amc.marketing_workspace','amc.planning_budget','amc.growth_insight',...AUTOPILOT_TOOLS,'assistant.skills.list','assistant.skills.read','my_list_assistant_memories','my_read_assistant_memory','my_write_workspace','my_read_workspace','amc.context','amc.creative','amc.operations','amc.library']
   const humanMemoryTools=['my_remember_assistant_memory','my_forget_assistant_memory','my_relearn_assistant_memory']
   const extraCapabilities=[...autopilotCapabilities(getIntent,options.autopilotAdapters),
+    defineCapability({name:'amc.creative_fidelity',description:'Classify only the six fidelity dimensions for the pending exact candidate after the host requests review. Records review evidence, never saves business content or changes source/SKU bindings.',effect:'write',retry:'idempotent',authorize,
+      input:{type:'object',properties:{candidateDigest:{type:'string',pattern:'^[a-f0-9]{64}$'},dimensions:{type:'array',minItems:6,maxItems:6,items:{type:'object',properties:{key:{type:'string',enum:[...FIDELITY_DIMENSIONS]},status:{type:'string',enum:['passed','failed','not_applicable']},issues:{type:'array',maxItems:12,items:{type:'string',minLength:1,maxLength:2000}}},required:['key','status','issues'],additionalProperties:false}}},required:['candidateDigest','dimensions'],additionalProperties:false},output:{type:'object'},
+      implementation:{kind:'function',execute:async(input,{actor,taskId})=>{
+        const intent=await getIntent(actor,taskId)
+        if(intent.kind!=='creative_adaptation')throw nativeError('creative_adaptation_required',403)
+        const previous=await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,taskId!)
+        const attempt=previous?.attempts.at(-1)
+        if(!attempt)throw nativeError('fidelity_candidate_required',409)
+        await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,attempt.artifact)).content,intent)
+        const quality=await classifyCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,intent.month,intent.creativeId,taskId!,input)
+        return {status:quality.status,repairCount:quality.repairCount,dimensions:quality.dimensions,issues:quality.issues,artifact:attempt.artifact,instructions:quality.status==='repair_required'?'Repair this candidate once in this same task, preserving the fixed bindings.':'Finish with the exact candidate artifact receipt. A needs_revision result cannot be adopted.'}
+      }},revalidate:async(_input,previous)=>previous}),
     defineCapability({name:'amc.marketing_workspace',description:'Read the authorized brand saved interview, brand claim and annual plan from the shared Kanban marketing workspace. Historical plans are evidence, not current approval. Does not save or regenerate anything.',input:empty,output:{type:'object'},effect:'read',authorize,
       implementation:{kind:'function',execute:async(_input,{actor,taskId})=>{const intent=await getIntent(actor,taskId);if(intent.kind!=='conversation'||intent.topic!=='brand_planning')throw nativeError('planning_task_required',403);return (options.readMarketingWorkspace||readMarketingWorkspace)(actor)}},
       revalidate:async(_input,previous,{actor,taskId})=>{const intent=await getIntent(actor,taskId);if(intent.kind!=='conversation'||intent.topic!=='brand_planning')throw nativeError('planning_task_required',403);return previous}}),
@@ -141,6 +155,10 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
           const value=input as {path?:string;content?:string}
           allowed=allowed&&value.path===intent.artifactPath&&(value.content===undefined||Buffer.byteLength(value.content)<=(intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'?2*1024*1024:32000))
           reason='task_artifact_scope'
+          if(allowed&&capability.name==='my_write_workspace'&&taskId&&intent.kind==='creative_adaptation'){
+            const quality=await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,taskId)
+            if(quality&&quality.status!=='repair_required'){allowed=false;reason='fidelity_review_candidate_frozen'}
+          }
         }
         if(allowed&&taskId&&capability.implementation.kind==='agent'){
           const usage=await app.ledger.taskUsage(await app.scope(actor),taskId)
@@ -167,7 +185,29 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         const artifact=await (app.workspace as WorkspacePort).read(actor,ref)
         if(row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'){
           if(!history.calls.some(c=>c.status==='succeeded'&&c.capability==='assistant.skills.read'&&(c.input as {id?:string}).id==='amc-creative/SKILL.md'))return {verified:false,feedback:'Read amc-creative/SKILL.md and follow amc.context.artifactContract.'}
-          await validateSkuArtifact(artifact.content,row.intent)
+          const taskId=row.intent.kind==='creative_adaptation'?(row.task_id||(await (app.tasks as unknown as {findRequest(actor:NativeActor,capability:string,key:string):Promise<{id:string}|null>}).findRequest(actor,'agent.work',row.intent.requestKey))?.id):null
+          if(row.intent.kind==='creative_adaptation'&&!taskId)throw nativeError('trusted_task_required',403)
+          let validated
+          try{validated=await validateSkuArtifact(artifact.content,row.intent)}catch(error){
+            if(row.intent.kind==='creative_adaptation'&&taskId){
+              const quality=await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,taskId)
+              if(quality?.status==='needs_revision'&&quality.attempts.at(-1)?.artifact.digest===ref.digest)return {verified:true}
+              if(quality?.status==='repair_required'&&quality.attempts.at(-1)?.artifact.digest!==ref.digest){
+                const code=(error as {code?:string})?.code
+                await rejectCreativeQualityRepair({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,row.intent.month,row.intent.creativeId,taskId,artifact.content,ref,`repair_artifact_invalid:${typeof code==='string'&&/^[a-z_]{1,100}$/.test(code)?code:'invalid_json_or_contract'}`)
+                return {verified:true}
+              }
+            }
+            throw error
+          }
+          const {result:adapted,ctx}=validated
+          if(row.intent.kind==='creative_adaptation'){
+            const quality=await prepareCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},row.intent.brandId,row.intent.month,row.intent.creativeId,taskId!,ctx.source,adapted,ref)
+            if(quality.status==='awaiting_review')return {verified:false,feedback:`Review the exact current candidate now. ${JSON.stringify(fidelityReviewContract)} candidateDigest=${ref.digest}. Call amc.creative_fidelity, then finish with the unchanged candidate receipt. Do not rewrite content during review.`}
+            if(quality.status==='repair_required')return {verified:false,feedback:`One repair is allowed in this same durable task. Correct only these fidelity issues while preserving trusted source/SKU bindings: ${JSON.stringify(quality.issues)}. Write the repaired V2 candidate and finish with its new receipt; it will be reviewed once more.`}
+            // needs_revision is a completed assessment, never business adoption.
+            return {verified:true}
+          }
           return {verified:true}
         }
         if(row.intent.kind==='conversation'){

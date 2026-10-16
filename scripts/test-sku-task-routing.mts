@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs'
 import ts from 'typescript'
 import * as contract from '../src/lib/ai-native/contract.ts'
 import * as sku from '../src/lib/brand-plan/creativeSkuContract.ts'
+import * as fidelity from '../src/lib/brand-plan/creativeFidelity.ts'
 const compile=(path:string,deps:any)=>{const mod={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports);return mod.exports}
 let revoked=false,currentRevision='a'.repeat(64),dispatches=0,lastIntent:any,allowedTools:string[]=[],saves=0,savedReceipt:any=null
 const facts={id:'brand',name:'Brand',knowledge:{menuItems:[{id:'a',name:'Alpha'},{id:'b',name:'Beta'}]}},catalog=sku.skuCatalog(facts)
@@ -21,11 +22,12 @@ const rows=new Map<string,any>(),taskId='11111111-1111-4111-8111-111111111111'
 const pool={query:async()=>({rows:[]})},app={runtime:{state:async()=>({id:taskId,status:'queued',input:{goal:'SKU'},version:1,updated_at:'now'})},dispatcher:{invoke:async(_name:string,input:any)=>{dispatches++;allowedTools=input.allowedTools;return {id:taskId}}}}
 ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:['amc.context','amc.creative','amc.library','amc.operations','my_write_workspace'],modelRevision:1})
 const service=compile('src/lib/ai-native/service.ts',{
+  '../brand-plan/creativeFidelity':fidelity,
   './contract':contract,'./application':{requireActor:async()=>{if(revoked)throw contract.nativeError('ai_access_denied',403)}},'../model-management/registry':{runtimeConfig:async()=>({version:1})},
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[]},'../brand-plan/creativeSkuDecision':skuDeps,'./sku-workflow':workflow,
   './recommendations':{adaptedScriptReceipt:async()=>savedReceipt},
   './autopilot':{autopilotRun:async()=>({})},
-  '../brand-plan/creativeRevisions':{saveCreativeRevision:async(...args:any[])=>{saves++;assert(args[6].skuBinding.decisionDigest);return {receipt:{id:'saved-adaptation',contentHash:'saved-hash',content:{id:'idea',adaptationStatus:'adapted'}}}},readCreativeRevisions:async()=>({revisions:[{contentHash:'saved-hash'}]})},
+  '../brand-plan/creativeRevisions':{readCreativeQualityReview:async()=>quality,saveCreativeRevision:async(...args:any[])=>{saves++;assert(args[6].skuBinding.decisionDigest);return {receipt:{id:'saved-adaptation',contentHash:'saved-hash',content:{id:'idea',adaptationStatus:'adapted'}}}},readCreativeRevisions:async()=>({revisions:[{contentHash:'saved-hash'}]})},
   './store':{intentBy:async(_p:any,_a:any,_f:any,key:string)=>{const r=rows.get(key);if(!r)throw contract.nativeError('not_found',404);return r},admitIntent:async(_p:any,_a:any,intent:any)=>{lastIntent=intent;const r={id:'request',intent,digest:contract.digest(intent),task_id:taskId};rows.set(intent.requestKey,r);return r},intentForTask:async()=>({intent:lastIntent})},
 })
 const body={kind:'sku_proposal',creativeId:'idea',month:'2026-11',expectedRevision:currentRevision,goal:'Suggest SKU roles',requestKey:'proposal-one'}
@@ -50,6 +52,7 @@ const adaptationContext=await workflow.skuTaskContext(lastIntent)
 assert.deepEqual(adaptationContext.productCatalog.map((s:any)=>s.id),['a'])
 assert.equal(adaptationContext.decision.digest,confirmed.digest)
 const produced={...binding(),kind:'creative_adaptation',decisionDigest:confirmed.digest,contextDigest:contract.digest(facts),mode:'source_adaptation',title:'Alpha story',aiCaption:'',materialRequirements:['Film Alpha'],shots:[{contractVersion:2,sourceShotId:'shot-1',skuIds:['a'],visualDescription:'Alpha',subjectAction:'Present Alpha',spokenText:'Meet Alpha',captionMode:'mirror_spoken',overlayText:'Alpha',soundDesign:'Continuous instrumental bed',transition:'Match cut',narrativePurpose:'Introduce Alpha',continuityRequirements:['Keep the same subject'],sourcePreservation:{hookRole:'preserved',narrativeRole:'preserved',pacingRole:'preserved',changeReasons:[]}}]}
+const quality=fidelity.completeFidelityAttempt(fidelity.beginFidelityAttempt(null,source,sku.adaptationFrom(JSON.stringify(produced),{...lastIntent,decisionDigest:confirmed.digest},catalog,source,confirmed),{path:lastIntent.artifactPath,revision:1,digest:'artifact-digest'}),{candidateDigest:'artifact-digest',dimensions:fidelity.FIDELITY_DIMENSIONS.map(key=>({key,status:'passed',issues:[]}))})
 assert.equal((await workflow.validateSkuArtifact(JSON.stringify(produced),lastIntent)).result.shots.length,1)
 await assert.rejects(()=>workflow.validateSkuArtifact(JSON.stringify({...produced,title:'Beta'}),lastIntent),/unselected_sku/)
 const dispatched=dispatches;currentRevision='f'.repeat(64)
@@ -66,8 +69,9 @@ revoked=false;currentRevision='a'.repeat(64)
 const libraryModule=compile('src/lib/ai-native/library.ts',{'./contract':contract,'../brand-plan/creativeRevisionContract':await import('../src/lib/brand-plan/creativeRevisionContract.ts')})
 let configured:any,artifactContent=''
 const application=compile('src/lib/ai-native/application.ts',{
+  '../brand-plan/creativeFidelity':fidelity,'../brand-plan/creativeRevisions':{prepareCreativeQualityReview:async()=>quality},
   './runtime-application.mjs':{openApplication:async(config:any)=>{configured=config;return {workspace:{read:async()=>({content:artifactContent})}}}},
-  './contract':contract,'./store':{intentBy:async()=>({intent:lastIntent})},'./library':libraryModule,'./sku-workflow':workflow,
+  './contract':contract,'./store':{intentBy:async()=>({intent:lastIntent,task_id:taskId})},'./library':libraryModule,'./sku-workflow':workflow,
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[],autopilotCapabilities:()=>[]},
   '@immedi/iaic-core/capabilities/index.js':{defineCapability:(v:any)=>v},'node:crypto':await import('node:crypto'),'node:path':await import('node:path'),
 })

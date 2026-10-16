@@ -17,7 +17,8 @@ import { composeApplication, requireActor, type WorkspacePort } from './applicat
 import { centralModels } from './models'
 import { nativePool, initializeHost, admitIntent, intentBy, intentForTask, type PublicTaskIndex, type RuntimeLane } from './store'
 import { conversationFrom, conversationInput, actorFor, dailyActorFor, candidateFrom, briefFrom, digest, sameSkuIntent, nativeError, requestKey, USAGE_POLICY, CORE_VERSION, type NativeActor, type NativeIntent } from './contract'
-import { readCreativeRevisions, saveCreativeRevision } from '../brand-plan/creativeRevisions'
+import { readCreativeRevisions, saveCreativeRevision,readCreativeQualityReview } from '../brand-plan/creativeRevisions'
+import {assertPassedQualityReview} from '../brand-plan/creativeFidelity'
 import { canReadOperations } from './operations'
 import { runtimeConfig } from '../model-management/registry'
 import {readSkuContext,readBoundSkuContext} from '../brand-plan/creativeSkuDecision'
@@ -250,18 +251,20 @@ async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHo
   const view=await nativeTaskHistory(app,actor,id,row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'),history=view.history,task=projectTask(history)
   // Read usage after the result snapshot: otherwise completion can race an earlier pending ledger read.
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
+  const qualityReview=row.intent.kind==='creative_adaptation'?await readCreativeQualityReview({id:userId,type:'HUMAN'},brandId,id):null
   let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null,skuAdoption=null
   if(task.status==='succeeded'&&task.result){
     artifact=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)||null
-    if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else if(row.intent.kind==='brand_brief')report=briefFrom(content,row.intent);else if(row.intent.kind==='conversation')report=conversationFrom(content,row.intent);else report=JSON.parse(content)}
+    if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else if(row.intent.kind==='brand_brief')report=briefFrom(content,row.intent);else if(row.intent.kind==='conversation')report=conversationFrom(content,row.intent);else report=qualityReview?.status==='needs_revision'?qualityReview.attempts.at(-1)!.adapted:JSON.parse(content)}
   }
   const sourceInsight=conversationInsight(history.calls)
+  if(qualityReview)Object.assign(task,{runtimeStatus:task.status,qualityReview,...(qualityReview.status==='needs_revision'?{status:'needs_revision'}:{})})
   if(artifact&&(row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation')){
     skuAdoption=row.intent.kind==='creative_adaptation'?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null
     // Succeeded artifacts were verified against this task's fixed context.
     // Reading them is not a new adoption; that operation revalidates live data.
     if(row.intent.kind==='sku_proposal')report={...report,historical:true,contextState:view.contextState}
-    else{candidate={...report,historical:true,contextState:view.contextState};report=null}
+    else{candidate={...report,historical:true,contextState:view.contextState,qualityReview};report=null}
   }
   const insight=row.intent.kind==='conversation'&&sourceInsight?{status:sourceInsight.status,reportVersionId:sourceInsight.reportVersionId||null,partial:sourceInsight.partial===true,generatedAt:typeof sourceInsight.generatedAt==='string'?sourceInsight.generatedAt:null}:null
   const operations=history.calls.find(c=>c.capability==='amc.operations'&&c.status==='succeeded')?.result as {draftTotal?:number;accountTotal?:number;operationsDigest?:string;retrievedAt?:string}|undefined
@@ -317,8 +320,10 @@ export async function adoptNativeCandidate(userId:string,brandId:string,id:strin
   }
   if(row.intent.kind==='sku_proposal')throw nativeError('human_sku_confirmation_required',409)
   if(row.intent.kind==='creative_adaptation'){
+    const qualityReview=await readCreativeQualityReview({id:userId,type:'HUMAN'},brandId,id)
+    assertPassedQualityReview(qualityReview,ref.digest)
     const {result,ctx}=await validateSkuArtifact((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
-    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{reviewChanges:[],...(boundRunId?{autopilotRunId:boundRunId}:{}),adoptionRequest,taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
+    const saved=await saveCreativeRevision({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,{expectedRevision:row.intent.expectedRevision,idempotencyKey:`sku-adapt-${digest([id,ref.digest])}`,patch:result.patch},undefined,{qualityReview:qualityReview!,reviewChanges:[],...(boundRunId?{autopilotRunId:boundRunId}:{}),adoptionRequest,taskId:id,agentId:'amc-mm-user-ai',requestedBy:userId,contextDigest:result.contextDigest,artifact:ref,skuBinding:{...row.intent,decisionDigest:row.intent.decisionDigest!},skuSource:ctx.source})
     const verified=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,row.intent.month,row.intent.creativeId,saved.receipt.id)
     if(verified.revisions[0]?.contentHash!==saved.receipt.contentHash)throw nativeError('creative_save_unverified',503)
     return {verified:true,receipt:saved.receipt,month:row.intent.month,creativeId:row.intent.creativeId}

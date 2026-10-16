@@ -153,6 +153,8 @@ Merchant document extraction (implemented locally, not deployed): Growth discove
 
 ## AMCMM 创意再创作与 AI Native 升级
 
+来源忠实度质量门槛（Task 6 本地已实现与定向验证，未发布）：V2 来源／SKU 校验后，仅按 hook、narrative_order、selling_point_position、continuity、cta、diversity 六个固定维度评审。评审产物只含候选摘要、维度分类与问题，不可改变来源、确认 SKU 或直接保存脚本；非法产物不放行。首次失败在原持久任务内最多修复一次，第二次失败或修复稿结构非法为 needs_revision，不得采用为完成适配。两次候选、评审与问题保留在 qualityReview 修订输入中，MM 可回读解释；Core 完成评估的 runtimeStatus 与 needs_revision 业务状态分别返回。采用仍要求当前品牌权限、来源／决策摘要及创意版本一致；通过评审不授予制作或发布权限。
+
 
 AMCMM AI Native 的主要业务目标是：根据当前品牌资料主动从 AMC Content 原创意库匹配来源候选 → AI 推荐 SKU → 人工调整并确认 → 生成完整逐镜适配脚本 → 用户 review 并修改 → 保存品牌再创作版本 → 添加素材进入既有制作流程，或保留在内容创意工作区待人工明确排期。品牌简报是辅助能力，不能代替这条流程。自动驾驶可以执行调研、策划以及人工确认 SKU 后的脚本适配和图文内容生成；不能替代 SKU 人工确认，正式发布仍需人工确认。
 
