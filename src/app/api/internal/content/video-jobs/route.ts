@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
-import { readTrustedVideoJob } from '@/lib/videoJobAccess'
+import { readTrustedVideoJob, resolveTrustedVideoJobActor } from '@/lib/videoJobAccess'
 import { serializeTrustedVideoJob } from '@/lib/videoJobContract'
+import { saveVideoJob } from '@/lib/videoJobPersistence'
 
 const unauthorized = () => Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -14,17 +15,26 @@ export async function POST(request: Request) {
   if (!authorized(request)) return unauthorized()
   try {
     const raw = await request.text()
-    if (Buffer.byteLength(raw, 'utf8') > 4096) return Response.json({ error: 'video_job_lookup_too_large' }, { status: 413 })
+    if (Buffer.byteLength(raw, 'utf8') > 9 * 1024 * 1024) return Response.json({ error: 'video_job_payload_too_large' }, { status: 413 })
     const body = JSON.parse(raw)
     const actorId = text(body?.actorId)
+    if (body?.job !== undefined) {
+      if (!actorId || !body.job || typeof body.job !== 'object' || Array.isArray(body.job)) return Response.json({ error: 'actorId and job are required' }, { status: 400 })
+      const brandId = text(body.job.brandId)
+      if (!brandId) return Response.json({ error: 'job.brandId is required' }, { status: 400 })
+      const actor = await resolveTrustedVideoJobActor(actorId, brandId, 'WRITE')
+      const job = await saveVideoJob(actor, body.job)
+      return Response.json({ success: true, job: serializeTrustedVideoJob(job) }, { headers: { 'Cache-Control': 'no-store' } })
+    }
     const id = text(body?.id)
     const brandId = text(body?.brandId)
     if (!actorId || !id) return Response.json({ error: 'actorId and id are required' }, { status: 400 })
     const job = await readTrustedVideoJob(actorId, id, brandId || undefined)
     return Response.json({ success: true, job: serializeTrustedVideoJob(job) }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error: any) {
-    return Response.json({ error: error instanceof SyntaxError ? 'Invalid JSON' : error.message || 'Video job lookup failed' }, {
-      status: error instanceof SyntaxError ? 400 : typeof error?.status === 'number' ? error.status : 503,
+    const hidden = error?.status === 403 || error?.status === 404
+    return Response.json({ error: error instanceof SyntaxError ? 'Invalid JSON' : hidden ? 'Not found' : error.message || 'Video job request failed' }, {
+      status: error instanceof SyntaxError ? 400 : hidden ? 404 : typeof error?.status === 'number' ? error.status : 503,
     })
   }
 }

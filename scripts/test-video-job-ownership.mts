@@ -2,8 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 
-const routeSource = readFileSync('src/app/api/content/video/jobs/route.ts', 'utf8')
-assert.doesNotMatch(routeSource, /brandId\s*\+\s*['"]:['"]\s*\+\s*id/, 'globally unique job IDs must not use brand-scoped advisory locks')
+const persistenceSource = readFileSync('src/lib/videoJobPersistence.ts', 'utf8')
+assert.doesNotMatch(persistenceSource, /brandId\s*\+\s*['"]:['"]\s*\+\s*id/, 'globally unique job IDs must not use brand-scoped advisory locks')
+assert.match(persistenceSource, /video-job:['"]?\s*\+\s*id/, 'shared persistence must use an ID-global advisory lock')
 
 const compile = (file: string, deps: Record<string, unknown>) => {
   const mod = { exports: {} as any }
@@ -101,6 +102,16 @@ const prisma: any = {
   $transaction: async (fn: (client: any) => unknown) => fn(tx),
 }
 
+const persistence = compile('src/lib/videoJobPersistence.ts', {
+  '@prisma/client': {},
+  './brandAccess': { canSessionAccessBrandProject: async (brand: string) => brandAccess && brand === 'brand' },
+  './prisma': { prisma },
+  './videoLineage': { pinVideoEditor: async () => { throw new Error('not expected') }, editorForLibrary: () => { throw new Error('not expected') } },
+  './role-permissions/delegation': { requireActorPermission: async () => {} },
+  './user-management/brandAccess': { canUserAccessBrand: async () => brandAccess },
+  './videoReceipt': { verifyVideoReceipt: () => {}, videoReceiptDigest: () => 'digest' },
+})
+
 const route = compile('src/app/api/content/video/jobs/route.ts', {
   'next/server': { NextResponse: Response },
   '@prisma/client': {},
@@ -125,6 +136,7 @@ const route = compile('src/app/api/content/video/jobs/route.ts', {
     videoReceiptDigest: () => 'digest',
   },
   '@/lib/videoJobContract': await import('../src/lib/videoJobContract.ts'),
+  '@/lib/videoJobPersistence': persistence,
 })
 
 const get = (id: string, brandId = 'brand', headers?: HeadersInit) =>
@@ -206,20 +218,40 @@ try {
         if (!found || found.createdBy !== actorId) throw Object.assign(new Error('Not found'), { status: 404 })
         return found
       },
+      resolveTrustedVideoJobActor: async (actorId: string, brandId: string) => {
+        if (!actorId || brandId !== 'brand' || actorId === 'inactive') throw Object.assign(new Error('Not found'), { status: 404 })
+        return { id: actorId, type: 'HUMAN', role: 'USER' }
+      },
     },
     '@/lib/videoJobContract': await import('../src/lib/videoJobContract.ts'),
+    '@/lib/videoJobPersistence': persistence,
   })
-  const internalPost = (token: string, actorId = 'owner') => internal.POST(new Request('https://kanban.test/api/internal/content/video-jobs', {
-    method: 'POST', headers: { 'x-content-service-token': token }, body: JSON.stringify({ actorId, id: 'owned', brandId: 'brand' }),
+  const internalPost = (token: string, payload: any = { actorId: 'owner', id: 'owned', brandId: 'brand' }) => internal.POST(new Request('https://kanban.test/api/internal/content/video-jobs', {
+    method: 'POST', headers: { 'x-content-service-token': token }, body: JSON.stringify(payload),
   }))
-  assert.equal((await internalPost('wrong-token')).status, 401)
-  assert.equal((await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, 'other')).status, 404)
+  const internalWrites = writes
+  assert.equal((await internalPost('wrong-token', { actorId: 'owner', job: { id: 'internal-forbidden', brandId: 'brand' } })).status, 401)
+  assert.equal(writes, internalWrites, 'invalid internal token cannot mutate')
+  assert.equal((await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, { actorId: 'other', id: 'owned', brandId: 'brand' })).status, 404)
+  assert.equal((await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, { actorId: 'inactive', job: { id: 'internal-inactive', brandId: 'brand' } })).status, 404)
+  assert.equal(writes, internalWrites, 'inactive internal actor cannot mutate')
   const trusted = await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
   assert.equal(trusted.status, 200)
   assert.equal(trusted.headers.get('cache-control'), 'no-store')
   const trustedBody: any = await trusted.json()
   assert.equal(trustedBody.job.createdBy, 'owner')
   assert.equal(trustedBody.job.plan._mmVideoJob.videoReceipt.ownerId, 'receipt-owner')
+  const internalCreated = await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, { actorId: 'owner', job: { id: 'internal-created', brandId: 'brand', title: 'Internal create', plan: {} } })
+  assert.equal(internalCreated.status, 200)
+  assert.equal((await internalCreated.json() as any).job.createdBy, 'owner')
+  const internalUpdated = await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, { actorId: 'owner', job: { id: 'internal-created', brandId: 'brand', title: 'Internal update', plan: {} } })
+  assert.equal(internalUpdated.status, 200)
+  assert.equal((await internalUpdated.json() as any).job.createdBy, 'owner', 'trusted update keeps the persisted owner immutable')
+  const beforeWrongOwner = writes
+  const wrongOwner = await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, { actorId: 'other', job: { id: 'internal-created', brandId: 'brand', title: 'Overwrite', plan: {} } })
+  assert.equal(wrongOwner.status, 404)
+  assert.equal(writes, beforeWrongOwner, 'wrong internal owner cannot mutate')
+  assert.equal(rows.find(row => row.id === 'internal-created')?.title, 'Internal update')
 } finally {
   if (previousInternalToken === undefined) delete process.env.CONTENT_SERVICE_INTERNAL_TOKEN
   else process.env.CONTENT_SERVICE_INTERNAL_TOKEN = previousInternalToken

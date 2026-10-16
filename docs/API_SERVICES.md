@@ -590,7 +590,7 @@ Permanent QR contract:
 8. `/api/brands/{id}/mcp/execute` 已关闭并返回 410；Agent 只使用 `/api/mcp`。
 9. 所有写操作以真实用户 actor 写入统一工作日志。
 10. `GET/POST /api/content/video/jobs` 对不存在、品牌拒绝、同品牌非创建者及缺少创建者统一返回相同 404；公开成功响应递归移除 `createdBy`、owner/actor/user 标识和内部 `videoReceipt`，只返回 `ownedByCurrentActor: true` 及 UI 必需字段。任务全局 ID 使用 ID 级事务锁且锁后重读，既有任务更新不得替换 `createdBy`。
-11. 完整视频持久化形状只由内部 token 认证的 `POST /api/internal/content/video-jobs` 返回；请求为 `{"actorId": <服务端会话用户>, "id": <任务>, "brandId"?: <品牌>}`，响应为 `{"success": true, "job": <完整持久化任务>}`，其中保留 `createdBy`、`plan._mmVideoJob.videoReceipt`、修订历史和制作状态供 MM 服务端恢复。入口复核活动账号、当前品牌范围及持久化创建者并返回 `Cache-Control: no-store`；浏览器、Cookie/API Key 公共路由和 `x-client-type` 都不能切换到该形状。公共 `GET/POST /api/content/video/jobs` 的 `job` 保留制作 UI 字段、脱敏修订内容及 `ownedByCurrentActor: true`，但不含上述内部字段。
+11. 完整视频持久化只使用内部 token 认证的 `POST /api/internal/content/video-jobs`。读取请求为 `{"actorId": <服务端会话用户>, "id": <任务>, "brandId"?: <品牌>}`；写入请求为 `{"actorId": <服务端会话用户>, "job": <完整任务>}`。两者响应均为 `{"success": true, "job": <完整持久化任务>}`，保留 `createdBy`、`plan._mmVideoJob.videoReceipt`、修订历史和制作状态供 MM 服务端恢复。入口在读取正文或执行写入前验证 `x-content-service-token`，再从数据库解析 ACTIVE actor；读取复核品牌 READ，写入复核品牌 READ/WRITE、视频制作能力、既有 owner/品牌不可变与全局 ID 锁。错误 token 返回 401；停用/撤权/非 owner 统一为 404 且零写入。浏览器、Cookie/API Key 公共路由和 `x-client-type` 都不能切换到该形状。公共 `GET/POST /api/content/video/jobs` 的 `job` 保留制作 UI 字段、脱敏修订内容及 `ownedByCurrentActor: true`，但不含上述内部字段。
 
 ## 7. Open Questions / Follow-up
 
