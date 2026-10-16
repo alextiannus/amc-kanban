@@ -605,7 +605,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **295** 个 API 路径、**427** 个 HTTP 方法组合。
+共 **296** 个 API 路径、**428** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -849,6 +849,7 @@ Permanent QR contract:
 | POST | `/api/internal/content-context` |
 | POST | `/api/internal/content-lab-admin` |
 | POST | `/api/internal/content-log` |
+| POST | `/api/internal/content/video-feedback` |
 | POST | `/api/internal/content/video-jobs` |
 | POST | `/api/internal/content/video-lineage` |
 | GET, POST | `/api/internal/global-text` |

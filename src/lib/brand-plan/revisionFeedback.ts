@@ -5,6 +5,7 @@ import {boundedEditDistance} from '../feedbackDistance'
 
 export const REVISION_REASONS=revisionReasons.map(([key])=>key)
 export const CANDIDATE_FEEDBACK_KIND='CREATIVE_CANDIDATE_FEEDBACK'
+export const VIDEO_EDIT_FEEDBACK_KIND='VIDEO_EDIT_FEEDBACK'
 export const FEEDBACK_WINDOW=2000
 export const FEEDBACK_DIMENSION_KEYS=50
 export const FEEDBACK_TEXT_LENGTH=512
@@ -102,9 +103,10 @@ export function summarizeCreativeFeedback(rows:any[]){
   const fields:Record<string,number>={},reasons:Record<string,number>={},total=counter()
   const events=window.flatMap(row=>{
     const input=record(row.input)
-    if(input.actor?.type!=='HUMAN'||row.version===0||typeof input.creativeId!=='string')return []
+    const trustedVideo=row.kind===VIDEO_EDIT_FEEDBACK_KIND&&input.schema==='video_feedback_event@1'
+    if((!trustedVideo&&input.actor?.type!=='HUMAN')||row.version===0||typeof input.creativeId!=='string')return []
     const discarded=row.kind===CANDIDATE_FEEDBACK_KIND&&input.event==='candidate_discarded'
-    if(row.kind&&row.kind!=='CREATIVE_ITEM'&&!discarded)return []
+    if(row.kind&&row.kind!=='CREATIVE_ITEM'&&!discarded&&!trustedVideo)return []
     const video=!discarded?readVideoFeedback(input.videoFeedback):null
     const videoEdited=!!video?.textChanges?.some(c=>c.before!==c.after)||[video?.voiceReceiptChange,video?.musicReceiptChange].some(c=>c&&c.beforeId!==c.afterId)
     const changes=changedFields(input.changes),ai=record(input.ai)
@@ -114,7 +116,7 @@ export function summarizeCreativeFeedback(rows:any[]){
     const edited=!discarded&&(videoEdited||(reviewChanges!==null?reviewChanges.length>0:changes.length>0))
     const rawDimensions=record(input.dimensions||creativeFeedbackDimensions(row.output,input.source))
     const dimensions:Record<string,unknown>={...rawDimensions,platform:keys(rawDimensions.platform).map(platform),sourceShot:keys([video?.sourceShotId,...qualityAttempts(input).flatMap(a=>a.shotIds)])}
-    return [{input,id:stableJson([input.month||'',input.creativeId]),discarded,direct,edited,changes,dimensions,video,videoEdited}]
+    return [{input,id:trustedVideo?String(input.eventId):stableJson([input.month||'',input.creativeId]),discarded,direct,edited,changes,dimensions,video,videoEdited,trustedVideo}]
   })
   const dimensionNames=['source','sku','platform','contentType','sourceShot'] as const
   const allowed=Object.fromEntries(dimensionNames.map(name=>[name,new Set(events.flatMap(e=>keys(e.dimensions[name])).filter(safeKey).sort().filter((v,i,a)=>i===0||v!==a[i-1]).slice(0,FEEDBACK_DIMENSION_KEYS-1))]))
@@ -126,7 +128,7 @@ export function summarizeCreativeFeedback(rows:any[]){
       if(edited)target.edited.add(event.id)
       if(event.discarded&&typeof event.input.candidateKey==='string')target.discarded.add(event.input.candidateKey)
     }
-    apply(total)
+    if(!event.trustedVideo)apply(total)
     if(event.video){
       if(event.video.captionMismatchBlocked)captionMismatchBlocks++
       for(const c of event.video.textChanges||[]){
@@ -141,15 +143,19 @@ export function summarizeCreativeFeedback(rows:any[]){
         if(name==='voice'){voiceDenominator++;if(replaced)voiceNumerator++}else{musicDenominator++;if(replaced)musicNumerator++}
       }
     }
-    for(const field of event.changes)fields[field]=(fields[field]||0)+1
-    for(const reason of new Set((Array.isArray(event.input.feedback?.reasons)?event.input.feedback.reasons.slice(0,10):[]).map(reasonKey)))reasons[reason as string]=(reasons[reason as string]||0)+1
+    if(!event.trustedVideo){
+      for(const field of event.changes)fields[field]=(fields[field]||0)+1
+      for(const reason of new Set((Array.isArray(event.input.feedback?.reasons)?event.input.feedback.reasons.slice(0,10):[]).map(reasonKey)))reasons[reason as string]=(reasons[reason as string]||0)+1
+    }
     for(const name of dimensionNames){
       const raw=keys(event.dimensions[name]),buckets=new Set(raw.length?raw.map(key=>allowed[name].has(key)?key:'other'):['other'])
       const editedShot=event.video?.sourceShotId
       const editedBucket=editedShot?(allowed.sourceShot.has(editedShot)?editedShot:'other'):null
       for(const key of buckets){
         if(!dimensions[name].has(key))dimensions[name].set(key,counter())
-        apply(dimensions[name].get(key)!,name==='sourceShot'?event.videoEdited&&editedBucket===key:event.edited)
+        if(event.trustedVideo&&name==='sourceShot'){
+          if(event.videoEdited&&editedBucket===key)dimensions[name].get(key)!.edited.add(event.id)
+        }else if(!event.trustedVideo)apply(dimensions[name].get(key)!,name==='sourceShot'?event.videoEdited&&editedBucket===key:event.edited)
       }
     }
   }

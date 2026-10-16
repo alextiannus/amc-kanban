@@ -2,6 +2,8 @@
 
 ## 当前交付状态（2026-10-16）
 
+Task 11A 可信反馈入口（本地已实现并完成 PGlite 定向验证、未发布）：Content/MM 只能通过内部服务令牌鉴权、事件摘要及 HMAC 三重校验提交 `video_feedback_event@1`。正文解析发生在令牌鉴权之后；事件必须固定 eventId、projectId、brandId、creativeId、creativeRevisionId、actorId、issuedAt 与 Task 7 `VideoFeedback`，服务端重新计算摘要和签名、执行五分钟时效与字节限制，并重新确认 ACTIVE 操作者、当前品牌写权限和项目追溯身份。相同 eventId + digest 重放幂等，任何冲突重放失败且不改变旧事件。证据使用专属 `VIDEO_EDIT_FEEDBACK` 事件和唯一/窗口索引，不创建品牌创意修订，不进入人工修订、采用或弃用计数；反馈聚合只投影有界结构化证据，不返回项目/修订/操作者身份、备注、提示词、脚本正文或来源私有数据。公开品牌反馈接口继续拒绝客户端视频证据。
+
 终审修复：发现与人工 SKU 确认将可信来源投影为 canonical source（sourceRevision + sourceDigest；libraryDigest 兼容字段使用单条 sourceDigest，而非查询批次摘要）。采用与复制原样保留确认快照，视频读取实际已保存修订，不按当前最新来源补造历史。完整源证据的新适配不再误报 legacy；未知历史仍明确缺证据。
 
 两端发布安排支持选择品牌当前可用账号；同平台有多个账号时不默认选择。提交时复验账号归属/连接，断连提示重新选择或先连接。取消安排经 schedule DELETE，带原 CAS/幂等键并读回 schedule:null；未知结果保留原请求重试，创意、历史与未排期草稿不删除。schedule GET 只返回有当前 content.schedule 权限的品牌可用账号最小字段，MM 仅放行精确 GET 路径，写入仍保留同源检查。
@@ -32,7 +34,7 @@ Task 8 审查修复（本地实现，未部署）：指定 revisionId 的读取�
 
 Task 7 统计扩展（本地已实现与定向验证，未发布）：`editDistanceByField` 只读取严格校验的 `input.videoFeedback.textChanges` 中实际 before/after 字符串，不解析 planning；每字段给出 total、comparisons、excludedPairs。文本字段为 spokenText、overlayText、visualDescription、subjectAction、soundDesign、transition、narrativePurpose；每事件至多七项且不重复，每字符串最多 512 个 Unicode 码点，窗口动态规划预算最多 4000000 个单元，超限证据不截断计分。`bySourceShot` 使用明确 sourceShotId 或摘要绑定的 V2 qualityReview 镜头，沿用 50 键上限，只有明确镜头编辑证据才计该镜头 editedScripts。`captionMismatchBlocks` 仅计明确 true 的阻断事件。voiceReplacementRate/musicReplacementRate 分母为严格校验的 beforeId/afterId 对（允许 null），分子仅为两个非空且不同的 ID；新增/移除不算替换。fidelityPassRate 按同一任务和产物引用去重已完成评审 attempt，必须 classification.candidateDigest 与 artifact.digest 一致；失败候选也入分母，缺证据及待评审不入分母，空分母 rate=null。各页指标仅代表当前事件窗口，不得跨页相加当完整去重总数。
 
-`videoFeedback` 是服务端保存的显式证据契约，允许 sourceShotId、textChanges、captionMismatchBlocked、voiceReceiptChange、musicReceiptChange；拒绝未知键、超限与重复字段，不从主观原因推断任何变化。当前公共修订写接口不接受客户端提交此结构；MM/Content 可信生产者接线待后续任务完成，未写入的证据保持未知。聚合仅返回计数，不返回文本、媒体 ID 或问题原文。数据库只投影受限证据；来源脚本、说明及 AI 指令仍不得加载。
+`videoFeedback` 是服务端保存的显式证据契约，允许 sourceShotId、textChanges、captionMismatchBlocked、voiceReceiptChange、musicReceiptChange；拒绝未知键、超限与重复字段，不从主观原因推断任何变化。当前公共修订写接口不接受客户端提交此结构；可信内部入口已接通并只接受固定项目/创意修订/操作者身份的签名事件，生产者实际调用与端到端发布仍待后续任务验证。未写入的证据保持未知。聚合仅返回计数，不返回文本、媒体 ID 或问题原文。数据库只投影受限证据；来源脚本、说明及 AI 指令仍不得加载。
 
 证据总字节预算为统一的 `VIDEO_FEEDBACK_MAX_BYTES=32768`。reader 要求完整紧凑 JSON 的 UTF-8 字节数加 256 字节 JSONB 格式余量不超过预算；该严格结构最多七个文本字段，256 字节覆盖 JSONB 增加的分隔空格。SQL 投影使用同一个常量为上限，合法证据不会因控制字符转义或格式开销丢失；超预算整个 videoFeedback 无效，不保留其中字幕/音频计数。
 

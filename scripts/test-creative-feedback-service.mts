@@ -136,7 +136,7 @@ try{
   let queries=0,lastProjection:any[]=[]
   const sqlDb={...db,$queryRaw:async(strings:TemplateStringsArray,...args:any[])=>{
     queries++;const sql=strings.reduce((q,s,i)=>q+(i?`$${i}`:'')+s,'')
-    assert.equal((sql.match(/LIMIT/g)||[]).length,4);assert(args.includes(2001))
+    assert.equal((sql.match(/LIMIT/g)||[]).length,5);assert(args.includes(2001))
     const result=await pg.query(sql,args.map(v=>v instanceof Date?v.toISOString():v))
     lastProjection=result.rows
     assert.equal(JSON.stringify(result.rows).includes('SECRET'),false,'database projection never returns raw content or notes')
@@ -149,14 +149,18 @@ try{
   assert.equal(next.sampleVersions,3);assert.equal(next.hasMore,false);assert.equal(next.nextCursor,null)
   const videoFeedback={sourceShotId:'s1',textChanges:[{field:'spokenText',before:'abcd',after:'wxyz'}],captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'voice1',afterId:'voice2'},musicReceiptChange:{beforeId:'music1',afterId:'music1'}}
   const attempts=[{artifact:{path:'candidate.json',revision:1,digest:'failed'},classification:{candidateDigest:'failed'},review:{status:'failed'},adapted:{shots:[{contractVersion:2,sourceShotId:'s1',spokenText:'SECRET ATTEMPT'}]}},{artifact:{path:'candidate.json',revision:2,digest:'passed'},classification:{candidateDigest:'passed'},review:{status:'passed'},adapted:{shots:[{contractVersion:2,sourceShotId:'s1',spokenText:'SECRET ATTEMPT'}]}}]
-  await pg.query(`INSERT INTO "BrandMarketingSolution" VALUES('video-revision',$1,'CREATIVE_ITEM',2,'2026-10-18',$2::jsonb,'{}'),('quality-event',$1,'CREATIVE_FIDELITY_REVIEW',2,'2026-10-18',$3::jsonb,'{}')`,[brandId,JSON.stringify({...input,videoFeedback,ai:{taskId:'video-task',reviewChanges:[],qualityReview:{version:1,attempts}}}),JSON.stringify({taskId:'video-task',qualityReview:{version:1,attempts}})])
+  const trustedVideoFeedback={sourceShotId:'trusted-shot',textChanges:[{field:'spokenText',before:'x',after:'xyz'}],captionMismatchBlocked:false,voiceReceiptChange:{beforeId:'voice-old',afterId:null},musicReceiptChange:{beforeId:'music-old',afterId:'music-new'}}
+  await pg.query(`INSERT INTO "BrandMarketingSolution" VALUES('video-revision',$1,'CREATIVE_ITEM',2,'2026-10-18',$2::jsonb,'{}'),('quality-event',$1,'CREATIVE_FIDELITY_REVIEW',2,'2026-10-18',$3::jsonb,'{}'),('trusted-video-event',$1,'VIDEO_EDIT_FEEDBACK',1,'2026-10-18',$4::jsonb,'{}')`,[brandId,JSON.stringify({...input,videoFeedback,ai:{taskId:'video-task',reviewChanges:[],qualityReview:{version:1,attempts}}}),JSON.stringify({taskId:'video-task',qualityReview:{version:1,attempts}}),JSON.stringify({schema:'video_feedback_event@1',eventId:'trusted-event',projectId:'SECRET PROJECT',creativeId:'trusted-creative',creativeRevisionId:'SECRET REVISION',actor:{id:'SECRET ACTOR',type:'HUMAN'},digest:'a'.repeat(64),videoFeedback:trustedVideoFeedback})])
   const videoPage=await service.readCreativeFeedbackSummary(actor,brandId,null,sqlDb)
-  assert.equal(videoPage.editDistanceByField.spokenText.total,4)
+  assert.equal(videoPage.editDistanceByField.spokenText.total,6)
   assert.equal(videoPage.bySourceShot.s1.editedScripts,1)
+  assert.deepEqual(videoPage.bySourceShot['trusted-shot'],{reviewedScripts:0,directlyAdoptedScripts:0,editedScripts:1,discardedCandidates:0})
   assert.equal(videoPage.captionMismatchBlocks,1)
-  assert.deepEqual(videoPage.voiceReplacementRate,{numerator:1,denominator:1,rate:1})
+  assert.deepEqual(videoPage.voiceReplacementRate,{numerator:1,denominator:2,rate:0.5})
+  assert.deepEqual(videoPage.musicReplacementRate,{numerator:1,denominator:2,rate:0.5})
   assert.deepEqual(videoPage.fidelityPassRate,{numerator:1,denominator:2,rate:0.5})
   assert.equal(JSON.stringify(videoPage).includes('abcd'),false)
+  assert.equal(JSON.stringify(lastProjection).includes('SECRET'),false,'trusted event projection excludes project/revision/actor identity and private fields')
   // Exercise the real authenticated GET, production SQL and aggregation with
   // multiple maximum-length strings whose control characters expand in JSON.
   const oversizedEvidence={...videoFeedback,sourceShotId:'oversized-shot',textChanges:feedback.VIDEO_FEEDBACK_FIELDS.map(field=>({field,before:'\u0001'.repeat(512),after:'\u0002'.repeat(512)}))}
@@ -174,11 +178,11 @@ try{
   const byteSummary=await byteResponse.json()
   assert(lastProjection.find(r=>r.id==='accepted-bytes')?.input.videoFeedback,'accepted evidence survives actual SQL projection')
   assert.equal(lastProjection.find(r=>r.id==='oversized-bytes')?.input.videoFeedback,null)
-  assert.equal(byteSummary.editDistanceByField.spokenText.total,516)
-  assert.equal(byteSummary.editDistanceByField.spokenText.comparisons,2)
+  assert.equal(byteSummary.editDistanceByField.spokenText.total,518)
+  assert.equal(byteSummary.editDistanceByField.spokenText.comparisons,3)
   assert.equal(byteSummary.captionMismatchBlocks,2)
-  assert.equal(byteSummary.voiceReplacementRate.denominator,2)
-  assert.equal(byteSummary.musicReplacementRate.denominator,2)
+  assert.equal(byteSummary.voiceReplacementRate.denominator,3)
+  assert.equal(byteSummary.musicReplacementRate.denominator,3)
   assert.equal(byteSummary.bySourceShot['accepted-shot'].editedScripts,1)
   assert.equal(byteSummary.bySourceShot['oversized-shot'],undefined,'oversized evidence is excluded whole')
   const beforeQueries=queries

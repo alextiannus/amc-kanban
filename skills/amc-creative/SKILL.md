@@ -16,3 +16,5 @@ For ordinary creative edits, read amc.creative and preserve the current human-ed
 For intent.editMode=materials, derive only materialRequirements from amc.creative.current.planning, including the unsaved draft. Add requirements for new scenes, remove obsolete ones and retain applicable filming details. Do not select SKUs, rewrite planning, reconstruct the source or wait for footage. The server attaches the unchanged draft.
 
 Preserve explicit user constraints. Write JSON at the trusted artifactPath, then finish with its exact receipt. Human adoption remains a separate revision-checked operation. Do not write memories or reveal internal digests in merchant prose.
+
+Video edit evidence is never authored by this Skill or accepted from merchant/public creative-save input. Only the trusted internal `video_feedback_event@1` producer may submit bounded explicit Task 7 evidence after a completed edit, with the fixed project, creative revision, actor, digest and signature. Missing evidence stays unknown; never infer edits, caption mismatches or audio replacements from scripts, prompts, notes or model output.
