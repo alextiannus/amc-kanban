@@ -9,6 +9,7 @@
 - REST、MCP 和网页使用相同的用户角色、Capability 与 Crew 授权。
 - 启动时先调用 `get_brand_config`，只操作返回的品牌；不得猜测 `brandId`。
 - 品牌权限不等于品牌内全部视频任务权限；视频任务只允许读取或修改当前 Personal MCP 用户本人创建的记录。不可见、他人创建或历史缺少创建者均按不存在处理，不尝试猜测、补填或改绑创建者。公开结果只使用 `ownedByCurrentActor`，不得索取或输出 owner/actor/user ID、内部视频回执，也不得使用 `x-client-type` 或内部视频任务接口伪装 MM 服务端读写。
+- `plan._mmVideoJob.language` 与 `plan._mmVideoJob.generationStage` 是 MM 服务端可信恢复元数据；Personal MCP 和公开网页不得索取、改写或把内部完整任务形状输出给用户。
 - 收到 403 时停止操作，不尝试旧接口或其他身份绕过。
 - 不输出、记录或持久化 API Key、Cookie、平台密码和第三方 Secret。
 

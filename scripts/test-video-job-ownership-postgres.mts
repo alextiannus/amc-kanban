@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { prisma } from '../src/lib/prisma.ts'
 import { readTrustedVideoJob } from '../src/lib/videoJobAccess.ts'
+import * as videoReceipt from '../src/lib/videoReceipt.ts'
+import { trustedVideoJobFixture } from './video-job-trusted-fixtures.mts'
 
 assert(process.env.DATABASE_URL?.includes('localhost') && process.env.DATABASE_URL.includes('_test_'))
 
@@ -27,6 +29,8 @@ const brandB = `video-owner-b-${suffix}`
 const sharedId = `video-shared-${suffix}`
 const internalId = `video-internal-${suffix}`
 const internalSharedId = `video-internal-shared-${suffix}`
+const durableZhId = `video-durable-zh-${suffix}`
+const durableBilingualId = `video-durable-bilingual-${suffix}`
 const revokedActorId = `actor-revoked-${suffix}`
 const actors: Record<string, any> = {
   'token-a': { id: `actor-a-${suffix}`, type: 'HUMAN', role: 'USER' },
@@ -61,7 +65,7 @@ const persistence = compile('src/lib/videoJobPersistence.ts', {
   './videoLineage': { pinVideoEditor: async () => { throw new Error('not expected') }, editorForLibrary: () => { throw new Error('not expected') } },
   './role-permissions/delegation': { requireActorPermission: async () => {} },
   './user-management/brandAccess': { canUserAccessBrand: async () => true },
-  './videoReceipt': { verifyVideoReceipt: () => {}, videoReceiptDigest: () => 'digest' },
+  './videoReceipt': videoReceipt,
 })
 
 const route = compile('src/app/api/content/video/jobs/route.ts', {
@@ -82,12 +86,16 @@ const route = compile('src/app/api/content/video/jobs/route.ts', {
   '@/lib/videoJobContract': await import('../src/lib/videoJobContract.ts'),
   '@/lib/videoJobPersistence': persistence,
 })
-const internal = compile('src/app/api/internal/content/video-jobs/route.ts', {
-  'node:crypto': await import('node:crypto'),
-  '@/lib/videoJobAccess': await import('../src/lib/videoJobAccess.ts'),
-  '@/lib/videoJobContract': await import('../src/lib/videoJobContract.ts'),
+const nodeCrypto = await import('node:crypto')
+const videoJobAccess = await import('../src/lib/videoJobAccess.ts')
+const videoJobContract = await import('../src/lib/videoJobContract.ts')
+const compileInternalRoute = () => compile('src/app/api/internal/content/video-jobs/route.ts', {
+  'node:crypto': nodeCrypto,
+  '@/lib/videoJobAccess': videoJobAccess,
+  '@/lib/videoJobContract': videoJobContract,
   '@/lib/videoJobPersistence': persistence,
 })
+const internal = compileInternalRoute()
 
 const post = (token: string, brandId: string) => route.POST(new Request('https://kanban.test/api/content/video/jobs', {
   method: 'POST',
@@ -155,8 +163,33 @@ try {
   await prisma.user.update({ where: { id: actors['token-a'].id }, data: { status: 'ACTIVE' } })
   const afterDenied = await prisma.videoProductionJob.findUniqueOrThrow({ where: { id: internalId } })
   assert.equal(afterDenied.title, beforeDenied.title, 'wrong-owner, revoked and inactive internal writes cause zero mutation')
+
+  const durableFixtures = [
+    trustedVideoJobFixture({ id: durableZhId, brandId: brandA, actorId: actors['token-a'].id, token: process.env.CONTENT_SERVICE_INTERNAL_TOKEN, language: 'zh', generationStage: 'reference_preparation' }),
+    trustedVideoJobFixture({ id: durableBilingualId, brandId: brandA, actorId: actors['token-a'].id, token: process.env.CONTENT_SERVICE_INTERNAL_TOKEN, language: 'bilingual', generationStage: 'video_generation' }),
+  ]
+  assert.equal((await internalPost('wrong-token', { actorId: actors['token-a'].id, job: durableFixtures[0] })).status, 401)
+  assert.equal(await prisma.videoProductionJob.count({ where: { id: { in: [durableZhId, durableBilingualId] } } }), 0, 'invalid token cannot persist durable trusted metadata')
+  for (const fixture of durableFixtures) {
+    assert.equal((await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, { actorId: actors['token-a'].id, job: fixture })).status, 200)
+  }
+  const freshInternal = compileInternalRoute()
+  for (const fixture of durableFixtures) {
+    const response = await freshInternal.POST(new Request('https://kanban.test/api/internal/content/video-jobs', {
+      method: 'POST',
+      headers: { 'x-content-service-token': process.env.CONTENT_SERVICE_INTERNAL_TOKEN },
+      body: JSON.stringify({ actorId: actors['token-a'].id, id: fixture.id, brandId: brandA }),
+    }))
+    assert.equal(response.status, 200)
+    const persisted: any = (await response.json()).job
+    assert.equal(persisted.createdBy, actors['token-a'].id)
+    assert.equal(persisted.plan._mmVideoJob.language, fixture.plan._mmVideoJob.language)
+    assert.equal(persisted.plan._mmVideoJob.generationStage, fixture.plan._mmVideoJob.generationStage)
+    assert.deepEqual(persisted.plan._mmVideoJob.videoReceipt, fixture.plan._mmVideoJob.videoReceipt)
+  }
   console.log('PASS PostgreSQL global video-job ID race: one winner, normalized loser, no foreign overwrite')
   console.log('PASS PostgreSQL internal video-job write: token-first auth, active/access/owner enforcement, atomic trusted ack')
+  console.log('PASS PostgreSQL trusted video-job metadata: committed zh/bilingual language, generation stage, identity and signed receipt survive a fresh internal read')
 } finally {
   await prisma.brand.deleteMany({ where: { id: { in: [brandA, brandB] } } })
   await prisma.user.deleteMany({ where: { id: { in: [...Object.values(actors).map(actor => actor.id), revokedActorId] } } })
