@@ -24,7 +24,10 @@ try {
   await db.brand.create({data:{id:'lineage-other-brand',name:'Other isolated brand',knowledge:{create:{negPrompts:[],marketingSolution:workspace}}}})
   let state=await readCreativeRevisions(actor,brandId,month,id,undefined,db)
   assert.equal(state.revisions.length,0)
-  const request={expectedRevision:state.expectedRevision,idempotencyKey:'first-request',patch:{title:'First edit',planning:'Principal rewrite'},actorId:'lineage-outsider'}
+  const request={expectedRevision:state.expectedRevision,idempotencyKey:'first-request',patch:{title:'First edit',planning:'Principal rewrite'}}
+  const forgedActorBefore={solutions:await db.brandMarketingSolution.count({where:{brandId}}),audits:await db.auditLog.count({where:{resourceId:id}}),knowledge:JSON.stringify((await db.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution)}
+  await expectCode(()=>saveCreativeRevision(actor,brandId,month,id,{...request,actorId:'lineage-outsider'},db),'invalid_creative_revision_request')
+  assert.deepEqual({solutions:await db.brandMarketingSolution.count({where:{brandId}}),audits:await db.auditLog.count({where:{resourceId:id}}),knowledge:JSON.stringify((await db.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution)},forgedActorBefore)
   const first=await saveCreativeRevision(actor,brandId,month,id,request,db)
   assert.equal(first.receipt.revision,1);assert.equal(first.receipt.actor.id,actor.id)
   assert.equal(first.receipt.principals[0].userId,actor.id)
@@ -70,7 +73,10 @@ try {
   // Explicit save-as-new preserves the original and assigns ownership from the session.
   state=await readCreativeRevisions(actor,brandId,month,id,undefined,db)
   const originalBeforeCopy=structuredClone(state.current)
-  const copyRequest={expectedRevision:state.expectedRevision,idempotencyKey:'copy-script-one',saveMode:'copy',patch:{planning:'My personal rewrite',aiTags:['forged-tags']},scriptOwner:{id:'lineage-outsider'}}
+  const copyRequest={expectedRevision:state.expectedRevision,idempotencyKey:'copy-script-one',saveMode:'copy',patch:{planning:'My personal rewrite',aiTags:['forged-tags']}}
+  const forgedOwnerBefore={solutions:await db.brandMarketingSolution.count({where:{brandId}}),audits:await db.auditLog.count({where:{resourceId:id}}),knowledge:JSON.stringify((await db.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution)}
+  await expectCode(()=>saveCreativeRevision(actor,brandId,month,id,{...copyRequest,scriptOwner:{id:'lineage-outsider'}},db),'invalid_creative_revision_request')
+  assert.deepEqual({solutions:await db.brandMarketingSolution.count({where:{brandId}}),audits:await db.auditLog.count({where:{resourceId:id}}),knowledge:JSON.stringify((await db.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution)},forgedOwnerBefore)
   const copied=await saveCreativeRevision(actor,brandId,month,id,copyRequest,db)
   const copiedId=copied.receipt.content.id
   assert.notEqual(copiedId,id)
