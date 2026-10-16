@@ -54,12 +54,12 @@ function nextWorkspace(workspace: any, month: string, creativeId: string, item: 
   return {...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar?.months,[month]:monthItems(workspace,month).map(row => row.id === creativeId ? item : row)}}}
 }
 
-function draftMarker(creativeId: string, revisionId: string) {
+function draftMarker(creativeId: string, revisionId: string | null) {
   return `${calendarSyncMarker(creativeId)} creative-revision:${revisionId}`
 }
 
-function unscheduledMarker(creativeId: string, revisionId: string) {
-  return `${creativeDraftMarker('unscheduled',creativeId)} creative-revision:${revisionId}`
+function unscheduledMarker(creativeId: string, revisionId: string | null) {
+  return `${creativeDraftMarker('unscheduled',creativeId)}${revisionId ? ` creative-revision:${revisionId}` : ''}`
 }
 
 async function writeSchedule(actor: Actor, brandId: string, creativeId: string, expectedRevision: string, input: unknown, unschedule: boolean, db = prisma, now = new Date()) {

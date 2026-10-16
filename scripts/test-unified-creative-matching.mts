@@ -1,10 +1,10 @@
-import {randomUUID,randomBytes} from 'node:crypto'
+import {randomUUID} from 'node:crypto'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
 import {Pool} from 'pg'
 import {prisma} from '../src/lib/prisma.ts'
-import {creativeDigest,creativeWorkspace,CreativeRevisionError} from '../src/lib/brand-plan/creativeRevisionContract.ts'
+import {creativeDigest,creativeWorkspace} from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import {MATCH_SHORTFALL_MESSAGE,openTargets,localPlanningTime} from '../src/lib/brand-plan/matchingContract.ts'
 import * as matching from '../src/lib/brand-plan/matchingContract.ts'
 import * as revisionContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
@@ -35,8 +35,8 @@ const createTask=async(_u:string,_b:string,body:any,_daily:any,_autopilot:any,bi
  const id=`task-${++count}`,facts=await readBrandFacts(prisma,brandId),n=Math.min(3,matchCount);matchCount-=n
  const sources=Array.from({length:n},(_,i)=>({inspirationCreativeId:`cre_fixture_${count}_${i}`,contentAngle:`${count} ${i}`,sourcePost:{title:randomUUID(),sourceUrl:`https://example.invalid/${count}/${i}`},scriptContent:{kind:'post'}}))
  const library={contextPortfolio:facts.creativePortfolio,sources,libraryDigest:'a'.repeat(64),contextDigest:nativeContract.digest(facts),retrievedAt:new Date().toISOString(),contentMatchRequestId:id,gaps:libraryFailures?[{status:503}]:[],libraryVersions:{}}
- const result={kind:'creative_discovery',brandId,libraryDigest:library.libraryDigest,contextDigest:library.contextDigest,summary:'fixture',recommendations:sources.map((s:any)=>({sourceCreativeId:s.inspirationCreativeId,title:s.sourcePost.title,planning:`Full isolated script ${s.sourcePost.title}: ${randomBytes(768).toString("base64url")}`,aiCaption:'Caption',materialRequirements:['Owned footage'],rationale:'Planning fit',skuIds:[]}))}
- const intent={kind:'creative_discovery',brandId,userId,goal:body.goal,requestKey:body.requestKey,artifactPath:id,requireMaterials:true,planningRequest:binding},ref={path:id,revision:1,digest:'b'.repeat(64)}
+ const result={kind:'creative_discovery',brandId,libraryDigest:library.libraryDigest,contextDigest:library.contextDigest,summary:'fixture',recommendations:sources.map((s:any)=>({sourceCreativeId:s.inspirationCreativeId,title:s.sourcePost.title,rationale:'Planning fit'}))}
+ const intent={kind:'creative_discovery',skuWorkflow:true,brandId,userId,goal:body.goal,requestKey:body.requestKey,artifactPath:id,requireMaterials:true,planningRequest:binding},ref={path:id,revision:1,digest:'b'.repeat(64)}
  const persisted=(await prisma.$queryRawUnsafe('SELECT $1::jsonb AS snapshot',JSON.stringify(library)) as any[])[0].snapshot
  tasks.set(id,{intent,content:JSON.stringify(result),task:{id,version:'original-fixture',status:waitingReason?'waiting':'succeeded',waiting_reason:waitingReason,result:{artifacts:[ref]},calls:[{capability:'amc.library',status:'succeeded',result:persisted}]}});keys.set(body.requestKey,id);return{id,status:'succeeded'}
 }
@@ -88,7 +88,7 @@ try{
  const filledBefore=(await readCalendarMatching(userId,brandId,month)).request.filled;qualityReject=true;matchCount=3;await advanceCalendarMatching(brandId,new Date('2026-11-07T18:00:00Z'));const shortfall=(await readCalendarMatching(userId,brandId,month)).request;assert.equal(shortfall.filled,filledBefore+2);assert.equal(shortfall.message,MATCH_SHORTFALL_MESSAGE);assert.equal(shortfall.error,null);qualityReject=false;
  knowledge=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}});await prisma.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...(knowledge.marketingSolution as any),annualPlan:{strategy:'Changed'}}}})
  await advanceCalendarMatching(brandId,new Date('2026-11-03T18:00:00Z'));assert.equal((await readCalendarMatching(userId,brandId,month)).request.status,'plan_changed');assert.equal(count,12)
- assert.throws(()=>validateCreativeFeedback({reasons:['made_up'],note:''}),CreativeRevisionError)
+ assert.throws(()=>validateCreativeFeedback({reasons:['made_up'],note:''}),(error:any)=>error.code==='invalid_creative_feedback'&&error.status===400)
  const rows=await prisma.brandMarketingSolution.findMany({where:{brandId,kind:'CREATIVE_ITEM'}});assert.equal(summarizeCreativeFeedback(rows).reasons.transitions,1)
  assert(localPlanningTime('Asia/Singapore',new Date('2026-11-01T18:00:00Z')).night)
  assert.deepEqual(openTargets([{id:'1',platform:'instagram'}],[]),[{id:'1',platform:'instagram'}])

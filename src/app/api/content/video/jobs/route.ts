@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type {Prisma} from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
     const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const job=await prisma.$transaction(async tx=>{
+    const job=await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
     if(!await canUserAccessBrand(brandId,actor.id,'WRITE'))throw Object.assign(new Error('Not found'),{status:404})
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${brandId+':'+id}))`
     const existing = await tx.videoProductionJob.findUnique({

@@ -1,4 +1,5 @@
-// Shared AMC diversity policy v1. Keep identical in Content and Kanban.
+// Shared AMC source diversity policy v1. Kanban additionally understands
+// workspace candidates that have not yet acquired an adapted script.
 import {createHash} from 'node:crypto'
 export const DIRECTIONS=['process','product','tasting','education','comparison','customer_story','brand_story','occasion','store_visit','offer','humor','unclassified'] as const
 export type Direction=typeof DIRECTIONS[number]
@@ -47,7 +48,11 @@ export function duplicateCreative(a:any,b:any){
  const id=(s:any)=>s.inspirationCreativeId||s.nativeSourceSnapshot?.source?.inspirationCreativeId
  if(id(a)&&id(a)===id(b))return true
  const url=sourceUrl(a);if(url&&url===sourceUrl(b))return true
- return similarNormalized(normalizedCreative(a),normalizedCreative(b))||similarNormalized(normalizedAdaptedCreative(a),normalizedAdaptedCreative(b))
+ if(similarNormalized(normalizedCreative(a),normalizedCreative(b)))return true
+ // Source-only candidates share a UI placeholder, not an adapted script.
+ // Compare their actual source evidence above, never the pending-message text.
+ if([a,b].some(item=>['awaiting_sku','sku_confirmed'].includes(item?.adaptationStatus)))return false
+ return similarNormalized(normalizedAdaptedCreative(a),normalizedAdaptedCreative(b))
 }
 export function creativeSubjectIds(source:any,productCatalog:Array<{id?:string;name?:string}>=[]){
  const explicit=Array.isArray(source?.skuIds)?source.skuIds.filter((id:unknown):id is string=>typeof id==='string'&&id.trim().length>0).map((id:string)=>`sku:${id.trim()}`):[]

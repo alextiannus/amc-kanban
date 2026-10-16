@@ -12,7 +12,7 @@ export async function readVideoLineage(userId:string,brandId:string,input:any) {
     const previous=(original.plan as any)?._mmVideoJob?.editor
     if(previous?.creativeRevisionId)throw Object.assign(new Error('video_lineage_immutable'),{status:409})
     const assets=await prisma.mediaAsset.findMany({where:{brandId,id:{in:original.assetIds||[]}},select:{id:true,url:true,mimeType:true,aiCaption:true}})
-    return pinVideoEditor(prisma,brandId,input,editorForLibrary(original,(original.assetIds||[]).flatMap(id=>assets.filter(asset=>asset.id===id))))
+    return pinVideoEditor(prisma,brandId,input,editorForLibrary(original,(original.assetIds||[]).flatMap((id:string)=>assets.filter((asset:{id:string})=>asset.id===id))))
   }
   return pinVideoEditor(prisma,brandId,input)
 }
