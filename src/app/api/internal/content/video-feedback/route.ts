@@ -12,7 +12,7 @@ export async function POST(request:Request){
   try{
     const raw=await request.text()
     if(Buffer.byteLength(raw,'utf8')>VIDEO_FEEDBACK_EVENT_MAX_BYTES)return Response.json({error:'video_feedback_event_too_large'},{status:413})
-    const result=await ingestTrustedVideoFeedback(JSON.parse(raw),sharedToken)
+    const result=await ingestTrustedVideoFeedback(JSON.parse(raw),{method:request.method,path:new URL(request.url).pathname,deliveredAt:request.headers.get('x-amc-video-feedback-delivered-at')||'',nonce:request.headers.get('x-amc-video-feedback-nonce')||'',signature:request.headers.get('x-amc-video-feedback-signature')||''},sharedToken)
     return Response.json(result,{status:result.replayed?200:201,headers:{'Cache-Control':'no-store'}})
   }catch(error:any){
     const syntax=error instanceof SyntaxError,status=syntax?400:error instanceof CreativeRevisionError?error.status:503

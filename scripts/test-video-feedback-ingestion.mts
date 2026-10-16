@@ -14,12 +14,13 @@ const feedback=await import('../src/lib/brand-plan/revisionFeedback.ts')
 let access=true
 const service=compile('src/lib/brand-plan/videoFeedbackIngestion.ts',{'node:crypto':crypto,'@prisma/client':{},'../prisma.ts':{prisma:{}},'../user-management/brandAccess.ts':{canUserAccessBrand:async()=>access},'./creativeRevisionContract.ts':contract,'./revisionFeedback.ts':feedback})
 const token='test-only-video-feedback-token',now=new Date('2026-10-17T08:00:00.000Z')
-const unsigned={schema:'video_feedback_event@1',eventId:'event-1',projectId:'project-1',brandId:'brand-a',creativeId:'creative-a',creativeRevisionId:'revision-a',actorId:'actor-a',issuedAt:now.toISOString(),feedback:{sourceShotId:'shot-a',textChanges:[{field:'spokenText',before:'old',after:'new'}],captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'voice-old',afterId:'voice-new'}}}
-const sign=(value:any)=>{const core=service.videoFeedbackEventCore({...value,digest:'0'.repeat(64),signature:'0'.repeat(64)}),digest=service.videoFeedbackEventDigest(core);return {...core,digest,signature:service.videoFeedbackEventSignature(core,token,digest)}}
-const signed=sign(unsigned)
-assert.equal(service.verifyVideoFeedbackEvent(signed,token).digest,signed.digest)
-assert.throws(()=>service.verifyVideoFeedbackEvent({...signed,signature:'0'.repeat(64)},token),/invalid_video_feedback_signature/)
-assert.throws(()=>service.verifyVideoFeedbackEvent({...signed,unexpected:true},token),/invalid_video_feedback_event/)
+const core={schema:'video_feedback_event@1',eventId:'event-1',occurredAt:new Date(now.getTime()-20*60*1000).toISOString(),identity:{projectId:'project-1',brandId:'brand-a',creativeId:'creative-a',creativeRevisionId:'revision-a',actorId:'actor-a'},evidence:{sourceShotId:'shot-a',textChanges:[{field:'spokenText',before:'old',after:'new'}],captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'voice-old',afterId:'voice-new'}}}
+const envelope=(value:any)=>{const parsed=service.videoFeedbackEventCore(value),coreDigest=service.videoFeedbackEventDigest(parsed);return {core:parsed,coreDigest}}
+const event=envelope(core)
+assert.deepEqual(service.videoFeedbackEventEnvelope(event),event)
+assert.throws(()=>service.videoFeedbackEventEnvelope({...event,coreDigest:'0'.repeat(64)}),/invalid_video_feedback_digest/)
+assert.throws(()=>service.videoFeedbackEventEnvelope({...event,unexpected:true}),/invalid_video_feedback_event/)
+assert.throws(()=>envelope({...core,identity:{...core.identity,unexpected:true}}),/invalid_video_feedback_event/)
 
 const pg=new PGlite()
 const previousToken=process.env.CONTENT_SERVICE_INTERNAL_TOKEN
@@ -35,7 +36,7 @@ await pg.exec(`INSERT INTO "Brand" VALUES('brand-a','ACTIVE'),('brand-b','ACTIVE
 await pg.query(`INSERT INTO "BrandMarketingSolution"(id,"brandId",kind,period,version,status,"generationMode","createdById",input,output) VALUES('revision-a','brand-a','CREATIVE_ITEM','period',1,'DRAFT','MANUAL','actor-a',$1::jsonb,'{}')`,[JSON.stringify({creativeId:'creative-a'})])
 const validPlan={basicVideoProjectId:'project-1',_mmVideoJob:{basicVideoProjectId:'project-1',videoReceipt:{projectId:'project-1'},editor:{creativeId:'creative-a',creativeRevisionId:'revision-a'}}}
 await pg.query(`INSERT INTO "VideoProductionJob" VALUES('job-a','brand-a','creative-a','actor-a',$1::jsonb)`,[JSON.stringify(validPlan)])
-let seq=0
+let seq=0,nonceSeq=0,activeToken=token
 const tx:any={
   $queryRaw:async(strings:TemplateStringsArray,...args:any[])=>{const sql=strings.reduce((out,s,i)=>out+s+(i<args.length?`$${i+1}`:''),'');return (await pg.query(sql,args)).rows},
   user:{findUnique:async({where}:any)=>(await pg.query(`SELECT id,status,type FROM "User" WHERE id=$1`,[where.id])).rows[0]||null},
@@ -48,34 +49,42 @@ const tx:any={
 }
 const db:any={$transaction:async(fn:any)=>fn(tx)}
 try{
-  const route=compile('src/app/api/internal/content/video-feedback/route.ts',{'node:crypto':crypto,'@/lib/brand-plan/creativeRevisionContract':contract,'@/lib/brand-plan/videoFeedbackIngestion':{...service,ingestTrustedVideoFeedback:(body:any,t:string)=>service.ingestTrustedVideoFeedback(body,t,now,db)}})
-  const post=(body:any,header=token)=>route.POST(new Request('https://kanban.test/api/internal/content/video-feedback',{method:'POST',headers:{'x-content-service-token':header},body:typeof body==='string'?body:JSON.stringify(body)}))
+  const route=compile('src/app/api/internal/content/video-feedback/route.ts',{'node:crypto':crypto,'@/lib/brand-plan/creativeRevisionContract':contract,'@/lib/brand-plan/videoFeedbackIngestion':{...service,ingestTrustedVideoFeedback:(body:any,delivery:any,t:string)=>service.ingestTrustedVideoFeedback(body,delivery,t,now,db)}})
+  const delivery=(body:any,key=activeToken,deliveredAt=now,nonce=`nonce-${String(++nonceSeq).padStart(16,'0')}`)=>{const unsigned={method:'POST',path:'/api/internal/content/video-feedback',deliveredAt:deliveredAt.toISOString(),nonce};return {...unsigned,signature:service.videoFeedbackDeliverySignature(body.core.eventId,body.coreDigest,unsigned,key)}}
+  const post=(body:any,header=activeToken,transport=typeof body==='string'?null:delivery(body,header))=>route.POST(new Request('https://kanban.test/api/internal/content/video-feedback',{method:'POST',headers:{'x-content-service-token':header,...(transport?{'x-amc-video-feedback-delivered-at':transport.deliveredAt,'x-amc-video-feedback-nonce':transport.nonce,'x-amc-video-feedback-signature':transport.signature}:{})},body:typeof body==='string'?body:JSON.stringify(body)}))
   let parsed=0
   const denied:any=new Request('https://kanban.test/api/internal/content/video-feedback',{method:'POST',body:'{}'});denied.text=async()=>{parsed++;return '{}'}
   assert.equal((await route.POST(denied)).status,401);assert.equal(parsed,0,'token authentication precedes body parsing')
-  assert.equal((await post(signed,'wrong')).status,401)
-  assert.equal((await post({...signed,signature:'0'.repeat(64)})).status,401)
-  const created=await post(signed);assert.equal(created.status,201);assert.equal((await created.json()).replayed,false)
-  const replay=await post(signed);assert.equal(replay.status,200);assert.equal((await replay.json()).replayed,true)
-  const lateReplay=await service.ingestTrustedVideoFeedback(signed,token,new Date(now.getTime()+6*60*1000),db);assert.equal(lateReplay.replayed,true,'accepted signed events remain replayable after freshness expires')
-  await assert.rejects(()=>service.ingestTrustedVideoFeedback(sign({...unsigned,eventId:'event-unseen-stale'}),token,new Date(now.getTime()+6*60*1000),db),/video_feedback_event_stale/)
-  const conflict=sign({...unsigned,feedback:{...unsigned.feedback,captionMismatchBlocked:false}});assert.equal((await post(conflict)).status,409)
-  assert.equal((await pg.query(`SELECT count(*)::int AS n FROM "BrandMarketingSolution" WHERE kind='VIDEO_EDIT_FEEDBACK'`)).rows[0].n,1)
-  const stored:any=(await pg.query(`SELECT input FROM "BrandMarketingSolution" WHERE kind='VIDEO_EDIT_FEEDBACK'`)).rows[0]
+  assert.equal((await post(event,'wrong',delivery(event,'wrong'))).status,401)
+  assert.equal((await post(event,token,{...delivery(event,token),signature:'0'.repeat(64)})).status,401)
+  const staleEvent=envelope({...core,eventId:'event-stale-delivery'}),staleDelivery=delivery(staleEvent,token,new Date(now.getTime()-6*60*1000))
+  assert.equal((await post(staleEvent,token,staleDelivery)).status,401)
+  const created=await post(event);assert.equal(created.status,201);assert.equal((await created.json()).replayed,false,'20-minute-old core is accepted with fresh delivery auth')
+  const replay=await post(event,token,delivery(event,token,new Date(now.getTime()+60*1000)));assert.equal(replay.status,200);assert.equal((await replay.json()).replayed,true)
+  const oldContract={...core,digest:event.coreDigest,signature:'0'.repeat(64)}
+  assert.equal((await post(oldContract,token,delivery(event,token))).status,400,'freshness-bound legacy body is version-gated closed')
+  const rotatedToken='rotated-video-feedback-token';process.env.CONTENT_SERVICE_INTERNAL_TOKEN=rotatedToken;activeToken=rotatedToken
+  assert.equal((await post(event,token,delivery(event,token))).status,401,'retired transport token is rejected')
+  const rotatedReplay=await post(event,rotatedToken,delivery(event,rotatedToken));assert.equal(rotatedReplay.status,200);assert.equal((await rotatedReplay.json()).replayed,true,'stable core replays under current rotated token')
+  const pending=envelope({...core,eventId:'event-pending-rotation',occurredAt:new Date(now.getTime()-60*60*1000).toISOString()})
+  assert.equal((await post(pending,rotatedToken,delivery(pending,rotatedToken))).status,201,'pending old core is signed and delivered with the current token')
+  const conflict=envelope({...core,evidence:{...core.evidence,captionMismatchBlocked:false}});assert.equal((await post(conflict)).status,409)
+  assert.equal((await pg.query(`SELECT count(*)::int AS n FROM "BrandMarketingSolution" WHERE kind='VIDEO_EDIT_FEEDBACK'`)).rows[0].n,2)
+  const stored:any=(await pg.query(`SELECT input FROM "BrandMarketingSolution" WHERE kind='VIDEO_EDIT_FEEDBACK' AND period='event-1'`)).rows[0]
   assert.equal(stored.input.signature,undefined);assert.equal(stored.input.feedback,undefined);assert(stored.input.videoFeedback);assert.equal(JSON.stringify(stored).includes('old'),true)
-  access=false;assert.equal((await post(sign({...unsigned,eventId:'event-denied'}))).status,404);access=true
-  await pg.query(`UPDATE "User" SET status='DISABLED' WHERE id='actor-a'`);assert.equal((await post(sign({...unsigned,eventId:'event-inactive'}))).status,404);await pg.query(`UPDATE "User" SET status='ACTIVE' WHERE id='actor-a'`)
-  assert.equal((await post(sign({...unsigned,eventId:'event-cross',brandId:'brand-b'}))).status,404)
-  assert.equal((await post(sign({...unsigned,eventId:'event-job-alias',projectId:'job-a'}))).status,404,'job id is never a Content project id alias')
+  access=false;assert.equal((await post(envelope({...core,eventId:'event-denied'}))).status,404);access=true
+  await pg.query(`UPDATE "User" SET status='DISABLED' WHERE id='actor-a'`);assert.equal((await post(envelope({...core,eventId:'event-inactive'}))).status,404);await pg.query(`UPDATE "User" SET status='ACTIVE' WHERE id='actor-a'`)
+  assert.equal((await post(envelope({...core,eventId:'event-cross',identity:{...core.identity,brandId:'brand-b'}}))).status,404)
+  assert.equal((await post(envelope({...core,eventId:'event-job-alias',identity:{...core.identity,projectId:'job-a'}}))).status,404,'job id is never a Content project id alias')
   const inconsistent={...validPlan,_mmVideoJob:{...validPlan._mmVideoJob,basicVideoProjectId:'other-project'}}
   await pg.query(`UPDATE "VideoProductionJob" SET plan=$1::jsonb WHERE id='job-a'`,[JSON.stringify(inconsistent)])
-  assert.equal((await post(sign({...unsigned,eventId:'event-mismatched-pin'}))).status,404)
+  assert.equal((await post(envelope({...core,eventId:'event-mismatched-pin'}))).status,404)
   const missing={...validPlan};delete (missing as any).basicVideoProjectId
   await pg.query(`UPDATE "VideoProductionJob" SET plan=$1::jsonb WHERE id='job-a'`,[JSON.stringify(missing)])
-  assert.equal((await post(sign({...unsigned,eventId:'event-missing-pin'}))).status,404)
+  assert.equal((await post(envelope({...core,eventId:'event-missing-pin'}))).status,404)
   await pg.query(`UPDATE "VideoProductionJob" SET plan=$1::jsonb WHERE id='job-a'`,[JSON.stringify(validPlan)])
   assert.equal((await post('x'.repeat(service.VIDEO_FEEDBACK_EVENT_MAX_BYTES+1))).status,413)
   await assert.rejects(()=>pg.query(`INSERT INTO "BrandMarketingSolution"(id,"brandId",kind,period,version,status,"generationMode",input,output) VALUES('duplicate','brand-a','VIDEO_EDIT_FEEDBACK','event-1',1,'RECORDED','TEST','{}','{}')`),/unique|duplicate/i)
   const indexes=await pg.query(`SELECT indexname FROM pg_indexes WHERE indexname IN ('BrandMarketingSolution_video_feedback_event_id_uq','BrandMarketingSolution_video_feedback_window_idx')`);assert.equal(indexes.rows.length,2)
-  console.log('PASS trusted video feedback: token-first auth, digest/HMAC/freshness, active access/binding, immutable replay/conflict, byte and partial-index gates')
+  console.log('PASS trusted video feedback: stable evidence digest, fresh per-delivery HMAC, token rotation, active access/binding, immutable replay/conflict, byte and partial-index gates')
 }finally{await pg.close();if(previousToken===undefined)delete process.env.CONTENT_SERVICE_INTERNAL_TOKEN;else process.env.CONTENT_SERVICE_INTERNAL_TOKEN=previousToken}
