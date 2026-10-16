@@ -122,10 +122,16 @@ function ScriptReview({brandId,creativeId,month,english=false,initialPanel,onSav
   }else if(p.kind==='discard'){
    if(!result.receipt?.id)throw new Error('unverified');setCandidate(null);setReviewedCandidate(null);setTask(null);persist(storageKey.current+':task',null);persist(storageKey.current+':candidate',null);setRequest(null);setNotice(t('已弃用候选，当前脚本保留。','Candidate discarded. Current script retained.'))
   }else{
-   if(!result.ok||!(result.draftId||result.schedule?.draftId)||p.kind==='unschedule'&&result.schedule!==null)throw new Error('unverified')
+   if(!result.ok||typeof result.draftId!=='string'||!result.draftId||!result.expectedRevision||p.kind==='unschedule'&&result.schedule!==null)throw new Error('unverified')
+   if(p.kind==='schedule'&&(!result.schedule||result.schedule.draftId!==result.draftId||result.schedule.platform!==p.body.platform||result.schedule.accountId!==p.body.accountId||(result.schedule.scheduledAt===null?p.body.scheduledAt!==null:new Date(result.schedule.scheduledAt).getTime()!==new Date(p.body.scheduledAt).getTime())))throw new Error('unverified')
    const fresh=await api(path('revisions'))
-   if(fresh.brand?.id!==brandId||fresh.creativeId!==activeId||result.expectedRevision&&fresh.expectedRevision!==result.expectedRevision||(p.kind==='unschedule'?fresh.current?.schedule!==null:fresh.current?.schedule?.draftId!==result.schedule.draftId||fresh.current?.schedule?.scheduledAt!==result.schedule.scheduledAt||fresh.current?.schedule?.platform!==result.schedule.platform||fresh.current?.schedule?.accountId!==result.schedule.accountId))throw new Error('unverified')
-   apply(fresh);setRequest(null);setDialog(null);setNotice(p.kind==='unschedule'?t('已取消发布安排，脚本和草稿均已保留。','Schedule canceled. Your script and draft are retained.'):t('已安排发布。','Publication scheduled.'));await onSaved?.({...fresh.current,month,revisionId:fresh.revisions?.[0]?.id})
+   if(fresh.brand?.id!==brandId||fresh.creativeId!==activeId||fresh.current?.id!==activeId||!fresh.expectedRevision||!Object.hasOwn(fresh.current,'schedule'))throw new Error('unverified')
+   if(fresh.current.schedule!==null&&(!fresh.current.schedule||typeof fresh.current.schedule.draftId!=='string'||!fresh.current.schedule.draftId||typeof fresh.current.schedule.platform!=='string'||fresh.current.schedule.scheduledAt!==null&&typeof fresh.current.schedule.scheduledAt!=='string'))throw new Error('unverified')
+   // A later script edit can change the creative revision without changing the
+   // durable schedule. Compare the complete arrangement, including its pin.
+   const matches=p.kind==='unschedule'?fresh.current.schedule===null:!!fresh.current.schedule&&['draftId','scheduledAt','platform','accountId','scheduledBy','scheduledAtRevisionId','legacy'].every(key=>fresh.current.schedule[key]===result.schedule[key])
+   if(!matches&&fresh.expectedRevision===result.expectedRevision)throw new Error('unverified')
+   apply(fresh);setRequest(null);setDialog(null);setNotice(!matches?t('发布安排又有更新，已显示最新安排。','The publication schedule changed again. The latest details are shown.'):p.kind==='unschedule'?t('已取消发布安排，脚本和草稿均已保留。','Schedule canceled. Your script and draft are retained.'):t('已安排发布。','Publication scheduled.'));await onSaved?.({...fresh.current,month,revisionId:fresh.revisions?.[0]?.id})
   }
  }
  const submit=(p:Pending)=>void act(()=>runRequest(pendingRef.current||p))

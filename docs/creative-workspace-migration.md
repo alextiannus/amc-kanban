@@ -33,6 +33,8 @@ node --import tsx scripts/migrate-creative-workspace.mts --apply --brand-id BRAN
 
 marker 判定先解析草稿中的全部权威身份，再核对工作区：即使其中一个来源创意已经缺失，两个不同 raw marker 仍是歧义；同一 raw 身份的大小写重复不算两个身份。有 V2 编码 marker 时仅以 V2 为权威，不能退回 raw 投影；冲突或损坏的 V2 不关联。关联扫描前先验证月份与非空字符串 ID（最长 200），数值 ID、缺 ID 等非法项原样保留并计入 invalid / needs_confirmation，不把 undefined 当作任意 marker 匹配。
 
+原始 agentNote 作为历史证据完整保留。每个明确身份的最后一次安排/取消 marker 决定当前有效状态；身份歧义检查仍检查全部历史身份。scheduler、迁移、旧日历投影及两端日历 UI 使用相同规则。取消后的旧 calendar marker 不再关联；创意明确 schedule:null 且有对应取消证据时，旧日期保留在 legacy，分类仍为 dated，但不再报告缺少草稿、不创建 schedule。后续显式重排追加新的有效 marker，可复用原草稿。幂等回放不追加重复历史。
+
 ## 事务和重放
 
 每个品牌独立事务，先锁 BrandKnowledge，再按 ID 锁该品牌 ContentDraft，使用与创意保存和排期相同的锁顺序。写入兼容投影、SYSTEM 审计和回读核验属于同一事务；锁等待 5 秒、单语句 15 秒。审计记录迁移版本、前后摘要、幂等摘要和逐项结果，actorId=null 表示系统迁移，不冒充历史作者。失败使该品牌全部回滚；已提交的其他品牌可以安全重放。
@@ -41,7 +43,7 @@ marker 判定先解析草稿中的全部权威身份，再核对工作区：即�
 
 ## 本地证据与发布边界
 
-终审后的显式排期也采用唯一身份规则：候选筛选与草稿锁后读回均拒绝多身份，跨月同 ID 的未关联项目不猜测归属。重排或取消追加当前 marker，保留完整历史 agentNote。两端通过同权限 schedule GET 读取最小可用账号字段，POST 提交显式账号，DELETE 取消并验证 schedule:null；这不改变迁移的默认只读、锁顺序、审计或幂等契约。
+终审后的显式排期也采用唯一身份规则：候选筛选与草稿锁后读回均拒绝多身份，跨月同 ID 的未关联项目不猜测归属。重排或取消追加当前 marker，保留完整历史 agentNote。两端通过同权限 schedule GET 读取最小可用账号字段，POST 提交显式账号，DELETE 取消并验证 schedule:null。UI 按完整安排（含账号、固定修订）核对持久回执；无关脚本更新不阻断确认，始终加载最新创意。如果最新安排已被替换，则结束待核对状态并提示最新安排，不误报本次成功、不自动重放。这不改变写入 CAS、迁移默认只读、锁顺序、审计或幂等契约。
 
 `test-creative-workspace-migration.mts` 使用 PGlite 执行实际 SQL，覆盖默认只读、唯一关联、歧义、跨品牌、前缀碰撞、来源未知、审计失败回滚及重复 apply。PGlite 不代表多连接 Prisma/PostgreSQL 或生产验收；真实 PostgreSQL 结果单独记录。
 

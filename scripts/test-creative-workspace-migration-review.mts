@@ -4,6 +4,10 @@ import {runCreativeWorkspaceMigration,type MigrationDatabase} from './migrate-cr
 import {creativeDraftMarker} from '../src/lib/brand-plan/creativeDraftMarker.ts'
 
 const scenarios:Record<string,{items:unknown[];notes:Array<[string,string]>;invalidMonth?:boolean;verify:(items:any[],report:any)=>void}>={
+ canceled:{items:[{id:'canceled',date:'2026-11-01',schedule:null},{id:'raw-canceled',date:'2026-11-02',schedule:null}],notes:[
+  ['canceled','Human note\n'+creativeDraftMarker('calendar','canceled')+'\n'+creativeDraftMarker('unscheduled','canceled')],
+  ['raw-canceled','Human note brand-plan-calendar-item:raw-canceled\nbrand-plan-creative-unscheduled:raw-canceled'],
+ ],verify:(items,report)=>{for(const item of items){assert.equal(item.schedule,null);assert.equal(item.migrationStatus,'migrated');assert(item.legacy.date)}assert.equal(report.summary.needs_confirmation,0)}},
  markers:{items:[{id:'known',date:'2026-11-01'},{id:'repeat'},{id:'encoded'},{id:'conflicting-v2',date:'2026-11-02'},{id:'malformed-v2',date:'2026-11-03'}],notes:[
   ['mixed','brand-plan-calendar-item:known brand-plan-calendar-item:missing'],
   ['repeat','brand-plan-calendar-item:repeat BRAND-PLAN-CALENDAR-ITEM:REPEAT'],

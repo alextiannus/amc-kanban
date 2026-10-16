@@ -58,9 +58,39 @@ export function creativeDraftMarkerIdentityCount(note: unknown, kind: CreativeDr
   return markerIdentities(note,kind).values.length
 }
 
-export function hasCreativeDraftMarker(note: unknown, kind: CreativeDraftMarkerKind, creativeId?: string) {
+export function hasCreativeDraftMarkerIdentity(note: unknown, kind: CreativeDraftMarkerKind, creativeId?: string) {
   if(creativeId!==undefined&&typeof creativeId!=='string')return false
   const identities=markerIdentities(note,kind)
   if(!identities.values.length||identities.encoded&&identities.values.length!==1)return false
   return creativeId===undefined||identities.values.includes(identities.encoded?encodeCreativeId(creativeId):creativeId.toLowerCase())
+}
+
+function decodeIdentity(value:string) {
+  return value.replace(/.{4}/g,code=>String.fromCharCode(parseInt(code,16)))
+}
+
+function lastMarker(note:string,kind:CreativeDraftMarkerKind,id:string) {
+  const identities=markerIdentities(note,kind)
+  if(!hasCreativeDraftMarkerIdentity(note,kind,id))return -1
+  const token=identities.encoded?encodeCreativeId(id):id.toLowerCase()
+  return [...note.matchAll(new RegExp(`${identities.encoded?encodedPrefix(kind):prefixes[kind]}(\\S+)`,'gi'))]
+    .filter(match=>match[1].toLowerCase()===token).at(-1)?.index??-1
+}
+
+// Notes are append-only historical evidence. The latest explicit marker for
+// this identity decides whether it is currently scheduled or canceled.
+export function hasCreativeDraftMarker(note: unknown, kind: CreativeDraftMarkerKind, creativeId?: string):boolean {
+  if(typeof note!=='string'||!hasCreativeDraftMarkerIdentity(note,kind,creativeId))return false
+  if(creativeId===undefined){
+    const identities=markerIdentities(note,kind)
+    return identities.values.some(value=>hasCreativeDraftMarker(note,kind,identities.encoded?decodeIdentity(value):value))
+  }
+  return lastMarker(note,kind,creativeId)>lastMarker(note,kind==='calendar'?'unscheduled':'calendar',creativeId)
+}
+
+export function activeCalendarCreativeId(note:unknown):string {
+  const identities=markerIdentities(note,'calendar')
+  if(identities.values.length!==1)return ''
+  const id=identities.encoded?decodeIdentity(identities.values[0]):typeof note==='string'?[...note.matchAll(/brand-plan-calendar-item:(\S+)/gi)][0]?.[1]||'':''
+  return hasCreativeDraftMarker(note,'calendar',id)?id:''
 }

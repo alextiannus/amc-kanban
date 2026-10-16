@@ -59,6 +59,7 @@ function project(knowledge:any,drafts:any[]) {
         findings.push({month,creativeId:id,classification:'current',migrationStatus:'unchanged',issues:[]});return raw
       }
       const candidates=draftEvidence.filter(draft=>hasCreativeDraftMarker(draft.agentNote,'calendar',id))
+      const explicitlyCanceled=item.schedule===null&&draftEvidence.some(draft=>hasCreativeDraftMarker(draft.agentNote,'unscheduled',id))
       let schedule=normalized.schedule
       let classification=dated?'dated':'undated'
       if(!schedule&&candidates.length){
@@ -72,7 +73,7 @@ function project(knowledge:any,drafts:any[]) {
           if(!draft.platformId||draft.accountBrandId!==knowledge.brandId)issues.push('draft_account_unresolved')
           if(!issues.length)schedule={draftId:draft.id,scheduledAt:draft.scheduledAt?new Date(draft.scheduledAt).toISOString():null,platform:draft.platformId,scheduledBy:null,scheduledAtRevisionId:null,legacy:true}
         }
-      }else if(!schedule&&dated)issues.push('draft_link_unresolved')
+      }else if(!schedule&&dated&&!explicitlyCanceled)issues.push('draft_link_unresolved')
       if(!schedule&&candidates.length&&issues.length)classification='ambiguous'
       const migrationStatus=issues.length?'needs_confirmation':'migrated'
       const result={classification,migrationStatus,issues}

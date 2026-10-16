@@ -5,6 +5,7 @@ import {Pool} from 'pg'
 import {runCreativeWorkspaceMigration,type MigrationDatabase} from './migrate-creative-workspace.mts'
 import {creativeDigest} from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import {scheduleCreative,unscheduleCreative,validateScheduleInput} from '../src/lib/brand-plan/creativeScheduling.ts'
+import {listOpenCalendarCreativeOptions} from '../src/lib/brand-plan/calendarSync.ts'
 
 const url=new URL(process.env.DATABASE_URL||'')
 assert(['localhost','127.0.0.1'].includes(url.hostname)&&/^\/amc_lineage_test_[a-zA-Z0-9_]+$/.test(url.pathname),'dedicated local fixture database only')
@@ -54,6 +55,27 @@ try{
  assert(!(await prisma.contentDraft.findUniqueOrThrow({where:{id:'migration-pg-draft'}})).agentNote?.includes('null'))
  const scheduled=await scheduleCreative(actor,brandId,creativeId,canceled.expectedRevision,{month,platform:'instagram',scheduledAt:null,idempotencyKey:'explicit-new-schedule'},prisma)
  assert.equal(scheduled.schedule?.draftId,'migration-pg-draft');assert.equal(scheduled.schedule?.scheduledBy,userId);assert(scheduled.schedule?.scheduledAtRevisionId);assert.equal(scheduled.schedule?.legacy,undefined)
+ // Reproduce cancellation BEFORE the first migration of an unmigrated dated item.
+ await prisma.brandKnowledge.update({where:{brandId},data:{marketingSolution:workspace}})
+ const humanNote='Original merchant note\nbrand-plan-calendar-item:'+creativeId
+ await prisma.contentDraft.update({where:{id:'migration-pg-draft'},data:{agentNote:humanNote}})
+ const beforeCancel=await scheduleCreative(actor,brandId,creativeId,creativeDigest(workspace.publishingCalendar.months[month][0]),{month,platform:'instagram',scheduledAt:'2026-11-02T02:00:00Z',idempotencyKey:'schedule-before-migration'},prisma)
+ const canceledBefore=await unscheduleCreative(actor,brandId,creativeId,beforeCancel.expectedRevision,{month,idempotencyKey:'cancel-before-migration'},prisma)
+ const canceledDraft=await prisma.contentDraft.findUniqueOrThrow({where:{id:'migration-pg-draft'}})
+ assert(canceledDraft.agentNote?.startsWith(humanNote));assert.equal(canceledDraft.scheduledAt,null)
+ const canceledProjection=(await listOpenCalendarCreativeOptions(brandId,month,prisma)).find(row=>row.id===creativeId)?.draftId
+ const cancelDry=await runCreativeWorkspaceMigration(adapters[0],{brandId});assert.equal(cancelDry.writtenBrands,0)
+ await runCreativeWorkspaceMigration(adapters[0],{apply:true,brandId})
+ const afterCancel=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution as any
+ assert.equal(afterCancel.publishingCalendar.months[month][0].schedule,null,'migration must not revive canceled schedule')
+ assert.equal(canceledProjection,null,'legacy calendar must not revive a canceled draft')
+ assert.deepEqual(await prisma.contentDraft.findUniqueOrThrow({where:{id:'migration-pg-draft'}}),canceledDraft)
+ assert.equal((await runCreativeWorkspaceMigration(adapters[0],{apply:true,brandId})).writtenBrands,0)
+ const againScheduled=await scheduleCreative(actor,brandId,creativeId,creativeDigest(afterCancel.publishingCalendar.months[month][0]),{month,platform:'instagram',scheduledAt:null,idempotencyKey:'reschedule-after-cancel-migration'},prisma)
+ assert.equal(againScheduled.schedule?.draftId,'migration-pg-draft')
+ assert.equal((await listOpenCalendarCreativeOptions(brandId,month,prisma)).find(row=>row.id===creativeId)?.draftId,'migration-pg-draft')
+ assert.equal(canceledBefore.schedule,null)
+ console.log('PASS exact legacy schedule → cancel → calendar projection → dry-run/apply/repeat → explicit reschedule; human note and draft retained')
  // Rollback is checked through the real PostgreSQL trigger and transaction.
  await prisma.brandKnowledge.update({where:{brandId},data:{marketingSolution:workspace}})
  await prisma.$executeRawUnsafe(`CREATE OR REPLACE FUNCTION migration_pg_fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='CREATIVE_WORKSPACE_LEGACY_MIGRATED' AND NEW."resourceId"='migration-pg-brand' THEN RAISE EXCEPTION 'migration audit fixture'; END IF; RETURN NEW; END $$`)

@@ -5,7 +5,7 @@ import { readPolicies } from '../role-permissions/store.ts'
 import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { calendarSyncMarker } from './calendarSync.ts'
-import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker, creativeDraftMarkerIdentityCount } from './creativeDraftMarker.ts'
+import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker, hasCreativeDraftMarkerIdentity, creativeDraftMarkerIdentityCount } from './creativeDraftMarker.ts'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, record, revisionPeriod, validateCreativeAddress } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeScheduleLink } from './creativeWorkspaceContract.ts'
 
@@ -65,10 +65,10 @@ function unscheduledMarker(creativeId: string, revisionId: string | null) {
 function assertUniqueIdentity(note:string|null,id:string) {
   for(const kind of ['calendar','unscheduled'] as const){
     const count=creativeDraftMarkerIdentityCount(note,kind)
-    if(count>1||count===1&&!hasCreativeDraftMarker(note,kind,id))throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
+    if(count>1||count===1&&!hasCreativeDraftMarkerIdentity(note,kind,id))throw new CreativeRevisionError('creative_schedule_draft_ambiguous',409)
   }
 }
-const retainNote=(note:string|null,marker:string)=>note?.split('\n').includes(marker)?note:note?note+'\n'+marker:marker
+const retainNote=(note:string|null,marker:string)=>note?.split('\n').at(-1)===marker?note:note?note+'\n'+marker:marker
 const eligibleAccount=(account:any,platform?:string)=>{
  const handle=account.handle?.trim().toLowerCase()||'',status=account.connectionStatus?.toUpperCase()||'UNKNOWN'
  return (!platform||platforms[account.platformId.toLowerCase()]===platform)&&!!platforms[account.platformId.toLowerCase()]&&handle!==''&&!['-','n/a','na','none','unknown'].includes(handle)&&!handle.startsWith('unconfigured')&&!handle.startsWith('placeholder')&&Boolean(account.postfastAccountId)&&!account.disabledReason&&!['DISABLED','DISCONNECTED','ERROR','EXPIRED'].includes(status)

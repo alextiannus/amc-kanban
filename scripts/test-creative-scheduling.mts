@@ -193,6 +193,16 @@ console.log('PASS: schedule route and real service validator compose for POST/DE
 // schedule, while ordinary caption/status review remains usable.
 const draftRouteSource=readFileSync(new URL('../src/app/api/brands/[id]/drafts/[draftId]/route.ts',import.meta.url),'utf8')
 const draftRouteCompiled=ts.transpileModule(draftRouteSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
+for(const id of ['idea-one','Idea-One','idea one','创意一','idea😀']){
+ const active=draftMarkers.creativeDraftMarker('calendar',id),canceled=draftMarkers.creativeDraftMarker('unscheduled',id)
+ const history='Human note\n'+active+'\n'+canceled
+ assert.equal(draftMarkers.hasCreativeDraftMarker(history,'calendar',id),false)
+ assert.equal(draftMarkers.hasCreativeDraftMarker(history,'unscheduled',id),true)
+ assert.equal(draftMarkers.activeCalendarCreativeId(history),'')
+ assert.equal(draftMarkers.activeCalendarCreativeId(history+'\n'+active),id)
+ assert.equal(draftMarkers.hasCreativeDraftMarker(history+'\n'+active,'unscheduled',id),false)
+ assert.equal(draftMarkers.hasCreativeDraftMarkerIdentity(history,'calendar',id),true,'history stays available for identity checks')
+}
 const linkedDraft:any={id:scheduled.draftId,brandId:'brand-a',accountId:'account-1',scheduledAt:new Date('2026-11-14T02:00:00Z'),agentNote:'brand-plan-calendar-item:idea-one creative-revision:revision-1',status:'pending_review',updatedAt:new Date(),postfastControls:null,platformPostId:null,publishedAt:null}
 const linkedKnowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[{id:'idea-one',schedule:{draftId:scheduled.draftId}}]}}}}
 let draftDeleted=false

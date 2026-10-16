@@ -1,4 +1,5 @@
 'use client'
+import { activeCalendarCreativeId } from '@/lib/brand-plan/creativeDraftMarker'
 import { postfastAccountHealthError } from '@/lib/postfastAccountHealth'
 import React, { useEffect, useState, useMemo, useRef } from 'react'
 import PostPreviewModal from './PostPreviewModal'
@@ -1346,7 +1347,7 @@ ${contentIdea || 'No details provided.'}`
   }
 
   const calendarCreativeIdFromEvent = (event: CalendarEvent) => {
-    return event.agentNote?.match(/brand-plan-calendar-item:([^\s]+)/)?.[1] || ''
+    return activeCalendarCreativeId(event.agentNote)
   }
 
   const materialRequirementsFromEvent = (event: CalendarEvent) => {
