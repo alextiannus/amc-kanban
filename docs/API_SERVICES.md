@@ -14,6 +14,8 @@ Agent 视角的连接与工作流手册见：[AGENT_CONNECTIVITY.md](AGENT_CONNE
 
 AMCMM AI 工作台接口、MCP、个人偏好、额度与恢复契约见 [IAIC 改造实施设计](amcmm-iaic-implementation.md)。
 
+内容创意工作区当前契约（2026-10-16，本地已实现、未部署）见 [创意追溯](creative-lineage.md)：月度频率只形成无日期创意目标；来源与媒体走品牌/月授权商户接口；先推荐 SKU、人工确认，再生成及采用脚本候选；共享修订和反馈；只有显式 schedule/unschedule 改变关联草稿。视频创建、保存及素材库重开固定创意版本和来源/SKU/镜头映射。迁移默认只读，未知证据不补造，见 [迁移手册](creative-workspace-migration.md)。旧版上线记录不是本轮发布证据。
+
 设计原则：
 
 1. AMCMM 持久 AI 工作使用独立 IAIC Core；现有 Dify/业务作业保留原职责，不与 Core 任务混为一套状态。
@@ -905,10 +907,10 @@ Regression commands: `npm run test:tiktok-aigc` (draft authorization, merge/read
 
 ### AMCMM 品牌创意推荐与审阅
 
-`POST /api/brands/:id/ai/tasks` 支持 `kind: creative_discovery`、goal、requestKey；`proactive:true` 使用服务端当日品牌事实快照键。新 MCP `discover_brand_creatives` 同样调用当前 HUMAN 品牌权限、额度与持久任务服务。`amc.library` 检索真实原创意；任务详情返回 recommendations、library 来源快照与 adoptions。`POST .../:taskId/adopt` 对推荐接受 artifactDigest、sourceCreativeId、requestKey、patch（title/planning/aiCaption/materialRequirements/date/platform），保存待用品牌计划并回读，返回 creativeId/month/creative 供既有制作入口使用。审阅不授予自动发布权限。当前交付状态见 amcmm-iaic-implementation.md。
+`POST /api/brands/:id/ai/tasks` 支持 `kind: creative_discovery`、goal、requestKey；`proactive:true` 使用服务端当日品牌事实快照键。MCP `discover_brand_creatives` 调用相同的当前用户品牌权限与持久任务服务。`amc.library` 检索真实原创意；新 discovery 登记无日期来源候选，不写已确认 SKU 或适配稿。任务详情返回 recommendations、library 来源快照与 adoptions。来源候选通过 `sku_proposal` 推荐 2–4 项（单项目录允许一项），经 `POST /api/brands/:id/content-creatives/:creativeId/sku-decision` 人工确认后，`creative_adaptation` 才生成固定决策的脚本候选。采用保存共享修订并回读，返回 creativeId/month/creative；不接受通过候选 patch 偷写 date/platform/schedule。审阅与采用不授予排期、付费重做或发布权限。当前交付状态见 amcmm-iaic-implementation.md。
 
 
 AMCMM工作台设定：GET/POST `/api/brands/:id/ai/preference` 保留Core个人偏好revision/status/content，增加从当前受权品牌事实计算的 `defaults`（brandId、brandName、content）及 `effectiveContent`、`source`（personal/brand）。无有效个人偏好时采用品牌默认；读取不创建个人记忆，POST仍由人类明确保存/遗忘。入口及默认投影已部署，生产隔离验收通过。
 
 
-AMCMM脚本自动适配（已部署验收）：POST `/api/brands/:id/ai/tasks` 的 `kind=creative, adaptToBrand=true, creativeId, month` 由服务端读取当前脚本版本及品牌/SKU快照，构造固定适配目标和按用户/品牌/原稿版本/事实快照/UTC日去重的请求键；调用方无需手填goal或expectedRevision。详情返回adaptToBrand。采用接口允许人类提交白名单patch，保留原AI artifact和SKU依据，原任务首次保存键阻止重复落版。切换品牌不带入旧品牌脚本。
+AMCMM 脚本适配当前入口（本地已实现，未部署）：既有 `kind=creative, adaptToBrand=true, creativeId, month` 兼容入口同样受 SKU 两阶段流程约束；选择来源本身不生成已适配脚本。服务端读取固定创意版本、真实来源与已确认 SKU 决策，采用时保留 AI artifact 和人工差异，首次保存键阻止重复落版，切换品牌隔离旧脚本。2026-09-30 的一阶段适配上线验收仅属于历史实现，不能替代本轮二阶段契约和发布验证。

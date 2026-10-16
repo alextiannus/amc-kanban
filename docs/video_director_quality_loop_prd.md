@@ -1,5 +1,7 @@
 # VideoDirector Self-Evolution PRD (Dify-first, No Scorecard)
 
+范围说明（2026-10-16）：下文是 VideoDirector 自学习的设计目标，不是当前商户视频重做的执行授权或已上线验收。当前本地已实现、未部署的商户工作区契约见 [创意追溯](creative-lineage.md)：免费文字修订与付费渲染分离，重做须明确确认，未知结果查询原请求，不能因反思或 repair 建议自动再次付费生成。设计与历史记录保留，不归档。
+
 ## 1. 目标
 
 把 VideoDirector 从“单次生成器”升级为“可持续自我学习的视频导演代理”。

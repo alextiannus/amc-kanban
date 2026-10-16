@@ -111,6 +111,7 @@ Implemented in [compliance.ts](file:///Users/alextian/Documents/Claude/Projects/
 The target AMC Copywriter is a normal AMC Agent system user. It runs from explicit business events or scheduled content checks, uses the same Capability and Crew authorization as a human employee, and writes all operations to the shared work log. It does not consume Kanban tasks or `WorkUnit`.
 
 ### 3.2 Automated Scheduling (6 Hours)
+- **Scope boundary (2026-10-16, local implementation, not deployed)**: this section describes the separate Copywriter background-check design, not scheduling authorization for the content-idea workspace. Monthly frequency creates undated idea targets; source selection requires SKU proposal and explicit confirmation before adaptation. Only the explicit creative schedule action may link a draft and set its time. Asset labels and background checks cannot bypass that action. See [creative lineage](creative-lineage.md).
 - **Mechanism**: A background loop executes every 6 hours (`setInterval.unref()` to prevent thread blocking).
 - **Execution**: The scheduler evaluates active brands, publishing cadence, social accounts, existing drafts, available assets, and unresolved `ActionItem` records. It creates or updates the relevant business resource directly.
 - **Workflow**: When content work is required, the scheduler invokes `marketingGraph` with explicit `brandId`, `accountId`, `draftId` and actor context. Internal graph checkpoints may track technical execution, but they are not product tasks or board items.
