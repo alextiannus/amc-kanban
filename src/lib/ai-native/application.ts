@@ -66,6 +66,14 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     return (await intentBy(pool,actor,'id',task.trusted_context.reference)).intent
   }
   const empty={type:'object',properties:{},additionalProperties:false}
+  const freezeRepairWrite=async(actor:NativeActor,intent:Parameters<typeof validateSkuArtifact>[1],taskId:string,content:string,artifact:{path:string;revision:number;digest:string})=>{
+    let validated
+    try{validated=await validateSkuArtifact(content,intent)}catch(error){
+      const code=(error as {code?:string})?.code
+      return rejectCreativeQualityRepair({id:actor.subjectId,type:'HUMAN'},intent.brandId,intent.month,intent.creativeId,taskId,content,artifact,`repair_artifact_invalid:${typeof code==='string'&&/^[a-z_]{1,100}$/.test(code)?code:'invalid_json_or_contract'}`)
+    }
+    return prepareCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,intent.month,intent.creativeId,taskId,validated.ctx.source,validated.result,artifact)
+  }
   const sourceRead=async(actor:NativeActor,intent:NativeIntent,previousPlanningContext?:PlanningContext)=>{
     const load=async()=>{
     const [knowledge,planningContext]=await Promise.all([
@@ -141,6 +149,28 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     defineCapability({name:'amc.operations',description:'Read current accounts, recent draft samples and all draft status counts. This is not revenue or a claim of external delivery.',input:empty,output:{type:'object'},effect:'read',authorize:async (actor:NativeActor)=>await authorize(actor)&&await canReadOperations(actor),implementation:{kind:'function',execute:(_input,{actor})=>brandOperations(actor)},revalidate:(_input,_previous,{actor})=>brandOperations(actor)}),
   ]
   app=await openApplication({pool,...(options.taskPool?{taskPool:options.taskPool}:{}),...models,...(models.modelFactory?{modelFactory:(configuration:Parameters<NonNullable<typeof models.modelFactory>>[0])=>{const provider=models.modelFactory!(configuration);return {next:(request:Parameters<typeof provider.next>[0])=>provider.next(prepareConversationCompletion(request))}}}:{}),skillRoot:options.skillRoot||path.join(process.cwd(),'skills'),version,authorize,
+    workspaceWrite:async(input:{expectedRevision:number;content:string},context:{actor:NativeActor;taskId?:string},write:()=>Promise<{reference:{path:string;revision:number;digest:string}}>)=>{
+      const {actor,taskId}=context
+      if(!taskId)return write()
+      const intent=await getIntent(actor,taskId)
+      if(intent.kind!=='creative_adaptation')return write()
+      const quality=await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,taskId)
+      if(!quality)return write()
+      if(quality.status!=='repair_required')throw nativeError('fidelity_review_candidate_frozen',409)
+      const original=quality.attempts[0].artifact
+      const current=await (app.workspace as WorkspacePort).read(actor,{path:intent.artifactPath})
+      // The immutable first new workspace revision is the reservation even if
+      // the process stopped after its commit but before review metadata settled.
+      if(current.reference.revision>original.revision){
+        const reserved=await (app.workspace as WorkspacePort).read(actor,{path:intent.artifactPath,revision:original.revision+1})
+        await freezeRepairWrite(actor,intent,taskId,reserved.content,reserved.reference)
+        throw nativeError('fidelity_repair_limit',409)
+      }
+      if(input.expectedRevision!==original.revision||current.reference.digest!==original.digest)throw nativeError('fidelity_repair_limit',409)
+      const saved=await write()
+      await freezeRepairWrite(actor,intent,taskId,input.content,saved.reference)
+      return saved
+    },
     taskCursorKey:createHash('sha256').update('amc-task-cursor-v1:').update(process.env.JWT_SECRET||process.env.DATABASE_URL||'local-test').digest(),
     job:{id:'amc-mm-user-ai',purpose:'Proactively match original library creatives to brand facts for human review, or prepare sourced briefs and rewrites. Read trusted amc.context first. For creative_discovery, read its requiredSkill using assistant.skills.read before any workspace write and follow artifactContract exactly. For autopilot, read amc-autopilot/SKILL.md and autonomously execute authorized capabilities; publication still needs human confirmation. For conversation, follow artifactContract. For brand_planning, amc.context.planningContext already includes the loaded required Skill, current marketing workspace and Growth evidence. Use them directly; do not reread them through separate tools. Deliver a coherent recommendation or usable draft, not serial micro-questions. Only ask for essential unresolved information; a closing question and suggestedReplies are optional. For other conversation topics read amc.context.requiredSkill. Put discussion notes in planningProgress, not a repeated progress paragraph. After a successful workspace write finish with its exact receipt; no readback is needed. Answer interview questions in the reply artifact instead of waiting. For sku_proposal and creative_adaptation, amc.context provides the complete fixed source and confirmed decision when applicable; read its requiredSkill amc-creative/SKILL.md and follow artifactContract. Do not call amc.creative or amc.library for these intents. For other intents, read the Skill matching intent.kind and follow that output schema. Never guess field names. Candidate and report completion never imply execution, publishing or saved business changes.',capabilities:['agent.work'],configuration:{skills:['amc-conversation/SKILL.md','amc-marketing-expert/SKILL.md','amc-brand-planning/SKILL.md','amc-discovery/SKILL.md','amc-creative/SKILL.md','amc-brief/SKILL.md','amc-autopilot/SKILL.md'],knowledge:[],tools:[...tools,...humanMemoryTools]}},
     runtimeLimits:{maxTurns:40,maxCalls:48,maxBatchCalls:1,modelTimeoutMs:110000,taskTimeoutMs:600000},extraCapabilities,
@@ -152,12 +182,20 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
         if(runId){try{await autopilotRun(actor.subjectId,intent.brandId,runId)}catch{allowed=false;reason='autopilot_disabled_or_revoked'}}
         if(humanMemoryTools.includes(capability.name)){allowed=false;reason='explicit_human_memory_edit_required'}
         if(['my_write_workspace','my_read_workspace'].includes(capability.name)){
-          const value=input as {path?:string;content?:string}
+          const value=input as {path?:string;content?:string;expectedRevision?:number}
           allowed=allowed&&value.path===intent.artifactPath&&(value.content===undefined||Buffer.byteLength(value.content)<=(intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'?2*1024*1024:32000))
           reason='task_artifact_scope'
           if(allowed&&capability.name==='my_write_workspace'&&taskId&&intent.kind==='creative_adaptation'){
             const quality=await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,taskId)
-            if(quality&&quality.status!=='repair_required'){allowed=false;reason='fidelity_review_candidate_frozen'}
+            if(quality?.status==='repair_required'){
+              const original=quality.attempts[0].artifact,current=await (app.workspace as WorkspacePort).read(actor,{path:intent.artifactPath})
+              if(current.reference.revision>original.revision){
+                const reserved=await (app.workspace as WorkspacePort).read(actor,{path:intent.artifactPath,revision:original.revision+1})
+                await freezeRepairWrite(actor,intent,taskId,reserved.content,reserved.reference)
+                allowed=false;reason='fidelity_repair_already_written'
+              }
+            }
+            if(quality&&(quality.status!=='repair_required'||value.expectedRevision!==quality.attempts[0].artifact.revision)){allowed=false;reason='fidelity_review_candidate_frozen'}
           }
         }
         if(allowed&&taskId&&capability.implementation.kind==='agent'){

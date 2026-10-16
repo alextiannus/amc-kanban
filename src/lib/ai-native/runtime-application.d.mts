@@ -1,3 +1,4 @@
-import type {Application,ApplicationOptions} from '@immedi/iaic-core/developer/templates/agent/app.mjs'
+import type {Application,ApplicationOptions,ArtifactReference} from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type {Pool} from 'pg'
-export function openApplication(options:ApplicationOptions&{taskPool?:Pool}):Promise<Application>
+type WorkspaceWriteGuard=(input:{expectedRevision:number;content:string},context:{actor:{scopeId:string;subjectId:string};taskId?:string},write:()=>Promise<{reference:ArtifactReference}>)=>Promise<{reference:ArtifactReference}>
+export function openApplication(options:ApplicationOptions&{taskPool?:Pool;workspaceWrite?:WorkspaceWriteGuard}):Promise<Application>

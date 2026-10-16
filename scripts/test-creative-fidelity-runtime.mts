@@ -11,15 +11,15 @@ import {readNativeTask,adoptNativeCandidate} from '../src/lib/ai-native/service.
 import {FIDELITY_DIMENSIONS} from '../src/lib/brand-plan/creativeFidelity.ts'
 
 const url=new URL(process.env.DATABASE_URL||'')
-assert.equal(url.hostname,'127.0.0.1');assert.equal(url.pathname,'/amc_lineage_test_task6_sdd_20261016')
+assert.equal(url.hostname,'127.0.0.1');assert.ok(['/amc_lineage_test_task6_sdd_20261016','/amc_lineage_test_task6fix_sdd_20261016'].includes(url.pathname))
 const pool=nativePool(),ids:string[]=[]
 let composition:any
 const usage={inputTokens:50,outputTokens:20}
 try{
   await initializeHost(pool)
   await prisma.roleDefinition.upsert({where:{id:'AMC_PRINCIPAL'},create:{id:'AMC_PRINCIPAL',name:'Principal',normalizedName:'principal',builtIn:true},update:{enabled:true}})
-  for(const scenario of ['passed','failed','malformed']){
-    const secondFails=scenario!=='passed',malformed=scenario==='malformed'
+  for(const scenario of ['passed','failed','malformed','recovery']){
+    const secondFails=['failed','malformed'].includes(scenario),malformed=scenario==='malformed'
     const id='fidelity-'+randomUUID(),actor=actorFor(id,id),month='2099-11',creativeId='idea'
     ids.push(id)
     const base={id:creativeId,title:'Brand introduction',planning:'',materialRequirements:[],adaptationStatus:'sku_confirmed'}
@@ -28,7 +28,7 @@ try{
     await prisma.user.create({data:{id,email:`${id}@example.invalid`,nickname:'Fidelity fixture',password:'test-only',businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
     await prisma.brand.create({data:{id,name:'Fidelity fixture',autoPilot:false,crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}},knowledge:{create:{negPrompts:[],menuItems:[],marketingSolution:{publishingCalendar:{months:{[month]:[current]}}}}}}})
     const intent:any={kind:'creative_adaptation',userId:id,brandId:id,creativeId,month,goal:'Adapt confirmed ordinary brand content and review fidelity',expectedRevision:creativeDigest(current),catalogDigest:catalogDigest([]),sourceRevision:null,sourceDigest:null,decisionDigest:decision.digest,artifactPath:`work/${id}.json`,requestKey:`request-${id}`}
-    let taskId='',blockedChecked=false,invalidChecked=false,pause=true
+    let taskId='',blockedChecked=false,invalidChecked=false,pause=true,pauseAfterRepair=true
     const model={next:async(request:any)=>{
       const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded')
       const context=calls.find((c:any)=>c.capability==='amc.context')?.result
@@ -37,6 +37,11 @@ try{
       const writes=calls.filter((c:any)=>c.capability==='my_write_workspace'),ref=writes.at(-1)?.result.reference
       if(!ref)return {type:'call',name:'my_write_workspace',input:{path:intent.artifactPath,expectedRevision:0,mediaType:'application/json',content:JSON.stringify(context.artifactContract.example)},usage}
       const quality=await readCreativeQualityReview({id,type:'HUMAN'},id,taskId)
+      if(writes.length===2&&pauseAfterRepair){
+        await assert.rejects(()=>composition.app.dispatcher.invoke('my_write_workspace',{path:intent.artifactPath,expectedRevision:ref.revision,mediaType:'application/json',content:JSON.stringify({...context.artifactContract.example,title:'Unauthorized third revision'})},{actor,taskId,callId:'third-before-second-finish'}),'a third revision must be denied before the second finish')
+        assert.equal((await readCreativeQualityReview({id,type:'HUMAN'},id,taskId))?.repairCount,1,'successful write consumes the repair before finish')
+        return {type:'wait',question:'Fixture pause after successful repair write, before second finish',usage}
+      }
       if(quality?.status==='awaiting_review'){
         if(!blockedChecked){
           blockedChecked=true
@@ -77,7 +82,36 @@ try{
     await composition.app.dispatcher.invoke('tasks.provide_input',{id:taskId,input:'Continue the single repair'},{actor,callId:'continue-fidelity-repair'})
     await composition.app.runtime.tick()
     task=await composition.app.runtime.get(actor,taskId,{history:true})
+    assert.equal(task.status,'waiting',JSON.stringify(task.events.slice(-4)))
+    const reserved=await readCreativeQualityReview({id,type:'HUMAN'},id,taskId)
+    assert.equal(reserved?.attempts.length,2,'the repair must already be persisted before its second finish')
+    const reservedArtifact=reserved!.attempts[1].artifact
+    assert.equal(reserved!.repairCount,1);assert.equal(reserved!.attempts.length,2)
+    assert.deepEqual(reservedArtifact,task.calls.filter((c:any)=>c.capability==='my_write_workspace'&&c.status==='succeeded').at(-1).result.reference)
+    await composition.app.close()
+    if(scenario==='recovery'){
+      // Reproduce a stop after the workspace commit but before review metadata:
+      // retain the Core immutable revision, restore only this fixture's last
+      // pre-write review row, then exercise the real guarded recovery path.
+      const row=await prisma.brandMarketingSolution.findFirst({where:{brandId:id,kind:'CREATIVE_FIDELITY_REVIEW',input:{path:['taskId'],equals:taskId}},orderBy:{version:'desc'}})
+      await prisma.brandMarketingSolution.delete({where:{id:row.id}})
+      assert.equal((await readCreativeQualityReview({id,type:'HUMAN'},id,taskId))?.status,'repair_required')
+    }
+    composition=await composeApplication(pool,models,options)
+    if(scenario==='recovery'){
+      await assert.rejects(()=>composition.app.dispatcher.invoke('my_write_workspace',{path:intent.artifactPath,expectedRevision:reservedArtifact.revision,mediaType:'application/json',content:JSON.stringify({title:'Must not replace an unacknowledged repair'})},{actor,taskId,callId:'recover-before-next-write'}))
+      assert.deepEqual((await readCreativeQualityReview({id,type:'HUMAN'},id,taskId))!.attempts[1].artifact,reservedArtifact)
+    }
+    await assert.rejects(()=>composition.app.dispatcher.invoke('my_write_workspace',{path:intent.artifactPath,expectedRevision:reservedArtifact.revision,mediaType:'application/json',content:JSON.stringify({title:'Third after restart'})},{actor,taskId,callId:'third-write-after-restart'}))
+    assert.deepEqual((await composition.app.workspace.read(actor,{path:intent.artifactPath})).reference,reservedArtifact,'restart cannot replace the exact reserved repair')
+    pauseAfterRepair=false
+    await composition.app.dispatcher.invoke('tasks.provide_input',{id:taskId,input:'Review the exact reserved repair'},{actor,callId:'review-reserved-repair'})
+    await composition.app.runtime.tick()
+    task=await composition.app.runtime.get(actor,taskId,{history:true})
     assert.equal(task.status,'succeeded',JSON.stringify(task.events.slice(-4)))
+    assert.deepEqual(task.result.artifacts[0],reservedArtifact)
+    assert.equal(task.calls.filter((c:any)=>c.capability==='my_write_workspace'&&c.status==='succeeded').length,2,'only the original and exact reserved repair may be successfully written')
+    assert.equal(composition.app.dispatcher.capabilities.get('my_write_workspace').retry,'never-replay','retain the existing Core write replay contract')
     assert.equal((await intentForTask(pool,composition.app,actor,taskId)).task_id,taskId,'recover the application index after verification through the Core binding')
     const quality=await readCreativeQualityReview({id,type:'HUMAN'},id,taskId)
     assert.equal(quality?.status,secondFails?'needs_revision':'passed');assert.equal(quality?.repairCount,1);assert.equal(quality?.attempts.length,2)
@@ -100,6 +134,8 @@ try{
     }else{
       const saved=await adoptNativeCandidate(id,id,taskId,body)
       assert.equal(saved.receipt.ai.qualityReview.attempts.length,2)
+      assert.deepEqual(saved.receipt.ai.artifact,reservedArtifact,'adopt exactly the first successful reserved repair')
+      assert.equal(saved.receipt.content.title,'Repaired brand introduction')
       assert.equal(saved.receipt.content.adaptationStatus,'adapted')
       assert.equal((await adoptNativeCandidate(id,id,taskId,body)).receipt.id,saved.receipt.id)
     }

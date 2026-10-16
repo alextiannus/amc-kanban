@@ -46,6 +46,8 @@ Task 8 审查修复（本地实现，未部署）：指定 revisionId 的读取�
 
 ### SKU 适配 V2 目标契约（未发布）
 
+Task 6 修复轮次 1（本地已实现与定向验证，未发布）：修复窗口只接受原评审产物 revision 作为 expectedRevision 的一次成功写入；应用层守卫复用 Core workspace 原写入能力，返回写入回执前追加冻结的第二份产物与修复计数。第二次 finish 前及重启后均拒绝第三份写入，结构非法的已写入修复稿直接 needs_revision 并保留原文。若 workspace 已成功提交但评审元数据确认中断，策略检查和执行守卫使用第一份新 immutable revision 恢复并冻结，不能通过改写新 head 绕过。沿用 Core never-replay 写入契约与原回执重放，不将相同内容的新 revision 当作幂等重放；历史成功写入的重验仅读取确切引用，不再执行写入。
+
 来源忠实度门槛（Task 6 本地已实现与定向验证，未发布）：先执行 V2 不可变来源与确认 SKU 校验，再以固定 hook、narrative_order、selling_point_position、continuity、cta、diversity 六维度进行确定性检查和结构化模型分类。模型通过受限 amc.creative_fidelity 能力只提交候选摘要、六维度状态及问题，不能修改可信绑定或保存内容；未知维度、缺失／重复维度、额外字段及非法状态均拒绝，适用维度不得以 not_applicable 跳过。质量评审沿用当前 Core task、统一模型配置与实际用量账本，没有独立代理或新供应商。qualityReview 为服务端持久证据，保留两次候选快照、产物引用、维度结果及问题，追加在独立 CREATIVE_FIDELITY_REVIEW 的 input，并在通过后的正式修订 input.ai.qualityReview 留存。首次失败在同一 Core task 内 repair_once，最多一份新候选；第二次失败或修复稿结构非法 needs_revision，MM 读取该状态与问题，不能作为 adapted 采用。任务 API 同时返回 status=needs_revision 与 runtimeStatus=succeeded，区分评估完成和适配通过；candidate.qualityReview 与顶层 qualityReview 相同。通过后的采用仍复核品牌、用户、当前创意版本、来源与 SKU 决策。重启或同一产物引用的重复完成不增加修复次数；新的 workspace revision 即使字节相同也占用修复次数，改变 digest 不能绕过上限。
 
 状态：本地已实现与定向验证，待发布；完整 PostgreSQL 修订套件待专用测试库验证。新 `AdaptedCreativeShotV2` 保存 `contractVersion: 2`、`sourceShotId`、`skuIds`、`visualDescription`、`subjectAction`、`spokenText`、`captionMode`、`overlayText`、`soundDesign`、`transition`、`narrativePurpose`、`continuityRequirements` 及 `sourcePreservation`。`spokenText` 是 TTS 与逐字字幕的唯一文本；`mirror_spoken` 从它派生字幕，`off` 不显示逐字字幕；`overlayText` 只作画面文字。纯视觉空口播必须关闭字幕，不能将生成失败视作静音选择。新写入拒绝旧 `voiceover/onScreenText/sound` 和独立字幕正文；读取固定来源时兼容原字段，不批量改写历史。来源接口可选投影 `continuityRequirements`；历史缺字段不影响原 full_source 判定，明确提供但格式错误则为 partial_source，禁止丢弃后声称完整。

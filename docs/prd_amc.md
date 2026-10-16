@@ -153,6 +153,8 @@ Merchant document extraction (implemented locally, not deployed): Growth discove
 
 ## AMCMM 创意再创作与 AI Native 升级
 
+Task 6 修复轮次 1（本地已实现与定向验证，未发布）：唯一修复名额在第一次成功写入新 workspace revision 时占用，写入回执返回前持久化并冻结确切产物；第二次 finish 前和重启后均不得写第三版。修复写入只允许基于原评审版本的 expectedRevision。已成功但评审元数据回执不明时，从不可变 workspace 第一份新修订恢复该名额，不允许改用后来的产物。结构非法的修复稿同样冻结并转 needs_revision。沿用 Core never-replay 写入契约，成功回执的历史重验不重新写入。
+
 来源忠实度质量门槛（Task 6 本地已实现与定向验证，未发布）：V2 来源／SKU 校验后，仅按 hook、narrative_order、selling_point_position、continuity、cta、diversity 六个固定维度评审。评审产物只含候选摘要、维度分类与问题，不可改变来源、确认 SKU 或直接保存脚本；非法产物不放行。首次失败在原持久任务内最多修复一次，第二次失败或修复稿结构非法为 needs_revision，不得采用为完成适配。两次候选、评审与问题保留在 qualityReview 修订输入中，MM 可回读解释；Core 完成评估的 runtimeStatus 与 needs_revision 业务状态分别返回。采用仍要求当前品牌权限、来源／决策摘要及创意版本一致；通过评审不授予制作或发布权限。
 
 
