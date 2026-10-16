@@ -23,6 +23,6 @@ origin=true
 assert.equal((await mod.exports.POST(request('not-json'),ctx)).status,400)
 assert.equal((await mod.exports.POST(request('a'.repeat(100001)),ctx)).status,413)
 const read=await mod.exports.GET(request(),ctx);assert.equal(read.status,200);assert.equal(read.headers.get('cache-control'),'no-store')
-assert.equal((await mod.exports.POST(request(JSON.stringify({actorId:'forged'})),ctx)).status,200)
+assert.equal((await mod.exports.POST(request(JSON.stringify({actorId:'forged'})),ctx)).status,400);assert.equal(calls,1)
 fail=true;assert.equal((await mod.exports.POST(request(),ctx)).status,409)
 console.log('PASS: revision route authentication, origin, trusted actor, limits, explicit historical read, no-store and conflict response')

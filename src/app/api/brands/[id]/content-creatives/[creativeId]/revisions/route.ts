@@ -18,6 +18,7 @@ async function handle(request: Request, context: Context, write=false) {
       if (raw.length > 100000) return json({error:'creative_payload_too_large'},413)
       let body: unknown
       try {body=JSON.parse(raw)} catch {return json({error:'invalid_json'},400)}
+      if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['expectedRevision','idempotencyKey','patch','feedback','saveMode'].includes(key)))return json({error:'invalid_creative_revision_request'},400)
       return json(await saveCreativeRevision(auth.user,id,month,creativeId,body))
     }
     return json(await readCreativeRevisions(auth.user,id,month,creativeId,url.searchParams.get('revisionId') || undefined, undefined, url.searchParams.has('beforeVersion') ? Number(url.searchParams.get('beforeVersion')) : undefined))

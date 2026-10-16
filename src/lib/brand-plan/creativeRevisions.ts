@@ -104,6 +104,7 @@ export async function rejectCreativeQualityRepair(actor:Actor,brandId:string,mon
 }
 
 export async function saveCreativeRevision(actor: Actor, brandId: string, month: string, creativeId: string, body: any, db = prisma, ai?:AiProvenance & {qualityReview?:CreativeQualityReview}, seed?:Record<string,any>, skuConfirmation?:{input:any;source?:SkuSource|null;resolveSource?:()=>Promise<SkuSource|null>}) {
+  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['expectedRevision','idempotencyKey','patch','feedback','saveMode'].includes(key)))throw new CreativeRevisionError('invalid_creative_revision_request')
   validateCreativeAddress(month,creativeId)
   if (typeof body?.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision) || typeof body?.idempotencyKey !== 'string' || !/^[a-zA-Z0-9_-]{8,100}$/.test(body.idempotencyKey)) throw new CreativeRevisionError('creative_revision_and_request_key_required')
   if(body?.saveMode!==undefined&&!['copy','overwrite'].includes(body.saveMode))throw new CreativeRevisionError('invalid_script_save_mode')

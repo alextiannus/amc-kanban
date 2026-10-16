@@ -2,7 +2,7 @@
 
 ## 当前交付状态（2026-10-16）
 
-Task 11A 可信反馈入口（本地已实现并完成 PGlite 定向验证、未发布）：Content/MM 只能通过内部服务令牌鉴权、事件摘要及 HMAC 三重校验提交 `video_feedback_event@1`。正文解析发生在令牌鉴权之后；事件必须固定 eventId、projectId、brandId、creativeId、creativeRevisionId、actorId、issuedAt 与 Task 7 `VideoFeedback`，服务端重新计算摘要和签名、执行五分钟时效与字节限制，并重新确认 ACTIVE 操作者、当前品牌写权限和项目追溯身份。相同 eventId + digest 重放幂等，任何冲突重放失败且不改变旧事件。证据使用专属 `VIDEO_EDIT_FEEDBACK` 事件和唯一/窗口索引，不创建品牌创意修订，不进入人工修订、采用或弃用计数；反馈聚合只投影有界结构化证据，不返回项目/修订/操作者身份、备注、提示词、脚本正文或来源私有数据。公开品牌反馈接口继续拒绝客户端视频证据。
+Task 11A 可信反馈入口（本地已实现并完成 PGlite 定向验证、未发布）：Content/MM 只能通过内部服务令牌鉴权、事件摘要及 HMAC 三重校验提交 `video_feedback_event@1`。正文解析发生在令牌鉴权之后；事件必须固定 eventId、projectId、brandId、creativeId、creativeRevisionId、actorId、issuedAt 与 Task 7 `VideoFeedback`，服务端重新计算摘要和签名、对新事件执行五分钟时效与字节限制，并重新确认 ACTIVE 操作者、当前品牌写权限和项目追溯身份。projectId 只认可持久化 plan、`_mmVideoJob` 与签名视频回执中完全一致的 Content 项目固定值，不接受 VideoProductionJob.id 作为别名；任何缺失或不一致均关闭失败。已接受的相同 eventId + digest 在签名、权限和追溯复验后可跨时效幂等重放，任何冲突重放失败且不改变旧事件。证据使用专属 `VIDEO_EDIT_FEEDBACK` 事件和唯一/窗口索引，不创建品牌创意修订，不进入人工修订、采用或弃用计数；反馈聚合只投影有界结构化证据，不返回项目/修订/操作者身份、备注、提示词、脚本正文或来源私有数据。公开品牌修订接口对 `videoFeedback`、事件 envelope、digest/signature 及其他未知证据键在任何修订写入前返回 400。
 
 终审修复：发现与人工 SKU 确认将可信来源投影为 canonical source（sourceRevision + sourceDigest；libraryDigest 兼容字段使用单条 sourceDigest，而非查询批次摘要）。采用与复制原样保留确认快照，视频读取实际已保存修订，不按当前最新来源补造历史。完整源证据的新适配不再误报 legacy；未知历史仍明确缺证据。
 

@@ -108,10 +108,15 @@ for(const firstDecision of ['adopt','discard']){
 }
 rows=[];audits=[];item={...structuredClone(original),aiCaption:'Original caption'}
 const actualPatch={planning:'Original',materialRequirements:[],aiCaption:''}
-const edited=await service.saveCreativeRevision(actor,brandId,month,creativeId,{expectedRevision:contract.creativeDigest(item),idempotencyKey:'real-edits',patch:actualPatch,videoFeedback:{captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'forged',afterId:'forged2'}}},db,{...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch:{title:'A',planning:'Candidate',materialRequirements:['Film product']}})
+const publicBase={expectedRevision:contract.creativeDigest(item),idempotencyKey:'real-edits',patch:actualPatch}
+for(const [key,value] of Object.entries({videoFeedback:{captionMismatchBlocked:true},videoFeedbackEvent:{schema:'video_feedback_event@1'},event:{},schema:'video_feedback_event@1',digest:'a'.repeat(64),signature:'b'.repeat(64),unknownEvidence:true})){
+  const before={rows:rows.length,audits:audits.length,item:structuredClone(item)}
+  await assert.rejects(()=>service.saveCreativeRevision(actor,brandId,month,creativeId,{...publicBase,[key]:value},db,{...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch:{title:'A',planning:'Candidate',materialRequirements:['Film product']}}),(error:any)=>error.code==='invalid_creative_revision_request'&&error.status===400)
+  assert.equal(rows.length,before.rows);assert.equal(audits.length,before.audits);assert.deepEqual(item,before.item)
+}
+const edited=await service.saveCreativeRevision(actor,brandId,month,creativeId,publicBase,db,{...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch:{title:'A',planning:'Candidate',materialRequirements:['Film product']}})
 assert.deepEqual(edited.receipt.ai.reviewChanges.map((v:any)=>v.field),['planning','materialRequirements','aiCaption'])
 assert.equal(feedback.summarizeCreativeFeedback(rows).editedScripts,1)
-assert.equal(rows.at(-1).input.videoFeedback,undefined,'client-supplied evidence cannot enter stored revision input')
 assert.equal(feedback.summarizeCreativeFeedback(rows).voiceReplacementRate.denominator,0)
 ;({rows,audits,item}=retained)
 

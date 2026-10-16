@@ -18,14 +18,14 @@ const id=(value:unknown):value is string=>typeof value==='string'&&value===value
 const hex=(value:unknown):value is string=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value)
 const equalHex=(left:string,right:string)=>{const a=Buffer.from(left,'hex'),b=Buffer.from(right,'hex');return a.length===b.length&&timingSafeEqual(a,b)}
 
-export function videoFeedbackEventCore(value:unknown,now=new Date()):VideoFeedbackEventCore{
+export function videoFeedbackEventCore(value:unknown):VideoFeedbackEventCore{
   if(!value||typeof value!=='object'||Array.isArray(value))throw new CreativeRevisionError('invalid_video_feedback_event')
   const input=value as Record<string,unknown>
   if(Object.keys(input).length!==allowedKeys.length||Object.keys(input).some(key=>!allowedKeys.includes(key))||input.schema!==VIDEO_FEEDBACK_EVENT_SCHEMA)throw new CreativeRevisionError('invalid_video_feedback_event')
   for(const key of ['eventId','projectId','brandId','creativeId','creativeRevisionId','actorId'] as const)if(!id(input[key]))throw new CreativeRevisionError('invalid_video_feedback_event')
   if(typeof input.issuedAt!=='string')throw new CreativeRevisionError('invalid_video_feedback_event')
   const issuedAt=new Date(input.issuedAt)
-  if(!Number.isFinite(issuedAt.getTime())||issuedAt.toISOString()!==input.issuedAt||Math.abs(now.getTime()-issuedAt.getTime())>VIDEO_FEEDBACK_EVENT_FRESHNESS_MS)throw new CreativeRevisionError('video_feedback_event_stale',409)
+  if(!Number.isFinite(issuedAt.getTime())||issuedAt.toISOString()!==input.issuedAt)throw new CreativeRevisionError('invalid_video_feedback_event')
   const feedback=readVideoFeedback(input.feedback)
   if(!feedback)throw new CreativeRevisionError('invalid_video_feedback_event')
   return {schema:VIDEO_FEEDBACK_EVENT_SCHEMA,eventId:input.eventId as string,projectId:input.projectId as string,brandId:input.brandId as string,creativeId:input.creativeId as string,creativeRevisionId:input.creativeRevisionId as string,actorId:input.actorId as string,issuedAt:input.issuedAt,feedback}
@@ -33,9 +33,9 @@ export function videoFeedbackEventCore(value:unknown,now=new Date()):VideoFeedba
 
 export function videoFeedbackEventDigest(core:VideoFeedbackEventCore){return createHash('sha256').update(stableJson(core)).digest('hex')}
 export function videoFeedbackEventSignature(core:VideoFeedbackEventCore,token:string,digest=videoFeedbackEventDigest(core)){return createHmac('sha256',token).update(`${core.schema}\n${core.eventId}\n${core.issuedAt}\n${digest}`).digest('hex')}
-export function verifyVideoFeedbackEvent(value:unknown,token:string,now=new Date()):SignedVideoFeedbackEvent{
+export function verifyVideoFeedbackEvent(value:unknown,token:string):SignedVideoFeedbackEvent{
   if(!token)throw new CreativeRevisionError('video_feedback_service_unconfigured',503)
-  const core=videoFeedbackEventCore(value,now),input=value as Record<string,unknown>
+  const core=videoFeedbackEventCore(value),input=value as Record<string,unknown>
   if(!hex(input.digest)||!hex(input.signature))throw new CreativeRevisionError('invalid_video_feedback_signature',401)
   const digest=videoFeedbackEventDigest(core),signature=videoFeedbackEventSignature(core,token,digest)
   if(!equalHex(input.digest,digest)||!equalHex(input.signature,signature))throw new CreativeRevisionError('invalid_video_feedback_signature',401)
@@ -43,7 +43,7 @@ export function verifyVideoFeedbackEvent(value:unknown,token:string,now=new Date
 }
 
 export async function ingestTrustedVideoFeedback(value:unknown,token:string,now=new Date(),db:any=prisma){
-  const event=verifyVideoFeedbackEvent(value,token,now)
+  const event=verifyVideoFeedbackEvent(value,token)
   return db.$transaction(async(tx:Prisma.TransactionClient)=>{
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'video-feedback:'+event.eventId}))::text`
     await tx.$queryRaw`SELECT "id" FROM "Brand" WHERE "id"=${event.brandId} FOR UPDATE`
@@ -51,15 +51,18 @@ export async function ingestTrustedVideoFeedback(value:unknown,token:string,now=
     if(actor?.status!=='ACTIVE'||brand?.status!=='ACTIVE'||!await canUserAccessBrand(event.brandId,event.actorId,'WRITE',tx))throw new CreativeRevisionError('video_feedback_access_denied',404)
     const [revision,jobs]=await Promise.all([
       tx.brandMarketingSolution.findFirst({where:{id:event.creativeRevisionId,brandId:event.brandId,kind:CREATIVE_REVISION_KIND}}),
-      tx.videoProductionJob.findMany({where:{brandId:event.brandId,creativeId:event.creativeId,createdBy:event.actorId,OR:[{id:event.projectId},{plan:{path:['basicVideoProjectId'],equals:event.projectId}},{plan:{path:['_mmVideoJob','basicVideoProjectId'],equals:event.projectId}}]},select:{id:true,plan:true},take:2}),
+      tx.videoProductionJob.findMany({where:{brandId:event.brandId,creativeId:event.creativeId,createdBy:event.actorId,OR:[{plan:{path:['basicVideoProjectId'],equals:event.projectId}},{plan:{path:['_mmVideoJob','basicVideoProjectId'],equals:event.projectId}},{plan:{path:['_mmVideoJob','videoReceipt','projectId'],equals:event.projectId}}]},select:{id:true,plan:true},take:2}),
     ])
-    const revisionInput=record(revision?.input),job=jobs.length===1?jobs[0]:null,metadata=record(record(job?.plan)._mmVideoJob),editor=record(metadata.editor)
-    if(!revision||revisionInput.creativeId!==event.creativeId||!job||editor.creativeId!==event.creativeId||editor.creativeRevisionId!==event.creativeRevisionId)throw new CreativeRevisionError('video_feedback_binding_not_found',404)
+    const revisionInput=record(revision?.input),job=jobs.length===1?jobs[0]:null,plan=record(job?.plan),metadata=record(plan._mmVideoJob),editor=record(metadata.editor),receipt=record(metadata.videoReceipt)
+    const projectPins=[plan.basicVideoProjectId,metadata.basicVideoProjectId,receipt.projectId]
+    if(!revision||revisionInput.creativeId!==event.creativeId||!job||projectPins.some(pin=>!id(pin)||pin!==event.projectId)||editor.creativeId!==event.creativeId||editor.creativeRevisionId!==event.creativeRevisionId)throw new CreativeRevisionError('video_feedback_binding_not_found',404)
     const existing=await tx.brandMarketingSolution.findFirst({where:{kind:VIDEO_EDIT_FEEDBACK_KIND,period:event.eventId}})
     if(existing){
       if(existing.brandId!==event.brandId||record(existing.input).digest!==event.digest)throw new CreativeRevisionError('video_feedback_event_conflict',409)
       return {ok:true,replayed:true,receipt:{eventId:event.eventId,digest:event.digest,recordId:existing.id,createdAt:existing.createdAt.toISOString()}}
     }
+    const issuedAt=new Date(event.issuedAt)
+    if(Math.abs(now.getTime()-issuedAt.getTime())>VIDEO_FEEDBACK_EVENT_FRESHNESS_MS)throw new CreativeRevisionError('video_feedback_event_stale',409)
     const row=await tx.brandMarketingSolution.create({data:{brandId:event.brandId,kind:VIDEO_EDIT_FEEDBACK_KIND,period:event.eventId,version:1,status:'RECORDED',generationMode:'TRUSTED_VIDEO_FEEDBACK',createdById:event.actorId,input:{schema:event.schema,eventId:event.eventId,projectId:event.projectId,creativeId:event.creativeId,creativeRevisionId:event.creativeRevisionId,actor:{id:event.actorId,type:actor.type},issuedAt:event.issuedAt,digest:event.digest,videoFeedback:event.feedback as any},output:{}}})
     return {ok:true,replayed:false,receipt:{eventId:event.eventId,digest:event.digest,recordId:row.id,createdAt:row.createdAt.toISOString()}}
   })

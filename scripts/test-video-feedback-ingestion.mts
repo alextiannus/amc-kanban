@@ -15,12 +15,11 @@ let access=true
 const service=compile('src/lib/brand-plan/videoFeedbackIngestion.ts',{'node:crypto':crypto,'@prisma/client':{},'../prisma.ts':{prisma:{}},'../user-management/brandAccess.ts':{canUserAccessBrand:async()=>access},'./creativeRevisionContract.ts':contract,'./revisionFeedback.ts':feedback})
 const token='test-only-video-feedback-token',now=new Date('2026-10-17T08:00:00.000Z')
 const unsigned={schema:'video_feedback_event@1',eventId:'event-1',projectId:'project-1',brandId:'brand-a',creativeId:'creative-a',creativeRevisionId:'revision-a',actorId:'actor-a',issuedAt:now.toISOString(),feedback:{sourceShotId:'shot-a',textChanges:[{field:'spokenText',before:'old',after:'new'}],captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'voice-old',afterId:'voice-new'}}}
-const sign=(value:any)=>{const core=service.videoFeedbackEventCore({...value,digest:'0'.repeat(64),signature:'0'.repeat(64)},now),digest=service.videoFeedbackEventDigest(core);return {...core,digest,signature:service.videoFeedbackEventSignature(core,token,digest)}}
+const sign=(value:any)=>{const core=service.videoFeedbackEventCore({...value,digest:'0'.repeat(64),signature:'0'.repeat(64)}),digest=service.videoFeedbackEventDigest(core);return {...core,digest,signature:service.videoFeedbackEventSignature(core,token,digest)}}
 const signed=sign(unsigned)
-assert.equal(service.verifyVideoFeedbackEvent(signed,token,now).digest,signed.digest)
-assert.throws(()=>service.verifyVideoFeedbackEvent({...signed,signature:'0'.repeat(64)},token,now),/invalid_video_feedback_signature/)
-assert.throws(()=>service.verifyVideoFeedbackEvent(sign({...unsigned,eventId:'stale',issuedAt:'2026-10-17T07:54:59.000Z'}),token,now),/video_feedback_event_stale/)
-assert.throws(()=>service.verifyVideoFeedbackEvent({...signed,unexpected:true},token,now),/invalid_video_feedback_event/)
+assert.equal(service.verifyVideoFeedbackEvent(signed,token).digest,signed.digest)
+assert.throws(()=>service.verifyVideoFeedbackEvent({...signed,signature:'0'.repeat(64)},token),/invalid_video_feedback_signature/)
+assert.throws(()=>service.verifyVideoFeedbackEvent({...signed,unexpected:true},token),/invalid_video_feedback_event/)
 
 const pg=new PGlite()
 const previousToken=process.env.CONTENT_SERVICE_INTERNAL_TOKEN
@@ -34,7 +33,8 @@ await pg.exec(`
 await pg.exec(readFileSync('prisma/migrations/20261017010000_video_edit_feedback/migration.sql','utf8'))
 await pg.exec(`INSERT INTO "Brand" VALUES('brand-a','ACTIVE'),('brand-b','ACTIVE'); INSERT INTO "User" VALUES('actor-a','ACTIVE','HUMAN');`)
 await pg.query(`INSERT INTO "BrandMarketingSolution"(id,"brandId",kind,period,version,status,"generationMode","createdById",input,output) VALUES('revision-a','brand-a','CREATIVE_ITEM','period',1,'DRAFT','MANUAL','actor-a',$1::jsonb,'{}')`,[JSON.stringify({creativeId:'creative-a'})])
-await pg.query(`INSERT INTO "VideoProductionJob" VALUES('job-a','brand-a','creative-a','actor-a',$1::jsonb)`,[JSON.stringify({basicVideoProjectId:'project-1',_mmVideoJob:{basicVideoProjectId:'project-1',editor:{creativeId:'creative-a',creativeRevisionId:'revision-a'}}})])
+const validPlan={basicVideoProjectId:'project-1',_mmVideoJob:{basicVideoProjectId:'project-1',videoReceipt:{projectId:'project-1'},editor:{creativeId:'creative-a',creativeRevisionId:'revision-a'}}}
+await pg.query(`INSERT INTO "VideoProductionJob" VALUES('job-a','brand-a','creative-a','actor-a',$1::jsonb)`,[JSON.stringify(validPlan)])
 let seq=0
 const tx:any={
   $queryRaw:async(strings:TemplateStringsArray,...args:any[])=>{const sql=strings.reduce((out,s,i)=>out+s+(i<args.length?`$${i+1}`:''),'');return (await pg.query(sql,args)).rows},
@@ -44,7 +44,7 @@ const tx:any={
     findFirst:async({where}:any)=>{const clauses=['kind=$1'],values=[where.kind];if(where.id){values.push(where.id);clauses.push(`id=$${values.length}`)}if(where.brandId){values.push(where.brandId);clauses.push(`"brandId"=$${values.length}`)}if(where.period){values.push(where.period);clauses.push(`period=$${values.length}`)}return (await pg.query(`SELECT * FROM "BrandMarketingSolution" WHERE ${clauses.join(' AND ')} LIMIT 1`,values)).rows[0]||null},
     create:async({data}:any)=>{const id=`feedback-${++seq}`;return (await pg.query(`INSERT INTO "BrandMarketingSolution"(id,"brandId",kind,period,version,status,"generationMode","createdById",input,output) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb) RETURNING *`,[id,data.brandId,data.kind,data.period,data.version,data.status,data.generationMode,data.createdById,JSON.stringify(data.input),JSON.stringify(data.output)])).rows[0]},
   },
-  videoProductionJob:{findMany:async({where}:any)=>{const rows=(await pg.query(`SELECT id,plan FROM "VideoProductionJob" WHERE "brandId"=$1 AND "creativeId"=$2 AND "createdBy"=$3`,[where.brandId,where.creativeId,where.createdBy])).rows as any[];return rows.filter(row=>row.id===unsigned.projectId||row.plan?.basicVideoProjectId===unsigned.projectId||row.plan?._mmVideoJob?.basicVideoProjectId===unsigned.projectId).slice(0,2)}},
+  videoProductionJob:{findMany:async({where}:any)=>{const rows=(await pg.query(`SELECT id,plan FROM "VideoProductionJob" WHERE "brandId"=$1 AND "creativeId"=$2 AND "createdBy"=$3`,[where.brandId,where.creativeId,where.createdBy])).rows as any[];const project=where.OR?.map((entry:any)=>entry.plan?.equals||entry.plan?.path&&entry.plan.equals).find(Boolean)||where.OR?.[0]?.plan?.equals;return rows.filter(row=>[row.plan?.basicVideoProjectId,row.plan?._mmVideoJob?.basicVideoProjectId,row.plan?._mmVideoJob?.videoReceipt?.projectId].includes(project)).slice(0,2)}},
 }
 const db:any={$transaction:async(fn:any)=>fn(tx)}
 try{
@@ -57,6 +57,8 @@ try{
   assert.equal((await post({...signed,signature:'0'.repeat(64)})).status,401)
   const created=await post(signed);assert.equal(created.status,201);assert.equal((await created.json()).replayed,false)
   const replay=await post(signed);assert.equal(replay.status,200);assert.equal((await replay.json()).replayed,true)
+  const lateReplay=await service.ingestTrustedVideoFeedback(signed,token,new Date(now.getTime()+6*60*1000),db);assert.equal(lateReplay.replayed,true,'accepted signed events remain replayable after freshness expires')
+  await assert.rejects(()=>service.ingestTrustedVideoFeedback(sign({...unsigned,eventId:'event-unseen-stale'}),token,new Date(now.getTime()+6*60*1000),db),/video_feedback_event_stale/)
   const conflict=sign({...unsigned,feedback:{...unsigned.feedback,captionMismatchBlocked:false}});assert.equal((await post(conflict)).status,409)
   assert.equal((await pg.query(`SELECT count(*)::int AS n FROM "BrandMarketingSolution" WHERE kind='VIDEO_EDIT_FEEDBACK'`)).rows[0].n,1)
   const stored:any=(await pg.query(`SELECT input FROM "BrandMarketingSolution" WHERE kind='VIDEO_EDIT_FEEDBACK'`)).rows[0]
@@ -64,6 +66,14 @@ try{
   access=false;assert.equal((await post(sign({...unsigned,eventId:'event-denied'}))).status,404);access=true
   await pg.query(`UPDATE "User" SET status='DISABLED' WHERE id='actor-a'`);assert.equal((await post(sign({...unsigned,eventId:'event-inactive'}))).status,404);await pg.query(`UPDATE "User" SET status='ACTIVE' WHERE id='actor-a'`)
   assert.equal((await post(sign({...unsigned,eventId:'event-cross',brandId:'brand-b'}))).status,404)
+  assert.equal((await post(sign({...unsigned,eventId:'event-job-alias',projectId:'job-a'}))).status,404,'job id is never a Content project id alias')
+  const inconsistent={...validPlan,_mmVideoJob:{...validPlan._mmVideoJob,basicVideoProjectId:'other-project'}}
+  await pg.query(`UPDATE "VideoProductionJob" SET plan=$1::jsonb WHERE id='job-a'`,[JSON.stringify(inconsistent)])
+  assert.equal((await post(sign({...unsigned,eventId:'event-mismatched-pin'}))).status,404)
+  const missing={...validPlan};delete (missing as any).basicVideoProjectId
+  await pg.query(`UPDATE "VideoProductionJob" SET plan=$1::jsonb WHERE id='job-a'`,[JSON.stringify(missing)])
+  assert.equal((await post(sign({...unsigned,eventId:'event-missing-pin'}))).status,404)
+  await pg.query(`UPDATE "VideoProductionJob" SET plan=$1::jsonb WHERE id='job-a'`,[JSON.stringify(validPlan)])
   assert.equal((await post('x'.repeat(service.VIDEO_FEEDBACK_EVENT_MAX_BYTES+1))).status,413)
   await assert.rejects(()=>pg.query(`INSERT INTO "BrandMarketingSolution"(id,"brandId",kind,period,version,status,"generationMode",input,output) VALUES('duplicate','brand-a','VIDEO_EDIT_FEEDBACK','event-1',1,'RECORDED','TEST','{}','{}')`),/unique|duplicate/i)
   const indexes=await pg.query(`SELECT indexname FROM pg_indexes WHERE indexname IN ('BrandMarketingSolution_video_feedback_event_id_uq','BrandMarketingSolution_video_feedback_window_idx')`);assert.equal(indexes.rows.length,2)
