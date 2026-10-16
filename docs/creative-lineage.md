@@ -28,13 +28,19 @@ Task 8 审查修复（本地实现，未部署）：指定 revisionId 的读取�
 
 原因固定为 `sku_mismatch`、`selling_point`、`transitions`、`visual_description`、`voiceover`、`subtitle`、`platform_style`、`material_feasibility`、`brand_facts`、`other`。历史 `sku` 在读取时映射 `sku_mismatch`，原 revision 不改写；旧客户端 sku 写入继续兼容，以保持既有幂等载荷。结构化差异记录实际字段变化，不从文本猜测原因；旧日历字段投影到 workspace 后比较，迁移本身不算编辑。
 
-`GET /api/brands/:brandId/content-creatives/feedback?cursor=...` 每次重验品牌 READ 权限，按 createdAt/id 倒序返回最多 2000 条修订/放弃事件的计数和 nextCursor（游标为不透明分页位置）。审核和修改按窗口内唯一 month/creativeId 计数；直接采用是明确未改动的人工保存，或与可信 AI 候选规范化字段一致的采用。AI 采用的当前版本差异仍保留，人工候选改动单独记录；缺少旧差异/候选证据不推断直接采用。审核、直接采用、修改是窗口内可重叠集合，不能把多页 distinct 计数相加当全历史去重数。SKU 确认算人工审核/修改；自动生成、自动排期和系统修订不算人工审核。字段与原因计数按事件去重；无原因的修改只计字段。
+`GET /api/brands/:brandId/content-creatives/feedback?cursor=...` 每次重验品牌 READ 权限，按 createdAt/id 倒序返回最多 2000 条修订/放弃/忠实度评审事件的计数和 nextCursor（游标为不透明分页位置）。审核和修改按窗口内唯一 month/creativeId 计数；直接采用是明确未改动的人工保存，或与可信 AI 候选规范化字段一致的采用。AI 采用的当前版本差异仍保留，人工候选改动单独记录；缺少旧差异/候选证据不推断直接采用。审核、直接采用、修改是窗口内可重叠集合，不能把多页 distinct 计数相加当全历史去重数。SKU 确认算人工审核/修改；自动生成、自动排期、系统修订及独立忠实度评审不算人工审核。字段与原因计数按事件去重；无原因的修改只计字段。
+
+Task 7 统计扩展（本地已实现与定向验证，未发布）：`editDistanceByField` 只读取严格校验的 `input.videoFeedback.textChanges` 中实际 before/after 字符串，不解析 planning；每字段给出 total、comparisons、excludedPairs。文本字段为 spokenText、overlayText、visualDescription、subjectAction、soundDesign、transition、narrativePurpose；每事件至多七项且不重复，每字符串最多 512 个 Unicode 码点，窗口动态规划预算最多 4000000 个单元，超限证据不截断计分。`bySourceShot` 使用明确 sourceShotId 或摘要绑定的 V2 qualityReview 镜头，沿用 50 键上限，只有明确镜头编辑证据才计该镜头 editedScripts。`captionMismatchBlocks` 仅计明确 true 的阻断事件。voiceReplacementRate/musicReplacementRate 分母为严格校验的 beforeId/afterId 对（允许 null），分子仅为两个非空且不同的 ID；新增/移除不算替换。fidelityPassRate 按同一任务和产物引用去重已完成评审 attempt，必须 classification.candidateDigest 与 artifact.digest 一致；失败候选也入分母，缺证据及待评审不入分母，空分母 rate=null。各页指标仅代表当前事件窗口，不得跨页相加当完整去重总数。
+
+`videoFeedback` 是服务端保存的显式证据契约，允许 sourceShotId、textChanges、captionMismatchBlocked、voiceReceiptChange、musicReceiptChange；拒绝未知键、超限与重复字段，不从主观原因推断任何变化。当前公共修订写接口不接受客户端提交此结构；MM/Content 可信生产者接线待后续任务完成，未写入的证据保持未知。聚合仅返回计数，不返回文本、媒体 ID 或问题原文。数据库只投影受限证据；来源脚本、说明及 AI 指令仍不得加载。
+
+既有文案反馈服务复用同一 Unicode 编辑距离实现，单次最大 20000 码点与 4000000 计算单元；超限返回未知 diffRatio=null，不新增或自动批准训练样本，不将未知当作全文重写。
 
 来源/SKU/平台/内容类型使用保存时固定上下文，各维度最多 49 个按字典序选择的真实键与 `other`；缺失、非法或剩余键归入 other。同一事件落入多个 SKU/平台时每桶只计一次；other 也按脚本/候选去重。聚合不返回说明、脚本、AI 指令或原始 revision；数据库只投影统计所需 JSON 字段。
 
 `POST /api/brands/:brandId/content-creatives/feedback` 接收 `action:discard_candidate`、`month`、`creativeId`、`taskId`、`artifactDigest`、`expectedRevision`、`idempotencyKey` 与可选 feedback。服务端核对当前用户的成功 AI 任务、创意/月、候选绑定版本及固定产物，再在品牌锁内重验内容编辑权限和 CAS。独立 `CREATIVE_CANDIDATE_FEEDBACK` 事件及审计记录放弃，不新增 CREATIVE_ITEM 修订、不改当前脚本/source/SKU/schedule、不调用制作或发布。原请求键和规范化载荷匹配时返回原事件回执；同键异载荷或同候选换新键均 409，不改写旧事件。已采用的候选拒绝放弃，已放弃的候选不能再次采用。MM 已本地接入；Kanban（Task 8）已本地接入并验证，尚未发布。
 
-部署需执行 `20261016060000_creative_feedback_window` 索引迁移；brandId/kind/createdAt/id 索引分别读取至多 2001 个修订和事件，再合并取窗口。此任务不回填或重写历史数据。
+部署需执行 `20261016060000_creative_feedback_window` 索引迁移；brandId/kind/createdAt/id 索引分别读取至多 2001 个修订、放弃和忠实度评审事件，再合并取窗口。此任务不回填或重写历史数据。
 
 ## SKU 二阶段适配（Task 5，本地已实现，未发布）
 

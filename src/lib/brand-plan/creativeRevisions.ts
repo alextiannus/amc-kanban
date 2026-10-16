@@ -276,8 +276,8 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
   return saved
 }
 
-// Only the small aggregate projection crosses the database boundary. Never load
-// full source snapshots, scripts, AI instructions or feedback notes for analytics.
+// Only bounded explicit text-change evidence and minimal review/shot metadata
+// cross the database boundary. Never load planning, snapshots, notes or prompts.
 export async function readCreativeFeedbackSummary(actor:Actor,brandId:string,cursor?:string|null,db=prisma){
   await authorize(db,actor,brandId)
   const before=parseFeedbackCursor(cursor)
@@ -293,24 +293,46 @@ export async function readCreativeFeedbackSummary(actor:Actor,brandId:string,cur
          WHERE "brandId"=${brandId} AND kind=${CANDIDATE_FEEDBACK_KIND}
          AND (${before?.createdAt??null}::timestamp IS NULL OR ("createdAt",id)<(${before?.createdAt??null}::timestamp,${before?.id??''}))
          ORDER BY "createdAt" DESC,id DESC LIMIT ${FEEDBACK_WINDOW+1})
+        UNION ALL
+        (SELECT id,kind,version,"createdAt",input,output FROM "BrandMarketingSolution"
+         WHERE "brandId"=${brandId} AND kind=${FIDELITY_REVIEW_KIND}
+         AND (${before?.createdAt??null}::timestamp IS NULL OR ("createdAt",id)<(${before?.createdAt??null}::timestamp,${before?.id??''}))
+         ORDER BY "createdAt" DESC,id DESC LIMIT ${FEEDBACK_WINDOW+1})
       ) events ORDER BY "createdAt" DESC,id DESC LIMIT ${FEEDBACK_WINDOW+1}
+    ), aggregate_window AS (
+      SELECT *,COALESCE(input->'qualityReview',input->'ai'->'qualityReview') AS quality
+      FROM revision_window
     )
     SELECT id,kind,version,"createdAt",jsonb_build_object(
       'creativeId',input->'creativeId','month',input->'month',
+      'taskId',CASE WHEN length(COALESCE(input->>'taskId',input->'ai'->>'taskId'))<=200 THEN COALESCE(input->'taskId',input->'ai'->'taskId') END,
       'actor',jsonb_build_object('type',input->'actor'->'type'),
       'event',input->'event','candidateKey',input->'candidateKey',
+      'videoFeedback',CASE WHEN octet_length((input->'videoFeedback')::text)<=32768 THEN input->'videoFeedback' END,
+      'qualityReview',CASE WHEN quality->'version'='1'::jsonb AND jsonb_typeof(quality->'attempts')='array' THEN jsonb_build_object('version',1,'attempts',
+        (SELECT COALESCE(jsonb_agg(jsonb_build_object(
+          'artifact',jsonb_build_object(
+            'path',CASE WHEN length(a->'artifact'->>'path')<=200 THEN a->'artifact'->'path' END,
+            'digest',CASE WHEN length(a->'artifact'->>'digest')<=200 THEN a->'artifact'->'digest' END,
+            'revision',CASE WHEN octet_length((a->'artifact'->'revision')::text)<=16 THEN a->'artifact'->'revision' END),
+          'classification',jsonb_build_object('candidateDigest',CASE WHEN length(a->'classification'->>'candidateDigest')<=200 THEN a->'classification'->'candidateDigest' END),
+          'review',jsonb_build_object('status',CASE WHEN a->'review'->>'status' IN ('passed','failed') THEN a->'review'->'status' END),
+          'adapted',jsonb_build_object('shots',
+            (SELECT COALESCE(jsonb_agg(jsonb_build_object('contractVersion',s->'contractVersion','sourceShotId',CASE WHEN length(s->>'sourceShotId')<=200 THEN s->'sourceShotId' END)),'[]'::jsonb)
+             FROM jsonb_array_elements(CASE WHEN jsonb_typeof(a->'adapted'->'shots')='array' THEN CASE WHEN jsonb_array_length(a->'adapted'->'shots')<=100 THEN a->'adapted'->'shots' ELSE '[]'::jsonb END ELSE '[]'::jsonb END) s))
+        )),'[]'::jsonb) FROM jsonb_array_elements(CASE WHEN jsonb_array_length(quality->'attempts')<=2 THEN quality->'attempts' ELSE '[]'::jsonb END) a)) ELSE NULL END,
       'changes',CASE WHEN jsonb_typeof(input->'changes')='array' THEN
-        (SELECT COALESCE(jsonb_agg(jsonb_build_object('field',c->'field')),'[]'::jsonb) FROM jsonb_array_elements(input->'changes') c) ELSE NULL END,
-      'feedback',jsonb_build_object('reasons',input->'feedback'->'reasons'),
+        (SELECT COALESCE(jsonb_agg(jsonb_build_object('field',CASE WHEN length(c->>'field')<=200 THEN c->'field' END)),'[]'::jsonb) FROM jsonb_array_elements(input->'changes') WITH ORDINALITY e(c,n) WHERE n<=100) ELSE NULL END,
+      'feedback',jsonb_build_object('reasons',CASE WHEN octet_length((input->'feedback'->'reasons')::text)<=4096 THEN input->'feedback'->'reasons' END),
       'ai',CASE WHEN jsonb_typeof(input->'ai')='object' THEN jsonb_build_object('reviewChanges',
         CASE WHEN jsonb_typeof(input->'ai'->'reviewChanges')='array' THEN
-          (SELECT COALESCE(jsonb_agg(jsonb_build_object('field',c->'field')),'[]'::jsonb) FROM jsonb_array_elements(input->'ai'->'reviewChanges') c) ELSE NULL END) ELSE NULL END,
-      'dimensions',COALESCE(input->'dimensions',jsonb_build_object(
+          (SELECT COALESCE(jsonb_agg(jsonb_build_object('field',CASE WHEN length(c->>'field')<=200 THEN c->'field' END)),'[]'::jsonb) FROM jsonb_array_elements(input->'ai'->'reviewChanges') WITH ORDINALITY e(c,n) WHERE n<=100) ELSE NULL END) ELSE NULL END,
+      'dimensions',COALESCE(CASE WHEN octet_length((input->'dimensions')::text)<=65536 THEN input->'dimensions' END,jsonb_build_object(
         'source',jsonb_build_array(COALESCE(output->'source'->'inspirationCreativeId',input->'source'->'creativeId',output->'inspirationCreativeId')),
         'sku',COALESCE(output->'skuDecision'->'selectedSkuIds',output->'skuIds','[]'::jsonb),
         'platform',COALESCE(output->'platformTargets',jsonb_build_array(COALESCE(output->'platformSlug',output->'platform'))),
         'contentType',jsonb_build_array(output->'contentType')))
-    ) AS input FROM revision_window ORDER BY "createdAt" DESC,id DESC`
+    ) AS input FROM aggregate_window ORDER BY "createdAt" DESC,id DESC`
   const window=rows.slice(0,FEEDBACK_WINDOW)
   return {...summarizeCreativeFeedback(window),sampleVersions:window.length,scope:'revision_event_window',windowLimit:FEEDBACK_WINDOW,hasMore:rows.length>FEEDBACK_WINDOW,nextCursor:rows.length>FEEDBACK_WINDOW?feedbackCursor(window[window.length-1]):null}
 }

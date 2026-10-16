@@ -35,7 +35,7 @@ const db:any={$transaction:async(fn:any)=>{
 }}
 Object.assign(db,tx)
 const revision=compile('src/lib/brand-plan/creativeRevisions.ts',{
-  './matchingContract':{},'./revisionFeedback':await import('../src/lib/brand-plan/revisionFeedback.ts'),'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},
+  './matchingContract':{},'./revisionFeedback':await import('../src/lib/brand-plan/revisionFeedback.ts'),'./creativeFidelity.ts':await import('../src/lib/brand-plan/creativeFidelity.ts'),'./creativeSourceReference':await import('../src/lib/brand-plan/creativeSourceReference.ts'),'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},
   '../ai-native/facts.ts':{readBrandFacts:async()=>facts()},'node:crypto':await import('node:crypto'),
   '../role-permissions/store.ts':{readPolicies:async()=>({policies:{EDITOR:[]}})},'../role-permissions/contract.ts':{effectiveGrants:()=>edit?['draft.update']:[]},'../auth-v2/types.ts':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['EDITOR']})},
   '../user-management/brandAccess.ts':{canUserAccessBrand:async(brand:string)=>allowed&&brand===brandId},'./creativeRevisionContract.ts':contract,'./creativeWorkspaceContract.ts':workspace,'./creativeCollections.ts':{},'./creativeSkuContract':sku,

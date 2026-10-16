@@ -8,6 +8,14 @@ import * as feedback from '../src/lib/brand-plan/revisionFeedback.ts'
 // Match Prisma's UTC timestamp(3) decoding; PGlite otherwise uses the host TZ.
 process.env.TZ='UTC'
 const compile=(path:string,deps:any)=>{const mod={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>{assert(key in deps,`unexpected dependency ${key}`);return deps[key]},mod,mod.exports);return mod.exports}
+let trainingWrites=0
+const corrections=compile('src/lib/feedbackService.ts',{'./prisma.ts':{prisma:{copywriterLog:{findFirst:async()=>({id:'log',rawOutput:JSON.stringify({caption:'a'.repeat(3000)})}),update:async()=>{trainingWrites++}},userCorrectionFeedback:{create:async()=>{trainingWrites++}}}},'./feedbackDistance.ts':await import('../src/lib/feedbackDistance.ts')})
+assert.equal(corrections.calculateDiffRatio(' kitten ','sitting'),3/7)
+assert.equal(corrections.calculateDiffRatio('😀','😃'),1)
+assert.equal(corrections.calculateDiffRatio('a'.repeat(3000),'b'.repeat(3000)),null)
+assert.deepEqual(await corrections.recordUserCorrection('brand','a'.repeat(3000),'b'.repeat(3000)),{recorded:false,diffRatio:null,error:'feedback_comparison_limit'})
+await corrections.processDraftCuration('brand','draft','b'.repeat(3000))
+assert.equal(trainingWrites,0,'over-budget effort must not auto-approve a training sample')
 const actor={id:'owner',type:'HUMAN'},brandId='brand',month='2026-11',creativeId='idea'
 let access=true,edit=true,auditFailure=false,candidateReads=0,rows:any[]=[],audits:any[]=[],queue=Promise.resolve()
 let item:any={id:creativeId,brandId,title:'A',planning:'Original',status:'idea_pending',platformTargets:['instagram'],source:{inspirationCreativeId:'source1',evidenceStatus:'full_source',timeline:[{id:'shot1'}]},skuDecision:{selectedSkuIds:['sku1']},schedule:{draftId:'draft1',scheduledAt:null,platform:'instagram',scheduledBy:'owner',scheduledAtRevisionId:'rev1'}}
@@ -23,7 +31,7 @@ const tx:any={
 }
 const db:any={...tx,$transaction:async(fn:any)=>{const previous=queue;let release:any;queue=new Promise(r=>release=r);await previous;const snapshot=structuredClone({rows,audits,item});try{return await fn(tx)}catch(e){({rows,audits,item}=snapshot);throw e}finally{release()}}}
 const service=compile('src/lib/brand-plan/creativeRevisions.ts',{
-  './matchingContract':{},'./revisionFeedback':feedback,'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},'../ai-native/facts.ts':{readBrandFacts:async()=>facts},'node:crypto':await import('node:crypto'),
+  './matchingContract':{},'./revisionFeedback':feedback,'./creativeFidelity.ts':await import('../src/lib/brand-plan/creativeFidelity.ts'),'../ai-native/creative-diversity.ts':{},'../prisma.ts':{prisma:{}},'../ai-native/facts.ts':{readBrandFacts:async()=>facts},'node:crypto':await import('node:crypto'),
   '../role-permissions/store.ts':{readPolicies:async()=>({policies:{EDITOR:[]}})},'../role-permissions/contract.ts':{effectiveGrants:()=>edit?['draft.update']:[]},'../auth-v2/types.ts':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['EDITOR']})},
   '../user-management/brandAccess.ts':{canUserAccessBrand:async(brand:string)=>access&&brand===brandId},'./creativeRevisionContract.ts':contract,'./creativeWorkspaceContract.ts':workspace,'./creativeSourceReference':await import('../src/lib/brand-plan/creativeSourceReference.ts'),'./creativeCollections.ts':{},'./creativeSkuContract':{},
 })
@@ -100,9 +108,11 @@ for(const firstDecision of ['adopt','discard']){
 }
 rows=[];audits=[];item={...structuredClone(original),aiCaption:'Original caption'}
 const actualPatch={planning:'Original',materialRequirements:[],aiCaption:''}
-const edited=await service.saveCreativeRevision(actor,brandId,month,creativeId,{expectedRevision:contract.creativeDigest(item),idempotencyKey:'real-edits',patch:actualPatch},db,{...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch:{title:'A',planning:'Candidate',materialRequirements:['Film product']}})
+const edited=await service.saveCreativeRevision(actor,brandId,month,creativeId,{expectedRevision:contract.creativeDigest(item),idempotencyKey:'real-edits',patch:actualPatch,videoFeedback:{captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'forged',afterId:'forged2'}}},db,{...refusedAdoption,contextDigest:contract.creativeDigest(facts),candidatePatch:{title:'A',planning:'Candidate',materialRequirements:['Film product']}})
 assert.deepEqual(edited.receipt.ai.reviewChanges.map((v:any)=>v.field),['planning','materialRequirements','aiCaption'])
 assert.equal(feedback.summarizeCreativeFeedback(rows).editedScripts,1)
+assert.equal(rows.at(-1).input.videoFeedback,undefined,'client-supplied evidence cannot enter stored revision input')
+assert.equal(feedback.summarizeCreativeFeedback(rows).voiceReplacementRate.denominator,0)
 ;({rows,audits,item}=retained)
 
 // A new key is never silently accepted as an unrecorded alias of an old result.
@@ -126,7 +136,7 @@ try{
   let queries=0
   const sqlDb={...db,$queryRaw:async(strings:TemplateStringsArray,...args:any[])=>{
     queries++;const sql=strings.reduce((q,s,i)=>q+(i?`$${i}`:'')+s,'')
-    assert.equal((sql.match(/LIMIT/g)||[]).length,3);assert(args.includes(2001))
+    assert.equal((sql.match(/LIMIT/g)||[]).length,4);assert(args.includes(2001))
     const result=await pg.query(sql,args.map(v=>v instanceof Date?v.toISOString():v))
     assert.equal(JSON.stringify(result.rows).includes('SECRET'),false,'database projection never returns raw content or notes')
     return result.rows.map((r:any)=>({...r,createdAt:new Date(r.createdAt)}))
@@ -136,6 +146,16 @@ try{
   assert.equal(page.reasons.sku_mismatch,2000)
   const next=await service.readCreativeFeedbackSummary(actor,brandId,page.nextCursor,sqlDb)
   assert.equal(next.sampleVersions,3);assert.equal(next.hasMore,false);assert.equal(next.nextCursor,null)
+  const videoFeedback={sourceShotId:'s1',textChanges:[{field:'spokenText',before:'abcd',after:'wxyz'}],captionMismatchBlocked:true,voiceReceiptChange:{beforeId:'voice1',afterId:'voice2'},musicReceiptChange:{beforeId:'music1',afterId:'music1'}}
+  const attempts=[{artifact:{path:'candidate.json',revision:1,digest:'failed'},classification:{candidateDigest:'failed'},review:{status:'failed'},adapted:{shots:[{contractVersion:2,sourceShotId:'s1',spokenText:'SECRET ATTEMPT'}]}},{artifact:{path:'candidate.json',revision:2,digest:'passed'},classification:{candidateDigest:'passed'},review:{status:'passed'},adapted:{shots:[{contractVersion:2,sourceShotId:'s1',spokenText:'SECRET ATTEMPT'}]}}]
+  await pg.query(`INSERT INTO "BrandMarketingSolution" VALUES('video-revision',$1,'CREATIVE_ITEM',2,'2026-10-18',$2::jsonb,'{}'),('quality-event',$1,'CREATIVE_FIDELITY_REVIEW',2,'2026-10-18',$3::jsonb,'{}')`,[brandId,JSON.stringify({...input,videoFeedback,ai:{taskId:'video-task',reviewChanges:[],qualityReview:{version:1,attempts}}}),JSON.stringify({taskId:'video-task',qualityReview:{version:1,attempts}})])
+  const videoPage=await service.readCreativeFeedbackSummary(actor,brandId,null,sqlDb)
+  assert.equal(videoPage.editDistanceByField.spokenText.total,4)
+  assert.equal(videoPage.bySourceShot.s1.editedScripts,1)
+  assert.equal(videoPage.captionMismatchBlocks,1)
+  assert.deepEqual(videoPage.voiceReplacementRate,{numerator:1,denominator:1,rate:1})
+  assert.deepEqual(videoPage.fidelityPassRate,{numerator:1,denominator:2,rate:0.5})
+  assert.equal(JSON.stringify(videoPage).includes('abcd'),false)
   const beforeQueries=queries
   await assert.rejects(()=>service.readCreativeFeedbackSummary(actor,brandId,'invalid',sqlDb),/invalid_feedback_cursor/)
   await assert.rejects(()=>service.readCreativeFeedbackSummary(actor,'foreign',null,sqlDb),/creative_access_denied/)
@@ -146,10 +166,12 @@ try{
 
 let auth:any=null,origin=true
 const http=compile('src/lib/ai-native/http.ts',{'../user-management/auth':{resolveSessionOrApiKey:async()=>auth},'../role-permissions/request-origin':{allowedRoleWriteOrigin:()=>origin}})
-const route=compile('src/app/api/brands/[id]/content-creatives/feedback/route.ts',{'@/lib/ai-native/http':http,'@/lib/ai-native/service':{readNativeTask:async()=>candidate},'@/lib/brand-plan/creativeRevisions':{readCreativeFeedbackSummary:async(a:any,b:string,c:string)=>{assert.equal(a.id,actor.id);assert.equal(b,brandId);assert.equal(c,'cursor');return {reviewedScripts:1}},recordCreativeCandidateDiscard:async(a:any,b:string,p:any)=>service.recordCreativeCandidateDiscard(a,b,p,resolve,db)}})
+const endpointSummary=feedback.summarizeCreativeFeedback([])
+const route=compile('src/app/api/brands/[id]/content-creatives/feedback/route.ts',{'@/lib/ai-native/http':http,'@/lib/ai-native/service':{readNativeTask:async()=>candidate},'@/lib/brand-plan/creativeRevisions':{readCreativeFeedbackSummary:async(a:any,b:string,c:string)=>{assert.equal(a.id,actor.id);assert.equal(b,brandId);assert.equal(c,'cursor');return endpointSummary},recordCreativeCandidateDiscard:async(a:any,b:string,p:any)=>service.recordCreativeCandidateDiscard(a,b,p,resolve,db)}})
 const ctx={params:Promise.resolve({id:brandId})},get=()=>new Request('https://localhost/api/feedback?cursor=cursor'),post=(value:string)=>new Request('https://localhost/api/feedback',{method:'POST',body:value})
 assert.equal((await route.GET(get(),ctx)).status,401)
 auth={user:actor};assert.equal((await route.GET(get(),ctx)).headers.get('cache-control'),'no-store')
+assert.deepEqual(await (await route.GET(get(),ctx)).json(),endpointSummary)
 origin=false;assert.equal((await route.POST(post('{}'),ctx)).status,403);origin=true
 assert.equal((await route.POST(post('invalid'),ctx)).status,400)
 assert.equal((await route.POST(post('x'.repeat(6001)),ctx)).status,413)
