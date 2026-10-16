@@ -8,6 +8,7 @@ import {requireActorPermission} from '@/lib/role-permissions/delegation'
 import {allowedRoleWriteOrigin} from '@/lib/role-permissions/request-origin'
 import {canUserAccessBrand} from '@/lib/user-management/brandAccess'
 import {verifyVideoReceipt,videoReceiptDigest} from '@/lib/videoReceipt'
+import {serializePublicVideoJob} from '@/lib/videoJobContract'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
     const ok = await canSessionAccessBrandProject(job.brandId, actor.id, actor.type, actor.role)
     if (!ok) return videoJobNotFoundResponse()
 
-    return NextResponse.json({ success: true, job: serializeJob(job) })
+    return NextResponse.json({ success: true, job: serializePublicVideoJob(job) })
   } catch (err: any) {
     console.error('[VideoJobs] get failed:', err)
     return NextResponse.json({ error: err.message || 'Video job lookup failed' }, { status: statusFromError(err) })
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
 
     const job=await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
     if(!await canUserAccessBrand(brandId,actor.id,'WRITE'))throw Object.assign(new Error('Not found'),{status:404})
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${brandId+':'+id}))::text`
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'video-job:'+id}))::text`
     const existing = await tx.videoProductionJob.findUnique({
       where: { id },
       select: { id:true,brandId: true, createdBy:true, plan:true, creativeId:true,idea:true,assetIds:true,mediaUrls:true },
@@ -120,9 +121,7 @@ export async function POST(request: Request) {
       body.plan={...body.plan,_mmVideoJob:metadata}
     }else if(oldEditor){throw Object.assign(new Error('video_lineage_required'),{status:409})}
 
-    return tx.videoProductionJob.upsert({
-      where: { id },
-      create: {
+    const create = {
         id,
         brandId,
         creativeId: optionalText(body.creativeId),
@@ -146,8 +145,8 @@ export async function POST(request: Request) {
         voiceoverState: voiceoverState(body),
         error: optionalText(body.error),
         createdBy: actor.id,
-      },
-      update: {
+      }
+    const update = {
         creativeId: optionalText(body.creativeId),
         title: text(body.title) || '短视频制作',
         platform: text(body.platform) || 'tiktok',
@@ -168,44 +167,16 @@ export async function POST(request: Request) {
         finalExecution: jsonOrNull(body.finalExecution),
         voiceoverState: voiceoverState(body),
         error: optionalText(body.error),
-      },
-    })
+      }
+    return existing
+      ? tx.videoProductionJob.update({ where: { id }, data: update })
+      : tx.videoProductionJob.create({ data: create })
 
     })
-    return NextResponse.json({ success: true, job: serializeJob(job) })
+    return NextResponse.json({ success: true, job: serializePublicVideoJob(job) })
   } catch (err: any) {
     console.error('[VideoJobs] save failed:', err)
     return NextResponse.json({ error: err.message || 'Video job save failed' }, { status: statusFromError(err) })
-  }
-}
-
-function serializeJob(job: any) {
-  return {
-    ...voiceoverState(job.voiceoverState || {}),
-    ownedByCurrentActor: true,
-    id: job.id,
-    brandId: job.brandId,
-    creativeId: job.creativeId,
-    title: job.title,
-    platform: job.platform,
-    idea: job.idea,
-    status: job.status,
-    scenes: Array.isArray(job.scenes) ? job.scenes : [],
-    finalVideoUrl: job.finalVideoUrl,
-    thumbnailUrl: job.thumbnailUrl,
-    narration: job.narration,
-    musicBrief: job.musicBrief,
-    progress: job.progress,
-    error: job.error,
-    plan: job.plan,
-    creatorType: job.creatorType,
-    aspectRatio: job.aspectRatio,
-    assetIds: job.assetIds || [],
-    mediaUrls: job.mediaUrls || [],
-    sceneExecutions: job.sceneExecutions || {},
-    finalExecution: job.finalExecution,
-    createdAt: job.createdAt instanceof Date ? job.createdAt.toISOString() : job.createdAt,
-    updatedAt: job.updatedAt instanceof Date ? job.updatedAt.toISOString() : job.updatedAt,
   }
 }
 

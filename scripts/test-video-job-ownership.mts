@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 
+const routeSource = readFileSync('src/app/api/content/video/jobs/route.ts', 'utf8')
+assert.doesNotMatch(routeSource, /brandId\s*\+\s*['"]:['"]\s*\+\s*id/, 'globally unique job IDs must not use brand-scoped advisory locks')
+
 const compile = (file: string, deps: Record<string, unknown>) => {
   const mod = { exports: {} as any }
   const source = readFileSync(file, 'utf8')
@@ -60,6 +63,13 @@ const rows: Job[] = [
   job('different-brand', 'other-brand', 'owner'),
 ]
 rows[0].voiceoverState = { script: 'safe script', createdBy: 'nested-owner-leak', ownedByCurrentActor: false }
+rows[0].plan = {
+  _mmVideoJob: {
+    videoReceipt: { ownerId: 'receipt-owner', editorActorId: 'receipt-editor', signature: 'secret-signature' },
+    revisions: [{ actorId: 'history-actor', userId: 'history-user', note: 'safe history' }],
+    nested: { createdById: 'nested-created-by', updatedBy: 'nested-updater', value: 'safe nested value' },
+  },
+}
 
 const matches = (row: Job, where: Record<string, unknown>) =>
   Object.entries(where).every(([key, value]) => value === undefined || row[key] === value)
@@ -67,16 +77,18 @@ const matches = (row: Job, where: Record<string, unknown>) =>
 const videoProductionJob = {
   findFirst: async ({ where }: any) => rows.find(row => matches(row, where)) ?? null,
   findUnique: async ({ where }: any) => rows.find(row => row.id === where.id) ?? null,
-  upsert: async ({ where, create, update }: any) => {
+  create: async ({ data }: any) => {
     writes += 1
-    const existing = rows.find(row => row.id === where.id)
-    if (existing) {
-      Object.assign(existing, structuredClone(update))
-      return existing
-    }
-    const created = { ...job(create.id, create.brandId, create.createdBy), ...structuredClone(create) }
+    const created = { ...job(data.id, data.brandId, data.createdBy), ...structuredClone(data) }
     rows.push(created)
     return created
+  },
+  update: async ({ where, data }: any) => {
+    writes += 1
+    const existing = rows.find(row => row.id === where.id)
+    assert(existing)
+    Object.assign(existing, structuredClone(data))
+    return existing
   },
 }
 const tx: any = {
@@ -112,10 +124,11 @@ const route = compile('src/app/api/content/video/jobs/route.ts', {
     verifyVideoReceipt: () => {},
     videoReceiptDigest: () => 'digest',
   },
+  '@/lib/videoJobContract': await import('../src/lib/videoJobContract.ts'),
 })
 
-const get = (id: string, brandId = 'brand') =>
-  route.GET(new Request(`https://kanban.test/api/content/video/jobs?id=${id}&brandId=${brandId}`))
+const get = (id: string, brandId = 'brand', headers?: HeadersInit) =>
+  route.GET(new Request(`https://kanban.test/api/content/video/jobs?id=${id}&brandId=${brandId}`, { headers }))
 const post = (id: string, brandId = 'brand', extra: Record<string, unknown> = {}) =>
   route.POST(new Request('https://kanban.test/api/content/video/jobs', {
     method: 'POST',
@@ -123,6 +136,16 @@ const post = (id: string, brandId = 'brand', extra: Record<string, unknown> = {}
     body: JSON.stringify({ id, brandId, title: 'Updated', plan: {}, ...extra }),
   }))
 const snapshot = async (response: Response) => ({ status: response.status, body: await response.json() })
+const forbiddenIdentityKey = (key: string) => /^(?:createdBy(?:Id)?|ownerId|editorActorId|actorId|userId|updatedBy(?:Id)?)$/i.test(key)
+const assertPublicShape = (value: unknown): void => {
+  if (Array.isArray(value)) return value.forEach(assertPublicShape)
+  if (!value || typeof value !== 'object') return
+  for (const [key, nested] of Object.entries(value)) {
+    assert.equal(forbiddenIdentityKey(key), false, `public response leaked identity key ${key}`)
+    assert.notEqual(key, 'videoReceipt', 'public response leaked the internal signed receipt')
+    assertPublicShape(nested)
+  }
+}
 
 const owned = await get('owned')
 assert.equal(owned.status, 200)
@@ -130,6 +153,13 @@ const ownedBody: any = await owned.json()
 assert.equal(ownedBody.job.ownedByCurrentActor, true)
 assert.equal('createdBy' in ownedBody.job, false, 'browser response must not disclose the raw owner id')
 assert.equal(ownedBody.job.script, 'safe script', 'supported voice state remains available')
+assert.equal(ownedBody.job.plan._mmVideoJob.revisions[0].note, 'safe history')
+assert.equal(ownedBody.job.plan._mmVideoJob.nested.value, 'safe nested value')
+assertPublicShape(ownedBody.job)
+assert.doesNotMatch(JSON.stringify(ownedBody.job), /receipt-owner|receipt-editor|history-actor|history-user|nested-created-by|nested-updater|secret-signature/)
+const fakeMmPublic: any = await (await get('owned', 'brand', { 'x-client-type': 'mm' })).json()
+assertPublicShape(fakeMmPublic.job)
+assert.equal(fakeMmPublic.job.ownedByCurrentActor, true, 'client flags cannot select the trusted shape')
 
 const absentRead = await snapshot(await get('missing'))
 const otherOwnerRead = await snapshot(await get('same-brand-other-owner'))
@@ -158,9 +188,41 @@ assert.equal(ownedWrite.status, 200)
 const ownedWriteBody: any = await ownedWrite.json()
 assert.equal(ownedWriteBody.job.ownedByCurrentActor, true)
 assert.equal('createdBy' in ownedWriteBody.job, false)
+assertPublicShape(ownedWriteBody.job)
 assert.equal(rows.find(row => row.id === 'owned')?.createdBy, 'owner', 'owner remains immutable on downstream updates')
 
 actor = { ...actor, id: 'other' }
 assert.deepEqual(await snapshot(await get('owned')), absentRead, 'refresh is owner-bound even within the same brand')
+
+const previousInternalToken = process.env.CONTENT_SERVICE_INTERNAL_TOKEN
+try {
+  process.env.CONTENT_SERVICE_INTERNAL_TOKEN = 'test-only-video-job-internal-token'
+  rows.find(row => row.id === 'owned')!.plan = { _mmVideoJob: { videoReceipt: { ownerId: 'receipt-owner', editorActorId: 'receipt-editor', signature: 'secret-signature' } } }
+  const internal = compile('src/app/api/internal/content/video-jobs/route.ts', {
+    'node:crypto': await import('node:crypto'),
+    '@/lib/videoJobAccess': {
+      readTrustedVideoJob: async (actorId: string, id: string) => {
+        const found = rows.find(row => row.id === id)
+        if (!found || found.createdBy !== actorId) throw Object.assign(new Error('Not found'), { status: 404 })
+        return found
+      },
+    },
+    '@/lib/videoJobContract': await import('../src/lib/videoJobContract.ts'),
+  })
+  const internalPost = (token: string, actorId = 'owner') => internal.POST(new Request('https://kanban.test/api/internal/content/video-jobs', {
+    method: 'POST', headers: { 'x-content-service-token': token }, body: JSON.stringify({ actorId, id: 'owned', brandId: 'brand' }),
+  }))
+  assert.equal((await internalPost('wrong-token')).status, 401)
+  assert.equal((await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN, 'other')).status, 404)
+  const trusted = await internalPost(process.env.CONTENT_SERVICE_INTERNAL_TOKEN)
+  assert.equal(trusted.status, 200)
+  assert.equal(trusted.headers.get('cache-control'), 'no-store')
+  const trustedBody: any = await trusted.json()
+  assert.equal(trustedBody.job.createdBy, 'owner')
+  assert.equal(trustedBody.job.plan._mmVideoJob.videoReceipt.ownerId, 'receipt-owner')
+} finally {
+  if (previousInternalToken === undefined) delete process.env.CONTENT_SERVICE_INTERNAL_TOKEN
+  else process.env.CONTENT_SERVICE_INTERNAL_TOKEN = previousInternalToken
+}
 
 console.log('PASS video job ownership: owner-only read/refresh/write, legacy fail-closed, non-enumerable denial, immutable hidden owner')
