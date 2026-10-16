@@ -91,6 +91,14 @@ export function hasCreativeDraftMarker(note: unknown, kind: CreativeDraftMarkerK
 export function activeCalendarCreativeId(note:unknown):string {
   const identities=markerIdentities(note,'calendar')
   if(identities.values.length!==1)return ''
-  const id=identities.encoded?decodeIdentity(identities.values[0]):typeof note==='string'?[...note.matchAll(/brand-plan-calendar-item:(\S+)/gi)][0]?.[1]||'':''
+  let id=identities.encoded?decodeIdentity(identities.values[0]):typeof note==='string'?[...note.matchAll(/brand-plan-calendar-item:(\S+)/gi)][0]?.[1]||'':''
+  if(!identities.encoded){
+    // A raw identity has no authoritative casing. Resolve it through a unique
+    // matching V2 cancellation before comparing state, never fold two V2 IDs.
+    const canceled=markerIdentities(note,'unscheduled')
+    const canonical=canceled.encoded?canceled.values.map(decodeIdentity).filter(value=>value.toLowerCase()===identities.values[0]):[]
+    if(canonical.length>1)return ''
+    id=canonical[0]||id
+  }
   return hasCreativeDraftMarker(note,'calendar',id)?id:''
 }

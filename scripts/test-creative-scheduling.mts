@@ -193,6 +193,14 @@ console.log('PASS: schedule route and real service validator compose for POST/DE
 // schedule, while ordinary caption/status review remains usable.
 const draftRouteSource=readFileSync(new URL('../src/app/api/brands/[id]/drafts/[draftId]/route.ts',import.meta.url),'utf8')
 const draftRouteCompiled=ts.transpileModule(draftRouteSource,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
+for(const [rawId,canonicalId] of [['IDEA-ONE','idea-one'],['idea-one','Idea-One']]){
+ const raw='Historical BRAND-PLAN-CALENDAR-ITEM:'+rawId,cancel=draftMarkers.creativeDraftMarker('unscheduled',canonicalId)
+ assert.equal(draftMarkers.activeCalendarCreativeId(raw+'\n'+cancel),'','raw casing must resolve to canonical V2 cancellation')
+ assert.equal(draftMarkers.activeCalendarCreativeId(raw+'\n'+cancel+'\n'+raw),canonicalId,'raw reactivation retains known canonical identity')
+ assert.equal(draftMarkers.activeCalendarCreativeId(raw+'\n'+cancel+'\n'+draftMarkers.creativeDraftMarker('calendar',canonicalId)),canonicalId)
+}
+assert.equal(draftMarkers.activeCalendarCreativeId(draftMarkers.creativeDraftMarker('calendar','IDEA-ONE')+'\n'+draftMarkers.creativeDraftMarker('unscheduled','idea-one')),'IDEA-ONE','genuinely distinct V2 identities remain case-sensitive')
+assert.equal(draftMarkers.activeCalendarCreativeId(draftMarkers.creativeDraftMarker('calendar','IDEA-ONE')+'\n'+draftMarkers.creativeDraftMarker('calendar','idea-one')),'','distinct V2 identities must not be merged')
 for(const id of ['idea-one','Idea-One','idea one','创意一','idea😀']){
  const active=draftMarkers.creativeDraftMarker('calendar',id),canceled=draftMarkers.creativeDraftMarker('unscheduled',id)
  const history='Human note\n'+active+'\n'+canceled
