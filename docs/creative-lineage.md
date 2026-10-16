@@ -1,6 +1,6 @@
 # 品牌创意修改与版本追溯
 
-## 当前交付状态（2026-10-16）
+## 当前交付状态（2026-10-17）
 
 Task 11A 可信反馈入口（本地已实现并完成 PGlite 定向验证、未发布）：`video_feedback_event@1` 的不可变 core 固定 schema、eventId、occurredAt、projectId、brandId、creativeId、creativeRevisionId、actorId 和 Task 7 `evidence`，`coreDigest` 是与传输令牌无关的稳定 SHA-256。每次 HTTP 交付必须用当前内部服务令牌提供新的 `deliveredAt`、随机 nonce 和 HMAC-SHA-256；规范字符串为 `video_feedback_delivery@1\nPOST\n/api/internal/content/video-feedback\neventId\ncoreDigest\ndeliveredAt\nnonce`，对应 `x-amc-video-feedback-delivered-at` / `-nonce` / `-signature` 头。令牌在读取正文前鉴权，正文后复验精确 method/path、五分钟交付时间窗口、nonce 和签名；五分钟只约束交付，不约束证据发生时间。积压的旧 core 可用当前令牌重新签名后首次入库，相同 eventId + coreDigest 可在当前保留期内使用新交付包幂等重放；旧令牌和旧的正文内签名合同均关闭失败，同 eventId 不同 coreDigest 为 409 冲突。每次交付都重新确认 ACTIVE 操作者、当前品牌写权限和项目追溯身份；projectId 只认可持久化 plan、`_mmVideoJob` 与签名视频回执中完全一致的 Content 项目固定值，不接受 VideoProductionJob.id 别名，任何缺失或不一致均关闭失败。证据使用专属 `VIDEO_EDIT_FEEDBACK` 事件和唯一/窗口索引，不创建品牌创意修订，不进入人工修订、采用或弃用计数；反馈聚合只投影有界结构化证据，不返回项目/修订/操作者身份、备注、提示词、脚本正文或来源私有数据。公开品牌修订接口对 `videoFeedback`、事件 envelope/digest/signature 及其他未知证据键在任何修订写入前返回 400。
 
@@ -12,7 +12,11 @@ core 的 `identity` 是严格对象，且只含 projectId、brandId、creativeId
 
 排期在候选选择与加锁读回后检查唯一 marker；两个 raw 身份即使另一个创意缺失仍拒绝，未关联的跨月同 ID 也不得推断归属。重排/取消保留原 agentNote 并追加权威 marker，不覆盖历史文本。
 
-本文为 current-truth / fixed-reference。Task 1–10 的无日期内容创意、品牌授权来源/视频、二阶段 SKU、共享修订/反馈与固定视频追溯均已在隔离分支本地实现，尚未 push 或部署。历史已上线记录仅证明当时范围，不覆盖本轮。三仓完整 typecheck / production build、两端默认 UI suites、PGlite SQL 与一次性 PostgreSQL/Prisma 并发验证通过；最终独立全分支 review、最终集成 E2E 和上线仍需单独批准。
+本文为 current-truth / fixed-reference。Task 1–11 的无日期内容创意、品牌授权来源/视频、二阶段 SKU、共享修订/反馈、固定视频追溯与可信反馈交付均已在隔离分支本地实现，尚未 push 或部署。Content 生产者已对当前 Kanban 消费者执行真实入库级跨仓 outbox 验证；这不是生产部署或线上 E2E。历史已上线记录仅证明当时范围，不覆盖本轮。
+
+Task 12 发布前门禁（Node 20.20.2）已通过 `npm run typecheck`、`npm run test:creative-revisions`、`npm run test:ai-native`、`node --import tsx scripts/test-video-feedback-ingestion.mts` 及 `npm run build -- --webpack`。标准 Turbopack 构建在当前临时工作树因保留的 `node_modules` 符号链接指向工作树根外而终止；webpack 生产构建已完成，未将该环境限制冒充 Turbopack 通过。空白数据库执行全部 94 个历史 migration 时，在 `20260703000000_fix_user_fk_ondelete` 因前序链未创建 `Comment` 关系而失败；因此全新数据库迁移兼容性为`待确认`。本地事务测试数据库只使用 `prisma db push` 建立当前 schema，不构成 migration deploy 证据。部署前必须对获授权的生产数据库运行 `prisma migrate status`，核对待执行的 `20261017010000_video_edit_feedback`，禁止以 `db push` 替代生产迁移。
+
+最终全分支 code review、跟随最新 `origin/main` 的重放、三类授权真实来源 E2E、推送和部署均未完成，仍是发布门禁。没有商户登录会话或授权真实来源时，来源 ID、确认 SKU、镜头 ID、文字哈希、语音/字幕/BGM 回执、返回目标和最终视频 ID 一律标记`待确认`，不得以 fixture、401 或跳转代替。
 
 月度频率只产生创意目标：20 个目标匹配 8 条仍需 12 条，不创建日期占位、草稿或发布任务。awaiting_sku / sku_confirmed 使用真实来源身份和证据去重，不拿通用等待文案做脚本文本判重；adapted 继续原文本质量校验。后台续检只增加合格来源候选，不承诺夜间补足或排期。内容编辑、SKU 确认、候选采用、显式 schedule、付费重做、正式发布是不同权限/确认动作。
 
