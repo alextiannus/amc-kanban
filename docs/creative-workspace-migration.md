@@ -25,9 +25,13 @@ node --import tsx scripts/migrate-creative-workspace.mts --apply --brand-id BRAN
 
 历史日期、平台和旧状态保留在 `legacy`；新工作区字段没有发布日期。未排期创意的 `schedule` 为 null。现有 canonical 来源和 SKU 决策原样保留；缺失来源、作者、修改原因、SKU 及修订 ID 均不补造。已有顶层来源摘录仍保留，不升级为完整来源。
 
+历史 `platformSlug` 也保留在 `legacy.platformSlug`，只有它而没有 platform 时可作为 platformTargets 的兼容来源。platform 与 platformSlug（沿用既有平台别名校验，其他值忽略大小写和首尾空白）冲突时保留两份原始证据、报告 `legacy_platform_conflict` / needs_confirmation；不从冲突值推断平台目标或草稿关联，已有显式 platformTargets 不改写。
+
 只有同品牌、唯一精确创意 marker、唯一创意身份、同品牌平台账号和没有其他创意占用的旧草稿可投影成 schedule。读取草稿已有 scheduledAt（可以为 null），不从旧 date 生成时间。迁移关联显式 `legacy: true`，未知的 scheduledBy 和 scheduledAtRevisionId 保持 null。正常显式排期仍必须保存真实操作者和固定修订 ID；客户端不能写入 legacy 投影。
 
 重复 marker、同 ID 跨月份、草稿已被其他创意占用、账号归属不明、缺少关联或非法身份均报告 needs_confirmation，不猜测草稿。非精确前缀和跨品牌记录不作为关联依据。迁移不创建、删除或更新 ContentDraft，不调用发布、模型或制作服务。
+
+marker 判定先解析草稿中的全部权威身份，再核对工作区：即使其中一个来源创意已经缺失，两个不同 raw marker 仍是歧义；同一 raw 身份的大小写重复不算两个身份。有 V2 编码 marker 时仅以 V2 为权威，不能退回 raw 投影；冲突或损坏的 V2 不关联。关联扫描前先验证月份与非空字符串 ID（最长 200），数值 ID、缺 ID 等非法项原样保留并计入 invalid / needs_confirmation，不把 undefined 当作任意 marker 匹配。
 
 ## 事务和重放
 

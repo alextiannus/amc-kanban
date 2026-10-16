@@ -42,17 +42,25 @@ export function creativeDraftMarkerSearches(kind: CreativeDraftMarkerKind, creat
 // Historical raw markers are whitespace-delimited tokens and may use different
 // casing anywhere in the note. Never treat punctuation as an ID boundary.
 // V2 encodes the ID's casing too, so distinct canonical IDs remain distinct.
-export function hasCreativeDraftMarker(note: unknown, kind: CreativeDraftMarkerKind, creativeId?: string) {
-  if (typeof note !== 'string') return false
+function markerIdentities(note: unknown, kind: CreativeDraftMarkerKind) {
+  if (typeof note !== 'string') return {encoded:false,values:[] as string[]}
   const encoded = [...note.matchAll(new RegExp(`${encodedPrefix(kind)}(\\S*)`,'gi'))].map(match => match[1].toLowerCase())
   if (encoded.length) {
     // Encoded identity is authoritative; malformed or conflicting V2 markers
     // must not fall back to the raw compatibility projection.
-    if (new Set(encoded).size !== 1 || !/^(?:[a-f0-9]{4}){1,200}$/.test(encoded[0])) return false
-    return creativeId === undefined || encoded[0] === encodeCreativeId(creativeId)
+    return {encoded:true,values:encoded.every(value=>/^(?:[a-f0-9]{4}){1,200}$/.test(value))?[...new Set(encoded)]:[]}
   }
-  for (const match of note.matchAll(new RegExp(`${prefixes[kind]}(\\S+)`,'gi'))) {
-    if (creativeId === undefined || match[1].toLowerCase() === creativeId.toLowerCase()) return true
-  }
-  return false
+  return {encoded:false,values:[...new Set([...note.matchAll(new RegExp(`${prefixes[kind]}(\\S+)`,'gi'))].map(match=>match[1].toLowerCase()))]}
+}
+
+// Count the note's identities, not the subset still present in the workspace.
+export function creativeDraftMarkerIdentityCount(note: unknown, kind: CreativeDraftMarkerKind) {
+  return markerIdentities(note,kind).values.length
+}
+
+export function hasCreativeDraftMarker(note: unknown, kind: CreativeDraftMarkerKind, creativeId?: string) {
+  if(creativeId!==undefined&&typeof creativeId!=='string')return false
+  const identities=markerIdentities(note,kind)
+  if(!identities.values.length||identities.encoded&&identities.values.length!==1)return false
+  return creativeId===undefined||identities.values.includes(identities.encoded?encodeCreativeId(creativeId):creativeId.toLowerCase())
 }

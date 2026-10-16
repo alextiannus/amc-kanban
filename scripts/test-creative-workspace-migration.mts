@@ -53,3 +53,4 @@ await assert.rejects(()=>runCreativeWorkspaceMigration(adapter,{apply:true}),/au
 assert.deepEqual(await read(),workspace,'audit failure rolls back workspace projection')
 await db.close()
 console.log('PASS real PGlite SQL: default dry-run, unique marker, ambiguity, prefix/cross-brand denial, unknown evidence preservation, audit rollback, repeated apply stability')
+await import('./test-creative-workspace-migration-review.mts')

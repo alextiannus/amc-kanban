@@ -58,7 +58,7 @@ export type CreativeWorkspaceItem = {
   schedule: CreativeScheduleLink | null
   createdAt: string
   updatedAt: string
-  legacy?: { date?: string; platform?: string; status?: string }
+  legacy?: { date?: string; platform?: string; platformSlug?: string; status?: string }
 }
 
 const statuses: CreativeStatus[] = ['idea_pending', 'needs_materials', 'needs_revision', 'ready', 'archived']
@@ -110,13 +110,14 @@ export function normalizeCreativeWorkspaceItem(value: unknown, context: { brandI
   const storedLegacy = record(input.legacy)
   if (typeof storedLegacy.date === 'string' || typeof input.date === 'string') legacy.date = string(storedLegacy.date || input.date)
   if (typeof storedLegacy.platform === 'string' || typeof input.platform === 'string') legacy.platform = string(storedLegacy.platform || input.platform)
+  if (typeof storedLegacy.platformSlug === 'string' || typeof input.platformSlug === 'string') legacy.platformSlug = string(storedLegacy.platformSlug || input.platformSlug)
   if (typeof storedLegacy.status === 'string' || rawStatus && !statuses.includes(rawStatus as CreativeStatus)) legacy.status = string(storedLegacy.status || rawStatus)
   const status: CreativeStatus = statuses.includes(rawStatus as CreativeStatus) ? rawStatus as CreativeStatus : rawStatus === 'archived' || rawStatus === '归档' ? 'archived' : 'idea_pending'
   const schedule = record(input.schedule)
   const completeSchedule = ['draftId', 'platform'].every(key => typeof schedule[key] === 'string' && schedule[key]) && ['scheduledBy','scheduledAtRevisionId'].every(key=>typeof schedule[key]==='string'&&schedule[key]||schedule.legacy===true&&schedule[key]===null) && (schedule.scheduledAt === null || typeof schedule.scheduledAt === 'string' && !!schedule.scheduledAt)
   return {
     id: string(input.id), brandId: string(context.brandId || input.brandId), title: string(input.title), status,
-    platformTargets: Array.isArray(input.platformTargets) ? list(input.platformTargets) : input.platform || legacy.platform ? [string(input.platform || legacy.platform)] : [],
+    platformTargets: Array.isArray(input.platformTargets) ? list(input.platformTargets) : input.platform || input.platformSlug || legacy.platform || legacy.platformSlug ? [string(input.platform || input.platformSlug || legacy.platform || legacy.platformSlug)] : [],
     contentType: string(input.contentType), planning: string(input.planning), materialRequirements: list(input.materialRequirements),
     aiCaption: string(input.aiCaption), aiTags: list(input.aiTags),
     source: input.source && typeof input.source === 'object' && !Array.isArray(input.source) ? input.source as CreativeSourceReference : null,

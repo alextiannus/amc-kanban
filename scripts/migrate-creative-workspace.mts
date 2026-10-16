@@ -1,8 +1,8 @@
 import {randomUUID} from 'node:crypto'
 import {pathToFileURL} from 'node:url'
-import {creativeDigest,creativeWorkspace,record} from '../src/lib/brand-plan/creativeRevisionContract.ts'
+import {creativeDigest,creativeWorkspace,record,validateCreativePatch} from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import {normalizeCreativeWorkspaceItem} from '../src/lib/brand-plan/creativeWorkspaceContract.ts'
-import {hasCreativeDraftMarker} from '../src/lib/brand-plan/creativeDraftMarker.ts'
+import {creativeDraftMarkerIdentityCount,hasCreativeDraftMarker} from '../src/lib/brand-plan/creativeDraftMarker.ts'
 
 type Sql = {query:(sql:string,params?:unknown[])=>Promise<{rows:any[]}>}
 export type MigrationDatabase = Sql & {transaction:<T>(fn:(tx:Sql)=>Promise<T>,readOnly:boolean)=>Promise<T>}
@@ -22,29 +22,43 @@ export function parseMigrationArgs(args:string[]):Options {
   return options
 }
 
+function validIdentity(month:string,id:unknown):id is string {
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(month)&&typeof id==='string'&&id.length>0&&id.length<=200
+}
+
+function platformIdentity(value:string,month:string) {
+  // Reuse the legacy contract's actual platform aliases, not a guessed mapping.
+  try{return validateCreativePatch({platform:value},month).platformSlug as string}catch{return value.trim().toLowerCase()}
+}
+
 function project(knowledge:any,drafts:any[]) {
   const workspace=creativeWorkspace(knowledge),months=record(workspace.publishingCalendar?.months)
   const entries=Object.entries(months).flatMap(([month,items])=>Array.isArray(items)?items.map((item:any,index)=>({month,index,item:record(item)})):[])
+  const validEntries=entries.filter(entry=>validIdentity(entry.month,entry.item.id))
+  const draftEvidence=drafts.map(draft=>({...draft,identityCount:creativeDraftMarkerIdentityCount(draft.agentNote,'calendar')}))
   const findings:any[]=[]
   const nextMonths={...months}
   for(const [month,items] of Object.entries(months)){
     if(!Array.isArray(items)){findings.push({month,creativeId:null,classification:'invalid',migrationStatus:'needs_confirmation',issues:['invalid_month_items']});continue}
     nextMonths[month]=items.map((raw:any)=>{
       const item=record(raw),id=typeof item.id==='string'?item.id:''
+      if(!validIdentity(month,item.id)){findings.push({month,creativeId:id||null,classification:'invalid',migrationStatus:'needs_confirmation',issues:['invalid_creative_identity']});return raw}
       // Completed projections are immutable migration evidence. Later ordinary
       // saves retain this record, and never cause another migration audit.
       if(item.workspaceMigration?.version===VERSION){findings.push({month,creativeId:id,...item.workspaceMigration.result});return raw}
       const issues:string[]=[]
-      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)||!id||id.length>200){findings.push({month,creativeId:id||null,classification:'invalid',migrationStatus:'needs_confirmation',issues:['invalid_creative_identity']});return raw}
       if(items.filter(row=>row?.id===id).length!==1){findings.push({month,creativeId:id,classification:'ambiguous',migrationStatus:'needs_confirmation',issues:['duplicate_creative_identity']});return raw}
       const normalized=normalizeCreativeWorkspaceItem(item,{brandId:knowledge.brandId})
+      const {platform,platformSlug}=normalized.legacy||{}
+      const platformConflict=Boolean(platform&&platformSlug&&platformIdentity(platform,month)!==platformIdentity(platformSlug,month))
+      if(platformConflict)issues.push('legacy_platform_conflict')
       const dated=Boolean(normalized.legacy?.date),hasLegacy=Boolean(normalized.legacy)
       // Existing canonical items already have an authority-owned schedule. Do
       // not reinterpret that state or stamp migration metadata on new work.
       if(!hasLegacy&&Object.hasOwn(item,'schedule')&&Object.hasOwn(item,'platformTargets')){
         findings.push({month,creativeId:id,classification:'current',migrationStatus:'unchanged',issues:[]});return raw
       }
-      const candidates=drafts.filter(draft=>hasCreativeDraftMarker(draft.agentNote,'calendar',id))
+      const candidates=draftEvidence.filter(draft=>hasCreativeDraftMarker(draft.agentNote,'calendar',id))
       let schedule=normalized.schedule
       let classification=dated?'dated':'undated'
       if(!schedule&&candidates.length){
@@ -52,17 +66,18 @@ function project(knowledge:any,drafts:any[]) {
         if(candidates.length!==1)issues.push('multiple_draft_links')
         else {
           const draft=candidates[0]
-          const identities=entries.filter(entry=>hasCreativeDraftMarker(draft.agentNote,'calendar',entry.item.id)).length
+          const identities=validEntries.filter(entry=>hasCreativeDraftMarker(draft.agentNote,'calendar',entry.item.id)).length
           const otherOwner=entries.some(entry=>(entry.month!==month||entry.item.id!==id)&&entry.item.schedule?.draftId===draft.id)
-          if(identities!==1||otherOwner)issues.push('draft_identity_ambiguous')
+          if(draft.identityCount!==1||identities!==1||otherOwner)issues.push('draft_identity_ambiguous')
           if(!draft.platformId||draft.accountBrandId!==knowledge.brandId)issues.push('draft_account_unresolved')
           if(!issues.length)schedule={draftId:draft.id,scheduledAt:draft.scheduledAt?new Date(draft.scheduledAt).toISOString():null,platform:draft.platformId,scheduledBy:null,scheduledAtRevisionId:null,legacy:true}
         }
       }else if(!schedule&&dated)issues.push('draft_link_unresolved')
+      if(!schedule&&candidates.length&&issues.length)classification='ambiguous'
       const migrationStatus=issues.length?'needs_confirmation':'migrated'
       const result={classification,migrationStatus,issues}
       findings.push({month,creativeId:id,...result})
-      const next={...item,status:normalized.status,platformTargets:normalized.platformTargets,source:normalized.source,skuDecision:normalized.skuDecision,schedule,...(normalized.legacy?{legacy:normalized.legacy}:{}),migrationStatus,workspaceMigration:{version:VERSION,result}}
+      const next={...item,status:normalized.status,platformTargets:platformConflict&&!Array.isArray(item.platformTargets)?[]:normalized.platformTargets,source:normalized.source,skuDecision:normalized.skuDecision,schedule,...(normalized.legacy?{legacy:normalized.legacy}:{}),migrationStatus,workspaceMigration:{version:VERSION,result}}
       // Preserve all original evidence fields and every historical revision;
       // only the dated compatibility fields move under the legacy projection.
       delete next.date;delete next.platform;delete next.platformSlug

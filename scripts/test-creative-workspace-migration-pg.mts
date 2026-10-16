@@ -13,7 +13,8 @@ const adapters:MigrationDatabase[]=pools.map(pool=>({query:(sql,params)=>pool.qu
  const client=await pool.connect();try{await client.query(readOnly?'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY':'BEGIN');await client.query("SET LOCAL lock_timeout='5s'");const result=await fn(client);await client.query('COMMIT');return result}catch(error){await client.query('ROLLBACK');throw error}finally{client.release()}
 }}))
 const brandId='migration-pg-brand',userId='migration-pg-user',month='2026-11',creativeId='migration-linked'
-const workspace={publishingCalendar:{months:{[month]:[{id:creativeId,title:'Legacy linked script',planning:'Known legacy text',date:'2026-11-02',platform:'instagram'},{id:'migration-undated',title:'No invented source'}]}}}
+const invalidItems=[{id:123,title:'Numeric ID stays unchanged'},{title:'Missing ID stays unchanged'}]
+const workspace={publishingCalendar:{months:{[month]:[{id:creativeId,title:'Legacy linked script',planning:'Known legacy text',date:'2026-11-02',platform:'instagram'},{id:'migration-undated',title:'No invented source'},{id:'migration-marker-conflict'},{id:'migration-slug',platformSlug:'instagram'},{id:'migration-platform-conflict',platform:'Instagram',platformSlug:'tiktok'},...invalidItems]}}}
 try{
  await prisma.auditLog.deleteMany({where:{resourceId:{in:[brandId,creativeId]}}})
  await prisma.brand.deleteMany({where:{id:brandId}});await prisma.user.deleteMany({where:{id:userId}})
@@ -21,12 +22,13 @@ try{
  await prisma.user.create({data:{id:userId,email:userId+'@example.invalid',password:'fixture-only',businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
  await prisma.brand.create({data:{id:brandId,name:'Migration PostgreSQL fixture',crew:{create:{members:{create:{userId,role:'PRINCIPAL'}}}},knowledge:{create:{negPrompts:[],marketingSolution:workspace}},accounts:{create:{id:'migration-pg-account',platformId:'instagram',handle:'fixture',postfastAccountId:'fixture-local-only',connectionStatus:'CONNECTED'}}}})
  await prisma.contentDraft.create({data:{id:'migration-pg-draft',brandId,accountId:'migration-pg-account',caption:'Do not overwrite',agentNote:`brand-plan-calendar-item:${creativeId}`,scheduledAt:new Date('2026-11-02T02:00:00Z')}})
+ await prisma.contentDraft.create({data:{id:'migration-pg-conflict',brandId,accountId:'migration-pg-account',caption:'Keep conflicting marker evidence',agentNote:'brand-plan-calendar-item:migration-marker-conflict brand-plan-calendar-item:missing'}})
  // Execute the actual branch SQL against PostgreSQL, not a parser/mock. db push
  // bootstrap may already have created this named index, so reset only it here.
  await prisma.$executeRawUnsafe('DROP INDEX IF EXISTS "BrandMarketingSolution_feedback_window_idx"')
  await prisma.$executeRawUnsafe(readFileSync('prisma/migrations/20261016060000_creative_feedback_window/migration.sql','utf8'))
  assert.equal((await prisma.$queryRawUnsafe<any[]>('SELECT indexname FROM pg_indexes WHERE indexname=$1','BrandMarketingSolution_feedback_window_idx')).length,1)
- const before=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}}),draftBefore=await prisma.contentDraft.findUniqueOrThrow({where:{id:'migration-pg-draft'}})
+ const before=await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}}),draftsBefore=await prisma.contentDraft.findMany({where:{brandId},orderBy:{id:'asc'}})
  const dry=await runCreativeWorkspaceMigration(adapters[0],{brandId})
  assert.equal(dry.mode,'dry-run');assert.equal(dry.writtenBrands,0)
  assert.deepEqual(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}}),before)
@@ -35,9 +37,14 @@ try{
  assert.equal(concurrent.reduce((n,r)=>n+r.writtenBrands,0),1,'two independent connections produce one migration')
  assert.deepEqual(concurrent[0].summary,concurrent[1].summary)
  assert.equal(await prisma.auditLog.count({where:{resourceId:brandId,action:'CREATIVE_WORKSPACE_LEGACY_MIGRATED'}}),1)
- assert.deepEqual(await prisma.contentDraft.findUniqueOrThrow({where:{id:'migration-pg-draft'}}),draftBefore)
+ assert.deepEqual(await prisma.contentDraft.findMany({where:{brandId},orderBy:{id:'asc'}}),draftsBefore)
  const saved=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution as any
  const current=saved.publishingCalendar.months[month][0]
+ const migrated=saved.publishingCalendar.months[month]
+ assert.equal(migrated[2].schedule,null);assert.equal(migrated[2].migrationStatus,'needs_confirmation')
+ assert.deepEqual(migrated[3].platformTargets,['instagram']);assert.equal(migrated[3].legacy.platformSlug,'instagram')
+ assert.deepEqual(migrated[4].platformTargets,[]);assert.equal(migrated[4].legacy.platformSlug,'tiktok');assert.equal(migrated[4].migrationStatus,'needs_confirmation')
+ assert.deepEqual(migrated.slice(5),invalidItems);assert.equal(dry.summary.invalid,2);assert.equal(dry.summary.needs_confirmation,4)
  assert.equal(current.schedule.legacy,true);assert.equal(current.schedule.scheduledBy,null);assert.equal(current.schedule.scheduledAtRevisionId,null)
  const again=await runCreativeWorkspaceMigration(adapters[0],{apply:true,brandId});assert.equal(again.writtenBrands,0);assert.deepEqual(again.summary,dry.summary)
  assert.throws(()=>validateScheduleInput({platform:'instagram',scheduledAt:null,idempotencyKey:'client-legacy',legacy:true}))
@@ -53,7 +60,7 @@ try{
  await prisma.$executeRawUnsafe('CREATE TRIGGER migration_pg_fail_audit BEFORE INSERT ON "AuditLog" FOR EACH ROW EXECUTE FUNCTION migration_pg_fail_audit()')
  await assert.rejects(()=>runCreativeWorkspaceMigration(adapters[0],{apply:true,brandId}),/migration audit fixture/)
  assert.deepEqual((await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution,workspace)
- console.log('PASS actual PostgreSQL/Prisma: branch index migration SQL, read-only dry run, two-connection apply lock/idempotency, audit rollback, unchanged draft, legacy cancel and explicit schedule restores trusted actor/revision; client legacy rejected')
+ console.log('PASS actual PostgreSQL/Prisma: branch index migration SQL, read-only dry run, two-connection apply lock/idempotency, audit rollback, unchanged drafts, missing-source conflicting markers denied, platformSlug preserved/conflicts reported, invalid identities unchanged, legacy cancel and explicit schedule restores trusted actor/revision; client legacy rejected')
 }finally{
  await prisma.$executeRawUnsafe('DROP TRIGGER IF EXISTS migration_pg_fail_audit ON "AuditLog"').catch(()=>{})
  await prisma.$executeRawUnsafe('DROP FUNCTION IF EXISTS migration_pg_fail_audit()').catch(()=>{})
