@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+import { configuredBrandColor, safeBrandColor } from '@/lib/brandEntryTheme'
 import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
 import { getSession } from '@/lib/auth'
@@ -24,10 +25,11 @@ function googleReviewAppUrlFromMeta(value: unknown) {
   return typeof appReviewUrl === 'string' ? appReviewUrl : null
 }
 
-function exposeGoogleReviewAppUrl<T extends { brand: { googleLinksMeta: unknown } }>(config: T) {
-  const { googleLinksMeta, ...brand } = config.brand
+function exposeGoogleReviewAppUrl<T extends { themeColor: string; brand: { googleLinksMeta: unknown; knowledge: { marketingSolution: unknown } | null } }>(config: T) {
+  const { googleLinksMeta, knowledge, ...brand } = config.brand
   return {
     ...config,
+    brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
     brand: {
       ...brand,
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
@@ -64,6 +66,8 @@ export async function GET(request: Request) {
         brand: {
           select: {
             name: true,
+            followRewardDescription: true,
+            knowledge: { select: { marketingSolution: true } },
             location: true,
             timezone: true,
             googlePlaceId: true,
@@ -115,6 +119,8 @@ export async function GET(request: Request) {
           brand: {
             select: {
               name: true,
+              followRewardDescription: true,
+              knowledge: { select: { marketingSolution: true } },
               location: true,
               timezone: true,
               googlePlaceId: true,
@@ -134,16 +140,44 @@ export async function GET(request: Request) {
       })
     }
 
-    if (!config) {
-      return NextResponse.json({ error: 'Game config not found' }, { status: 404 })
+    // The permanent brand entry remains available without creating a game.
+    if (!config && isPublic) {
+      const brand = await prisma.brand.findUnique({
+        where: { id: brandId },
+        select: {
+          name: true, location: true, timezone: true, followRewardDescription: true,
+          knowledge: { select: { marketingSolution: true } },
+          googleReviewUrl: true,
+          googleBusinessUrl: true,
+          accounts: {
+            where: { unboundAt: null },
+            select: { platformId: true, profileUrl: true, handle: true },
+          },
+        },
+      })
+      if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+      const { knowledge, ...publicBrand } = brand
+      return NextResponse.json({
+        hasActivity: false, brand: publicBrand, title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
+        taskReviewEnabled: false, taskGoogleMapsEnabled: false,
+        taskXiaohongshuEnabled: false, taskInstagramEnabled: false,
+        templateType: 'WHEEL', prizes: [],
+      })
     }
+    if (!config) return NextResponse.json({ error: 'Game config not found' }, { status: 404 })
 
     const responseConfig = exposeGoogleReviewAppUrl(config)
 
     // Security: Do not expose clerkPin or the complete Google metadata on public API
     if (isPublic) {
+      const configuredRound = await prisma.gameActivityRound.findFirst({
+        where: { gameConfigId: config.id },
+        select: { id: true },
+      })
       const publicConfig = {
         ...responseConfig,
+        themeColor: responseConfig.brandThemeColor || safeBrandColor(config.themeColor) || '#334155',
+        hasActivity: Boolean(configuredRound),
         clerkPin: undefined,
       }
       return NextResponse.json(publicConfig)

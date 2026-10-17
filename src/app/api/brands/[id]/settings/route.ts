@@ -50,6 +50,7 @@ export async function GET(_req: Request, { params }: Params) {
 
     // Brand profile
     description: brand.description,
+    followRewardDescription: brand.followRewardDescription,
     website: brand.website,
     phone: brand.phone,
     address: brand.address,
@@ -92,6 +93,20 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json()
+  if (body.followRewardDescription !== undefined &&
+      (typeof body.followRewardDescription !== 'string' || body.followRewardDescription.trim().length > 500)) {
+    return NextResponse.json({ error: 'Follow reward description must be text of up to 500 characters.' }, { status: 400 })
+  }
+  // Follow copy is independent of integrations and game settings.
+  // Do not resync accounts or queue Google imports for this simple text edit.
+  if (Object.keys(body).length === 1 && body.followRewardDescription !== undefined) {
+    const updated = await prisma.brand.update({
+      where: { id },
+      data: { followRewardDescription: body.followRewardDescription.trim() || null },
+      select: { followRewardDescription: true },
+    })
+    return NextResponse.json({ ok: true, followRewardDescription: updated.followRewardDescription })
+  }
   if (body.timezone !== undefined) {
     try {
       assertValidTimeZone(body.timezone)
@@ -126,6 +141,7 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.name !== undefined && { name: body.name.trim() }),
       ...(body.location !== undefined && { location: opt(body.location) }),
       ...(normalizedTimezone !== undefined && { timezone: normalizedTimezone }),
+      ...(body.followRewardDescription !== undefined && { followRewardDescription: body.followRewardDescription.trim() || null }),
       // Brand profile
       ...(body.description !== undefined && { description: opt(body.description) }),
       ...(body.website !== undefined && { website: opt(body.website) }),

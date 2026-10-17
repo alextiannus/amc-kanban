@@ -386,6 +386,7 @@ model Brand {
   status                  String               @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
 
   // Brand profile (Agent can populate these)
+  followRewardDescription String? @db.Text // Optional merchant-written follow reward copy
   description       String? // Brand tagline / about text
   industry          String? // Merchant industry/category synchronized to Growth
   logoUrl           String? // Brand logo image URL

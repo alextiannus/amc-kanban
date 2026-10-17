@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
+import { brandEntryTheme } from '@/lib/brandEntryTheme'
+import BrandFollowPanel from '@/components/BrandFollowPanel'
 import { BookOpen, CheckCircle2, Copy, MapPin, TicketCheck } from 'lucide-react'
 
 type Prize = {
@@ -14,6 +16,7 @@ type Prize = {
 }
 
 type GameConfig = {
+  hasActivity?: boolean
   title: string
   description: string | null
   themeColor: string
@@ -26,6 +29,7 @@ type GameConfig = {
   prizes: Prize[]
   brand?: {
     name?: string
+    followRewardDescription?: string | null
     location?: string | null
     timezone?: string | null
     googleReviewUrl?: string | null
@@ -489,6 +493,7 @@ function prizeIcon(type: Prize['type']): string {
 function GameBoard({
   config,
   spinning,
+  disabled = false,
   wheelRotation,
   gridActiveSlot,
   onSpin,
@@ -496,6 +501,7 @@ function GameBoard({
 }: {
   config: GameConfig
   spinning: boolean
+  disabled?: boolean
   wheelRotation: number
   gridActiveSlot: number | null
   onSpin: () => void
@@ -539,7 +545,7 @@ function GameBoard({
                   <button
                     key={gridIndex}
                     onClick={onSpin}
-                    disabled={spinning || config.prizes.length === 0}
+                    disabled={disabled || spinning || config.prizes.length === 0}
                     className="rounded-2xl border border-white/20 text-white shadow-lg active:scale-95 disabled:opacity-70"
                     style={{ background: `radial-gradient(circle, ${config.themeColor || '#db2777'} 0%, #4c0519 100%)` }}
                   >
@@ -610,7 +616,7 @@ function GameBoard({
       </div>
       <button
         onClick={onSpin}
-        disabled={spinning || config.prizes.length === 0}
+        disabled={disabled || spinning || config.prizes.length === 0}
         className="absolute z-20 flex h-20 w-20 items-center justify-center rounded-full border-[5px] border-white bg-white text-sm font-black uppercase tracking-widest text-[#3d2010] shadow-xl active:scale-95 disabled:opacity-70"
       >
         {spinning ? '...' : t.spin}
@@ -702,7 +708,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
   const [redeemingLogId, setRedeemingLogId] = useState<string | null>(null)
 
-  const accent = config?.themeColor || '#2563eb'
+  const entryTheme = brandEntryTheme(config?.themeColor)
+  const accent = entryTheme.primary
   const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
@@ -824,16 +831,15 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       setLoading(true)
       setError('')
       try {
-        const [configRes, statusRes] = await Promise.all([
-          fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' }),
-          fetch(`/api/game/status?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(id)}`, { cache: 'no-store' }),
-        ])
-        if (!configRes.ok) throw new Error(copy[detectLocale()].activityNotReady)
-        if (!statusRes.ok) throw new Error(copy[detectLocale()].statusLoadFailed)
+        const configRes = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' })
+        if (!configRes.ok) throw new Error(copy[detectedLocale].activityNotReady)
         const configData = await configRes.json() as GameConfig
-        const statusData = await statusRes.json() as GameStatus
         setConfig(configData)
-        setStatus(statusData)
+        if (configData.hasActivity !== false) {
+          await refreshStatus(id)
+        } else {
+          setStatus(null)
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : copy[detectLocale()].openFailed)
       } finally {
@@ -843,7 +849,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
     void load()
     return () => window.clearTimeout(initializeTimer)
-  }, [brandId])
+  }, [brandId, refreshStatus])
 
   useEffect(() => {
     const activeRoundId = status?.activeRound?.id
@@ -865,7 +871,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }, [locale, requestShareDrafts, sessionId, shareDraftId, status?.activeRound, status?.entryRewardClaimed])
 
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || !config || config.hasActivity === false) return
     const handlePageShow = () => { void refreshStatus(sessionId).catch(() => undefined) }
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') handlePageShow()
@@ -878,7 +884,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       window.removeEventListener('focus', handlePageShow)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [refreshStatus, sessionId])
+  }, [config, refreshStatus, sessionId])
 
   useEffect(() => {
     if (!sessionId) return
@@ -1093,7 +1099,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   async function spin() {
-    if (!sessionId || spinning) return
+    if (!sessionId || spinning || !activityActive || !status?.entryRewardClaimed) return
     setError('')
     setMessage('')
     setSpinResult(null)
@@ -1157,16 +1163,17 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-900">
-      <section className="mx-auto flex min-h-screen w-full max-w-md flex-col bg-slate-50">
-        <header className="px-5 pb-8 pt-8 text-white" style={{ background: accent }}>
-          <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/70">{config?.brand?.name || t.defaultBrand}</p>
-          <h1 className="mt-3 text-3xl font-black leading-tight">{config?.title || t.defaultTitle}</h1>
-          <p className="mt-3 text-sm font-semibold leading-6 text-white/90">{t.heroCta}</p>
-        </header>
+    <main className="min-h-screen text-slate-900" style={{ background: entryTheme.background }}>
+      <section className="mx-auto flex min-h-screen w-full max-w-lg flex-col">
+        <div className="space-y-4 px-4 pb-3 pt-6">
+          <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={config?.themeColor} />
 
-        <div className="-mt-5 flex-1 space-y-4 rounded-t-[28px] bg-slate-50 px-5 pb-8 pt-5">
-          {!activityActive && (
+          {config?.hasActivity !== false && status && <div className="px-1 pt-3">
+            <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
+            <p className="mt-2 text-sm text-slate-500">{locale === 'zh' ? '分享你的到店体验，参与店内抽奖。' : 'Share your visit and join our lucky draw.'}</p>
+          </div>}
+
+          {config?.hasActivity !== false && status && !activityActive && (
             <section className="rounded-[28px] bg-white p-6 text-center shadow-sm">
               <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-2xl" aria-hidden="true">⏸</span>
               <h2 className="mt-4 text-lg font-black text-slate-950">{t.activityPaused}</h2>
@@ -1184,14 +1191,14 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </section>
           )}
 
-          {showGame && config && (
+          {activityActive && config && (
             <section className="rounded-[28px] bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
                     {config.templateType === 'GRID' ? t.luckyGrid : t.luckyWheel}
                   </p>
-                  <h2 className="text-base font-black text-slate-950">{t.tapToPlay}</h2>
+                  <h2 className="text-base font-black text-slate-950">{showGame ? t.tapToPlay : (locale === 'zh' ? '先完成分享步骤，再抽奖' : 'Complete the sharing step to spin')}</h2>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
                   {t.points}: <span style={{ color: accent }}>{status?.pointsBalance ?? 0}</span>
@@ -1200,6 +1207,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
               <GameBoard
                 config={config}
                 spinning={spinning}
+                disabled={!showGame}
                 wheelRotation={wheelRotation}
                 gridActiveSlot={gridActiveSlot}
                 onSpin={spin}
@@ -1396,6 +1404,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </div>
           )}
         </div>
+        <footer className="px-5 pb-4 pt-1 text-center text-[11px] leading-5 text-slate-500">Powered by AI Marketing Crew (AMC)</footer>
       </section>
     </main>
   )
