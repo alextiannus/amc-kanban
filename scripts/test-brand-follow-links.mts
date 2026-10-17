@@ -72,9 +72,18 @@ const branches = brandGoogleMapsEntries({...searchBrand,googlePlaceId:'ChIJ_BRAN
 assert.equal(branches.length,2)
 assert.equal(new URL(branches[0].url).searchParams.get('query_place_id'),'ChIJ_EAST')
 assert.equal(new URL(branches[1].url).searchParams.has('query_place_id'),false)
-assert.equal(new URL(branches[1].url).searchParams.get('query'),'TEST West 20 West Road Singapore')
+assert.equal(new URL(branches[1].url).searchParams.get('query'),'TEST Café & Grill TEST West 20 West Road')
 assert.equal(brandFollowLinks({...searchBrand,googleMapEntries:branches,accounts:[{platformId:'GBP',profileUrl:'https://maps.google.com/?cid=321'}]}).filter(link=>link.platform==='google_maps').length,2)
 assert.equal(brandGoogleMapsEntries({}).length,0)
 console.log('PASS provider-independent Maps search, exact-link priority, no invented review/Place ID, per-branch identity and closed-store exclusion.')
 
 assert.equal(brandFollowLinks({...searchBrand,googleBusinessUrl:'https://maps.google.com/?cid=correct',accounts:[{platformId:'GBP',profileUrl:'https://maps.google.com/?cid=old'}]}).find(link=>link.platform==='google_maps')?.url,'https://maps.google.com/?cid=correct')
+
+const matchedStores = brandGoogleMapsEntries({...searchBrand,googleBusinessUrl:'https://maps.google.com/?cid=primary',location:'East District'}, [
+ {name:'East',address:'10 Example Road'}, {name:'West',address:'20 West Road'}
+])
+assert.equal(matchedStores[0].url,'https://maps.google.com/?cid=primary')
+assert.equal(matchedStores[0].kind,'place')
+assert.equal(matchedStores[1].kind,'search')
+assert.equal(new URL(matchedStores[1].url).searchParams.get('query'),'TEST Café & Grill West 20 West Road')
+console.log('PASS primary destination matches its stored address, and other branches do not inherit the primary district.')

@@ -28,12 +28,12 @@ const mapObject = (value: unknown): Record<string, unknown> => value && typeof v
 
 /** A search is a usable destination, never evidence of a verified listing or Place ID. */
 export function brandGoogleMapsEntries(brand: Pick<FollowBrand, 'name' | 'address' | 'location' | 'googleBusinessUrl' | 'googlePlaceId' | 'accounts'>, stores?: unknown): GoogleMapEntry[] {
-  const destination = (name: string, address: string, placeId: unknown, rawUrl: unknown, handle = ''): GoogleMapEntry | null => {
+  const destination = (name: string, address: string, placeId: unknown, rawUrl: unknown, handle = '', region = cleanMapText(brand.location)): GoogleMapEntry | null => {
     const direct = publicHttpUrl(typeof rawUrl === 'string' ? rawUrl : null)
     if (direct) return { url: direct, handle, kind: 'place' }
     const id = cleanMapText(placeId)
     const validId = id.length <= 512 ? id : ''
-    const query = [name, address, cleanMapText(brand.location)].filter(Boolean).join(' ')
+    const query = [name, address, region].filter(Boolean).join(' ')
     if (!query && !validId) return null
     const url = new URL('https://www.google.com/maps/search/')
     url.searchParams.set('api', '1')
@@ -49,7 +49,12 @@ export function brandGoogleMapsEntries(brand: Pick<FollowBrand, 'name' | 'addres
   // Each branch keeps its own address and identity; no arbitrary first-location selection.
   if (rows.length) return rows.flatMap(store => {
     const google = mapObject(store.googleBusiness)
-    const entry = destination(cleanMapText(store.name) || cleanMapText(brand.name), cleanMapText(store.address), store.googlePlaceId || google.placeId || (rows.length === 1 ? brand.googlePlaceId : null), store.googleBusinessUrl || google.businessUrl || (rows.length === 1 ? brand.googleBusinessUrl : null), rows.length > 1 ? [cleanMapText(store.name), cleanMapText(store.address)].filter(Boolean).join(' · ') : '')
+    const address = cleanMapText(store.address)
+    const matchesPrimary = store.isPrimary === true || Boolean(address && cleanMapText(brand.address) && address.toLowerCase() === cleanMapText(brand.address).toLowerCase())
+    const usePrimary = rows.length === 1 || matchesPrimary
+    const storeName = cleanMapText(store.name)
+    const name = storeName && !storeName.includes(cleanMapText(brand.name)) ? [cleanMapText(brand.name), storeName].filter(Boolean).join(' ') : storeName || cleanMapText(brand.name)
+    const entry = destination(name, address, store.googlePlaceId || google.placeId || (usePrimary ? brand.googlePlaceId : null), store.googleBusinessUrl || google.businessUrl || (usePrimary ? brand.googleBusinessUrl : null), rows.length > 1 ? [storeName, address].filter(Boolean).join(' · ') : '', rows.length > 1 ? '' : cleanMapText(brand.location))
     return entry ? [entry] : []
   })
   return exact ? [exact] : []
