@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { activityTextDefaults, normalizeActivityPage, type ActivityPage, type ActivityTextKey } from '@/lib/activityPage'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
 import { publicHttpUrl } from '@/lib/brandFollowLinks'
+import { ActivityCanvasEditing, ActivityInlineText } from '@/components/ActivityCanvasEditor'
 import BrandFollowPanel from '@/components/BrandFollowPanel'
 import { BookOpen, CheckCircle2, Copy, MapPin, TicketCheck } from 'lucide-react'
 
@@ -708,6 +709,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const previewBrandOverrides = useRef<NonNullable<GameConfig['brand']>>({})
   const [draftActivity, setDraftActivity] = useState(false)
   const [editingPage, setEditingPage] = useState(false)
+  const [editingLink, setEditingLink] = useState<{ key: string; original: string; url: string } | null>(null)
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [status, setStatus] = useState<GameStatus | null>(null)
   const [sessionId, setSessionId] = useState('')
@@ -727,6 +729,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
   const [redeemingLogId, setRedeemingLogId] = useState<string | null>(null)
 
+  const postCanvasEdit = (change: Record<string, unknown>) => {
+    if (!isMerchantPreview() || !document.referrer) return
+    const origin = new URL(document.referrer).origin
+    if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_INLINE_CHANGE', brandId, locale, ...change }, origin)
+  }
   const pageText = (key: ActivityTextKey) => config?.brand?.activityPage?.text?.[locale]?.[key] ?? activityTextDefaults[key][locale]
 
   const amcDefault = !config?.brandThemeColor
@@ -847,14 +854,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     return () => window.clearTimeout(restoreTimer)
   }, [activePlatforms, brandId, config])
 
-  useEffect(() => {
-    const elements = document.querySelectorAll<HTMLElement>('[data-activity-edit]')
-    for (const element of elements) {
-      if (element.tagName === 'A') continue
-      if (editingPage) { element.tabIndex = 0; element.setAttribute('role', 'button') }
-      else { element.removeAttribute('tabindex'); element.removeAttribute('role') }
-    }
-  })
 
   useEffect(() => {
     if (!isMerchantPreview()) return
@@ -868,6 +867,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       if (typeof data.rewardDescription === 'string') brandOverrides.followRewardDescription = data.rewardDescription.slice(0, 500)
       if (data.locale === 'zh' || data.locale === 'en') setLocale(data.locale)
       setEditingPage(data.editing === true)
+      if (data.editing !== true) setEditingLink(null)
       try { if (data.activityPage) brandOverrides.activityPage = normalizeActivityPage(data.activityPage) } catch { return }
       const input = data.config
       if (input && typeof input === 'object') {
@@ -1286,14 +1286,21 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
+    <ActivityCanvasEditing.Provider value={{ enabled: editingPage, locale, onText: (field, value) => postCanvasEdit({ field, value }), link: editingLink, onLink: (linkKey, value) => postCanvasEdit({ field: 'link', linkKey, value }), closeLink: () => setEditingLink(null) }}>
     <main data-editing={editingPage ? 'true' : undefined} onKeyDownCapture={event => {
-      if (editingPage && (event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-activity-edit]')) { event.preventDefault(); event.target.click() }
+      if (editingPage && (event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-activity-edit="draw"]')) { event.preventDefault(); event.target.click() }
     }} onClickCapture={event => {
       if (!isMerchantPreview()) return
       if (editingPage) {
+        if (event.target instanceof Element && event.target.closest('[data-activity-control]')) return
         event.preventDefault()
         event.stopPropagation()
         const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-activity-edit]') : null
+        if (target?.dataset.activityEdit === 'link' && target.dataset.linkKey && target.dataset.linkOriginal) {
+          setEditingLink({ key: target.dataset.linkKey, original: target.dataset.linkOriginal, url: target.closest('a')?.href || target.dataset.linkOriginal })
+          return
+        }
+        if (target?.hasAttribute('contenteditable')) { setEditingLink(null); return }
         if (target && document.referrer) {
           const origin = new URL(document.referrer).origin
           if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) {
@@ -1307,20 +1314,20 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       event.preventDefault()
       event.stopPropagation()
     }} onSubmitCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
-      {editingPage && <style>{`[data-editing="true"] [data-activity-edit]{cursor:pointer;outline:1px dashed #2563eb55;outline-offset:4px;border-radius:4px}[data-editing="true"] [data-activity-edit]:hover{outline:2px solid #2563eb;background-color:#2563eb0d}[data-editing="true"] [data-activity-edit]:focus-visible{outline:2px solid #2563eb}`}</style>}
+      {editingPage && <style>{`[data-editing="true"] [data-activity-edit]{cursor:pointer;outline:1px dashed #2563eb55;outline-offset:4px;border-radius:4px}[data-editing="true"] [data-activity-edit]:hover{outline:2px solid #2563eb;background-color:#2563eb0d}[data-editing="true"] [data-activity-edit]:focus-visible{outline:2px solid #2563eb}[data-editing="true"] [contenteditable]{cursor:text;min-height:1em;min-width:1em;white-space:pre-wrap;overflow-wrap:anywhere}[data-editing="true"] [contenteditable]:empty:before{content:attr(data-placeholder);opacity:.4}`}</style>}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
           <div className="flex items-center justify-center gap-2">
-            <p data-activity-edit="brandName" className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{pageText('brandName') || config?.brand?.name || t.defaultBrand}</p>
+            <ActivityInlineText as="p" field="brandName" className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{pageText('brandName') || config?.brand?.name || t.defaultBrand}</ActivityInlineText>
           </div>
-          <h1 data-activity-edit="greeting" className="mt-3 text-2xl font-black leading-tight text-slate-900">{pageText('greeting')}</h1>
-          <p data-activity-edit="greetingNote" className="mt-2 text-sm leading-5 text-slate-600">{pageText('greetingNote')}</p>
+          <ActivityInlineText as="h1" field="greeting" className="mt-3 text-2xl font-black leading-tight text-slate-900">{pageText('greeting')}</ActivityInlineText>
+          <ActivityInlineText as="p" field="greetingNote" className="mt-2 text-sm leading-5 text-slate-600">{pageText('greetingNote')}</ActivityInlineText>
         </header>
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
           <BrandFollowPanel preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
-          {config?.hasActivity !== false && status && <div data-activity-edit="draw" className="px-1 pt-3">
+          {config?.hasActivity !== false && status && <div data-activity-edit="draw" tabIndex={editingPage ? 0 : undefined} role={editingPage ? 'button' : undefined} className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{config?.description?.trim() || (locale === 'zh' ? '分享你的到店体验，参与店内抽奖。' : 'Share your visit and join our lucky draw.')}</p>
           </div>}
@@ -1561,5 +1568,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         </footer>
       </section>
     </main>
+    </ActivityCanvasEditing.Provider>
   )
 }
