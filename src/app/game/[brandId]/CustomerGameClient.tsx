@@ -1288,9 +1288,18 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   return (
     <ActivityCanvasEditing.Provider value={{ enabled: editingPage, locale, onText: (field, value) => postCanvasEdit({ field, value }), link: editingLink, onLink: (linkKey, value) => postCanvasEdit({ field: 'link', linkKey, value }), closeLink: () => setEditingLink(null) }}>
     <main data-editing={editingPage ? 'true' : undefined} onKeyDownCapture={event => {
-      if (editingPage && (event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-activity-edit="draw"]')) { event.preventDefault(); event.target.click() }
+      if (isMerchantPreview() && (event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-activity-edit="draw"]')) { event.preventDefault(); event.target.click() }
     }} onClickCapture={event => {
       if (!isMerchantPreview()) return
+      const draw = event.target instanceof Element ? event.target.closest('[data-activity-edit="draw"]') : null
+      if (draw) {
+        event.preventDefault(); event.stopPropagation()
+        if (document.referrer) {
+          const origin = new URL(document.referrer).origin
+          if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_EDIT', brandId, field: 'draw' }, origin)
+        }
+        return
+      }
       if (editingPage) {
         if (event.target instanceof Element && event.target.closest('[data-activity-control]')) return
         event.preventDefault()
@@ -1327,7 +1336,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
           <BrandFollowPanel preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
-          {config?.hasActivity !== false && status && <div data-activity-edit="draw" tabIndex={editingPage ? 0 : undefined} role={editingPage ? 'button' : undefined} className="px-1 pt-3">
+          {config?.hasActivity !== false && status && <div data-activity-edit="draw" tabIndex={isMerchantPreview() ? 0 : undefined} role={isMerchantPreview() ? 'button' : undefined} className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{config?.description?.trim() || (locale === 'zh' ? '分享你的到店体验，参与店内抽奖。' : 'Share your visit and join our lucky draw.')}</p>
           </div>}
