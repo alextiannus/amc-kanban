@@ -87,7 +87,7 @@ const account = (id, providerId, platformId, handle = 'OLD DISPLAY NAME') => ({ 
     googleLocations = []
     assert.equal((await resolveBrandFollowAccounts(google, 'TEST_EMPTY_REFRESH'))[0].profileUrl, null)
     googleLocations = [{ id: 'new-location', name: 'TEST Synced', mapsUri: 'https://maps.google.com/?cid=987' }]
-    testNow += 15_001
+    testNow += 90_001
     assert.equal((await resolveBrandFollowAccounts(google, 'TEST_EMPTY_REFRESH'))[0].profileUrl, 'https://maps.google.com/?cid=987', 'Empty location snapshots must refresh promptly after upstream sync')
   } finally { Date.now = originalNow }
   console.log('PASS automatic bound account resolution: multi-brand isolation, provider identity, Facebook post evidence, new-binding cache refresh, concurrent request dedupe, unbound filtering, provider failure and no guessed links.')

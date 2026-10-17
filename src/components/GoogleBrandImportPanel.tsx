@@ -8,6 +8,7 @@ const explanations: Record<string, [string, string]> = {
   GOOGLE_OAUTH_REQUIRED: ['需要连接 Google 商家授权', 'Connect Google Business authorization'],
   GOOGLE_OAUTH_REQUIRED_FOR_MENU_AND_REVIEWS: ['已读取绑定门店信息；菜单与评价需要 Google 商家读取授权。', 'Bound location information read. Menus and reviews require Google Business read authorization.'],
   GOOGLE_AUTHORIZATION_FAILED: ['Google 授权已失效或权限不足，请重新连接。', 'Google authorization expired or is unavailable. Reconnect the account.'],
+  GOOGLE_LOCATIONS_PENDING_SYNC: ['Google 账号已连接，但尚未返回门店；系统会自动重试。若持续为空，请在 PostFast 同步门店或检查 Google 商家访问权限。', 'Google is connected but has not returned any locations. We will retry automatically. If this persists, sync locations in PostFast or check Google Business permissions.'],
   GOOGLE_LOCATION_SELECTION_REQUIRED: ['请选择此品牌对应的 Google 门店。', 'Select the Google location for this brand.'],
   GOOGLE_ACCOUNT_SELECTION_REQUIRED: ['此品牌绑定了多个 Google 账号，请在账号设置中明确绑定。', 'Multiple Google accounts are bound. Choose the intended binding in account settings.'],
   GOOGLE_BOUND_ACCOUNT_READ_FAILED: ['暂时无法读取已绑定账号，请检查账号连接后重试。', 'Unable to read the bound account. Check its connection and retry.'],
@@ -53,7 +54,7 @@ export default function GoogleBrandImportPanel({ brandId, english = false }: { b
     try { const r = await fetch(`${endpoint}?locations=1`); const v = await r.json(); if (!r.ok) throw new Error(v.error); setLocations(v.locations || []); if (!v.locations?.length) setError(tr('此授权没有可用门店。', 'No locations are available under this authorization.')) }
     catch (e) { setError(explain(e instanceof Error ? e.message : '')) } finally { setBusy(false) }
   }
-  const status = ({ PENDING: tr('等待同步', 'Queued'), RUNNING: tr('正在补充资料', 'Enriching profile'), COMPLETE: tr('已同步', 'Synced'), PARTIAL: tr('已补充可获取资料', 'Available information imported'), NEEDS_ATTENTION: tr('需要检查配置', 'Check configuration'), NOT_STARTED: tr('配置账号后自动同步', 'Syncs automatically after account setup') } as Record<string, string>)[current?.status || 'NOT_STARTED']
+  const status = ({ PENDING: tr('等待同步', 'Queued'), WAITING_FOR_LOCATIONS: tr('账号已连接，等待门店同步', 'Account connected, awaiting locations'), RUNNING: tr('正在补充资料', 'Enriching profile'), COMPLETE: tr('已同步', 'Synced'), PARTIAL: tr('已补充可获取资料', 'Available information imported'), NEEDS_ATTENTION: tr('需要检查配置', 'Check configuration'), NOT_STARTED: tr('配置账号后自动同步', 'Syncs automatically after account setup') } as Record<string, string>)[current?.status || 'NOT_STARTED']
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" aria-label="Google business information">
     <h3 className="font-bold text-sm">{tr('Google 商家资料', 'Google business information')}</h3>
     <p className="text-xs">{tr('连接 Google 商家账号后，自动补充门店、菜单和顾客反馈。保留已有资料。', 'After connecting Google Business, location data, menus and customer feedback are imported automatically. Existing information is preserved.')}</p>

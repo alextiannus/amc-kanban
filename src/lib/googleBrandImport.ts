@@ -1,7 +1,8 @@
 import type { Prisma } from '@prisma/client'
-import { configSelect, fingerprint, queueGoogleBrandImport } from './googleBrandImportQueue'
+import { configSelect, fingerprint, queueGoogleBrandImport, queueMissingGoogleBrandImports } from './googleBrandImportQueue'
 export { queueGoogleBrandImport } from './googleBrandImportQueue'
 import { prisma } from './prisma'
+import { accountPlatform } from './socialAccountIdentity'
 import { getGoogleAccessToken } from './integrations/google'
 import { postfastGetGBPLocationsForInternalAccount } from './integrations/postfast'
 import { GoogleImportError, googleId, listOwnedGoogleLocations, mergeGoogleMenu, object, readGoogleBrandData, text } from './integrations/googleBrandData'
@@ -18,7 +19,7 @@ export async function ownedGoogleLocations(brandId: string) {
   if (b.googleRefreshToken) return listOwnedGoogleLocations(await tokenFor(b))
   if (!b.postfastApiKey) throw new GoogleImportError('GOOGLE_OAUTH_REQUIRED')
   const result: Array<{ id: string; accountId: string; name: string; address: string }> = []
-  for (const account of b.accounts.filter((a: any) => /^(google|google_business|gbp)$/.test(a.platformId))) {
+  for (const account of b.accounts.filter((a: any) => accountPlatform(a.platformId) === 'google')) {
     const response = await postfastGetGBPLocationsForInternalAccount(b.postfastApiKey, account.id)
     if (!response.success) throw new GoogleImportError('GOOGLE_BOUND_ACCOUNT_READ_FAILED')
     result.push(...response.locations.map(l => ({ id: l.id, accountId: `postfast:${account.id}`, name: l.name, address: l.address || '' })))
@@ -47,12 +48,13 @@ async function collect(b: any, selectedAccountId?: string | null) {
     if (!b.googleAccountId || !b.googleLocationId) throw new GoogleImportError('GOOGLE_LOCATION_SELECTION_REQUIRED')
     return readGoogleBrandData(await tokenFor(b), b.googleAccountId, b.googleLocationId)
   }
-  const accounts = b.accounts.filter((a: any) => /^(google|google_business|gbp)$/.test(a.platformId) && a.postfastAccountId && (!selectedAccountId || a.id === selectedAccountId))
+  const accounts = b.accounts.filter((a: any) => accountPlatform(a.platformId) === 'google' && a.postfastAccountId && (!selectedAccountId || a.id === selectedAccountId))
   if (!b.postfastApiKey || accounts.length !== 1) throw new GoogleImportError(accounts.length > 1 ? 'GOOGLE_ACCOUNT_SELECTION_REQUIRED' : 'GOOGLE_OAUTH_REQUIRED')
   const remote = await postfastGetGBPLocationsForInternalAccount(b.postfastApiKey, accounts[0].id)
   if (!remote.success) throw new GoogleImportError('GOOGLE_BOUND_ACCOUNT_READ_FAILED')
+  if (!remote.locations.length) throw new GoogleImportError('GOOGLE_LOCATIONS_PENDING_SYNC')
   // Only a sole location or an explicit configured location can identify this brand.
-  const selected = b.googleLocationId ? remote.locations.find(l => l.id === b.googleLocationId || l.id === `locations/${b.googleLocationId}`) : remote.locations.length === 1 ? remote.locations[0] : null
+  const selected = b.googleLocationId ? remote.locations.find(l => l.id.replace(/^(?:accounts\/[^/]+\/)?locations\//, '') === String(b.googleLocationId).replace(/^(?:accounts\/[^/]+\/)?locations\//, '')) : remote.locations.length === 1 ? remote.locations[0] : null
   if (!selected) throw new GoogleImportError('GOOGLE_LOCATION_SELECTION_REQUIRED')
   return { source: 'postfast_google_binding', resource: selected.id, observedAt: new Date().toISOString(),
     profile: { name: selected.name, googleLocationName: selected.name, address: selected.address || '', googlePlaceId: selected.placeId || '', googleBusinessUrl: /^https:\/\//.test(selected.mapsUri || '') ? selected.mapsUri : '' },
@@ -62,7 +64,10 @@ async function collect(b: any, selectedAccountId?: string | null) {
 export async function runGoogleBrandImport(brandId?: string) {
   const now = new Date()
   const row = await prisma.googleBrandImport.findFirst({ where: { ...(brandId ? { brandId } : {}), OR: [
-    { status: 'PENDING', nextAttemptAt: { lte: now } }, { status: 'RUNNING', leaseUntil: { lt: now } },
+    { status: { in: ['PENDING', 'WAITING_FOR_LOCATIONS'] }, nextAttemptAt: { lte: now } },
+    // Recover legacy empty-location failures as well as locations synced later upstream.
+    { status: 'NEEDS_ATTENTION', lastError: 'GOOGLE_LOCATION_SELECTION_REQUIRED', nextAttemptAt: { lte: now } },
+    { status: 'RUNNING', leaseUntil: { lt: now } },
   ] }, orderBy: { nextAttemptAt: 'asc' } })
   if (!row) return null
   const lease = new Date(Date.now() + 10 * 60_000)
@@ -102,18 +107,22 @@ export async function runGoogleBrandImport(brandId?: string) {
   } catch (error) {
     const code = error instanceof GoogleImportError ? error.code : 'GOOGLE_IMPORT_FAILED'
     if (code === 'GOOGLE_CONFIGURATION_CHANGED') { await queueGoogleBrandImport(row.brandId, true); return null }
+    const waitingForLocations = code === 'GOOGLE_LOCATIONS_PENDING_SYNC'
     const blocked = /REQUIRED|SELECTION|ARCHIVED|NOT_OWNED/.test(code)
-    await prisma.googleBrandImport.updateMany({ where: { brandId: row.brandId, generation: row.generation, leaseUntil: lease }, data: { status: blocked || row.attempts >= 4 ? 'NEEDS_ATTENTION' : 'PENDING', leaseUntil: null, lastError: code, nextAttemptAt: new Date(Date.now() + Math.min(60, 2 ** row.attempts) * 60_000) } })
+    await prisma.googleBrandImport.updateMany({ where: { brandId: row.brandId, generation: row.generation, leaseUntil: lease }, data: { status: waitingForLocations ? 'WAITING_FOR_LOCATIONS' : blocked || row.attempts >= 4 ? 'NEEDS_ATTENTION' : 'PENDING', leaseUntil: null, lastError: code, nextAttemptAt: new Date(Date.now() + Math.min(60, 2 ** Math.min(row.attempts, 6)) * 60_000) } })
     return null
   }
 }
-const state = globalThis as typeof globalThis & { googleImportTimer?: ReturnType<typeof setInterval>; googleImportBusy?: boolean }
+const state = globalThis as typeof globalThis & { googleImportTimer?: ReturnType<typeof setInterval>; googleImportBusy?: boolean; googleImportBootstrapped?: boolean }
 export function startGoogleBrandImportWorker() {
   if (state.googleImportTimer) return
   const tick = async () => {
     if (state.googleImportBusy) return
     state.googleImportBusy = true
-    try { await runGoogleBrandImport() } catch { console.warn('[google-brand-import] worker unavailable') }
+    try {
+      if (!state.googleImportBootstrapped) state.googleImportBootstrapped = (await queueMissingGoogleBrandImports()) === 0
+      await runGoogleBrandImport()
+    } catch { console.warn('[google-brand-import] worker unavailable') }
     finally { state.googleImportBusy = false }
   }
   state.googleImportTimer = setInterval(() => { void tick() }, 15_000)
