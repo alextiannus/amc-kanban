@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+import { brandGoogleMapsEntries } from '@/lib/brandFollowLinks'
 import { translateActivityPage } from '@/lib/activityPageTranslation'
 import { resolveBrandFollowAccounts, type StoredFollowAccount } from '@/lib/brandFollowAccounts'
 import { followRewardDescription } from '@/lib/followReward'
@@ -29,13 +30,18 @@ function googleReviewAppUrlFromMeta(value: unknown) {
 }
 
 type BrandEntrySource = {
+  name: string
+  address?: string | null
+  location?: string | null
+  googlePlaceId?: string | null
+  googleBusinessUrl?: string | null
   activityPage?: unknown
   followRewardDescription: string | null
   postfastApiKey: string | null
   accounts: StoredFollowAccount[]
   googleLocationId?: string | null
   googleLinksMeta: unknown
-  knowledge: { marketingSolution: unknown } | null
+  knowledge: { marketingSolution: unknown; stores?: unknown } | null
 }
 
 async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: string; brand: BrandEntrySource }>(config: T) {
@@ -45,6 +51,7 @@ async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: 
     brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
     brand: {
       ...brand,
+      googleMapEntries: brandGoogleMapsEntries({ ...brand, accounts }, knowledge?.stores),
       activityPage: await translateActivityPage(brand.activityPage, brand.followRewardDescription),
       followRewardDescription: followRewardDescription(brand.followRewardDescription),
       accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, config.brandId),
@@ -81,9 +88,9 @@ export async function GET(request: Request) {
         prizes: { orderBy: { createdAt: 'asc' } },
         brand: {
           select: {
-            name: true,
+            name: true, address: true,
             followRewardDescription: true, activityPage: true, postfastApiKey: true,
-            knowledge: { select: { marketingSolution: true } },
+            knowledge: { select: { marketingSolution: true, stores: true } },
             location: true,
             timezone: true,
             googleLocationId: true, googlePlaceId: true,
@@ -134,9 +141,9 @@ export async function GET(request: Request) {
           prizes: { orderBy: { createdAt: 'asc' } },
           brand: {
             select: {
-              name: true,
+              name: true, address: true,
               followRewardDescription: true, activityPage: true, postfastApiKey: true,
-              knowledge: { select: { marketingSolution: true } },
+              knowledge: { select: { marketingSolution: true, stores: true } },
               location: true,
               timezone: true,
               googleLocationId: true, googlePlaceId: true,
@@ -161,8 +168,8 @@ export async function GET(request: Request) {
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
-          name: true, location: true, timezone: true, followRewardDescription: true, activityPage: true, postfastApiKey: true,
-          knowledge: { select: { marketingSolution: true } },
+          name: true, address: true, location: true, timezone: true, followRewardDescription: true, activityPage: true, postfastApiKey: true,
+          knowledge: { select: { marketingSolution: true, stores: true } },
           googleLocationId: true, googlePlaceId: true,
           googleReviewUrl: true,
           googleBusinessUrl: true,
@@ -174,7 +181,7 @@ export async function GET(request: Request) {
       })
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
       const { knowledge, postfastApiKey, accounts, googleLocationId, ...brandFields } = brand
-      const publicBrand = { ...brandFields, activityPage: await translateActivityPage(brandFields.activityPage, brandFields.followRewardDescription), followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
+      const publicBrand = { ...brandFields, googleMapEntries: brandGoogleMapsEntries({ ...brandFields, accounts }, knowledge?.stores), activityPage: await translateActivityPage(brandFields.activityPage, brandFields.followRewardDescription), followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
       return NextResponse.json({
         hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,

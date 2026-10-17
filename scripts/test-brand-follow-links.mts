@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { brandFollowLinks, publicHttpUrl, followAppUrl } from '../src/lib/brandFollowLinks.ts'
+import { brandGoogleMapsEntries, brandFollowLinks, publicHttpUrl, followAppUrl } from '../src/lib/brandFollowLinks.ts'
 for (const input of ['javascript:alert(1)', 'data:text/html,test', 'instagram://user?username=test', 'https://user:secret@example.com', 'not a url', '']) assert.equal(publicHttpUrl(input), null)
 const links = brandFollowLinks({ accounts: [
   {platformId: 'INSTAGRAM', handle: '@missing'},
@@ -53,3 +53,28 @@ assert.equal(configuredMaps.find(link=>link.platform==='google_maps')?.url,mapsB
 assert.equal(configuredMaps.find(link=>link.review)?.url,mapsBrand.googleReviewUrl)
 assert.equal(brandFollowLinks({googlePlaceId:'ChIJ_TEST_configured',accounts:[{platformId:'gbp',profileUrl:mapsBrand.googleBusinessUrl}]}).filter(link=>link.platform==='google_maps').length,1)
 console.log('Google aliases, configured Place ID fallback, explicit-link priority, no guessed entries and account deduplication passed.')
+
+// Provider-independent maps, without manufacturing a listing or review target.
+const searchBrand = {name: 'TEST Café & Grill', address: '10 Example Road', location: 'Singapore'}
+const fallback = brandFollowLinks(searchBrand)
+assert.equal(fallback.length, 1)
+assert.equal(fallback[0].mapSearch, true)
+assert.equal(new URL(fallback[0].url).searchParams.get('query'), 'TEST Café & Grill 10 Example Road Singapore')
+assert.equal(new URL(fallback[0].url).searchParams.has('query_place_id'), false)
+assert.equal(fallback.some(link => link.review), false)
+assert.equal(brandGoogleMapsEntries({...searchBrand,googlePlaceId:'ChIJ_EXACT'})[0].kind,'place')
+assert.equal(brandGoogleMapsEntries({...searchBrand,accounts:[{platformId:'GBP',profileUrl:'https://maps.google.com/?cid=321'}]})[0].url,'https://maps.google.com/?cid=321')
+const branches = brandGoogleMapsEntries({...searchBrand,googlePlaceId:'ChIJ_BRAND_PRIMARY'}, [
+ {storeId:'a',name:'TEST East',address:'10 East Road',googleBusiness:{placeId:'ChIJ_EAST'}},
+ {storeId:'b',name:'TEST West',address:'20 West Road'},
+ {storeId:'c',name:'TEST Closed',address:'30 Closed Road',status:'closed'},
+])
+assert.equal(branches.length,2)
+assert.equal(new URL(branches[0].url).searchParams.get('query_place_id'),'ChIJ_EAST')
+assert.equal(new URL(branches[1].url).searchParams.has('query_place_id'),false)
+assert.equal(new URL(branches[1].url).searchParams.get('query'),'TEST West 20 West Road Singapore')
+assert.equal(brandFollowLinks({...searchBrand,googleMapEntries:branches,accounts:[{platformId:'GBP',profileUrl:'https://maps.google.com/?cid=321'}]}).filter(link=>link.platform==='google_maps').length,2)
+assert.equal(brandGoogleMapsEntries({}).length,0)
+console.log('PASS provider-independent Maps search, exact-link priority, no invented review/Place ID, per-branch identity and closed-store exclusion.')
+
+assert.equal(brandFollowLinks({...searchBrand,googleBusinessUrl:'https://maps.google.com/?cid=correct',accounts:[{platformId:'GBP',profileUrl:'https://maps.google.com/?cid=old'}]}).find(link=>link.platform==='google_maps')?.url,'https://maps.google.com/?cid=correct')

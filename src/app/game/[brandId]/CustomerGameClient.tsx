@@ -35,6 +35,8 @@ type GameConfig = {
   brand?: {
     activityPage?: ActivityPage
     name?: string
+    address?: string | null
+    googleMapEntries?: { url: string; handle: string; kind: 'place' | 'search' }[]
     followRewardDescription?: string | null
     location?: string | null
     timezone?: string | null

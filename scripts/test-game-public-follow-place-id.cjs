@@ -10,7 +10,9 @@ const brandFixture = { postfastApiKey: 'TEST_PRIVATE_KEY', followRewardDescripti
 const failWrite = () => assert.fail('Public follow entry must not create games or schedule writes')
 const activityModule = { exports: {} }
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/activityPage.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(activityModule, activityModule.exports)
+const linksModule = { exports: {} }; new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/brandFollowLinks.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(() => activityModule.exports, linksModule, linksModule.exports)
 const dependencies = {
+  '@/lib/brandFollowLinks': linksModule.exports,
   '@/lib/activityPageTranslation': {translateActivityPage: async page => activityModule.exports.normalizeActivityPage(page)},
   '@/lib/brandFollowAccounts': { resolveBrandFollowAccounts: async accounts => accounts.map(({platformId,handle,profileUrl})=>({platformId,handle,profileUrl})) },
   '@/lib/followReward': { followRewardDescription: value => value ?? '关注账号，可获赠饮品一份' },
@@ -67,5 +69,21 @@ new Function('require', 'module', 'exports', compiled)(name => {
   const privateFollow = await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&initialize=false'))
   assert.equal(privateFollow.status, 200)
   assert.equal((await privateFollow.json()).hasActivity, false)
+  brandFixture.googlePlaceId = null
+  brandFixture.address = '22 TEST Street'
+  brandFixture.location = 'Singapore'
+  brandFixture.knowledge = { stores: [{name:'TEST West',address:'33 West Street',googleBusiness:{placeId:'ChIJ_WEST'}}] }
+  for (const hasConfig of [false,true]) {
+    configured = hasConfig
+    const result = await (await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'))).json()
+    assert.equal(result.brand.googleMapEntries[0].kind,'place')
+    assert.equal(new URL(result.brand.googleMapEntries[0].url).searchParams.get('query_place_id'),'ChIJ_WEST')
+    assert.equal(result.brand.knowledge,undefined)
+    brandFixture.knowledge = null
+    const fallback = await (await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'))).json()
+    assert.equal(fallback.brand.googleMapEntries[0].kind,'search')
+    assert.equal(new URL(fallback.brand.googleMapEntries[0].url).searchParams.get('query'),'TEST Brand 22 TEST Street Singapore')
+    brandFixture.knowledge = { stores: [{name:'TEST West',address:'33 West Street',googleBusiness:{placeId:'ChIJ_WEST'}}] }
+  }
   console.log('PASS public configured and follow-only entry retains configured Place ID without creating a game or requiring authentication.')
 })().catch(error => { console.error(error); process.exitCode = 1 })

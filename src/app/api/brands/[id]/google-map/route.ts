@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { canOwnBrand } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
+import { brandGoogleMapsEntries } from '@/lib/brandFollowLinks'
 import { parseGoogleMapsEntry } from '@/lib/googleMapsEntry'
 
 type Params = { params: Promise<{ id: string }> }
@@ -9,10 +10,11 @@ export async function GET(_request: Request, { params }: Params) {
   const { id } = await params
   const session = await getSession()
   if (!session?.user || !await canOwnBrand(id, session.user.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const brand = await prisma.brand.findUnique({ where: { id }, select: { name: true, googlePlaceId: true, googleBusinessUrl: true, googleReviewUrl: true, googleBrandImport: { select: { status: true, lastError: true } } } })
+  const brand = await prisma.brand.findUnique({ where: { id }, select: { name: true, address: true, location: true, knowledge: { select: { stores: true } }, accounts: { where: { unboundAt: null }, select: { platformId: true, profileUrl: true, handle: true } }, googlePlaceId: true, googleBusinessUrl: true, googleReviewUrl: true, googleBrandImport: { select: { status: true, lastError: true } } } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const mapsUrl = brand.googleBusinessUrl || (brand.googlePlaceId ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(brand.name)}&query_place_id=${encodeURIComponent(brand.googlePlaceId)}` : '')
-  return NextResponse.json({ brandId: id, mapsUrl, ready: Boolean(mapsUrl), googleSync: brand.googleBrandImport }, { headers: { 'Cache-Control': 'no-store' } })
+  const entries = brandGoogleMapsEntries(brand, brand.knowledge?.stores)
+  const mapsUrl = entries[0]?.url || ''
+  return NextResponse.json({ brandId: id, mapsUrl, entries, ready: entries.length > 0, exact: entries.some(entry => entry.kind === 'place'), googleSync: brand.googleBrandImport }, { headers: { 'Cache-Control': 'no-store' } })
 }
 export async function PUT(request: Request, { params }: Params) {
   const { id } = await params
