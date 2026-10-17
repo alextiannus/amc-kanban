@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { activityTextDefaults, normalizeActivityPage, type ActivityPage, type ActivityTextKey } from '@/lib/activityPage'
+import { activityText, normalizeActivityPage, type ActivityPage, type ActivityTextKey } from '@/lib/activityPage'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
 import { publicHttpUrl } from '@/lib/brandFollowLinks'
 import { ActivityCanvasEditing, ActivityInlineText } from '@/components/ActivityCanvasEditor'
@@ -735,7 +735,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     const origin = new URL(document.referrer).origin
     if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_INLINE_CHANGE', brandId, locale, ...change }, origin)
   }
-  const pageText = (key: ActivityTextKey) => config?.brand?.activityPage?.text?.[locale]?.[key] ?? activityTextDefaults[key][locale]
+  const pageText = (key: ActivityTextKey) => activityText(config?.brand?.activityPage, key, locale)
 
   const amcDefault = !config?.brandThemeColor
   const entryTheme = brandEntryTheme(config?.brandThemeColor || '#ffd84a')
@@ -1293,6 +1293,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     }} onClickCapture={event => {
       if (!isMerchantPreview()) return
       if (event.target instanceof Element && event.target.closest('[data-activity-language]')) return
+      if (event.target instanceof Element && event.target.closest('[data-activity-share]') && !event.target.closest('[contenteditable]')) return
       const draw = event.target instanceof Element ? event.target.closest('[data-activity-edit="draw"]') : null
       if (draw) {
         event.preventDefault(); event.stopPropagation()
@@ -1341,7 +1342,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           <ActivityInlineText as="p" field="greetingNote" className="mt-2 text-sm leading-5 text-slate-600">{pageText('greetingNote')}</ActivityInlineText>
         </header>
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
-          <BrandFollowPanel preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
+          <BrandFollowPanel brandId={brandId} preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
           {config?.hasActivity !== false && status && <div data-activity-edit="draw" tabIndex={isMerchantPreview() ? 0 : undefined} role={isMerchantPreview() ? 'button' : undefined} className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>

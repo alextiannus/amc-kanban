@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-import { normalizeActivityPage } from '@/lib/activityPage'
+import { translateActivityPage } from '@/lib/activityPageTranslation'
 import { resolveBrandFollowAccounts, type StoredFollowAccount } from '@/lib/brandFollowAccounts'
 import { followRewardDescription } from '@/lib/followReward'
 import { configuredBrandColor, safeBrandColor } from '@/lib/brandEntryTheme'
@@ -45,7 +45,7 @@ async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: 
     brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
     brand: {
       ...brand,
-      activityPage: normalizeActivityPage(brand.activityPage),
+      activityPage: await translateActivityPage(brand.activityPage, brand.followRewardDescription),
       followRewardDescription: followRewardDescription(brand.followRewardDescription),
       accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, config.brandId),
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
@@ -174,7 +174,7 @@ export async function GET(request: Request) {
       })
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
       const { knowledge, postfastApiKey, accounts, googleLocationId, ...brandFields } = brand
-      const publicBrand = { ...brandFields, activityPage: normalizeActivityPage(brandFields.activityPage), followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
+      const publicBrand = { ...brandFields, activityPage: await translateActivityPage(brandFields.activityPage, brandFields.followRewardDescription), followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
       return NextResponse.json({
         hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,

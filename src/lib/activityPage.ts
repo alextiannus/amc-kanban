@@ -5,16 +5,53 @@ export const activityTextDefaults = {
   eyebrow: { zh: '从这一面，到下一次见', en: 'A little hello. A reason to stay in touch.' },
   followTitle: { zh: '成为我们的朋友吧！', en: 'Let’s stay in touch!' },
   followNote: { zh: '店里的新鲜事、特别时刻，还有下一次见面的理由，都想分享给你。', en: 'Good things, fresh stories, and little moments we’d love to share with you.' },
+  reward: { zh: '关注账号，可获赠饮品一份', en: 'Follow us and enjoy a complimentary drink.' },
+  shareTitle: { zh: '分享本店给朋友', en: 'Share this place with friends' },
+  shareNote: { zh: '把喜欢的小店，分享给你在意的人。', en: 'Send a little discovery to someone you care about.' },
   rewardTitle: { zh: '送给关注我们的你', en: 'A little thank-you for following' },
   tapHint: { zh: '轻点图标，就能找到我们', en: 'Tap an icon to find us' },
   reviewTitle: { zh: '今天的体验，想听你说', en: 'How was your visit?' },
   reviewNote: { zh: '在 Google 留下你的真实评价', en: 'Share your honest experience on Google' },
 } as const
 export type ActivityTextKey = keyof typeof activityTextDefaults
-export type ActivityPage = { text: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, string>>>>; links: Record<string, string>; drawEnabled?: boolean }
+export type ActivityPage = { text: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, string>>>>; links: Record<string, string>; drawEnabled?: boolean; translations?: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, { source: string; value: string }>>>> }
 export function activityLinkKey(platform: string, handle: string) { return `${platform.toLowerCase()}:${encodeURIComponent(handle)}` }
-export function activityText(page: ActivityPage | null | undefined, key: ActivityTextKey, locale: 'zh' | 'en') {
-  return page?.text?.[locale]?.[key] ?? activityTextDefaults[key][locale]
+export function activitySourceText(page: ActivityPage | null | undefined, key: ActivityTextKey, locale: 'zh' | 'en', reward?: string | null) {
+  const direct = page?.text?.[locale]?.[key]
+  if (direct !== undefined) return direct
+  if (key !== 'reward' || reward == null) return undefined
+  if (reward === activityTextDefaults.reward.zh || reward === activityTextDefaults.reward.en) {
+    const other = page?.text?.[locale === 'zh' ? 'en' : 'zh']?.reward
+    return other !== undefined && other !== activityTextDefaults.reward.zh && other !== activityTextDefaults.reward.en ? undefined : activityTextDefaults.reward[locale]
+  }
+  if (!reward.trim()) return ''
+  return (/[\u3400-\u9fff]/u.test(reward) ? 'zh' : 'en') === locale ? reward : undefined
+}
+export function activityText(page: ActivityPage | null | undefined, key: ActivityTextKey, locale: 'zh' | 'en', reward?: string | null) {
+  const direct = activitySourceText(page, key, locale, reward)
+  if (direct !== undefined) return direct
+  const source = activitySourceText(page, key, locale === 'zh' ? 'en' : 'zh', reward)
+  const translated = page?.translations?.[locale]?.[key]
+  if (source !== undefined && translated?.source === source) return translated.value
+  return source ?? activityTextDefaults[key][locale]
+}
+export function activityPageDraftSnapshot(page: ActivityPage, reward: string) {
+  const { translations: _translations, ...editable } = page
+  void _translations
+  return JSON.stringify([editable, reward])
+}
+export function activityTranslationTasks(page: ActivityPage, reward?: string | null) {
+  const tasks: { key: ActivityTextKey; locale: 'zh' | 'en'; source: string }[] = []
+  for (const key of Object.keys(activityTextDefaults) as ActivityTextKey[]) {
+    if (['brandName', 'reviewTitle', 'reviewNote'].includes(key)) continue
+    for (const locale of ['zh', 'en'] as const) {
+      if (activitySourceText(page, key, locale, reward) !== undefined) continue
+      const source = activitySourceText(page, key, locale === 'zh' ? 'en' : 'zh', reward)
+      if (!source?.trim() || page.translations?.[locale]?.[key]?.source === source) continue
+      tasks.push({ key, locale, source })
+    }
+  }
+  return tasks
 }
 // Existing synchronized destinations may use HTTP; new overrides still require HTTPS.
 export function isActivitySourceLink(key: string, value: string): boolean {
@@ -47,6 +84,25 @@ export function normalizeActivityPage(input: unknown): ActivityPage {
         localized[key] = value
       }
       out.text[locale] = localized
+    }
+  }
+  if (source.translations !== undefined) {
+    if (!source.translations || typeof source.translations !== 'object' || Array.isArray(source.translations)) throw new Error('Invalid translations')
+    out.translations = {}
+    for (const locale of ['zh', 'en'] as const) {
+      const values = (source.translations as Record<string, unknown>)[locale]
+      if (values === undefined) continue
+      if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Invalid translations')
+      const localized: NonNullable<NonNullable<ActivityPage['translations']>['zh']> = {}
+      for (const key of Object.keys(activityTextDefaults) as ActivityTextKey[]) {
+        const entry = (values as Record<string, unknown>)[key]
+        if (entry === undefined) continue
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('Invalid translation')
+        const { source: original, value } = entry as Record<string, unknown>
+        if (typeof original !== 'string' || original.length > 500 || typeof value !== 'string' || value.length > 500) throw new Error('Invalid translation')
+        localized[key] = { source: original, value }
+      }
+      out.translations[locale] = localized
     }
   }
   if (source.links !== undefined) {

@@ -18,7 +18,7 @@ let authorized=true, loggedIn=true, writes=0, audits=0, gameReady=true, storageF
 let stored={activityPage:null,followRewardDescription:null};
 function jsonb(v){if(Array.isArray(v))return v.map(jsonb);if(v&&typeof v==='object')return Object.fromEntries(Object.keys(v).sort().map(k=>[k,jsonb(v[k])]));return v}
 const tx={ $queryRaw:async()=>[], brand:{findUnique:async()=>stored,update:async({data})=>{writes++;stored=jsonb(data);return stored}}, gameConfig:{findUnique:async()=>gameReady?{prizes:[{id:'prize'}]}:null}, auditLog:{create:async()=>{audits++}}};
-const api=compile('src/app/api/brands/[id]/activity-page/route.ts',{'node:crypto':require('node:crypto'),'next/server':{NextResponse:{json:Response.json}},'@/lib/auth':{getSession:async()=>loggedIn?{user:{id:'owner'}}:null},'@/lib/brandAccess':{canOwnBrand:async()=>authorized},'@/lib/prisma':{prisma:{brand:tx.brand,$transaction:fn=>storageFails?Promise.reject(new Error('database unavailable')):fn(tx)}},'@/lib/activityPage':contract});
+const api=compile('src/app/api/brands/[id]/activity-page/route.ts',{'node:crypto':require('node:crypto'),'next/server':{NextResponse:{json:Response.json}},'@/lib/auth':{getSession:async()=>loggedIn?{user:{id:'owner'}}:null},'@/lib/brandAccess':{canOwnBrand:async()=>authorized},'@/lib/prisma':{prisma:{brand:tx.brand,$transaction:fn=>storageFails?Promise.reject(new Error('database unavailable')):fn(tx)}},'@/lib/activityPageTranslation':{translateActivityPage:async page=>contract.normalizeActivityPage(page)},'@/lib/activityPage':contract});
 const params={params:Promise.resolve({id:'brand'})};
 const req=body=>new Request('https://amc-kanban.immedi.ai/api/brands/brand/activity-page',{method:'PUT',headers:{'content-type':'application/json',origin:'https://amc-mm.immedi.ai'},body:JSON.stringify(body)});
 (async()=>{
@@ -34,9 +34,12 @@ const req=body=>new Request('https://amc-kanban.immedi.ai/api/brands/brand/activ
  data=await(await api.GET(new Request('https://example.test'),params)).json();gameReady=false;
  assert.equal((await api.PUT(req({...body,revision:data.revision,activityPage:{...page,drawEnabled:true}}),params)).status,400);
  assert.equal(writes,2);assert.equal(audits,2);
- storageFails=true;assert.equal((await api.PUT(req(body),params)).status,500);storageFails=false;
+ storageFails=true;assert.equal((await api.PUT(req({...body,revision:data.revision}),params)).status,500);storageFails=false;
  assert.equal((await api.PUT(req({...body,activityPage:{links:{'instagram:test':'javascript:alert(1)'}}}),params)).status,400);
  assert.equal((await api.PUT(req(null),params)).status,400);
  assert.equal(writes,2);assert.equal(audits,2);
+ assert.equal((await api.POST(req(body),params)).status,200);assert.equal(writes,2);assert.equal(audits,2);
+ authorized=false;assert.equal((await api.POST(req(body),params)).status,404);authorized=true;
+ assert.equal((await api.POST(new Request('https://example.test',{method:'POST',headers:{origin:'https://evil.test'},body:JSON.stringify(body)}),params)).status,403);
  console.log('PASS activity page: bilingual defaults, text limits, safe links, binding isolation, restoration, brand authorization, CSRF, JSONB-stable revisions, stale-save conflicts and draw readiness.');
 })().catch(e=>{console.error(e);process.exit(1)});

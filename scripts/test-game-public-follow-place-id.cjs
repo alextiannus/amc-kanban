@@ -11,7 +11,7 @@ const failWrite = () => assert.fail('Public follow entry must not create games o
 const activityModule = { exports: {} }
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/activityPage.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(activityModule, activityModule.exports)
 const dependencies = {
-  '@/lib/activityPage': activityModule.exports,
+  '@/lib/activityPageTranslation': {translateActivityPage: async page => activityModule.exports.normalizeActivityPage(page)},
   '@/lib/brandFollowAccounts': { resolveBrandFollowAccounts: async accounts => accounts.map(({platformId,handle,profileUrl})=>({platformId,handle,profileUrl})) },
   '@/lib/followReward': { followRewardDescription: value => value ?? '关注账号，可获赠饮品一份' },
   'next/server': { NextResponse: { json: Response.json }, after: failWrite },
