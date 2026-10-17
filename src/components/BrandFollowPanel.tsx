@@ -21,7 +21,7 @@ function PlatformMark({ platform }: { platform: string }) {
   return asset ? <img src={`/social-platforms/${asset}-original.jpg`} alt="" className="h-full w-full rounded-2xl object-contain" aria-hidden="true"/> : <span className="text-xs font-bold">{labels[platform] || platform}</span>
 }
 
-export default function BrandFollowPanel({ brand, locale, themeColor, standalone = false }: { brand?: FollowBrand; standalone?: boolean; locale: 'zh' | 'en'; themeColor?: string }) {
+export default function BrandFollowPanel({ brand, locale, themeColor, standalone = false, preview = false }: { brand?: FollowBrand; standalone?: boolean; preview?: boolean; locale: 'zh' | 'en'; themeColor?: string }) {
   const zh = locale === 'zh'
   const platformName = (platform: string) => !zh && platform === 'xiaohongshu' ? 'RedNote' : !zh && platform === 'wechat' ? 'WeChat' : labels[platform] || platform
   const theme = brandEntryTheme(themeColor)
@@ -40,6 +40,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
   useEffect(() => () => pendingOpen.current?.(), [])
 
   function openAccount(event: MouseEvent<HTMLAnchorElement>, platform: string, url: string) {
+    if (preview) return // Keep preview links in a new tab; never navigate the editor iframe.
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
         !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return
     const appUrl = followAppUrl(platform, url)
@@ -81,7 +82,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
       </div>}
       <p className="mb-3 text-center text-sm font-semibold opacity-90">{zh ? '轻点图标，就能找到我们' : 'Tap an icon to find us'}</p>
       {accounts.length ? <div className={`relative grid ${stickerLayout ? `${accounts.length === 2 ? 'grid-cols-2' : accounts.length === 3 ? 'grid-cols-3' : 'grid-cols-4'} gap-3 px-1 pb-3 pt-3` : 'grid-cols-3 gap-2 rounded-3xl border p-2'}`} style={stickerLayout ? undefined : { background: theme.background, color: theme.ink, borderColor: theme.border }}>
-        {accounts.map((link, index) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
+        {accounts.map((link, index) => <a key={link.url} data-preview-account-link="true" href={link.url} target="_blank" rel="noopener noreferrer"
           onClick={event => openAccount(event, link.platform, link.url)}
           aria-label={`${platformName(link.platform)}${link.handle ? ` ${link.handle}` : ''}`}
           className={`group relative flex min-w-0 flex-col items-center gap-2 px-1 py-3 text-center transition hover:z-10 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current ${stickerLayout ? 'rounded-xl border border-white/70' : 'rounded-2xl hover:bg-black/5'}`}
@@ -96,7 +97,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
         </a>)}
       </div> : <p className="text-center text-sm opacity-80">{zh ? '我们的社交账号即将与你见面。' : 'Our social pages will be here soon.'}</p>}
     </div>
-    {review && <a href={review.url} target="_blank" rel="noopener noreferrer" className="flex min-h-16 items-center gap-3 px-5 py-3 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-current">
+    {review && <a data-preview-account-link="true" href={review.url} target="_blank" rel="noopener noreferrer" className="flex min-h-16 items-center gap-3 px-5 py-3 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-current">
       <img src="/social-platforms/google-original.jpg" alt="" className="h-7 w-7 shrink-0 rounded-lg" aria-hidden="true"/>
       <span className="min-w-0 flex-1"><span className="block text-sm font-bold">{zh ? '今天的体验，想听你说' : 'How was your visit?'}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{zh ? '在 Google 留下你的真实评价' : 'Share your honest experience on Google'}</span></span>
       <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true"/>

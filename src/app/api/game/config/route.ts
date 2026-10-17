@@ -147,6 +147,7 @@ export async function GET(request: Request) {
         select: {
           name: true, location: true, timezone: true, followRewardDescription: true,
           knowledge: { select: { marketingSolution: true } },
+          googlePlaceId: true,
           googleReviewUrl: true,
           googleBusinessUrl: true,
           accounts: {

@@ -1,6 +1,7 @@
 export type FollowBrand = {
   name?: string
   followRewardDescription?: string | null
+  googlePlaceId?: string | null
   googleReviewUrl?: string | null
   googleBusinessUrl?: string | null
   accounts?: { platformId: string; profileUrl?: string | null; handle?: string | null }[]
@@ -22,15 +23,27 @@ export function brandFollowLinks(brand?: FollowBrand) {
     const url = publicHttpUrl(account.profileUrl)
     if (!url || seen.has(url)) continue
     seen.add(url)
-    links.push({ platform: account.platformId.toLowerCase(), handle: account.handle || '', url, review: false })
+    const rawPlatform = account.platformId.toLowerCase()
+    const platform = ['google', 'googlebusiness', 'googlebusinessprofile', 'googlemybusiness', 'googlemaps', 'gbp', 'gmb'].includes(rawPlatform.replace(/[\s_-]/g, '')) ? 'google_maps' : rawPlatform
+    links.push({ platform, handle: account.handle || '', url, review: false })
   }
-  const maps = publicHttpUrl(brand?.googleBusinessUrl)
+  const placeId = brand?.googlePlaceId?.trim()
+  const configuredPlaceId = placeId && placeId.length <= 512 && !/^(unconfigured|undefined|null)$/i.test(placeId) ? placeId : null
+  let placeMapsUrl: string | null = null
+  if (configuredPlaceId && !links.some(link => link.platform === 'google_maps')) {
+    const url = new URL('https://www.google.com/maps/search/')
+    url.searchParams.set('api', '1')
+    url.searchParams.set('query', brand?.name?.trim() || configuredPlaceId)
+    url.searchParams.set('query_place_id', configuredPlaceId)
+    placeMapsUrl = url.href
+  }
+  const maps = publicHttpUrl(brand?.googleBusinessUrl) || placeMapsUrl
   if (maps) {
     const existing = links.find(link => link.url === maps)
     if (existing) existing.platform = 'google_maps'
     else links.push({ platform: 'google_maps', handle: '', url: maps, review: false })
   }
-  const review = publicHttpUrl(brand?.googleReviewUrl)
+  const review = publicHttpUrl(brand?.googleReviewUrl) || (configuredPlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(configuredPlaceId)}` : null)
   if (review) links.push({ platform: 'google', handle: '', url: review, review: true })
   return links
 }

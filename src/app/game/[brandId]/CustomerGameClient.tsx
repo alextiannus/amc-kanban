@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
+import { publicHttpUrl } from '@/lib/brandFollowLinks'
 import BrandFollowPanel from '@/components/BrandFollowPanel'
 import { BookOpen, CheckCircle2, Copy, MapPin, TicketCheck } from 'lucide-react'
 
@@ -34,6 +35,7 @@ type GameConfig = {
     followRewardDescription?: string | null
     location?: string | null
     timezone?: string | null
+    googlePlaceId?: string | null
     googleReviewUrl?: string | null
     googleReviewAppUrl?: string | null
     googleBusinessUrl?: string | null
@@ -851,6 +853,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       if (typeof data.rewardDescription === 'string') draft.brand!.followRewardDescription = data.rewardDescription.slice(0, 500)
       const input = data.config
       if (input && typeof input === 'object') {
+        for (const key of ['googleBusinessUrl', 'googleReviewUrl'] as const) if (typeof input[key] === 'string') draft.brand![key] = publicHttpUrl(input[key])
+        if (typeof input.googlePlaceId === 'string') draft.brand!.googlePlaceId = input.googlePlaceId.trim().slice(0, 512)
         if (typeof input.title === 'string') draft.title = input.title.slice(0, 200)
         if (typeof input.description === 'string' || input.description === null) draft.description = input.description?.slice(0, 5000) ?? null
         if (typeof input.themeColor === 'string' && /^#[0-9a-f]{6}$/i.test(input.themeColor)) draft.themeColor = input.themeColor
@@ -1218,7 +1222,13 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main onClickCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} onSubmitCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
+    <main onClickCapture={event => {
+      if (!isMerchantPreview()) return
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[data-preview-account-link="true"]') : null
+      if (link?.target === '_blank' && publicHttpUrl(link.href)) return
+      event.preventDefault()
+      event.stopPropagation()
+    }} onSubmitCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
@@ -1229,7 +1239,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           <p className="mt-2 text-sm leading-5 text-slate-600">{locale === 'zh' ? '谢谢你的到来，让我们把这份缘分留久一点。' : 'Thanks for stopping by. Let’s make this the start of something lovely.'}</p>
         </header>
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
-          <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
+          <BrandFollowPanel preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
           {config?.hasActivity !== false && status && <div className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
