@@ -1163,7 +1163,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main className="min-h-screen pb-8 text-slate-900" style={{ background: entryTheme.background }}>
+    <main className="relative isolate pb-8 text-slate-900" style={{ background: entryTheme.background }}>
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ background: entryTheme.background }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ background: `radial-gradient(ellipse at top left, ${entryTheme.tint}, transparent 75%), ${entryTheme.background}`, color: entryTheme.ink }}>
           <p className="mx-auto inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{config?.brand?.name || t.defaultBrand}</p>
