@@ -26,5 +26,5 @@ export function brandEntryTheme(value: unknown) {
   let ink = primary
   // Keep branded text readable even for white, yellow and pastel palettes.
   while (1.05 / (luminance(ink) + .05) < 7) ink = mix(ink, 0, .12)
-  return { primary, ink, background: mix(primary, 255, .96), tint: mix(primary, 255, .90), border: mix(primary, 255, .78) }
+  return { primary, ink, onPrimary: 1.05 / (luminance(primary) + .05) >= 4.5 ? '#ffffff' : '#0f172a', background: mix(primary, 255, .96), tint: mix(primary, 255, .90), border: mix(primary, 255, .78) }
 }

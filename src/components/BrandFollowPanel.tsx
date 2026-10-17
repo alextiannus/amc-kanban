@@ -59,34 +59,33 @@ export default function BrandFollowPanel({ brand, locale, themeColor }: { brand?
     }
   }
 
-  return <section aria-labelledby="brand-follow-title" className="overflow-hidden rounded-[28px] border bg-white shadow-lg shadow-slate-900/5" style={{ borderColor: theme.border }}>
-    <header className="relative overflow-hidden px-5 pb-6 pt-7 text-center" style={{ background: `linear-gradient(145deg, ${theme.tint}, ${theme.background} 75%)` }}>
-      <span aria-hidden="true" className="absolute -right-8 -top-10 h-32 w-32 rounded-full border-[20px] opacity-20" style={{ borderColor: theme.primary }}/>
-      <p className="relative mx-auto inline-block max-w-full break-words rounded-full border bg-white/70 px-4 py-1.5 text-sm font-bold" style={{ color: theme.ink, borderColor: theme.border }}>{brand?.name || 'AMC'}</p>
-      <h1 id="brand-follow-title" className="relative mt-5 text-2xl font-black leading-snug" style={{ color: theme.ink }}>{zh ? '嗨，很高兴见到你！' : 'Hi, lovely to see you!'}</h1>
-      <p className="relative mt-3 text-sm leading-6 text-slate-600"><span className="block font-bold" style={{ color: theme.ink }}>{zh ? '成为我们的朋友吧' : 'Let’s be friends.'}</span>{zh ? '店里的新鲜事，想第一时间分享给你。' : 'We’d love to share our latest stories with you.'}</p>
-    </header>
-    <div className="px-5 pb-4">
-    {reward && <div data-testid="follow-reward" className="relative mt-4 rounded-2xl border border-dashed px-4 py-3" style={{ background: theme.background, borderColor: theme.border, color: theme.ink }}>
-      <p className="text-[11px] font-bold tracking-wide opacity-80">{zh ? '关注小礼遇' : 'A little thank-you'}</p>
-      <p className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold leading-6">{reward}</p>
-    </div>}
-    {accounts.length ? <div className={`mt-6 grid gap-x-2 gap-y-5 ${accounts.length === 4 ? 'grid-cols-2' : 'grid-cols-3'}`}>{accounts.map(link => <a
-      key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
-      onClick={event => openAccount(event, link.platform, link.url)}
-      aria-label={`${labels[link.platform] || link.platform}${link.handle ? ` ${link.handle}` : ''}`}
-      className="group flex min-w-0 flex-col items-center gap-1.5 rounded-xl px-1 py-1 text-center transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
-      style={{ color: theme.ink }}
-    >
-      <span className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-sm transition group-hover:-translate-y-0.5 motion-reduce:transform-none"><PlatformMark platform={link.platform}/></span>
-      <span className="w-full break-words text-xs font-bold text-slate-800">{labels[link.platform] || link.platform}</span>
-      {link.handle && <span className="w-full break-words text-[11px] leading-4 text-slate-500">{link.handle}</span>}
-    </a>)}</div> : <p className="mt-4 text-center text-sm text-slate-500">{zh ? '社交账号待补充。' : 'Social accounts will be added here.'}</p>}
-    {review && <a href={review.url} target="_blank" rel="noopener noreferrer" className="mt-5 flex min-h-12 items-center justify-center gap-2 border-t border-slate-100 pt-3 text-sm font-semibold text-slate-600 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
-      <img src="/social-platforms/google-original.jpg" alt="" className="h-6 w-6 rounded-md" aria-hidden="true"/>
-      <span>{zh ? '留下真实评价' : 'Leave an honest review'}</span>
-      <ExternalLink className="h-3.5 w-3.5" aria-hidden="true"/>
-    </a>}
+  return <section aria-labelledby="brand-follow-title" className="overflow-hidden rounded-[28px] border bg-white shadow-sm" style={{ borderColor: theme.border }}>
+    <div className="px-5 pb-5 pt-5 text-center">
+      <p className="text-xs font-bold tracking-[0.12em]" style={{ color: theme.ink }}>{zh ? '从这一面，到下一次见' : 'A little hello. A reason to stay in touch.'}</p>
+      <h2 id="brand-follow-title" className="mt-2 text-2xl font-black leading-snug" style={{ color: theme.ink }}>{zh ? '成为我们的朋友吧！' : 'Let’s stay in touch!'}</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{zh ? '店里的新鲜事、特别时刻，还有下一次见面的理由，都想分享给你。' : 'Good things, fresh stories, and little moments we’d love to share with you.'}</p>
     </div>
+    <div className="px-4 py-5" style={{ background: theme.primary, color: theme.onPrimary }}>
+      {reward && <div data-testid="follow-reward" className="mb-4 rounded-2xl px-4 py-3" style={{ background: theme.background, color: theme.ink }}>
+        <p className="text-xs font-bold opacity-80">{zh ? '送给关注我们的你' : 'A little thank-you for following'}</p>
+        <p className="mt-2 whitespace-pre-wrap break-words text-base font-bold leading-7">{reward}</p>
+      </div>}
+      <p className="mb-4 text-center text-sm font-semibold opacity-90">{zh ? '轻点图标，就能找到我们' : 'Tap an icon to find us'}</p>
+      {accounts.length ? <div className={`grid overflow-hidden rounded-3xl border p-2 ${accounts.length === 4 ? 'grid-cols-2' : 'grid-cols-3'}`} style={{ background: `${theme.onPrimary}0d`, borderColor: `${theme.onPrimary}33` }}>
+        {accounts.map(link => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
+          onClick={event => openAccount(event, link.platform, link.url)}
+          aria-label={`${labels[link.platform] || link.platform}${link.handle ? ` ${link.handle}` : ''}`}
+          className="group flex min-w-0 flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl shadow-sm transition group-hover:-translate-y-0.5 motion-reduce:transform-none"><PlatformMark platform={link.platform}/></span>
+          <span className="w-full break-words text-xs font-bold">{labels[link.platform] || link.platform}</span>
+          {link.handle && <span className="w-full break-words text-[11px] leading-4 opacity-80">{link.handle}</span>}
+        </a>)}
+      </div> : <p className="text-center text-sm opacity-80">{zh ? '我们的社交账号即将与你见面。' : 'Our social pages will be here soon.'}</p>}
+    </div>
+    {review && <a href={review.url} target="_blank" rel="noopener noreferrer" className="flex min-h-16 items-center gap-3 px-5 py-4 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-current">
+      <img src="/social-platforms/google-original.jpg" alt="" className="h-7 w-7 shrink-0 rounded-lg" aria-hidden="true"/>
+      <span className="min-w-0 flex-1"><span className="block text-sm font-bold">{zh ? '今天的体验，想听你说' : 'How was your visit?'}</span><span className="mt-1 block text-xs leading-5 text-slate-500">{zh ? '在 Google 留下你的真实评价' : 'Share your honest experience on Google'}</span></span>
+      <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true"/>
+    </a>}
   </section>
 }
