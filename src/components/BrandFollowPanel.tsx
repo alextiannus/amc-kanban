@@ -21,7 +21,7 @@ function PlatformMark({ platform }: { platform: string }) {
   return asset ? <img src={`/social-platforms/${asset}-original.jpg`} alt="" className="h-full w-full rounded-2xl object-contain" aria-hidden="true"/> : <span className="text-xs font-bold">{labels[platform] || platform}</span>
 }
 
-export default function BrandFollowPanel({ brand, locale, themeColor }: { brand?: FollowBrand; locale: 'zh' | 'en'; themeColor?: string }) {
+export default function BrandFollowPanel({ brand, locale, themeColor, standalone = false }: { brand?: FollowBrand; standalone?: boolean; locale: 'zh' | 'en'; themeColor?: string }) {
   const zh = locale === 'zh'
   const theme = brandEntryTheme(themeColor)
   const links = brandFollowLinks(brand)
@@ -66,13 +66,13 @@ export default function BrandFollowPanel({ brand, locale, themeColor }: { brand?
     }
   }
 
-  return <section aria-labelledby="brand-follow-title" className="overflow-hidden rounded-[28px] border bg-white shadow-sm" style={{ borderColor: theme.border }}>
-    <div className="px-5 py-4 text-center">
+  return <section aria-labelledby="brand-follow-title" className="flex flex-col overflow-hidden rounded-[28px] border bg-white shadow-sm" style={{ borderColor: theme.border, minHeight: standalone ? 'clamp(360px, calc(80svh - 160px), 600px)' : undefined }}>
+    <div className={`px-5 text-center ${standalone ? 'py-6' : 'py-4'}`}>
       <p className="text-xs font-bold tracking-[0.12em]" style={{ color: theme.ink }}>{zh ? '从这一面，到下一次见' : 'A little hello. A reason to stay in touch.'}</p>
       <h2 id="brand-follow-title" className="mt-2 text-2xl font-black leading-snug" style={{ color: theme.ink }}>{zh ? '成为我们的朋友吧！' : 'Let’s stay in touch!'}</h2>
       <p className="mt-2 text-sm leading-5 text-slate-600">{zh ? '店里的新鲜事、特别时刻，还有下一次见面的理由，都想分享给你。' : 'Good things, fresh stories, and little moments we’d love to share with you.'}</p>
     </div>
-    <div className="px-4 py-4" style={{ background: theme.primary, color: theme.onPrimary }}>
+    <div className={`px-4 ${standalone ? 'flex flex-1 flex-col justify-center py-6' : 'py-4'}`} style={{ background: theme.primary, color: theme.onPrimary }}>
       {reward && <div data-testid="follow-reward" className="mb-3 rounded-2xl px-4 py-3" style={{ background: theme.background, color: theme.ink }}>
         <p className="text-xs font-bold opacity-80">{zh ? '送给关注我们的你' : 'A little thank-you for following'}</p>
         <p className="mt-1 whitespace-pre-wrap break-words text-sm font-bold leading-6">{reward}</p>

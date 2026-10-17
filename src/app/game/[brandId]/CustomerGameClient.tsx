@@ -1171,7 +1171,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           <h1 className="mt-3 text-2xl font-black leading-tight">{locale === 'zh' ? '嗨，很高兴遇见你！' : 'Hi, lovely to see you!'}</h1>
         </header>
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3" style={{ background: entryTheme.background }}>
-          <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={config?.themeColor} />
+          <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={config?.themeColor} standalone={config?.hasActivity === false} />
 
           {config?.hasActivity !== false && status && <div className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
