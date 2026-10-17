@@ -703,6 +703,7 @@ function GameBoard({
 
 export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const savedPreviewConfig = useRef<GameConfig | null>(null)
+  const previewBrandOverrides = useRef<NonNullable<GameConfig['brand']>>({})
   const [draftActivity, setDraftActivity] = useState(false)
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [status, setStatus] = useState<GameStatus | null>(null)
@@ -850,11 +851,12 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       const base = savedPreviewConfig.current
       if (!base || data?.type !== 'AMC_GAME_PREVIEW_UPDATE' || data.brandId !== brandId) return
       const draft: GameConfig = { ...base, brand: { ...base.brand } }
-      if (typeof data.rewardDescription === 'string') draft.brand!.followRewardDescription = data.rewardDescription.slice(0, 500)
+      const brandOverrides: NonNullable<GameConfig['brand']> = {}
+      if (typeof data.rewardDescription === 'string') brandOverrides.followRewardDescription = data.rewardDescription.slice(0, 500)
       const input = data.config
       if (input && typeof input === 'object') {
-        for (const key of ['googleBusinessUrl', 'googleReviewUrl'] as const) if (typeof input[key] === 'string') draft.brand![key] = publicHttpUrl(input[key])
-        if (typeof input.googlePlaceId === 'string') draft.brand!.googlePlaceId = input.googlePlaceId.trim().slice(0, 512)
+        for (const key of ['googleBusinessUrl', 'googleReviewUrl'] as const) if (typeof input[key] === 'string') brandOverrides[key] = publicHttpUrl(input[key])
+        if (typeof input.googlePlaceId === 'string') brandOverrides.googlePlaceId = input.googlePlaceId.trim().slice(0, 512)
         if (typeof input.title === 'string') draft.title = input.title.slice(0, 200)
         if (typeof input.description === 'string' || input.description === null) draft.description = input.description?.slice(0, 5000) ?? null
         if (typeof input.themeColor === 'string' && /^#[0-9a-f]{6}$/i.test(input.themeColor)) draft.themeColor = input.themeColor
@@ -863,6 +865,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         if (typeof input.maxSpinsPerUserDay === 'number' && Number.isFinite(input.maxSpinsPerUserDay)) draft.maxSpinsPerUserDay = Math.max(1, Math.min(100, input.maxSpinsPerUserDay))
         if (Array.isArray(input.prizes)) draft.prizes = input.prizes.slice(0, 50).filter((p: Prize) => p && typeof p.name === 'string' && ['COUPON', 'PHYSICAL', 'POINTS', 'THANKS'].includes(p.type) && Number.isFinite(p.probability)).map((p: Prize) => ({ name: p.name.slice(0, 200), type: p.type, probability: Math.max(0, Math.min(1, p.probability)), totalInventory: typeof p.totalInventory === 'number' ? Math.max(0, p.totalInventory) : null }))
       }
+      previewBrandOverrides.current = brandOverrides
+      draft.brand = { ...draft.brand, ...brandOverrides }
       const showActivity = data.previewActivity === true
       draft.hasActivity = base.hasActivity !== false || showActivity
       setDraftActivity(showActivity)
@@ -871,6 +875,50 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     }
     window.addEventListener('message', receive)
     return () => window.removeEventListener('message', receive)
+  }, [brandId])
+
+  useEffect(() => {
+    let stopped = false
+    let refreshing = false
+    let refreshAgain = false
+    const refreshBrandAccounts = async () => {
+      if (document.visibilityState === 'hidden' || !savedPreviewConfig.current) return
+      if (refreshing) { refreshAgain = true; return }
+      refreshing = true
+      try {
+        const response = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' })
+        if (!response.ok) return
+        const fresh = await response.json() as GameConfig
+        if (stopped || !fresh.brand) return
+        savedPreviewConfig.current = { ...savedPreviewConfig.current!, brand: fresh.brand }
+        // Refresh bindings, not the editor's unsaved title, prizes or offer.
+        setConfig(current => {
+          if (!current) return current
+          const brand = isMerchantPreview() ? { ...fresh.brand, ...previewBrandOverrides.current } : fresh.brand
+          return JSON.stringify(current.brand) === JSON.stringify(brand) ? current : { ...current, brand }
+        })
+      } catch { /* A transient read failure must not erase recorded accounts or drafts. */ }
+      finally {
+        refreshing = false
+        if (refreshAgain && !stopped) { refreshAgain = false; void refreshBrandAccounts() }
+      }
+    }
+    const refresh = () => { void refreshBrandAccounts() }
+    const refreshFromMerchant = (event: MessageEvent) => {
+      if (!isMerchantPreview() || event.source !== window.parent || (event.origin !== 'https://amc-mm.immedi.ai' && event.origin !== window.location.origin)) return
+      if (event.data?.type === 'AMC_GAME_PREVIEW_REFRESH_ACCOUNTS' && event.data.brandId === brandId) refresh()
+    }
+    window.addEventListener('message', refreshFromMerchant)
+    const timer = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+      window.removeEventListener('message', refreshFromMerchant)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
+    }
   }, [brandId])
 
   useEffect(() => {

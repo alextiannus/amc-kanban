@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, type MouseEvent } from 'react'
 import { ExternalLink } from 'lucide-react'
+import { followRewardDescription } from '@/lib/followReward'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
 import { brandFollowLinks, followAppUrl, type FollowBrand } from '@/lib/brandFollowLinks'
 
@@ -35,7 +36,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
     { rotate: '-3deg', offset: '1px' },
     { rotate: '6deg', offset: '7px' },
   ]
-  const reward = brand?.followRewardDescription?.trim()
+  const reward = brand ? followRewardDescription(brand.followRewardDescription, locale) : ''
   const pendingOpen = useRef<(() => void) | null>(null)
   useEffect(() => () => pendingOpen.current?.(), [])
 

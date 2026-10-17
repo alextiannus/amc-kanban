@@ -102,7 +102,7 @@ export async function PATCH(request: Request, { params }: Params) {
   if (Object.keys(body).length === 1 && body.followRewardDescription !== undefined) {
     const updated = await prisma.brand.update({
       where: { id },
-      data: { followRewardDescription: body.followRewardDescription.trim() || null },
+      data: { followRewardDescription: body.followRewardDescription.trim() },
       select: { followRewardDescription: true },
     })
     return NextResponse.json({ ok: true, followRewardDescription: updated.followRewardDescription })
@@ -141,7 +141,7 @@ export async function PATCH(request: Request, { params }: Params) {
       ...(body.name !== undefined && { name: body.name.trim() }),
       ...(body.location !== undefined && { location: opt(body.location) }),
       ...(normalizedTimezone !== undefined && { timezone: normalizedTimezone }),
-      ...(body.followRewardDescription !== undefined && { followRewardDescription: body.followRewardDescription.trim() || null }),
+      ...(body.followRewardDescription !== undefined && { followRewardDescription: body.followRewardDescription.trim() }),
       // Brand profile
       ...(body.description !== undefined && { description: opt(body.description) }),
       ...(body.website !== undefined && { website: opt(body.website) }),

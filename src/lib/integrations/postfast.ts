@@ -621,11 +621,13 @@ export async function postfastGetAnalytics(apiKey: string, options?: {
 export async function postfastListPosts(apiKey: string, options?: {
   status?: 'scheduled' | 'published' | 'failed' | 'draft'
   platform?: string
+  socialMediaIds?: string[]
   limit?: number
   page?: number
   timeoutMs?: number
 }): Promise<{ success: boolean; posts: PostFastPost[]; total?: number; hasNextPage?: boolean; error?: string }> {
   const params = new URLSearchParams()
+  if (options?.socialMediaIds?.length) params.set('socialMediaIds', options.socialMediaIds.slice(0, 100).join(','))
   if (options?.status) params.set('statuses', options.status.toUpperCase())  // API expects uppercase
   if (options?.platform) params.set('platforms', options.platform.toUpperCase())
   if (options?.limit) params.set('limit', String(Math.min(options.limit, 50)))  // max 50 per request

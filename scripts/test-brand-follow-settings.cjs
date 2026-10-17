@@ -18,7 +18,7 @@ async function patch(value){return mod.exports.PATCH({json:async()=>({followRewa
 ;(async()=>{
  let result=await patch('  关注后可领取礼物\n请向店员出示  ')
  assert.equal(result.status,200);assert.equal(saved.followRewardDescription,'关注后可领取礼物\n请向店员出示')
- result=await patch(' \n ');assert.equal(result.status,200);assert.equal(saved.followRewardDescription,null)
+ result=await patch(' \n ');assert.equal(result.status,200);assert.equal(saved.followRewardDescription,'')
  for(const invalid of [null,42,{},'x'.repeat(501)]){const before=writes;result=await patch(invalid);assert.equal(result.status,400);assert.equal(writes,before)}
  result=await patch('x'.repeat(500));assert.equal(result.status,200)
  authorized=false;const before=writes;result=await patch('foreign');assert.equal(result.status,404);assert.equal(writes,before)

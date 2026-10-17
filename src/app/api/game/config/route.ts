@@ -1,6 +1,8 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+import { resolveBrandFollowAccounts, type StoredFollowAccount } from '@/lib/brandFollowAccounts'
+import { followRewardDescription } from '@/lib/followReward'
 import { configuredBrandColor, safeBrandColor } from '@/lib/brandEntryTheme'
 import { after, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
@@ -25,13 +27,23 @@ function googleReviewAppUrlFromMeta(value: unknown) {
   return typeof appReviewUrl === 'string' ? appReviewUrl : null
 }
 
-function exposeGoogleReviewAppUrl<T extends { themeColor: string; brand: { googleLinksMeta: unknown; knowledge: { marketingSolution: unknown } | null } }>(config: T) {
-  const { googleLinksMeta, knowledge, ...brand } = config.brand
+type BrandEntrySource = {
+  followRewardDescription: string | null
+  postfastApiKey: string | null
+  accounts: StoredFollowAccount[]
+  googleLinksMeta: unknown
+  knowledge: { marketingSolution: unknown } | null
+}
+
+async function prepareBrandEntryConfig<T extends { themeColor: string; brand: BrandEntrySource }>(config: T) {
+  const { googleLinksMeta, knowledge, postfastApiKey, accounts, ...brand } = config.brand
   return {
     ...config,
     brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
     brand: {
       ...brand,
+      followRewardDescription: followRewardDescription(brand.followRewardDescription),
+      accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey),
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
     },
   }
@@ -66,7 +78,7 @@ export async function GET(request: Request) {
         brand: {
           select: {
             name: true,
-            followRewardDescription: true,
+            followRewardDescription: true, postfastApiKey: true,
             knowledge: { select: { marketingSolution: true } },
             location: true,
             timezone: true,
@@ -76,7 +88,7 @@ export async function GET(request: Request) {
             googleLinksMeta: true,
             accounts: { where: { unboundAt: null },
               select: {
-                platformId: true,
+                id: true, postfastAccountId: true, platformId: true,
                 profileUrl: true,
                 handle: true,
               },
@@ -119,7 +131,7 @@ export async function GET(request: Request) {
           brand: {
             select: {
               name: true,
-              followRewardDescription: true,
+              followRewardDescription: true, postfastApiKey: true,
               knowledge: { select: { marketingSolution: true } },
               location: true,
               timezone: true,
@@ -129,7 +141,7 @@ export async function GET(request: Request) {
               googleLinksMeta: true,
               accounts: { where: { unboundAt: null },
                 select: {
-                  platformId: true,
+                  id: true, postfastAccountId: true, platformId: true,
                   profileUrl: true,
                   handle: true,
                 },
@@ -145,19 +157,20 @@ export async function GET(request: Request) {
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
-          name: true, location: true, timezone: true, followRewardDescription: true,
+          name: true, location: true, timezone: true, followRewardDescription: true, postfastApiKey: true,
           knowledge: { select: { marketingSolution: true } },
           googlePlaceId: true,
           googleReviewUrl: true,
           googleBusinessUrl: true,
           accounts: {
             where: { unboundAt: null },
-            select: { platformId: true, profileUrl: true, handle: true },
+            select: { id: true, postfastAccountId: true, platformId: true, profileUrl: true, handle: true },
           },
         },
       })
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-      const { knowledge, ...publicBrand } = brand
+      const { knowledge, postfastApiKey, accounts, ...brandFields } = brand
+      const publicBrand = { ...brandFields, followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey) }
       return NextResponse.json({
         hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,
@@ -167,7 +180,7 @@ export async function GET(request: Request) {
     }
     if (!config) return NextResponse.json({ error: 'Game config not found' }, { status: 404 })
 
-    const responseConfig = exposeGoogleReviewAppUrl(config)
+    const responseConfig = await prepareBrandEntryConfig(config)
 
     // Security: Do not expose clerkPin or the complete Google metadata on public API
     if (isPublic) {
