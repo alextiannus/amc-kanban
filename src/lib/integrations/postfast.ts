@@ -1,3 +1,4 @@
+import { postfastProfileUrl } from '../postfastProfileUrl.ts'
 import { SocialAccountBindingError, providerForLocal } from '../socialAccountIdentity.ts'
 /**
  * PostFast Integration — Complete API wrapper
@@ -428,7 +429,7 @@ export async function postfastFetchAccounts(apiKey: string, timeoutMs = 15_000):
       platformId: normalizePlatform(a.platform),
       handle: asString(a.platformUsername) || asString(a.displayName) || asString(a.id),
       displayName: asString(a.displayName) || undefined,
-      profileUrl: asString(a.profileUrl) || undefined,
+      profileUrl: postfastProfileUrl(normalizePlatform(a.platform), a.platformUsername, a.profileUrl) || undefined,
       connected,
       followerCount,
       followerDelta,

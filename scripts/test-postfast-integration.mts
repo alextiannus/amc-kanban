@@ -375,6 +375,7 @@ async function main() {
     assert.equal(accounts.success, true)
     assert.equal(accounts.accounts.length, 5)
     assert.equal(accounts.accounts[0].platformId, 'instagram')
+    assert.equal(accounts.accounts[0].profileUrl, 'https://www.instagram.com/amc_store/')
     assert.equal(accounts.accounts[0].connectionStatus, 'CONNECTED')
     assert.equal(accounts.accounts[0].inboxCapable, true)
     assert.equal(accounts.accounts[4].connectionStatus, 'DISABLED')

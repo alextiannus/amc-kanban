@@ -62,7 +62,7 @@ export async function syncSocialAccountBindings(brandId: string, remotes: PostFa
         platformId: accountPlatform(remote.platformId),
         handle: remote.handle,
         displayName: remote.displayName ?? remote.handle,
-        profileUrl: remote.profileUrl ?? null,
+        profileUrl: remote.profileUrl?.trim() || (local && sameLegacyAccount(local, remote) ? local.profileUrl ?? null : null),
         followerCount: remote.followerCount ?? null,
         followerDelta: remote.followerDelta ?? 0,
         ratingScore: remote.ratingScore ?? null,

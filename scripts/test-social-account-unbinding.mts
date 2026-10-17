@@ -47,6 +47,15 @@ try {
   assert.equal(providerForLocal(local('a', 'google', 'renamed', { postfastAccountId: 'pf' }), [{ id: 'pf', platformId: 'google', handle: 'original' }])?.id, 'pf')
 
   reset()
+  const facebook = test.state().accounts[1]
+  facebook.platformId = 'facebook'
+  facebook.profileUrl = 'https://www.facebook.com/recorded-page'
+  await binding.syncSocialAccountBindings('brand', [{ id:'fb', platformId:'facebook', handle:'correct store' }])
+  assert.equal(test.state().accounts.find((a: any) => a.id === 'b').profileUrl, 'https://www.facebook.com/recorded-page', 'missing provider URL must preserve the recorded URL for the same identity')
+  await binding.syncSocialAccountBindings('brand', [{ id:'fb', platformId:'facebook', handle:'renamed' }])
+  assert.equal(test.state().accounts.find((a: any) => a.id === 'b').profileUrl, null, 'renamed identity must not retain an old profile URL')
+
+  reset()
   const history = structuredClone(test.state().drafts)
   await binding.unbindSocialAccount('brand', 'a', 'operator')
   assert(test.state().accounts[0].unboundAt)
