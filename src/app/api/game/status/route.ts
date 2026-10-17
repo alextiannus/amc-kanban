@@ -11,15 +11,26 @@ export async function GET(request: Request) {
   const brandId = url.searchParams.get('brandId')
   const sessionId = url.searchParams.get('sessionId')
 
-  if (!brandId || !sessionId) {
+  const preview = url.searchParams.get('preview') === 'true'
+  if (!brandId || (!preview && !sessionId)) {
     return NextResponse.json({ error: 'brandId and sessionId required' }, { status: 400 })
   }
 
   try {
+    if (preview) {
+      const config = await prisma.gameConfig.findUnique({ where: { brandId }, select: { id: true, maxSpinsPerUserDay: true } })
+      const rounds = config ? await findActiveAndNextGameRounds(prisma, config.id) : { activeRound: null, nextRound: null }
+      const max = config?.maxSpinsPerUserDay ?? 3
+      return NextResponse.json({ preview: true, pointsBalance: 0, spinsTodayCount: 0,
+        maxSpinsPerUserDay: max, spinsRemainingToday: max,
+        activeRound: publicGameRound(rounds.activeRound), nextRound: publicGameRound(rounds.nextRound),
+        entryRewardClaimed: false, entryReward: null, todayFeedbackSubmission: null, issuedPrizes: [], unclaimedPrizes: [],
+      }, { headers: { 'Cache-Control': 'no-store' } })
+    }
     // 1. Find or create the GameSession
     let session = await prisma.gameSession.findUnique({
       where: {
-        brandId_sessionId: { brandId, sessionId },
+        brandId_sessionId: { brandId, sessionId: sessionId! },
       },
     })
 
@@ -27,7 +38,7 @@ export async function GET(request: Request) {
       session = await prisma.gameSession.create({
         data: {
           brandId,
-          sessionId,
+          sessionId: sessionId!,
           pointsBalance: 0,
         },
       })

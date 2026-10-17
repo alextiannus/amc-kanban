@@ -227,6 +227,10 @@ const copy = {
   },
 }
 
+function isMerchantPreview() {
+  return typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('preview') === '1'
+}
+
 function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
   for (const language of [...(window.navigator.languages || []), window.navigator.language]) {
@@ -777,7 +781,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const historicalPrizes = issuedPrizes.filter((prize) => !showGame || prize.logId !== spinResult?.spinLogId)
 
   const requestShareDrafts = useCallback(async (requestedSessionId: string, requestLocale: Locale, silent = false) => {
-    if (!requestedSessionId) return
+    if (!requestedSessionId || isMerchantPreview()) return
     if (!silent) setLoadingDrafts(true)
     try {
       const response = await fetch(`/api/game/share-drafts?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(requestedSessionId)}&locale=${requestLocale}`, { cache: 'no-store' })
@@ -809,7 +813,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
   const refreshStatus = useCallback(async (requestedSessionId: string) => {
     if (!requestedSessionId) return null
-    const response = await fetch(`/api/game/status?brandId=${encodeURIComponent(brandId)}&sessionId=${encodeURIComponent(requestedSessionId)}`, { cache: 'no-store' })
+    const response = await fetch(`/api/game/status?brandId=${encodeURIComponent(brandId)}&${isMerchantPreview() ? 'preview=true' : `sessionId=${encodeURIComponent(requestedSessionId)}`}`, { cache: 'no-store' })
     if (!response.ok) throw new Error(copy[detectLocale()].statusLoadFailed)
     const data = await response.json() as GameStatus
     setStatus(data)
@@ -836,7 +840,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
   useEffect(() => {
     const detectedLocale = detectLocale()
-    const id = getSessionId(brandId)
+    const id = isMerchantPreview() ? 'merchant-preview' : getSessionId(brandId)
     const initializeTimer = window.setTimeout(() => {
       setLocale(detectedLocale)
       setSessionId(id)
@@ -1178,7 +1182,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
+    <main onClickCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} onSubmitCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
