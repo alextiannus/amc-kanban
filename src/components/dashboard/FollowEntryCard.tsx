@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
-import { Check, Copy, Download, ExternalLink, Save, Share2 } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, QrCode, Save, Share2, X } from 'lucide-react'
 import { followRewardDescription as resolveFollowRewardDescription } from '@/lib/followReward'
 import { activityTextDefaults, activitySourceText, activityPageDraftSnapshot, activityTranslationTasks, isActivitySourceLink, normalizeActivityPage, type ActivityPage } from '@/lib/activityPage'
+import { activitySharePresentation } from '@/lib/activitySharePresentation'
 import { BRAND_ACCOUNTS_CHANGED } from '@/lib/brandAccountEvents'
 import { activityPrimary, activitySecondary } from './activityUi'
 import { getPermanentGameUrl } from '@/lib/gameQr'
@@ -19,8 +20,18 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
   const [page, setPage] = useState<ActivityPage>({ text: {}, links: {} })
   const [revision, setRevision] = useState('')
   const [savedSnapshot, setSavedSnapshot] = useState('')
+  const [savedSharePage, setSavedSharePage] = useState<ActivityPage>()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sticker, setSticker] = useState<{ url: string; blob: Blob } | null>(null)
+  const [savingImage, setSavingImage] = useState(false)
+  const [stickerNotice, setStickerNotice] = useState('')
+  const stickerDialog = useRef<HTMLDialogElement>(null)
+  const stickerTrigger = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (sticker && !stickerDialog.current?.open) stickerDialog.current?.showModal()
+    return () => { if (sticker) URL.revokeObjectURL(sticker.url) }
+  }, [sticker])
   const [savingPage, setSavingPage] = useState(false)
   const [notice, setNotice] = useState('')
   const [loadVersion, setLoadVersion] = useState(0)
@@ -36,6 +47,7 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
         if (controller.signal.aborted) return
         const next = normalizeActivityPage(data.activityPage)
         setPage(next)
+        setSavedSharePage(next)
         setRevision(data.revision)
         const reward = resolveFollowRewardDescription(data.followRewardDescription)
         onRewardChange(reward)
@@ -131,7 +143,7 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       }
       const data = await res.json()
       if (!mounted.current) return
-      setPage(data.activityPage); setRevision(data.revision)
+      setPage(data.activityPage); setSavedSharePage(data.activityPage); setRevision(data.revision)
       onRewardChange(data.followRewardDescription); onRewardSaved?.(data.followRewardDescription)
       setSavedSnapshot(activityPageDraftSnapshot(data.activityPage, data.followRewardDescription))
       setTranslationPending(data.translationPending === true)
@@ -142,14 +154,16 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
   async function sharePage() {
     setError(''); setNotice('')
     try {
-      if (navigator.share) await navigator.share({ title: brandName, url: getPermanentGameUrl(brandId) })
+      if (navigator.share) {
+        const copy = activitySharePresentation(brandName, savedSharePage, isEn ? 'en' : 'zh')
+        await navigator.share({ title: copy.title, text: copy.description, url: getPermanentGameUrl(brandId) })
+      }
       else { await navigator.clipboard.writeText(getPermanentGameUrl(brandId)); setNotice(isEn ? 'Page link copied.' : '页面链接已复制。') }
     } catch (err) { if (err instanceof Error && err.name === 'AbortError') return
       try { await navigator.clipboard.writeText(getPermanentGameUrl(brandId)); setNotice(isEn ? 'Page link copied. Share it anywhere.' : '页面链接已复制，可粘贴分享。') }
       catch { setError(isEn ? 'Unable to share. Open the published page and copy its address.' : '分享失败，请打开已发布页面复制地址。') } }
   }
   const invitation = { zh: '扫一扫，成为我们的朋友吧', en: 'Scan to stay in touch', zhNote: '店里的新鲜事，想继续分享给你。', enNote: 'A little more of our world, shared with you.' }
-  const title = isEn ? 'Scan to stay in touch' : '扫一扫，成为我们的朋友吧'
   const url = getPermanentGameUrl(brandId)
 
   const [googleSync, setGoogleSync] = useState<{ brandId: string; status: string; lastError?: string } | null>(null)
@@ -172,16 +186,11 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
     return () => { controller.abort(); window.clearInterval(timer) }
   }, [brandId, activityVersion])
 
-  async function exportCard(print: boolean, qrOnly = false) {
-    // Open synchronously so browser popup protection does not block printing.
-    const popup = print ? window.open('', '_blank', 'width=800,height=900') : null
-    if (print && !popup) {
-      setError(isEn ? 'Allow popups to print this card.' : '请允许弹出窗口后重试打印。')
-      return
-    }
-    if (popup) popup.opener = null
+  async function openStickerPreview() {
+    if (!qrCodeUrl || busy) return
     setBusy(true)
     setError('')
+    setStickerNotice('')
     try {
       const qr = new Image()
       qr.src = qrCodeUrl
@@ -189,26 +198,26 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       logo.src = AMC_QR_LOGO
       await Promise.all([qr.decode(), logo.decode(), document.fonts.ready])
       const canvas = document.createElement('canvas')
-      canvas.width = qrOnly ? 900 : 1200
-      canvas.height = qrOnly ? 1200 : 1700
+      canvas.width = 1200
+      canvas.height = 1700
       const ctx = canvas.getContext('2d')
       if (!ctx) throw new Error('Canvas unavailable')
       drawAmcQrBackground(ctx, canvas.width, canvas.height)
       ctx.textAlign = 'center'
       ctx.fillStyle = '#132523'
-      ctx.font = qrOnly ? '700 30px sans-serif' : '700 40px sans-serif'
-      ctx.fillText(brandName, canvas.width / 2, qrOnly ? 75 : 125, canvas.width - 160)
-      ctx.font = qrOnly ? '800 38px sans-serif' : '800 52px sans-serif'
-      ctx.fillText(invitation.zh, canvas.width / 2, qrOnly ? 145 : 230, canvas.width - 160)
-      ctx.font = qrOnly ? '700 30px sans-serif' : '700 40px sans-serif'
-      ctx.fillText(invitation.en, canvas.width / 2, qrOnly ? 195 : 295, canvas.width - 160)
+      ctx.font = '700 40px sans-serif'
+      ctx.fillText(brandName, canvas.width / 2, 125, canvas.width - 160)
+      ctx.font = '800 52px sans-serif'
+      ctx.fillText(invitation.zh, canvas.width / 2, 230, canvas.width - 160)
+      ctx.font = '700 40px sans-serif'
+      ctx.fillText(invitation.en, canvas.width / 2, 295, canvas.width - 160)
       ctx.fillStyle = '#60706d'
-      ctx.font = qrOnly ? '25px sans-serif' : '30px sans-serif'
-      ctx.fillText(invitation.zhNote, canvas.width / 2, qrOnly ? 245 : 360, canvas.width - 160)
-      ctx.font = qrOnly ? '22px sans-serif' : '28px sans-serif'
-      ctx.fillText(invitation.enNote, canvas.width / 2, qrOnly ? 280 : 410, canvas.width - 160)
+      ctx.font = '30px sans-serif'
+      ctx.fillText(invitation.zhNote, canvas.width / 2, 360, canvas.width - 160)
+      ctx.font = '28px sans-serif'
+      ctx.fillText(invitation.enNote, canvas.width / 2, 410, canvas.width - 160)
       // The artwork stays outside this white plate and the QR's quiet zone.
-      const plate = qrOnly ? { x: 90, y: 330, size: 720, qr: 640 } : { x: 200, y: 555, size: 800, qr: 720 }
+      const plate = { x: 200, y: 555, size: 800, qr: 720 }
       ctx.fillStyle = '#ffffff'
       ctx.beginPath()
       ctx.roundRect(plate.x, plate.y, plate.size, plate.size, 28)
@@ -216,13 +225,13 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       ctx.imageSmoothingEnabled = false
       ctx.drawImage(qr, plate.x + 40, plate.y + 40, plate.qr, plate.qr)
       ctx.fillStyle = '#60706d'
-      if (!qrOnly) {
+      {
         ctx.font = '28px sans-serif'
         ctx.fillText('扫码进入品牌主页', 600, 1430, 1040)
         ctx.font = '24px sans-serif'
         ctx.fillText('Scan to explore our social pages', 600, 1475, 1040)
       }
-      const footerSize = qrOnly ? 20 : 24
+      const footerSize = 24
       ctx.font = `${footerSize}px sans-serif`
       ctx.textAlign = 'left'
       const prefix = 'Powered by'
@@ -232,35 +241,41 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       const prefixWidth = ctx.measureText(prefix).width
       const footerWidth = prefixWidth + gap + logoSize + gap + ctx.measureText(suffix).width
       const footerX = (canvas.width - footerWidth) / 2
-      const footerY = qrOnly ? 1140 : 1610
+      const footerY = 1610
       ctx.fillText(prefix, footerX, footerY)
       ctx.imageSmoothingEnabled = true
       ctx.drawImage(logo, footerX + prefixWidth + gap, footerY - footerSize * .9, logoSize, logoSize)
       ctx.fillText(suffix, footerX + prefixWidth + gap + logoSize + gap, footerY)
-      const image = canvas.toDataURL('image/png')
-      if (popup) {
-        const doc = popup.document
-        doc.title = title
-        const style = doc.createElement('style')
-        style.textContent = '@page{size:A5 portrait;margin:0}body{margin:0;text-align:center}img{display:block;width:100%;max-height:100vh;object-fit:contain}@media print{img{width:148mm;height:210mm;max-height:none}}'
-        doc.head.append(style)
-        const output = doc.createElement('img')
-        output.alt = title
-        output.src = image
-        doc.body.append(output)
-        await output.decode()
-        popup.focus()
-        popup.print()
-      } else {
-        const anchor = document.createElement('a')
-        anchor.download = `${qrOnly ? 'brand-qr' : 'brand-follow'}-${brandId}.png`
-        anchor.href = image
-        anchor.click()
-      }
+      const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('Image unavailable')), 'image/png'))
+      if (mounted.current) setSticker({ url: URL.createObjectURL(blob), blob })
     } catch {
-      popup?.close()
-      setError(isEn ? 'Unable to export. Please try again.' : '卡片导出失败，请重试。')
-    } finally { setBusy(false) }
+      if (mounted.current) setError(isEn ? 'Unable to prepare the sticker. Please try again.' : '贴纸生成失败，请重试。')
+    } finally { if (mounted.current) setBusy(false) }
+  }
+  async function saveStickerImage() {
+    if (!sticker || savingImage) return
+    setStickerNotice('')
+    const file = new File([sticker.blob], `brand-sticker-${brandId}.png`, { type: 'image/png' })
+    try {
+      if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+        setSavingImage(true)
+        await navigator.share({ files: [file] })
+      } else {
+        window.open(sticker.url, '_blank', 'noopener,noreferrer')
+        setStickerNotice(isEn ? 'Touch and hold the image to save it to Photos.' : '在原图上长按，选择“存储到照片”或“保存图片”。')
+      }
+    } catch (err) {
+      if (!(err && typeof err === 'object' && 'name' in err && err.name === 'AbortError')) setStickerNotice(isEn ? 'Touch and hold the preview image to save it, or use Download QR code.' : '可长按预览图保存图片，或选择“下载二维码”。')
+    } finally { if (mounted.current) setSavingImage(false) }
+  }
+  function downloadSticker() {
+    if (!sticker) return
+    const anchor = document.createElement('a')
+    anchor.download = `brand-sticker-${brandId}.png`
+    anchor.href = sticker.url
+    document.body.append(anchor)
+    anchor.click()
+    anchor.remove()
   }
 
   return <section className="space-y-4 text-slate-900 dark:text-slate-100" aria-label={isEn ? 'Activity page builder' : '活动页编辑器'}>
@@ -291,7 +306,7 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
         </aside>
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
-        <button type="button" className={activitySecondary} disabled={!qrCodeUrl || busy} onClick={() => void exportCard(false)}><Download size={14}/>{isEn ? 'Download QR sticker' : '下载二维码贴纸'}</button>
+        <button type="button" className={activitySecondary} disabled={!qrCodeUrl || busy} ref={stickerTrigger} onClick={() => void openStickerPreview()}><QrCode size={14}/>{busy ? (isEn ? 'Preparing…' : '正在生成…') : (isEn ? 'QR sticker' : '二维码贴纸')}</button>
         <button type="button" className={activitySecondary} onClick={() => void sharePage()}><Share2 size={14}/>{isEn ? 'Share page' : '分享页面'}</button>
         <a href={url} target="_blank" rel="noopener noreferrer" className={activitySecondary}><ExternalLink size={14}/>{isEn ? 'Open published page' : '打开已发布页面'}</a>
         <button type="button" className={activitySecondary} onClick={() => void navigator.clipboard.writeText(url).then(() => setNotice(isEn ? 'Link copied.' : '链接已复制。')).catch(() => setError(isEn ? 'Unable to copy link.' : '复制失败。'))}><Copy size={14}/>{isEn ? 'Copy link' : '复制链接'}</button>
@@ -303,5 +318,21 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       <button type="button" disabled={savingPage} className={activitySecondary} onClick={() => { if (!dirty || window.confirm(isEn ? 'Discard unsaved page changes?' : '放弃尚未保存的页面修改？')) { setRevision(''); setLoadVersion(v => v + 1) } }}>{isEn ? 'Reload page' : '重新载入'}</button>
       <button type="button" disabled={!revision || savingPage || !dirty} onClick={() => void savePage()} className={activityPrimary}><Save size={14}/>{savingPage ? (isEn ? 'Saving…' : '保存中…') : (isEn ? 'Save page' : '保存页面')}</button>
     </div>
+    <dialog ref={stickerDialog} onClose={() => { setSticker(null); stickerTrigger.current?.focus() }} aria-labelledby="activity-sticker-title" className="fixed inset-0 m-auto max-h-[92svh] w-[calc(100%_-_2rem)] max-w-md overflow-auto rounded-3xl border-0 bg-white p-0 text-slate-900 shadow-2xl backdrop:bg-slate-950/60 dark:bg-slate-900 dark:text-slate-100">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-100 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+        <h3 id="activity-sticker-title" className="text-base font-bold">{isEn ? 'QR sticker' : '二维码贴纸'}</h3>
+        <button type="button" onClick={() => stickerDialog.current?.close()} aria-label={isEn ? 'Close preview' : '关闭预览'} className="flex h-11 w-11 items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"><X size={20}/></button>
+      </div>
+      {sticker && <div className="space-y-4 p-5">
+        {/* eslint-disable-next-line @next/next/no-img-element -- Native Blob image enables long-press saving. */}
+        <img src={sticker.url} alt={isEn ? `${brandName} QR sticker` : `${brandName}二维码贴纸`} className="mx-auto h-auto w-full rounded-2xl" style={{ WebkitTouchCallout: 'default' }}/>
+        <p className="text-center text-xs leading-5 text-slate-500">{isEn ? 'Touch and hold the image to save it to Photos, or choose an option below.' : '长按图片可保存到相册，也可以选择下方操作。'}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <button type="button" disabled={savingImage} className={activityPrimary} onClick={() => void saveStickerImage()}><Save size={15}/>{isEn ? 'Save image' : '保存图片'}</button>
+          <button type="button" className={activitySecondary} onClick={downloadSticker}><Download size={15}/>{isEn ? 'Download QR code' : '下载二维码'}</button>
+        </div>
+        {stickerNotice && <p role="status" className="text-center text-xs leading-5 text-slate-500">{stickerNotice}</p>}
+      </div>}
+    </dialog>
   </section>
 }

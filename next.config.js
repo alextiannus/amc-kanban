@@ -1,7 +1,9 @@
 const path = require('path')
+const { HTML_LIMITED_BOT_UA_RE } = require('next/dist/shared/lib/router/utils/html-bots')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	htmlLimitedBots: new RegExp(HTML_LIMITED_BOT_UA_RE.source + '|MicroMessenger|WeChat|Weixin|Qzone|AMC-Activity-HTML', 'i'),
 	// Keep Kanban chunks separate from MM chunks when the public activity is served on amc.immedi.ai.
 	assetPrefix: '/activity-assets',
 	async rewrites() {

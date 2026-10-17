@@ -5,6 +5,7 @@ import { Fragment, useContext, useEffect, useRef, useState, type MouseEvent } fr
 import { ActivityCanvasEditing, ActivityInlineText, ActivityInlineLinkEditor } from '@/components/ActivityCanvasEditor'
 import { activityText } from '@/lib/activityPage'
 import { ChevronRight, Share2 } from 'lucide-react'
+import { activitySharePresentation } from '@/lib/activitySharePresentation'
 import { shareActivityPage } from '@/lib/activityShare'
 import { followRewardDescription } from '@/lib/followReward'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
@@ -25,7 +26,7 @@ function PlatformMark({ platform }: { platform: string }) {
   return asset ? <img src={`/social-platforms/${asset}-original.jpg`} alt="" className="h-full w-full rounded-2xl object-contain" aria-hidden="true"/> : <span className="text-xs font-bold">{labels[platform] || platform}</span>
 }
 
-export default function BrandFollowPanel({ brandId, brand, locale, themeColor, standalone = false, preview = false }: { brandId: string; brand?: FollowBrand; standalone?: boolean; preview?: boolean; locale: 'zh' | 'en'; themeColor?: string }) {
+export default function BrandFollowPanel({ brandId, brand, shareBrand, locale, themeColor, standalone = false, preview = false }: { brandId: string; brand?: FollowBrand; shareBrand?: FollowBrand; standalone?: boolean; preview?: boolean; locale: 'zh' | 'en'; themeColor?: string }) {
   const zh = locale === 'zh'
   const editing = useContext(ActivityCanvasEditing).enabled
   const text = (key: Parameters<typeof activityText>[1]) => activityText(brand?.activityPage, key, locale)
@@ -105,7 +106,9 @@ export default function BrandFollowPanel({ brandId, brand, locale, themeColor, s
     </div>
     <button type="button" data-activity-share onClick={async () => {
       setShareNotice('')
-      const result = await shareActivityPage(brandId, brand?.name || '', text('shareTitle'), navigator)
+      const savedBrand = shareBrand || brand
+      const copy = activitySharePresentation(savedBrand?.name || '', savedBrand?.activityPage, locale)
+      const result = await shareActivityPage(brandId, copy.title, copy.description, navigator)
       if (result === 'copied') setShareNotice('copied')
       if (result === 'failed') setShareNotice('failed')
     }} className="flex min-h-16 w-full items-center gap-3 px-5 py-4 text-left text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-current">

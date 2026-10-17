@@ -714,6 +714,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [editingPage, setEditingPage] = useState(false)
   const [editingLink, setEditingLink] = useState<{ key: string; original: string; url: string } | null>(null)
   const [config, setConfig] = useState<GameConfig | null>(null)
+  const [savedShareBrand, setSavedShareBrand] = useState<GameConfig['brand']>()
   const [status, setStatus] = useState<GameStatus | null>(null)
   const [sessionId, setSessionId] = useState('')
   const [loading, setLoading] = useState(true)
@@ -911,6 +912,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         const fresh = await response.json() as GameConfig
         if (stopped || !fresh.brand) return
         savedPreviewConfig.current = { ...savedPreviewConfig.current!, brand: fresh.brand }
+        setSavedShareBrand(fresh.brand)
         // Refresh bindings, not the editor's unsaved title, prizes or offer.
         setConfig(current => {
           if (!current) return current
@@ -957,6 +959,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         if (!configRes.ok) throw new Error(copy[detectedLocale].activityNotReady)
         const configData = await configRes.json() as GameConfig
         savedPreviewConfig.current = configData
+        setSavedShareBrand(configData.brand)
         setConfig(configData)
         if (isMerchantPreview() && document.referrer) {
           const parentOrigin = new URL(document.referrer).origin
@@ -1345,7 +1348,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           <ActivityInlineText as="p" field="greetingNote" className="mt-2 text-sm leading-5 text-slate-600">{pageText('greetingNote')}</ActivityInlineText>
         </header>
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
-          <BrandFollowPanel brandId={brandId} preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
+          <BrandFollowPanel brandId={brandId} preview={isMerchantPreview()} brand={config?.brand} shareBrand={isMerchantPreview() ? savedShareBrand : config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
           {config?.hasActivity !== false && status && <div data-activity-edit="draw" tabIndex={isMerchantPreview() ? 0 : undefined} role={isMerchantPreview() ? 'button' : undefined} className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
