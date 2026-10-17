@@ -16,6 +16,8 @@ AMCMM AI 工作台接口、MCP、个人偏好、额度与恢复契约见 [IAIC �
 
 内容创意工作区当前契约（2026-10-16，本地已实现、未部署）见 [创意追溯](creative-lineage.md)：月度频率只形成无日期创意目标；来源与媒体走品牌/月授权商户接口；先推荐 SKU、人工确认，再生成及采用脚本候选；共享修订和反馈；只有显式 schedule/unschedule 改变关联草稿。视频创建、保存及素材库重开固定创意版本和来源/SKU/镜头映射。迁移默认只读，未知证据不补造，见 [迁移手册](creative-workspace-migration.md)。旧版上线记录不是本轮发布证据。
 
+品牌策划四步接口（2026-10-18，本地实现，未发布）：`GET/POST /api/brands/{id}/insight`、`POST /api/brands/{id}/planning-document` 及 `/attachments`；申请、报告来源、文档确认和附件限制见 [品牌策划工作区](amc-planning-workspace.md)。
+
 设计原则：
 
 1. AMCMM 持久 AI 工作使用独立 IAIC Core；现有 Dify/业务作业保留原职责，不与 Core 任务混为一套状态。
@@ -605,7 +607,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **296** 个 API 路径、**428** 个 HTTP 方法组合。
+共 **301** 个 API 路径、**437** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -687,6 +689,7 @@ Permanent QR contract:
 | GET | `/api/brands/{id}/actions` |
 | PATCH | `/api/brands/{id}/actions/{aid}/approve` |
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
+| GET, POST, PUT | `/api/brands/{id}/activity-page` |
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
 | GET, POST | `/api/brands/{id}/ai/autopilot` |
 | POST | `/api/brands/{id}/ai/bug-reports` |
@@ -743,10 +746,12 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/drafts/sync-statuses` |
 | DELETE, GET, PATCH, POST | `/api/brands/{id}/folders` |
 | GET, POST | `/api/brands/{id}/google-import` |
+| GET, PUT | `/api/brands/{id}/google-map` |
 | GET, POST | `/api/brands/{id}/growth-sync` |
 | GET, PATCH | `/api/brands/{id}/identity` |
 | POST | `/api/brands/{id}/identity/{field}/sync` |
 | GET, POST | `/api/brands/{id}/inbox-state` |
+| GET, POST | `/api/brands/{id}/insight` |
 | GET, PATCH | `/api/brands/{id}/knowledge` |
 | POST | `/api/brands/{id}/logo` |
 | POST | `/api/brands/{id}/marketing-plan/generate` |
@@ -757,6 +762,8 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/owners` |
 | DELETE, PATCH | `/api/brands/{id}/owners/{userId}` |
 | GET, POST | `/api/brands/{id}/planning` |
+| POST | `/api/brands/{id}/planning-document` |
+| POST | `/api/brands/{id}/planning-document/attachments` |
 | GET, POST | `/api/brands/{id}/posts` |
 | GET, POST | `/api/brands/{id}/posts/publish` |
 | GET, PATCH | `/api/brands/{id}/profile` |

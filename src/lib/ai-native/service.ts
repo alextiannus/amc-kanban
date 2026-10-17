@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto'
 import {laneCursors,nextLaneCursor} from './runtime-routing'
 import {activeConversationStatus,wakeConversationWorker} from './conversation-status'
 import {conversationProgress,conversationInsight} from './conversation-progress'
@@ -356,5 +357,10 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
  const task=await readNativeTask(userId,brandId,taskId)
  const draft=task.kind==='conversation'&&task.status==='succeeded'?(task.report as any)?.planningDraft:null
  if(!draft)throw nativeError('planning_draft_unavailable',409)
- return savePlanningDraft(userId,brandId,taskId,draft)
+ const host=await taskHost(userId,brandId,taskId)
+ const history=(await nativeTaskHistory(host.app,host.actor,taskId,false)).history
+ const source=(history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
+ const skillContent=source?.skill?.content
+ const provenance={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
+ return savePlanningDraft(userId,brandId,taskId,draft,provenance)
 }

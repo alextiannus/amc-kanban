@@ -5,13 +5,14 @@ import {brandFor,digest,nativeError,type NativeActor} from './contract'
 /** Only revision metadata crosses this boundary, never the large source documents. */
 export async function conversationSourceRevision(actor:NativeActor){
   const brandId=brandFor(actor)
-  const [brand,interview,growth]=await Promise.all([
+  const [brand,interview,growth,attachments]=await Promise.all([
     prisma.brand.findUnique({where:{id:brandId},select:{updatedAt:true,knowledge:{select:{updatedAt:true}}}}),
     prisma.brandPlanInterview.findFirst({where:{brandId},orderBy:{completedAt:'desc'},select:{id:true,updatedAt:true}}),
     prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'},select:{id:true,updatedAt:true}}),
+    prisma.mediaAsset.findFirst({where:{brandId,technicalMetadata:{path:['planningAttachment'],equals:true}},orderBy:{updatedAt:'desc'},select:{id:true,updatedAt:true}}),
   ])
   if(!brand)throw nativeError('brand_context_unavailable',404)
-  return digest([brand,interview,growth])
+  return digest([brand,interview,growth,attachments])
 }
 
 /** Actor authorization is performed by the caller on every access, including hits.

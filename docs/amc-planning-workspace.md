@@ -1,22 +1,55 @@
+---
+status: implemented-local
+lifecycle_class: fixed-reference
+updated: 2026-10-18
+---
+
 # AMCMM 品牌策划共创工作区
 
-状态：2026-10-14，已上线。Kanban `720f8f0f`，AMCMM `a988b7b`；两个 Render 部署均为 live。
+四步流程已本地实现，尚未发布。本文件描述当前目标和本地代码，不把旧五步版本的生产 SHA 作为本次上线证明。
 
-电脑端：阶段导航、策划画布、User AI 对话三栏；中等宽度横向阶段导航与双栏。手机端：横向阶段切换与策划／对话双视图，固定操作区；键盘打开时精简导航，保证输入与发送可见。
+## 四步流程
 
-洞察、访谈、宣传重心、卖点、年度主线及四个季度均可独立选择；允许先生成草案再讨论。快捷操作绑定当前范围、起始月份和未采用草案，下一轮修改保留基线。AI 普通讨论主动给出方案，可提供有用的后续快捷操作，只对关键缺口集中提问；当前阶段与讨论摘要采用结构化展示（2026-10-14 已上线），不把讨论摘要当成保存或批准回执。用户和品牌隔离保存对话、输入、原任务和候选；品牌切换中止旧请求。
+1. **AI Insight**：只展示最新已完成报告。统一比较本品牌已保存摸底报告、Growth 当前 V3 报告及 `BrandMarketingSolution.kind=MANAGEMENT_REPORT` 的完成版本；按分析周期结束时间、完成时间和稳定 ID 排序，日期缺失不能当作最新。只读取真实产物，不把原管理报告页面的演示数据当成真实月报。Growth 读取失败保留已存报告，标明来源状态；无任何可读来源且上游不可读时提示读取问题。
+2. **品牌访谈**：AMC Skill 根据同一最新报告、历史问答和已保存附件准备可编辑调研文档，区分来源、时间、用户确认和待确认。支持直接编辑、对话和上传资料。
+3. **营销方向与卖点**：合并两个旧步骤，在同一文档讨论目标客群、宣传重心、卖点证据、主推产品与资源限制，用户确认后绑定访谈版本。
+4. **品牌营销策划**：以已确认访谈和方向生成品牌特点、卖点、SWOT、自然年度全年活动日历及策划、从选定起始月开始连续六个月的执行计划、店内经营配合及品牌营销创意。可编辑文档由全部校验章节生成，不能仅保存模型回复摘要。
 
-对话统一调用既有 User AI 任务服务与 AMC 营销专家。`planningScope` 固定阶段、0–3 季度序号、开始月份及讨论／草案模式。自由输入明确要求生成时也可产生候选。返回 `planningDraft`，包括作用范围、工作区版本、标题、讨论内容及年度／季度结构字段。年度第几季和自然年季度标签不同，定位使用精确月份；AI 使用宿主计算的显示标签。
+独立季度导航移除；旧 `focus`、`selling_points`、`annual` 和 `quarter` 契约及原数据保留，季度和内容日历不自动重建。已有年度/季度策划通过第四步详情对照。
 
-采用入口：`POST /api/brands/:id/ai/tasks/:taskId/planning`。浏览器只提交原任务 ID，后端回读已验证的持久产物，重新校验当前用户和品牌权限。品牌锁、JSON CAS 和版本摘要防止覆盖并发更新；审计回执令重复采用幂等。工作区资料和版本来自同一数据库快照。年度主线只合并对应字段，季度只替换该月份区间；其他季度与内容日历保持原值。沿用 `BrandMarketingSolution` 版本表。阶段笔记保存到既有 `marketingSolution.coCreation`，不自动写成 Growth 已验证事实。
+## 报告申请
 
-已有季度后冻结计划起始月份；跨年旧计划按起始月份匹配，不能拿自然年 Q1–Q4 标签作为滚动年度的唯一标识。部分季度可先保存，不强迫一键生成全年。候选与已保存内容可对照查看；保存冲突保留候选，提示基于最新资料重新整理。原品牌资料、声音与渠道配置通过辅助入口保留。
+无报告时显示「品牌报告尚未完成」与「Request an AI Insight Report」。点击后服务端预留申请 ID，以稳定 provider idempotency key 创建 Growth 任务。丢失回执保留原申请，重试同一 key；处理中的重复申请返回原 ID。申请成功显示「已申请，报告完成后将在此展示」。需要证据复核、失败及服务不可读分别展示，不能把申请成功当作报告完成。
 
-验证：
-- `scripts/test-planning-workspace.mts`：作用域、准确月份、跨年季度、其他季度与内容日历保留、并发幂等、旧版本冲突、年度历史和阶段笔记。
-- `scripts/test-brand-planning.mts`：真实 IAIC 运行时的年度及季度候选契约、工具证据、品牌与用户隔离。
-- AMCMM `scripts/test-planning-workspace-ui.mjs`：四种屏宽、键盘、候选刷新恢复、继续修改带入草案、快捷回复、采用与冲突重试。
-- 原文字／语音对话组件与原 User AI 回归、两端类型检查及生产构建通过。
-- 真实中央模型与 Growth 联调输出 Q3 · 2027-05 – 2027-07 候选，用量完整；只保存隔离 Agent 验收记录，没有采用到真实品牌计划。
+| API | 作用 |
+| --- | --- |
+| `GET /api/brands/:id/insight` | 读取统一最新报告、来源状态和真实申请状态；有写权限时核对并同步已完成原任务，不启动新调研 |
+| `POST /api/brands/:id/insight` | 显式申请或恢复原申请，返回真实申请 ID |
+| `POST /api/brands/:id/ai/tasks/:taskId/planning` | 从原持久任务读取并保存经过验证的候选，不接受浏览器伪造的 AI 产物 |
+| `POST /api/brands/:id/planning-document` | 保存文档或显式确认，提交 stage/action/content/attachmentIds/expectedRevision/requestKey |
+| `POST /api/brands/:id/planning-document/attachments` | multipart `file`，保存本品牌附件及实际解析状态 |
 
-生产核验：新采用接口匿名请求返回 401；Skill Markdown 与 ZIP 均返回 200，SHA-256 与源文件一致。AMCMM 生产构建成功并上线。响应式交互与保存回归使用实际组件和隔离数据库；真实模型联调验证候选生成，未在生产真实品牌中执行采用。
+## 文档、确认与附件
+
+保存草稿与确认分开。服务端记录确认人、时间和输入版本，使用品牌行锁、工作区 revision、审计和幂等回执；冲突保留浏览器草稿。方向依赖已确认访谈，完整策划依赖二者的当前确认版本。长文压缩后的摘录不能代替服务端完整资料计算的 `confirmationState`。
+
+附件支持 TXT、Markdown、PDF、JPG、PNG、WebP，单个不超过 10MB，每份访谈最多 20 个引用。使用 OBS 存储，文字提取后仍标为待确认；图片复用现有分析队列，未配置或未完成分析时保留待核对状态。PDF 原件可以提交，当前未提供 PDF 自动文字提取，需用户补充重点信息。解析不成功不丢附件，也不声称 AI 已读懂。
+
+确认过的上游文档修改后，新生成及确认不能继续沿用失效输入。既有方案保留并提示重新核对。完整方案的人工编辑文档为当前内容，`structuredDataStale` 表示原结构化生成字段只供对照。正式确认另存 `BrandMarketingSolution` 版本。草案记录真实生成任务加载的 Skill 内容哈希及报告引用，不能用采用时的新 Skill 冒充生成时版本。
+
+## 界面与权限
+
+桌面阶段导航、文档和对话分栏；手机采用阶段切换和文档/对话双视图。AI Insight 隐藏通用讨论、草案及起始月份操作。键盘打开时精简导航，保持输入和发送可见。品牌切换隔离报告、对话、候选、编辑草稿和在途回执。新写接口在 MM 代理和业务端均检查适用的来源及品牌写权限，multipart 保持原始二进制。
+
+## 验证入口
+
+- `scripts/test-brand-planning-v2.mts`：最新报告排序、必需章节、跨年六个月及旧数据保留。
+- `scripts/test-latest-insight.mts`：真实隔离数据库月报、摸底及 Growth fixture 的统一选择和离线回退。
+- `scripts/test-insight-request.mts`：持久申请、未知结果恢复、provider key 和重复请求。
+- `scripts/test-planning-document.mts`：保存/确认、长文确认状态、附件隔离、完整方案及版本历史。
+- `scripts/test-planning-workspace.mts`：旧年度/季度、冲突和并发幂等。
+- `scripts/test-brand-planning.mts`：真实 IAIC 运行时，含合并方向及完整策划，模型/Growth 使用 fixture。
+- MM `scripts/test-planning-workspace-v2-ui.mjs`：实际组件、四种屏宽、键盘视区、申请、文档和确认。
+- MM `scripts/test-planning-proxy.mts`：跨站写拒绝及二进制附件代理。
+
+真实中央模型和 OBS/Growth 的登录后线上联调、发布及 live 健康标记不属于这些 fixture 测试的证明范围。

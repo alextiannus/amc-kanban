@@ -1,4 +1,4 @@
-import {planningRevision} from '../ai-native/planning-workspace-contract'
+import {planningReviewState,planningRevision} from '../ai-native/planning-workspace-contract'
 import {buildMarketingExpertPrompt,type MarketingPlanLLMScope} from './marketingExpert'
 import { protectTrackedCreativeChanges } from './creativeRevisions'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, revisionPeriod } from './creativeRevisionContract'
@@ -367,6 +367,7 @@ export async function getBrandPlan(brandId: string) {
     brand: serializeBrandSummary(brand),
     marketingSolution,
     marketingSolutionRevision: planningRevision(brand.knowledge?.marketingSolution),
+    planningReview:planningReviewState(marketingSolution),
     brandClaim: brand.knowledge?.brandClaim || null,
     brandPlan: marketingSolution,
     merchantInterview,

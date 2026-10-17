@@ -1,6 +1,6 @@
 import {activeConversationStatus,wakeConversationWorker} from '../src/lib/ai-native/conversation-status.ts'
 import {getBrandPlan,getBrandPlanningContext} from '../src/lib/brand-plan/service.ts'
-import {planningDraftContract} from '../src/lib/ai-native/planning-workspace-contract.ts'
+import {planningRevision,planningDraftContract} from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {checkPlanningBudget} from '../src/lib/ai-native/planning-budget.ts'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -8,7 +8,7 @@ import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {nativePool,initializeHost,admitIntent,intentForTask} from '../src/lib/ai-native/store.ts'
 import {actorFor,conversationFrom,conversationInput,type ConversationIntent} from '../src/lib/ai-native/contract.ts'
 import {prisma} from '../src/lib/prisma.ts'
-import {projectPlanningReport,readPlanningInsight,readMarketingWorkspace,projectSavedAnnualPlan} from '../src/lib/ai-native/brand-planning.ts'
+import {projectInsightSections,projectPlanningReport,readPlanningInsight,readMarketingWorkspace,projectSavedAnnualPlan} from '../src/lib/ai-native/brand-planning.ts'
 
 const url=new URL(process.env.DATABASE_URL||'')
 assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
@@ -19,6 +19,8 @@ assert.throws(()=>conversationInput({goal:'Hello',history:Array.from({length:6},
 assert.deepEqual(conversationInput({goal:'Hello',history:[{role:'user',content:'Hi',system:'untrusted'}]}).history,[{role:'user',content:'Hi'}])
 const projected=projectPlanningReport({sources:'x'.repeat(50000),growth_recommendations:['Important late section'],evidence_gaps:['Unknown budget']})
 assert(projected.partial);assert.deepEqual((projected.report as any).growth_recommendations,['Important late section']);assert(JSON.stringify(projected.report).length<30000)
+const lateReport=projectInsightSections({id:'report',type:'research',title:'Report',source:'fixture',periodEnd:null,completedAt:null,content:'## Sources\n'+'source '.repeat(10000)+'\n## Growth opportunities\nKnown late decision'})
+assert(lateReport.partial);assert(lateReport.report?.content.includes('Known late decision'),'Long source lists cannot hide later report analysis')
 const annualProjection=projectSavedAnnualPlan({goal:'G'.repeat(1000),theme:'Theme',generatedAt:'2026-10-14',planningStartMonth:'2027-01',strategyPrinciples:Array(3).fill('Principle'),platformStrategy:[],contentPillars:[],metrics:[],researchFocus:'Research',subscriptionStrategy:{},generationMode:'LLM',llmProvider:'test',llmModel:'test',quarterlyFocus:[],quarterlyPlans:Array.from({length:4},(_,q)=>({quarter:`Q${q+1}`,year:2027,startMonth:'2027-01',endMonth:'2027-12',periodLabel:'period',strategy:'strategy',focus:'focus',promotionPoints:[],campaigns:[],contentThemes:[],monthlyFocus:Array.from({length:3},(_,m)=>({month:`2027-${String(q*3+m+1).padStart(2,'0')}`,focus:'Confirmed month focus',promotionPoints:['Existing selling point']}))}))})
 assert.equal((annualProjection.report as any).quarterlyPlans.flatMap((q:any)=>q.monthlyFocus).length,12)
 assert.equal((annualProjection.report as any).quarterlyPlans[3].monthlyFocus[2].month,'2027-12')
@@ -55,11 +57,11 @@ const model={next:async(request:any)=>{
 let app:any
 try{
   await initializeHost(pool)
-  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContextRevision:async()=>sourceRevision,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'missing',revision:'0'.repeat(64),workspace:null}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
+  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContextRevision:async()=>sourceRevision,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'available',revision:'0'.repeat(64),workspace:{coCreation:{interview:{status:'confirmed',content:'Confirmed interview'},direction:{status:'confirmed',content:'Confirmed direction',inputVersions:{interview:planningRevision({status:'confirmed',content:'Confirmed interview'})}}}}}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
-  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning'] as const).entries()){
+  for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning'] as const).entries()){
     if(index===7)sourceRevision='two'
-    const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3)?{planningScope:{stage:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
+    const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3||index===8||index===9)?{planningScope:{stage:index===8?'direction' as const:index===9?'marketing_plan' as const:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
     await admitIntent(pool,actor,intent)
     await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
     const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot')&&(topic==='brand_planning'||t!=='amc.growth_insight'))}
@@ -101,7 +103,7 @@ try{
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
   await prisma.brandPlanInterview.create({data:{brandId:id,rawNotes:'访谈原始记录',answers:[{question:'目标',answer:'家庭聚餐'}]}})
-  await prisma.brandKnowledge.update({where:{brandId:id},data:{brandPlan:{coCreation:{focus:'legacy focus'}},researchReport:{summary:'Saved evidence'}}})
+  await prisma.brandKnowledge.update({where:{brandId:id},data:{brandPlan:{coCreation:{focus:'legacy focus'}},researchReport:{}}})
   const narrow=await getBrandPlanningContext(id),full=await getBrandPlan(id)
   for(const key of ['marketingSolution','marketingSolutionRevision','brandClaim','merchantInterview'])assert.deepEqual((narrow as any)[key],(full as any)[key],'narrow query preserves '+key)
   const savedWorkspace=await readMarketingWorkspace(actor)
@@ -121,7 +123,7 @@ try{
     await prisma.brandGrowthResearchSnapshot.create({data:{brandId:id,source:'amc-growth',sourceVersion:'2026-10-01',report:{growthBrandKey:'research-key',reportVersionId:'41',generatedAt:'2026-10-01',structuredReport:{growth_recommendations:['Saved insight']}}}})
     const cached=await readPlanningInsight(actor);assert.equal(cached.status,'cached');assert.equal((cached as any).liveStatus,'unavailable')
     paths.length=0
-    globalThis.fetch=async(input:any)=>{const url=new URL(String(input));paths.push(url.pathname);return Response.json(url.pathname.endsWith('/research-key/versions')?{items:[{tier:'initial',report_version_id:43,created_at:'2026-10-02',result:{report_template_version:'v3'}}]}:url.pathname.endsWith('/versions')?{items:[]}:{insights:['Fresh research-key insight']})}
+    globalThis.fetch=async(input:any)=>{const url=new URL(String(input));paths.push(url.pathname);return Response.json(url.pathname.endsWith('/research-key/versions')?{items:[{tier:'initial',report_version_id:43,created_at:'2026-10-02',result:{report_template_version:'v3'}}]}:url.pathname.endsWith('/versions')?{items:[]}:{generated_at:'2026-10-02',insights:['Fresh research-key insight']})}
     assert.equal((await readPlanningInsight(actor)).status,'available');assert(paths.includes('/v1/admin/reports/research-key/versions'))
     await prisma.brandGrowthResearchSnapshot.deleteMany({where:{brandId:id}})
     globalThis.fetch=async()=>Response.json({items:[]})

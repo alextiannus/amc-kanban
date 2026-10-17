@@ -3,7 +3,7 @@ export const UI_PAGES = {
   bd: ['专属邀请码', 'Invite Users', 'BD only: view and copy the current business development invite code.'],
   bd_revenue: ['收入业绩看板', 'Revenue Board', 'BD only: view the current business development revenue and performance.'],
   bd_leads: ['销售线索管理', 'Sales Leads', 'BD only: review, add and update sales leads through existing forms.'],
-  brand_story: ['品牌策划', 'Brand Planning', 'Step-by-step brand planning, owner interviews, annual direction and individual quarters.'],
+  brand_story: ['品牌策划', 'Brand Planning', 'AI Insight, editable brand interview, marketing direction and selling points, and a complete brand marketing plan.'],
   calendar: ['发布日历', 'Publishing Calendar', 'Review drafts, scheduled and published content, edit or publish through existing controls.'],
   ai_workspace: ['品牌创意', 'Brand Ideas', 'Browse brand ideas, review and edit scripts, continue tasks and hand off to production.'],
   assets: ['素材库', 'Asset Library', 'Upload, search and select existing brand images and videos for content creation.'],
