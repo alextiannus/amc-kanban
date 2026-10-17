@@ -181,7 +181,7 @@ Merchant voiceover current implementation contract (pending deployment): [mercha
 - 页面底部固定显示 `Powered by [AMC 图标] AMC - AI Marketing Crew`。
 
 
-- 顾客活动页及打印页由 `amc.immedi.ai` 同源提供，MM 代理 Kanban 页面与隔离的 `/activity-assets/_next/static/` 静态资源，不重定向到后台域名；API 继续复用现有代理。旧 Kanban 活动链接保持可访问。域名迁移代码待发布，线上状态以健康检查和公开页面验证为准。
+- 顾客活动页及打印页由 `amc.immedi.ai` 同源提供，MM 代理 Kanban 页面与隔离的 `/activity-assets/_next/static/` 静态资源，不重定向到后台域名；API 继续复用现有代理。旧 Kanban 活动链接保持可访问。已完成主域名活动页、打印二维码及跨域实时预览的公开只读验证；线上状态以健康检查为准。
 - 复用 `/game/{brandId}` 固定二维码。上部显示品牌名称、所有已绑定且具有有效 HTTP(S) 主页链接的社交账号 icon、平台和账号名称，以及独立的 Google 真实评价入口；不根据 handle 猜测主页。关注与评价跳转不发积分、不调用活动接口。
 - 下部仅已配置活动轮次的品牌显示活动信息（打开设置自动创建的默认 GameConfig 不算已配置活动）；有生效轮次时保留原分享领分与抽奖规则，未配置时自动隐藏，不能创建默认活动或虚构奖品。公开配置请求在没有活动时只返回品牌公开展示字段，不返回凭证或店员 PIN。
 - 社交入口独立于抽奖任务开关与活动状态；活动状态读取失败不影响关注入口，需明确提示活动加载失败，不能当成无活动。历史奖品仍可查看与使用。
