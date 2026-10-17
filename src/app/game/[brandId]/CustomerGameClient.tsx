@@ -1173,7 +1173,6 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
           <div className="flex items-center justify-center gap-2">
-            <img src="/logos/amc-sunflower.svg" alt="AMC" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
             <p className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{config?.brand?.name || t.defaultBrand}</p>
           </div>
           <h1 className="mt-3 text-2xl font-black leading-tight text-slate-900">{locale === 'zh' ? '嗨，很高兴遇见你！' : 'Hi, lovely to see you!'}</h1>
@@ -1418,7 +1417,9 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </div>
           )}
         </div>
-        <footer className="px-5 pb-4 pt-1 text-center text-[11px] leading-5 text-slate-500">Powered by AI Marketing Crew (AMC)</footer>
+        <footer className="flex flex-wrap items-center justify-center gap-1.5 px-5 pb-4 pt-1 text-center text-[11px] leading-5 text-slate-500">
+          <span>Powered by</span><img src="/logos/amc-sunflower.svg" alt="" aria-hidden="true" width={16} height={16} className="h-4 w-4 rounded" /><span>AMC - AI Marketing Crew</span>
+        </footer>
       </section>
     </main>
   )
