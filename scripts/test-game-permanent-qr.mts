@@ -9,6 +9,7 @@ import {
 } from '../src/lib/gameQr.ts'
 import { buildPrizeSnapshot, hasPrizeIdentityChanged } from '../src/lib/gamePrizes.ts'
 
+assert.equal(PERMANENT_GAME_ORIGIN, 'https://amc.immedi.ai')
 const brandId = 'brand-permanent-qr'
 const permanentUrl = getPermanentGameUrl(brandId)
 

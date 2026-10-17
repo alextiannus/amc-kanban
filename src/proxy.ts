@@ -51,7 +51,8 @@ export default async function proxy(request: NextRequest) {
   requestHeaders.set('x-amc-request-id', requestId)
 
   // ── Main app (immedi.ai) ──────────────────────────────────────────────────
-  const isPublicPage = publicSocialIcon ||
+  const publicActivityAsset = ['GET', 'HEAD'].includes(request.method) && pathname.startsWith('/activity-assets/_next/static/')
+  const isPublicPage = publicActivityAsset || publicSocialIcon ||
     pathname === '/tiktokWdXr977VBxysOGiXvrulDAH3ZeoG1iAD.txt' ||
     pathname === '/terms' ||
     pathname === '/privacy' ||

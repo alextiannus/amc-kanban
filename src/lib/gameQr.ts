@@ -1,4 +1,4 @@
-export const PERMANENT_GAME_ORIGIN = 'https://amc-kanban.immedi.ai'
+export const PERMANENT_GAME_ORIGIN = 'https://amc.immedi.ai'
 
 export const PERMANENT_GAME_QR_OPTIONS = {
   width: 640,

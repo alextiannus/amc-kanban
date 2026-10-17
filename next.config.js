@@ -2,6 +2,11 @@ const path = require('path')
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	// Keep Kanban chunks separate from MM chunks when the public activity is served on amc.immedi.ai.
+	assetPrefix: '/activity-assets',
+	async rewrites() {
+		return [{ source: '/activity-assets/_next/static/:path*', destination: '/_next/static/:path*' }]
+	},
 	allowedDevOrigins: ['127.0.0.1'],
 	serverExternalPackages: ['mediainfo.js', '@immedi/iaic-core', 'pg'],
 	transpilePackages: [
