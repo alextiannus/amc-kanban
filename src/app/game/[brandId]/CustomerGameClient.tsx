@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { activityTextDefaults, normalizeActivityPage, type ActivityPage, type ActivityTextKey } from '@/lib/activityPage'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
 import { publicHttpUrl } from '@/lib/brandFollowLinks'
 import BrandFollowPanel from '@/components/BrandFollowPanel'
@@ -31,6 +32,7 @@ type GameConfig = {
   templateType: 'WHEEL' | 'GRID'
   prizes: Prize[]
   brand?: {
+    activityPage?: ActivityPage
     name?: string
     followRewardDescription?: string | null
     location?: string | null
@@ -705,6 +707,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const savedPreviewConfig = useRef<GameConfig | null>(null)
   const previewBrandOverrides = useRef<NonNullable<GameConfig['brand']>>({})
   const [draftActivity, setDraftActivity] = useState(false)
+  const [editingPage, setEditingPage] = useState(false)
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [status, setStatus] = useState<GameStatus | null>(null)
   const [sessionId, setSessionId] = useState('')
@@ -724,6 +727,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
   const [redeemingLogId, setRedeemingLogId] = useState<string | null>(null)
 
+  const pageText = (key: ActivityTextKey) => config?.brand?.activityPage?.text?.[locale]?.[key] ?? activityTextDefaults[key][locale]
+
   const amcDefault = !config?.brandThemeColor
   const entryTheme = brandEntryTheme(config?.brandThemeColor || '#ffd84a')
   const pageBackground = '#f7f3dc'
@@ -735,19 +740,18 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     return () => window.removeEventListener('languagechange', updateLanguage)
   }, [])
   const t = copy[locale]
-  const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
+  const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config?.prizes])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
   const spinsRemaining = status?.spinsRemainingToday ?? dailyLimit
   const activePlatforms = useMemo<Platform[]>(() => {
-    if (!config) return []
     const platforms: Platform[] = []
-    if (config.taskGoogleMapsEnabled) platforms.push('GOOGLE')
-    if (config.taskXiaohongshuEnabled) platforms.push('XIAOHONGSHU')
-    if (config.taskInstagramEnabled) platforms.push('INSTAGRAM')
+    if (config?.taskGoogleMapsEnabled) platforms.push('GOOGLE')
+    if (config?.taskXiaohongshuEnabled) platforms.push('XIAOHONGSHU')
+    if (config?.taskInstagramEnabled) platforms.push('INSTAGRAM')
     return platforms
-  }, [config])
-  const activityActive = Boolean(status?.activeRound) || draftActivity
-  const showGame = activityActive && Boolean(status?.entryRewardClaimed)
+  }, [config?.taskGoogleMapsEnabled, config?.taskXiaohongshuEnabled, config?.taskInstagramEnabled])
+  const activityActive = config?.hasActivity !== false && (Boolean(status?.activeRound) || draftActivity)
+  const showGame = activityActive && (Boolean(status?.entryRewardClaimed) || draftActivity)
   const formatRoundTime = (value: string) => {
     try {
       return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en', {
@@ -844,6 +848,15 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }, [activePlatforms, brandId, config])
 
   useEffect(() => {
+    const elements = document.querySelectorAll<HTMLElement>('[data-activity-edit]')
+    for (const element of elements) {
+      if (element.tagName === 'A') continue
+      if (editingPage) { element.tabIndex = 0; element.setAttribute('role', 'button') }
+      else { element.removeAttribute('tabindex'); element.removeAttribute('role') }
+    }
+  })
+
+  useEffect(() => {
     if (!isMerchantPreview()) return
     const receive = (event: MessageEvent) => {
       if (event.source !== window.parent || (event.origin !== 'https://amc-mm.immedi.ai' && event.origin !== window.location.origin)) return
@@ -853,6 +866,9 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       const draft: GameConfig = { ...base, brand: { ...base.brand } }
       const brandOverrides: NonNullable<GameConfig['brand']> = {}
       if (typeof data.rewardDescription === 'string') brandOverrides.followRewardDescription = data.rewardDescription.slice(0, 500)
+      if (data.locale === 'zh' || data.locale === 'en') setLocale(data.locale)
+      setEditingPage(data.editing === true)
+      try { if (data.activityPage) brandOverrides.activityPage = normalizeActivityPage(data.activityPage) } catch { return }
       const input = data.config
       if (input && typeof input === 'object') {
         for (const key of ['googleBusinessUrl', 'googleReviewUrl'] as const) if (typeof input[key] === 'string') brandOverrides[key] = publicHttpUrl(input[key])
@@ -868,7 +884,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       previewBrandOverrides.current = brandOverrides
       draft.brand = { ...draft.brand, ...brandOverrides }
       const showActivity = data.previewActivity === true
-      draft.hasActivity = base.hasActivity !== false || showActivity
+      draft.hasActivity = showActivity
       setDraftActivity(showActivity)
       setConfig(draft)
       if (showActivity) setStatus(current => current ?? { pointsBalance: 0, unclaimedPrizes: [], activeRound: null, nextRound: null, entryRewardClaimed: false })
@@ -1270,26 +1286,41 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main onClickCapture={event => {
+    <main data-editing={editingPage ? 'true' : undefined} onKeyDownCapture={event => {
+      if (editingPage && (event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-activity-edit]')) { event.preventDefault(); event.target.click() }
+    }} onClickCapture={event => {
       if (!isMerchantPreview()) return
+      if (editingPage) {
+        event.preventDefault()
+        event.stopPropagation()
+        const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-activity-edit]') : null
+        if (target && document.referrer) {
+          const origin = new URL(document.referrer).origin
+          if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) {
+            window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_EDIT', brandId, field: target.dataset.activityEdit, linkKey: target.dataset.linkKey, originalUrl: target.dataset.linkOriginal, url: target.closest('a')?.href }, origin)
+          }
+        }
+        return
+      }
       const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>('a[data-preview-account-link="true"]') : null
       if (link?.target === '_blank' && publicHttpUrl(link.href)) return
       event.preventDefault()
       event.stopPropagation()
     }} onSubmitCapture={event => { if (isMerchantPreview()) { event.preventDefault(); event.stopPropagation() } }} lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
+      {editingPage && <style>{`[data-editing="true"] [data-activity-edit]{cursor:pointer;outline:1px dashed #2563eb55;outline-offset:4px;border-radius:4px}[data-editing="true"] [data-activity-edit]:hover{outline:2px solid #2563eb;background-color:#2563eb0d}[data-editing="true"] [data-activity-edit]:focus-visible{outline:2px solid #2563eb}`}</style>}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
           <div className="flex items-center justify-center gap-2">
-            <p className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{config?.brand?.name || t.defaultBrand}</p>
+            <p data-activity-edit="brandName" className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{pageText('brandName') || config?.brand?.name || t.defaultBrand}</p>
           </div>
-          <h1 className="mt-3 text-2xl font-black leading-tight text-slate-900">{locale === 'zh' ? '嗨，很高兴遇见你！' : 'Hi, lovely to see you!'}</h1>
-          <p className="mt-2 text-sm leading-5 text-slate-600">{locale === 'zh' ? '谢谢你的到来，让我们把这份缘分留久一点。' : 'Thanks for stopping by. Let’s make this the start of something lovely.'}</p>
+          <h1 data-activity-edit="greeting" className="mt-3 text-2xl font-black leading-tight text-slate-900">{pageText('greeting')}</h1>
+          <p data-activity-edit="greetingNote" className="mt-2 text-sm leading-5 text-slate-600">{pageText('greetingNote')}</p>
         </header>
         <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
           <BrandFollowPanel preview={isMerchantPreview()} brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
-          {config?.hasActivity !== false && status && <div className="px-1 pt-3">
+          {config?.hasActivity !== false && status && <div data-activity-edit="draw" className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
             <p className="mt-2 text-sm text-slate-500">{config?.description?.trim() || (locale === 'zh' ? '分享你的到店体验，参与店内抽奖。' : 'Share your visit and join our lucky draw.')}</p>
           </div>}
@@ -1312,8 +1343,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
             </section>
           )}
 
-          {activityActive && config && (
-            <section className="rounded-[28px] bg-white p-4 shadow-sm">
+          {config?.hasActivity !== false && config && status && (
+            <section data-activity-edit="draw" className="rounded-[28px] bg-white p-4 shadow-sm">
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">

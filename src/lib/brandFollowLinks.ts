@@ -1,4 +1,6 @@
+import { activityLinkKey, type ActivityPage } from './activityPage'
 export type FollowBrand = {
+  activityPage?: ActivityPage
   name?: string
   followRewardDescription?: string | null
   googlePlaceId?: string | null
@@ -45,7 +47,10 @@ export function brandFollowLinks(brand?: FollowBrand) {
   }
   const review = publicHttpUrl(brand?.googleReviewUrl) || (configuredPlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(configuredPlaceId)}` : null)
   if (review) links.push({ platform: 'google', handle: '', url: review, review: true })
-  return links
+  return links.map(link => {
+    const key = activityLinkKey(link.platform, link.review ? 'review' : link.handle)
+    return { ...link, key, originalUrl: link.url, url: publicHttpUrl(brand?.activityPage?.links?.[key]) || link.url }
+  })
 }
 
 // Derive app routes only from the configured, validated profile URL.

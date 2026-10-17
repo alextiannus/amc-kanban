@@ -12,7 +12,7 @@ function compile(file, dependencies = {}) {
   }, module, module.exports)
   return module.exports
 }
-const links = compile('src/lib/brandFollowLinks.ts')
+const links = compile('src/lib/brandFollowLinks.ts', { './activityPage': compile('src/lib/activityPage.ts') })
 const identities = compile('src/lib/socialAccountIdentity.ts')
 let accountReads = 0, postReads = 0
 const remotes = [

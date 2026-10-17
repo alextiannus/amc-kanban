@@ -5,14 +5,18 @@ const ts = require('typescript')
 
 let selected
 let configured = false
+let privateRead = false
 const brandFixture = { postfastApiKey: 'TEST_PRIVATE_KEY', followRewardDescription: null, name: 'TEST Brand', googlePlaceId: 'ChIJ_TEST_CONFIGURED', accounts: [], knowledge: null, googleLinksMeta: {} }
 const failWrite = () => assert.fail('Public follow entry must not create games or schedule writes')
+const activityModule = { exports: {} }
+new Function('module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/activityPage.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(activityModule, activityModule.exports)
 const dependencies = {
+  '@/lib/activityPage': activityModule.exports,
   '@/lib/brandFollowAccounts': { resolveBrandFollowAccounts: async accounts => accounts.map(({platformId,handle,profileUrl})=>({platformId,handle,profileUrl})) },
   '@/lib/followReward': { followRewardDescription: value => value ?? '关注账号，可获赠饮品一份' },
   'next/server': { NextResponse: { json: Response.json }, after: failWrite },
-  '@/lib/auth': { getSession: () => assert.fail('Public entry must not require a merchant session') },
-  '@/lib/brandAccess': {},
+  '@/lib/auth': { getSession: () => privateRead ? { user: { id: 'TEST_owner', role: 'USER' } } : assert.fail('Public entry must not require a merchant session') },
+  '@/lib/brandAccess': { canHumanAccessBrandProject: async () => true },
   '@/lib/gamePrizes': {},
   '@/lib/gameShareDraftPool': {},
   '@/lib/brandEntryTheme': { configuredBrandColor: () => null, safeBrandColor: value => value },
@@ -54,5 +58,14 @@ new Function('require', 'module', 'exports', compiled)(name => {
   assert.equal(JSON.stringify(configuredData).includes('TEST_PRIVATE_KEY'), false)
   assert.equal(JSON.stringify(configuredData).includes('TEST_PIN'), false)
   assert.equal(configuredData.brand.postfastApiKey, undefined)
+  brandFixture.activityPage = { text: {}, links: {}, drawEnabled: true }
+  assert.equal((await (await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'))).json()).hasActivity, true)
+  brandFixture.activityPage.drawEnabled = false
+  assert.equal((await (await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'))).json()).hasActivity, false)
+  configured = false
+  privateRead = true
+  const privateFollow = await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&initialize=false'))
+  assert.equal(privateFollow.status, 200)
+  assert.equal((await privateFollow.json()).hasActivity, false)
   console.log('PASS public configured and follow-only entry retains configured Place ID without creating a game or requiring authentication.')
 })().catch(error => { console.error(error); process.exitCode = 1 })

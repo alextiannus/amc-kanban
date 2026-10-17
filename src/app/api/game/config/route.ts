@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+import { normalizeActivityPage } from '@/lib/activityPage'
 import { resolveBrandFollowAccounts, type StoredFollowAccount } from '@/lib/brandFollowAccounts'
 import { followRewardDescription } from '@/lib/followReward'
 import { configuredBrandColor, safeBrandColor } from '@/lib/brandEntryTheme'
@@ -28,6 +29,7 @@ function googleReviewAppUrlFromMeta(value: unknown) {
 }
 
 type BrandEntrySource = {
+  activityPage?: unknown
   followRewardDescription: string | null
   postfastApiKey: string | null
   accounts: StoredFollowAccount[]
@@ -43,6 +45,7 @@ async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: 
     brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
     brand: {
       ...brand,
+      activityPage: normalizeActivityPage(brand.activityPage),
       followRewardDescription: followRewardDescription(brand.followRewardDescription),
       accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, config.brandId),
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
@@ -79,7 +82,7 @@ export async function GET(request: Request) {
         brand: {
           select: {
             name: true,
-            followRewardDescription: true, postfastApiKey: true,
+            followRewardDescription: true, activityPage: true, postfastApiKey: true,
             knowledge: { select: { marketingSolution: true } },
             location: true,
             timezone: true,
@@ -100,7 +103,7 @@ export async function GET(request: Request) {
     })
 
     // If config doesn't exist and it's a private request, initialize default settings
-    if (!config && !isPublic) {
+    if (!config && !isPublic && url.searchParams.get('initialize') !== 'false') {
       config = await prisma.gameConfig.create({
         data: {
           brandId,
@@ -132,7 +135,7 @@ export async function GET(request: Request) {
           brand: {
             select: {
               name: true,
-              followRewardDescription: true, postfastApiKey: true,
+              followRewardDescription: true, activityPage: true, postfastApiKey: true,
               knowledge: { select: { marketingSolution: true } },
               location: true,
               timezone: true,
@@ -154,11 +157,11 @@ export async function GET(request: Request) {
     }
 
     // The permanent brand entry remains available without creating a game.
-    if (!config && isPublic) {
+    if (!config && (isPublic || url.searchParams.get('initialize') === 'false')) {
       const brand = await prisma.brand.findUnique({
         where: { id: brandId },
         select: {
-          name: true, location: true, timezone: true, followRewardDescription: true, postfastApiKey: true,
+          name: true, location: true, timezone: true, followRewardDescription: true, activityPage: true, postfastApiKey: true,
           knowledge: { select: { marketingSolution: true } },
           googleLocationId: true, googlePlaceId: true,
           googleReviewUrl: true,
@@ -171,7 +174,7 @@ export async function GET(request: Request) {
       })
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
       const { knowledge, postfastApiKey, accounts, googleLocationId, ...brandFields } = brand
-      const publicBrand = { ...brandFields, followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
+      const publicBrand = { ...brandFields, activityPage: normalizeActivityPage(brandFields.activityPage), followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
       return NextResponse.json({
         hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,
@@ -183,22 +186,20 @@ export async function GET(request: Request) {
 
     const responseConfig = await prepareBrandEntryConfig(config)
 
+    const configuredRound = await prisma.gameActivityRound.findFirst({ where: { gameConfigId: config.id }, select: { id: true } })
+    const hasActivity = (Boolean(configuredRound) || responseConfig.brand.activityPage.drawEnabled === true) && responseConfig.brand.activityPage.drawEnabled !== false
     // Security: Do not expose clerkPin or the complete Google metadata on public API
     if (isPublic) {
-      const configuredRound = await prisma.gameActivityRound.findFirst({
-        where: { gameConfigId: config.id },
-        select: { id: true },
-      })
       const publicConfig = {
         ...responseConfig,
         themeColor: responseConfig.brandThemeColor || safeBrandColor(config.themeColor) || '#334155',
-        hasActivity: Boolean(configuredRound),
+        hasActivity,
         clerkPin: undefined,
       }
       return NextResponse.json(publicConfig)
     }
 
-    return NextResponse.json(responseConfig)
+    return NextResponse.json({ ...responseConfig, hasActivity })
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[GET /api/game/config]', e)

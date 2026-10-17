@@ -387,6 +387,7 @@ model Brand {
 
   // Brand profile (Agent can populate these)
   followRewardDescription String? @db.Text // Optional merchant-written follow reward copy
+  activityPage Json? // Merchant-owned page copy, destination overrides and activity selection
   description       String? // Brand tagline / about text
   industry          String? // Merchant industry/category synchronized to Growth
   logoUrl           String? // Brand logo image URL
