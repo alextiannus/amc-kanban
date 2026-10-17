@@ -23,6 +23,7 @@ function PlatformMark({ platform }: { platform: string }) {
 
 export default function BrandFollowPanel({ brand, locale, themeColor, standalone = false }: { brand?: FollowBrand; standalone?: boolean; locale: 'zh' | 'en'; themeColor?: string }) {
   const zh = locale === 'zh'
+  const platformName = (platform: string) => !zh && platform === 'xiaohongshu' ? 'RedNote' : !zh && platform === 'wechat' ? 'WeChat' : labels[platform] || platform
   const theme = brandEntryTheme(themeColor)
   const links = brandFollowLinks(brand)
   const accounts = links.filter(link => !link.review)
@@ -82,7 +83,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
       {accounts.length ? <div className={`relative grid ${stickerLayout ? `${accounts.length === 2 ? 'grid-cols-2' : accounts.length === 3 ? 'grid-cols-3' : 'grid-cols-4'} gap-3 px-1 pb-3 pt-3` : 'grid-cols-3 gap-2 rounded-3xl border p-2'}`} style={stickerLayout ? undefined : { background: theme.background, color: theme.ink, borderColor: theme.border }}>
         {accounts.map((link, index) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
           onClick={event => openAccount(event, link.platform, link.url)}
-          aria-label={`${labels[link.platform] || link.platform}${link.handle ? ` ${link.handle}` : ''}`}
+          aria-label={`${platformName(link.platform)}${link.handle ? ` ${link.handle}` : ''}`}
           className={`group relative flex min-w-0 flex-col items-center gap-2 px-1 py-3 text-center transition hover:z-10 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current ${stickerLayout ? 'rounded-xl border border-white/70' : 'rounded-2xl hover:bg-black/5'}`}
           style={stickerLayout ? {
             background: '#ffffff', color: '#334155', outlineColor: theme.ink,
@@ -90,7 +91,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
             boxShadow: `0 3px 0 ${theme.border}66, 0 8px 18px ${theme.ink}12`,
           } : undefined}>
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl transition group-hover:-translate-y-0.5 motion-reduce:transform-none"><PlatformMark platform={link.platform}/></span>
-          <span className="w-full break-words text-[11px] font-bold leading-4">{labels[link.platform] || link.platform}</span>
+          <span className="w-full break-words text-[11px] font-bold leading-4">{platformName(link.platform)}</span>
           {link.handle && accounts.length !== 4 && <span className="w-full break-words text-[11px] leading-4 opacity-80">{link.handle}</span>}
         </a>)}
       </div> : <p className="text-center text-sm opacity-80">{zh ? '我们的社交账号即将与你见面。' : 'Our social pages will be here soon.'}</p>}

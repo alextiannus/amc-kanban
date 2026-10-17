@@ -229,7 +229,12 @@ const copy = {
 
 function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
-  return window.navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+  for (const language of [...(window.navigator.languages || []), window.navigator.language]) {
+    const tag = language?.toLowerCase() || ''
+    if (tag.startsWith('zh')) return 'zh'
+    if (tag.startsWith('en')) return 'en'
+  }
+  return 'en'
 }
 
 function getSessionId(brandId: string): string {
@@ -715,6 +720,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const pageBackground = '#f7f3dc'
   const pageBackdrop = 'radial-gradient(ellipse at 0% 0%, #fff1af 0%, transparent 55%), radial-gradient(ellipse at 100% 40%, #e5eee5 0%, transparent 65%), linear-gradient(#13252308 1px, transparent 1px), linear-gradient(90deg, #13252308 1px, transparent 1px)'
   const accent = brandEntryTheme(config?.themeColor).primary
+  useEffect(() => {
+    const updateLanguage = () => setLocale(detectLocale())
+    window.addEventListener('languagechange', updateLanguage)
+    return () => window.removeEventListener('languagechange', updateLanguage)
+  }, [])
   const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
@@ -1168,7 +1178,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
+    <main lang={locale === 'zh' ? 'zh-CN' : 'en'} className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
