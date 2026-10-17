@@ -7,6 +7,14 @@ export type StoredFollowAccount = AccountIdentity & { unboundAt?: Date | string 
 const cache = new Map<string, { expiresAt: number; value: unknown }>()
 const pending = new Map<string, Promise<unknown>>()
 
+function googleLocationKey(value: string): string {
+  return value.trim().replace(/^(?:accounts\/[^/]+\/)?locations\//, '')
+}
+
+function reportGoogleSync(brandId: string | undefined, reason: string, details: Record<string, number | boolean> = {}) {
+  console.info(JSON.stringify({ event: 'brand_follow_google_sync', brandId, reason, ...details }))
+}
+
 async function cached<T>(key: string, load: () => Promise<{ success: boolean } & T>): Promise<({ success: boolean } & T) | null> {
   const found = cache.get(key)
   if (found && found.expiresAt > Date.now()) return found.value as { success: boolean } & T
@@ -43,17 +51,24 @@ export function profileFromAccountPost(account: Pick<PostFastAccount, 'id' | 'pl
   return null
 }
 
-export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[], apiKey?: string | null, googleLocationId?: string | null) {
+export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[], apiKey?: string | null, googleLocationId?: string | null, brandId?: string) {
   const bound = accounts.filter(account => !account.unboundAt)
   const result = bound.map(account => ({ platformId: account.platformId, handle: account.handle, profileUrl: publicHttpUrl(account.profileUrl) }))
   const missing = bound.filter((account, index) => !result[index].profileUrl && (account.postfastAccountId || (account.handle && account.handle !== 'unconfigured')))
-  if (!apiKey || !missing.length) return result
+  const missingGoogle = missing.some(account => accountPlatform(account.platformId) === 'google')
+  if (!apiKey || !missing.length) {
+    if (missingGoogle) reportGoogleSync(brandId, 'PROVIDER_NOT_CONFIGURED')
+    return result
+  }
   const credentialKey = createHash('sha256').update(apiKey).digest('hex')
   // New bindings change this key on every instance, so old snapshots cannot hide a new account.
   const bindingKey = createHash('sha256').update(JSON.stringify(bound.map(account => [account.id, account.postfastAccountId, account.platformId, account.handle]).sort())).digest('hex')
   const cacheKey = `${credentialKey}:${bindingKey}`
   const snapshot = await cached(`${cacheKey}:accounts`, () => postfastFetchAccounts(apiKey, 3_000))
-  if (!snapshot?.success) return result
+  if (!snapshot?.success) {
+    if (missingGoogle) reportGoogleSync(brandId, 'ACCOUNTS_UNAVAILABLE')
+    return result
+  }
   const availableIds = new Set(snapshot.accounts.map(account => account.id))
   if (missing.some(account => account.postfastAccountId && !availableIds.has(account.postfastAccountId))) {
     const entry = cache.get(`${cacheKey}:accounts`)
@@ -63,19 +78,27 @@ export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[]
   for (let index = 0; index < bound.length; index++) {
     if (result[index].profileUrl || (!bound[index].postfastAccountId && bound[index].handle === 'unconfigured')) continue
     let remote: PostFastAccount | undefined
-    try { remote = providerForLocal(bound[index], snapshot.accounts) } catch { continue }
-    if (!remote || accountPlatform(remote.platformId) !== accountPlatform(bound[index].platformId)) continue
+    try { remote = providerForLocal(bound[index], snapshot.accounts) } catch {
+      if (accountPlatform(bound[index].platformId) === 'google') reportGoogleSync(brandId, 'ACCOUNT_AMBIGUOUS')
+      continue
+    }
+    if (!remote || accountPlatform(remote.platformId) !== accountPlatform(bound[index].platformId)) {
+      if (accountPlatform(bound[index].platformId) === 'google') reportGoogleSync(brandId, 'BOUND_ACCOUNT_NOT_FOUND')
+      continue
+    }
     const profileUrl = publicHttpUrl(remote.profileUrl)
     if (profileUrl) result[index] = { platformId: bound[index].platformId, handle: remote.handle, profileUrl }
     else if (accountPlatform(remote.platformId) === 'google') {
       const response = await cached(`${cacheKey}:google:${remote.id}`, () => postfastGetGBPLocations(apiKey, remote.id, 3_000))
-      if (!response?.success) continue
+      if (!response?.success) { reportGoogleSync(brandId, 'LOCATIONS_UNAVAILABLE'); continue }
       // An explicit selection must never silently fall back to a different business.
-      const locationKey = (value: string) => value.replace(/^locations\//, '')
       const selected = googleLocationId
-        ? response.locations.filter(location => locationKey(location.id) === locationKey(googleLocationId))
+        ? response.locations.filter(location => googleLocationKey(location.id) === googleLocationKey(googleLocationId))
         : response.locations.length === 1 ? response.locations : []
-      if (selected.length !== 1) continue
+      if (selected.length !== 1) {
+        reportGoogleSync(brandId, googleLocationId ? 'SELECTED_LOCATION_NOT_FOUND' : 'LOCATION_SELECTION_REQUIRED', { locationCount: response.locations.length, hasSelection: Boolean(googleLocationId) })
+        continue
+      }
       const location = selected[0]
       let mapsUrl = publicHttpUrl(location.mapsUri)
       if (!mapsUrl && location.placeId?.trim()) {
@@ -86,6 +109,7 @@ export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[]
         mapsUrl = maps.href
       }
       if (mapsUrl) result[index] = { platformId: bound[index].platformId, handle: location.name || remote.handle, profileUrl: mapsUrl }
+      reportGoogleSync(brandId, mapsUrl ? 'RESOLVED' : 'LOCATION_HAS_NO_PUBLIC_URL', { locationCount: response.locations.length, hasSelection: Boolean(googleLocationId) })
     }
     else if (['facebook', 'tiktok'].includes(accountPlatform(remote.platformId))) unresolved.push({ index, remote })
   }

@@ -75,5 +75,10 @@ const account = (id, providerId, platformId, handle = 'OLD DISPLAY NAME') => ({ 
   assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE', 'two'))[0].profileUrl, 'https://maps.google.com/?cid=2')
   assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE', 'absent'))[0].profileUrl, null, 'Never replace a missing selected location')
   assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE', 'one'))[0].profileUrl, 'https://maps.google.com/?cid=1', 'Normalize Google location resource prefixes')
+  googleLocations = [{ id: 'accounts/provider-account/locations/123456', name: 'TEST Full Resource', mapsUri: 'https://maps.google.com/?cid=123456' }]
+  for (const selection of ['123456', 'locations/123456', 'accounts/provider-account/locations/123456']) {
+    assert.equal((await resolveBrandFollowAccounts(google, 'TEST_FULL_RESOURCE', selection))[0].profileUrl, 'https://maps.google.com/?cid=123456', 'Full provider resource and configured location must identify the same business')
+  }
+  assert.equal((await resolveBrandFollowAccounts(google, 'TEST_FULL_RESOURCE', 'another-location'))[0].profileUrl, null)
   console.log('PASS automatic bound account resolution: multi-brand isolation, provider identity, Facebook post evidence, new-binding cache refresh, concurrent request dedupe, unbound filtering, provider failure and no guessed links.')
 })().catch(error => { console.error(error); process.exitCode = 1 })

@@ -36,7 +36,7 @@ type BrandEntrySource = {
   knowledge: { marketingSolution: unknown } | null
 }
 
-async function prepareBrandEntryConfig<T extends { themeColor: string; brand: BrandEntrySource }>(config: T) {
+async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: string; brand: BrandEntrySource }>(config: T) {
   const { googleLinksMeta, googleLocationId, knowledge, postfastApiKey, accounts, ...brand } = config.brand
   return {
     ...config,
@@ -44,7 +44,7 @@ async function prepareBrandEntryConfig<T extends { themeColor: string; brand: Br
     brand: {
       ...brand,
       followRewardDescription: followRewardDescription(brand.followRewardDescription),
-      accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId),
+      accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, config.brandId),
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
     },
   }
@@ -171,7 +171,7 @@ export async function GET(request: Request) {
       })
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
       const { knowledge, postfastApiKey, accounts, googleLocationId, ...brandFields } = brand
-      const publicBrand = { ...brandFields, followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId) }
+      const publicBrand = { ...brandFields, followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
       return NextResponse.json({
         hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,
