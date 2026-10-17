@@ -27,6 +27,13 @@ export default function BrandFollowPanel({ brand, locale, themeColor }: { brand?
   const links = brandFollowLinks(brand)
   const accounts = links.filter(link => !link.review)
   const review = links.find(link => link.review)
+  const stickerLayout = accounts.length === 4
+  const stickers = [
+    { rotate: '-6deg', offset: '6px' },
+    { rotate: '3deg', offset: '-3px' },
+    { rotate: '-3deg', offset: '1px' },
+    { rotate: '6deg', offset: '7px' },
+  ]
   const reward = brand?.followRewardDescription?.trim()
   const pendingOpen = useRef<(() => void) | null>(null)
   useEffect(() => () => pendingOpen.current?.(), [])
@@ -71,14 +78,19 @@ export default function BrandFollowPanel({ brand, locale, themeColor }: { brand?
         <p className="mt-1 whitespace-pre-wrap break-words text-sm font-bold leading-6">{reward}</p>
       </div>}
       <p className="mb-3 text-center text-sm font-semibold opacity-90">{zh ? '轻点图标，就能找到我们' : 'Tap an icon to find us'}</p>
-      {accounts.length ? <div className={`grid overflow-hidden rounded-3xl border p-2 ${accounts.length === 4 ? 'grid-cols-4 gap-1' : 'grid-cols-3'}`} style={{ background: theme.background, color: theme.ink, borderColor: theme.border, boxShadow: `0 8px 24px ${theme.ink}14` }}>
-        {accounts.map(link => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
+      {accounts.length ? <div className={`relative grid ${stickerLayout ? 'grid-cols-4 gap-2 px-1 pb-3 pt-3' : 'grid-cols-3 gap-2 rounded-3xl border p-2'}`} style={stickerLayout ? undefined : { background: theme.background, color: theme.ink, borderColor: theme.border }}>
+        {accounts.map((link, index) => <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
           onClick={event => openAccount(event, link.platform, link.url)}
           aria-label={`${labels[link.platform] || link.platform}${link.handle ? ` ${link.handle}` : ''}`}
-          className="group flex min-w-0 flex-col items-center gap-2 rounded-2xl px-1 py-3 text-center transition hover:bg-black/5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm transition group-hover:-translate-y-0.5 motion-reduce:transform-none"><PlatformMark platform={link.platform}/></span>
+          className={`group relative flex min-w-0 flex-col items-center gap-2 px-1 py-3 text-center transition hover:z-10 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current ${stickerLayout ? 'rounded-xl border border-white/70' : 'rounded-2xl hover:bg-black/5'}`}
+          style={stickerLayout ? {
+            background: '#ffffff', color: theme.ink, outlineColor: theme.onPrimary,
+            transform: `translateY(${stickers[index].offset}) rotate(${stickers[index].rotate})`,
+            boxShadow: `0 3px 0 ${theme.background}, 0 8px 16px ${theme.ink}26`,
+          } : undefined}>
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl transition group-hover:-translate-y-0.5 motion-reduce:transform-none"><PlatformMark platform={link.platform}/></span>
           <span className="w-full break-words text-[11px] font-bold leading-4">{labels[link.platform] || link.platform}</span>
-          {link.handle && accounts.length !== 4 && <span className="w-full break-words text-[11px] leading-4 opacity-80">{link.handle}</span>}
+          {link.handle && !stickerLayout && <span className="w-full break-words text-[11px] leading-4 opacity-80">{link.handle}</span>}
         </a>)}
       </div> : <p className="text-center text-sm opacity-80">{zh ? '我们的社交账号即将与你见面。' : 'Our social pages will be here soon.'}</p>}
     </div>
