@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { publicHttpUrl } from './brandFollowLinks'
 import { accountPlatform, providerForLocal, type AccountIdentity } from './socialAccountIdentity'
-import { postfastFetchAccounts, postfastListPosts, type PostFastAccount, type PostFastPost } from './integrations/postfast'
+import { postfastFetchAccounts, postfastListPosts, postfastGetGBPLocations, type PostFastAccount, type PostFastPost } from './integrations/postfast'
 
 export type StoredFollowAccount = AccountIdentity & { unboundAt?: Date | string | null }
 const cache = new Map<string, { expiresAt: number; value: unknown }>()
@@ -43,7 +43,7 @@ export function profileFromAccountPost(account: Pick<PostFastAccount, 'id' | 'pl
   return null
 }
 
-export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[], apiKey?: string | null) {
+export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[], apiKey?: string | null, googleLocationId?: string | null) {
   const bound = accounts.filter(account => !account.unboundAt)
   const result = bound.map(account => ({ platformId: account.platformId, handle: account.handle, profileUrl: publicHttpUrl(account.profileUrl) }))
   const missing = bound.filter((account, index) => !result[index].profileUrl && (account.postfastAccountId || (account.handle && account.handle !== 'unconfigured')))
@@ -67,6 +67,26 @@ export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[]
     if (!remote || accountPlatform(remote.platformId) !== accountPlatform(bound[index].platformId)) continue
     const profileUrl = publicHttpUrl(remote.profileUrl)
     if (profileUrl) result[index] = { platformId: bound[index].platformId, handle: remote.handle, profileUrl }
+    else if (accountPlatform(remote.platformId) === 'google') {
+      const response = await cached(`${cacheKey}:google:${remote.id}`, () => postfastGetGBPLocations(apiKey, remote.id, 3_000))
+      if (!response?.success) continue
+      // An explicit selection must never silently fall back to a different business.
+      const locationKey = (value: string) => value.replace(/^locations\//, '')
+      const selected = googleLocationId
+        ? response.locations.filter(location => locationKey(location.id) === locationKey(googleLocationId))
+        : response.locations.length === 1 ? response.locations : []
+      if (selected.length !== 1) continue
+      const location = selected[0]
+      let mapsUrl = publicHttpUrl(location.mapsUri)
+      if (!mapsUrl && location.placeId?.trim()) {
+        const maps = new URL('https://www.google.com/maps/search/')
+        maps.searchParams.set('api', '1')
+        maps.searchParams.set('query', location.name || location.placeId)
+        maps.searchParams.set('query_place_id', location.placeId)
+        mapsUrl = maps.href
+      }
+      if (mapsUrl) result[index] = { platformId: bound[index].platformId, handle: location.name || remote.handle, profileUrl: mapsUrl }
+    }
     else if (['facebook', 'tiktok'].includes(accountPlatform(remote.platformId))) unresolved.push({ index, remote })
   }
   if (unresolved.length) {

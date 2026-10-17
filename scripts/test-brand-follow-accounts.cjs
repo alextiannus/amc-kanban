@@ -20,7 +20,9 @@ const remotes = [
   { id: 'fb-a', platformId: 'facebook', handle: 'TEST Page A' },
   { id: 'ig-b', platformId: 'instagram', handle: 'actual_b', profileUrl: 'https://www.instagram.com/actual_b/' },
 ]
+let googleLocations = []
 const provider = {
+  postfastGetGBPLocations: async (key, id) => ({ success: true, locations: id === 'google-a' ? googleLocations : [] }),
   postfastFetchAccounts: async key => { accountReads++; return { success: key !== 'TEST_FAIL', accounts: remotes } },
   postfastListPosts: async () => { postReads++; return { success: true, posts: [
     { socialMediaId: 'fb-a', platformId: 'facebook', status: 'published', postUrl: 'https://www.facebook.com/61500000000001/posts/123' },
@@ -63,5 +65,15 @@ const account = (id, providerId, platformId, handle = 'OLD DISPLAY NAME') => ({ 
     {socialMediaId:'fb-a', platformId:'facebook', status:'published', postUrl:'https://www.facebook.com/reel/123'},
     {socialMediaId:'fb-a', platformId:'facebook', status:'published', postUrl:'https://www.facebook.com/groups/posts/123'},
   ]) assert.equal(profileFromAccountPost(remote, post), null)
+  remotes.push({ id: 'google-a', platformId: 'google', handle: 'TEST Google Owner' })
+  const google = [account('local-google', 'google-a', 'google')]
+  googleLocations = [{ id: 'locations/one', name: 'TEST One', placeId: 'ChIJ_TEST_ONE' }]
+  const sole = await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_SOLE')
+  assert.equal(new URL(sole[0].profileUrl).searchParams.get('query_place_id'), 'ChIJ_TEST_ONE')
+  googleLocations = [{ id: 'locations/one', name: 'TEST One', mapsUri: 'https://maps.google.com/?cid=1' }, { id: 'two', name: 'TEST Two', mapsUri: 'https://maps.google.com/?cid=2' }]
+  assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE'))[0].profileUrl, null, 'Multiple businesses require an explicit selection')
+  assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE', 'two'))[0].profileUrl, 'https://maps.google.com/?cid=2')
+  assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE', 'absent'))[0].profileUrl, null, 'Never replace a missing selected location')
+  assert.equal((await resolveBrandFollowAccounts(google, 'TEST_GOOGLE_MULTIPLE', 'one'))[0].profileUrl, 'https://maps.google.com/?cid=1', 'Normalize Google location resource prefixes')
   console.log('PASS automatic bound account resolution: multi-brand isolation, provider identity, Facebook post evidence, new-binding cache refresh, concurrent request dedupe, unbound filtering, provider failure and no guessed links.')
 })().catch(error => { console.error(error); process.exitCode = 1 })

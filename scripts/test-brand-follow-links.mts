@@ -15,7 +15,7 @@ assert.equal(links[2].review, true)
 assert.deepEqual(brandFollowLinks(), [])
 console.log('Follow links: missing URLs, unsafe schemes, duplicate URLs, multiple accounts and independent review passed.')
 
-assert.equal(followAppUrl('instagram', 'https://www.instagram.com/real.account/?igsh=test'), 'instagram://user?username=real.account')
+assert.equal(followAppUrl('instagram', 'https://www.instagram.com/real.account/?igsh=test'), null, 'Instagram must use its HTTPS universal link instead of an app-version-specific route')
 assert.equal(followAppUrl('instagram', 'https://instagram.com.evil.example/real'), null)
 assert.equal(followAppUrl('instagram', 'https://www.instagram.com/p/post-id'), null)
 assert.equal(followAppUrl('instagram', 'https://www.instagram.com/accounts'), null)

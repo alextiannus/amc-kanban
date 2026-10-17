@@ -31,19 +31,20 @@ type BrandEntrySource = {
   followRewardDescription: string | null
   postfastApiKey: string | null
   accounts: StoredFollowAccount[]
+  googleLocationId?: string | null
   googleLinksMeta: unknown
   knowledge: { marketingSolution: unknown } | null
 }
 
 async function prepareBrandEntryConfig<T extends { themeColor: string; brand: BrandEntrySource }>(config: T) {
-  const { googleLinksMeta, knowledge, postfastApiKey, accounts, ...brand } = config.brand
+  const { googleLinksMeta, googleLocationId, knowledge, postfastApiKey, accounts, ...brand } = config.brand
   return {
     ...config,
     brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
     brand: {
       ...brand,
       followRewardDescription: followRewardDescription(brand.followRewardDescription),
-      accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey),
+      accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId),
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
     },
   }
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
             knowledge: { select: { marketingSolution: true } },
             location: true,
             timezone: true,
-            googlePlaceId: true,
+            googleLocationId: true, googlePlaceId: true,
             googleBusinessUrl: true,
             googleReviewUrl: true,
             googleLinksMeta: true,
@@ -135,7 +136,7 @@ export async function GET(request: Request) {
               knowledge: { select: { marketingSolution: true } },
               location: true,
               timezone: true,
-              googlePlaceId: true,
+              googleLocationId: true, googlePlaceId: true,
               googleBusinessUrl: true,
               googleReviewUrl: true,
               googleLinksMeta: true,
@@ -159,7 +160,7 @@ export async function GET(request: Request) {
         select: {
           name: true, location: true, timezone: true, followRewardDescription: true, postfastApiKey: true,
           knowledge: { select: { marketingSolution: true } },
-          googlePlaceId: true,
+          googleLocationId: true, googlePlaceId: true,
           googleReviewUrl: true,
           googleBusinessUrl: true,
           accounts: {
@@ -169,8 +170,8 @@ export async function GET(request: Request) {
         },
       })
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
-      const { knowledge, postfastApiKey, accounts, ...brandFields } = brand
-      const publicBrand = { ...brandFields, followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey) }
+      const { knowledge, postfastApiKey, accounts, googleLocationId, ...brandFields } = brand
+      const publicBrand = { ...brandFields, followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId) }
       return NextResponse.json({
         hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,

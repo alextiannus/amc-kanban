@@ -55,14 +55,7 @@ export function followAppUrl(platform: string, profileUrl: string): string | nul
   if (!safe) return null
   const url = new URL(safe)
   const host = url.hostname.toLowerCase()
-  if (platform === 'instagram' && ['instagram.com', 'www.instagram.com'].includes(host)) {
-    const parts = url.pathname.split('/').filter(Boolean)
-    const username = parts[0]
-    if (parts.length === 1 && /^[a-zA-Z0-9_.]+$/.test(username) &&
-        !['explore', 'reels', 'reel', 'p', 'stories', 'accounts', 'direct'].includes(username.toLowerCase())) {
-      return `instagram://user?username=${encodeURIComponent(username)}`
-    }
-  }
+  // Instagram universal HTTPS links preserve the account route across installed app versions.
   if (platform === 'xiaohongshu' && ['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com', 'www.xhslink.com'].includes(host)) {
     return `xhsdiscover://webview?url=${encodeURIComponent(safe)}`
   }
