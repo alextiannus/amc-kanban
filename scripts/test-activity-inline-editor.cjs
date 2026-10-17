@@ -2,7 +2,7 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs'), path = require('node:path'), ts = require('typescript')
 let state = [], index = 0, changes = []
 let editor = { enabled: true, locale: 'zh', onText: (field, value) => changes.push({ field, value }) }
-const React = { createContext: value => ({ value }), useContext: () => editor,
+const React = { useLayoutEffect: () => {}, createContext: value => ({ value }), useContext: () => editor,
   useState: value => { const i = index++; if (!(i in state)) state[i] = value; return [state[i], value => { state[i] = value }] },
   useRef: value => { const i = index++; return state[i] ||= { current: value } } }
 const jsx = (type, props) => ({ type, props })

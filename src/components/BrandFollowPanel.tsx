@@ -1,7 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import { useContext, useEffect, useRef, type MouseEvent } from 'react'
+import { Fragment, useContext, useEffect, useRef, type MouseEvent } from 'react'
 import { ActivityCanvasEditing, ActivityInlineText, ActivityInlineLinkEditor } from '@/components/ActivityCanvasEditor'
 import { activityText } from '@/lib/activityPage'
 import { ExternalLink } from 'lucide-react'
@@ -86,7 +86,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
       </div>}
       <ActivityInlineText as="p" field="tapHint" className="mb-3 text-center text-sm font-semibold opacity-90">{text('tapHint')}</ActivityInlineText>
       {accounts.length ? <div className={`relative grid ${stickerLayout ? `${accounts.length === 2 ? 'grid-cols-2' : accounts.length === 3 ? 'grid-cols-3' : 'grid-cols-4'} gap-3 px-1 pb-3 pt-3` : 'grid-cols-3 gap-2 rounded-3xl border p-2'}`} style={stickerLayout ? undefined : { background: theme.background, color: theme.ink, borderColor: theme.border }}>
-        {accounts.map((link, index) => <div key={link.key} className="min-w-0"><a data-preview-account-link="true" data-activity-edit="link" data-link-key={link.key} data-link-original={link.originalUrl} href={link.url} target="_blank" rel="noopener noreferrer"
+        {accounts.map((link, index) => <Fragment key={link.key}><a data-preview-account-link="true" data-activity-edit="link" data-link-key={link.key} data-link-original={link.originalUrl} href={link.url} target="_blank" rel="noopener noreferrer"
           onClick={event => openAccount(event, link.platform, link.url)}
           aria-label={`${platformName(link.platform)}${link.handle ? ` ${link.handle}` : ''}`}
           className={`group relative flex min-w-0 flex-col items-center gap-2 px-1 py-3 text-center transition hover:z-10 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-current ${stickerLayout ? 'rounded-xl border border-white/70' : 'rounded-2xl hover:bg-black/5'}`}
@@ -98,7 +98,7 @@ export default function BrandFollowPanel({ brand, locale, themeColor, standalone
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl transition group-hover:-translate-y-0.5 motion-reduce:transform-none"><PlatformMark platform={link.platform}/></span>
           <span className="w-full break-words text-[11px] font-bold leading-4">{platformName(link.platform)}</span>
           {link.handle && accounts.length !== 4 && <span className="w-full break-words text-[11px] leading-4 opacity-80">{link.handle}</span>}
-        </a><ActivityInlineLinkEditor linkKey={link.key}/></div>)}
+        </a>{((index + 1) % (stickerLayout ? accounts.length : 3) === 0 || index === accounts.length - 1) && accounts.slice(index - index % (stickerLayout ? accounts.length : 3), index + 1).map(rowLink => <ActivityInlineLinkEditor key={rowLink.key} linkKey={rowLink.key}/>)}</Fragment>)}
       </div> : <p className="text-center text-sm opacity-80">{zh ? '我们的社交账号即将与你见面。' : 'Our social pages will be here soon.'}</p>}
     </div>
     {review && <a data-preview-account-link="true" data-activity-edit="link" data-link-key={review.key} data-link-original={review.originalUrl} href={review.url} target="_blank" rel="noopener noreferrer" className="flex min-h-16 items-center gap-3 px-5 py-3 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-current">

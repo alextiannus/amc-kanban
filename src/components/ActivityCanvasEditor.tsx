@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useRef, useState, type CSSProperties } from 'react'
+import { createContext, useContext, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import type { ActivityTextKey } from '@/lib/activityPage'
 
 type TextField = ActivityTextKey | 'reward'
@@ -45,6 +45,19 @@ export function ActivityInlineLinkEditor({ linkKey }: { linkKey: string }) {
 }
 function LinkInput({ editor, link }: { editor: Editing; link: LinkSelection }) {
   const [value, setValue] = useState(link.url)
+  const input = useRef<HTMLTextAreaElement>(null)
+  useLayoutEffect(() => {
+    const field = input.current
+    if (!field) return
+    const resize = () => { field.style.height = 'auto'; field.style.height = `${field.scrollHeight + 2}px` }
+    resize()
+    let width = field.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (field.clientWidth !== width) { width = field.clientWidth; resize() }
+    })
+    observer.observe(field)
+    return () => observer.disconnect()
+  }, [value])
   const zh = editor.locale === 'zh'
   let valid = false
   let destination: string | null = null
@@ -53,11 +66,11 @@ function LinkInput({ editor, link }: { editor: Editing; link: LinkSelection }) {
     if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password && value.length <= 2048) destination = url.href
     valid = url.protocol === 'https:' && Boolean(destination)
   } catch { /* Display inline validation while typing. */ }
-  return <div data-activity-control className="mt-3 min-w-0 rounded-xl border border-slate-300 bg-white p-2 text-left text-slate-800">
+  return <div data-activity-control className="col-span-full mt-3 min-w-0 rounded-xl border border-slate-300 bg-white p-2 text-left text-slate-800">
     <label htmlFor="canvas-account-link" className="sr-only">{zh ? '账号链接' : 'Account link'}</label>
     <div className="relative">
-    <textarea id="canvas-account-link" autoFocus rows={3} spellCheck={false} autoCapitalize="none" maxLength={2048} value={value} onChange={event => { setValue(event.target.value); editor.onLink(link.key, event.target.value) }} className="block w-full min-w-0 resize-y break-all rounded-lg border border-slate-300 bg-white p-2 pr-10 text-xs leading-5 text-slate-900"/>
-    <button type="button" aria-label={zh ? '打开当前链接' : 'Open current link'} title={zh ? '打开当前链接' : 'Open current link'} disabled={!destination} onClick={() => { if (destination) window.open(destination, '_blank', 'noopener,noreferrer') }} className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-30">
+    <textarea ref={input} id="canvas-account-link" autoFocus rows={1} spellCheck={false} autoCapitalize="none" maxLength={2048} value={value} onChange={event => { setValue(event.target.value); editor.onLink(link.key, event.target.value) }} className="block min-h-20 w-full min-w-0 resize-none overflow-hidden break-all rounded-lg border border-slate-300 bg-white p-3 pr-12 text-base leading-6 text-slate-900"/>
+    <button type="button" aria-label={zh ? '打开当前链接' : 'Open current link'} title={zh ? '打开当前链接' : 'Open current link'} disabled={!destination} onClick={() => { if (destination) window.open(destination, '_blank', 'noopener,noreferrer') }} className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-30">
       <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 3h6v6M10 14 21 3M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>
     </button>
     </div>

@@ -7,7 +7,7 @@ import { brandEntryTheme } from '@/lib/brandEntryTheme'
 import { publicHttpUrl } from '@/lib/brandFollowLinks'
 import { ActivityCanvasEditing, ActivityInlineText } from '@/components/ActivityCanvasEditor'
 import BrandFollowPanel from '@/components/BrandFollowPanel'
-import { BookOpen, CheckCircle2, Copy, MapPin, TicketCheck } from 'lucide-react'
+import { BookOpen, CheckCircle2, Copy, Languages, MapPin, TicketCheck } from 'lucide-react'
 
 type Prize = {
   id?: string
@@ -722,6 +722,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [wheelRotation, setWheelRotation] = useState(0)
   const [gridActiveSlot, setGridActiveSlot] = useState<number | null>(null)
   const [locale, setLocale] = useState<Locale>('en')
+  const manualLocale = useRef(false)
   const [shareDraftId, setShareDraftId] = useState<string | null>(null)
   const [shareDrafts, setShareDrafts] = useState<ShareDrafts>({})
   const [loadingDrafts, setLoadingDrafts] = useState(false)
@@ -742,7 +743,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const pageBackdrop = 'radial-gradient(ellipse at 0% 0%, #fff1af 0%, transparent 55%), radial-gradient(ellipse at 100% 40%, #e5eee5 0%, transparent 65%), linear-gradient(#13252308 1px, transparent 1px), linear-gradient(90deg, #13252308 1px, transparent 1px)'
   const accent = brandEntryTheme(config?.themeColor).primary
   useEffect(() => {
-    const updateLanguage = () => setLocale(detectLocale())
+    const updateLanguage = () => { if (!manualLocale.current) setLocale(detectLocale()) }
     window.addEventListener('languagechange', updateLanguage)
     return () => window.removeEventListener('languagechange', updateLanguage)
   }, [])
@@ -1291,6 +1292,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       if (isMerchantPreview() && (event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-activity-edit="draw"]')) { event.preventDefault(); event.target.click() }
     }} onClickCapture={event => {
       if (!isMerchantPreview()) return
+      if (event.target instanceof Element && event.target.closest('[data-activity-language]')) return
       const draw = event.target instanceof Element ? event.target.closest('[data-activity-edit="draw"]') : null
       if (draw) {
         event.preventDefault(); event.stopPropagation()
@@ -1326,6 +1328,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       {editingPage && <style>{`[data-editing="true"] [data-activity-edit]{cursor:pointer;outline:1px dashed #2563eb55;outline-offset:4px;border-radius:4px}[data-editing="true"] [data-activity-edit]:hover{outline:2px solid #2563eb;background-color:#2563eb0d}[data-editing="true"] [data-activity-edit]:focus-visible{outline:2px solid #2563eb}[data-editing="true"] [contenteditable]{cursor:text;min-height:1em;min-width:1em;white-space:pre-wrap;overflow-wrap:anywhere}[data-editing="true"] [contenteditable]:empty:before{content:attr(data-placeholder);opacity:.4}`}</style>}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
+        <div className="flex justify-end px-4 pt-3">
+          <button data-activity-language type="button" aria-label={locale === 'zh' ? '切换为英文' : 'Switch to Chinese'} onClick={() => { manualLocale.current = true; setEditingLink(null); setLocale(current => current === 'zh' ? 'en' : 'zh') }} className="inline-flex min-h-10 items-center gap-1.5 rounded-full border border-slate-900/10 bg-white/70 px-3 text-xs font-semibold text-slate-700 shadow-sm">
+            <Languages size={14} aria-hidden="true"/>{locale === 'zh' ? 'English' : '中文'}
+          </button>
+        </div>
         <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
           <div className="flex items-center justify-center gap-2">
             <ActivityInlineText as="p" field="brandName" className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{pageText('brandName') || config?.brand?.name || t.defaultBrand}</ActivityInlineText>
