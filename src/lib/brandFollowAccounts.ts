@@ -91,6 +91,13 @@ export async function resolveBrandFollowAccounts(accounts: StoredFollowAccount[]
     else if (accountPlatform(remote.platformId) === 'google') {
       const response = await cached(`${cacheKey}:google:${remote.id}`, () => postfastGetGBPLocations(apiKey, remote.id, 3_000))
       if (!response?.success) { reportGoogleSync(brandId, 'LOCATIONS_UNAVAILABLE'); continue }
+      if (!response.locations.length) {
+        // A newly synchronized location should become visible on the next preview refresh.
+        const entry = cache.get(`${cacheKey}:google:${remote.id}`)
+        if (entry) entry.expiresAt = Math.min(entry.expiresAt, Date.now() + 15_000)
+        reportGoogleSync(brandId, 'NO_SYNCED_LOCATIONS', { locationCount: 0, hasSelection: Boolean(googleLocationId) })
+        continue
+      }
       // An explicit selection must never silently fall back to a different business.
       const selected = googleLocationId
         ? response.locations.filter(location => googleLocationKey(location.id) === googleLocationKey(googleLocationId))

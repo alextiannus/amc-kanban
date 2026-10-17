@@ -80,5 +80,15 @@ const account = (id, providerId, platformId, handle = 'OLD DISPLAY NAME') => ({ 
     assert.equal((await resolveBrandFollowAccounts(google, 'TEST_FULL_RESOURCE', selection))[0].profileUrl, 'https://maps.google.com/?cid=123456', 'Full provider resource and configured location must identify the same business')
   }
   assert.equal((await resolveBrandFollowAccounts(google, 'TEST_FULL_RESOURCE', 'another-location'))[0].profileUrl, null)
+  const originalNow = Date.now
+  let testNow = originalNow()
+  Date.now = () => testNow
+  try {
+    googleLocations = []
+    assert.equal((await resolveBrandFollowAccounts(google, 'TEST_EMPTY_REFRESH'))[0].profileUrl, null)
+    googleLocations = [{ id: 'new-location', name: 'TEST Synced', mapsUri: 'https://maps.google.com/?cid=987' }]
+    testNow += 15_001
+    assert.equal((await resolveBrandFollowAccounts(google, 'TEST_EMPTY_REFRESH'))[0].profileUrl, 'https://maps.google.com/?cid=987', 'Empty location snapshots must refresh promptly after upstream sync')
+  } finally { Date.now = originalNow }
   console.log('PASS automatic bound account resolution: multi-brand isolation, provider identity, Facebook post evidence, new-binding cache refresh, concurrent request dedupe, unbound filtering, provider failure and no guessed links.')
 })().catch(error => { console.error(error); process.exitCode = 1 })
