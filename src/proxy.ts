@@ -29,6 +29,7 @@ async function hasValidSession(request: NextRequest): Promise<boolean> {
 
 export default async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+  const publicSocialIcon = ['GET', 'HEAD'].includes(request.method) && /^\/social-platforms\/(?:instagram|tiktok|xiaohongshu|facebook|youtube|linkedin|x|wechat|google)-original\.jpg$/.test(pathname)
   const publicGameConfig = pathname === '/api/game/config' && request.method === 'GET' && request.nextUrl.searchParams.get('public') === 'true'
   // The identity handler authenticates the current user credential, checks
   // brand scope and live video grants, and returns no-store structured errors.
@@ -50,7 +51,7 @@ export default async function proxy(request: NextRequest) {
   requestHeaders.set('x-amc-request-id', requestId)
 
   // ── Main app (immedi.ai) ──────────────────────────────────────────────────
-  const isPublicPage = 
+  const isPublicPage = publicSocialIcon ||
     pathname === '/tiktokWdXr977VBxysOGiXvrulDAH3ZeoG1iAD.txt' ||
     pathname === '/terms' ||
     pathname === '/privacy' ||

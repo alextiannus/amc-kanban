@@ -115,3 +115,5 @@ Reward creation and the 5-point increment occur in one serializable transaction.
 - Footer text is exactly `Powered by AI Marketing Crew (AMC)`. All existing sharing, round, draw and redemption rules remain unchanged.
 
 - The single invitation card retains a branded gradient header, warm greeting, friend invitation and optional reward detail. A valid configured `googleBusinessUrl` adds a Google Maps icon linked to that store, independently of the optional review action. Missing links remain hidden.
+
+- 平台原始图标的九个固定 JPG 路径允许匿名 GET/HEAD；不扩大整个目录或其他页面的匿名访问范围。
