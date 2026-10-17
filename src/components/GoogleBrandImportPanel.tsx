@@ -1,4 +1,5 @@
 'use client'
+import GoogleMapsEntryForm from './GoogleMapsEntryForm'
 import React, { useEffect, useState } from 'react'
 
 type ImportResult = { source: string; observedAt: string; fieldsAdded: string[]; skuAdded: number; skuCount: number; skuNames?: string[]; missing: string[]; reviewSummary?: { sampleSize: number; totalReviewCount: number | null; averageRating: number | null; distribution: number[]; from: string | null; to: string | null; truncated: boolean; themes: { topic: string; mentions: number }[]; productMentions: {name: string; mentions: number}[] } | null }
@@ -56,6 +57,7 @@ export default function GoogleBrandImportPanel({ brandId, english = false }: { b
   }
   const status = ({ PENDING: tr('等待同步', 'Queued'), WAITING_FOR_LOCATIONS: tr('账号已连接，等待门店同步', 'Account connected, awaiting locations'), RUNNING: tr('正在补充资料', 'Enriching profile'), COMPLETE: tr('已同步', 'Synced'), PARTIAL: tr('已补充可获取资料', 'Available information imported'), NEEDS_ATTENTION: tr('需要检查配置', 'Check configuration'), NOT_STARTED: tr('配置账号后自动同步', 'Syncs automatically after account setup') } as Record<string, string>)[current?.status || 'NOT_STARTED']
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" aria-label="Google business information">
+    <GoogleMapsEntryForm key={brandId} brandId={brandId} english={english} />
     <h3 className="font-bold text-sm">{tr('Google 商家资料', 'Google business information')}</h3>
     <p className="text-xs">{tr('连接 Google 商家账号后，自动补充门店、菜单和顾客反馈。保留已有资料。', 'After connecting Google Business, location data, menus and customer feedback are imported automatically. Existing information is preserved.')}</p>
     <p role="status" className="text-xs font-semibold">{status}</p>

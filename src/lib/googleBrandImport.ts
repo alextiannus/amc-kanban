@@ -88,6 +88,8 @@ export async function runGoogleBrandImport(brandId?: string) {
       if (!current || !receipt || receipt.generation !== row.generation || receipt.leaseUntil?.getTime() !== lease.getTime() || fingerprint(config) !== row.configHash) throw new GoogleImportError('GOOGLE_CONFIGURATION_CHANGED')
       const profile = object(data.profile), patch: Record<string, string> = {}
       for (const key of ['address', 'phone', 'website', 'description', 'googlePlaceId', 'googleLocationName', 'googleBusinessUrl'] as const) {
+        const confirmedMap = object(current.googleLinksMeta).source === 'merchant-confirmed-map-link'
+        if (confirmedMap && (key === 'googlePlaceId' || key === 'googleBusinessUrl')) continue
         if (!text(current[key]) && text(profile[key])) patch[key] = text(profile[key])
       }
       const merged = mergeGoogleMenu(current.knowledge?.menuItems, data.menu)

@@ -240,7 +240,7 @@ async function copyGrowthFactsToKanban(brandId: string, data: any, existingBrand
   if (address) brandUpdate.address = address
   if (phone) brandUpdate.phone = phone
   if (website) brandUpdate.website = website
-  if (primaryGoogle) {
+  if (primaryGoogle && (existingBrand?.googleLinksMeta as any)?.source !== 'merchant-confirmed-map-link') {
     brandUpdate.googlePlaceId = primaryGoogle.placeId
     if (primaryGoogle.businessUrl) brandUpdate.googleBusinessUrl = primaryGoogle.businessUrl
     if (primaryGoogle.reviewUrl) brandUpdate.googleReviewUrl = primaryGoogle.reviewUrl

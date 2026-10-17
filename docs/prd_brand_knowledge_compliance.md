@@ -191,6 +191,7 @@ Exposed to the agent directly inside [server.ts](file:///Users/alextian/Document
 ## Google 自动补充验收（2026-09-30）
 
 Google 账号门店就绪检查（已实现；上线状态以健康检查为准）：绑定完成后复用持久导入队列；空门店列表进入 WAITING_FOR_LOCATIONS 并按退避时间持续重试，不标为需要选择门店。多个门店仍要求明确选择，已有人工资料不覆盖。既有因空门店误判而停止的任务自动恢复检查。此机制只读取 PostFast 已同步门店，不承诺能通过公开 API 强制执行 PostFast 内部 Sync Locations；上游为空或授权异常必须在商家配置中明确提示。
+门店地图入口独立于 Google/PostFast 授权：商家在门店资料保存已确认的 Google Maps 链接；可从标准链接明确携带的 Place ID 生成同店地图与写评入口，不猜测 ID，不在抽奖设置重复输入账号。单独保存只写地图字段及来源，不重绑账号、不更新奖品、库存或关注文案。原生账号同步仍补充缺失字段，地图入口已就绪时活动预览不再显示“等待地图”提示。
 
 - 运行版本：Kanban `edc56ea1`、AMC-MM `64675665`、Growth `efb51851` 均已 live。
 - 本地验证：Google 精确身份、多个授权账号分页、不做名称检索、菜单来源与规格去重、保留人工/旧格式商品、评价样本与评分统计、错误脱敏；PostgreSQL 真实事务验证持久认领、并发执行、重复同步、解绑期间丢弃旧结果、Growth outbox，以及 PostFast 权限不足时只补充可取得字段。
