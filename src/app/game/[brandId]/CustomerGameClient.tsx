@@ -1,4 +1,5 @@
 'use client'
+/* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
@@ -20,6 +21,7 @@ type GameConfig = {
   title: string
   description: string | null
   themeColor: string
+  brandThemeColor?: string | null
   taskReviewEnabled?: boolean
   taskGoogleMapsEnabled: boolean
   taskXiaohongshuEnabled: boolean
@@ -708,8 +710,11 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const [rewardingPlatform, setRewardingPlatform] = useState<Platform | null>(null)
   const [redeemingLogId, setRedeemingLogId] = useState<string | null>(null)
 
-  const entryTheme = brandEntryTheme(config?.themeColor)
-  const accent = entryTheme.primary
+  const amcDefault = !config?.brandThemeColor
+  const entryTheme = brandEntryTheme(config?.brandThemeColor || '#ffd84a')
+  const pageBackground = '#f7f3dc'
+  const pageBackdrop = 'radial-gradient(ellipse at 0% 0%, #fff1af 0%, transparent 55%), radial-gradient(ellipse at 100% 40%, #e5eee5 0%, transparent 65%), linear-gradient(#13252308 1px, transparent 1px), linear-gradient(90deg, #13252308 1px, transparent 1px)'
+  const accent = brandEntryTheme(config?.themeColor).primary
   const t = copy[locale]
   const activePrizes = useMemo(() => (config?.prizes || []).filter((prize) => prize.name), [config])
   const dailyLimit = status?.maxSpinsPerUserDay ?? config?.maxSpinsPerUserDay ?? null
@@ -1163,16 +1168,19 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main className="relative isolate pb-8 text-slate-900" style={{ background: '#faf9f6' }}>
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ background: '#faf9f6' }} />
+    <main className="relative isolate pb-8 text-slate-900" style={{ background: pageBackground }}>
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10" style={{ backgroundColor: pageBackground, backgroundImage: pageBackdrop, backgroundSize: 'auto, auto, 48px 48px, 48px 48px' }} />
       <section className="mx-auto flex w-full max-w-lg flex-col">
-        <header className="px-5 pb-5 pt-4 text-center" style={{ background: `radial-gradient(ellipse at top left, ${entryTheme.background}, transparent 75%), #faf9f6`, color: entryTheme.ink }}>
-          <p className="mx-auto inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{config?.brand?.name || t.defaultBrand}</p>
+        <header className="px-5 pb-5 pt-4 text-center" style={{ color: amcDefault ? '#132523' : entryTheme.ink }}>
+          <div className="flex items-center justify-center gap-2">
+            <img src="/logos/amc-sunflower.svg" alt="AMC" width={32} height={32} className="h-8 w-8 shrink-0 rounded-lg" />
+            <p className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{config?.brand?.name || t.defaultBrand}</p>
+          </div>
           <h1 className="mt-3 text-2xl font-black leading-tight text-slate-900">{locale === 'zh' ? '嗨，很高兴遇见你！' : 'Hi, lovely to see you!'}</h1>
           <p className="mt-2 text-sm leading-5 text-slate-600">{locale === 'zh' ? '谢谢你的到来，让我们把这份缘分留久一点。' : 'Thanks for stopping by. Let’s make this the start of something lovely.'}</p>
         </header>
-        <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3" style={{ background: '#faf9f6' }}>
-          <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={config?.themeColor} standalone={config?.hasActivity === false} />
+        <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3">
+          <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={entryTheme.primary} standalone={config?.hasActivity === false} />
 
           {config?.hasActivity !== false && status && <div className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>

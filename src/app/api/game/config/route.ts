@@ -158,7 +158,7 @@ export async function GET(request: Request) {
       if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
       const { knowledge, ...publicBrand } = brand
       return NextResponse.json({
-        hasActivity: false, brand: publicBrand, title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
+        hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,
         taskXiaohongshuEnabled: false, taskInstagramEnabled: false,
         templateType: 'WHEEL', prizes: [],
