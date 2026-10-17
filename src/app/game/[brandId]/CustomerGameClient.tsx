@@ -1163,14 +1163,13 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }
 
   return (
-    <main className="min-h-screen text-slate-900" style={{ background: entryTheme.background }}>
-      <section className="mx-auto flex min-h-screen w-full max-w-lg flex-col">
-        <header className="px-5 pb-7 pt-5 text-center" style={{ background: `radial-gradient(ellipse at top left, ${entryTheme.tint}, transparent 75%), ${entryTheme.background}`, color: entryTheme.ink }}>
+    <main className="min-h-screen pb-8 text-slate-900" style={{ background: entryTheme.background }}>
+      <section className="mx-auto flex w-full max-w-lg flex-col">
+        <header className="px-5 pb-5 pt-4 text-center" style={{ background: `radial-gradient(ellipse at top left, ${entryTheme.tint}, transparent 75%), ${entryTheme.background}`, color: entryTheme.ink }}>
           <p className="mx-auto inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{config?.brand?.name || t.defaultBrand}</p>
-          <h1 className="mt-3 text-2xl font-black leading-tight">{locale === 'zh' ? '嗨，很高兴见到你！' : 'Hi, lovely to see you!'}</h1>
-          <p className="mt-2 text-sm leading-5 text-slate-600">{locale === 'zh' ? '谢谢你的到来，让我们把这份缘分留久一点。' : 'Thanks for stopping by. Let’s make this the start of something lovely.'}</p>
+          <h1 className="mt-3 text-2xl font-black leading-tight">{locale === 'zh' ? '嗨，很高兴遇见你！' : 'Hi, lovely to see you!'}</h1>
         </header>
-        <div className="-mt-3 flex-1 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3" style={{ background: entryTheme.background }}>
+        <div className="-mt-3 space-y-4 rounded-t-[28px] px-4 pb-5 pt-3" style={{ background: entryTheme.background }}>
           <BrandFollowPanel brand={config?.brand} locale={locale} themeColor={config?.themeColor} />
 
           {config?.hasActivity !== false && status && <div className="px-1 pt-3">
