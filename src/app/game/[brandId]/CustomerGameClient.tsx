@@ -1,7 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
 import BrandFollowPanel from '@/components/BrandFollowPanel'
 import { BookOpen, CheckCircle2, Copy, MapPin, TicketCheck } from 'lucide-react'
@@ -700,6 +700,8 @@ function GameBoard({
 }
 
 export default function CustomerGameClient({ brandId }: { brandId: string }) {
+  const savedPreviewConfig = useRef<GameConfig | null>(null)
+  const [draftActivity, setDraftActivity] = useState(false)
   const [config, setConfig] = useState<GameConfig | null>(null)
   const [status, setStatus] = useState<GameStatus | null>(null)
   const [sessionId, setSessionId] = useState('')
@@ -741,7 +743,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     if (config.taskInstagramEnabled) platforms.push('INSTAGRAM')
     return platforms
   }, [config])
-  const activityActive = Boolean(status?.activeRound)
+  const activityActive = Boolean(status?.activeRound) || draftActivity
   const showGame = activityActive && Boolean(status?.entryRewardClaimed)
   const formatRoundTime = (value: string) => {
     try {
@@ -821,7 +823,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }, [brandId])
 
   useEffect(() => {
-    if (!config) return
+    if (!config || isMerchantPreview()) return
 
     const storageKey = openedPlatformStorageKey(brandId)
     const storedPlatform = window.sessionStorage.getItem(storageKey)
@@ -839,6 +841,35 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   }, [activePlatforms, brandId, config])
 
   useEffect(() => {
+    if (!isMerchantPreview()) return
+    const receive = (event: MessageEvent) => {
+      if (event.source !== window.parent || (event.origin !== 'https://amc-mm.immedi.ai' && event.origin !== window.location.origin)) return
+      const data = event.data
+      const base = savedPreviewConfig.current
+      if (!base || data?.type !== 'AMC_GAME_PREVIEW_UPDATE' || data.brandId !== brandId) return
+      const draft: GameConfig = { ...base, brand: { ...base.brand } }
+      if (typeof data.rewardDescription === 'string') draft.brand!.followRewardDescription = data.rewardDescription.slice(0, 500)
+      const input = data.config
+      if (input && typeof input === 'object') {
+        if (typeof input.title === 'string') draft.title = input.title.slice(0, 200)
+        if (typeof input.description === 'string' || input.description === null) draft.description = input.description?.slice(0, 5000) ?? null
+        if (typeof input.themeColor === 'string' && /^#[0-9a-f]{6}$/i.test(input.themeColor)) draft.themeColor = input.themeColor
+        if (input.templateType === 'WHEEL' || input.templateType === 'GRID') draft.templateType = input.templateType
+        for (const key of ['taskReviewEnabled', 'taskGoogleMapsEnabled', 'taskXiaohongshuEnabled', 'taskInstagramEnabled'] as const) if (typeof input[key] === 'boolean') draft[key] = input[key]
+        if (typeof input.maxSpinsPerUserDay === 'number' && Number.isFinite(input.maxSpinsPerUserDay)) draft.maxSpinsPerUserDay = Math.max(1, Math.min(100, input.maxSpinsPerUserDay))
+        if (Array.isArray(input.prizes)) draft.prizes = input.prizes.slice(0, 50).filter((p: Prize) => p && typeof p.name === 'string' && ['COUPON', 'PHYSICAL', 'POINTS', 'THANKS'].includes(p.type) && Number.isFinite(p.probability)).map((p: Prize) => ({ name: p.name.slice(0, 200), type: p.type, probability: Math.max(0, Math.min(1, p.probability)), totalInventory: typeof p.totalInventory === 'number' ? Math.max(0, p.totalInventory) : null }))
+      }
+      const showActivity = data.previewActivity === true
+      draft.hasActivity = base.hasActivity !== false || showActivity
+      setDraftActivity(showActivity)
+      setConfig(draft)
+      if (showActivity) setStatus(current => current ?? { pointsBalance: 0, unclaimedPrizes: [], activeRound: null, nextRound: null, entryRewardClaimed: false })
+    }
+    window.addEventListener('message', receive)
+    return () => window.removeEventListener('message', receive)
+  }, [brandId])
+
+  useEffect(() => {
     const detectedLocale = detectLocale()
     const id = isMerchantPreview() ? 'merchant-preview' : getSessionId(brandId)
     const initializeTimer = window.setTimeout(() => {
@@ -853,7 +884,12 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         const configRes = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' })
         if (!configRes.ok) throw new Error(copy[detectedLocale].activityNotReady)
         const configData = await configRes.json() as GameConfig
+        savedPreviewConfig.current = configData
         setConfig(configData)
+        if (isMerchantPreview() && document.referrer) {
+          const parentOrigin = new URL(document.referrer).origin
+          if (parentOrigin === 'https://amc-mm.immedi.ai' || parentOrigin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_READY', brandId }, parentOrigin)
+        }
         if (configData.hasActivity !== false) {
           await refreshStatus(id)
         } else {
@@ -1197,7 +1233,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
           {config?.hasActivity !== false && status && <div className="px-1 pt-3">
             <h2 className="text-xl font-black text-slate-950">{config?.title || t.defaultTitle}</h2>
-            <p className="mt-2 text-sm text-slate-500">{locale === 'zh' ? '分享你的到店体验，参与店内抽奖。' : 'Share your visit and join our lucky draw.'}</p>
+            <p className="mt-2 text-sm text-slate-500">{config?.description?.trim() || (locale === 'zh' ? '分享你的到店体验，参与店内抽奖。' : 'Share your visit and join our lucky draw.')}</p>
           </div>}
 
           {config?.hasActivity !== false && status && !activityActive && (
