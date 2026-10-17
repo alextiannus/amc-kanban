@@ -48,7 +48,7 @@ const [schema, migration, rewardRoute, roundsRoute, statusRoute, spinRoute, clie
   readFile(`${repoRoot}/src/app/api/game/status/route.ts`, 'utf8'),
   readFile(`${repoRoot}/src/app/api/game/spin/route.ts`, 'utf8'),
   readFile(`${repoRoot}/src/app/game/[brandId]/CustomerGameClient.tsx`, 'utf8'),
-  readFile(`${repoRoot}/src/components/dashboard/GameSettingsDashboard.tsx`, 'utf8'),
+  readFile(`${repoRoot}/src/components/dashboard/GameActivityOperations.tsx`, 'utf8'),
 ])
 
 assert.match(schema, /model GameActivityRound/)

@@ -16,7 +16,7 @@ export async function PUT(request: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user || !await canOwnBrand(id, session.user.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const origin = request.headers.get('origin')
-  if ((origin && !['https://amc-mm.immedi.ai', 'https://amc.immedi.ai', new URL(request.url).origin].includes(origin)) || request.headers.get('sec-fetch-site') === 'cross-site') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if ((origin && !['https://amc-mm.immedi.ai', 'https://amc-kanban.immedi.ai', 'https://amc.immedi.ai', new URL(request.url).origin].includes(origin)) || request.headers.get('sec-fetch-site') === 'cross-site') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   let body: { activityPage?: unknown; followRewardDescription: string; revision: string }
   let page: ReturnType<typeof normalizeActivityPage>
   try {
@@ -63,7 +63,7 @@ export async function POST(request: Request, { params }: Params) {
   const session = await getSession()
   if (!session?.user || !await canOwnBrand(id, session.user.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const origin = request.headers.get('origin')
-  if ((origin && !['https://amc-mm.immedi.ai', 'https://amc.immedi.ai', new URL(request.url).origin].includes(origin)) || request.headers.get('sec-fetch-site') === 'cross-site') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if ((origin && !['https://amc-mm.immedi.ai', 'https://amc-kanban.immedi.ai', 'https://amc.immedi.ai', new URL(request.url).origin].includes(origin)) || request.headers.get('sec-fetch-site') === 'cross-site') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   try {
     const body = await request.json()
     if (typeof body?.followRewardDescription !== 'string' || body.followRewardDescription.length > 500) throw new Error('Invalid offer')

@@ -1,6 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
+import { isActivityPreviewOrigin } from '@/lib/activityPreviewOrigin'
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { activityText, normalizeActivityPage, type ActivityPage, type ActivityTextKey } from '@/lib/activityPage'
 import { brandEntryTheme } from '@/lib/brandEntryTheme'
@@ -735,7 +736,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   const postCanvasEdit = (change: Record<string, unknown>) => {
     if (!isMerchantPreview() || !document.referrer) return
     const origin = new URL(document.referrer).origin
-    if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_INLINE_CHANGE', brandId, locale, ...change }, origin)
+    if (isActivityPreviewOrigin(origin, window.location.origin)) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_INLINE_CHANGE', brandId, locale, ...change }, origin)
   }
   const pageText = (key: ActivityTextKey) => activityText(config?.brand?.activityPage, key, locale)
 
@@ -861,7 +862,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
   useEffect(() => {
     if (!isMerchantPreview()) return
     const receive = (event: MessageEvent) => {
-      if (event.source !== window.parent || (event.origin !== 'https://amc-mm.immedi.ai' && event.origin !== window.location.origin)) return
+      if (event.source !== window.parent || (!isActivityPreviewOrigin(event.origin, window.location.origin))) return
       const data = event.data
       const base = savedPreviewConfig.current
       if (!base || data?.type !== 'AMC_GAME_PREVIEW_UPDATE' || data.brandId !== brandId) return
@@ -924,7 +925,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     }
     const refresh = () => { void refreshBrandAccounts() }
     const refreshFromMerchant = (event: MessageEvent) => {
-      if (!isMerchantPreview() || event.source !== window.parent || (event.origin !== 'https://amc-mm.immedi.ai' && event.origin !== window.location.origin)) return
+      if (!isMerchantPreview() || event.source !== window.parent || (!isActivityPreviewOrigin(event.origin, window.location.origin))) return
       if (event.data?.type === 'AMC_GAME_PREVIEW_REFRESH_ACCOUNTS' && event.data.brandId === brandId) refresh()
     }
     window.addEventListener('message', refreshFromMerchant)
@@ -959,7 +960,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         setConfig(configData)
         if (isMerchantPreview() && document.referrer) {
           const parentOrigin = new URL(document.referrer).origin
-          if (parentOrigin === 'https://amc-mm.immedi.ai' || parentOrigin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_READY', brandId }, parentOrigin)
+          if (isActivityPreviewOrigin(parentOrigin, window.location.origin)) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_READY', brandId }, parentOrigin)
         }
         if (configData.hasActivity !== false) {
           await refreshStatus(id)
@@ -1301,7 +1302,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         event.preventDefault(); event.stopPropagation()
         if (document.referrer) {
           const origin = new URL(document.referrer).origin
-          if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_EDIT', brandId, field: 'draw' }, origin)
+          if (isActivityPreviewOrigin(origin, window.location.origin)) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_EDIT', brandId, field: 'draw' }, origin)
         }
         return
       }
@@ -1317,7 +1318,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
         if (target?.hasAttribute('contenteditable')) { setEditingLink(null); return }
         if (target && document.referrer) {
           const origin = new URL(document.referrer).origin
-          if (origin === 'https://amc-mm.immedi.ai' || origin === window.location.origin) {
+          if (isActivityPreviewOrigin(origin, window.location.origin)) {
             window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_EDIT', brandId, field: target.dataset.activityEdit, linkKey: target.dataset.linkKey, originalUrl: target.dataset.linkOriginal, url: target.closest('a')?.href }, origin)
           }
         }

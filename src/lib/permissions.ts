@@ -70,6 +70,7 @@ export type MenuItemDef = {
   label: string
   icon: string
   comingSoon?: boolean
+  badge?: 'free'
   /** External href — overrides view switching */
   href?: string
 }
@@ -162,7 +163,6 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
       { id: 'drafts',       view: 'drafts',       label: '发布内容', icon: 'FileText' },
       { id: 'assets',       view: 'assets',       label: '素材库',          icon: 'Images' },
       { id: 'creditUsage',  view: 'creditUsage',  label: 'AMC Credit 用量', icon: 'Coins' },
-      { id: 'game',         view: 'game',         label: '店内活动',        icon: 'Gift' },
       { id: 'socialInsight',view: 'socialInsight',label: '数据分析',        icon: 'BarChart2' },
     ]
     groups.push({
@@ -170,6 +170,7 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
       isBrandSection: true,
       items: brandItems,
     })
+    groups.push({ groupLabel: '增值服务', items: [{ id: 'game', view: 'game', label: '店内活动', icon: 'Gift', badge: 'free' }] })
   }
 
   // ── 3. BD 商务 (coming soon placeholder) ─────────────────────────

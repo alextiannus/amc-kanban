@@ -38,6 +38,7 @@ const req=body=>new Request('https://amc-kanban.immedi.ai/api/brands/brand/activ
  assert.equal((await api.PUT(req({...body,activityPage:{links:{'instagram:test':'javascript:alert(1)'}}}),params)).status,400);
  assert.equal((await api.PUT(req(null),params)).status,400);
  assert.equal(writes,2);assert.equal(audits,2);
+ assert.equal((await api.POST(new Request('http://localhost:10000/api/brands/brand/activity-page',{method:'POST',headers:{origin:'https://amc-kanban.immedi.ai','content-type':'application/json'},body:JSON.stringify(body)}),params)).status,200);
  assert.equal((await api.POST(req(body),params)).status,200);assert.equal(writes,2);assert.equal(audits,2);
  authorized=false;assert.equal((await api.POST(req(body),params)).status,404);authorized=true;
  assert.equal((await api.POST(new Request('https://example.test',{method:'POST',headers:{origin:'https://evil.test'},body:JSON.stringify(body)}),params)).status,403);

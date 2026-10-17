@@ -83,6 +83,7 @@ const MENU_TRANSLATIONS: Record<string, string> = {
   '素材库': 'Asset Library',
   'AMC Credit 用量': 'AMC Credit Usage',
   '店内活动': 'In-store Campaigns',
+  '增值服务': 'Value-added Services',
   '数据分析': 'Growth Analytics',
   'BD 工作台': 'BD Workspace',
   '客户汇总': 'Client Summary',
@@ -469,6 +470,7 @@ export default function Sidebar({
                         <span className="flex-1 truncate">{translatedLabel(item.label, isEn)}</span>
                       )}
 
+                      {item.badge === 'free' && !collapsed && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{isEn ? 'Free' : '免费'}</span>}
                       {item.comingSoon && !collapsed && (
                         <Lock size={11} className="shrink-0 text-slate-300 dark:text-slate-600" />
                       )}
