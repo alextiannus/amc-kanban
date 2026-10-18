@@ -1,6 +1,10 @@
 ---
 name: xiaohongshu-copywriting
-description: 小红书（XHS/Rednote）平台内容创作规范与 Hook 公式库
+description: "小红书（XHS/Rednote）平台内容创作规范与 Hook 公式库"
+metadata:
+  platform: "xiaohongshu"
+  version: "1.0.0"
+  language: "zh-CN"
 platform: xiaohongshu
 version: 1.0.0
 language: zh-CN

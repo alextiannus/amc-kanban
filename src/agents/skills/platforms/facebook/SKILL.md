@@ -1,6 +1,10 @@
 ---
 name: facebook-copywriting
-description: Facebook page post copywriting standards for F&B and local business
+description: "Facebook page post copywriting standards for F&B and local business"
+metadata:
+  platform: "facebook"
+  version: "1.0.0"
+  language: "en"
 platform: facebook
 version: 1.0.0
 language: en

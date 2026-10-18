@@ -4147,7 +4147,7 @@ export async function getBrandMarketingInputs(brandId:string,startMonth:string){
  const calendar=market?await buildMarketingPlanMarketContext({...brand,location:market,industry:brand.industry||'Local merchant'},years.map(year=>({year}))):{marketCalendar:{market:null,events:[],gaps:[{reason:'market_not_recorded'}]},storeActivities:serializeStoreActivities(brand.gameConfig)}
  return {
   brandPositioning:{content:w.coCreation?.interview?.content||null,status:w.coCreation?.interview?.status||'missing',revision:planningRevision(w.coCreation?.interview||null)},
-  principalStrategy:w.coCreation?.principal_strategy||w.coCreation?.direction||null,
+  principalStrategy:w.coCreation?.principal_strategy||null,
   marketCalendar:{...calendar.marketCalendar,years,retrievedAt:new Date().toISOString()},
   platformPlanning:{roleSource:'amc-marketing-expert/SKILL.md',knownBrandPlatforms:[...new Set(brand.accounts.map((account:{platformId:string})=>account.platformId))],cadenceRule:'按每个平台默认定位安排内容类型、渠道分工、预热/活动/复盘节奏；不规定每个平台具体发布次数，不读取订阅配额。'},
   storeActivities:calendar.storeActivities,

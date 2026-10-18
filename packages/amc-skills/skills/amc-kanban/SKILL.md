@@ -1,0 +1,89 @@
+---
+name: amc-kanban
+description: "Use authorized AMC Personal MCP tools to read brand operations and perform user-authorized merchant work."
+---
+
+# AI Marketing Crew Personal MCP Skill
+
+版本：4.0（2026-08-22）
+
+## 身份与权限
+
+- Personal MCP 使用用户本人生成的 Bearer API Key。
+- AI 只以该用户身份操作，不模拟其他用户，不使用 `x-agent-id`。
+- REST、MCP 和网页使用相同的用户角色、Capability 与 Crew 授权。
+- 启动时先调用 `get_brand_config`，只操作返回的品牌；不得猜测 `brandId`。
+- 品牌权限不等于品牌内全部视频任务权限；视频任务只允许读取或修改当前 Personal MCP 用户本人创建的记录。不可见、他人创建或历史缺少创建者均按不存在处理，不尝试猜测、补填或改绑创建者。公开结果只使用 `ownedByCurrentActor`，不得索取或输出 owner/actor/user ID、内部视频回执，也不得使用 `x-client-type` 或内部视频任务接口伪装 MM 服务端读写。
+- `plan._mmVideoJob.language` 与 `plan._mmVideoJob.generationStage` 是 MM 服务端可信恢复元数据；Personal MCP 和公开网页不得索取、改写或把内部完整任务形状输出给用户。
+- 收到 403 时停止操作，不尝试旧接口或其他身份绕过。
+- 不输出、记录或持久化 API Key、Cookie、平台密码和第三方 Secret。
+
+## 安装与授权边界
+
+安装只提供方法，不授权保存、付费、发布或回复。每个写操作须有当前用户明确授权；历史自动设置不能扩大权限。营销策略遵守 amc-marketing-expert，暂不将 Subscription 或固定平台发布次数作为策略输入；执行套餐仅在明确的执行任务中核对。读取实际 MCP schema，不假设此文档列举的旧工具全部仍可用。
+
+## 标准工作循环
+
+1. 读取品牌 profile、subscription、accounts、assets、drafts、reviews 和 ActionItems。
+2. 根据当前用户已授权的任务、品牌上下文和最新数据创建或更新业务资源；执行任务需要时核对套餐资源，营销策略不读 Subscription 或固定平台发布次数。
+3. 使用 `board_save_draft` 保存草稿并绑定 `accountId`。
+4. 使用 `board_get_schedule_recommendation` 获取推荐时间，再用 `board_submit_draft` 提交。
+5. 使用 `get_brand_reviews` 和 `board_reply_review` 处理允许自动回复的评论。
+6. 需要人工审核、补素材或决策时使用 `post_action_item` 创建 ActionItem。
+7. 发布成功后保存真实平台 URL；失败时记录原因并创建可执行的 ActionItem。
+8. 每次写操作以 Personal MCP 所属用户作为 actor 进入统一工作日志。
+
+## 推荐工具
+
+- `get_brand_config`
+- `get_brand_subscription`
+- `get_brand_marketing_plan`
+- `generate_brand_research_report`
+- `save_brand_merchant_interview`
+- `generate_brand_marketing_plan`
+- `generate_brand_publishing_calendar`
+- `create_content_drafts_from_calendar`
+- `run_brand_planning_workflow`
+- `get_brand_profile_markdown` / `update_brand_profile_markdown`
+- `board_list_social_accounts`
+- `list_brand_assets` / `board_upload_asset` / `board_delete_asset`
+- `board_save_draft` / `board_submit_draft` / `board_delete_draft`
+- `board_get_schedule_recommendation`
+- `publish` / `board_delete_scheduled_content`
+- `get_brand_reviews` / `board_reply_review`
+- `post_action_item`
+- `save_local_document`
+- `write_daily_memory` / `read_daily_memory`
+- `get_platform_benchmarks` / `get_social_insights`
+
+## 人机协作
+
+ActionItem 必须带正确 `brandId`，并写明背景、所需动作和完成条件。人类处理后继续原草稿、素材、评论或发布流程。
+
+旧 WorkUnit、task API、泳道 MCP Tool 和 `create_require_input_task` 仅为迁移兼容，不用于新流程。泳道阶段只保留为工作日志 `workStage`。
+
+## 接入
+
+MCP：
+
+```json
+{
+  "mcpServers": {
+    "amc-kanban": {
+      "url": "https://amc-kanban.immedi.ai/api/mcp",
+      "headers": {
+        "Authorization": "Bearer <KANBAN_PERSONAL_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+REST Base URL：`https://amc-kanban.immedi.ai/api`
+
+`/api/brands/{id}/mcp/execute` 已关闭；只使用 `/api/mcp`。
+
+
+## API 参考
+
+按需读取 [OpenAPI 参考](references/kanban-openapi.yaml)，并以已连接服务返回的实际工具 schema 为准。

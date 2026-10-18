@@ -63,7 +63,8 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   const attachments=await prisma.mediaAsset.findMany({where:{brandId,id:{in:(record(record(workspace.marketingSolution).coCreation).interview?.attachmentIds||[]).slice(0,20)}},select:{id:true,filename:true,aiCaption:true,imageAnalysis:true,textDetection:true,technicalMetadata:true}})
   sections.coCreation=sections.coCreation?{...sections.coCreation,attachmentEvidence:attachments}:null
   if(scope?.stage==='marketing_plan'){
-  sections.coCreation=withoutStrategyQuotas(sections.coCreation)
+  const {direction,focus,selling_points,...activeCoCreation}=sections.coCreation||{}
+  sections.coCreation=withoutStrategyQuotas(activeCoCreation)
   sections.annualPlan=withoutStrategyQuotas(sections.annualPlan)
   sections.marketingPlan=withoutStrategyQuotas(sections.marketingPlan)
   ;(sections as any).marketingInputs=await getBrandMarketingInputs(brandId,scope.startMonth)

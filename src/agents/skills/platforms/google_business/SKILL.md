@@ -1,6 +1,10 @@
 ---
 name: google-business-copywriting
-description: Google Business Profile (GBP) post copywriting for local SEO and conversions
+description: "Google Business Profile (GBP) post copywriting for local SEO and conversions"
+metadata:
+  platform: "google_business"
+  version: "1.0.0"
+  language: "en"
 platform: google_business
 version: 1.0.0
 language: en

@@ -1,0 +1,9 @@
+{
+  "name": "@amc/skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AMC Agent Skills, canonical resources and compatibility distribution",
+  "repository": {"type": "git", "url": "https://github.com/alextiannus/amc-kanban.git", "directory": "packages/amc-skills"},
+  "files": ["README.md", "manifest.json", "skills", "scripts"],
+  "scripts": {"check": "python3 scripts/manage.py check", "test": "python3 scripts/test_package.py"}
+}

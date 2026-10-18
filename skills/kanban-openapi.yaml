@@ -51,7 +51,7 @@ paths:
       responses:
         '200':
           description: Profile updated successfully
-          
+
   /tasks:
     post:
       deprecated: true
@@ -131,7 +131,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Task'
-                
+
     patch:
       deprecated: true
       summary: Update task details

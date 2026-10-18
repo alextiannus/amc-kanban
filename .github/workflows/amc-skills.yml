@@ -1,0 +1,20 @@
+name: AMC Skills package
+on:
+  push:
+    paths: ['packages/amc-skills/**', 'skills/**', 'src/agents/skills/platforms/**', 'public/skills/**', '.github/workflows/amc-skills.yml']
+  pull_request:
+    paths: ['packages/amc-skills/**', 'skills/**', 'src/agents/skills/platforms/**', 'public/skills/**', '.github/workflows/amc-skills.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Check canonical resources, generated consumers and archives
+        run: python3 packages/amc-skills/scripts/manage.py check --consumer kanban=. --archive-dir public/skills
+      - name: Verify safe standalone installation and compatibility
+        run: python3 packages/amc-skills/scripts/test_package.py

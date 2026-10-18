@@ -1,0 +1,553 @@
+{
+  "schemaVersion": 1,
+  "name": "amc-skills",
+  "version": "1.0.0",
+  "repository": "https://github.com/alextiannus/amc-kanban",
+  "directory": "packages/amc-skills",
+  "skills": [
+    {
+      "id": "amc-autopilot",
+      "path": "skills/amc-autopilot",
+      "audience": "host",
+      "category": "operations",
+      "requires": [
+        "AMC IAIC runtime and trusted artifactContract"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-autopilot"
+      },
+      "version": "sha256:25e01d492cb43d1a9a6bbac4066ca7501d0dcb5a69e5cc09a1b7f8f3bbc0f173",
+      "description": "User AI Assistant owns authorized autonomous brand research, planning and publishable photo-post creation. Publication requires human confirmation."
+    },
+    {
+      "id": "amc-brand-planning",
+      "path": "skills/amc-brand-planning",
+      "audience": "compatibility",
+      "category": "planning",
+      "requires": [
+        "authorized AMC MCP/API for business data; user sources support offline drafting"
+      ],
+      "dependsOn": [
+        "amc-marketing-expert"
+      ],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-brand-planning"
+      },
+      "version": "sha256:4a5f48a2b11051c185981d92c3fda13003bc6cb2a5059cc9f5fc57c5030d5623",
+      "description": "AMC 品牌策划旧入口，兼容既有引用；新品牌营销共创流程使用 AMC 营销专家 amc-marketing-expert。"
+    },
+    {
+      "id": "amc-brief",
+      "path": "skills/amc-brief",
+      "audience": "host",
+      "category": "operations",
+      "requires": [
+        "AMC IAIC runtime and trusted artifactContract"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-brief"
+      },
+      "version": "sha256:e954fb39bb75aa13fdb40ce261e62df9467b57719a3f4cc43c2b93b562394f01",
+      "description": "Produce an evidence-backed current brand work brief without changing business records."
+    },
+    {
+      "id": "amc-conversation",
+      "path": "skills/amc-conversation",
+      "audience": "host",
+      "category": "operations",
+      "requires": [
+        "AMC IAIC runtime and trusted artifactContract"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-conversation"
+      },
+      "version": "sha256:4fd589f77fc71c527d995965000fd5df5caa75f2f4971b1de7b3cbc06f97b50d",
+      "description": "Respond to a user’s general text conversation with their brand-scoped User AI Assistant."
+    },
+    {
+      "id": "amc-creative",
+      "path": "skills/amc-creative",
+      "audience": "host",
+      "category": "operations",
+      "requires": [
+        "AMC IAIC runtime and trusted artifactContract"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-creative"
+      },
+      "version": "sha256:e4996a6b56e5e47716226c31e300b0c3f6d18cac5008a9aa1a11e68597ad4fbd",
+      "description": "Edit a brand creative or prepare the confirmed SKU adaptation artifact."
+    },
+    {
+      "id": "amc-discovery",
+      "path": "skills/amc-discovery",
+      "audience": "host",
+      "category": "operations",
+      "requires": [
+        "AMC IAIC runtime and trusted artifactContract"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-discovery"
+      },
+      "version": "sha256:e6cb8f45b94ec1ad3073f701fc025b34c4c3b95ef062b45607f70392f8a1ec13",
+      "description": "Select authoritative creative sources for the brand's SKU confirmation workflow."
+    },
+    {
+      "id": "amc-kanban",
+      "path": "skills/amc-kanban",
+      "audience": "external",
+      "category": "operations",
+      "requires": [
+        "authorized AMC MCP/API for business data; user sources support offline drafting"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-kanban"
+      },
+      "version": "sha256:1237b10298316ee60f513337185042fa6a1ddcdc219027ad0ebb9280b1833eb0",
+      "description": "Use authorized AMC Personal MCP tools to read brand operations and perform user-authorized merchant work."
+    },
+    {
+      "id": "amc-marketing-expert",
+      "path": "skills/amc-marketing-expert",
+      "audience": "external",
+      "category": "planning",
+      "requires": [
+        "authorized AMC MCP/API for business data; user sources support offline drafting"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-marketing-expert"
+      },
+      "version": "sha256:3eb58d2333ecc71849bfffc21f63a6bb6599e2637e49f58bb76ab65538bf17c8",
+      "description": "AMC 营销专家，与品牌主或品牌主理人通过多轮对话共同完成 Insight 网络洞察、品牌访谈/品牌定位及完整品牌营销策略；适用于品牌营销讨论与年度规划。"
+    },
+    {
+      "id": "amc-knowledge",
+      "path": "skills/amc-knowledge",
+      "audience": "repository",
+      "category": "research",
+      "requires": [
+        "local amc-growth checkout"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-growth",
+        "path": "skills/amc-knowledge"
+      },
+      "version": "sha256:b2c5a56acf558187cf4f56ca1ad8d4d03f693300aa967c8fdf79a804e336e74c",
+      "description": "Use this skill when managing AMC Growth knowledge: ingesting merchant notes, post examples, tracked accounts, service-plan scoped growth plans, generated indexes, API exports, and dashboard-ready outputs in the amc-growth repository."
+    },
+    {
+      "id": "brand-intelligence-intake",
+      "path": "skills/brand-intelligence-intake",
+      "audience": "external",
+      "category": "research",
+      "requires": [
+        "authorized AMC MCP/API for business data; user sources support offline drafting"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-growth",
+        "path": "skills/brand-intelligence-intake"
+      },
+      "version": "sha256:5e1987e81988e1a101fbd7ec6200f0c312b5a56a5adc7137b8eb009d3ed5ea15",
+      "description": "Collect public evidence for AMC Brand Intelligence Intake and generate local lifestyle merchant network-operation reports. Use when researching a local merchant brand, gathering website/Google Maps/social/trade-area/competitor evidence, normalizing evidence for amc-growth, submitting external AI-agent evidence back to amc-growth, or producing initial and advanced Brand Intelligence Intake reports."
+    },
+    {
+      "id": "facebook-copywriting",
+      "path": "skills/facebook-copywriting",
+      "audience": "external",
+      "category": "platform",
+      "requires": [
+        "verified brand facts; current platform requirements when material"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "src/agents/skills/platforms/facebook"
+      },
+      "version": "sha256:bf4479576849bae030b83c7d66c05ec908baae50bbabd36304dbfd226e876ca4",
+      "description": "Facebook page post copywriting standards for F&B and local business"
+    },
+    {
+      "id": "google-business-copywriting",
+      "path": "skills/google-business-copywriting",
+      "audience": "external",
+      "category": "platform",
+      "requires": [
+        "verified brand facts; current platform requirements when material"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "src/agents/skills/platforms/google_business"
+      },
+      "version": "sha256:c5e5546790b3816a073260c8dd8d62fbc0c23a5133c082192f965a91c4925822",
+      "description": "Google Business Profile (GBP) post copywriting for local SEO and conversions"
+    },
+    {
+      "id": "instagram-copywriting",
+      "path": "skills/instagram-copywriting",
+      "audience": "external",
+      "category": "platform",
+      "requires": [
+        "verified brand facts; current platform requirements when material"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "src/agents/skills/platforms/instagram"
+      },
+      "version": "sha256:2eceed31561bb97bddb405015807c8720b643eb360123ffcc69db0f69852cbe7",
+      "description": "Instagram platform copywriting standards, hook formulas, and format rules"
+    },
+    {
+      "id": "tiktok-copywriting",
+      "path": "skills/tiktok-copywriting",
+      "audience": "external",
+      "category": "platform",
+      "requires": [
+        "verified brand facts; current platform requirements when material"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "src/agents/skills/platforms/tiktok"
+      },
+      "version": "sha256:a079e4f25ebcddac7d5e4704e3497dec8317f7dc32b6dced45edf443e7c3e000",
+      "description": "TikTok / Instagram Reels caption and video script hook standards"
+    },
+    {
+      "id": "xiaohongshu-copywriting",
+      "path": "skills/xiaohongshu-copywriting",
+      "audience": "external",
+      "category": "platform",
+      "requires": [
+        "verified brand facts; current platform requirements when material"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "src/agents/skills/platforms/xiaohongshu"
+      },
+      "version": "sha256:5733b00fd7190985c750984b430585546f990d90a42561802f68c779b66505e5",
+      "description": "小红书（XHS/Rednote）平台内容创作规范与 Hook 公式库"
+    },
+    {
+      "id": "amc-content-copywriting",
+      "path": "skills/amc-content-copywriting",
+      "audience": "external",
+      "category": "content",
+      "requires": [
+        "verified creative brief and brand facts; actual host schema for structured outputs"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-content",
+        "path": "src/engine/copywriters/catalog.ts and src/engine/skills/registry.ts"
+      },
+      "version": "sha256:c4d31e42e545d4d2cfb5106932bdea9d971254bc772ed5654d1f9459b2bfdd30",
+      "description": "Draft or review AMC social copy using verified creative briefs and repository-default Content native writing skills. Use for platform-specific content; do not treat compatibility registry rules as automatically active or claim access to private runtime settings."
+    }
+  ],
+  "mirrors": [
+    {
+      "source": "skills/amc-autopilot/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-autopilot/SKILL.md"
+    },
+    {
+      "source": "skills/amc-autopilot/agents/openai.yaml",
+      "consumer": "kanban",
+      "target": "skills/amc-autopilot/agents/openai.yaml"
+    },
+    {
+      "source": "skills/amc-brand-planning/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-brand-planning/SKILL.md"
+    },
+    {
+      "source": "skills/amc-brief/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-brief/SKILL.md"
+    },
+    {
+      "source": "skills/amc-brief/agents/openai.yaml",
+      "consumer": "kanban",
+      "target": "skills/amc-brief/agents/openai.yaml"
+    },
+    {
+      "source": "skills/amc-conversation/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-conversation/SKILL.md"
+    },
+    {
+      "source": "skills/amc-conversation/agents/openai.yaml",
+      "consumer": "kanban",
+      "target": "skills/amc-conversation/agents/openai.yaml"
+    },
+    {
+      "source": "skills/amc-creative/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/SKILL.md"
+    },
+    {
+      "source": "skills/amc-creative/agents/openai.yaml",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/agents/openai.yaml"
+    },
+    {
+      "source": "skills/amc-discovery/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-discovery/SKILL.md"
+    },
+    {
+      "source": "skills/amc-discovery/agents/openai.yaml",
+      "consumer": "kanban",
+      "target": "skills/amc-discovery/agents/openai.yaml"
+    },
+    {
+      "source": "skills/amc-kanban/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-kanban/SKILL.md"
+    },
+    {
+      "source": "skills/amc-marketing-expert/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-marketing-expert/SKILL.md"
+    },
+    {
+      "source": "skills/amc-marketing-expert/agents/openai.yaml",
+      "consumer": "kanban",
+      "target": "skills/amc-marketing-expert/agents/openai.yaml"
+    },
+    {
+      "source": "skills/amc-knowledge/SKILL.md",
+      "consumer": "growth",
+      "target": "skills/amc-knowledge/SKILL.md"
+    },
+    {
+      "source": "skills/amc-knowledge/references/agent-data-collection-guide.md",
+      "consumer": "growth",
+      "target": "skills/amc-knowledge/references/agent-data-collection-guide.md"
+    },
+    {
+      "source": "skills/amc-knowledge/references/consumer-contracts.md",
+      "consumer": "growth",
+      "target": "skills/amc-knowledge/references/consumer-contracts.md"
+    },
+    {
+      "source": "skills/amc-knowledge/references/file-schemas.md",
+      "consumer": "growth",
+      "target": "skills/amc-knowledge/references/file-schemas.md"
+    },
+    {
+      "source": "skills/amc-knowledge/references/intake-workflow.md",
+      "consumer": "growth",
+      "target": "skills/amc-knowledge/references/intake-workflow.md"
+    },
+    {
+      "source": "skills/amc-knowledge/references/service-plan-scoping.md",
+      "consumer": "growth",
+      "target": "skills/amc-knowledge/references/service-plan-scoping.md"
+    },
+    {
+      "source": "skills/brand-intelligence-intake/SKILL.md",
+      "consumer": "growth",
+      "target": "skills/brand-intelligence-intake/SKILL.md"
+    },
+    {
+      "source": "skills/brand-intelligence-intake/agents/openai.yaml",
+      "consumer": "growth",
+      "target": "skills/brand-intelligence-intake/agents/openai.yaml"
+    },
+    {
+      "source": "skills/brand-intelligence-intake/references/collector-modules.md",
+      "consumer": "growth",
+      "target": "skills/brand-intelligence-intake/references/collector-modules.md"
+    },
+    {
+      "source": "skills/brand-intelligence-intake/references/evidence-contract.md",
+      "consumer": "growth",
+      "target": "skills/brand-intelligence-intake/references/evidence-contract.md"
+    },
+    {
+      "source": "skills/brand-intelligence-intake/references/report-logic.md",
+      "consumer": "growth",
+      "target": "skills/brand-intelligence-intake/references/report-logic.md"
+    },
+    {
+      "source": "skills/facebook-copywriting/SKILL.md",
+      "consumer": "kanban",
+      "target": "src/agents/skills/platforms/facebook/SKILL.md",
+      "platformLegacy": {
+        "platform": "facebook",
+        "version": "1.0.0",
+        "language": "en"
+      }
+    },
+    {
+      "source": "skills/google-business-copywriting/SKILL.md",
+      "consumer": "kanban",
+      "target": "src/agents/skills/platforms/google_business/SKILL.md",
+      "platformLegacy": {
+        "platform": "google_business",
+        "version": "1.0.0",
+        "language": "en"
+      }
+    },
+    {
+      "source": "skills/instagram-copywriting/SKILL.md",
+      "consumer": "kanban",
+      "target": "src/agents/skills/platforms/instagram/SKILL.md",
+      "platformLegacy": {
+        "platform": "instagram",
+        "version": "1.0.0",
+        "language": "en"
+      }
+    },
+    {
+      "source": "skills/tiktok-copywriting/SKILL.md",
+      "consumer": "kanban",
+      "target": "src/agents/skills/platforms/tiktok/SKILL.md",
+      "platformLegacy": {
+        "platform": "tiktok",
+        "version": "1.0.0",
+        "language": "en"
+      }
+    },
+    {
+      "source": "skills/xiaohongshu-copywriting/SKILL.md",
+      "consumer": "kanban",
+      "target": "src/agents/skills/platforms/xiaohongshu/SKILL.md",
+      "platformLegacy": {
+        "platform": "xiaohongshu",
+        "version": "1.0.0",
+        "language": "zh-CN"
+      }
+    },
+    {
+      "source": "skills/amc-kanban/references/kanban-openapi.yaml",
+      "consumer": "kanban",
+      "target": "skills/kanban-openapi.yaml"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-skills/Review_skills.json",
+      "consumer": "content",
+      "target": "config/platform-skills/Review_skills.json"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-skills/facebook_skills.json",
+      "consumer": "content",
+      "target": "config/platform-skills/facebook_skills.json"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-skills/google_business_profile_skills.json",
+      "consumer": "content",
+      "target": "config/platform-skills/google_business_profile_skills.json"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-skills/instagram_skills.json",
+      "consumer": "content",
+      "target": "config/platform-skills/instagram_skills.json"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-skills/tiktok_skills.json",
+      "consumer": "content",
+      "target": "config/platform-skills/tiktok_skills.json"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json",
+      "consumer": "content",
+      "target": "config/platform-skills/xiaohongshu_skills.json"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-Rules/facebook_Rules.md",
+      "consumer": "content",
+      "target": "config/platform-Rules/facebook_Rules.md"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-Rules/google_business_Rules.md",
+      "consumer": "content",
+      "target": "config/platform-Rules/google_business_Rules.md"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-Rules/instagram_Rules.md",
+      "consumer": "content",
+      "target": "config/platform-Rules/instagram_Rules.md"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-Rules/tiktok_Rules.md",
+      "consumer": "content",
+      "target": "config/platform-Rules/tiktok_Rules.md"
+    },
+    {
+      "source": "skills/amc-content-copywriting/references/platform-Rules/xiaohongshu_Rules.md",
+      "consumer": "content",
+      "target": "config/platform-Rules/xiaohongshu_Rules.md"
+    }
+  ],
+  "generatedResources": [
+    "skills/amc-content-copywriting/references/content-defaults.json"
+  ],
+  "files": {
+    "skills/amc-autopilot/SKILL.md": "e033698f34c28aa75cb394953ba4646eb2d4b6e22d664f686e9a807992451db1",
+    "skills/amc-autopilot/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-brand-planning/SKILL.md": "b3928775c880ca1aae168645ab884c5877ff160a2b725f6972751358cf561d84",
+    "skills/amc-brief/SKILL.md": "6c2a096ab3ae40a4acdbb1f81b76d5e81341d158c6165152e64b5afa63c3a89f",
+    "skills/amc-brief/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-content-copywriting/SKILL.md": "c17064a57caaab5b6cfd5973baa29bc4e2e5b7e97ce464364c89d30139ced512",
+    "skills/amc-content-copywriting/references/content-defaults.json": "eef6189232d6112c8869e3a943f19216f387b4b085c42fd9837f94225b068c8b",
+    "skills/amc-content-copywriting/references/platform-Rules/facebook_Rules.md": "1eb177181362ddfc87afef4c844d2a32945e686b07fcf174be951f2bde3abb0d",
+    "skills/amc-content-copywriting/references/platform-Rules/google_business_Rules.md": "cc32ab8fcc1ee5242af2a6ed3187cba98055ff2fd4bf27304af8d31760121b97",
+    "skills/amc-content-copywriting/references/platform-Rules/instagram_Rules.md": "7bd4e70a01c9578fbd8c905008c26d271769d80f24693fbfc587ec0064a13d63",
+    "skills/amc-content-copywriting/references/platform-Rules/tiktok_Rules.md": "9b53bf372baf884347a3097e29eb2bf7a8e1bc6c0e9be0b6cedabbc40205721a",
+    "skills/amc-content-copywriting/references/platform-Rules/xiaohongshu_Rules.md": "01e1df63ede9d9af28d138331f9bb75328662195413a0b471e30f195848321fd",
+    "skills/amc-content-copywriting/references/platform-skills/Review_skills.json": "11728d52705714873b13db23bc8e52ab1271184bf00b7465f99e3840a7adefbc",
+    "skills/amc-content-copywriting/references/platform-skills/facebook_skills.json": "96d893de22a7de1ccd281a93c513401adb592dd62cb035b53bff04ff3e5ccec9",
+    "skills/amc-content-copywriting/references/platform-skills/google_business_profile_skills.json": "f334fb9b786d4c52e50cc76005d568a3d2e6c4e41e4208c7dd3884db2dd31684",
+    "skills/amc-content-copywriting/references/platform-skills/instagram_skills.json": "07e845c626c3808db8afece28b39bbbd42a2f316e61e887ece05662aaead4731",
+    "skills/amc-content-copywriting/references/platform-skills/tiktok_skills.json": "046e090104bc5583cedf5b9c5bf1e082cf465c7d7e8da70df0037b1859854e49",
+    "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json": "31204879c1538b0e9ed5862f689689f021560776b5069eef62817dadccacda65",
+    "skills/amc-conversation/SKILL.md": "dc483eea2d5c3b4d4dfd625cdb697fa2adc243d212af2ae3ad1f5c29874039a6",
+    "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-creative/SKILL.md": "fe7167c5a53b33efc7339761ec91ef64f6619c5237eba6047069182cafcca9d7",
+    "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-discovery/SKILL.md": "1e5139adfe9f6809934717e03745b781a2f33d10c7aca5e2954dd2fb17b449c2",
+    "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",
+    "skills/amc-kanban/references/kanban-openapi.yaml": "1ab3963e32b0b4aaae62a2ced01f6c893d7b034706a814fd089d6a7eff4bc946",
+    "skills/amc-knowledge/SKILL.md": "5fd6bf73335ce9c2a1c5b2fbee607e74899504c65fa9137bf67d014700e7dafc",
+    "skills/amc-knowledge/references/agent-data-collection-guide.md": "21f8839d9158762eecc11d21028f2e8e3cabe5fd42880f549b8f68e584bb2214",
+    "skills/amc-knowledge/references/consumer-contracts.md": "d81be56cf322d267041eb77011f6b86a680d731033ee10f63356f773e4fad3cf",
+    "skills/amc-knowledge/references/file-schemas.md": "6ac342d1d48c897dbb22ff3a15d53a69b574960a30a45c7795c5cd2254818102",
+    "skills/amc-knowledge/references/intake-workflow.md": "19d83ff83da008b395cff96a5e13fd08db1f8b8c363da22487aba752e04ac82b",
+    "skills/amc-knowledge/references/service-plan-scoping.md": "0190b1cdc46c5a12325a9876d64ae025ab546c8a2b055d5fc3cb403b28e1227f",
+    "skills/amc-marketing-expert/SKILL.md": "0a6e0b102bc3c1a75c9a9605e14e40233c8977e7d2a195868ff2b630145c0f31",
+    "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
+    "skills/brand-intelligence-intake/SKILL.md": "aea6f0010f18cc49d576382a1d85ff94e4362cda6298bb4b6fb0fb69cf4fa2ce",
+    "skills/brand-intelligence-intake/agents/openai.yaml": "e21863b50a0d25e0fa895efaf7900c2752d8e942989f4960e976698ca4eb0d8a",
+    "skills/brand-intelligence-intake/references/collector-modules.md": "b1cebca9efa60d5969c042d58d1b44211fb0915bcf50fb5a1cdc447431f8760b",
+    "skills/brand-intelligence-intake/references/evidence-contract.md": "6ad3ddea88461a6a71d145d9c2f88653782d1af37bb0a471f3cb87309e0b0602",
+    "skills/brand-intelligence-intake/references/report-logic.md": "4d94abf5339332d63741ebe434df701f7c2bd469bbbaaef3090ce5879ef0a9f3",
+    "skills/facebook-copywriting/SKILL.md": "383734163ecd665ea1dd0613e94c423bdefdbb51fe3fc8b7f0b8ed650449a21d",
+    "skills/google-business-copywriting/SKILL.md": "aac22328d4a8c851db715b4cbc2ac50d4573ae10e2d1d97352a858906fcc4b86",
+    "skills/instagram-copywriting/SKILL.md": "a14dab52b73c17ae9721c687f527f2fa2f2b99f63a96ddd6e69179baf04ba945",
+    "skills/tiktok-copywriting/SKILL.md": "7998acfb151f959575af4082943c5bcbb0406df04b62da9fb752695592d568ab",
+    "skills/xiaohongshu-copywriting/SKILL.md": "d07888db797d01dd790560b040120b4f8478ea84b58d02e4ecec8d4984b65e0d"
+  }
+}

@@ -1,6 +1,6 @@
 import type {Prisma} from '@prisma/client'
 import {prisma} from '../prisma'
-import {planningRevision,planningInputVersions,assertPlanningConfirmed} from './planning-workspace-contract'
+import {planningRevision,planningInputVersions,planningInputsMatch,assertPlanningConfirmed} from './planning-workspace-contract'
 const reject=(code:string,statusCode=400)=>{throw Object.assign(Error(code),{statusCode})}
 /** A document edit is separate from confirmation; all confirmation identity is server supplied. */
 export async function savePlanningDocument(brandId:string,userId:string,input:any){
@@ -16,7 +16,7 @@ export async function savePlanningDocument(brandId:string,userId:string,input:an
   if(key==='marketing_plan'){
    assertPlanningConfirmed(current)
    if(!current.marketingPlan)return reject('marketing_plan_draft_required',409)
-   if(planningRevision(current.marketingPlan.inputVersions)!==planningRevision(planningInputVersions(current)))return reject('planning_inputs_changed',409)
+   if(!planningInputsMatch(current.marketingPlan.inputVersions,current))return reject('planning_inputs_changed',409)
   }
   if(key==='direction'&&input.action==='confirm'&&current.coCreation?.interview?.status!=='confirmed')return reject('interview_confirmation_required',409)
   const now=new Date().toISOString()

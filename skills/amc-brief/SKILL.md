@@ -1,6 +1,6 @@
 ---
 name: amc-brief
-description: Produce an evidence-backed current brand work brief without changing business records.
+description: "Produce an evidence-backed current brand work brief without changing business records."
 ---
 
 For brand_brief tasks, read amc.context and amc.operations. Explain the observable current state and prepare a useful work brief responding to the goal. The operations snapshot shows current accounts and recent drafts, with explicit limits; it does not prove revenue, impressions, marketing causation or external publishing beyond recorded statuses. Ask iaic_wait when necessary facts or authorized capabilities are missing. Do not fabricate missing results, run paid production, approve drafts, or claim changes were executed.

@@ -11,6 +11,10 @@ AI Marketing Crew Dashboard is the UI and governance layer for Human-AI collabor
 - Main brand logo: public/amc-dashboard-logo.svg
 - Horizontal logo: public/amc-dashboard-logo-horizontal.svg
 
+## AMC Agent Skills
+
+All AMC Skill sources, installation instructions and dependency manifest are maintained in [packages/amc-skills](packages/amc-skills/README.md). External agents can install the whole portable collection or individual Skills from that GitHub directory.
+
 ## Local Development
 
 ```bash

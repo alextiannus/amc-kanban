@@ -1,6 +1,10 @@
 ---
 name: instagram-copywriting
-description: Instagram platform copywriting standards, hook formulas, and format rules
+description: "Instagram platform copywriting standards, hook formulas, and format rules"
+metadata:
+  platform: "instagram"
+  version: "1.0.0"
+  language: "en"
 platform: instagram
 version: 1.0.0
 language: en

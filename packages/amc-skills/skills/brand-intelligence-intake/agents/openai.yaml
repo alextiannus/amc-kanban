@@ -1,0 +1,4 @@
+interface:
+  display_name: "Brand Intelligence Intake"
+  short_description: "Collect evidence for AMC brand reports."
+  default_prompt: "Use $brand-intelligence-intake to collect merchant evidence and submit it to AMC Growth."

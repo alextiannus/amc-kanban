@@ -70,6 +70,7 @@ export function planningDraftContract(scope:PlanningScope){
 
 export function sixPlanningMonths(start:string){return [...planningMonths(start),...planningMonths(start,1)]}
 export function marketingPlanShape(start:string){return {
+ strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:Array.from({length:12},(_,i)=>({month:`${start.slice(0,4)}-${String(i+1).padStart(2,'0')}`,theme:'年度节点主题',campaign:'拟议活动策划，日期未经核实写待确认'})),
@@ -81,20 +82,25 @@ export function validateMarketingPlan(d:any,start:string){
  if(!d||!['brandCharacteristics','coreSellingPoints','inStoreActivities','brandCreatives'].every(k=>list(d[k]))||!d.swot||!['strengths','weaknesses','opportunities','threats'].every(k=>list(d.swot[k])))return fail('incomplete_marketing_plan')
  if(!Array.isArray(d.annualCalendar)||d.annualCalendar.length!==12||d.annualCalendar.some((m:any,i:number)=>m?.month!==`${start.slice(0,4)}-${String(i+1).padStart(2,'0')}`||!str(m.theme)||!str(m.campaign)))return fail('invalid_annual_calendar')
  if(!Array.isArray(d.monthlyPlans)||d.monthlyPlans.length!==6||d.monthlyPlans.some((m:any,i:number)=>m?.month!==sixPlanningMonths(start)[i]||!['goal','theme','resources','measurement'].every(k=>str(m[k]))||!['activities','channels','content'].every(k=>list(m[k]))))return fail('invalid_six_month_plan')
+ if(d.strategyDirection!==undefined&&!list(d.strategyDirection)||d.informationToSupplement!==undefined&&(!Array.isArray(d.informationToSupplement)||d.informationToSupplement.length>24||!d.informationToSupplement.every(str)))return fail('invalid_strategy_supplement')
  if(marketingPlanMarkdown(d).length>24000)return fail('marketing_plan_document_too_long')
- if(Object.keys(d).some(k=>!['brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives'].includes(k)))return fail('unexpected_marketing_plan_field')
+ if(Object.keys(d).some(k=>!['brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives','strategyDirection','informationToSupplement'].includes(k)))return fail('unexpected_marketing_plan_field')
 }
-export function planningInputVersions(current:any){return {interview:planningRevision(current.coCreation?.interview||null),direction:planningRevision(current.coCreation?.direction||null),...(current.coCreation?.principal_strategy?{principalStrategy:planningRevision(current.coCreation.principal_strategy)}:{})}}
+export function planningInputVersions(current:any){return {interview:planningRevision(current.coCreation?.interview||null),...(current.coCreation?.principal_strategy?{principalStrategy:planningRevision(current.coCreation.principal_strategy)}:{})}}
+export function planningInputsMatch(recorded:any,current:any){
+ const {direction,...active}=recorded||{}
+ return planningRevision(active)===planningRevision(planningInputVersions(current))
+}
 export function assertPlanningConfirmed(current:any){
- const interview=current.coCreation?.interview,direction=current.coCreation?.direction
- if(interview?.status!=='confirmed'||direction?.status!=='confirmed'||direction.inputVersions?.interview!==planningRevision(interview))throw Object.assign(Error('planning_confirmation_required'),{statusCode:409})
+ const interview=current.coCreation?.interview
+ if(interview?.status!=='confirmed')throw Object.assign(Error('planning_confirmation_required'),{statusCode:409})
 }
 
 export function planningReviewState(current:any){
  const interview=current.coCreation?.interview,direction=current.coCreation?.direction,plan=current.marketingPlan
  const interviewConfirmed=interview?.status==='confirmed'
  const directionConfirmed=direction?.status==='confirmed'&&interviewConfirmed&&direction.inputVersions?.interview===planningRevision(interview)
- return {interviewConfirmed,directionConfirmed,planNeedsReview:!!plan&&(!directionConfirmed||planningRevision(plan.inputVersions)!==planningRevision(planningInputVersions(current)))}
+ return {interviewConfirmed,directionConfirmed,planNeedsReview:!!plan&&(!interviewConfirmed||!planningInputsMatch(plan.inputVersions,current))}
 }
 
 /** The editable document contains every validated section, never only the model's short reply. */
@@ -102,6 +108,7 @@ export function marketingPlanMarkdown(d:any,english=false){
  const label=(zh:string,en:string)=>english?en:zh
  const list=(items:string[])=>items.map(s=>`- ${s}`).join('\n')
  return [
+  ...(d.strategyDirection?.length?[`## ${label('营销方向','Marketing direction')}\n${list(d.strategyDirection)}`]:[]),
   `## ${label('品牌特点与定位','Brand characteristics')}\n${list(d.brandCharacteristics)}`,
   `## ${label('核心卖点','Core selling points')}\n${list(d.coreSellingPoints)}`,
   '## SWOT\n'+[['strengths','优势','Strengths'],['weaknesses','劣势','Weaknesses'],['opportunities','机会','Opportunities'],['threats','威胁','Threats']].map(([key,zh,en])=>`### ${label(zh,en)}\n${list(d.swot[key])}`).join('\n\n'),
@@ -109,5 +116,6 @@ export function marketingPlanMarkdown(d:any,english=false){
   `## ${label('未来六个月营销策划','Next six months')}\n`+d.monthlyPlans.map((m:any)=>`### ${m.month} · ${m.theme}\n${m.goal}\n\n${label('活动','Activities')}\n${list(m.activities)}\n\n${label('渠道','Channels')}\n${list(m.channels)}\n\n${label('内容','Content')}\n${list(m.content)}\n\n${label('资源与预算','Resources and budget')}\n${m.resources}\n\n${label('衡量与复盘','Measurement')}\n${m.measurement}`).join('\n\n'),
   `## ${label('店内经营配合','In-store operations')}\n${list(d.inStoreActivities)}`,
   `## ${label('品牌营销创意','Brand marketing ideas')}\n${list(d.brandCreatives)}`,
+  `## ${label('期望补充信息','Information to supplement')}\n${d.informationToSupplement?.length?list(d.informationToSupplement):label('现有方案未列出明确补充项，可补充近期变化。','No explicit gaps are listed. Add recent changes if needed.')}`,
  ].join('\n\n')
 }

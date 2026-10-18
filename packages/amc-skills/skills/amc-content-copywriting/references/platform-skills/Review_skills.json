@@ -1,0 +1,77 @@
+{
+  "skills": [
+    {
+      "id": "platform_quality_gate_v3",
+      "name": "Platform Quality Gate v3",
+      "kind": "review",
+      "priority": 80,
+      "version": "v1",
+      "description": "Score platform native 30%, human authenticity 25%, AIDA flow 20%, food/product visualization 15%, and CTA quality 10%.",
+      "directives": [
+        "Score platform native 30%, human authenticity 25%, AIDA flow 20%, food/product visualization 15%, and CTA quality 10%.",
+        "Recommend rewrite below 85/100.",
+        "Flag generic AIDA, weak human reaction, repeated food adjectives, wrong brand timing, and multiple CTA actions."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "ai_pattern_detector_v3",
+      "name": "AI Pattern Detector v3",
+      "kind": "review",
+      "priority": 80,
+      "version": "v1",
+      "description": "Detect repeated AI food words such as soft, fresh, delicious, perfect, great, best, warm, fluffy, and filling.",
+      "directives": [
+        "Detect repeated AI food words such as soft, fresh, delicious, perfect, great, best, warm, fluffy, and filling.",
+        "Detect ad phrases such as We are excited, Highly recommend, Must try, Discover our amazing, Perfect choice, and Best restaurant.",
+        "Detect identical cross-platform structure or product-description-first copy.",
+        "Require rewrite when the caption sounds like a generated brand ad rather than platform-native user behavior."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "ugc-natural-language-review",
+      "name": "UGC Natural Language Reviewer",
+      "kind": "review",
+      "priority": 99,
+      "version": "v1",
+      "description": "Detect AI-like expressions, unnatural user actions, promotional wording, and rewrite content into authentic conversational language.",
+      "directives": [
+        "Detect AI-like expressions, unnatural user actions, promotional wording, and rewrite content into authentic conversational language.",
+        "Lower priority for phrases such as I finally stopped, I discovered, hidden gem, must try, perfect for, life-changing, and reset my body.",
+        "Prefer conversational softeners such as honestly, actually, kind of, a little, I did not expect, what surprised me was, and what I liked was.",
+        "CTA should feel like friend-to-friend conversation, not brand operation."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "ugc-logic-review",
+      "name": "UGC Logic Reviewer",
+      "kind": "review",
+      "priority": 99,
+      "version": "v1",
+      "description": "Detect unrealistic user behavior, artificial storytelling, and promotional language, then rewrite into realistic user experience content.",
+      "directives": [
+        "Detect unrealistic user behavior, artificial storytelling, and promotional language, then rewrite into realistic user experience content.",
+        "Flag stories that jump from problem directly to booking, buying, or recommending without hesitation, trigger, or experience detail.",
+        "Require at least two psychological stages for social UGC: before, hesitation, during, after, or sharing.",
+        "Review whether each section answers why they went, what happened, and why it felt worth sharing."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "platform_aida_quality_gate_v2",
+      "name": "Platform AIDA Quality Gate v2",
+      "kind": "review",
+      "priority": 80,
+      "version": "v1",
+      "description": "Score content by Platform Fit 30%, Human Authenticity 25%, AIDA Flow 20%, Food/Product Visualization 15%, and CTA Quality 10%.",
+      "directives": [
+        "Score content by Platform Fit 30%, Human Authenticity 25%, AIDA Flow 20%, Food/Product Visualization 15%, and CTA Quality 10%.",
+        "Rewrite when platform fit, human authenticity, AIDA flow, product visualization, or CTA quality falls below the publishable threshold.",
+        "Flag generic product-description AIDA when the platform needs native creator or search behavior."
+      ],
+      "scope": {}
+    }
+  ]
+}

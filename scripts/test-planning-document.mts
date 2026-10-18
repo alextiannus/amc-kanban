@@ -28,9 +28,10 @@ try{
  assert.equal(await prisma.auditLog.count({where:{resourceId:brandId}}),5)
  const longInterview='Known brand information. '.repeat(600)
  await send('interview','save',longInterview);await send('interview','confirm',longInterview)
- await send('direction','save','Direction and evidence');await send('direction','confirm','Direction and evidence')
+ assertPlanningConfirmed(current)
+ assert.notEqual(current.coCreation.direction.inputVersions.interview,planningRevision(current.coCreation.interview),'Historical direction is stale but no longer blocks final strategy')
  const source=await readMarketingWorkspace(actorFor(brandId,userId))
- assert.equal(source.confirmationState?.directionConfirmed,true,'Long document projection cannot invalidate trusted confirmation metadata')
+ assert.equal(source.confirmationState?.interviewConfirmed,true,'Long document projection cannot invalidate trusted positioning confirmation')
  const scope={stage:'marketing_plan',mode:'draft',startMonth:'2026-11'} as const
  const full=validatePlanningDraft({scope,expectedRevision:planningRevision(current),title:'Complete plan',content:'Complete planning narrative',data:marketingPlanShape(scope.startMonth)},scope)
  await savePlanningDraft(userId,brandId,'full-plan-fixture',full)

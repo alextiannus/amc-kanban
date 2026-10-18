@@ -1,0 +1,681 @@
+{
+  "copywriters": {
+    "google-business-ben": {
+      "loadedSkillIds": []
+    }
+  },
+  "skills": [
+    {
+      "id": "aida_platform_adaptation_v3",
+      "name": "AIDA Platform Adaptation v3",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Dynamically adapt AIDA according to platform behavior, audience, content goal, and expected user action.",
+      "directives": [
+        "Dynamically adapt AIDA according to platform behavior, audience, content goal, and expected user action.",
+        "Never use an identical AIDA flow across Instagram, Facebook, TikTok, Xiaohongshu, and Google Business.",
+        "Avoid the generic Hook -> Food description -> Brand selling point -> CTA pattern.",
+        "Instagram: Visual Moment -> Reaction -> Sensory Experience -> Save / Comment.",
+        "Facebook: Local Daily Moment -> Community Relevance -> Family / Office Use -> Discussion.",
+        "TikTok: Stop-scroll Hook -> Reaction -> Food Reveal -> Comment.",
+        "Xiaohongshu: Lifestyle Problem -> Discovery -> Experience -> Save Reason.",
+        "Google Business: Search Need -> Business Answer -> Customer Fit -> Visit Action."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "human_native_experience_v3",
+      "name": "Human Native Experience v3",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Social copy must feel like a real user, creator, local regular, or community member, not a brand generator.",
+      "directives": [
+        "Social copy must feel like a real user, creator, local regular, or community member, not a brand generator.",
+        "For social platforms, include one real-person reaction, one concrete action, and one believable situation when facts support it.",
+        "Useful English reactions include Honestly did not expect, I was surprised, Did not think, My first bite, and I noticed.",
+        "Useful Chinese reactions include 没想到, 原本以为, 结果, 有点惊喜, and 我自己比较喜欢.",
+        "Useful actions include opened, tore, picked up, first bite, 打开, 掰开, 拿起, and 第一口.",
+        "Useful scenes include before work, after school, tea break, weekend, family sharing, office lunch, 上班路上, 下午茶, and 周末."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "food_sensory_expression_v3",
+      "name": "Food Sensory Expression v3",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Food description must follow Action + Physical Detail + Feeling.",
+      "directives": [
+        "Food description must follow Action + Physical Detail + Feeling.",
+        "Replace static adjective lists with observable food actions and physical proof.",
+        "Wrong: The bun is soft and delicious.",
+        "Better: The skin tore easily when I opened it, and the first bite was mostly filling.",
+        "Within one caption, avoid repeating soft-type, fresh-type, or filling-type words more than twice.",
+        "Do not use perfect, great, best, delicious, fresh, soft, fluffy, filling, or warm as a substitute for evidence."
+      ],
+      "scope": {
+        "vertical": "food_beverage"
+      }
+    },
+    {
+      "id": "single_cta_optimizer_v2",
+      "name": "Single CTA Optimizer v2",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Every caption should have only one primary CTA.",
+      "directives": [
+        "Every caption should have only one primary CTA.",
+        "Instagram allows save, comment, or a simple choice question; avoid homepage as the main action.",
+        "Facebook allows family or community discussion; avoid buy now and homepage-first CTAs.",
+        "TikTok allows one comment question; avoid website, order, or homepage CTAs.",
+        "Xiaohongshu allows 收藏, 评论, or 分享体验; avoid 官网, 立即购买, and 马上下单.",
+        "Google Business allows view menu, get directions, visit profile, learn more, order, book, contact, or check availability."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "brand_timing_control_v2",
+      "name": "Brand Timing Control v2",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Control when the brand appears so the post does not open like an advertisement.",
+      "directives": [
+        "Control when the brand appears so the post does not open like an advertisement.",
+        "Instagram: brand appears after the first experience beat; keep about 70% experience and 30% brand.",
+        "Facebook: brand appears naturally through community or daily-life information.",
+        "TikTok: brand appears after Reaction -> Food moment -> Discovery.",
+        "Xiaohongshu: brand appears near the end after my life, discovery, and experience.",
+        "Google Business may name the business in the first sentence when it helps search clarity."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "aida_platform_optimizer_v2",
+      "name": "AIDA Platform Optimizer v2",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Never apply identical AIDA structure across platforms.",
+      "directives": [
+        "Never apply identical AIDA structure across platforms.",
+        "Instagram AIDA: Visual Food Moment -> Personal Reaction -> Sensory Desire -> Save / Comment.",
+        "Facebook AIDA: Local Life Moment -> Community Value -> Family / Daily Use -> Conversation.",
+        "TikTok AIDA: Stop-scroll Hook -> Creator Reaction -> Food Reveal -> Comment Trigger.",
+        "Xiaohongshu AIDA: Lifestyle Problem -> Discovery Story -> Personal Experience -> Save Reason.",
+        "Google Business AIDA: Search Need -> Business Answer -> Customer Fit -> Visit Action.",
+        "Adapt attention style, interest depth, desire trigger, and action behavior to the selected platform."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "human_native_storytelling_v2",
+      "name": "Human Native Storytelling v2",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Make copy feel like platform-native creator content rather than AI marketing copy.",
+      "directives": [
+        "Make copy feel like platform-native creator content rather than AI marketing copy.",
+        "Include at least one believable personal reaction, physical action, or real situation when the platform allows it.",
+        "Useful reactions include honestly surprised, did not expect, first bite, I noticed, or native equivalents.",
+        "Useful actions include opened, tore, picked up, held, bit into, shared, unboxed, or native equivalents.",
+        "Useful situations include before work, lunch break, after school, tea break, weekend breakfast, family sharing, or office rush.",
+        "Avoid consecutive generic adjectives such as fresh, soft, delicious, handmade, and quality."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "food_sensory_variation_v2",
+      "name": "Food Sensory Variation v2",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Do not describe food with static adjective lists. Use action plus sensory evidence.",
+      "directives": [
+        "Do not describe food with static adjective lists. Use action plus sensory evidence.",
+        "Prefer opened, tore, broke, bit, held, picked up, shared, unboxed, or unwrapped before food descriptors.",
+        "Include sensory dimensions such as temperature, texture, filling, weight, smell, first bite, or mouthfeel when supported.",
+        "Replace \"The bun is soft\" with an action-led observation such as \"The skin tore easily when I opened it\" when supported."
+      ],
+      "scope": {
+        "vertical": "food_beverage"
+      }
+    },
+    {
+      "id": "aida_rewrite_optimizer_v2",
+      "name": "AIDA Rewrite Optimizer v2",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Rewrite order: 1. Fix Hook, 2. Improve Interest, 3. Strengthen Desire, 4. Simplify CTA, 5. Remove AI Pattern.",
+      "directives": [
+        "Rewrite order: 1. Fix Hook, 2. Improve Interest, 3. Strengthen Desire, 4. Simplify CTA, 5. Remove AI Pattern.",
+        "Use the selected platform AIDA structure instead of a generic Attention -> Product -> Benefit -> CTA shape.",
+        "Remove marketing language, feature dumps, repeated adjective chains, and non-native CTAs."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "human_food_storytelling",
+      "name": "Human Food Storytelling",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Transform promotional food copy into authentic customer-style food experiences.",
+      "directives": [
+        "Transform promotional food copy into authentic customer-style food experiences.",
+        "Prioritize personal experience, specific sensory details, natural language, imperfect human expressions, and realistic daily scenarios.",
+        "Use customer-experience voice rather than brand promotion voice.",
+        "Replace generic food adjectives with concrete actions, texture, temperature, aroma, filling, or first-bite details.",
+        "Include at least one realistic daily scenario such as before work, lunch break, after school, weekend breakfast, tea break, or takeaway on the way home when supported by the brief.",
+        "Avoid advertisement tone, generic food adjectives, AI-like structured sentences, and overly perfect descriptions."
+      ],
+      "scope": {
+        "vertical": "food_beverage"
+      }
+    },
+    {
+      "id": "style:food:human-native",
+      "name": "Human Native Food Copy",
+      "kind": "copywriter",
+      "priority": 97,
+      "version": "v1",
+      "description": "Write food copy like a real local customer or shop operator, not like a brand brochure.",
+      "directives": [
+        "Write food copy like a real local customer or shop operator, not like a brand brochure.",
+        "Use one concrete visual food detail in the first two lines.",
+        "For Instagram, Facebook, TikTok, and Google Business, use natural platform-appropriate emojis when they fit the content. Follow each platform range and avoid repeated hype chains.",
+        "Avoid generic template phrases such as nutritious choice, perfect for any time, satisfying meal, and order online today.",
+        "Make the CTA social when the platform supports it: ask users to save, comment a filling choice, tag a colleague, or check the homepage.",
+        "Do not overclaim health effects. Say lower-fat or lower-sugar only when provided as a brand fact."
+      ],
+      "scope": {
+        "vertical": "food_beverage"
+      }
+    },
+    {
+      "id": "style:social:anti-template",
+      "name": "Social Anti Template",
+      "kind": "copywriter",
+      "priority": 82,
+      "version": "v1",
+      "description": "Avoid stacked selling points. Turn benefits into one real use moment, visual detail, or audience situation.",
+      "directives": [
+        "Avoid stacked selling points. Turn benefits into one real use moment, visual detail, or audience situation.",
+        "Do not start with generic ad openings such as Looking for, Discover, Perfect for, or Heads up unless the platform voice truly needs it."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:clear-cta",
+      "name": "Clear CTA",
+      "kind": "copywriter",
+      "priority": 86,
+      "version": "v1",
+      "description": "End with one specific action.",
+      "directives": [
+        "End with one specific action.",
+        "Keep the CTA plain and explicit."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:local-proof-first",
+      "name": "Local Proof First",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Anchor claims in local, visible, or audience-specific proof early.",
+      "directives": [
+        "Anchor claims in local, visible, or audience-specific proof early.",
+        "Do not lead with abstract brand claims."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "concrete_detail_injection",
+      "name": "Concrete Detail Injection",
+      "kind": "copywriter",
+      "priority": 95,
+      "version": "v1",
+      "description": "Prioritize numbers, locations, time, specific actions, and physical details over abstract adjectives.",
+      "directives": [
+        "Prioritize numbers, locations, time, specific actions, and physical details over abstract adjectives.",
+        "Convert vague descriptions into concrete specifics. Replace generic adjectives with verifiable details — numbers, actions, physical sensations — not decoration.",
+        "Every sensory claim (soft, warm, fresh, rich) must be backed by a concrete physical detail the reader can visualize.",
+        "Use specific actions: opened, tore, picked up, bit into, walked in, noticed — before any adjective.",
+        "Include at least one concrete number, time reference, location cue, or physical dimension per paragraph."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "feature_to_value_translator",
+      "name": "Feature To Value Translator",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Never output brand features as standalone information lines. Every feature must be translated into user value.",
+      "directives": [
+        "Never output brand features as standalone information lines. Every feature must be translated into user value.",
+        "Translation rule: Feature + User Concern → User Value. Identify the user's underlying worry for each feature, then show how the feature resolves it through a specific experience detail.",
+        "Describe the experience through action, sensory detail, and emotional change — not abstract adjectives.",
+        "Bad: listing a feature as a standalone fact without connecting it to user experience Good direction: describe the experience through action, sensory detail, and emotional change — not abstract adjectives",
+        "Every brand fact must answer: What user problem does this solve? What user concern does this address? Why would someone care?"
+      ],
+      "scope": {}
+    },
+    {
+      "id": "trust_building_generator",
+      "name": "Trust Building Generator",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Every post must include at least one trust signal: concrete number, specific location, time reference, user action, or real limitation.",
+      "directives": [
+        "Every post must include at least one trust signal: concrete number, specific location, time reference, user action, or real limitation.",
+        "Priority signals: specific time, place, action, and sensory markers that signal a real experience",
+        "Avoid trust-destroying words: amazing, premium, best, perfect, life-changing, unforgettable, must-try.",
+        "Build trust through specifics, not superlatives. The reader should feel: \"This is real, not an ad.\"",
+        "Include practical information when available: location, timing, service mode, suitable audience, price range.",
+        "Never fabricate trust signals. Only use facts from FACT CONTEXT."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "platform_cta_optimizer",
+      "name": "Platform CTA Optimizer",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Select the correct CTA type based on platform and user decision stage.",
+      "directives": [
+        "Select the correct CTA type based on platform and user decision stage.",
+        "Instagram CTA: Save for later, a choice-based engagement question, Tag a friend, If this has been on your one-day list.",
+        "Facebook CTA: Has anyone around here tried this?, Which one would your family pick?, What would you choose for tea break?",
+        "TikTok CTA: Would you try this?, Rate it 1-10, Sweet or savoury?, Tag someone who needs this.",
+        "Xiaohongshu CTA: 收藏, 评论, 分享体验, 你早餐喜欢甜口还是咸口?",
+        "Google Business CTA: view menu, get directions, visit profile, learn more, order, book, contact.",
+        "Never use cross-platform CTA styles: no save/share on Facebook, no website-first on Instagram, no Instagram-style on Google Business."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "micro_detail_injection",
+      "name": "Micro Detail Injection",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Every piece of content must include at least one micro detail from each category when applicable: action detail, sensory detail, thought detail.",
+      "directives": [
+        "Every piece of content must include at least one micro detail from each category when applicable: action detail, sensory detail, thought detail.",
+        "Action details: concrete physical actions that ground the narrative in sensory reality",
+        "Sensory details for food: steam coming out, crispy edge, warm filling, smell of fresh bread, first bite texture, temperature contrast.",
+        "Sensory details for space: quiet room, morning sunlight, smell of coffee, clean floor, soft music, natural light through the window.",
+        "Thought details: express unexpected reactions, moments of humour, near-cancellations, random observations, lingering impressions — the unfiltered thoughts that occur during a real experience.",
+        "These micro details make content feel real. A real person notices small things. A marketing team only writes about value and benefits."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "anti_ai_pattern_detector",
+      "name": "Anti AI Pattern Detector",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Detect and eliminate common AI writing patterns that make content feel machine-generated.",
+      "directives": [
+        "Detect and eliminate common AI writing patterns that make content feel machine-generated.",
+        "Pattern 1 — Uniform sentence structure: avoid chains of subject-verb-object sentences. Vary sentence openings and lengths.",
+        "Pattern 2 — Over-summarized emotions: detect abstract emotional summaries and replace with specific actions or observations.",
+        "Pattern 3 — Brand introduction sentences: detect \"XXX offers... / XXX provides... / XXX is the perfect place...\" and replace with user experience.",
+        "Pattern 4 — Perfect narrative arc: detect \"Problem -> Solution -> Satisfaction\" and introduce realistic friction, hesitation, or imperfection.",
+        "Pattern 5 — Marketing close: detect formulaic endings and replace with natural conversational closings.",
+        "Pattern 6 — Repeated rhythm: detect consecutive sentences of similar length and break the pattern with a short or long sentence."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "marketing_language_filter",
+      "name": "Marketing Language Filter",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Actively reduce marketing word density. Target: zero marketing-only words per post.",
+      "directives": [
+        "Actively reduce marketing word density. Target: zero marketing-only words per post.",
+        "Banned or heavily reduced words: amazing, incredible, perfect, premium, best, top-rated, life-changing, transformative, unforgettable, ultimate, exceptional, outstanding.",
+        "Replace marketing words with human expressions: amazing -> didn't expect; perfect -> worked well for me; premium -> felt comfortable; life-changing -> became something I enjoyed; best -> one of the places I liked; incredible -> honestly surprised me.",
+        "Also reduce: wonderful experience, fantastic service, excellent quality, great value, highly recommend. These are what marketing teams write, not what real people say.",
+        "Real people express opinions modestly — understated reactions, personal preferences, tentative comparisons. Never enthusiastic endorsement language."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "emoji_quality_checker",
+      "name": "Emoji Quality Checker",
+      "kind": "copywriter",
+      "priority": 85,
+      "version": "v1",
+      "description": "Before final output, run an emoji quality self-check on the entire caption.",
+      "directives": [
+        "Before final output, run an emoji quality self-check on the entire caption.",
+        "Check 1 — Meaningfulness: if you delete every emoji, does the emotional message change? If no, remove the meaningless emojis.",
+        "Check 2 — Context match: does each emoji match the actual emotion of its sentence? If the sentence expresses nervousness but the emoji represents a business activity category, that is a FAIL — emoji must match emotion, not industry.",
+        "Check 3 — Overuse: if more than 10 emojis appear in a single caption, reduce to the most emotionally meaningful ones. For Xiaohongshu: 5-10 range.",
+        "Check 4 — Pattern detection: if emojis appear at the end of every paragraph, or at the same relative position in multiple sentences, break the pattern.",
+        "Check 5 — CTA emoji: never use a fixed emoji (like 🤍) on every CTA. CTA emoji should vary based on the emotional tone of the close."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "humanization_experience_first",
+      "name": "Humanization: Experience > Selling Point",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v1",
+      "description": "Core principle: show what happened through a real experience, never list features as standalone facts.",
+      "directives": [
+        "Core principle: show what happened through a real experience, never list features as standalone facts.",
+        "For every selling point: replace a feature statement with a specific moment that demonstrates it. Let the reader infer the feature from the experience.",
+        "Before writing any feature, ask: what did I see, hear, or feel that proved this? Write that instead.",
+        "A reader should see a person's journey, not a brand's menu of services."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "humanization_scene_first",
+      "name": "Humanization: Scene > Description",
+      "kind": "copywriter",
+      "priority": 98,
+      "version": "v1",
+      "description": "Replace abstract descriptions with specific moments. Show what someone saw, felt, or did — not what a place offers.",
+      "directives": [
+        "Replace abstract descriptions with specific moments. Show what someone saw, felt, or did — not what a place offers.",
+        "Environment: not what it looked like, but how it felt. Product: not what it claims, but what you experienced.",
+        "Every post needs one concrete scene: walking in for the first time, opening the product, a moment of unexpected help."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "humanization_ai_filter",
+      "name": "Humanization: AI Expression Filter",
+      "kind": "copywriter",
+      "priority": 92,
+      "version": "v1",
+      "description": "Delete AI-high-frequency expressions: beginner-friendly, premium, professional, high-quality, perfect for, best choice.",
+      "directives": [
+        "Delete AI-high-frequency expressions: beginner-friendly, premium, professional, high-quality, perfect for, best choice.",
+        "Delete summary-style emotional statements. Replace with specific moments.",
+        "Delete fabricated social proof. Replace with observable personal reactions.",
+        "Avoid template sequences and overused patterns."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "interior_description_filter",
+      "name": "Interior Description Filter",
+      "kind": "copywriter",
+      "priority": 85,
+      "version": "v1",
+      "description": "Detect and remove decoration-focused AI descriptions. Never stack multiple visual adjectives in a row.",
+      "directives": [
+        "Detect and remove decoration-focused AI descriptions. Never stack multiple visual adjectives in a row.",
+        "Banned interior-listing patterns: listing decoration details as a sequence of visual adjectives.",
+        "Rewrite interior descriptions into user feelings — describe how the space changed the user's emotional state, not what it looks like.",
+        "By industry — Fitness/wellness: focus on beginner-friendly, not intimidating, welcoming. Restaurant/Cafe: focus on comfortable to stay, not rushed, good for conversation. Retail: focus on easy to browse, no pressure.",
+        "Self-check: if you delete the environment description, does the emotional message of the caption change? If not, the description was unnecessary decoration."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "feature_pain_point_translator",
+      "name": "Feature Pain Point Translator",
+      "kind": "copywriter",
+      "priority": 98,
+      "version": "v1",
+      "description": "Never mention a core selling point without explaining why it matters. Do not stop at describing features.",
+      "directives": [
+        "Never mention a core selling point without explaining why it matters. Do not stop at describing features.",
+        "For every important feature, ask: Why does the user need this? What are they afraid of? What pain does this solve?",
+        "Translation formula: Feature → User Pain Point → Specific Scenario → Emotional Relief → Purchase Reason.",
+        "Describe the experience through action, sensory detail, and emotional change — not abstract adjectives.",
+        "Tier 1 selling points must be fully expanded with pain point + proof + purchase reason. Tier 2/3 points can be brief or skipped."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "purchase_reason_amplifier",
+      "name": "Purchase Reason Amplifier",
+      "kind": "copywriter",
+      "priority": 95,
+      "version": "v1",
+      "description": "For every Tier 1 selling point: Feature + User Problem + Resolution + Why It Matters. Never let a core feature appear as a one-line fact.",
+      "directives": [
+        "For every Tier 1 selling point: Feature + User Problem + Resolution + Why It Matters. Never let a core feature appear as a one-line fact.",
+        "Structure: Feature → identify the user's underlying worry → provide specific proof of how it was resolved → explain why this makes it a purchase reason.",
+        "Turn features into purchase decisions, not descriptions. The reader should think \"this solves exactly what I was worried about\", not \"this place has X feature.\"",
+        "In limited word count, every sentence must serve a purpose. Spend words on Tier 1 purchase drivers. Briefly mention or skip Tier 2/3."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:trust-building",
+      "name": "Trust Building",
+      "kind": "copywriter",
+      "priority": 84,
+      "version": "v1",
+      "description": "Use measured, trustworthy language.",
+      "directives": [
+        "Use measured, trustworthy language.",
+        "Give enough detail for the reader to believe the post."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:local-seo",
+      "name": "Google Business Local SEO",
+      "kind": "copywriter",
+      "priority": 96,
+      "version": "v1",
+      "description": "Write for search intent, local relevance, and clear business actions.",
+      "directives": [
+        "Write for search intent, local relevance, and clear business actions.",
+        "Lead with location, offer, or appointment value."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:no-hashtag",
+      "name": "Google Business No Hashtag",
+      "kind": "copywriter",
+      "priority": 94,
+      "version": "v1",
+      "description": "Do not use hashtags.",
+      "directives": [
+        "Do not use hashtags.",
+        "Keep the post factual and concise."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:store-update",
+      "name": "Google Business Store Update",
+      "kind": "copywriter",
+      "priority": 88,
+      "version": "v1",
+      "description": "Write like a current store update with menu, availability, address, and one clear action.",
+      "directives": [
+        "Write like a current store update with menu, availability, address, and one clear action.",
+        "Avoid social slang, emojis, hashtags, and influencer phrasing."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:menu-seo",
+      "name": "Google Business Menu SEO",
+      "kind": "copywriter",
+      "priority": 86,
+      "version": "v1",
+      "description": "Use practical menu and service phrases naturally without keyword stuffing.",
+      "directives": [
+        "Use practical menu and service phrases naturally without keyword stuffing.",
+        "Mention dine-in, takeaway, delivery, website, or address only when provided as facts."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "platform_quality_gate_v3",
+      "name": "platform quality gate v3",
+      "kind": "copywriter",
+      "priority": 80,
+      "version": "v1",
+      "description": "platform_quality_gate_v3",
+      "directives": [],
+      "scope": {}
+    },
+    {
+      "id": "ai_pattern_detector_v3",
+      "name": "ai pattern detector v3",
+      "kind": "copywriter",
+      "priority": 80,
+      "version": "v1",
+      "description": "ai_pattern_detector_v3",
+      "directives": [],
+      "scope": {}
+    },
+    {
+      "id": "platform_aida_quality_gate_v2",
+      "name": "platform aida quality gate v2",
+      "kind": "copywriter",
+      "priority": 80,
+      "version": "v1",
+      "description": "platform_aida_quality_gate_v2",
+      "directives": [],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:local-search",
+      "name": "google business:local-search",
+      "kind": "copywriter",
+      "priority": 85,
+      "version": "v1",
+      "description": "style:google_business:local-search",
+      "directives": [],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:factual",
+      "name": "google business:factual",
+      "kind": "copywriter",
+      "priority": 85,
+      "version": "v1",
+      "description": "style:google_business:factual",
+      "directives": [],
+      "scope": {}
+    },
+    {
+      "id": "style:google_business:business-information",
+      "name": "google business:business-information",
+      "kind": "copywriter",
+      "priority": 85,
+      "version": "v1",
+      "description": "style:google_business:business-information",
+      "directives": [],
+      "scope": {}
+    },
+    {
+      "id": "core_selling_point_selector_v1",
+      "name": "Core Selling Point Selector v1",
+      "kind": "copywriter",
+      "priority": 98,
+      "version": "v1",
+      "description": "Global rule: one caption = one core purchase reason. Never list all available features.",
+      "directives": [
+        "CRITICAL — Core Selling Point Selection: one caption must focus on ONE core purchase reason.",
+        "Before writing, silently ask: what is the single reason someone would choose this place? That is your focus.",
+        "You may keep at most two supporting facts — but they must directly support the core point, not compete with it.",
+        "If you find yourself mentioning 3+ selling points, delete the weaker ones. Deepen the core point instead.",
+        "Tier 1 (core focus): fully expand. Tier 2/3: brief or skip.",
+        "Weight distribution: ~60% on the core point and its proof, ~25% on user context, ~10% on supporting fact, ~5% on everything else."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "quality_rewrite_check_v2",
+      "name": "Quality Rewrite Check v2",
+      "kind": "copywriter",
+      "priority": 98,
+      "version": "v2",
+      "description": "Auto-detect and fix AI patterns — V10 with complete Google CTA check.",
+      "directives": [
+        "QUALITY REWRITE CHECK v2 — run these checks on the rewritten output before returning:",
+        "1. AI-Detection: Does this sound like a template? Check for Hook→Benefit→CTA pattern, abstract adjectives, uniform sentence length. If yes, rewrite.",
+        "2. ONE Selling Point Check: Identify the single core purchase reason. If more than 2 selling points, remove weaker ones.",
+        "3. Selling Point Quality: Is the core selling point expanded? Is it a one-line fact? If so, reframe.",
+        "4. CTA Completeness (Google Business): Does the CTA include Action + What Comes After? Never end with a lone action verb. If incomplete, add the outcome.",
+        "5. Language Quality: Are there forbidden words? If yes, replace with factual alternatives.",
+        "6. Platform Native: Does this read like a Google Business post, not social media?",
+        "If any check fails, rewrite that part before returning the final output."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "core_selling_point_selector_v2",
+      "name": "Core Selling Point Selector v2",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v2",
+      "description": "Before generating, silently choose ONE core purchase reason. At most one supporting fact. Delete every other selling point.",
+      "directives": [
+        "Before writing, silently choose ONE core purchase reason for this caption. You may keep at most ONE supporting fact that directly reinforces it. Delete or skip every other selling point, even if available in the brief.",
+        "Ask yourself: what is the single reason someone would choose this place? That is your focus.",
+        "If you find yourself mentioning more than 2 selling points, remove the weaker ones. Deepen the core point instead.",
+        "Core point weight: ~70% of content words. Supporting fact: ~15%. User context and hesitation: ~10%. Everything else: ~5%.",
+        "This is the most important structural rule. A caption listing many features equally is a failed caption.",
+        "Self-check: can you answer 'what is the single purchase reason' in one phrase? If not, remove extra selling points."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "quality_rewrite_check_v3",
+      "name": "Quality Rewrite Check v3",
+      "kind": "copywriter",
+      "priority": 100,
+      "version": "v3",
+      "description": "V11 quality checks: Hook, single selling point, human authenticity, advertisement detection, human-product-scene unity.",
+      "directives": [
+        "QUALITY REWRITE CHECK v3 — run before returning:",
+        "1. Hook Check: does the first line make the target user stop scrolling? If it just introduces content, rewrite.",
+        "2. Core Selling Point Check: can you answer 'what is the single purchase reason' in one phrase? If more than 2 answers, remove extra selling points and deepen the core.",
+        "3. Human Check: does this sound like a real person sharing, not AI-generated marketing? Check for natural imperfections, varied rhythm, personal opinions.",
+        "4. Advertisement Check: does this feel like an ad? Remove promotional language, superlatives, feature dumps, brand-first framing.",
+        "5. Human-Product-Scene Check: who has the problem? when and where does it happen? why does the product solve it? Are all three unified and consistent?",
+        "6. CTA Completeness (Google Business): Does the CTA include Action + What Comes After? Never end with a lone action verb.",
+        "7. Platform Native: does this read like real content on this platform, not a port from another platform?",
+        "If any check fails, rewrite that part before returning."
+      ],
+      "scope": {}
+    },
+    {
+      "id": "ben_directives_v1",
+      "name": "Ben Directives v1",
+      "kind": "copywriter",
+      "priority": 90,
+      "version": "v1",
+      "description": "Ben's skill directives — menu SEO writer voice.",
+      "directives": [
+        "Lead with meal intent, menu item, location, or service mode.",
+        "Keep claims factual and searchable.",
+        "Avoid repeating the same keyword more than twice.",
+        "Include one practical detail people need to decide.",
+        "Avoid social feed tone and hashtags."
+      ],
+      "scope": {}
+    }
+  ]
+}

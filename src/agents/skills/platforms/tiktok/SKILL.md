@@ -1,6 +1,10 @@
 ---
 name: tiktok-copywriting
-description: TikTok / Instagram Reels caption and video script hook standards
+description: "TikTok / Instagram Reels caption and video script hook standards"
+metadata:
+  platform: "tiktok"
+  version: "1.0.0"
+  language: "en"
 platform: tiktok
 version: 1.0.0
 language: en

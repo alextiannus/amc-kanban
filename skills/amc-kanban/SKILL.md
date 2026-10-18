@@ -1,3 +1,8 @@
+---
+name: amc-kanban
+description: "Use authorized AMC Personal MCP tools to read brand operations and perform user-authorized merchant work."
+---
+
 # AI Marketing Crew Personal MCP Skill
 
 版本：4.0（2026-08-22）
@@ -13,10 +18,14 @@
 - 收到 403 时停止操作，不尝试旧接口或其他身份绕过。
 - 不输出、记录或持久化 API Key、Cookie、平台密码和第三方 Secret。
 
+## 安装与授权边界
+
+安装只提供方法，不授权保存、付费、发布或回复。每个写操作须有当前用户明确授权；历史自动设置不能扩大权限。营销策略遵守 amc-marketing-expert，暂不将 Subscription 或固定平台发布次数作为策略输入；执行套餐仅在明确的执行任务中核对。读取实际 MCP schema，不假设此文档列举的旧工具全部仍可用。
+
 ## 标准工作循环
 
 1. 读取品牌 profile、subscription、accounts、assets、drafts、reviews 和 ActionItems。
-2. 根据订阅配额、品牌上下文和最新数据直接创建或更新业务资源。
+2. 根据当前用户已授权的任务、品牌上下文和最新数据创建或更新业务资源；执行任务需要时核对套餐资源，营销策略不读 Subscription 或固定平台发布次数。
 3. 使用 `board_save_draft` 保存草稿并绑定 `accountId`。
 4. 使用 `board_get_schedule_recommendation` 获取推荐时间，再用 `board_submit_draft` 提交。
 5. 使用 `get_brand_reviews` 和 `board_reply_review` 处理允许自动回复的评论。
@@ -73,3 +82,8 @@ MCP：
 REST Base URL：`https://amc-kanban.immedi.ai/api`
 
 `/api/brands/{id}/mcp/execute` 已关闭；只使用 `/api/mcp`。
+
+
+## API 参考
+
+按需读取 [OpenAPI 参考](references/kanban-openapi.yaml)，并以已连接服务返回的实际工具 schema 为准。
