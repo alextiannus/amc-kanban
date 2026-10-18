@@ -1,3 +1,4 @@
+import {reuseIdeaDraft} from '../src/lib/ai-native/idea-content-draft'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma'
@@ -43,6 +44,13 @@ try{
  const authorizedReplay=await admitBrandIdeas(userId,brandId,ids[2]);assert(authorizedReplay.selected[0].replayed,'real Admin authorization must preserve the same receipt')
  await assert.rejects(()=>admitBrandIdeas(userId,'foreign-brand',ids[0],prisma,async()=>{throw new Error('denied')},now),/denied/)
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId,kind:'CREATIVE_ITEM'}}),0,'selection creates no adapted revision')
+ // Production saves into the SAME undated placeholder, without a second draft.
+ const produced=await prisma.$transaction(tx=>reuseIdeaDraft(tx,brandId,items[0],'generation-test',{caption:'Verified generated content',mediaUrls:[],hashtags:[]}))
+ assert.equal(produced,items[0].calendarSelection.draftId)
+ assert.equal(await prisma.contentDraft.count({where:{brandId}}),3)
+ const same=await prisma.$transaction(tx=>reuseIdeaDraft(tx,brandId,items[0],'generation-test',{caption:'Duplicate result',mediaUrls:[],hashtags:[]}));assert.equal(same,produced)
+ assert.equal((await prisma.contentDraft.findUniqueOrThrow({where:{id:produced!}})).caption,'Verified generated content')
+ await assert.rejects(()=>prisma.$transaction(tx=>reuseIdeaDraft(tx,brandId,items[0],'other-generation',{caption:'Must not overwrite'})),/selected_idea_draft_changed/)
  // Publishing history does not refill a fulfilled monthly target.
  await prisma.contentDraft.updateMany({where:{brandId},data:{status:'published',publishedAt:now}})
  assert.equal((await admit()).selected.length,0)

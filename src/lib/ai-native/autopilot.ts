@@ -1,3 +1,4 @@
+import {reuseIdeaDraft} from './idea-content-draft'
 // Application capabilities and durable business receipts. IAIC User AI owns the task and decisions.
 import type {Pool} from 'pg'
 import type {Prisma} from '@prisma/client'
@@ -216,11 +217,14 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,source.month,output.creative_id)
    if(current.expectedRevision!==source.hash)throw nativeError('autopilot_creative_changed')
    await gate()
-   const draftId=`autopilot_${output.id}`
+   let draftId=`autopilot_${output.id}`
    await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
     const assets=await tx.mediaAsset.findMany({where:{brandId,id:{in:result.assetIds}}})
     if(assets.length!==result.assetIds.length||assets.some((a:any)=>['denied','expired','revoked','restricted'].includes(a.rightsStatus||'')))throw nativeError('autopilot_assets_changed')
-    await tx.contentDraft.upsert({where:{id:draftId},update:{},create:{id:draftId,brandId,accountId:run.account_id,caption:result.generated.caption,hashtags:result.generated.hashtags||[],mediaUrls:result.mediaUrls,status:'draft',agentId:userId,agentNote:`brand-plan-calendar-item:${output.creative_id}\nAI autopilot ${run.id}; creative revision ${output.revision_id}; publication requires human confirmation.`,viralCopyScriptProvenance:{autopilot:{runId,taskId:run.task_id,authorizationRevision:run.config_revision,ownerId:userId,...source},generation:result.generated.provenance||null},assetRefs:{create:result.assetIds.map((assetId:string,order:number)=>({assetId,order}))}}})
+    const contentData={accountId:run.account_id,caption:result.generated.caption,hashtags:result.generated.hashtags||[],mediaUrls:result.mediaUrls,status:'draft',agentId:userId,viralCopyScriptProvenance:{autopilot:{runId,taskId:run.task_id,authorizationRevision:run.config_revision,ownerId:userId,...source},generation:result.generated.provenance||null},assetRefs:{create:result.assetIds.map((assetId:string,order:number)=>({assetId,order}))}}
+    const reused=await reuseIdeaDraft(tx,brandId,current.current,output.id,contentData)
+    if(reused)draftId=reused
+    else await tx.contentDraft.upsert({where:{id:draftId},update:{},create:{id:draftId,brandId,...contentData,agentNote:`brand-plan-calendar-item:${output.creative_id}\nAI autopilot ${run.id}; creative revision ${output.revision_id}; publication requires human confirmation.`}})
     await tx.notification.upsert({where:{id:`autopilot-ready-${output.id}`},update:{},create:{id:`autopilot-ready-${output.id}`,userId,brandId,type:'INFO',title:'自动驾驶内容已生成',message:`${source.creative.title}：User AI Assistant 已完成品牌适配与内容生成，请在内容草稿中确认后发布。`}})
    })
    await pool.query("UPDATE amc_iaic.autopilot_outputs SET status='completed',draft_id=$2,error=NULL,updated_at=now() WHERE id=$1",[output.id,draftId])
