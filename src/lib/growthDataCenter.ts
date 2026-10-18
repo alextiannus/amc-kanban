@@ -345,7 +345,7 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   googleBusinessUrl?: string | null
   googleReviewUrl?: string | null
   accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null; displayName?: string | null; followerCount?: number | null; ratingScore?: number | null }>
-}, merchantContext: Record<string, unknown>, options: { jobId?: string; requestKey?: string; onCreated?: (jobId:string)=>Promise<void>; maxWaitMs?: number } = {}) {
+}, merchantContext: Record<string, unknown>, options: { jobId?: string; requestKey?: string; sourceRevision?:string; onCreated?: (jobId:string)=>Promise<void>; maxWaitMs?: number } = {}) {
   const owner = brand.owners?.find((item) => item.role === 'owner' && item.user?.email)?.user
     || brand.owners?.find((item) => item.user?.email)?.user
   const contactEmail = owner?.email || process.env.AMC_GROWTH_REPORT_EMAIL || 'contact@immedi.ai'
@@ -357,6 +357,8 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
     if (platform && value && !socialProfiles[platform]) socialProfiles[platform] = value
   }
   const payload = {
+    insight_source_key:'amc-kanban-'+brand.id,
+    insight_source_revision:options.sourceRevision||null,
     brand_name: brand.name,
     market: brand.location || brand.address || 'Singapore',
     category: brand.industry || 'Local merchant',
@@ -512,4 +514,14 @@ export async function growthAutopilotEvidence(jobId:string,brandId:string,userId
   const data=await response.json().catch(()=>({}))
   if(!response.ok)throw new GrowthDataCenterError(response.status,data.error||'growth_evidence_unavailable')
   return data
+}
+
+/** Canonical source configuration remains in Growth; callers supply a server-bound brand identity. */
+export async function readGrowthInsightSources(identity:Record<string,unknown>){return growthInsightSourcesRequest(identity,false)}
+export async function writeGrowthInsightSources(input:Record<string,unknown>){return growthInsightSourcesRequest(input,true)}
+async function growthInsightSourcesRequest(input:Record<string,unknown>,write:boolean){
+ const response=await growthRequest('/v1/brand-intelligence/source-set',{method:write?'PUT':'POST',body:JSON.stringify(input)})
+ const value=await response.json().catch(()=>({}));if(!response.ok)throw new GrowthDataCenterError(response.status,value.error||'growth_sources_unavailable')
+ if(!/^[a-f0-9]{64}$/.test(value.revision||'')||!Array.isArray(value.sources))throw new GrowthDataCenterError(502,'growth_sources_invalid')
+ return value
 }

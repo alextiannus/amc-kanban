@@ -25,8 +25,8 @@ assert.deepEqual(merged.marketingPlan.inputVersions,planningInputVersions(curren
 assert.throws(()=>validatePlanningDraft({...draft,data:{...shape,swot:null}},scope),/incomplete_marketing_plan/)
 assert.throws(()=>validatePlanningDraft({...draft,data:{...shape,monthlyPlans:shape.monthlyPlans.slice(1)}},scope),/invalid_six_month_plan/)
 assert.throws(()=>validatePlanningDraft({...draft,data:{...shape,annualCalendar:shape.annualCalendar.slice(1)}},scope),/invalid_annual_calendar/)
-assert.throws(()=>assertPlanningConfirmed({...current,coCreation:{...current.coCreation,interview:{...interview,content:'edited',status:'draft'}}}),/planning_confirmation_required/)
-assert.throws(()=>mergePlanningDraft({...current,coCreation:{}},draft,'unconfirmed'),/planning_confirmation_required/)
+assert.doesNotThrow(()=>assertPlanningConfirmed({...current,coCreation:{...current.coCreation,interview:{...interview,content:'edited',status:'draft'}}}))
+assert.doesNotThrow(()=>mergePlanningDraft({...current,coCreation:{}},draft,'unconfirmed'),'A strategy can be drafted without visiting prior stages')
 console.log('PASS: latest completed reports, missing timestamps, stable ties, seven sections, exact rolling six months, confirmation binding, preserved legacy calendar')
 
 const positioningOnly={coCreation:{interview}}

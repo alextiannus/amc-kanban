@@ -1,8 +1,9 @@
 import {nativeHttp} from '@/lib/ai-native/http'
 import {actorFor} from '@/lib/ai-native/contract'
 import {requireActor} from '@/lib/ai-native/application'
-import {createNativeTask,readNativeTask,controlNativeTask} from '@/lib/ai-native/service'
+import {createNativeTask,readNativeTask} from '@/lib/ai-native/service'
 import {readInterviewInformationSources,interviewInformationTaskBody} from '@/lib/brand-plan/interview-information'
+import {prepareInterviewRetry} from '@/lib/brand-plan/interview-task-recovery'
 import {prisma} from '@/lib/prisma'
 export const dynamic='force-dynamic'
 export const maxDuration=90
@@ -20,12 +21,8 @@ export async function POST(request:Request,{params}:Context){const {id}=await pa
   const audit=await prisma.auditLog.findFirst({where:{resourceId:`interview-info:${id}:${body.retryOf}`,actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES'}})
   if((audit?.metadata as any)?.sourceRevision!==source.sourceRevision)throw Object.assign(Error('retry_source_mismatch'),{statusCode:409})
   const previous=await readNativeTask(userId,id,body.retryOf)
-  if(previous.status==='waiting'&&previous.waitingReason==='interrupted'){
-   await controlNativeTask(userId,id,body.retryOf,{action:'resume',requestKey:`interview-resume-${body.retryOf}-${Date.parse(String(previous.updatedAt))||0}`})
-   return {taskId:body.retryOf,sourceRevision:source.sourceRevision,sources:(audit?.metadata as any)?.sources||source.sources}
-  }
-  if(previous.status==='waiting'&&previous.waitingReason==='limit'){await controlNativeTask(userId,id,body.retryOf,{action:'cancel',requestKey:`interview-recovery-${body.retryOf}`})}
-  else if(!['failed','cancelled'].includes(previous.status))throw Object.assign(Error('original_task_still_active'),{statusCode:409})
+  if(!['failed','cancelled'].includes(previous.status)&&!(previous.status==='waiting'&&['limit','interrupted','invalid_model_action','model_output_limit'].includes(previous.waitingReason||'')))throw Object.assign(Error('original_task_still_active'),{statusCode:409})
+  await prepareInterviewRetry(userId,id,body.retryOf,previous.status)
  }
  const task=await createNativeTask(userId,id,interviewInformationTaskBody(source,body.retryOf))
  const resourceId=`interview-info:${id}:${task.id}`

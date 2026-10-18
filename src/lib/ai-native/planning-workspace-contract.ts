@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto'
-export const PLANNING_STAGES=['insight','interview','focus','selling_points','annual','quarter','direction','marketing_plan'] as const
+export const PLANNING_STAGES=['insight','interview','focus','selling_points','annual','quarter','direction','marketing_plan','execution_checklist'] as const
 export type PlanningScope={stage:typeof PLANNING_STAGES[number];mode:'discuss'|'draft';startMonth:string;quarter?:number}
 export type PlanningDraft={scope:PlanningScope;expectedRevision:string;title:string;content:string;data?:Record<string,any>}
 const fail=(code:string)=>{throw Object.assign(new Error(code),{code,statusCode:400})}
@@ -20,7 +20,9 @@ export function validatePlanningDraft(value:any,scope:PlanningScope):PlanningDra
  const strings=(v:any,max=16)=>Array.isArray(v)&&v.length<=max&&v.every(x=>str(x))
  if(!str(value.title,200)||!str(value.content,14000))return fail('invalid_planning_draft')
  const data=value.data
- if(scope.stage==='marketing_plan'){
+ if(scope.stage==='execution_checklist'){
+  validateExecutionChecklist(data)
+ }else if(scope.stage==='marketing_plan'){
   validateMarketingPlan(data,scope.startMonth)
  }else if(scope.stage==='annual'){
   if(!data||!str(data.goal)||!str(data.theme)||!strings(data.strategyPrinciples)||!strings(data.contentPillars)||!strings(data.metrics)||!Array.isArray(data.platformStrategy)||data.platformStrategy.length>12||data.platformStrategy.some((p:any)=>!p||!['platform','role','contentApproach','customerAction'].every(k=>str(p[k])))||Object.keys(data).some(k=>!['goal','theme','strategyPrinciples','contentPillars','metrics','platformStrategy'].includes(k)))return fail('invalid_annual_draft')
@@ -34,8 +36,11 @@ export function validatePlanningDraft(value:any,scope:PlanningScope):PlanningDra
 export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string){
  const scope=draft.scope,now=new Date().toISOString(),next={...current}
  const saved={...(scope.stage==='interview'?{attachmentIds:current.coCreation?.interview?.attachmentIds||[]}:{}),title:scope.stage==='interview'?'品牌定位':draft.title,content:draft.content,taskId,updatedAt:now,status:'draft'}
+ if(scope.stage==='execution_checklist'){
+  next.executionChecklist=mergeExecutionChecklist(current.executionChecklist,draft.data,now)
+  next.coCreation={...current.coCreation,execution_checklist:saved};return next
+ }
  if(scope.stage==='marketing_plan'){
-  assertPlanningConfirmed(current)
   saved.content=marketingPlanMarkdown(draft.data,!/[\u4e00-\u9fff]/.test(draft.title+draft.content))
   next.marketingPlan={...draft.data,content:saved.content,title:draft.title,planningStartMonth:scope.startMonth,taskId,status:'draft',updatedAt:now,inputVersions:planningInputVersions(current)}
   next.coCreation={...current.coCreation,marketing_plan:saved};return next
@@ -63,7 +68,7 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
 }
 export function planningDraftContract(scope:PlanningScope){
  if(scope.mode!=='draft')return {}
- const data=scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
+ const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',action:'具体行动，店内配合动作也作为独立任务',plannedTime:'具体计划时间，未知写待确认'}],informationToSupplement:['缺失信息；无则空数组']}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
  return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段草案标题',content:'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
 }
 
@@ -74,7 +79,7 @@ export function marketingPlanShape(start:string){return {
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:Array.from({length:12},(_,i)=>({month:`${start.slice(0,4)}-${String(i+1).padStart(2,'0')}`,theme:'年度节点主题',campaign:'拟议活动策划，日期未经核实写待确认'})),
- monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['具体活动'],channels:['实际渠道'],content:['内容安排'],resources:'执行资源、预算与负责人角色，未知写待确认',measurement:'指标口径及复盘方式'})),
+ monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['活动名称｜类型（团购／新品促销／节庆促销／其他）｜活动时间｜参与产品与机制｜店内配合｜确认情况（已确认／待商家确认）；确认情况依据商家真实记录，未知写待确认'],channels:['实际渠道'],content:['内容安排'],resources:'执行资源、预算与负责人角色，未知写待确认',measurement:'指标口径及复盘方式'})),
  inStoreActivities:['店内产品、陈列、话术、转化、会员与复购配合'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
 export function validateMarketingPlan(d:any,start:string){
  const str=(x:any)=>typeof x==='string'&&!!x.trim()&&x.length<=4000
@@ -91,10 +96,8 @@ export function planningInputsMatch(recorded:any,current:any){
  const {direction,...active}=recorded||{}
  return planningRevision(active)===planningRevision(planningInputVersions(current))
 }
-export function assertPlanningConfirmed(current:any){
- const interview=current.coCreation?.interview
- if(interview?.status!=='confirmed')throw Object.assign(Error('planning_confirmation_required'),{statusCode:409})
-}
+/** Compatibility helper: planning steps are optional; review state is advisory. */
+export function assertPlanningConfirmed(current:any){return planningReviewState(current)}
 
 export function planningReviewState(current:any){
  const interview=current.coCreation?.interview,direction=current.coCreation?.direction,plan=current.marketingPlan
@@ -118,4 +121,25 @@ export function marketingPlanMarkdown(d:any,english=false){
   `## ${label('品牌营销创意','Brand marketing ideas')}\n${list(d.brandCreatives)}`,
   `## ${label('期望补充信息','Information to supplement')}\n${d.informationToSupplement?.length?list(d.informationToSupplement):label('现有方案未列出明确补充项，可补充近期变化。','No explicit gaps are listed. Add recent changes if needed.')}`,
  ].join('\n\n')
+}
+
+/** Generated tasks cannot declare completion. Existing execution records are human-owned. */
+export function validateExecutionChecklist(data:any){
+ const text=(v:any,max:number)=>typeof v==='string'&&!!v.trim()&&v.length<=max
+ if(!data||!Array.isArray(data.items)||data.items.length>120||!Array.isArray(data.informationToSupplement)||data.informationToSupplement.length>24||data.informationToSupplement.some((v:any)=>!text(v,2000))||Object.keys(data).some(k=>!['items','informationToSupplement'].includes(k)))return fail('invalid_execution_checklist')
+ const ids=new Set<string>()
+ for(const item of data.items){if(!item||!text(item.id,100)||!/^[a-zA-Z0-9_-]+$/.test(item.id)||ids.has(item.id)||!text(item.action,2000)||!text(item.plannedTime,200)||Object.keys(item).some(k=>!['id','action','plannedTime'].includes(k)))return fail('invalid_execution_task');ids.add(item.id)}
+}
+export function mergeExecutionChecklist(previous:any,data:any,now:string){
+ validateExecutionChecklist(data)
+ const old=Array.isArray(previous?.items)?previous.items:[]
+ const used=new Set<string>()
+ const items=data.items.map((item:any)=>{
+  const match=old.find((v:any)=>!used.has(v.id)&&v.id===item.id)||old.find((v:any)=>!used.has(v.id)&&v.action.trim()===item.action.trim()&&v.plannedTime===item.plannedTime)
+  if(match){used.add(match.id);return {...item,id:match.id,completed:match.completed===true,completedAt:match.completedAt||null,completedBy:match.completedBy||null}}
+  return {...item,completed:false,completedAt:null,completedBy:null}
+ })
+ // Regeneration never silently removes a tracked task or its completion history.
+ for(const item of old)if(!used.has(item.id)&&!items.some((v:any)=>v.id===item.id))items.push(item)
+ return {items,informationToSupplement:data.informationToSupplement,updatedAt:now}
 }

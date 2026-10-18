@@ -13,6 +13,7 @@ new Function('require','module','exports',code)((name:string)=>{
  if(name.includes('/http'))return {nativeHttp:async(request:Request,run:any)=>{try{return Response.json(await run(userId,await request.json()))}catch{return Response.json({error:'storage_request_failed'},{status:503})}}}
  if(name.includes('/contract'))return {actorFor:()=>({})}
  if(name.includes('/application'))return {requireActor:async()=>{}}
+ if(name.includes('interview-task-recovery'))return {prepareInterviewRetry:async()=>{}}
  if(name.includes('ai-native/service'))return {createNativeTask:async()=>({id:'storage-task-'+(++created)}),readNativeTask:async()=>({status:'failed'})}
  if(name.includes('brand-plan/interview-information'))return {readInterviewInformationSources:async()=>({sourceRevision,sourceHashes:{brand:'p',report:'r',interview:'i'},sources:{reportId:'fixture'},skillVersion:'fixture',language:'zh',interviewInput:{content:'fixture',attachmentIds:[]}}),interviewInformationTaskBody:()=>({})}
  if(name.includes('/prisma'))return {prisma}

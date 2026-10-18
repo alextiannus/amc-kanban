@@ -24,11 +24,12 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   const sharp=(await import('sharp')).default
   try{const meta=await sharp(buffer,{limitInputPixels:40000000}).metadata();if(!meta.width||!meta.height)throw Error()}catch{return NextResponse.json({error:'无法读取图片。'},{status:400})}
  }
+ const insightSource=form.get('purpose')==='insight_source'
  const extractedText=mime.startsWith('text/')?buffer.toString('utf8').slice(0,18000):null
  const uploaded=await uploadHuaweiObsObject({key:`brands/${id}/planning/${randomUUID()}`,body:buffer,contentType:mime})
  if(!uploaded.ok)return NextResponse.json({error:'上传未完成，请重试。'},{status:502})
- const asset=await prisma.mediaAsset.create({data:{brandId:id,url:uploaded.url,filename:file.name.slice(0,200),mimeType:mime,sizeBytes:buffer.length,uploadedBy:auth.user.id,assetKind:mime.startsWith('image/')?'image':'document',sourceType:'huawei_obs',contentHash:createHash('sha256').update(buffer).digest('hex'),aiCaption:extractedText,technicalMetadata:{planningAttachment:true,extractionStatus:extractedText?'extracted_unconfirmed':'pending_review'}}})
+ const asset=await prisma.mediaAsset.create({data:{brandId:id,url:uploaded.url,filename:file.name.slice(0,200),mimeType:mime,sizeBytes:buffer.length,uploadedBy:auth.user.id,assetKind:mime.startsWith('image/')?'image':'document',sourceType:'huawei_obs',contentHash:createHash('sha256').update(buffer).digest('hex'),aiCaption:extractedText,technicalMetadata:{planningAttachment:!insightSource,insightSource,extractionStatus:extractedText?'extracted_unconfirmed':'pending_review'}}})
  let status=extractedText?'extracted_unconfirmed':'pending_review'
- if(mime.startsWith('image/'))try{const {createAnalysisBatch}=await import('@/lib/asset-analysis/service');const batch=await createAnalysisBatch({brandId:id,assetIds:[asset.id],batchKey:`planning-${asset.id}`,upload:true});if(batch)status='queued'}catch{/* Original attachment remains available for manual review. */}
+ if(!insightSource&&mime.startsWith('image/'))try{const {createAnalysisBatch}=await import('@/lib/asset-analysis/service');const batch=await createAnalysisBatch({brandId:id,assetIds:[asset.id],batchKey:`planning-${asset.id}`,upload:true});if(batch)status='queued'}catch{/* Original attachment remains available for manual review. */}
  return NextResponse.json({id:asset.id,filename:asset.filename,extractedText,status})
 }

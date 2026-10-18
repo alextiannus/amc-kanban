@@ -14,7 +14,8 @@ async function handle(request:Request,context:Context,write:boolean){
  const canWrite=await canSessionWriteBrandProject(id,auth.user.id,auth.user.type)
  if(!(write?canWrite:await canSessionAccessBrandProject(id,auth.user.id,auth.user.type,auth.user.role)))return NextResponse.json({error:'Not found'},{status:404})
  try{
-  if(write)await requestInsight(id,auth.user.id)
+  if(write){let input:any={};try{input=await request.json()}catch{return NextResponse.json({error:'invalid_json'},{status:400})}
+   await requestInsight(id,auth.user.id,undefined,{refresh:input.refresh===true,previousRequestId:input.previousRequestId??null,sourceRevision:input.sourceRevision})}
   // Polling only reads provider state and materializes completed artifacts; never starts a report.
   let refreshUnavailable=false
   if(canWrite)try{await reconcileInsight(id)}catch{refreshUnavailable=true}

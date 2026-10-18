@@ -1,10 +1,11 @@
+import {readInsightSources} from './insight-sources'
 import type {Prisma} from '@prisma/client'
 import {createHash,randomUUID} from 'node:crypto'
 import {prisma} from '../prisma'
 import {buildGrowthResearchReport,loadBrandPlanBrand,saveResearchReport} from './service'
 import {insightReport,latestInsightReport,growthInsightReport} from './insight-report'
 
-type RequestState={id:string;status:'submitting'|'processing'|'review_required'|'completed'|'failed';createdAt:string;jobId?:string;updatedAt?:string}
+type RequestState={id:string;status:'submitting'|'processing'|'review_required'|'completed'|'failed';createdAt:string;sourceRevision?:string;jobId?:string;updatedAt?:string}
 async function mutateRequest(brandId:string,change:(request:RequestState|null)=>RequestState|null){
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
   await tx.$queryRaw`SELECT id FROM "Brand" WHERE id=${brandId} FOR UPDATE`
@@ -29,17 +30,25 @@ export async function readInsight(brandId:string){
  return {report,request:(w.insightRequest||null) as RequestState|null}
 }
 /** Stable provider key survives lost responses. Never interpret transport failures as provider rejection. */
-export async function requestInsight(brandId:string,userId:string,adapters={loadBrand:loadBrandPlanBrand,buildReport:buildGrowthResearchReport,saveReport:saveResearchReport}){
- const request=(await mutateRequest(brandId,old=>old&&old.status!=='failed'?old:{id:randomUUID(),status:'submitting',createdAt:new Date().toISOString()}))!
+export async function requestInsight(brandId:string,userId:string,adapters={loadBrand:loadBrandPlanBrand,buildReport:buildGrowthResearchReport,saveReport:saveResearchReport},options:{refresh?:boolean;previousRequestId?:string|null;sourceRevision?:string}={}){
+ const sources=options.refresh?await readInsightSources(brandId):null
+ if(options.refresh&&sources.revision!==options.sourceRevision)throw Object.assign(Error('source_revision_conflict'),{statusCode:409})
+ const request=(await mutateRequest(brandId,old=>{
+  if(old&&['submitting','processing','review_required'].includes(old.status))return old
+  if(options.refresh&&options.previousRequestId!==(old?.id||null)){if(old)return old;throw Object.assign(Error('insight_request_changed'),{statusCode:409})}
+  if(!options.refresh&&old&&old.status!=='failed')return old
+  return {id:randomUUID(),status:'submitting',createdAt:new Date().toISOString(),...(sources?{sourceRevision:sources.revision}:{})}
+ }))!
  if(request.status!=='submitting')return request
  const brand=await adapters.loadBrand(brandId)
  if(!brand)throw Object.assign(Error('brand_not_found'),{statusCode:404})
  try{
-  const report=await adapters.buildReport(brand,{requestKey:`brand-insight:${brandId}:${request.id}`,maxWaitMs:0,onCreated:async jobId=>{await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,jobId,status:'processing',updatedAt:new Date().toISOString()}:old)}})
+  const report=await adapters.buildReport(brand,{requestKey:`brand-insight:${brandId}:${request.id}`,maxWaitMs:0,sourceRevision:request.sourceRevision,onCreated:async jobId=>{await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,jobId,status:'processing',updatedAt:new Date().toISOString()}:old)}})
   await adapters.saveReport(brandId,report)
   return (await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'completed'}:old))!
  }catch(error){
   if((error as any).code==='growth_research_still_running')return (await readInsight(brandId)).request!
+  if((error as any).status===409&&(error as any).code==='source_revision_conflict'){await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'failed'}:old);throw Object.assign(Error('source_revision_conflict'),{statusCode:409})}
   // Keep the reservation and key so an unknown provider outcome is safely recoverable.
   throw Object.assign(Error('insight_submission_unavailable'),{statusCode:503})
  }finally{

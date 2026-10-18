@@ -58,7 +58,7 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   const brandId=brandFor(actor)
   const workspace=await getBrandPlanningContext(brandId)
   if(!workspace)return {brandId,status:'missing' as const,revision:planningRevision({}),workspace:null}
-  const sections={brandInformation:workspace.brandInformation,coCreation:record(workspace.marketingSolution).coCreation||null,merchantInterview:workspace.merchantInterview,brandClaim:workspace.brandClaim||null,annualPlan:workspace.marketingSolution.annualPlan||null,marketingPlan:(workspace.marketingSolution as any).marketingPlan||null}
+  const sections={executionChecklist:(workspace.marketingSolution as any).executionChecklist||null,brandInformation:workspace.brandInformation,coCreation:record(workspace.marketingSolution).coCreation||null,merchantInterview:workspace.merchantInterview,brandClaim:workspace.brandClaim||null,annualPlan:workspace.marketingSolution.annualPlan||null,marketingPlan:(workspace.marketingSolution as any).marketingPlan||null}
   // Per-section budgets keep long interviews from hiding existing quarterly plans.
   const attachments=await prisma.mediaAsset.findMany({where:{brandId,id:{in:(record(record(workspace.marketingSolution).coCreation).interview?.attachmentIds||[]).slice(0,20)}},select:{id:true,filename:true,aiCaption:true,imageAnalysis:true,textDetection:true,technicalMetadata:true}})
   sections.coCreation=sections.coCreation?{...sections.coCreation,attachmentEvidence:attachments}:null
@@ -73,7 +73,7 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   const document=(workspace.marketingSolution as any).coCreation?.interview
   ;(sections as any).positioningInputs={brandInformation:workspace.brandInformation,latestInterview:workspace.merchantInterview,latestSupplement:interviewInput(document),currentPositioning:document?{content:document.content,status:document.status,source:'previous positioning; derived, not a new interview'}:null,brandClaim:workspace.brandClaim,attachments}
  }
- const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,key==='annualPlan'?projectSavedAnnualPlan(value):key==='positioningInputs'?projectPositioningInputs(value):key==='marketingInputs'?projectMarketingInputs(value):key==='marketingPlan'?projectPlanningReport(value,18000,12):projectPlanningReport(value,key==='coCreation'?14000:5000)]))
+ const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,key==='annualPlan'?projectSavedAnnualPlan(value):key==='positioningInputs'?projectPositioningInputs(value):key==='marketingInputs'?projectMarketingInputs(value):key==='executionChecklist'?projectPlanningReport(value,30000,120):key==='marketingPlan'?projectPlanningReport(value,18000,12):projectPlanningReport(value,key==='coCreation'?14000:5000)]))
   return {brandId,status:'available' as const,confirmationState:planningReviewState(workspace.marketingSolution),approval:'not_asserted',revision:workspace.marketingSolutionRevision,retrievedAt:new Date().toISOString(),partial:Object.values(projected).some(v=>v.partial),workspace:Object.fromEntries(Object.entries(projected).map(([key,value])=>[key,value.report]))}
 }
 
