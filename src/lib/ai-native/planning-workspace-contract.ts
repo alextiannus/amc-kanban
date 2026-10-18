@@ -134,14 +134,15 @@ export function validateExecutionChecklist(data:any){
 }
 export function mergeExecutionChecklist(previous:any,data:any,now:string){
  validateExecutionChecklist(data)
- const old=Array.isArray(previous?.items)?previous.items:[]
+ const active=Array.isArray(previous?.items)?previous.items:[],history=Array.isArray(previous?.retiredItems)?previous.retiredItems:[]
+ const old=[...active,...history]
  const used=new Set<string>()
  const items=data.items.map((item:any)=>{
   const match=old.find((v:any)=>!used.has(v.id)&&v.id===item.id)||old.find((v:any)=>!used.has(v.id)&&v.action.trim()===item.action.trim()&&v.plannedTime===item.plannedTime)
   if(match){used.add(match.id);return {...item,id:match.id,completed:match.completed===true,completedAt:match.completedAt||null,completedBy:match.completedBy||null}}
   return {...item,completed:false,completedAt:null,completedBy:null}
  })
- // Regeneration never silently removes a tracked task or its completion history.
- for(const item of old)if(!used.has(item.id)&&!items.some((v:any)=>v.id===item.id))items.push(item)
- return {items,informationToSupplement:data.informationToSupplement,updatedAt:now}
+ // A replacement list must stay concise. Retired work retains human completion history.
+ const retiredItems=old.filter((item:any)=>!used.has(item.id)&&!items.some((v:any)=>v.id===item.id)).map((item:any)=>({...item,retiredAt:item.retiredAt||now}))
+ return {items,retiredItems,informationToSupplement:data.informationToSupplement,updatedAt:now}
 }
