@@ -10,6 +10,7 @@ import { recordExecution } from '../model-management/runtime'
 import { complete } from '../global-text/transport'
 import { boundInvalidActions, MODEL_INVOCATION_ALLOWANCE } from './model-guards'
 import { nativeError } from './contract'
+import {DEFAULT_NATIVE_OUTPUT_TOKENS,FULL_PLANNING_OUTPUT_TOKENS,fullPlanningScope,nativeOutputTokens} from './planning-model-budget'
 
 export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'|'resolveSecret'|'modelFactory'|'tokenPolicies'>>{
   const current=await runtimeConfig()
@@ -32,15 +33,27 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       return config.secrets?.[model.secretRef]
     },
     tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:MODEL_INVOCATION_ALLOWANCE,price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
-    modelFactory:configuration=>boundInvalidActions(createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:6000,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
+    modelFactory:configuration=>{
+     const provider=(full:boolean)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
       let result;try{
-        result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:wire.input,tools:nativeWireTools(wire.tools).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}})),toolChoice:'required',maxTokens:Math.min(6000,model.definition.maxTokensByTask?.ai_native||model.definition.maxTokensByTask?.text||6000),signal:options.signal||undefined,task:'ai_native'})
+        result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:wire.input,tools:nativeWireTools(wire.tools).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}})),toolChoice:'required',maxTokens:nativeOutputTokens(full,model.definition.maxTokensByTask),signal:options.signal||undefined,task:'ai_native'})
         return new Response(JSON.stringify({id:result.providerReference,provider_usage:result.rawUsage,usage:result.usage,status:'completed',output:nativeWireCalls(result.message?.tool_calls,result,wire.tools).map((t:any)=>({type:'function_call',name:t.function.name,arguments:t.function.arguments}))}))
       }finally{
         await recordExecution({source:'mm',executor:'kanban',task:'ai_native',version,modelId:model.id,connectionId:model.connectionId,targetModel:model.definition.modelName,responseModel:result?.responseModel||undefined,status:result?'success':'failed',latencyMs:Date.now()-started})
       }
-    }})),
+    }})
+     const regular=provider(false),planning=provider(true)
+     return boundInvalidActions({name:regular.name,next:async(request:any)=>{
+      const taskId=request.billingContext?.taskId
+      let full=false
+      if(typeof taskId==='string'&&/^[0-9a-f-]{36}$/i.test(taskId)){
+       const rows=await prisma.$queryRawUnsafe(`SELECT intent->'planningScope' AS scope FROM amc_iaic.amc_ai_requests WHERE task_id=$1::uuid AND intent->>'kind'='conversation' AND intent->>'topic'='brand_planning'`,taskId) as Array<{scope:unknown}>
+       full=!!fullPlanningScope(rows[0]?.scope)
+      }
+      return (full?planning:regular).next(request)
+     }})
+    },
   }
 }
