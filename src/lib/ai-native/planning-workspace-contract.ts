@@ -69,7 +69,7 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
 export function planningDraftContract(scope:PlanningScope){
  if(scope.mode!=='draft')return {}
  const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'每项只选一种通用行动：制定次月内容与发布计划（本月内提前完成）、组织本月内容制作（素材准备、精修剪辑）、安排本月内容发布、复盘本月Monthly Insight Report并确定下月调整、策划次月营销活动（计划）（每月含末月，在次月前排期）；独立活动用策划××活动（计划）；审核并入制作，禁忌在访谈确定；曝光执行仅商家确认安排及预算后列入',plannedTime:'计划日期或时段'}],informationToSupplement:[]}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
- return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段草案标题',content:scope.stage==='marketing_plan'?'草案摘要、输入来源和关键待确认项；完整方案放入 data，宿主据 data 生成完整可编辑正文，不要重复输出整篇方案':scope.stage==='execution_checklist'?'简短说明清单范围和来源；所有行动完整放入 data.items，不重复整份清单':'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
+ return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段方案标题',content:scope.stage==='marketing_plan'?'方案摘要、输入来源和关键待补充项；完整方案放入 data，宿主据 data 生成完整可编辑正文，不要重复输出整篇方案':scope.stage==='execution_checklist'?'简短说明清单范围和来源；所有行动完整放入 data.items，不重复整份清单':'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
 }
 
 
@@ -80,8 +80,8 @@ export function marketingPlanShape(start:string){return {
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
- monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['实际渠道'],content:['内容安排'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
- inStoreActivities:['订阅准备阶段一次性安排店内关注与Google评论贴纸制作、摆放及扫码验证，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
+ monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['各已启用可发布渠道的月度活动主题安排，包括Google Maps；每月该主题至少一次，可按需多次'],content:['当月营销活动在各平台的不同表达、真实创意参考及顾客行动'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
+ inStoreActivities:['订阅准备阶段一次性安排店内关注与Google评论贴纸制作、摆放及扫码验证，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['真实检索来源ID和标题、适配品牌的理由、应用方式、渠道、素材与条件；原创建议明确区分']}}
 export function validateMarketingPlan(d:any,start:string){
  const str=(x:any)=>typeof x==='string'&&!!x.trim()&&x.length<=4000
  const list=(x:any)=>Array.isArray(x)&&x.length>0&&x.length<=24&&x.every(str)
