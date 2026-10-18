@@ -13,7 +13,7 @@ export async function POST(request:Request,{params}:Context){const {id}=await pa
  const source=await readInterviewInformationSources(id,body.language==='en'?'en':'zh')
  if(body.sourceRevision!==source.sourceRevision)throw Object.assign(Error('interview_sources_changed'),{statusCode:409})
  if(!body.retryOf){
-  const existing=await prisma.auditLog.findFirst({where:{actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES',resourceId:{startsWith:`interview-info:${id}:`},metadata:{path:['sourceRevision'],equals:source.sourceRevision}},orderBy:{createdAt:'desc'}})
+  const existing=await prisma.auditLog.findFirst({where:{actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES',resourceId:{startsWith:`interview-info:${id}:`},metadata:{path:['sourceRevision'],equals:source.sourceRevision}},orderBy:{timestamp:'desc'}})
   if(existing){const saved=existing.metadata as any;return {taskId:saved.taskId,sourceRevision:saved.sourceRevision,sources:saved.sources||source.sources}}
  }
  if(body.retryOf){const previous=await readNativeTask(userId,id,body.retryOf);if(!['failed','cancelled'].includes(previous.status))throw Object.assign(Error('original_task_still_active'),{statusCode:409})}
