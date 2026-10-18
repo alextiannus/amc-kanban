@@ -63,7 +63,7 @@ export function briefFrom(content:string,intent:BriefIntent){
 }
 
 export function conversationFrom(content:string,intent:ConversationIntent){
-  if(Buffer.byteLength(content)>(intent.planningScope?.stage==='marketing_plan'?120000:32000))throw nativeError('reply_too_large')
+  if(Buffer.byteLength(content)>(['marketing_plan','execution_checklist'].includes(intent.planningScope?.stage||'')?120000:32000))throw nativeError('reply_too_large')
   const value=JSON.parse(content)
   if(value.kind!=='conversation'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_evidence_invalid')
   if(intent.planningScope&&(intent.planningScope.mode==='draft'||value.planningDraft!==undefined))value.planningDraft=validatePlanningDraft(value.planningDraft,{...intent.planningScope,mode:'draft'})
