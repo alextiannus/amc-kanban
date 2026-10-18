@@ -81,3 +81,15 @@ export function researchReviewLocationId(rawValue: unknown, locations: GrowthRes
 
   return locations.length === 1 ? locations[0].location_id : ''
 }
+
+/** Exact single catalog prices only; ranges and unknown values stay unknown. */
+export function researchMenuPrice(value:unknown,currency='SGD'):number|null {
+ if(typeof value==='number')return Number.isFinite(value)&&value>=0?value:null
+ if(typeof value!=='string'||!value.trim())return null
+ const prefixes:Record<string,string[]>={SGD:['S$','SGD','$'],USD:['US$','USD','$'],MYR:['RM','MYR'],CNY:['CNY','RMB','¥','￥']}
+ let amount=value.trim()
+ const prefix=(prefixes[currency]||[currency]).find(p=>amount.toUpperCase().startsWith(p.toUpperCase()))
+ if(prefix)amount=amount.slice(prefix.length).trim()
+ if(!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(amount))return null
+ const number=Number(amount.replaceAll(',',''));return Number.isFinite(number)?number:null
+}

@@ -32,6 +32,7 @@ import type { CalendarCreativeMatchStatus } from '@/lib/brand-plan/calendarCreat
 import { resolveCalendarCreativeCandidateWithRetry } from '@/lib/brand-plan/calendarCreativeMatching'
 import { resolveInspirationCreativeId } from '@/lib/brand-plan/inspirationCreativeLink'
 import {
+  researchMenuPrice,
   researchReportTimezone,
   researchReviewLocationId,
   researchStoreGoogleMapsUrl,
@@ -845,10 +846,10 @@ async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
     name: text(item.name),
     category: text(item.category),
     description: text(item.description),
-    price: numberOrNull(item.price),
+    price: researchMenuPrice(item.price,text(item.currency)||'SGD'),
     currency: text(item.currency) || 'SGD',
     signature: Boolean(item.signature || item.isSignature),
-    bundle: Boolean(item.bundle || item.isBundle),
+    bundle: Boolean(item.bundle || item.isBundle || item.type === 'bundle'),
     lunch: Boolean(item.lunch || item.isLunch),
     delivery_suitable: item.deliverySuitable === undefined ? undefined : Boolean(item.deliverySuitable),
     beverage: Boolean(item.beverage),

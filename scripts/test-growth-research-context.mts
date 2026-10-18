@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import {
+  researchMenuPrice,
   researchReportTimezone,
   researchReviewLocationId,
   researchStoreGoogleMapsUrl,
@@ -28,3 +29,11 @@ assert.equal(researchReportTimezone('America/New_York', 'Singapore'), 'Asia/Sing
 assert.equal(researchReportTimezone('Europe/London', 'United Kingdom'), 'Europe/London')
 
 console.log('Growth research context tests passed.')
+
+assert.equal(researchMenuPrice('S$3.60'),3.6)
+assert.equal(researchMenuPrice('SGD 15.80'),15.8)
+assert.equal(researchMenuPrice('69.80'),69.8)
+assert.equal(researchMenuPrice('S$1,200.00'),1200)
+for(const value of [null,undefined,'','待确认','S$6.80/S$9.80','3.6-3.8','USD 5.00','about 3.60',-1])assert.equal(researchMenuPrice(value),null)
+assert.equal(researchMenuPrice('USD 5.00','USD'),5)
+console.log('PASS: exact catalog currencies survive Growth input; unknown, currency conflicts and variable prices are never invented')
