@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
-import {creativeIsVisible,dislikedCreativeSources} from '../src/lib/brand-plan/creativeVisibility.ts'
+import {creativeIsVisible,dislikedCreativeSources,readDislikedCreativeSources} from '../src/lib/brand-plan/creativeVisibility.ts'
 import {readBrandFacts,creativePortfolioFromMarketingSolution} from '../src/lib/ai-native/facts.ts'
 import {digest,nativeError} from '../src/lib/ai-native/contract.ts'
 const solution={publishingCalendar:{months:{'2026-10':[{id:'dismissed',inspirationCreativeId:'cre_old',brandDismissal:{decision:'dislike',sourceId:'cre_old'}},{id:'kept',inspirationCreativeId:'cre_good'}]}}}
 assert.deepEqual([...dislikedCreativeSources(solution)],['cre_old']);assert(!creativeIsVisible(solution.publishingCalendar.months['2026-10'][0]));assert.equal(creativePortfolioFromMarketingSolution(solution).length,1)
 const facts=await readBrandFacts({brand:{findUnique:async()=>({id:'brand',name:'Test brand',knowledge:{marketingSolution:solution}})}},'brand')
 assert.deepEqual(facts.dislikedSourceIds,['cre_old']);assert(!JSON.stringify(facts.creativePortfolio).includes('cre_old'))
+assert.deepEqual([...await readDislikedCreativeSources({brandMarketingSolution:{findMany:async()=>[{period:'cre_past_choice'}]}},'brand',solution)],['cre_old','cre_past_choice'])
 let request:any
 const deps:any={'./idea-pool':{},'../promotion-strategy/clients':{matchPromotionStrategyCreativeCandidates:async(input:any)=>{request=input;return {creativeCandidates:[{inspirationCreativeId:'cre_old'},{inspirationCreativeId:'cre_good'}]}}},'./contract':{digest,nativeError},'../brand-plan/creativeRevisionContract':{}}
 const mod={exports:{} as any}

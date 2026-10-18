@@ -1,4 +1,4 @@
-import {dislikedCreativeSources,creativeIsVisible} from '../brand-plan/creativeVisibility'
+import {dislikedCreativeSources,readDislikedCreativeSources,creativeIsVisible} from '../brand-plan/creativeVisibility'
 import { skuIsNew } from '../sku-library/service.ts'
 
 // JSONB may reorder object keys. Restore the exact facts projection before
@@ -23,7 +23,7 @@ export async function readBrandFacts(db:any,brandId:string){
   const facts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{brandTone:true,negPrompts:true,audienceAssumptions:true,productAssumptions:true,menuItems:true,businessHours:true,brandVoice:true,market:true,brandImage:true,promotionFocus:true,researchReport:true,marketingSolution:true}}}})
   if(!facts)return null
   const rawKnowledge=facts.knowledge
-  const creativePortfolio=creativePortfolioFromMarketingSolution(rawKnowledge?.marketingSolution),dislikedSourceIds=[...dislikedCreativeSources(rawKnowledge?.marketingSolution)]
+  const creativePortfolio=creativePortfolioFromMarketingSolution(rawKnowledge?.marketingSolution),dislikedSourceIds=[...(db.brandMarketingSolution?.findMany?await readDislikedCreativeSources(db,brandId,rawKnowledge?.marketingSolution):dislikedCreativeSources(rawKnowledge?.marketingSolution))]
   if(rawKnowledge){
     const strategy=rawKnowledge.marketingSolution?.autopilotStrategy
     const report=rawKnowledge.researchReport

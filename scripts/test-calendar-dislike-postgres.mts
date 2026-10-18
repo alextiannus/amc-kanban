@@ -3,6 +3,7 @@ import {creativeDraftMarker} from '../src/lib/brand-plan/creativeDraftMarker'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma'
 import {nativePool} from '../src/lib/ai-native/store'
+import {readBrandFacts} from '../src/lib/ai-native/facts'
 import {dismissCalendarCreative,listBrainstorm} from '../src/lib/ai-native/brainstorm'
 import {creativeDigest} from '../src/lib/brand-plan/creativeRevisionContract'
 import {listOpenCalendarCreativeOptions} from '../src/lib/brand-plan/calendarSync'
@@ -25,6 +26,8 @@ try{
  await prisma.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_FEED',period:'sources',version:1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{},output:{sources:[source]}}})
  await pool.query('INSERT INTO amc_iaic.brand_ideas(id,brand_id,source_id,source,context_digest,match_id,library_versions,plan_id,plan_month) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[ideaId,brandId,sourceId,JSON.stringify(source),'context','match','{}',item.id,'2026-10'])
  assert.equal((await listBrainstorm(userId,brandId)).items.length,1)
+ await prisma.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_DECISION',period:'cre_previous_browsing_choice',version:1,status:'SAVED',generationMode:'HUMAN_CHOICE',createdById:userId,input:{decision:'dislike'},output:{}}})
+ const beforeFacts=await readBrandFacts(prisma,brandId);assert(beforeFacts.dislikedSourceIds.includes('cre_previous_browsing_choice'))
  const body={action:'dismiss',creativeId:item.id,expectedRevision:creativeDigest(item)}
  const results=await Promise.all(Array.from({length:4},()=>dismissCalendarCreative(userId,brandId,body)))
  assert.equal(results.filter(r=>!r.replayed).length,1)

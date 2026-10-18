@@ -1,4 +1,4 @@
-import {dislikedCreativeSources,creativeIsVisible} from '../brand-plan/creativeVisibility'
+import {readDislikedCreativeSources,creativeIsVisible} from '../brand-plan/creativeVisibility'
 import {rankedIdeas,matchScore} from './idea-selection-policy'
 import {executionCreativeBrief} from './execution-creative-brief'
 import {localPlanningTime} from '../brand-plan/matchingContract'
@@ -61,7 +61,7 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
     const active=previous.filter(row=>!row.replaced_at)
     const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId:facts.id},select:{marketingSolution:true}})
     const plans:any[]=Object.values((knowledge?.marketingSolution as any)?.publishingCalendar?.months||{}).flat().filter((item:any)=>item&&!['archived','deleted','published','done','已发布','已完成','归档','已删除'].includes(item.status))
-    const disliked=dislikedCreativeSources(knowledge?.marketingSolution)
+    const disliked=await readDislikedCreativeSources(prisma,facts.id,knowledge?.marketingSolution)
     const fixed=plans.filter(creativeIsVisible).filter(item=>!item.nativeDaily||item.nativeReviewStatus!=='pending_review')
     const counts:Record<string,number>={};for(const item of fixed){const direction=creativeDirection(item);counts[direction]=Math.min(2,(counts[direction]||0)+1)}
     for(const row of active){const direction=creativeDirection(row.source);counts[direction]=Math.max(counts[direction]||0,1)}
@@ -101,7 +101,7 @@ export async function readIdeaPool(userId:string,brandId:string){
   const pool=await database()
   let items=(await pool.query('SELECT id,source_id,source,created_at,selected_at,plan_id,plan_month,last_error,task_id FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY created_at DESC,id',[brandId])).rows
   const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true}})
-  const disliked=dislikedCreativeSources(knowledge?.marketingSolution);items=items.filter(item=>!disliked.has(item.source_id))
+  const disliked=await readDislikedCreativeSources(prisma,brandId,knowledge?.marketingSolution);items=items.filter(item=>!disliked.has(item.source_id))
   const months=(knowledge?.marketingSolution as any)?.publishingCalendar?.months||{}
   for(const item of items)item.creative=item.plan_id?calendarCreativeOption((months[item.plan_month]||[]).find((creative:any)=>creative.id===item.plan_id)||{}):null
   const latest=(await pool.query('SELECT local_day,status,started_at,completed_at,added FROM amc_iaic.brand_idea_days WHERE brand_id=$1 ORDER BY local_day DESC LIMIT 1',[brandId])).rows[0]||null
