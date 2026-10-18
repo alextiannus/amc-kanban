@@ -76,12 +76,12 @@ export function planningDraftContract(scope:PlanningScope){
 export function annualPlanningMonths(start:string){return Array.from({length:4},(_,quarter)=>planningMonths(start,quarter)).flat()}
 export function sixPlanningMonths(start:string){return [...planningMonths(start),...planningMonths(start,1)]}
 export function marketingPlanShape(start:string){return {
- strategyFramework:{summary:['阶段目标、主客群、主推、内容、转化及本月重点的一页摘要'],diagnosis:['来源观察→优先瓶颈→应对；SWOT对应行动'],objectives:['目标优先级/依据/基线/指标/周期；未知基线如实说明'],audience:['主次客群/消费场景/动机/顾虑/所需证据'],products:['真实产品/角色/优先级/利益/证据/暂不主推理由'],content:['内容主题、目的、品牌专属创意、真实参考来源、所需素材、希望顾客采取的行动及表达限制；每月活动主题覆盖各已启用渠道至少一次'],channels:['实际平台、内容安排、顾客下一步行动、访问或下单方法及目前障碍'],exposure:['适用曝光手段/目的/预算与确认状态/测量；无确认不执行'],review:['Monthly Insight指标/来源与限制/继续调整停止条件/次月反馈']},strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
+ strategyFramework:{summary:['阶段目标、主客群、主推、内容、转化及本月重点的一页摘要'],diagnosis:['来源观察→优先瓶颈→应对；SWOT对应行动'],objectives:['目标优先级/依据/基线/指标/周期；未知基线如实说明'],audience:['主次客群/消费场景/动机/顾虑/所需证据'],products:['真实产品/角色/优先级/利益/证据/暂不主推理由'],content:['内容主题、目的、品牌专属内容方向、所需素材、希望顾客采取的行动及表达限制；每月活动主题覆盖各已启用渠道至少一次'],channels:['实际平台、内容安排、顾客下一步行动、访问或下单方法及目前障碍'],exposure:['适用曝光手段/目的/预算与确认状态/测量；无确认不执行'],review:['Monthly Insight指标/来源与限制/继续调整停止条件/次月反馈']},strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
- monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['各已启用可发布渠道的月度活动主题安排，包括Google Maps；每月该主题至少一次，可按需多次'],content:['当月营销活动在各平台的不同表达、真实创意参考及顾客行动'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
- inStoreActivities:['订阅准备阶段一次性安排店内关注与Google评论贴纸制作、摆放及扫码验证，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['真实检索来源ID和标题、适配品牌的理由、应用方式、渠道、素材与条件；原创建议明确区分']}}
+ monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['各已启用可发布渠道的月度活动主题安排，包括Google Maps；每月该主题至少一次，可按需多次'],content:['当月营销活动在各平台的不同表达、内容方向及顾客行动，具体参考在执行阶段匹配'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
+ inStoreActivities:['订阅准备阶段一次性安排店内关注与Google评论贴纸制作、摆放及扫码验证，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['品牌专属内容创意方向、适合客群、应用方式、渠道与素材要求；执行阶段再检索创意库和制作脚本']}}
 export function validateMarketingPlan(d:any,start:string){
  const str=(x:any)=>typeof x==='string'&&!!x.trim()&&x.length<=4000
  const list=(x:any)=>Array.isArray(x)&&x.length>0&&x.length<=24&&x.every(str)

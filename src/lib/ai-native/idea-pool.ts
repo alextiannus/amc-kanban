@@ -1,4 +1,4 @@
-import {planningCreativeBrief} from './planning-creative-search'
+import {executionCreativeBrief} from './execution-creative-brief'
 import {advanceCalendarMatching} from './calendar-planning'
 import {localPlanningTime} from '../brand-plan/matchingContract'
 import {creativeDirection,diverseCreatives,duplicateCreative} from './creative-diversity'
@@ -64,7 +64,7 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
     const counts:Record<string,number>={};for(const item of fixed){const direction=creativeDirection(item);counts[direction]=Math.min(2,(counts[direction]||0)+1)}
     for(const row of active){const direction=creativeDirection(row.source);counts[direction]=Math.max(counts[direction]||0,1)}
     const excluded=[...new Set([...plans.map(item=>item.nativeSourceSnapshot?.source?.inspirationCreativeId).filter(Boolean),...previous.map(row=>row.source_id)])].slice(0,72)
-    const response=await match({merchantId:facts.id,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`daily-${facts.id}-${day}`,promotionGoal:'根据品牌真实资料寻找适合品牌与产品的内容创意，提供脚本和所需素材。',sellingPoint:JSON.stringify(planningCreativeBrief(facts,knowledge?.marketingSolution||{})).slice(0,6000),requestedCandidateCount:8,diversify:true,directionCounts:counts,excludeCreativeIds:excluded,requirePersistedCreative:true,platforms:['instagram','xiaohongshu','tiktok']})
+    const response=await match({merchantId:facts.id,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`daily-${facts.id}-${day}`,promotionGoal:'根据品牌真实资料寻找适合品牌与产品的内容创意，提供脚本和所需素材。',sellingPoint:JSON.stringify(executionCreativeBrief(facts,knowledge?.marketingSolution||{},day.slice(0,7))).slice(0,6000),requestedCandidateCount:8,diversify:true,directionCounts:counts,excludeCreativeIds:excluded,requirePersistedCreative:true,platforms:['instagram','xiaohongshu','tiktok']})
     const seen=new Set(previous.map(row=>row.source_id))
     const sources=(response.creativeCandidates||[]).filter(source=>typeof source.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(source.inspirationCreativeId)&&!seen.has(source.inspirationCreativeId)&&!!seen.add(source.inspirationCreativeId)).slice(0,8).map(sourceExcerpt)
     if(!sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
