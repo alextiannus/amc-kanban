@@ -1,8 +1,8 @@
 import type {Prisma} from '@prisma/client'
-import {randomUUID} from 'node:crypto'
+import {createHash,randomUUID} from 'node:crypto'
 import {prisma} from '../prisma'
 import {buildGrowthResearchReport,loadBrandPlanBrand,saveResearchReport} from './service'
-import {insightReport,latestInsightReport,structuredInsightMarkdown} from './insight-report'
+import {insightReport,latestInsightReport,growthInsightReport} from './insight-report'
 
 type RequestState={id:string;status:'submitting'|'processing'|'review_required'|'completed'|'failed';createdAt:string;jobId?:string;updatedAt?:string}
 async function mutateRequest(brandId:string,change:(request:RequestState|null)=>RequestState|null){
@@ -23,7 +23,7 @@ export async function readInsight(brandId:string){
  const w=(knowledge?.marketingSolution||{}) as any
  const report=latestInsightReport([
   insightReport('workspace-research','research',w.researchReport),insightReport('baseline-research','research',knowledge?.researchReport),
-  ...snapshots.map((s:any)=>insightReport(s.id,'research',s.report)),
+  ...snapshots.map((s:any)=>insightReport(s.id,(s.report as any)?.reportType==='management'?'management':'research',s.report)),
   ...management.map((s:any)=>insightReport(s.id,'management',{...(s.output as any),status:s.status,generatedAt:s.generatedAt.toISOString()})),
  ])
  return {report,request:(w.insightRequest||null) as RequestState|null}
@@ -69,17 +69,24 @@ export async function readAvailableInsight(brandId:string){
   prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'},select:{report:true}}),
  ])
  const keys=[brand?.growthBrandKey,(snapshot?.report as any)?.growthBrandKey].filter((v):v is string=>typeof v==='string'&&!!v.trim())
- const fallback=(liveStatus:string)=>({...saved,status:saved.report?'cached':liveStatus,liveStatus})
+ const fallback=(liveStatus:string)=>({...saved,report:withInsightPdfUrl(brandId,saved.report),status:saved.report?'cached':liveStatus,liveStatus})
  if(!keys.length)return fallback('not_linked')
  try{
-  const {findLatestGrowthV3ReportReference,readGrowthReportArtifact}=await import('../growthDataCenter')
-  const ref=await findLatestGrowthV3ReportReference({growthBrandKeys:keys})
-  if(!ref?.reportVersionId)return fallback('missing')
-  const artifact=await readGrowthReportArtifact(`/v1/admin/report-versions/${encodeURIComponent(ref.reportVersionId)}/download-json`)
-  const parsed=JSON.parse(Buffer.from(artifact.body).toString('utf8'))
-  if(!parsed||typeof parsed!=='object'||!Object.keys(parsed).length)throw Error('empty_report')
-  const live=insightReport(ref.reportVersionId,'research',{title:'品牌摸底报告',content:typeof parsed.reportMarkdown==='string'?parsed.reportMarkdown:structuredInsightMarkdown(parsed),generatedAt:parsed.metadata?.generated_at||parsed.generated_at||null})
-  const report=latestInsightReport([saved.report,live])
-  return {...saved,report,status:report?.id===live?.id?'available':'cached',liveStatus:'available'}
+  const {findLatestGrowthInsightVersion}=await import('../growthDataCenter')
+  const value=await findLatestGrowthInsightVersion(keys)
+  if(!value)return fallback('missing')
+  const live=growthInsightReport(value)
+  if(!live)throw Error('growth_report_content_missing')
+  const snapshotId='insight-'+createHash('sha256').update(`${brandId}:${live.id}`).digest('hex').slice(0,40)
+  const cached={growthBrandKey:keys[0],reportType:live.type,supplementQuestions:live.supplementQuestions||[],reportVersionId:live.id,title:live.title,reportMarkdown:live.content,pdfPath:live.pdfPath||null,generatedAt:live.completedAt,periodEnd:live.periodEnd}
+  const dataHash=createHash('sha256').update(JSON.stringify(cached)).digest('hex')
+  const previous=await prisma.brandGrowthResearchSnapshot.findUnique({where:{id:snapshotId},select:{dataHash:true}})
+  if(previous?.dataHash!==dataHash)await prisma.brandGrowthResearchSnapshot.upsert({where:{id:snapshotId},create:{id:snapshotId,brandId,source:'amc-growth',sourceVersion:live.id,dataHash,report:cached,generatedAt:new Date(live.completedAt||0)},update:{report:cached,dataHash}})
+  const report=latestInsightReport(saved.report?.id===live.id?[live]:[saved.report,live])
+  return {...saved,report:withInsightPdfUrl(brandId,report),status:report?.id===live?.id?'available':'cached',liveStatus:'available'}
  }catch{return fallback('unavailable')}
+}
+
+function withInsightPdfUrl(brandId:string,report:Awaited<ReturnType<typeof readInsight>>['report']){
+ return report?{...report,...(report.pdfPath?{pdfUrl:`/api/brands/${encodeURIComponent(brandId)}/insight/pdf?version=${encodeURIComponent(report.id)}`}:{})}:null
 }

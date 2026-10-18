@@ -49,7 +49,7 @@ async function growthRequest(path: string, init: RequestInit) {
 export async function readGrowthReportArtifact(pathValue: string) {
   const path = pathValue.startsWith('/') ? pathValue : `/${pathValue}`
   const allowed = /^\/v1\/admin\/report-versions\/\d+\/(download|download-json)$/.test(path)
-    || /^\/downloads\/brand-intelligence-intake\/[A-Za-z0-9_./-]+\.pdf$/.test(path)
+    || /^\/(?:public\/)?downloads\/brand-intelligence-intake\/[A-Za-z0-9_./-]+\.pdf$/.test(path)
   if (!allowed) throw new GrowthDataCenterError(400, 'growth_report_artifact_path_invalid')
   const response = await growthRequest(path, { method: 'GET' })
   if (!response.ok) throw new GrowthDataCenterError(response.status, `growth_report_artifact_failed:${response.status}`)
@@ -312,6 +312,31 @@ export async function findLatestGrowthV3ReportReference(input: {
     versions.push(...(payload.items || []))
   }
   return selectLatestGrowthV3ReportVersionReference(versions)
+}
+
+/** Brand-bound latest report, including advanced and monthly reports; no V3 initial-only filter. */
+export async function findLatestGrowthInsightVersion(keys:string[]){
+ const items:GrowthReportVersionCandidate[]=[]
+ for(const key of [...new Set(keys)]){
+  const response=await growthRequest(`/v1/admin/reports/${encodeURIComponent(key)}/versions`,{method:'GET'})
+  if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_report_versions_failed')
+  const payload=await response.json()
+  items.push(...(payload.items||[]))
+ }
+ const valid=items.filter(v=>/^\d+$/.test(String(v.report_version_id||'')))
+ valid.sort((a,b)=>(Date.parse(b.created_at||'')||0)-(Date.parse(a.created_at||'')||0)||Number(b.report_version_id)-Number(a.report_version_id))
+ const ref=valid[0]
+ if(!ref)return null
+ const response=await growthRequest(`/v1/admin/report-versions/${ref.report_version_id}`,{method:'GET'})
+ if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_report_version_failed')
+ const payload=await response.json(),report=payload.report
+ if(!report||String(report.report_version_id)!==String(ref.report_version_id)||(report.brand_key&&!keys.includes(report.brand_key)))throw Error('growth_report_version_mismatch')
+ const result=report.result||{}
+ const normalizePdf=(value:unknown)=>{
+  if(typeof value!=='string')return ''
+  try{const url=new URL(value.replace(/^generated\/public\//,'/public/'),growthBaseUrl());return url.origin===new URL(growthBaseUrl()).origin?url.pathname:''}catch{return ''}
+ }
+ return {...report,result,pdf_download_path:normalizePdf(report.pdf_download_path||report.pdf_download_url||report.pdf_report_path||result.pdf_download_path||result.pdf_download_url||result.pdf_report_path),created_at:report.created_at||ref.created_at}
 }
 
 export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBrand & {
