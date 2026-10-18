@@ -22,3 +22,15 @@ console.warn=()=>{}
 try{for(const calls of [undefined,null,{},'not an array',[],[null],[{}],[{function:null}]])assert.throws(()=>nativeWireCalls(calls,result,workspaceTools),(e:any)=>e.code==='INVALID_MODEL_ACTION'&&e.invalidAction===true&&e.usage.outputTokens===7&&e.usageEvidence.providerReference==='fixture')}finally{console.warn=warn}
 assert.deepEqual(nativeWireCalls([valid],result,workspaceTools),[valid])
 console.log('PASS: malformed or missing provider tool-call structures retain known usage instead of becoming unmetered exceptions')
+
+const document={content:'草稿摘要：包含“引号”、\\路径和换行\n第二行',planningDraft:{scope:{stage:'marketing_plan',startMonth:'2026-10',mode:'draft'},expectedRevision:'a'.repeat(64),title:'坡晓馒',content:'摘要',data:{activities:['新品“试吃”仅为建议','店内配合：包装与自取提示\n不含堂食']}}}
+const objectWrite={function:{name:'cap_7',arguments:JSON.stringify({path:'work/test.json',mediaType:'application/json',expectedRevision:0,content:document})}}
+const structuredTools=nativeWireTools(workspaceTools,true)
+assert.equal(structuredTools[0].parameters.properties.content.type,'object')
+assert.equal((workspaceTools[0].parameters.properties.content as any).type,undefined,'Advertised Core schema is never mutated')
+const normalized=nativeWireCall(objectWrite,result,workspaceTools,true)
+assert.deepEqual(JSON.parse(JSON.parse(normalized.function.arguments).content),document,'Structured transport preserves every nested value and quote exactly')
+assert.deepEqual(nativeWireCalls([objectWrite],result,workspaceTools,true),[normalized])
+console.warn=()=>{}
+try{assert.throws(()=>nativeWireCall(objectWrite,result,workspaceTools),(e:any)=>e.code==='INVALID_MODEL_ACTION');assert.throws(()=>nativeWireCall(write('{"still":"invalid",}'),result,workspaceTools,true),(e:any)=>e.code==='INVALID_MODEL_ACTION')}finally{console.warn=warn}
+console.log('PASS: trusted planning object transport serializes exact JSON without nested model escaping; other flows and malformed strings retain strict validation')

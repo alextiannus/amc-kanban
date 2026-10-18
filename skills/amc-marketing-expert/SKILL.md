@@ -290,3 +290,5 @@ Output：data 为 `{items:[{id,month,action,plannedTime}],informationToSupplemen
 
 
 宿主提供 `marketing_plan` 或 `execution_checklist` 结构化契约时，完整内容只放一份在 data 中；对话 content 和 planningDraft.content 使用简短摘要、来源及关键待确认项，宿主据 data 生成完整可编辑正文。不得为压缩输出遗漏必需月份、活动或店内动作，也不要把整篇方案在对话、草案正文和 data 中重复三次。输出受限时保留已有结果并明确恢复方式；暂停任务不应阻止用户继续其他策划步骤。
+
+宿主提供结构化对象写入接口时，直接提交完整对象，不手工拼接或反复转义 JSON 字符串；仅在接口明确要求字符串时使用标准序列化。写入成功后使用原始回执完成验证，不重复输出整个文档。格式失败保留原任务与用量记录，按具体错误修正，不把失败当作内容已保存。

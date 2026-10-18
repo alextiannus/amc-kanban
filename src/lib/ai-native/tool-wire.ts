@@ -1,19 +1,24 @@
 import type {Completion} from '../global-text/transport'
 
-export function nativeWireTools(tools:any[]){
- return tools.map(tool=>tool.name==='iaic_finish'?{...tool,description:tool.description+' Supply literal JSON: {"result":{"summary":"Candidate ready","artifacts":[{"path":"COPY EXACT RECEIPT PATH","revision":1,"digest":"COPY EXACT RECEIPT DIGEST"}]}}. Copy actual workspace reference values. Use a short summary, not the candidate document. No JavaScript expressions, concatenation, markdown fences or ellipses.'}:tool)
+const workspaceWriter=(tool:any)=>{const p=tool?.parameters?.properties;return !!(p?.path&&p?.content&&p?.expectedRevision)}
+export function nativeWireTools(tools:any[],structuredWorkspace=false){
+ return tools.map(tool=>{
+  if(structuredWorkspace&&workspaceWriter(tool))return {...tool,description:tool.description+' For this planning draft, supply content as a complete JSON OBJECT matching artifactContract, not as a JSON-encoded string. The host serializes it losslessly before the normal workspace write and verification.',parameters:{...tool.parameters,properties:{...tool.parameters.properties,content:{type:'object',description:'Complete planning reply artifact as a JSON object; follow the trusted artifactContract.',additionalProperties:true},...(tool.parameters.properties.mediaType?{mediaType:{type:'string',const:'application/json'}}:{})}}}
+  return tool.name==='iaic_finish'?{...tool,description:tool.description+' Supply literal JSON: {"result":{"summary":"Candidate ready","artifacts":[{"path":"COPY EXACT RECEIPT PATH","revision":1,"digest":"COPY EXACT RECEIPT DIGEST"}]}}. Copy actual workspace reference values. Use a short summary, not the candidate document. No JavaScript expressions, concatenation, markdown fences or ellipses.'}:tool
+ })
 }
-export function nativeWireCall(call:any,result:Completion,tools:any[]=[]){
+export function nativeWireCall(call:any,result:Completion,tools:any[]=[],structuredWorkspace=false){
  const original=call?.function?.arguments
  try{
   if(typeof call?.function?.name!=='string'||!call.function.name)throw new Error('tool_call_required')
   // Some compatible providers already return a parsed object. Normalize its
   // representation, without changing values or repairing malformed strings.
-  const args=typeof original==='string'?JSON.parse(original):original
+  let args=typeof original==='string'?JSON.parse(original):original
   if(!args||typeof args!=='object'||Array.isArray(args))throw new Error('object_required')
   // Identify the workspace writer from the trusted advertised schema, including aliases.
   const properties=tools.find(tool=>tool.name===call.function.name)?.parameters?.properties
   if(properties?.path&&properties?.content&&properties?.expectedRevision&&args.mediaType==='application/json'){
+   if(structuredWorkspace&&args.content&&typeof args.content==='object'&&!Array.isArray(args.content))args={...args,content:JSON.stringify(args.content)}
    if(typeof args.content!=='string')throw new Error('json_document_string_required')
    JSON.parse(args.content)
   }
@@ -26,8 +31,8 @@ export function nativeWireCall(call:any,result:Completion,tools:any[]=[]){
  }
 }
 
-export function nativeWireCalls(calls:unknown,result:Completion,tools:any[]=[]){
+export function nativeWireCalls(calls:unknown,result:Completion,tools:any[]=[],structuredWorkspace=false){
  // Rejected provider structures must preserve already observed usage as well.
- if(!Array.isArray(calls)||!calls.length)return [nativeWireCall(null,result,tools)]
- return calls.map(call=>nativeWireCall(call,result,tools))
+ if(!Array.isArray(calls)||!calls.length)return [nativeWireCall(null,result,tools,structuredWorkspace)]
+ return calls.map(call=>nativeWireCall(call,result,tools,structuredWorkspace))
 }
