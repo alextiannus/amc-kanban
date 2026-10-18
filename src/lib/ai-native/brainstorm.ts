@@ -7,6 +7,7 @@ import {matchPromotionStrategyCreativeCandidates,fetchCreativeSourceEvidence} fr
 import {readBrandFacts} from './facts'
 import {digest,nativeError} from './contract'
 import {createNativeTask} from './service'
+import {hasCreativeDraftMarker} from '../brand-plan/creativeDraftMarker'
 import {creativeDigest,creativeWorkspace} from '../brand-plan/creativeRevisionContract'
 import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
 import {canonicalCreativeSource} from '../brand-plan/creativeSourceReference'
@@ -131,20 +132,33 @@ export async function dismissCalendarCreative(userId:string,brandId:string,body:
   const entries=Object.entries(months).flatMap(([month,items]:any)=>Array.isArray(items)?items.filter((i:any)=>i.id===body.creativeId).map((current:any)=>({month,current})):[])
   if(entries.length!==1)throw nativeError('creative_not_found_or_ambiguous',404)
   const {month,current}=entries[0],old=current.brandDismissal
-  if(old?.decision==='dislike'&&old.expectedRevision===body.expectedRevision)return {ok:true,replayed:true,creativeId:body.creativeId,month,hiddenCreativeIds:old.hiddenCreativeIds||[body.creativeId]}
+  if(old?.decision==='dislike'&&old.expectedRevision===body.expectedRevision)return {ok:true,replayed:true,creativeId:body.creativeId,month,hiddenCreativeIds:old.hiddenCreativeIds||[body.creativeId],hiddenDraftIds:old.hiddenDraftIds||[]}
   if(old?.decision==='dislike'||creativeDigest(current)!==body.expectedRevision)throw nativeError('creative_revision_conflict',409)
   const candidateIds=[current.inspirationCreativeId,current.source?.inspirationCreativeId,current.nativeSourceSnapshot?.source?.inspirationCreativeId].filter(Boolean)
   if(new Set(candidateIds).size>1)throw nativeError('creative_source_changed',409)
   const sourceId=candidateIds[0]
   if(sourceId&&!/^cre_[a-zA-Z0-9_-]+$/.test(sourceId))throw nativeError('creative_source_changed',409)
-  const hiddenCreativeIds=Object.values(months).flat().filter((i:any)=>i.id===body.creativeId||sourceId&&[i.inspirationCreativeId,i.source?.inspirationCreativeId,i.nativeSourceSnapshot?.source?.inspirationCreativeId].includes(sourceId)).map((i:any)=>i.id)
-  const next={...current,brandDismissal:{decision:'dislike',by:userId,at:new Date().toISOString(),expectedRevision:body.expectedRevision,sourceId:sourceId||null,hiddenCreativeIds}}
+  const hiddenItems=Object.values(months).flat().filter((i:any)=>i.id===body.creativeId||sourceId&&[i.inspirationCreativeId,i.source?.inspirationCreativeId,i.nativeSourceSnapshot?.source?.inspirationCreativeId].includes(sourceId)) as any[]
+  const hiddenCreativeIds=hiddenItems.map(i=>i.id),draftIds=hiddenItems.map(i=>i.calendarSelection?.draftId).filter(Boolean),hiddenDraftIds:string[]=[]
+  // Only untouched selection placeholders are archived. Real drafts, media,
+  // schedules and published content are never changed by this preference.
+  if(draftIds.length){
+   const drafts=await tx.contentDraft.findMany({where:{brandId,id:{in:draftIds},status:'planned_unimplemented',scheduledAt:null,publishedAt:null,mediaUrls:{isEmpty:true}},select:{id:true,caption:true,agentNote:true}})
+   for(const draft of drafts){
+    const owner=hiddenItems.find(i=>i.calendarSelection?.draftId===draft.id)
+    if(!owner||draft.caption!==`内容创意：${owner.title}`||!hasCreativeDraftMarker(draft.agentNote,'unscheduled',owner.id))continue
+    const result=await tx.contentDraft.updateMany({where:{id:draft.id,brandId,status:'planned_unimplemented',caption:draft.caption,agentNote:draft.agentNote,scheduledAt:null,publishedAt:null,mediaUrls:{isEmpty:true}},data:{status:'archived'}})
+    if(result.count)hiddenDraftIds.push(draft.id)
+   }
+  }
+
+  const next={...current,brandDismissal:{decision:'dislike',by:userId,at:new Date().toISOString(),expectedRevision:body.expectedRevision,sourceId:sourceId||null,hiddenCreativeIds,hiddenDraftIds}}
   await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:Object.fromEntries(Object.entries(months).map(([bucket,items]:any)=>[bucket,Array.isArray(items)?items.map((i:any)=>i.id===body.creativeId?next:sourceId&&[i.inspirationCreativeId,i.source?.inspirationCreativeId,i.nativeSourceSnapshot?.source?.inspirationCreativeId].includes(sourceId)?{...i,brandDismissal:next.brandDismissal}:i):items]))}}}})
   if(sourceId){
    const prior=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_DECISION,period:sourceId},orderBy:{version:'desc'}})
    await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_DECISION,period:sourceId,version:(prior?.version||0)+1,status:'SAVED',generationMode:'HUMAN_CHOICE',createdById:userId,input:{decision:'dislike',sourceDigest:current.source?.sourceDigest||current.nativeSourceSnapshot?.source?.sourceDigest||null},output:{decision:'dislike',sourceId,creativeId:body.creativeId,month}}})
   }
-  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CALENDAR_CREATIVE_DISLIKED',resourceType:'BrandCreative',resourceId:body.creativeId,metadata:{brandId,month,sourceId:sourceId||null,expectedRevision:body.expectedRevision}}})
-  return {ok:true,replayed:false,creativeId:body.creativeId,month,hiddenCreativeIds}
+  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CALENDAR_CREATIVE_DISLIKED',resourceType:'BrandCreative',resourceId:body.creativeId,metadata:{brandId,month,sourceId:sourceId||null,expectedRevision:body.expectedRevision,hiddenDraftIds}}})
+  return {ok:true,replayed:false,creativeId:body.creativeId,month,hiddenCreativeIds,hiddenDraftIds}
  })
 }

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import {creativeDraftMarker} from '../src/lib/brand-plan/creativeDraftMarker'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma'
 import {nativePool} from '../src/lib/ai-native/store'
@@ -17,6 +18,9 @@ try{
  await prisma.user.create({data:{id:userId,email:userId+'@example.test',type:'HUMAN',status:'ACTIVE',role:'ADMIN',password:'test-only-not-a-credential'}})
  await prisma.brand.create({data:{id:brandId,name:'TEST ONLY calendar dislike'}})
  await prisma.brandKnowledge.create({data:{brandId,negPrompts:[],marketingSolution:{publishingCalendar:{months:{'2026-10':[item],'2026-09':[{...item,id:'other-version'}]}}}}})
+ const placeholder=await prisma.contentDraft.create({data:{brandId,caption:'内容创意：Selected idea',mediaUrls:[],hashtags:[],status:'planned_unimplemented',agentNote:creativeDraftMarker('unscheduled','other-version')}})
+ const knowledgeBefore:any=await prisma.brandKnowledge.findUnique({where:{brandId}});knowledgeBefore.marketingSolution.publishingCalendar.months['2026-09'][0].calendarSelection={draftId:placeholder.id}
+ await prisma.brandKnowledge.update({where:{brandId},data:{marketingSolution:knowledgeBefore.marketingSolution}})
  const draft=await prisma.contentDraft.create({data:{brandId,caption:'Keep actual content',mediaUrls:['https://example.test/owned.mp4'],hashtags:[],status:'draft'}})
  await prisma.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_FEED',period:'sources',version:1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{},output:{sources:[source]}}})
  await pool.query('INSERT INTO amc_iaic.brand_ideas(id,brand_id,source_id,source,context_digest,match_id,library_versions,plan_id,plan_month) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[ideaId,brandId,sourceId,JSON.stringify(source),'context','match','{}',item.id,'2026-10'])
@@ -32,6 +36,7 @@ try{
  assert.equal((await readIdeaPool(userId,brandId)).items.length,0)
  await assert.rejects(admitBrandIdeas(userId,brandId,ideaId),(e:any)=>e.code==='idea_not_found')
  assert.equal((await prisma.contentDraft.findUnique({where:{id:draft.id}}))?.caption,'Keep actual content')
+ const archived=await prisma.contentDraft.findUnique({where:{id:placeholder.id}});assert.equal(archived?.status,'archived');assert.equal(archived?.caption,placeholder.caption);assert.equal(archived?.agentNote,placeholder.agentNote);assert(results.every(r=>r.hiddenDraftIds.includes(placeholder.id)))
  assert.equal(await prisma.auditLog.count({where:{resourceId:item.id,action:'CALENDAR_CREATIVE_DISLIKED'}}),1)
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId,kind:'BRAINSTORM_FEED'}}),1)
  console.log('PASS real PostgreSQL: concurrent dislike replays once, both calendar versions and recommendation routes hide the source; source/script/schedule/draft/history remain intact; cannot re-admit disliked source')
