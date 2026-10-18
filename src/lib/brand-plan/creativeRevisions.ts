@@ -1,3 +1,4 @@
+import {resolveCreativeMonth} from './creativeAddress.ts'
 import {MATCH_REQUEST_KIND,planningHash,openTargets,requestTargets} from './matchingContract'
 import {validateCreativeFeedback,readCreativeFeedback,creativeChanges,creativeCandidateChanges,creativeFeedbackDimensions,CANDIDATE_FEEDBACK_KIND,FEEDBACK_WINDOW,VIDEO_EDIT_FEEDBACK_KIND,VIDEO_FEEDBACK_MAX_BYTES,feedbackCursor,parseFeedbackCursor,summarizeCreativeFeedback} from './revisionFeedback'
 import {creativeDirection,duplicateCreative,exceedsCreativeSubjectLimit} from '../ai-native/creative-diversity.ts'
@@ -9,7 +10,7 @@ import { readPolicies } from '../role-permissions/store.ts'
 import { effectiveGrants } from '../role-permissions/contract.ts'
 import { principalFromUser } from '../auth-v2/types.ts'
 import { canUserAccessBrand } from '../user-management/brandAccess.ts'
-import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, revisionSource, validateCreativeAddress, validateCreativePatch } from './creativeRevisionContract.ts'
+import { CREATIVE_REVISION_KIND, CreativeRevisionError, creativeDigest, creativeWorkspace, findCreative, monthItems, originalSource, record, revisionPeriod, revisionSource, validateCreativeAddress, validateCreativeId, validateCreativePatch } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, validateCreativeRevisionClientPatch, validateCreativeWorkspacePatch } from './creativeWorkspaceContract.ts'
 import { syncConfirmedCreativeCollection } from './creativeCollections.ts'
 import {canonicalCreativeSource} from './creativeSourceReference'
@@ -38,15 +39,18 @@ function present(row: any) {
   return { id:row.id, revision:row.version, parentRevisionId:input.parentRevisionId || null, originalRevisionId:input.originalRevisionId || row.id, createdAt:row.createdAt.toISOString(), actor:input.actor || null, principals:input.principals || [], brand:input.brand, origin:input.origin, ai:input.ai || null, source:revisionSource(record(row.output),input.source,row.createdAt.toISOString()), feedback:readCreativeFeedback(input.feedback), changes:input.changes||[], content:row.output, workspaceItem:normalizeCreativeWorkspaceItem(row.output,{brandId:input.brand?.id,currentRevisionId:row.id,createdAt:row.createdAt.toISOString(),updatedAt:row.createdAt.toISOString()}), contentHash:creativeDigest(row.output) }
 }
 export async function readCreativeRevisions(actor: Actor, brandId: string, month: string, creativeId: string, revisionId?: string, db = prisma, beforeVersion?: number) {
-  validateCreativeAddress(month, creativeId)
+  validateCreativeId(creativeId)
+  if(month)validateCreativeAddress(month, creativeId)
   if (beforeVersion !== undefined && (!Number.isSafeInteger(beforeVersion) || beforeVersion < 0)) throw new CreativeRevisionError('invalid_revision_cursor')
   const reader=await authorize(db,actor,brandId)
+  const resolvedKnowledge = !month ? await db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}}) : undefined
+  if(!month)month=await resolveCreativeMonth(db,brandId,creativeId,resolvedKnowledge)
   const brandWrite=await canUserAccessBrand(brandId,actor.id,'WRITE',db)
   const canWrite=brandWrite&&await canEditScript(db,reader)
   const canSchedule=brandWrite&&await canEditScript(db,reader,'content.schedule')
   const period = revisionPeriod(month,creativeId)
   const [knowledge, revisions, brand] = await Promise.all([
-    db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}}),
+    resolvedKnowledge !== undefined ? resolvedKnowledge : db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}}),
     db.brandMarketingSolution.findMany({where:{brandId,kind:CREATIVE_REVISION_KIND,period,...(revisionId ? {id:revisionId}:beforeVersion !== undefined ? {version:{lt:beforeVersion}}:{})},orderBy:{version:'desc'},take:101}),
     db.brand.findUnique({where:{id:brandId},select:{id:true,name:true}}),
   ])

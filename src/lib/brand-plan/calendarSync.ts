@@ -7,6 +7,7 @@ export type CalendarCreativeItem = {
   calendarSelection?: {draftId:string}
   nativeSourceSnapshot?: {source?: {matchScore?:number}}
   nativeDaily?: {poolIdeaId:string;taskId:string}
+  brainstorm?: {sourceId:string;matchScore:number;likedBy:string;likedAt:string}
   nativeReviewStatus?: string
   legacy?: {date?:string;platform?:string;status?:string}
   platformTargets?: string[]
@@ -31,6 +32,7 @@ export type CalendarCreativeItem = {
 export type CalendarCreativeOption = {
   matchScore?: number | null
   nativeDaily?: {poolIdeaId:string;taskId:string}
+  brainstorm?: {sourceId:string;matchScore:number;likedBy:string;likedAt:string}
   nativeReviewStatus?: string
   id: string
   date: string | null
@@ -149,6 +151,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     product,
     planning,
     materialRequirements,
+    brainstorm:item.brainstorm,
     nativeDaily:item.nativeDaily,
     nativeReviewStatus:item.nativeReviewStatus,
     suggestedFolder: `创意素材/${suggestedFolder}`,

@@ -1,5 +1,18 @@
 # 品牌创意修改与版本追溯
 
+创意详情定位（2026-10-19，本地实现与定向回归通过，未发布）：品牌 ID 与创意 ID 是详情读取及页面深链的身份；不要求入口提供月份，不从发布日期猜测归属。后端在品牌授权后解析当前记录的内部存储月份并返回；编辑、SKU、排期与修订回读自动沿用该位置，继续验证摘要、权限和幂等回执。月份仍用于列表筛选、计划目标和发布安排，不作为打开详情的先决条件。同一品牌有重复创意 ID 时明确拒绝定位；缺失或撤权不能跨品牌查找。历史带月份的链接继续兼容。
+
+
+## MM 创意脑爆（2026-10-19，本地实现与定向验证通过，未发布）
+
+看板提示「品牌创意」打开全屏脑爆，视频模式查看 Content 原视频，脚本模式仅展示原脚本爆款元素与品牌相似推荐原因，不改写脚本。候选使用 Content 真实 matchScore 严格大于 75 的已持久化来源；排序分不冒充百分比。喜欢前不加入内容日历；喜欢保存无日期、未改写创意，不创建 AI 改写任务、发布草稿或视频。不喜欢永久排除该品牌的此来源，保留来源与选择记录；稍后决定仍可再次浏览。
+
+内容日历显示已喜欢创意，点击「复刻」才创建现有 User Assistant 脚本改写任务，结果进入 Review，由用户采用后继续现有素材和视频制作流程。完整拍摄说明、参考视频、上传和素材库选择沿用现有制作/采集入口，不新增按创意归集缺失镜头的要求。既有自动匹配并直接改写流程不变。所有选择按品牌持久化，喜欢和复刻分别幂等；源版本变化、撤权或任务结果不明不得伪报成功。
+
+接口：`GET /api/brands/:id/ai/brainstorm` 读取当前候选；同路径 POST 接受 refresh、decide、replicate。decide 只接受 sourceId、固定 sourceDigest、decision（like/dislike/defer）和 expectedVersion；品牌内行锁串行，重复选择返回原回执，过时选择返回 409。喜欢直接追加未改写的工作区创意并审计，不伪造 AI 任务或脚本修订；首个人工/AI 审阅保存继续沿用既有基线与修订链。原视频使用品牌授权的 `/ai/brainstorm/:sourceId/media`，固定来源版本后复用现有精确域名、公网 DNS、类型与流量上限策略。复刻使用既有 creative 任务，幂等键绑定用户、品牌、创意与当前版本；候选不自动采用。
+
+Content 匹配新增可选 `minimumMatchScore`，在候选截取之前严格筛选大于阈值；脑爆传 75，旧调用不传时默认匹配行为及匹配请求 ID 保持不变。UI 显示原始匹配分而非百分比。验证包括服务/路由替身、原视频流代理、四种屏幕下真实组件浏览及播放、选择持久化和结果不明重试、日历复刻到待 Review 候选、三个服务的当前源码类型检查；未验证生产登录后的真实来源、AI 模型改写或付费制作。
+
 ## 当前交付状态（2026-10-17）
 
 Task 11A 可信反馈入口（本地已实现并完成 PGlite 定向验证、未发布）：`video_feedback_event@1` 的不可变 core 固定 schema、eventId、occurredAt、projectId、brandId、creativeId、creativeRevisionId、actorId 和 Task 7 `evidence`，`coreDigest` 是与传输令牌无关的稳定 SHA-256。每次 HTTP 交付必须用当前内部服务令牌提供新的 `deliveredAt`、随机 nonce 和 HMAC-SHA-256；规范字符串为 `video_feedback_delivery@1\nPOST\n/api/internal/content/video-feedback\neventId\ncoreDigest\ndeliveredAt\nnonce`，对应 `x-amc-video-feedback-delivered-at` / `-nonce` / `-signature` 头。令牌在读取正文前鉴权，正文后复验精确 method/path、五分钟交付时间窗口、nonce 和签名；五分钟只约束交付，不约束证据发生时间。积压的旧 core 可用当前令牌重新签名后首次入库，相同 eventId + coreDigest 可在当前保留期内使用新交付包幂等重放；旧令牌和旧的正文内签名合同均关闭失败，同 eventId 不同 coreDigest 为 409 冲突。每次交付都重新确认 ACTIVE 操作者、当前品牌写权限和项目追溯身份；projectId 只认可持久化 plan、`_mmVideoJob` 与签名视频回执中完全一致的 Content 项目固定值，不接受 VideoProductionJob.id 别名，任何缺失或不一致均关闭失败。证据使用专属 `VIDEO_EDIT_FEEDBACK` 事件和唯一/窗口索引，不创建品牌创意修订，不进入人工修订、采用或弃用计数；反馈聚合只投影有界结构化证据，不返回项目/修订/操作者身份、备注、提示词、脚本正文或来源私有数据。公开品牌修订接口对 `videoFeedback`、事件 envelope/digest/signature 及其他未知证据键在任何修订写入前返回 400。
@@ -89,15 +102,15 @@ AI 改写素材需求应保存到 patch.materialRequirements。对既有产物�
 
 复用 BrandMarketingSolution，kind=CREATIVE_ITEM，以品牌、月份和卡片 ID 的摘要为 period。版本0保留首次编辑时的策划原稿，作者未知标记 legacy_unknown；版本1起保存真实会话操作者、角色快照、当时有效 Crew PRINCIPAL 关系、父版本、原始来源 ID/已知内容快照及摘要。来源仅有策划摘录时明确 plan_snapshot，不能冒充 Content 原文或原创意准确发行版本。已有版本只读保留。
 
-Task 4 本地来源接口（未发布）：`GET /api/brands/:brandId/content-creatives/:creativeId/source?month=YYYY-MM` 通过既有修订读取服务校验品牌 READ 权限，再用服务凭据读取 Content 完整来源。真实来源 ID 冲突或无法解析返回 404；固定 sourceRevision/sourceDigest 不符返回 409；Content 服务失败返回 503。新候选在匹配时保存完整来源的 revision/digest，历史 nativeSourceSnapshot.libraryDigest 仍是批次摘要，不用于单条摘要比较。无时间线为 source_unavailable；缺字段或历史未固定版本为 partial_source；全部字段和固定版本均完整才为 full_source。保留全部镜头，不生成占位。
+Task 4 本地来源接口（未发布）：`GET /api/brands/:brandId/content-creatives/:creativeId/source`（month 可选） 通过既有修订读取服务校验品牌 READ 权限，再用服务凭据读取 Content 完整来源。真实来源 ID 冲突或无法解析返回 404；固定 sourceRevision/sourceDigest 不符返回 409；Content 服务失败返回 503。新候选在匹配时保存完整来源的 revision/digest，历史 nativeSourceSnapshot.libraryDigest 仍是批次摘要，不用于单条摘要比较。无时间线为 source_unavailable；缺字段或历史未固定版本为 partial_source；全部字段和固定版本均完整才为 full_source。保留全部镜头，不生成占位。
 
-商户仅接收允许的文本/镜头字段及无 query、fragment、用户凭据、管理/内部路径的公开 HTTPS 链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。受控/OBS/签名视频返回 `/api/brands/:brandId/content-creatives/:creativeId/source/media?month=YYYY-MM`，代理每次重验品牌访问与固定来源，再校验精确主机白名单和公网 IPv4 DNS；连接固定解析出的地址，拒绝重定向及非视频内容。不转发浏览器 Cookie/Authorization，不回传上游签名、Location、Set-Cookie。代理默认最多 64 MiB、配置 `AMC_SOURCE_MEDIA_MAX_BYTES`，提前拒绝声明超限，chunked 超限中止传输。允许主机来自 `AMC_SOURCE_MEDIA_ALLOWED_HOSTS`（逗号分隔精确媒体主机）及已有 OBS 公开主机配置，无通配主机；IPv6-only 源暂不支持。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&month=YYYY-MM&panel=source`，MM 已本地接入品牌与月份绑定的来源面板；Kanban 在当前运营编辑器直接展示同一来源证据。
+商户仅接收允许的文本/镜头字段及无 query、fragment、用户凭据、管理/内部路径的公开 HTTPS 链接；不返回原始管理元数据、Content libraryDetailPath 或管理链接。受控/OBS/签名视频返回 `/api/brands/:brandId/content-creatives/:creativeId/source/media?month=YYYY-MM`，代理每次重验品牌访问与固定来源，再校验精确主机白名单和公网 IPv4 DNS；连接固定解析出的地址，拒绝重定向及非视频内容。不转发浏览器 Cookie/Authorization，不回传上游签名、Location、Set-Cookie。代理默认最多 64 MiB、配置 `AMC_SOURCE_MEDIA_MAX_BYTES`，提前拒绝声明超限，chunked 超限中止传输。允许主机来自 `AMC_SOURCE_MEDIA_ALLOWED_HOSTS`（逗号分隔精确媒体主机）及已有 OBS 公开主机配置，无通配主机；IPv6-only 源暂不支持。internalDetailPath 固定为编码后的 `/dashboard?brandId=...&sub=ai_workspace&creativeId=...&panel=source`，MM 来源面板按品牌与创意身份读取；Kanban 在当前运营编辑器直接展示同一来源证据。
 
 Content 在完整序列化后按 UTF-8 字节检查 `AMC_SOURCE_EVIDENCE_MAX_BYTES`（默认 8 MiB，上限配置不超过 64 MiB），等于限额允许；超限为 413/library_evidence_too_large。Kanban S2S 同时检查 Content-Length 与逐块累计的真实字节，伪造/缺失长度不绕过限制；超限取消读取，来源接口保留明确 413 错误。时间线从不为满足限额而截断。
 
 Task 4 审查轮次 2：媒体主机策略与 Huawei OBS 共用 endpoint 规范化，endpoint 已含 bucket 前缀时不重复添加。精确收录私有签名的 bucket+endpoint 主机，并另外收录配置的 PUBLIC_BASE_URL/CDN 主机；CDN 不替代私有签名主机。仅允许 HTTPS 默认端口，主机统一小写；尾点、用户凭据、非默认端口和通配主机配置不得扩大白名单。
 
-GET/POST /api/brands/:id/content-creatives/:creativeId/revisions?month=YYYY-MM 提供读取及保存。保存接收 expectedRevision（当前卡片摘要）、idempotencyKey、白名单 patch。脚本保存与既有 AI 修改采用按 draft.update 校验角色权限，不要求 brand.update；canSaveAsNew / canOverwrite 使用同一内容编辑权限和品牌访问范围，覆盖还须符合保管人限制。保存事务锁定品牌知识记录并复核当前权限，追加版本和审计、更新唯一卡片。幂等键绑定品牌、卡片、月份、实际用户和载荷；同键异内容409；并发旧版本409。响应与后续 GET 指定 revisionId 回读相互核对。
+`GET /api/brands/:id/content-creatives/:creativeId/revisions` 按品牌与创意 ID 读取，后端返回内部存储月份，旧 GET 的 month 参数不参与定位；`revisionId` 和 `beforeVersion` 继续用于历史回读与分页。`POST .../revisions?month=YYYY-MM` 接收编辑器从读取结果自动取得的内部位置用于保存。保存接收 expectedRevision（当前卡片摘要）、idempotencyKey、白名单 patch。脚本保存与既有 AI 修改采用按 draft.update 校验角色权限，不要求 brand.update；canSaveAsNew / canOverwrite 使用同一内容编辑权限和品牌访问范围，覆盖还须符合保管人限制。保存事务锁定品牌知识记录并复核当前权限，追加版本和审计、更新唯一卡片。幂等键绑定品牌、卡片、月份、实际用户和载荷；同键异内容409；并发旧版本409。响应与后续 GET 指定 revisionId 回读相互核对。
 
 保存不修改现有 ContentDraft、排期、发布或付费视频。制作由独立交接固定修订与 Content 签名回执，显式排期由专用 schedule/unschedule 接口完成；不能从保存推导下游更新。原整月接口不允许覆盖或删除已有追溯的卡片；改用逐条版本入口。新月份通过统一策划匹配请求创建待审核创意；包含已追溯创意的整月生成与覆盖入口统一拒绝，防止丢失人工修改。历史作者不猜测，首次快照不声称是原创作者投稿。
 

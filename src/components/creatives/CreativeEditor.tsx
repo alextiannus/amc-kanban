@@ -7,7 +7,7 @@ import CreativeSourceComparison,{type CreativeSource} from './CreativeSourceComp
 import CreativeSkuDecision,{type SkuRecommendation} from './CreativeSkuDecision'
 import CreativeRevisionTimeline from './CreativeRevisionTimeline'
 
-type Props={brandId:string;creativeId:string;month:string;english?:boolean;initialPanel?:string;onSaved?:(creative:any)=>void|Promise<void>;onProduce?:(creative:any)=>void|Promise<void>;onDownload?:(creative:any)=>void}
+type Props={brandId:string;creativeId:string;month?:string;english?:boolean;initialPanel?:string;onSaved?:(creative:any)=>void|Promise<void>;onProduce?:(creative:any)=>void|Promise<void>;onDownload?:(creative:any)=>void}
 type Pending={kind:'save'|'adopt'|'sku'|'task'|'discard'|'schedule'|'unschedule';url:string;body:any;attempted?:boolean;result?:any}
 const button='inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-600 disabled:cursor-not-allowed disabled:opacity-40'
 const field='mt-2 block w-full min-w-0 rounded-lg border border-slate-200 bg-white p-3 text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-violet-600'
@@ -15,9 +15,10 @@ const terminal=(v:string)=>['succeeded','failed','cancelled','interrupted'].incl
 async function api(url:string,body?:unknown,signal?:AbortSignal,method='POST'){const r=await fetch(url,{cache:'no-store',signal:signal||AbortSignal.timeout(25000),...(body?{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});const value=await r.json();if(!r.ok)throw Object.assign(new Error(value.error||'request_failed'),{status:r.status});return value}
 const stored=(key:string)=>{try{return JSON.parse(sessionStorage.getItem(key)||'null')}catch{return null}}
 const persist=(key:string,value:unknown)=>{try{value===null?sessionStorage.removeItem(key):sessionStorage.setItem(key,JSON.stringify(value))}catch{}}
-export default function CreativeEditor(props:Props){return <ScriptReview key={`${props.brandId}:${props.month}:${props.creativeId}`} {...props}/>}
-function ScriptReview({brandId,creativeId,month,english=false,initialPanel,onSaved,onProduce,onDownload}:Props){
+export default function CreativeEditor(props:Props){return <ScriptReview key={`${props.brandId}:${props.creativeId}`} {...props}/>}
+function ScriptReview({brandId,creativeId,english=false,initialPanel,onSaved,onProduce,onDownload}:Props){
  const t=(zh:string,en:string)=>english?en:zh,base=`/api/brands/${encodeURIComponent(brandId)}`
+ const [month,setMonth]=useState(''),resolvedMonth=useRef('')
  const [activeId,setActiveId]=useState(creativeId),[data,setData]=useState<any>(null),[source,setSource]=useState<CreativeSource|null>(null),[sourceError,setSourceError]=useState(''),[sku,setSku]=useState<any>(null),[skuError,setSkuError]=useState('')
  const [script,setScript]=useState(''),[materials,setMaterials]=useState<string[]>([]),[rows,setRows]=useState<SkuRecommendation[]>([]),[skuNote,setSkuNote]=useState(''),[shotId,setShotId]=useState('')
  const [reasons,setReasons]=useState<string[]>([]),[note,setNote]=useState(''),[instruction,setInstruction]=useState(''),[task,setTask]=useState<any>(null),[candidate,setCandidate]=useState<any>(null)
@@ -28,11 +29,11 @@ function ScriptReview({brandId,creativeId,month,english=false,initialPanel,onSav
  const selectedAccountId=accountId||(eligibleAccounts.length===1?eligibleAccounts[0].id:'')
  const alive=useRef(true),lock=useRef(false),pendingRef=useRef<Pending|null>(null),storageKey=useRef(''),dialogRef=useRef<HTMLElement>(null),returnFocus=useRef<HTMLElement|null>(null),ready=useRef(false)
  const activeIdRef=useRef(creativeId),panelGeneration=useRef(0),panelAbort=useRef<AbortController|null>(null)
- const path=(suffix:string,id=activeId)=>`${base}/content-creatives/${encodeURIComponent(id)}/${suffix}?month=${encodeURIComponent(month)}`
+ const path=(suffix:string,id=activeId)=>`${base}/content-creatives/${encodeURIComponent(id)}/${suffix}${resolvedMonth.current?`?month=${encodeURIComponent(resolvedMonth.current)}`:''}`
  const dirty=!!data&&(script!==(data.current.planning||'')||JSON.stringify(materials)!==JSON.stringify(data.current.materialRequirements||[])),running=task&&!terminal(task.status),disabled=busy||!!pending||!!running
  const feedback={reasons,note},needsAdaptation=['awaiting_sku','sku_confirmed'].includes(data?.current?.adaptationStatus),canSchedule=!!data?.capabilities?.canSchedule&&!dirty&&!needsAdaptation&&!!script.trim()&&materials.length>0&&!candidate
  const message=(e:any)=>{
-  const codes:Record<string,[string,string]>={schedule_account_not_found:['该账号已断开或不再可用。请重新打开发布安排选择其他账号，或先到品牌设置重新连接。','This account is disconnected or unavailable. Reopen scheduling to choose another account, or reconnect it in brand settings.'],schedule_account_ambiguous:['请选择一个发布账号。','Choose one publishing account.'],creative_schedule_draft_ambiguous:['这份草稿的创意归属需要核对，暂时无法安排发布。','The draft is linked to more than one idea. Review its ownership before scheduling.'],creative_revision_conflict:['创意已更新，输入已保留。请重新读取后核对。','This idea changed. Your edits are retained. Reload and compare.'],creative_source_changed:['原创意版本已变化，请重新读取后确认商品。','The source changed. Reload before confirming products.'],sku_catalog_changed:['商品目录已变化，请重新读取并确认商品。','The catalog changed. Reload and confirm products again.'],sku_complete_source_required:['原分镜不完整，暂时无法按原创意生成脚本。','Complete source shots are required before adaptation.'],creative_source_not_found:['未找到可验证的原创意，请从内容创意列表重新打开。','No verified source found. Reopen from the content ideas list.'],unverified:['保存结果待核对。请重试，输入和原请求已保留。','The save needs verification. Retry with the retained input and request.'],candidate_changed:['候选已变化，请重新生成后核对。','The candidate changed. Generate and review a new candidate.'],sku_confirmation_required:['请先确认商品，再生成具体脚本。','Confirm SKUs before generating the script.'],creative_adaptation_required:['请先确认 SKU 并采用生成的脚本，再安排发布。','Confirm SKUs and adopt the generated script before scheduling.']}
+  const codes:Record<string,[string,string]>={creative_not_found_or_ambiguous:['无法唯一定位这条创意，请刷新列表后重试。','This idea could not be uniquely located. Refresh the list and retry.'],schedule_account_not_found:['该账号已断开或不再可用。请重新打开发布安排选择其他账号，或先到品牌设置重新连接。','This account is disconnected or unavailable. Reopen scheduling to choose another account, or reconnect it in brand settings.'],schedule_account_ambiguous:['请选择一个发布账号。','Choose one publishing account.'],creative_schedule_draft_ambiguous:['这份草稿的创意归属需要核对，暂时无法安排发布。','The draft is linked to more than one idea. Review its ownership before scheduling.'],creative_revision_conflict:['创意已更新，输入已保留。请重新读取后核对。','This idea changed. Your edits are retained. Reload and compare.'],creative_source_changed:['原创意版本已变化，请重新读取后确认商品。','The source changed. Reload before confirming products.'],sku_catalog_changed:['商品目录已变化，请重新读取并确认商品。','The catalog changed. Reload and confirm products again.'],sku_complete_source_required:['原分镜不完整，暂时无法按原创意生成脚本。','Complete source shots are required before adaptation.'],creative_source_not_found:['未找到可验证的原创意，请从内容创意列表重新打开。','No verified source found. Reopen from the content ideas list.'],unverified:['保存结果待核对。请重试，输入和原请求已保留。','The save needs verification. Retry with the retained input and request.'],candidate_changed:['候选已变化，请重新生成后核对。','The candidate changed. Generate and review a new candidate.'],sku_confirmation_required:['请先确认商品，再生成具体脚本。','Confirm SKUs before generating the script.'],creative_adaptation_required:['请先确认 SKU 并采用生成的脚本，再安排发布。','Confirm SKUs and adopt the generated script before scheduling.']}
   return codes[e.message]?.[english?1:0]||(e.status===403?t('没有此操作权限，输入已保留。请核对账号权限。','You do not have permission. Your input is retained.'):e.status===401?t('登录已失效，请复制未保存内容后重新登录。','Session expired. Copy unsaved content before signing in.'):t('操作未完成，输入已保留。请重试核对。','The action was not confirmed. Your input is retained. Retry to reconcile.'))
  }
  const apply=(v:any)=>{setData(v);setScript(v.current.planning||'');setMaterials(v.current.materialRequirements||[])}
@@ -46,11 +47,11 @@ function ScriptReview({brandId,creativeId,month,english=false,initialPanel,onSav
   const result=await Promise.allSettled([api(path('source',id),undefined,signal),api(path('sku-decision',id),undefined,signal)])
   if(!alive.current||controller.signal.aborted||generation!==panelGeneration.current||id!==activeIdRef.current)return
   if(result[0].status==='fulfilled'){const value=result[0].value;if(value.brandId===brandId&&value.creativeId===id){setSource(value);setSourceError('');setShotId(value.timeline?.[0]?.id||'')}}else{setSource(null);setSourceError(message(result[0].reason))}
-  if(result[1].status==='fulfilled'){const value=result[1].value;if(value.brandId!==brandId||value.creativeId!==id||value.month!==month){setSku(null);setSkuError(message({message:'candidate_changed'}));return}setSku(value);setRows(value.decision?.recommendations||[]);setSkuNote(value.decision?.adjustmentNote||'');setSkuError('')}else{setSku(null);setSkuError(message(result[1].reason))}
+  if(result[1].status==='fulfilled'){const value=result[1].value;if(value.brandId!==brandId||value.creativeId!==id||value.month!==resolvedMonth.current){setSku(null);setSkuError(message({message:'candidate_changed'}));return}setSku(value);setRows(value.decision?.recommendations||[]);setSkuNote(value.decision?.adjustmentNote||'');setSkuError('')}else{setSku(null);setSkuError(message(result[1].reason))}
  }
  const acceptTask=(v:any)=>{
   if(!alive.current)return
-  if(v.creativeId!==activeIdRef.current||v.month!==month)throw new Error('candidate_changed')
+  if(v.creativeId!==activeIdRef.current||v.month!==resolvedMonth.current)throw new Error('candidate_changed')
   setTask(v);persist(storageKey.current+':task',v)
   if(v.status==='succeeded'){
    const artifact=v.kind==='sku_proposal'?v.report:v.candidate
@@ -60,9 +61,8 @@ function ScriptReview({brandId,creativeId,month,english=false,initialPanel,onSav
   }else if(['failed','cancelled','interrupted'].includes(v.status))setError(t('AI 未完成，当前脚本已保留。可重新发起。','AI did not complete. Your script is retained; you can retry.'))
  }
  useEffect(()=>{alive.current=true;void (async()=>{try{
-  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw new Error('creative_source_not_found')
-  const value=await api(path('revisions',creativeId));if(!alive.current)return;if(!value.current||value.brand?.id!==brandId||value.creativeId!==creativeId)throw new Error('creative_source_not_found');apply(value)
-  storageKey.current=`amc-review:${value.currentUser.id}:${brandId}:${month}:${creativeId}`
+  const value=await api(path('revisions',creativeId));if(!alive.current)return;if(!value.current||value.brand?.id!==brandId||value.creativeId!==creativeId||!/^\d{4}-(0[1-9]|1[0-2])$/.test(value.month))throw new Error('creative_not_found_or_ambiguous');resolvedMonth.current=value.month;setMonth(value.month);apply(value)
+  storageKey.current=`amc-review:${value.currentUser.id}:${brandId}:${value.month}:${creativeId}`
   const draft=stored(storageKey.current+':draft');if(draft){setScript(draft.script??value.current.planning);setMaterials(draft.materials||[]);setReasons(draft.reasons||[]);setNote(draft.note||'');setInstruction(draft.instruction||'');setNotice(t('已恢复未保存的输入，请核对后保存。','Unsaved input restored. Review before saving.'));if(draft.expectedRevision&&draft.expectedRevision!==value.expectedRevision){setData({...value,expectedRevision:draft.expectedRevision});setError(message({message:'creative_revision_conflict'}))}}
   const request=stored(storageKey.current+':pending');if(request){setRequest({...request,attempted:true});setError(request.result?.receipt?message({message:'unverified'}):t('上次操作结果待核对，请重试原请求。','The previous action needs reconciliation. Retry the pending action.'))}
   ready.current=true;void loadPanels(creativeId)

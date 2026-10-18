@@ -607,7 +607,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **303** 个 API 路径、**440** 个 HTTP 方法组合。
+共 **306** 个 API 路径、**446** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -692,9 +692,11 @@ Permanent QR contract:
 | GET, POST, PUT | `/api/brands/{id}/activity-page` |
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
 | GET, POST | `/api/brands/{id}/ai/autopilot` |
+| GET, POST | `/api/brands/{id}/ai/brainstorm` |
+| GET | `/api/brands/{id}/ai/brainstorm/{sourceId}/media` |
 | POST | `/api/brands/{id}/ai/bug-reports` |
 | GET | `/api/brands/{id}/ai/bug-reports/{reportId}` |
-| GET | `/api/brands/{id}/ai/ideas` |
+| GET, POST | `/api/brands/{id}/ai/ideas` |
 | GET, POST | `/api/brands/{id}/ai/preference` |
 | GET, POST | `/api/brands/{id}/ai/tasks` |
 | GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
@@ -753,6 +755,7 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/inbox-state` |
 | GET, POST | `/api/brands/{id}/insight` |
 | GET | `/api/brands/{id}/insight/pdf` |
+| GET, PUT | `/api/brands/{id}/insight/sources` |
 | GET, POST | `/api/brands/{id}/interview-information` |
 | GET, PATCH | `/api/brands/{id}/knowledge` |
 | POST | `/api/brands/{id}/logo` |

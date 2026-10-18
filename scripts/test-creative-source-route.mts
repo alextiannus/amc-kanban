@@ -46,7 +46,7 @@ assert.equal(body.thumbnailUrl,null)
 assert.equal(body.libraryDetailPath,undefined)
 assert.equal(body.credentials,undefined)
 assert.equal(body.scriptContent.secret,undefined)
-assert.equal(body.internalDetailPath,'/dashboard?brandId=brand&sub=ai_workspace&creativeId=idea&month=2026-11&panel=source')
+assert.equal(body.internalDetailPath,'/dashboard?brandId=brand&sub=ai_workspace&creativeId=idea&panel=source')
 source.timeline[0].continuityRequirements=['同一张桌面','动作方向从左到右']
 const withContinuity=await (await get()).json()
 assert.deepEqual(withContinuity.timeline[0].continuityRequirements,['同一张桌面','动作方向从左到右'])
@@ -81,7 +81,7 @@ reset();creative.current={id:'idea'};creative.source={creativeId:sourceId,snapsh
 source.sourceRevision='changed';assert.equal((await get()).status,409,'stored canonical source remains pinned')
 const previousFetch=globalThis.fetch
 reset();source.originalVideoUrl='https://media.example/video.mp4?X-Amz-Signature=secret&X-Amz-Credential=secret'
-assert.equal((await (await get()).json()).originalVideoUrl,'/api/brands/brand/content-creatives/idea/source/media?month=2026-11')
+assert.equal((await (await get()).json()).originalVideoUrl,'/api/brands/brand/content-creatives/idea/source/media')
 for(const unsafe of ['https://public.example/admin/private','https://public.example/%61dmin/private','https://public.example/internal/video','https://public.example/a#token','https://public.example/a#','https://public.example/a?token=secret','https://public.example/a?signature=secret','https://public.example/a?X-Amz-Credential=secret','https://127.0.0.1/a','https://service.local./a']) {
   reset();source.originalPostUrl=unsafe;source.thumbnailUrl=unsafe
   const result=await (await get()).json();assert.equal(result.originalPostUrl,null);assert.equal(result.thumbnailUrl,null)

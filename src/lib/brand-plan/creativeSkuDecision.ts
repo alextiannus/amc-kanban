@@ -8,6 +8,7 @@ import {skuCatalog,catalogDigest,assertConfirmedDecision,checkSkuBinding,type Sk
 type Actor={id:string;type:string}
 export async function readSkuContext(actor:Actor,brandId:string,month:string,creativeId:string,db=prisma){
   const current=await readCreativeRevisions(actor,brandId,month,creativeId,undefined,db)
+  month=current.month
   const item=current.current
   if(!item||!current.expectedRevision)throw new CreativeRevisionError('creative_not_found_or_ambiguous',404)
   const facts=await readBrandFacts(db,brandId),catalog=skuCatalog(facts)

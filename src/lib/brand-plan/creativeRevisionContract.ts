@@ -14,8 +14,12 @@ export function stableJson(value: unknown): string {
 }
 export function creativeDigest(value: unknown) { return createHash('sha256').update(stableJson(value)).digest('hex') }
 export function revisionPeriod(month: string, itemId: string) { return creativeDigest([month,itemId]) }
+export function validateCreativeId(itemId: string) {
+  if (typeof itemId !== 'string' || !itemId || itemId.length > 200) throw new CreativeRevisionError('invalid_creative_address')
+}
 export function validateCreativeAddress(month: string, itemId: string) {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !itemId || itemId.length > 200) throw new CreativeRevisionError('invalid_creative_address')
+  validateCreativeId(itemId)
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new CreativeRevisionError('invalid_creative_address')
 }
 export function creativeWorkspace(knowledge: any) {
   return { ...record(knowledge?.brandPlan), ...record(knowledge?.marketingSolution) }

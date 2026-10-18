@@ -113,6 +113,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     let fullEvidence:any
     if (intent.editMode!=='materials' && !options.readCreative && typeof sourceId==='string' && /^cre_[a-zA-Z0-9_-]+$/.test(sourceId)) {
       try {fullEvidence=await fetchCreativeSourceEvidence(sourceId)} catch {fullEvidence={status:'unavailable',note:'Original analysis unavailable; do not reconstruct unseen scenes.'}}
+      if(value.current?.brainstorm){const fixed=value.current.source;if(fullEvidence.status==='unavailable')throw nativeError('creative_source_unavailable',503);if(fullEvidence.creativeId!==fixed?.inspirationCreativeId||fullEvidence.sourceRevision!==fixed?.sourceRevision||fullEvidence.sourceDigest!==fixed?.sourceDigest)throw nativeError('creative_source_changed',409)}
     }
     return {...(intent.editMode==='materials'?{editMode:'materials',instructions:'Only derive materialRequirements from current.planning. Source is provenance, not a request to re-adapt or re-analyze the original.'}:{}),current:{...value.current,...(intent.draftScript!==undefined?{planning:intent.draftScript}:{}),...(intent.draftMaterialRequirements!==undefined?{materialRequirements:intent.draftMaterialRequirements}:{})},...(intent.draftScript!==undefined?{editingUnsavedDraft:true}:{}),expectedRevision:value.expectedRevision,source:{...savedSource,...(fullEvidence?{currentOriginalAnalysis:fullEvidence}:{})},brandId:intent.brandId}
   }

@@ -15,6 +15,10 @@ function publicIpv4(address:string) {
 
 export async function readCreativeSourceMedia(actor:{id:string;type:string},brandId:string,month:string,creativeId:string,signal?:AbortSignal) {
   const {raw}=await resolveCreativeSource(actor,brandId,month,creativeId)
+  return streamSourceVideoMedia(raw,signal)
+}
+
+export async function streamSourceVideoMedia(raw:{originalVideoUrl?:unknown},signal?:AbortSignal){
   const url=sourceMediaLocation(raw.originalVideoUrl)
   if(!url||!sourceMediaAllowedHosts().has(url.hostname.toLowerCase()))throw denied()
   // Resolve only public A records and pin the actual connection to that result;

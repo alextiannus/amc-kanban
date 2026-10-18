@@ -21,7 +21,7 @@ async function handle(request: Request, context: Context, write=false) {
       if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(key=>!['expectedRevision','idempotencyKey','patch','feedback','saveMode'].includes(key)))return json({error:'invalid_creative_revision_request'},400)
       return json(await saveCreativeRevision(auth.user,id,month,creativeId,body))
     }
-    return json(await readCreativeRevisions(auth.user,id,month,creativeId,url.searchParams.get('revisionId') || undefined, undefined, url.searchParams.has('beforeVersion') ? Number(url.searchParams.get('beforeVersion')) : undefined))
+    return json(await readCreativeRevisions(auth.user,id,'',creativeId,url.searchParams.get('revisionId') || undefined, undefined, url.searchParams.has('beforeVersion') ? Number(url.searchParams.get('beforeVersion')) : undefined))
   } catch(error) {
     if (error instanceof CreativeRevisionError) return json({error:error.code},error.status)
     console.error('[creative-revisions] request failed', error instanceof Error ? error.name : 'unknown')
