@@ -76,7 +76,7 @@ export function planningDraftContract(scope:PlanningScope){
 export function annualPlanningMonths(start:string){return Array.from({length:4},(_,quarter)=>planningMonths(start,quarter)).flat()}
 export function sixPlanningMonths(start:string){return [...planningMonths(start),...planningMonths(start,1)]}
 export function marketingPlanShape(start:string){return {
- strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
+ strategyFramework:{summary:['阶段目标、主客群、主推、内容、转化及本月重点的一页摘要'],diagnosis:['来源观察→优先瓶颈→应对；SWOT对应行动'],objectives:['目标优先级/依据/基线/指标/周期；未知基线如实说明'],audience:['主次客群/消费场景/动机/顾虑/所需证据'],products:['真实产品/角色/优先级/利益/证据/暂不主推理由'],content:['持续主线/目的/品牌专属角度/素材/CTA/表达边界'],channels:['实际平台/角色/内容适配/下一步CTA/入口状态/转化阻力'],exposure:['适用曝光手段/目的/预算与确认状态/测量；无确认不执行'],review:['Monthly Insight指标/来源与限制/继续调整停止条件/次月反馈']},strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
@@ -90,8 +90,9 @@ export function validateMarketingPlan(d:any,start:string){
  if(!Array.isArray(d.monthlyPlans)||d.monthlyPlans.length!==6||d.monthlyPlans.some((m:any,i:number)=>m?.month!==sixPlanningMonths(start)[i]||!['goal','theme','resources','measurement'].every(k=>str(m[k]))||!['activities','channels','content'].every(k=>list(m[k]))))return fail('invalid_six_month_plan')
  if(d.monthlyPlans.some((m:any)=>m.preparation!==undefined&&(!Array.isArray(m.preparation)||m.preparation.length>12||!m.preparation.every(str))))return fail('invalid_monthly_preparation')
  if(d.strategyDirection!==undefined&&!list(d.strategyDirection)||d.informationToSupplement!==undefined&&(!Array.isArray(d.informationToSupplement)||d.informationToSupplement.length>24||!d.informationToSupplement.every(str)))return fail('invalid_strategy_supplement')
+ if(d.strategyFramework!==undefined&&(!d.strategyFramework||Array.isArray(d.strategyFramework)||!['summary','diagnosis','objectives','audience','products','content','channels','exposure','review'].every(key=>list(d.strategyFramework[key]))||Object.keys(d.strategyFramework).some(key=>!['summary','diagnosis','objectives','audience','products','content','channels','exposure','review'].includes(key))))return fail('invalid_strategy_framework')
  if(marketingPlanMarkdown(d).length>24000)return fail('marketing_plan_document_too_long')
- if(Object.keys(d).some(k=>!['brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives','strategyDirection','informationToSupplement'].includes(k)))return fail('unexpected_marketing_plan_field')
+ if(Object.keys(d).some(k=>!['brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives','strategyDirection','informationToSupplement','strategyFramework'].includes(k)))return fail('unexpected_marketing_plan_field')
 }
 export function planningInputVersions(current:any){return {interview:planningRevision(current.coCreation?.interview||null),...(current.coCreation?.principal_strategy?{principalStrategy:planningRevision(current.coCreation.principal_strategy)}:{})}}
 export function planningInputsMatch(recorded:any,current:any){
@@ -113,6 +114,7 @@ export function marketingPlanMarkdown(d:any,english=false){
  const label=(zh:string,en:string)=>english?en:zh
  const list=(items:string[])=>items.map(s=>`- ${s}`).join('\n')
  return [
+  ...(['summary','diagnosis','objectives','audience','products','content','channels','exposure','review'] as const).flatMap(key=>{const names:Record<string,[string,string]>={summary:['策略摘要','Strategy brief'],diagnosis:['现状与核心问题','Diagnosis'],objectives:['阶段目标与优先级','Objectives'],audience:['客群与消费场景','Audience and occasions'],products:['产品优先级与卖点策略','Product priorities'],content:['内容主线与品牌表达','Content strategy'],channels:['平台分工与转化路径','Channels and conversion'],exposure:['曝光投入与预算条件','Exposure and budget'],review:['月度复盘与调整机制','Review and iteration']};return d.strategyFramework?.[key]?.length?[`## ${label(...names[key])}\n${list(d.strategyFramework[key])}`]:[]}),
   ...(d.strategyDirection?.length?[`## ${label('营销方向','Marketing direction')}\n${list(d.strategyDirection)}`]:[]),
   `## ${label('品牌特点与定位','Brand characteristics')}\n${list(d.brandCharacteristics)}`,
   `## ${label('核心卖点','Core selling points')}\n${list(d.coreSellingPoints)}`,

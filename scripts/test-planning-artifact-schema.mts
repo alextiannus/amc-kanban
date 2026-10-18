@@ -29,3 +29,19 @@ assert(discussion(reply),'ordinary stage discussion must not force a whole new d
 
 const oldCalendar=structuredClone(artifact);oldCalendar.planningDraft.data.annualCalendar=oldCalendar.planningDraft.data.annualCalendar.map((m,i)=>({...m,month:`2026-${String(i+1).padStart(2,"0")}`}));assert.equal(valid(oldCalendar),false)
 const gapTask=structuredClone(checklist);gapTask.planningDraft.data.informationToSupplement=["电话待确认"];assert.equal(validate(gapTask),false)
+
+// New strategy evidence must survive formatting and adoption; legacy saved plans stay readable.
+const rich=structuredClone(artifact)
+rich.planningDraft.data.strategyFramework.audience=['核心客群｜家庭备餐｜需要真实产品与购买入口证据']
+assert(valid(rich),JSON.stringify(valid.errors))
+const {marketingPlanMarkdown,validateMarketingPlan,mergePlanningDraft}=await import('../src/lib/ai-native/planning-workspace-contract.ts')
+const adopted=mergePlanningDraft({},rich.planningDraft,'rich-task')
+assert(adopted.coCreation.marketing_plan.content.includes(rich.planningDraft.data.strategyFramework.audience[0]))
+assert(adopted.coCreation.marketing_plan.content.includes('平台分工与转化路径'))
+const legacy=structuredClone(rich.planningDraft.data);delete (legacy as any).strategyFramework
+assert.doesNotThrow(()=>validateMarketingPlan(legacy,scope.startMonth))
+for(const key of ['summary','audience','channels','review']){
+ const broken=structuredClone(rich);(broken.planningDraft.data.strategyFramework as any)[key]=[]
+ assert.equal(valid(broken),false);assert.throws(()=>validateMarketingPlan(broken.planningDraft.data,scope.startMonth))
+}
+console.log('PASS: strategy evidence and audience/conversion/review sections persist in adopted document; old plans remain compatible')
