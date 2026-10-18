@@ -1,3 +1,4 @@
+import {dislikedCreativeSources} from '../brand-plan/creativeVisibility'
 import {allows} from '../role-permissions/store'
 import {principalFromUser} from '../auth-v2/types'
 import {prisma} from '../prisma'
@@ -39,7 +40,8 @@ export async function admitBrandIdeas(userId:string,brandId:string,ideaId?:strin
   const rows:any[]=ideaId?await tx.$queryRaw`SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND id::text=${ideaId} AND (replaced_at IS NULL OR selected_at IS NOT NULL) FOR UPDATE`:await tx.$queryRaw`SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND replaced_at IS NULL ORDER BY created_at,id FOR UPDATE`
   if(ideaId&&!rows.length)throw nativeError('idea_not_found',404)
   const selected:any[]=[]
-  const candidates=ideaId?rows:rows.filter(row=>!all.some(i=>(i.nativeDaily?.poolIdeaId===row.id||i.inspirationCreativeId===row.source_id)&&(i.calendarSelection?.draftId||i.schedule?.draftId)))
+  const disliked=dislikedCreativeSources(workspace),visibleRows=rows.filter(row=>!disliked.has(row.source_id));if(ideaId&&!visibleRows.length)throw nativeError('idea_not_found',404)
+  const candidates=ideaId?visibleRows:visibleRows.filter(row=>!all.some(i=>(i.nativeDaily?.poolIdeaId===row.id||i.inspirationCreativeId===row.source_id)&&(i.calendarSelection?.draftId||i.schedule?.draftId)))
   for(const row of rankedIdeas(candidates).slice(0,count)){
    let item=all.find(i=>i.id===`pool_${row.id}`||i.nativeDaily?.poolIdeaId===row.id||i.inspirationCreativeId===row.source_id)
    let bucket=item?Object.keys(months).find(m=>months[m].includes(item))!:month

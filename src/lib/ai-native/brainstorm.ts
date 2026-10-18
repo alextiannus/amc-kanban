@@ -7,7 +7,7 @@ import {matchPromotionStrategyCreativeCandidates,fetchCreativeSourceEvidence} fr
 import {readBrandFacts} from './facts'
 import {digest,nativeError} from './contract'
 import {createNativeTask} from './service'
-import {creativeWorkspace} from '../brand-plan/creativeRevisionContract'
+import {creativeDigest,creativeWorkspace} from '../brand-plan/creativeRevisionContract'
 import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
 import {canonicalCreativeSource} from '../brand-plan/creativeSourceReference'
 import {streamSourceVideoMedia} from '../brand-plan/creativeSourceMedia'
@@ -41,7 +41,7 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
  const facts=await readBrandFacts(db,brandId)
  if(!facts)throw nativeError('brand_context_unavailable',404)
  const excluded=await db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},orderBy:{createdAt:'desc'},distinct:['period'],take:72,select:{period:true}})
- const response=await match({merchantId:brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`brainstorm-${brandId}-${digest([facts.name,facts.description,Date.now()]).slice(0,16)}`,promotionGoal:'寻找适合品牌的原创意，保留原脚本供创意脑爆，不改写脚本。',sellingPoint:[facts.name,facts.description,...(facts.productCatalog||[]).slice(0,8).map((s:any)=>s.name)].filter(Boolean).join('；').slice(0,4000),requestedCandidateCount:8,minimumMatchScore:75,requirePersistedCreative:true,excludeCreativeIds:excluded.map((d:any)=>d.period),platforms:['instagram','tiktok','xiaohongshu'],diversify:true})
+ const response=await match({merchantId:brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`brainstorm-${brandId}-${digest([facts.name,facts.description,Date.now()]).slice(0,16)}`,promotionGoal:'寻找适合品牌的原创意，保留原脚本供创意浏览，不改写脚本。',sellingPoint:[facts.name,facts.description,...(facts.productCatalog||[]).slice(0,8).map((s:any)=>s.name)].filter(Boolean).join('；').slice(0,4000),requestedCandidateCount:8,minimumMatchScore:75,requirePersistedCreative:true,excludeCreativeIds:excluded.map((d:any)=>d.period),platforms:['instagram','tiktok','xiaohongshu'],diversify:true})
  if(!Array.isArray(response.creativeCandidates)||typeof response.contentMatchRequestId!=='string')throw nativeError('content_library_unavailable',503)
  if((response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400)&&!response.creativeCandidates?.length)throw nativeError('content_library_unavailable',503)
  const incoming=response.creativeCandidates.filter(eligibleBrainstormSource)
@@ -101,7 +101,7 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
  if(Object.keys(body).some(k=>!['action','creativeId'].includes(k))||typeof body.creativeId!=='string')throw nativeError('invalid_brainstorm_request',400)
  await authorizeBrainstorm(userId,brandId,true,db)
  const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,'',body.creativeId,undefined,db)
- if(!current.current?.brainstorm||!current.canOverwrite)throw nativeError('brainstorm_source_not_found',404)
+ if(current.current?.brandDismissal?.decision==='dislike'||!current.current?.brainstorm||!current.canOverwrite)throw nativeError('brainstorm_source_not_found',404)
  if(current.current.planning?.trim())return {ok:true,creativeId:body.creativeId,alreadyRewritten:true}
  const fixed=current.current.source
  if(!fixed?.inspirationCreativeId||!fixed.sourceRevision||!fixed.sourceDigest)throw nativeError('creative_source_not_found',404)
@@ -119,4 +119,32 @@ export async function brainstormVideo(userId:string,brandId:string,sourceId:stri
  const raw=await fetchCreativeSourceEvidence(sourceId)
  if(raw.creativeId!==sourceId||raw.sourceRevision!==source.sourceRevision||raw.sourceDigest!==source.sourceDigest)throw nativeError('creative_source_changed',409)
  return streamSourceVideoMedia(raw,signal)
+}
+
+// Calendar choices also apply to automatically adapted and legacy saved ideas.
+export async function dismissCalendarCreative(userId:string,brandId:string,body:any,db:any=prisma){
+ if(!body||Object.keys(body).some(k=>!['action','creativeId','expectedRevision'].includes(k))||body.action!=='dismiss'||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||''))throw nativeError('invalid_brainstorm_request',400)
+ return db.$transaction(async(tx:any)=>{
+  await authorizeBrainstorm(userId,brandId,true,tx)
+  await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
+  const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge),months=workspace.publishingCalendar?.months||{}
+  const entries=Object.entries(months).flatMap(([month,items]:any)=>Array.isArray(items)?items.filter((i:any)=>i.id===body.creativeId).map((current:any)=>({month,current})):[])
+  if(entries.length!==1)throw nativeError('creative_not_found_or_ambiguous',404)
+  const {month,current}=entries[0],old=current.brandDismissal
+  if(old?.decision==='dislike'&&old.expectedRevision===body.expectedRevision)return {ok:true,replayed:true,creativeId:body.creativeId,month,hiddenCreativeIds:old.hiddenCreativeIds||[body.creativeId]}
+  if(old?.decision==='dislike'||creativeDigest(current)!==body.expectedRevision)throw nativeError('creative_revision_conflict',409)
+  const candidateIds=[current.inspirationCreativeId,current.source?.inspirationCreativeId,current.nativeSourceSnapshot?.source?.inspirationCreativeId].filter(Boolean)
+  if(new Set(candidateIds).size>1)throw nativeError('creative_source_changed',409)
+  const sourceId=candidateIds[0]
+  if(sourceId&&!/^cre_[a-zA-Z0-9_-]+$/.test(sourceId))throw nativeError('creative_source_changed',409)
+  const hiddenCreativeIds=Object.values(months).flat().filter((i:any)=>i.id===body.creativeId||sourceId&&[i.inspirationCreativeId,i.source?.inspirationCreativeId,i.nativeSourceSnapshot?.source?.inspirationCreativeId].includes(sourceId)).map((i:any)=>i.id)
+  const next={...current,brandDismissal:{decision:'dislike',by:userId,at:new Date().toISOString(),expectedRevision:body.expectedRevision,sourceId:sourceId||null,hiddenCreativeIds}}
+  await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:Object.fromEntries(Object.entries(months).map(([bucket,items]:any)=>[bucket,Array.isArray(items)?items.map((i:any)=>i.id===body.creativeId?next:sourceId&&[i.inspirationCreativeId,i.source?.inspirationCreativeId,i.nativeSourceSnapshot?.source?.inspirationCreativeId].includes(sourceId)?{...i,brandDismissal:next.brandDismissal}:i):items]))}}}})
+  if(sourceId){
+   const prior=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_DECISION,period:sourceId},orderBy:{version:'desc'}})
+   await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_DECISION,period:sourceId,version:(prior?.version||0)+1,status:'SAVED',generationMode:'HUMAN_CHOICE',createdById:userId,input:{decision:'dislike',sourceDigest:current.source?.sourceDigest||current.nativeSourceSnapshot?.source?.sourceDigest||null},output:{decision:'dislike',sourceId,creativeId:body.creativeId,month}}})
+  }
+  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CALENDAR_CREATIVE_DISLIKED',resourceType:'BrandCreative',resourceId:body.creativeId,metadata:{brandId,month,sourceId:sourceId||null,expectedRevision:body.expectedRevision}}})
+  return {ok:true,replayed:false,creativeId:body.creativeId,month,hiddenCreativeIds}
+ })
 }

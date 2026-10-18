@@ -65,4 +65,20 @@ access=false;const queries=queryCount;await assert.rejects(api.listBrainstorm('u
 write=false;await assert.rejects(choose('cre_later','like',1),(e:any)=>e.code==='brainstorm_access_denied');write=true
 await assert.rejects(api.brainstormVideo('user','brand','cre_no',undefined,db),(e:any)=>e.code==='brainstorm_source_not_found')
 assert.equal((await api.brainstormVideo('user','brand','cre_new',undefined,db)).status,200)
+// A saved idea can later be disliked, without deleting its source/script/schedule.
+const stored=Object.values(knowledge.marketingSolution.publishingCalendar.months).flat()[0] as any
+stored.planning='Saved brand script';stored.schedule={draftId:'keep-scheduled-draft'}
+const original=structuredClone(stored),month=Object.keys(knowledge.marketingSolution.publishingCalendar.months)[0]
+knowledge.marketingSolution.publishingCalendar.months['2026-01']=[{...structuredClone(stored),id:'another-source-version'}]
+const dismissBody={action:'dismiss',creativeId:stored.id,expectedRevision:creativeContract.creativeDigest(stored)}
+await assert.rejects(api.dismissCalendarCreative('user','brand',{...dismissBody,expectedRevision:'0'.repeat(64)},db),(e:any)=>e.code==='creative_revision_conflict')
+const snapshot=structuredClone({rows,knowledge,audits});failAudit=true;await assert.rejects(api.dismissCalendarCreative('user','brand',dismissBody,db),/audit-failed/);failAudit=false;assert.deepEqual({rows,knowledge,audits},snapshot)
+await api.dismissCalendarCreative('user','brand',dismissBody,db)
+assert((await api.dismissCalendarCreative('user','brand',dismissBody,db)).replayed)
+const removed=knowledge.marketingSolution.publishingCalendar.months[month][0]
+assert.deepEqual(removed.source,original.source);assert.equal(removed.planning,original.planning);assert.deepEqual(removed.schedule,original.schedule)
+assert.equal(removed.brandDismissal.decision,'dislike');assert.equal(knowledge.marketingSolution.publishingCalendar.months['2026-01'][0].brandDismissal.decision,'dislike')
+assert.equal(rows.filter(r=>r.kind===contract.BRAINSTORM_DECISION&&r.period==='cre_like').at(-1).input.decision,'dislike')
+await assert.rejects(api.replicateBrainstorm('user','brand',{action:'replicate',creativeId:stored.id},db,create),(e:any)=>e.code==='brainstorm_source_not_found')
+write=false;await assert.rejects(api.dismissCalendarCreative('user','brand',dismissBody,db),(e:any)=>e.code==='brainstorm_access_denied');write=true
 console.log('PASS: >75 source-only feed, brand-scoped choices, durable dislikes/defer, concurrent/idempotent likes, atomic audit, no rewrite before Replicate, task-key resume and authorized source media')

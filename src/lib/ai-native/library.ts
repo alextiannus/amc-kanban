@@ -15,9 +15,11 @@ export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<Lib
   if(intent.poolIdeaId){
     return poolIdeaLibrary(intent.brandId,intent.poolIdeaId,facts)
   }
-  const response=await matchPromotionStrategyCreativeCandidates({merchantId:intent.brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`amc-native-${intent.requestKey}`,promotionGoal:intent.goal,sellingPoint:JSON.stringify({description:facts.description,knowledge:facts.knowledge}).slice(0,6000),requestedCandidateCount:3,requirePersistedCreative:true,platforms:intent.planningRequest?[intent.planningRequest.platform]:['instagram','xiaohongshu','tiktok'],excludeCreativeIds:intent.planningRequest?.excludeCreativeIds||[],diversify:true})
+  const disliked=new Set<string>(facts.dislikedSourceIds||[])
+  const excluded=[...new Set([...disliked,...(intent.planningRequest?.excludeCreativeIds||[])])].slice(0,72)
+  const response=await matchPromotionStrategyCreativeCandidates({merchantId:intent.brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`amc-native-${intent.requestKey}`,promotionGoal:intent.goal,sellingPoint:JSON.stringify({description:facts.description,knowledge:facts.knowledge}).slice(0,6000),requestedCandidateCount:3,requirePersistedCreative:true,platforms:intent.planningRequest?[intent.planningRequest.platform]:['instagram','xiaohongshu','tiktok'],excludeCreativeIds:excluded,diversify:true})
   const seen=new Set<string>()
-  const sources=(response.creativeCandidates||[]).filter(c=>typeof c.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(c.inspirationCreativeId)&&!seen.has(c.inspirationCreativeId)&&!!seen.add(c.inspirationCreativeId)).slice(0,3).map(sourceExcerpt)
+  const sources=(response.creativeCandidates||[]).filter(c=>typeof c.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(c.inspirationCreativeId)&&!disliked.has(c.inspirationCreativeId)&&!seen.has(c.inspirationCreativeId)&&!!seen.add(c.inspirationCreativeId)).slice(0,3).map(sourceExcerpt)
   if(!sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
   const payload={...(intent.planningRequest?{contextPortfolio:facts.creativePortfolio||[]}:{}),contentMatchRequestId:response.contentMatchRequestId,sources,gaps:response.contentLibraryGaps||[],libraryVersions:response.libraryVersions||{},contextDigest:digest(facts)}
   // A read is bounded; oversized source text must never silently become different evidence.

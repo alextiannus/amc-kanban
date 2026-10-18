@@ -1,3 +1,4 @@
+import {dislikedCreativeSources,creativeIsVisible} from '../brand-plan/creativeVisibility'
 import {rankedIdeas,matchScore} from './idea-selection-policy'
 import {executionCreativeBrief} from './execution-creative-brief'
 import {localPlanningTime} from '../brand-plan/matchingContract'
@@ -60,12 +61,13 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
     const active=previous.filter(row=>!row.replaced_at)
     const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId:facts.id},select:{marketingSolution:true}})
     const plans:any[]=Object.values((knowledge?.marketingSolution as any)?.publishingCalendar?.months||{}).flat().filter((item:any)=>item&&!['archived','deleted','published','done','已发布','已完成','归档','已删除'].includes(item.status))
-    const fixed=plans.filter(item=>!item.nativeDaily||item.nativeReviewStatus!=='pending_review')
+    const disliked=dislikedCreativeSources(knowledge?.marketingSolution)
+    const fixed=plans.filter(creativeIsVisible).filter(item=>!item.nativeDaily||item.nativeReviewStatus!=='pending_review')
     const counts:Record<string,number>={};for(const item of fixed){const direction=creativeDirection(item);counts[direction]=Math.min(2,(counts[direction]||0)+1)}
     for(const row of active){const direction=creativeDirection(row.source);counts[direction]=Math.max(counts[direction]||0,1)}
-    const excluded=[...new Set([...plans.map(item=>item.nativeSourceSnapshot?.source?.inspirationCreativeId).filter(Boolean),...previous.map(row=>row.source_id)])].slice(0,72)
+    const excluded=[...new Set([...disliked,...plans.map(item=>item.nativeSourceSnapshot?.source?.inspirationCreativeId).filter(Boolean),...previous.map(row=>row.source_id)])].slice(0,72)
     const response=await match({merchantId:facts.id,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`daily-${facts.id}-${day}`,promotionGoal:'根据当前品牌营销策略匹配原创意，只返回来源与匹配依据，保存到品牌创意列表；不得本地化、制作或排期。',sellingPoint:JSON.stringify(executionCreativeBrief(facts,knowledge?.marketingSolution||{},day.slice(0,7))).slice(0,6000),requestedCandidateCount:8,diversify:true,directionCounts:counts,excludeCreativeIds:excluded,requirePersistedCreative:true,platforms:['instagram','xiaohongshu','tiktok']})
-    const seen=new Set(previous.map(row=>row.source_id))
+    const seen=new Set([...disliked,...previous.map(row=>row.source_id)])
     const sources=(response.creativeCandidates||[]).filter(source=>typeof source.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(source.inspirationCreativeId)&&!seen.has(source.inspirationCreativeId)&&!!seen.add(source.inspirationCreativeId)).slice(0,8).map(sourceExcerpt)
     if(!sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
     const connection=await pool.connect()
@@ -78,7 +80,7 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
       const replaceable=current.filter(row=>!row.selected_at)
       const kept=[...current]
       for(const source of diverseCreatives(sources,[],sources.length)){
-        if(kept.some(row=>duplicateCreative(row.source,source))||plans.some(item=>duplicateCreative(item,source))||fixed.filter(item=>creativeDirection(item)===creativeDirection(source)).length>=2)continue
+        if(kept.some(row=>duplicateCreative(row.source,source))||plans.filter(creativeIsVisible).some(item=>duplicateCreative(item,source))||fixed.filter(item=>creativeDirection(item)===creativeDirection(source)).length>=2)continue
         const same=kept.filter(row=>!row.selected_at&&creativeDirection(row.source)===creativeDirection(source))
         if(same.length>=2){
           const old=same.find(row=>!row.selected_at&&!String(row.id).startsWith('new-'))
@@ -97,8 +99,9 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
 export async function readIdeaPool(userId:string,brandId:string){
   await requireActor(actorFor(brandId,userId))
   const pool=await database()
-  const items=(await pool.query('SELECT id,source_id,source,created_at,selected_at,plan_id,plan_month,last_error,task_id FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY created_at DESC,id',[brandId])).rows
+  let items=(await pool.query('SELECT id,source_id,source,created_at,selected_at,plan_id,plan_month,last_error,task_id FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY created_at DESC,id',[brandId])).rows
   const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true}})
+  const disliked=dislikedCreativeSources(knowledge?.marketingSolution);items=items.filter(item=>!disliked.has(item.source_id))
   const months=(knowledge?.marketingSolution as any)?.publishingCalendar?.months||{}
   for(const item of items)item.creative=item.plan_id?calendarCreativeOption((months[item.plan_month]||[]).find((creative:any)=>creative.id===item.plan_id)||{}):null
   const latest=(await pool.query('SELECT local_day,status,started_at,completed_at,added FROM amc_iaic.brand_idea_days WHERE brand_id=$1 ORDER BY local_day DESC LIMIT 1',[brandId])).rows[0]||null
@@ -116,7 +119,7 @@ export async function selectPoolIdea(brandId:string,id:unknown){
 export async function poolIdeaLibrary(brandId:string,id:string,facts:any):Promise<LibrarySnapshot>{
   const pool=await database()
   const idea=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE id=$1 AND brand_id=$2 AND selected_at IS NOT NULL',[id,brandId])).rows[0]
-  if(!idea)throw nativeError('idea_not_found',404)
+  if(!idea||(facts.dislikedSourceIds||[]).includes(idea.source_id))throw nativeError('idea_not_found',404)
   const payload={contentMatchRequestId:idea.match_id,sources:[idea.source],gaps:[],libraryVersions:idea.library_versions,contextDigest:digest(facts)}
   return {...payload,libraryDigest:digest(payload),retrievedAt:new Date(idea.created_at).toISOString()}
 }
