@@ -55,18 +55,19 @@ export async function requestInsight(brandId:string,userId:string,adapters={load
   await prisma.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'INSIGHT_REPORT_REQUESTED',resourceType:'Brand',resourceId:brandId,metadata:{requestId:request.id}}})
  }
 }
-export async function reconcileInsight(brandId:string){
+export async function reconcileInsight(brandId:string,adapters={readJob:async(id:string)=>{const {readGrowthResearchJob}=await import('../growthDataCenter');return readGrowthResearchJob(id)},loadBrand:loadBrandPlanBrand,buildReport:buildGrowthResearchReport,saveReport:saveResearchReport}){
  const {request}=await readInsight(brandId)
  if(!request?.jobId||!['processing','review_required'].includes(request.status))return
- const {readGrowthResearchJob}=await import('../growthDataCenter')
- const job=await readGrowthResearchJob(request.jobId)
+ const job=await adapters.readJob(request.jobId)
  if(['failed','cancelled'].includes(job.status||'')){await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'failed'}:old);return}
- if(['needs_review','evidence_review'].includes(job.status||'')){await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'review_required'}:old);return}
- if(!['completed','initial_ready'].includes(job.status||''))return
- const brand=await loadBrandPlanBrand(brandId)
+ const versions=(job.report_versions||{}) as any
+ const hasReport=!!(job.latest_report_markdown||job.latest_report_content||versions.advanced?.report_content||versions.initial?.report_content)
+ if(job.status==='evidence_review'||job.status==='needs_review'&&!hasReport){await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'review_required'}:old);return}
+ if(!['completed','initial_ready','needs_review'].includes(job.status||''))return
+ const brand=await adapters.loadBrand(brandId)
  if(!brand)return
- const report=await buildGrowthResearchReport(brand,{jobId:request.jobId,maxWaitMs:0})
- await saveResearchReport(brandId,report)
+ const report=await adapters.buildReport(brand,{jobId:request.jobId,maxWaitMs:0})
+ await adapters.saveReport(brandId,report)
  await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'completed',updatedAt:new Date().toISOString()}:old)
 }
 
