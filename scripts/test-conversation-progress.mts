@@ -39,3 +39,11 @@ assert.deepEqual(conversationInsight([bundled]),{status:'missing'})
 assert.deepEqual(conversationInsight([bundled,{capability:'amc.growth_insight',status:'succeeded',result:{status:'available'}}]),{status:'available'})
 assert.equal(conversationInsight([{...bundled,status:'failed'}]),undefined)
 console.log('PASS: bundled current-source progress, explicit missing report, legacy source compatibility')
+const {planningWriteRecovery}=await import('../src/lib/ai-native/conversation-progress.ts')
+const planning={kind:'conversation',topic:'brand_planning',planningScope:{stage:'marketing_plan'}}
+const internal=[{capability:'amc.context',status:'succeeded'},{capability:'my_write_workspace',status:'unknown'}]
+assert.equal(planningWriteRecovery(planning,'waiting','external_result',internal),'draft_write_unresolved')
+for(const calls of [[{capability:'external.publish',status:'unknown'}],[{capability:'my_write_workspace',status:'running'}],[...internal,{capability:'amc.context',status:'unknown'}]])assert.equal(planningWriteRecovery(planning,'waiting','external_result',calls),undefined)
+assert.equal(planningWriteRecovery({...planning,topic:'general'},'waiting','external_result',internal),undefined)
+assert.equal(planningWriteRecovery(planning,'waiting','usage_reconciliation',internal),undefined)
+console.log('PASS: presentation recovery is limited to internal planning writes; uncertain external actions and usage retain their original handling')

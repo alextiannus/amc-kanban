@@ -304,3 +304,7 @@ Output：data 为 `{items:[{id,month,action,plannedTime}],informationToSupplemen
 营销策略和行动清单的最终工作区文档必须包含 `kind: "conversation"`、真实 `brandId`、`content`、当前 `contextDigest`、`planningProgress` 和 `planningDraft`。完整内容只写一份 data，摘要不重复全文。严格复制宿主 artifactContract 的字段、类型、作用域、修订号与路径：全年表 annualCalendar 只能有起始年份1月至12月共12项；跨年的月份只放连续六个月 monthlyPlans；每月 resources 和 measurement 都是字符串，不是数组。行动清单 data 只含 items 和 informationToSupplement；每个 item 只含 id、month、action、plannedTime，不能生成 completed 或负责人。按宿主提供的结构化对象 schema 写入，不手工嵌套转义。
 
 写入若返回字段验证错误，仅修正具体错误后重试。成功写入最终回复后，立即用该次真实 receipt 的 path、revision、digest 提交完成验证；不要再次读取或无新反馈反复重写同一份正文。只有完成验证明确拒绝或用户提供新要求时才重新修订，不能把工作区写入成功当成商家已采用或确认。
+
+### 月度活动与未来里程碑复核
+
+每个规划月份逐类核对团购、新品促销、节庆促销及其他经营活动的意向：适用时提出具体拟议方案；不适用或尚无上新安排时写明原因，不要求每类每月都开展。所有未获商家确认的活动机制、库存、权益和预算保持拟议。未来的策划启动、确认、制作、预热、执行、复盘日期必须写“拟／计划”，不能写成“已启动／已完成”；首月已经过去的日期不能安排为未来任务。正式执行期若早于节日当天，准备期限必须相应前移，策略正文、月度计划与行动清单的日期保持一致。宵夜等消费场景不等于夜间即时配送，沿用已知的下单、自取和配送边界，不编造承诺。

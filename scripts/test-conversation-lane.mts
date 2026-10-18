@@ -25,6 +25,14 @@ const next=async(request:any)=>{
  const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded'),find=(name:string)=>calls.findLast((c:any)=>c.capability===name)
  if(!find('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
  const ctx=find('amc.context').result
+ if(ctx.intent.planningScope?.stage==='execution_checklist'){
+  const attempts=data.calls.filter((c:any)=>c.capability==='my_write_workspace')
+  if(attempts.some((c:any)=>c.status==='succeeded'))return {type:'finish',result:{summary:'Done',artifacts:[attempts.find((c:any)=>c.status==='succeeded').result.reference]},usage}
+  assert(!attempts.some((c:any)=>c.status==='unknown'),'preflight rejection must never become an uncertain write')
+  if(attempts.length)await assert.rejects(()=>conversation.workspace.read(actor,{path:ctx.intent.artifactPath}),/not found/i)
+  const body={kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,planningProgress:{stage:'execution_checklist',summary:'Fixture draft'},planningDraft:{scope:ctx.intent.planningScope,expectedRevision:ctx.planningContext.workspace.revision,title:'清单',content:'清单摘要',data:{items:[{id:'one',month:'2026-10',action:'核对资料',plannedTime:'2026-10-20'}],informationToSupplement:[]}},...(attempts.length?{content:'清单已生成'}:{})}
+  return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify(body)},usage}
+ }
  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,content:'A coherent recommendation based on your current brand.',contextDigest:ctx.contextDigest,planningProgress:{stage:'focus',summary:'Fixture proposal only.'}})},usage}
  return {type:'finish',result:{summary:'Done',artifacts:[find('my_write_workspace').result.reference]},usage}
 }
@@ -49,8 +57,8 @@ try{
  assert.equal((await pool.query('SELECT count(*)::int AS n FROM amc_ai_requests WHERE request_key=$1',[standbyKey])).rows[0].n,0,'standby must not admit or charge a task to an incompatible executor')
  ;(globalThis as any).amcConversationHost=Promise.resolve({pool,taskPool,app:conversation,tools:chat.tools,lane:'conversation',modelRevision:1})
  await standby.close();standby=null
- const make=async(app:any,tools:string[],lane:'default'|'conversation',suffix='')=>{
-  const intent:ConversationIntent={brandId:id,userId:id,goal:'Discuss a campaign',requestKey:id+'-'+lane+suffix,artifactPath:`work/${digest([actor,id+'-'+lane+suffix])}.json`,kind:'conversation',history:[],topic:'brand_planning'}
+ const make=async(app:any,tools:string[],lane:'default'|'conversation',suffix='',planningScope?:any)=>{
+  const intent:ConversationIntent={brandId:id,userId:id,goal:'Discuss a campaign',requestKey:id+'-'+lane+suffix,artifactPath:`work/${digest([actor,id+'-'+lane+suffix])}.json`,kind:'conversation',history:[],topic:'brand_planning',...(planningScope?{planningScope}:{})}
   const row=await admitIntent(pool,actor,intent,lane);assert.equal(row.runtime_lane,lane)
   const duplicate=await admitIntent(pool,actor,intent,lane==='default'?'conversation':'default');assert.equal(duplicate.runtime_lane,lane,'global admission pins the first lane across retries')
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>!t.startsWith('amc.autopilot'))},{actor,callId:intent.requestKey})
@@ -76,11 +84,19 @@ try{
  for(const [lane,task] of [['default',old],['conversation',fresh]] as const){const receipt=await createNativeTask(id,id,{kind:'conversation',topic:'brand_planning',history:[],goal:'Discuss a campaign',requestKey:id+'-'+lane});assert.equal(receipt.id,task.id,'retry remains on its original runtime')}
  await pool.query('UPDATE amc_ai_requests SET task_id=NULL WHERE task_id=$1',[fresh.id])
  assert.equal((await readNativeTaskStatus(id,id,fresh.id)).status,'succeeded','lost conversation index is recovered from public Core binding')
+ const checked=await make(conversation,chat.tools,'conversation','-preflight',{stage:'execution_checklist',mode:'draft',startMonth:'2026-10'})
+ await conversation.runtime.tick()
+ const checkedHistory=await conversation.runtime.get(actor,checked.id,{history:true})
+ assert.equal(checkedHistory.status,'succeeded')
+ const writes=checkedHistory.calls.filter((c:any)=>c.capability==='my_write_workspace')
+ assert.deepEqual(writes.map((c:any)=>c.status),['failed','succeeded'],'invalid format is rejected before execution and corrected in the same task')
+ assert((await conversation.ledger.taskUsage(await conversation.scope(actor),checked.id)).complete)
+ console.log('PASS: invalid planning JSON rejected before any workspace write; original task corrects it and succeeds with settled usage')
  const extra=[]
  for(let i=0;i<21;i++)extra.push(await make(conversation,chat.tools,'conversation','-page-'+i))
  const first=await listNativeTasks(id,id);assert(first.page.nextCursor)
  const second=await listNativeTasks(id,id,first.page.nextCursor!);assert.equal(second.page.nextCursor,null)
- const combined=[...first.page.items,...second.page.items].map(t=>t.id);assert.equal(new Set(combined).size,combined.length);assert.equal(combined.length,23,'both queues paginate without dropped or repeated tasks')
+ const combined=[...first.page.items,...second.page.items].map(t=>t.id);assert.equal(new Set(combined).size,combined.length);assert.equal(combined.length,24,'both queues paginate without dropped or repeated tasks')
  assert.equal((await controlNativeTask(id,id,extra[0].id,{action:'cancel',requestKey:randomUUID()})).task.status,'cancelled')
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
  await assert.rejects(()=>readNativeTaskStatus(id,id,fresh.id))

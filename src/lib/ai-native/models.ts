@@ -37,12 +37,12 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
     },
     tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:MODEL_INVOCATION_ALLOWANCE,price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
     modelFactory:configuration=>{
-     const provider=(full:boolean,scope?:PlanningScope)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
+     const provider=(full:boolean,scope?:PlanningScope,binding?:any)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
       let result;try{
         result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:wire.input,tools:nativeWireTools(wire.tools,full,scope).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}})),toolChoice:'required',maxTokens:nativeOutputTokens(full,model.definition.maxTokensByTask),signal:options.signal||undefined,task:full?'brand_planning':'ai_native',...(full?{timeoutMs:PLANNING_TEXT_TIMEOUT_MS}:{})})
-        return new Response(JSON.stringify({id:result.providerReference,provider_usage:result.rawUsage,usage:result.usage,status:'completed',output:nativeWireCalls(result.message?.tool_calls,result,wire.tools,full).map((t:any)=>({type:'function_call',name:t.function.name,arguments:t.function.arguments}))}))
+        return new Response(JSON.stringify({id:result.providerReference,provider_usage:result.rawUsage,usage:result.usage,status:'completed',output:nativeWireCalls(result.message?.tool_calls,result,wire.tools,full,binding).map((t:any)=>({type:'function_call',name:t.function.name,arguments:t.function.arguments}))}))
       }finally{
         await recordExecution({source:'mm',executor:'kanban',task:'ai_native',version,modelId:model.id,connectionId:model.connectionId,targetModel:model.definition.modelName,responseModel:result?.responseModel||undefined,status:result?'success':'failed',latencyMs:Date.now()-started})
       }
@@ -55,7 +55,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
        const rows=await prisma.$queryRawUnsafe(`SELECT intent FROM amc_iaic.amc_ai_requests WHERE task_id=$1::uuid AND intent->>'kind'='conversation' AND intent->>'topic'='brand_planning'`,taskId) as Array<{intent:any}>
        intent=rows[0]?.intent;full=!!fullPlanningScope(intent?.planningScope)
       }
-      return (full?provider(true,intent.planningScope):regular).next(prepareConversationCompletion(request,intent))
+      return (full?provider(true,intent.planningScope,intent):regular).next(prepareConversationCompletion(request,intent))
      }})
     },
   }

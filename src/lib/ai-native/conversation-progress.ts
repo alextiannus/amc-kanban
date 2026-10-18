@@ -29,3 +29,9 @@ export function conversationInsight(calls:readonly {capability:string;status:str
     if(call.capability==='amc.context'&&(call.result as any)?.planningContext?.insight)return (call.result as any).planningContext.insight as {status?:string;reportVersionId?:string;partial?:boolean;generatedAt?:unknown}
   }
 }
+
+/** Presentation-only recovery for internal draft writes; never reconcile a call or its usage. */
+export function planningWriteRecovery(intent:any,status:string,reason:string|undefined,calls:readonly {capability:string;status:string}[]){
+ const reads=['amc.context','my_read_workspace','assistant.skills.read','amc.marketing_workspace','amc.growth_insight','amc.planning_budget']
+ return intent?.kind==='conversation'&&intent.topic==='brand_planning'&&['marketing_plan','execution_checklist'].includes(intent.planningScope?.stage)&&status==='waiting'&&reason==='external_result'&&calls.some(c=>c.capability==='my_write_workspace'&&c.status==='unknown')&&calls.every(c=>['succeeded','failed','unknown'].includes(c.status)&&(c.capability==='my_write_workspace'||reads.includes(c.capability))&&(c.status!=='unknown'||c.capability==='my_write_workspace'))?'draft_write_unresolved':undefined
+}

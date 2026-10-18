@@ -150,13 +150,17 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
     defineCapability({name:'amc.operations',description:'Read current accounts, recent draft samples and all draft status counts. This is not revenue or a claim of external delivery.',input:empty,output:{type:'object'},effect:'read',authorize:async (actor:NativeActor)=>await authorize(actor)&&await canReadOperations(actor),implementation:{kind:'function',execute:(_input,{actor})=>brandOperations(actor)},revalidate:(_input,_previous,{actor})=>brandOperations(actor)}),
   ]
   app=await openApplication({pool,...(options.taskPool?{taskPool:options.taskPool}:{}),...models,...(models.modelFactory?{modelFactory:(configuration:Parameters<NonNullable<typeof models.modelFactory>>[0])=>{const provider=models.modelFactory!(configuration);return {next:(request:Parameters<typeof provider.next>[0])=>provider.next(prepareConversationCompletion(request))}}}:{}),skillRoot:options.skillRoot||path.join(process.cwd(),'skills'),version,authorize,
+    workspacePreflight:async(input:{path:string;content:string},context:{actor:NativeActor;taskId?:string})=>{
+      if(!context.taskId)return {valid:true}
+      const intent=await getIntent(context.actor,context.taskId)
+      if(intent.kind!=='conversation'||intent.topic!=='brand_planning'||!intent.planningScope||!['marketing_plan','execution_checklist'].includes(intent.planningScope.stage)||input.path!==intent.artifactPath)return {valid:true}
+      try{conversationFrom(input.content,intent);return {valid:true}}
+      catch(error){return {valid:false,feedback:'Correct the final planning JSON before writing: '+(error instanceof Error?error.message:'invalid')+'. Root requires kind=conversation, brandId, content (short reply summary), contextDigest, planningProgress and planningDraft. annualCalendar exactly 12 start-year months; monthlyPlans six rolling months; resources and measurement are strings. Preserve complete draft data.'}}
+    },
     workspaceWrite:async(input:{path?:string;expectedRevision:number;content:string},context:{actor:NativeActor;taskId?:string},write:()=>Promise<{reference:{path:string;revision:number;digest:string}}>)=>{
       const {actor,taskId}=context
       if(!taskId)return write()
       const intent=await getIntent(actor,taskId)
-      if(intent.kind==='conversation'&&intent.topic==='brand_planning'&&intent.planningScope&&['marketing_plan','execution_checklist'].includes(intent.planningScope.stage)&&input.path===intent.artifactPath){
-        try{conversationFrom(input.content,intent)}catch(error){throw nativeError('planning_artifact_invalid: '+(error instanceof Error?error.message:'invalid')+'. Use kind=conversation, the exact artifactContract and scope; annualCalendar exactly 12 start-year months, monthlyPlans exactly six rolling months, measurement and resources strings; do not invent fields. Correct the draft before writing.',400)}
-      }
       if(intent.kind!=='creative_adaptation')return write()
       const quality=await readCreativeQualityReview({id:actor.subjectId,type:'HUMAN'},intent.brandId,taskId)
       if(!quality)return write()

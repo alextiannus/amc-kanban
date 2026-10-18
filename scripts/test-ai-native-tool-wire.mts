@@ -34,3 +34,13 @@ assert.deepEqual(nativeWireCalls([objectWrite],result,workspaceTools,true),[norm
 console.warn=()=>{}
 try{assert.throws(()=>nativeWireCall(objectWrite,result,workspaceTools),(e:any)=>e.code==='INVALID_MODEL_ACTION');assert.throws(()=>nativeWireCall(write('{"still":"invalid",}'),result,workspaceTools,true),(e:any)=>e.code==='INVALID_MODEL_ACTION')}finally{console.warn=warn}
 console.log('PASS: trusted planning object transport serializes exact JSON without nested model escaping; other flows and malformed strings retain strict validation')
+
+const bound:any={kind:'conversation',topic:'brand_planning',brandId:'case-brand',artifactPath:'work/test.json',planningScope:{stage:'marketing_plan',mode:'draft',startMonth:'2026-10'}}
+const body={contextDigest:'a'.repeat(64),planningDraft:{content:'已生成的摘要',data:{unchanged:'原始业务数据'}}}
+const missing={function:{name:'cap_7',arguments:JSON.stringify({path:bound.artifactPath,mediaType:'application/json',expectedRevision:0,content:body})}}
+const envelope=JSON.parse(JSON.parse(nativeWireCall(missing,result,workspaceTools,true,bound).function.arguments).content)
+assert.equal(envelope.kind,'conversation');assert.equal(envelope.brandId,'case-brand');assert.equal(envelope.content,body.planningDraft.content);assert.deepEqual(envelope.planningDraft,body.planningDraft)
+const wrong=structuredClone(missing);wrong.function.arguments=JSON.stringify({...JSON.parse(wrong.function.arguments),content:{...body,brandId:'other-brand',kind:'wrong',content:'existing'}})
+const retained=JSON.parse(JSON.parse(nativeWireCall(wrong,result,workspaceTools,true,bound).function.arguments).content)
+assert.equal(retained.brandId,'other-brand');assert.equal(retained.kind,'wrong');assert.equal(retained.content,'existing','do not overwrite wrong supplied values; normal verifier must reject them')
+console.log('PASS: fill only missing trusted envelope metadata; preserve generated data, source digest and supplied mismatches for rejection')

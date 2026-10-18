@@ -1,3 +1,4 @@
+import {preflightResult} from '@immedi/iaic-core/capabilities/preflight.js';
 // Bounded application capacity for the canonical Skill plus report and three-source positioning.
 export const AMC_CONTEXT_MAX_BYTES=320000;
 export function createAmcContextAssembler(options){return new ContextAssembler({...options,maxBytes:AMC_CONTEXT_MAX_BYTES,overflow:'omit-old-results'});}
@@ -12,7 +13,7 @@ import {
 } from '@immedi/iaic-core';
 
 // This is application-owned composition. Each imported Core module remains independently replaceable.
-export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles,resolveSecret,modelFactory,userModels=null,routing=null,tokenPolicies,authorize,verifyOutcome,version,runtimeLimits={},taskCursorKey=null,toolCallLimits,enablePlans=false,scheduling=null,eventWork=null,executionPolicy=null,mandates=null,extraCapabilities=[],releaseBinding=null,hostContext=null,workspaceWrite=null}){
+export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles,resolveSecret,modelFactory,userModels=null,routing=null,tokenPolicies,authorize,verifyOutcome,version,runtimeLimits={},taskCursorKey=null,toolCallLimits,enablePlans=false,scheduling=null,eventWork=null,executionPolicy=null,mandates=null,extraCapabilities=[],releaseBinding=null,hostContext=null,workspaceWrite=null,workspacePreflight=null}){
  if(releaseBinding!==null&&(!releaseBinding||releaseBinding.implementationRevision!==version))throw new Error('Release binding must match the explicit application version');
  if(!Array.isArray(extraCapabilities))throw new Error('extraCapabilities must be an array of host-defined Capabilities');
  if(mandates!==null&&(typeof mandates?.authorizeGrant!=='function'||typeof mandates?.sourceFor!=='function'))throw new Error('Mandates require trusted authorizeGrant and sourceFor ports');
@@ -21,6 +22,7 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  if(typeof enablePlans!=='boolean')throw new Error('enablePlans must be a boolean');
  if(!runtimeLimits||Object.getPrototypeOf(runtimeLimits)!==Object.prototype||Object.entries(runtimeLimits).some(([k,v])=>!['maxTurns','maxCalls','maxBatchCalls','modelTimeoutMs','taskTimeoutMs'].includes(k)||!Number.isSafeInteger(v)||v<1))throw new Error('Supply positive integer Runtime limits only');
  if(typeof authorize!=='function'||typeof verifyOutcome!=='function')throw new Error('Supply current application authorization and independent outcome verification');
+ if(workspacePreflight!==null&&typeof workspacePreflight!=='function')throw new Error('Workspace preflight must be a host function');
  if(workspaceWrite!==null&&typeof workspaceWrite!=='function')throw new Error('Workspace write guard must be a host function');
  const check=async actor=>{if(await authorize(actor)!==true)throw Object.assign(new Error('Application access denied'),{statusCode:403});return true;};
  const scope=async actor=>{await check(actor);return {applicationId:actor.scopeId,assistantId:job.id,subjectId:JSON.stringify([actor.subjectId,job.id])};};
@@ -46,7 +48,7 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  const deferredStore=scheduling?new DeferredTaskStore({pool,claimScope:{assistantId:job.id}}):null;if(deferredStore)await deferredStore.initialize();
  const deferred=scheduling?createAgentDeferredTasks({name:'agent.work',store:deferredStore,resolveScope:scope,validateTask:assistantMandates?(actor,input)=>assistantMandates.checkTask(actor,{capability:'agent.work',input}):null,restoreActor:async original=>{const actor=await scheduling.restoreActor(original),current=await scope(actor);if(['applicationId','assistantId','subjectId'].some(key=>current[key]!==original[key]))throw Object.assign(new Error('Restored schedule identity does not match its owner'),{statusCode:403});return actor;},dispatcher:{get capabilities(){return dispatcher.capabilities;},invoke:(...args)=>dispatcher.invoke(...args)},taskStore:tasks,sessions,isEnabled:scheduling.isEnabled,reservedPrefixes:['agent-call:',...(eventWork?[EVENT_SUBSCRIPTION_TASK_PREFIX]:[])]}):null;
  const eventTasks=eventWork?new EventTaskSubscriptions({subscriptions:eventSubscriptions,deferred,buildTask:eventWork.buildTask}):null;
- const capabilities=createAgentTaskCapabilities({name:'agent.work',description:job.purpose,memory,workspace,skillCatalog:skills,knowledge,sessions,events,mandates:assistantMandates,extraCapabilities,authorize:check,verifyOutcome,toolCallLimits,plans,deferred}).map(cap=>defineCapability({...cap,...(workspaceWrite&&cap.name==='my_write_workspace'&&cap.implementation.kind==='function'?{implementation:{kind:'function',execute:(input,context)=>workspaceWrite(input,context,()=>cap.implementation.execute(input,context))}}:{}),authorize:async(actor,input)=>{
+ const capabilities=createAgentTaskCapabilities({name:'agent.work',description:job.purpose,memory,workspace,skillCatalog:skills,knowledge,sessions,events,mandates:assistantMandates,extraCapabilities,authorize:check,verifyOutcome,toolCallLimits,plans,deferred}).map(cap=>defineCapability({...cap,...(workspacePreflight&&cap.name==='my_write_workspace'?{preflight:async(input,context)=>{if(cap.preflight){const prior=preflightResult(await cap.preflight(input,context));if(!prior.valid)return prior;}return workspacePreflight(input,context);}}:{}),...(workspaceWrite&&cap.name==='my_write_workspace'&&cap.implementation.kind==='function'?{implementation:{kind:'function',execute:(input,context)=>workspaceWrite(input,context,()=>cap.implementation.execute(input,context))}}:{}),authorize:async(actor,input)=>{
   await check(actor);const tools=job.configuration.tools;
   if(cap.implementation.kind==='agent'&&(!input.allowedTools||input.allowedTools.some(name=>!tools.includes(name))))return false;
   if(cap.implementation.kind==='function'&&!tools.includes(cap.name))return false;
