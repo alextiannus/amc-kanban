@@ -308,3 +308,50 @@ Output：data 为 `{items:[{id,month,action,plannedTime}],informationToSupplemen
 ### 月度活动与未来里程碑复核
 
 每个规划月份逐类核对团购、新品促销、节庆促销及其他经营活动的意向：适用时提出具体拟议方案；不适用或尚无上新安排时写明原因，不要求每类每月都开展。所有未获商家确认的活动机制、库存、权益和预算保持拟议。未来的策划启动、确认、制作、预热、执行、复盘日期必须写“拟／计划”，不能写成“已启动／已完成”；首月已经过去的日期不能安排为未来任务。正式执行期若早于节日当天，准备期限必须相应前移，策略正文、月度计划与行动清单的日期保持一致。宵夜等消费场景不等于夜间即时配送，沿用已知的下单、自取和配送边界，不编造承诺。
+
+### 工作区写入参数必须区分两层
+
+最终文档对象放在工具的 content 属性，外层同时包含 path、mediaType、expectedRevision。以下是可解析JSON的格式示例；所有占位字符串、示例月份和日期必须替换为当前受信任任务值，真实data必须列全本阶段要求，不能只复制示例的一项任务：
+
+```json
+{
+  "path": "复制 amc.context.intent.artifactPath",
+  "mediaType": "application/json",
+  "expectedRevision": 0,
+  "content": {
+    "kind": "conversation",
+    "brandId": "复制实际 brandId",
+    "content": "本次行动清单草案摘要",
+    "contextDigest": "复制当前64位 contextDigest",
+    "planningProgress": {
+      "stage": "execution_checklist",
+      "summary": "本次草案待审阅"
+    },
+    "planningDraft": {
+      "scope": {
+        "stage": "execution_checklist",
+        "mode": "draft",
+        "startMonth": "2026-10"
+      },
+      "expectedRevision": "复制当前业务工作区64位 revision",
+      "title": "行动计划",
+      "content": "简短摘要；真实结果必须列全连续六个月所有适用动作",
+      "data": {
+        "items": [
+          {
+            "id": "202610_activity_intent",
+            "month": "2026-10",
+            "action": "与商家核对本月团购、新品和节庆活动意向",
+            "plannedTime": "2026-10-20"
+          }
+        ],
+        "informationToSupplement": [
+          "活动机制及备货能力待商家核对"
+        ]
+      }
+    }
+  }
+}
+```
+
+path复制受信任任务路径；新文件工具expectedRevision为整数0，更新时复制最新写入回执的整数revision。它与planningDraft.expectedRevision的64位业务工作区哈希是两回事。content为完整对象，不是手工转义的JSON字符串。不要只提交content而省略外层参数。成功写入后，使用真实写入回执提交完成验证。

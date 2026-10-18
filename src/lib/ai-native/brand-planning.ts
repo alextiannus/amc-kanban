@@ -53,6 +53,26 @@ export function projectSavedAnnualPlan(value:unknown){
   return {report:{...record(base.report),quarterlyPlans:projected.map(item=>item.report)},partial:base.partial||quarters.length>4||projected.some(item=>item.partial)}
 }
 
+/** Preserve full reviewed documents and task IDs; equal per-key budgets cut later months. */
+export function projectSavedMarketingPlan(value:any){
+ if(!value)return {report:null,partial:false}
+ const content=typeof value.content==='string'?value.content:''
+ const metadata=Object.fromEntries(['title','status','planningStartMonth','updatedAt','inputVersions','structuredDataStale'].filter(k=>value[k]!==undefined).map(k=>[k,value[k]]))
+ const full=content.length<=24000?content:content.slice(0,24000)+' [excerpt]'
+ if(value.structuredDataStale===true)return {report:{...metadata,content:full,sourceRule:'Use this complete edited content. Superseded generated arrays are intentionally omitted.'},partial:content.length>24000}
+ const structured=Object.fromEntries(['strategyDirection','brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives','informationToSupplement'].filter(k=>value[k]!==undefined).map(k=>[k,value[k]]))
+ if(JSON.stringify(structured).length>40000)return {report:{...metadata,content:full,sourceRule:'Use the saved document; oversized historical structured fields are omitted.'},partial:true}
+ return {report:{...metadata,...structured,content:full},partial:content.length>24000}
+}
+export function projectSavedExecutionChecklist(value:any){
+ if(!value)return {report:null,partial:false}
+ const all=Array.isArray(value.items)?value.items:[],chosen=all.slice(0,120)
+ let partial=all.length>120
+ let items=chosen.map((v:any)=>({id:v.id,month:v.month,action:v.action,plannedTime:v.plannedTime,completed:v.completed===true}))
+ if(JSON.stringify(items).length>60000){partial=true;items=items.map((v:any)=>({...v,action:typeof v.action==='string'&&v.action.length>300?v.action.slice(0,300)+' [excerpt]':v.action}))}
+ return {report:{items,informationToSupplement:value.informationToSupplement||[],...(partial?{sourcePartial:true,sourceRule:'Reuse visible IDs; unseen old tasks and completion records must remain preserved.'}:{})},partial}
+}
+
 /** Shared persisted planning data; caller authorizes, brand identity is never model supplied. */
 export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:string;startMonth:string}){
   const brandId=brandFor(actor)
@@ -62,7 +82,7 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   // Per-section budgets keep long interviews from hiding existing quarterly plans.
   const attachments=await prisma.mediaAsset.findMany({where:{brandId,id:{in:(record(record(workspace.marketingSolution).coCreation).interview?.attachmentIds||[]).slice(0,20)}},select:{id:true,filename:true,aiCaption:true,imageAnalysis:true,textDetection:true,technicalMetadata:true}})
   sections.coCreation=sections.coCreation?{...sections.coCreation,attachmentEvidence:attachments}:null
-  if(scope?.stage==='marketing_plan'){
+  if(scope?.stage==='marketing_plan'||scope?.stage==='execution_checklist'){
   const {direction,focus,selling_points,...activeCoCreation}=sections.coCreation||{}
   sections.coCreation=withoutStrategyQuotas(activeCoCreation)
   sections.annualPlan=withoutStrategyQuotas(sections.annualPlan)
@@ -73,7 +93,7 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   const document=(workspace.marketingSolution as any).coCreation?.interview
   ;(sections as any).positioningInputs={brandInformation:workspace.brandInformation,latestInterview:workspace.merchantInterview,latestSupplement:interviewInput(document),currentPositioning:document?{content:document.content,status:document.status,source:'previous positioning; derived, not a new interview'}:null,brandClaim:workspace.brandClaim,attachments}
  }
- const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,key==='annualPlan'?projectSavedAnnualPlan(value):key==='positioningInputs'?projectPositioningInputs(value):key==='marketingInputs'?projectMarketingInputs(value):key==='executionChecklist'?projectPlanningReport(value,30000,120):key==='marketingPlan'?projectPlanningReport(value,18000,12):projectPlanningReport(value,key==='coCreation'?14000:5000)]))
+ const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,key==='annualPlan'?projectSavedAnnualPlan(value):key==='positioningInputs'?projectPositioningInputs(value):key==='marketingInputs'?projectMarketingInputs(value):key==='executionChecklist'?projectSavedExecutionChecklist(value):key==='marketingPlan'?projectSavedMarketingPlan(value):projectPlanningReport(value,key==='coCreation'?14000:5000)]))
   return {brandId,status:'available' as const,confirmationState:planningReviewState(workspace.marketingSolution),approval:'not_asserted',revision:workspace.marketingSolutionRevision,retrievedAt:new Date().toISOString(),partial:Object.values(projected).some(v=>v.partial),workspace:Object.fromEntries(Object.entries(projected).map(([key,value])=>[key,value.report]))}
 }
 

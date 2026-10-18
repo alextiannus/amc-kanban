@@ -92,6 +92,8 @@ try{
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
     assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
     if(index===5||index===6)assert.equal(insightReads,5,'a new task and all revalidations reuse session context')
+    if(index===8)assert.equal(insightReads,7,'direction scope has its own current source bundle')
+    if(index===9)assert.equal(insightReads,8,'full strategy scope cannot reuse the narrow direction context')
     const before=modelCalls
     await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal(modelCalls,before)
@@ -99,7 +101,7 @@ try{
     await assert.rejects(()=>app.runtime.get(actorFor(id,'other-user'),receipt.id))
     assert.throws(()=>conversationFrom(artifact.content,{...intent,brandId:'other-brand'}))
   }
-  assert.equal(insightReads,6,'four legacy turns plus one shared session load and one revision invalidation')
+  assert.equal(insightReads,8,'four legacy turns, one shared session load, one revision invalidation and two distinct planning scopes')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
   await prisma.brandPlanInterview.create({data:{brandId:id,rawNotes:'访谈原始记录',answers:[{question:'目标',answer:'家庭聚餐'}]}})
@@ -113,17 +115,17 @@ try{
   const originalFetch=globalThis.fetch
   const paths:string[]=[]
   try{
-    globalThis.fetch=async(input:any)=>{const url=new URL(String(input));paths.push(url.pathname);return Response.json(url.pathname.endsWith('/versions')?{items:[{tier:'initial',report_version_id:42,created_at:'2026-10-01',result:{report_template_version:'v3'}}]}:{brand:'Planning fixture',insights:['Known fact']})}
+    globalThis.fetch=async(input:any)=>{const url=new URL(String(input));paths.push(url.pathname);return Response.json(url.pathname.endsWith('/versions')?{items:[{tier:'initial',report_version_id:42,created_at:'2026-10-01',result:{report_template_version:'v3'}}]}:{report:{report_version_id:42,brand_key:'fixture-growth',tier:'initial',created_at:'2026-10-01',report_content:'# Known fact\nCurrent human report'}})}
     const report=await readPlanningInsight(actor)
-    assert.equal(report.status,'available');assert.deepEqual(paths,['/v1/admin/reports/fixture-growth/versions','/v1/admin/report-versions/42/download-json'])
+    assert.equal(report.status,'available');assert.deepEqual(paths,['/v1/admin/reports/fixture-growth/versions','/v1/admin/report-versions/42'])
     globalThis.fetch=async()=>Response.json({items:[]})
-    assert.equal((await readPlanningInsight(actor)).status,'missing')
+    const retained=await readPlanningInsight(actor);assert.equal(retained.status,'cached');assert.equal(retained.liveStatus,'missing','an empty remote listing cannot erase a saved human report')
     globalThis.fetch=async()=>{throw Error('provider secret')}
-    assert.equal((await readPlanningInsight(actor)).status,'unavailable')
-    await prisma.brandGrowthResearchSnapshot.create({data:{brandId:id,source:'amc-growth',sourceVersion:'2026-10-01',report:{growthBrandKey:'research-key',reportVersionId:'41',generatedAt:'2026-10-01',structuredReport:{growth_recommendations:['Saved insight']}}}})
+    const offline=await readPlanningInsight(actor);assert.equal(offline.status,'cached');assert.equal(offline.liveStatus,'unavailable')
+    await prisma.brandGrowthResearchSnapshot.create({data:{brandId:id,source:'amc-growth',sourceVersion:'2026-10-01',report:{growthBrandKey:'research-key',reportVersionId:'41',generatedAt:'2026-10-01',reportMarkdown:'# Saved insight\nExisting report body'}}})
     const cached=await readPlanningInsight(actor);assert.equal(cached.status,'cached');assert.equal((cached as any).liveStatus,'unavailable')
     paths.length=0
-    globalThis.fetch=async(input:any)=>{const url=new URL(String(input));paths.push(url.pathname);return Response.json(url.pathname.endsWith('/research-key/versions')?{items:[{tier:'initial',report_version_id:43,created_at:'2026-10-02',result:{report_template_version:'v3'}}]}:url.pathname.endsWith('/versions')?{items:[]}:{generated_at:'2026-10-02',insights:['Fresh research-key insight']})}
+    globalThis.fetch=async(input:any)=>{const url=new URL(String(input));paths.push(url.pathname);return Response.json(url.pathname.endsWith('/research-key/versions')?{items:[{tier:'initial',report_version_id:43,created_at:'2026-10-02',result:{report_template_version:'v3'}}]}:url.pathname.endsWith('/versions')?{items:[]}:{report:{report_version_id:43,brand_key:'research-key',tier:'initial',created_at:'2026-10-02',report_content:'# Fresh research-key insight\nCurrent body'}})}
     assert.equal((await readPlanningInsight(actor)).status,'available');assert(paths.includes('/v1/admin/reports/research-key/versions'))
     await prisma.brandGrowthResearchSnapshot.deleteMany({where:{brandId:id}})
     globalThis.fetch=async()=>Response.json({items:[]})

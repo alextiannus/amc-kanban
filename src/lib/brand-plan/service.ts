@@ -4152,6 +4152,6 @@ export async function getBrandMarketingInputs(brandId:string,startMonth:string){
   marketCalendar:{...calendar.marketCalendar,years,retrievedAt:new Date().toISOString()},
   platformPlanning:{roleSource:'amc-marketing-expert/SKILL.md',knownBrandPlatforms:[...new Set(brand.accounts.map((account:{platformId:string})=>account.platformId))],cadenceRule:'按每个平台默认定位安排内容类型、渠道分工、预热/活动/复盘节奏；不规定每个平台具体发布次数，不读取订阅配额。'},
   storeActivities:calendar.storeActivities,
-  usageRule:'以已确认品牌定位为基础，结合真实当地节假日、主理人策略输入及平台默认定位。缺失或不可读必须注明，不虚构节日日期或预算。Subscription 不是当前策略输入，不使用历史套餐、配额和具体发布次数约束策略。主理人输入是策略意愿，不是支付或发布授权。'
+  usageRule:'以现有可用品牌定位为基础，结合真实当地节假日、主理人策略输入及平台默认定位。缺失或不可读必须注明，不虚构节日日期或预算。Subscription 不是当前策略输入，不使用历史套餐、配额和具体发布次数约束策略。主理人输入是策略意愿，不是支付或发布授权。'
  }
 }
