@@ -70,7 +70,7 @@ export function projectSavedExecutionChecklist(value:any){
  let partial=all.length>120
  let items=chosen.map((v:any)=>({id:v.id,month:v.month,action:v.action,plannedTime:v.plannedTime,completed:v.completed===true}))
  if(JSON.stringify(items).length>60000){partial=true;items=items.map((v:any)=>({...v,action:typeof v.action==='string'&&v.action.length>300?v.action.slice(0,300)+' [excerpt]':v.action}))}
- return {report:{items,informationToSupplement:value.informationToSupplement||[],...(partial?{sourcePartial:true,sourceRule:'Reuse visible IDs; unseen old tasks and completion records must remain preserved.'}:{})},partial}
+ return {report:{items,preparationRule:'One-time preparation task id amc-follow-review-setup remains visible until human completion; never regenerate a completed setup. Monthly production includes asset preparation, retouching/editing and review; no separate duplicate shooting/review tasks.',paidExposureRule:'Include paid ads or influencer visits only with traceable merchant confirmation of both the arrangement and its budget. Otherwise keep them as optional strategy proposals, never conditional To Do placeholders.',informationToSupplement:value.informationToSupplement||[],...(partial?{sourcePartial:true,sourceRule:'Reuse visible IDs; unseen old tasks and completion records must remain preserved.'}:{})},partial}
 }
 
 /** Shared persisted planning data; caller authorizes, brand identity is never model supplied. */
@@ -102,7 +102,7 @@ export function projectMarketingInputs(value:any){
  if(!value)return {report:null,partial:false}
  const events=Array.isArray(value.marketCalendar?.events)?value.marketCalendar.events:[]
  const compactEvents=events.slice(0,80).map((event:any)=>Object.fromEntries(['id','date','name','type','market','source','source_url','sourceUrl','status','verificationStatus','campaign_fit'].filter(key=>event[key]!==undefined).map(key=>[key,event[key]])))
- return {report:{...value,marketCalendar:{...value.marketCalendar,events:compactEvents}},partial:events.length>80}
+ return {report:{...value,executionScope:{source:'Lark SOP代运营动作要求和责任分配 + merchant-defined AMC scope',monthlyWork:['确定内容创意','组织内容制作（素材准备、精修剪辑，含审核）','安排内容发布','复盘Monthly Insight Report并确定下月调整'],measurement:'Report-backed online reviews and order conversions; never invent unavailable metrics.',paidExposure:'Strategy may propose influencer visits and paid ads. Execution tasks require traceable merchant confirmation of BOTH the arrangement and its budget in the actual saved inputs; no approval is inferred from this policy.',preparation:{id:'amc-follow-review-setup',action:'配置店内社媒关注与Google评论引导',rule:'Subscription preparation, one time; carry until human completion. Existing links do not prove completion.'}},marketCalendar:{...value.marketCalendar,events:compactEvents}},partial:events.length>80}
 }
 
 export function withoutStrategyQuotas(value:any):any{

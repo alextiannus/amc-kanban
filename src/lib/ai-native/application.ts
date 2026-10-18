@@ -4,7 +4,7 @@ import {cachedConversationContext,conversationSourceRevision} from './conversati
 import {prepareConversationCompletion} from './conversation-completion'
 import {conversationKnowledge} from './conversation-progress'
 import {UI_PAGES} from './ui-navigation'
-import {planningDraftContract,planningQuarterLabel} from './planning-workspace-contract'
+import {assertAmcExecutionChecklist,planningDraftContract,planningQuarterLabel} from './planning-workspace-contract'
 import {checkPlanningBudget,type PlanningBudget} from './planning-budget'
 import {fetchCreativeSourceEvidence} from '../promotion-strategy/clients'
 
@@ -154,8 +154,8 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
       if(!context.taskId)return {valid:true}
       const intent=await getIntent(context.actor,context.taskId)
       if(intent.kind!=='conversation'||intent.topic!=='brand_planning'||!intent.planningScope||!['marketing_plan','execution_checklist'].includes(intent.planningScope.stage)||input.path!==intent.artifactPath)return {valid:true}
-      try{conversationFrom(input.content,intent);return {valid:true}}
-      catch(error){return {valid:false,feedback:'Correct the final planning JSON before writing: '+(error instanceof Error?error.message:'invalid')+'. Root requires kind=conversation, brandId, content (short reply summary), contextDigest, planningProgress and planningDraft. annualCalendar exactly twelve rolling months beginning at scope.startMonth; monthlyPlans six rolling months with concise preparation for later campaigns; resources and measurement are strings. Execution checklist contains operation-level work only and informationToSupplement is empty. Preserve complete draft data.'}}
+      try{const report=conversationFrom(input.content,intent);if(intent.planningScope.stage==='execution_checklist'&&report.planningDraft)assertAmcExecutionChecklist(report.planningDraft.data);return {valid:true}}
+      catch(error){return {valid:false,feedback:'Correct the final planning JSON before writing: '+(error instanceof Error?error.message:'invalid')+'. Root requires kind=conversation, brandId, content (short reply summary), contextDigest, planningProgress and planningDraft. annualCalendar exactly twelve rolling months beginning at scope.startMonth; monthlyPlans six rolling months with concise preparation for later campaigns; resources and measurement are strings. Execution checklist contains AMC social marketing work only: ideas, organized production, publishing, Monthly Insight Report review and one-time follow/Google review setup. No customer feedback collection, staff training, installation or fulfilment. Paid ads/visits require actual merchant-confirmed arrangements and budgets. informationToSupplement is empty. Preserve complete draft data.'}}
     },
     workspaceWrite:async(input:{path?:string;expectedRevision:number;content:string},context:{actor:NativeActor;taskId?:string},write:()=>Promise<{reference:{path:string;revision:number;digest:string}}>)=>{
       const {actor,taskId}=context

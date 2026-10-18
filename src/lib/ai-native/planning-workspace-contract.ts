@@ -37,7 +37,7 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
  const scope=draft.scope,now=new Date().toISOString(),next={...current}
  const saved={...(scope.stage==='interview'?{attachmentIds:current.coCreation?.interview?.attachmentIds||[]}:{}),title:scope.stage==='interview'?'品牌定位':draft.title,content:draft.content,taskId,updatedAt:now,status:'draft'}
  if(scope.stage==='execution_checklist'){
-  next.executionChecklist=mergeExecutionChecklist(current.executionChecklist,draft.data,now)
+  next.executionChecklist=mergeExecutionChecklist(current.executionChecklist,draft.data,now,scope.startMonth)
   next.coCreation={...current.coCreation,execution_checklist:saved};return next
  }
  if(scope.stage==='marketing_plan'){
@@ -68,7 +68,7 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
 }
 export function planningDraftContract(scope:PlanningScope){
  if(scope.mode!=='draft')return {}
- const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'代运营动作，例如制定圣诞活动方案或安排月度素材拍摄；不拆资料问题或活动方案细节',plannedTime:'计划日期或时段'}],informationToSupplement:[]}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
+ const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'确定本月内容创意／组织内容制作（素材准备、精修剪辑）／安排发布／复盘Monthly Insight Report；曝光执行仅商家确认安排及预算后列入',plannedTime:'计划日期或时段'}],informationToSupplement:[]}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
  return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段草案标题',content:scope.stage==='marketing_plan'?'草案摘要、输入来源和关键待确认项；完整方案放入 data，宿主据 data 生成完整可编辑正文，不要重复输出整篇方案':scope.stage==='execution_checklist'?'简短说明清单范围和来源；所有行动完整放入 data.items，不重复整份清单':'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
 }
 
@@ -81,7 +81,7 @@ export function marketingPlanShape(start:string){return {
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
  monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['实际渠道'],content:['内容安排'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
- inStoreActivities:['店内产品、陈列、话术、转化、会员与复购配合'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
+ inStoreActivities:['订阅准备阶段一次性配置店内社媒关注与Google评论引导，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
 export function validateMarketingPlan(d:any,start:string){
  const str=(x:any)=>typeof x==='string'&&!!x.trim()&&x.length<=4000
  const list=(x:any)=>Array.isArray(x)&&x.length>0&&x.length<=24&&x.every(str)
@@ -126,13 +126,19 @@ export function marketingPlanMarkdown(d:any,english=false){
 }
 
 /** Generated tasks cannot declare completion. Existing execution records are human-owned. */
+export const FOLLOW_REVIEW_SETUP_ID='amc-follow-review-setup'
+/** Generated work stays within AMC's contracted marketing scope. Historical records remain readable. */
+export function assertAmcExecutionAction(action:string){
+ if(/员工培训|物料铺设|备货|订单承接|配送履约|收银核销|商家回访|回访商家|门店陈列|店内.{0,6}(陈列|铺设)|收集.{0,16}(会员|复购|顾客反馈|客户反馈)|staff training|order fulfil|order fulfill|stock preparation|merchant visit|collect.{0,24}(repeat purchases|customer feedback)/i.test(action))fail('execution_task_outside_amc_scope')
+}
+export function assertAmcExecutionChecklist(data:any){validateExecutionChecklist(data);for(const item of data.items)assertAmcExecutionAction(item.action)}
 export function validateExecutionChecklist(data:any){
  const text=(v:any,max:number)=>typeof v==='string'&&!!v.trim()&&v.length<=max
  if(!data||!Array.isArray(data.items)||data.items.length>120||!Array.isArray(data.informationToSupplement)||data.informationToSupplement.length>24||data.informationToSupplement.some((v:any)=>!text(v,2000))||Object.keys(data).some(k=>!['items','informationToSupplement'].includes(k)))return fail('invalid_execution_checklist')
  const ids=new Set<string>()
  for(const item of data.items){if(!item||!text(item.id,100)||!/^[a-zA-Z0-9_-]+$/.test(item.id)||ids.has(item.id)||!/^20\d{2}-(0[1-9]|1[0-2])$/.test(item.month||'')||!text(item.action,2000)||!text(item.plannedTime,200)||Object.keys(item).some(k=>!['id','month','action','plannedTime'].includes(k)))return fail('invalid_execution_task');ids.add(item.id)}
 }
-export function mergeExecutionChecklist(previous:any,data:any,now:string){
+export function mergeExecutionChecklist(previous:any,data:any,now:string,startMonth?:string){
  validateExecutionChecklist(data)
  const active=Array.isArray(previous?.items)?previous.items:[],history=Array.isArray(previous?.retiredItems)?previous.retiredItems:[]
  const old=[...active,...history]
@@ -142,6 +148,11 @@ export function mergeExecutionChecklist(previous:any,data:any,now:string){
   if(match){used.add(match.id);return {...item,id:match.id,completed:match.completed===true,completedAt:match.completedAt||null,completedBy:match.completedBy||null}}
   return {...item,completed:false,completedAt:null,completedBy:null}
  })
+ // Subscription preparation is a single durable work item, never a recurring monthly task.
+ const setup=old.find((v:any)=>v.id===FOLLOW_REVIEW_SETUP_ID)
+ if(!items.some((v:any)=>v.id===FOLLOW_REVIEW_SETUP_ID)&&setup?.completed!==true&&(setup||startMonth)){
+  items.unshift({id:FOLLOW_REVIEW_SETUP_ID,month:setup?.month||startMonth,action:'配置店内社媒关注与Google评论引导',plannedTime:setup?.plannedTime||'订阅后的准备阶段',completed:false,completedAt:null,completedBy:null});used.add(FOLLOW_REVIEW_SETUP_ID)
+ }
  // A replacement list must stay concise. Retired work retains human completion history.
  const retiredItems=old.filter((item:any)=>!used.has(item.id)&&!items.some((v:any)=>v.id===item.id)).map((item:any)=>({...item,retiredAt:item.retiredAt||now}))
  return {items,retiredItems,informationToSupplement:data.informationToSupplement,updatedAt:now}

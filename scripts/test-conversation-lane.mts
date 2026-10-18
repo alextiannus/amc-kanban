@@ -30,7 +30,7 @@ const next=async(request:any)=>{
   if(attempts.some((c:any)=>c.status==='succeeded'))return {type:'finish',result:{summary:'Done',artifacts:[attempts.find((c:any)=>c.status==='succeeded').result.reference]},usage}
   assert(!attempts.some((c:any)=>c.status==='unknown'),'preflight rejection must never become an uncertain write')
   if(attempts.length)await assert.rejects(()=>conversation.workspace.read(actor,{path:ctx.intent.artifactPath}),/not found/i)
-  const body={kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,planningProgress:{stage:'execution_checklist',summary:'Fixture draft'},planningDraft:{scope:ctx.intent.planningScope,expectedRevision:ctx.planningContext.workspace.revision,title:'清单',content:'清单摘要',data:{items:[{id:'one',month:'2026-10',action:'核对资料',plannedTime:'2026-10-20'}],informationToSupplement:[]}},...(attempts.length?{content:'清单已生成'}:{})}
+  const body={kind:'conversation',brandId:id,contextDigest:ctx.contextDigest,planningProgress:{stage:'execution_checklist',summary:'Fixture draft'},planningDraft:{scope:ctx.intent.planningScope,expectedRevision:ctx.planningContext.workspace.revision,title:'清单',content:'清单摘要',data:{items:[{id:'one',month:'2026-10',action:attempts.length===1?'完成元旦物料铺设与员工培训订单承接':'确定10月内容创意',plannedTime:'2026-10-20'}],informationToSupplement:[]}},...(attempts.length?{content:'清单已生成'}:{})}
   return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify(body)},usage}
  }
  if(!find('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,content:'A coherent recommendation based on your current brand.',contextDigest:ctx.contextDigest,planningProgress:{stage:'focus',summary:'Fixture proposal only.'}})},usage}
@@ -89,9 +89,9 @@ try{
  const checkedHistory=await conversation.runtime.get(actor,checked.id,{history:true})
  assert.equal(checkedHistory.status,'succeeded')
  const writes=checkedHistory.calls.filter((c:any)=>c.capability==='my_write_workspace')
- assert.deepEqual(writes.map((c:any)=>c.status),['failed','succeeded'],'invalid format is rejected before execution and corrected in the same task')
+ assert.deepEqual(writes.map((c:any)=>c.status),['failed','failed','succeeded'],'invalid format and out-of-scope merchant operations are rejected before execution and corrected in the same task')
  assert((await conversation.ledger.taskUsage(await conversation.scope(actor),checked.id)).complete)
- console.log('PASS: invalid planning JSON rejected before any workspace write; original task corrects it and succeeds with settled usage')
+ console.log('PASS: invalid JSON and non-AMC work rejected before any workspace write; original task corrects both and succeeds with settled usage')
  const longHistory=[{role:'user' as const,content:'品牌资料'.repeat(2100)}]
  const longTask=await createNativeTask(id,id,{kind:'conversation',topic:'brand_planning',history:longHistory,goal:'Review complete information',requestKey:'long-'+randomUUID()})
  const longStored=await conversation.tasks.get(actor,longTask.id)

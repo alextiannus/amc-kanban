@@ -1,6 +1,6 @@
 import {prisma} from '../prisma'
 import {Prisma} from '@prisma/client'
-import {planningRevision,mergePlanningDraft,type PlanningDraft} from './planning-workspace-contract'
+import {assertAmcExecutionChecklist,planningRevision,mergePlanningDraft,type PlanningDraft} from './planning-workspace-contract'
 /** Caller authenticates the original task owner and validates its persisted artifact. */
 export async function savePlanningDraft(userId:string,brandId:string,taskId:string,draft:PlanningDraft,provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:null}){
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
@@ -8,6 +8,7 @@ export async function savePlanningDraft(userId:string,brandId:string,taskId:stri
   const receiptId=`planning:${brandId}:${taskId}`
   const receipt=await tx.auditLog.findFirst({where:{resourceId:receiptId,action:'PLANNING_DRAFT_ADOPTED',actorId:userId},select:{id:true}})
   if(receipt)return {saved:true,receiptId:receipt.id,replayed:true}
+  if(draft.scope.stage==='execution_checklist')assertAmcExecutionChecklist(draft.data)
   const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}})
   const current=(knowledge?.marketingSolution||{}) as Record<string,any>
   if(planningRevision(current)!==draft.expectedRevision)throw Object.assign(new Error('planning_revision_conflict'),{code:'planning_revision_conflict',statusCode:409})
