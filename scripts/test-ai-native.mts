@@ -20,10 +20,10 @@ const model={next:async(request:any)=>{
  modelCalls++
  if(missingUsage)return {type:'wait',question:'No usage fixture'}
  const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content)
- const host=JSON.parse(request.messages.find((m:any)=>m.content.includes('"hostContext":')).content.split('\n').at(-1)).hostContext.data
  const calls=data.calls.filter((c:any)=>c.status==='succeeded')
  const has=(n:string)=>calls.some((c:any)=>c.capability===n)
  if(!has('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
+ const host=calls.find((c:any)=>c.capability==='amc.context').result.intent
  if(host.kind==='brand_brief'){
    if(!has('amc.operations'))return {type:'call',name:'amc.operations',input:{},usage}
    if(!has('my_write_workspace'))return {type:'call',name:'my_write_workspace',input:{path:host.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'brand_brief',brandId:id,title:'Current brand work',content:'The current database has no drafts. Prepare a reviewed creative before production.',contextDigest:calls.find((c:any)=>c.capability==='amc.context').result.contextDigest,operationsDigest:calls.find((c:any)=>c.capability==='amc.operations').result.operationsDigest})},usage}
