@@ -20,6 +20,10 @@ export async function POST(request:Request,{params}:Context){const {id}=await pa
   const audit=await prisma.auditLog.findFirst({where:{resourceId:`interview-info:${id}:${body.retryOf}`,actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES'}})
   if((audit?.metadata as any)?.sourceRevision!==source.sourceRevision)throw Object.assign(Error('retry_source_mismatch'),{statusCode:409})
   const previous=await readNativeTask(userId,id,body.retryOf)
+  if(previous.status==='waiting'&&previous.waitingReason==='interrupted'){
+   await controlNativeTask(userId,id,body.retryOf,{action:'resume',requestKey:`interview-resume-${body.retryOf}-${new Date(previous.updatedAt||0).getTime()}`})
+   return {taskId:body.retryOf,sourceRevision:source.sourceRevision,sources:(audit?.metadata as any)?.sources||source.sources}
+  }
   if(previous.status==='waiting'&&previous.waitingReason==='limit'){await controlNativeTask(userId,id,body.retryOf,{action:'cancel',requestKey:`interview-recovery-${body.retryOf}`})}
   else if(!['failed','cancelled'].includes(previous.status))throw Object.assign(Error('original_task_still_active'),{statusCode:409})
  }
