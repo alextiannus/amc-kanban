@@ -66,7 +66,14 @@ export async function reconcileInsight(brandId:string,adapters={readJob:async(id
  if(!['completed','initial_ready','needs_review'].includes(job.status||''))return
  const brand=await adapters.loadBrand(brandId)
  if(!brand)return
- const report=await adapters.buildReport(brand,{jobId:request.jobId,maxWaitMs:0})
+ let report
+ try{report=await adapters.buildReport(brand,{jobId:request.jobId,maxWaitMs:0})}catch(error){
+  if(['growth_research_v3_missing','growth_research_report_missing','growth_research_failed'].includes(String((error as any).code||''))){
+   await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'failed',updatedAt:new Date().toISOString()}:old)
+   return
+  }
+  throw error
+ }
  await adapters.saveReport(brandId,report)
  await mutateRequest(brandId,old=>old&&old.id===request.id?{...old,status:'completed',updatedAt:new Date().toISOString()}:old)
 }

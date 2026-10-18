@@ -23,5 +23,9 @@ try{
  await reconcileInsight(brandId,reviewAdapters)
  assert.equal(savedReview,1,'A finished report with review gaps is synchronized and remains readable')
  assert.equal((await readInsight(brandId)).request?.status,'completed','Report generation completion does not imply merchant approval')
+ await prisma.brandKnowledge.update({where:{brandId},data:{marketingSolution:{insightRequest:{...reserved,status:'processing',jobId:'legacy-job'}}}})
+ await reconcileInsight(brandId,{...reviewAdapters,buildReport:async()=>{throw Object.assign(Error('legacy report'),{code:'growth_research_v3_missing'})}})
+ assert.equal((await readInsight(brandId)).request?.status,'failed','An incompatible finished report must allow a fresh request instead of blocking forever')
+ assert.equal(savedReview,1,'Incompatible report does not replace the last valid report')
  console.log('PASS: durable request receipt, unknown outcome recovery, provider idempotency key, active request concurrency, no fabricated report')
 }finally{await prisma.auditLog.deleteMany({where:{actorId:userId}});await prisma.brand.deleteMany({where:{id:brandId}});await prisma.$disconnect()}
