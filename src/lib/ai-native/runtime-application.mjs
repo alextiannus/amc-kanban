@@ -1,3 +1,7 @@
+// Bounded application capacity for the canonical Skill plus report and three-source positioning.
+export const AMC_CONTEXT_MAX_BYTES=320000;
+export function createAmcContextAssembler(options){return new ContextAssembler({...options,maxBytes:AMC_CONTEXT_MAX_BYTES,overflow:'omit-old-results'});}
+
 // Application-owned composition of public Core modules with task-pool and workspace-write host ports.
 import {HostTaskContext} from '@immedi/iaic-core/context/host.js';
 import {
@@ -55,7 +59,7 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  const dispatcher=new CapabilityDispatcher({capabilities,executionPolicy});
  const identity={bind:({actor,capability})=>registry.bind(actor,job.id,capability.name),check:({actor,task,binding})=>registry.check(actor,binding,task.capability)};
  const agentIdentity=releaseBinding===null?identity:new ReleaseBoundAgentIdentity({identity,releases:releaseBinding.releases,reference:releaseBinding.reference,implementationRevision:releaseBinding.implementationRevision});
- runtime=new AgentRuntime({...runtimeLimits,store:tasks,dispatcher,mandates:assistantMandates,model:{name:'host-model-resolver'},resolveModel:request=>(modelRouting||models).resolve(request),context:new ContextAssembler({skillRoot,planProvider:plans?({actor,task})=>plans.read(actor,{id:task.id}):null,overflow:'omit-old-results',sessionProvider:({actor,task})=>task.input.session?sessions.context(actor,task.input.session):null}),version,agentIdentity,trustedContext:hostContexts});
+ runtime=new AgentRuntime({...runtimeLimits,store:tasks,dispatcher,mandates:assistantMandates,model:{name:'host-model-resolver'},resolveModel:request=>(modelRouting||models).resolve(request),context:createAmcContextAssembler({skillRoot,planProvider:plans?({actor,task})=>plans.read(actor,{id:task.id}):null,overflow:'omit-old-results',sessionProvider:({actor,task})=>task.input.session?sessions.context(actor,task.input.session):null}),version,agentIdentity,trustedContext:hostContexts});
  dispatcher.tasks=runtime;
  try{await runtime.initialize();}catch(error){await runtime.stop();throw error;}
  const entry={capabilities:dispatcher.capabilities,invoke:(name,input,context)=>name==='agent.work'?startSessionTask({sessions,actor:context.actor,input,startTask:()=>dispatcher.invoke(name,input,context)}):dispatcher.invoke(name,input,context)};

@@ -1,7 +1,7 @@
 import {nativeHttp} from '@/lib/ai-native/http'
 import {actorFor} from '@/lib/ai-native/contract'
 import {requireActor} from '@/lib/ai-native/application'
-import {createNativeTask,readNativeTask} from '@/lib/ai-native/service'
+import {createNativeTask,readNativeTask,controlNativeTask} from '@/lib/ai-native/service'
 import {readInterviewInformationSources,interviewInformationTaskBody} from '@/lib/brand-plan/interview-information'
 import {prisma} from '@/lib/prisma'
 export const dynamic='force-dynamic'
@@ -16,7 +16,13 @@ export async function POST(request:Request,{params}:Context){const {id}=await pa
   const existing=await prisma.auditLog.findFirst({where:{actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES',resourceId:{startsWith:`interview-info:${id}:`},metadata:{path:['sourceRevision'],equals:source.sourceRevision}},orderBy:{timestamp:'desc'}})
   if(existing){const saved=existing.metadata as any;return {taskId:saved.taskId,sourceRevision:saved.sourceRevision,sources:saved.sources||source.sources}}
  }
- if(body.retryOf){const previous=await readNativeTask(userId,id,body.retryOf);if(!['failed','cancelled'].includes(previous.status))throw Object.assign(Error('original_task_still_active'),{statusCode:409})}
+ if(body.retryOf){
+  const audit=await prisma.auditLog.findFirst({where:{resourceId:`interview-info:${id}:${body.retryOf}`,actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES'}})
+  if((audit?.metadata as any)?.sourceRevision!==source.sourceRevision)throw Object.assign(Error('retry_source_mismatch'),{statusCode:409})
+  const previous=await readNativeTask(userId,id,body.retryOf)
+  if(previous.status==='waiting'&&previous.waitingReason==='limit'){await controlNativeTask(userId,id,body.retryOf,{action:'cancel',requestKey:`interview-recovery-${body.retryOf}`})}
+  else if(!['failed','cancelled'].includes(previous.status))throw Object.assign(Error('original_task_still_active'),{statusCode:409})
+ }
  const task=await createNativeTask(userId,id,interviewInformationTaskBody(source,body.retryOf))
  const resourceId=`interview-info:${id}:${task.id}`
  if(!await prisma.auditLog.findFirst({where:{resourceId,actorId:userId,action:'INTERVIEW_INFORMATION_SOURCES'}}))await prisma.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'INTERVIEW_INFORMATION_SOURCES',resourceType:'Brand',resourceId,metadata:{brandId:id,taskId:task.id,sourceRevision:source.sourceRevision,sourceHashes:source.sourceHashes,sources:source.sources,skillVersion:source.skillVersion,language:source.language,interviewInput:source.interviewInput}}})
