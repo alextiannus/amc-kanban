@@ -380,7 +380,7 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
       ? merchantContext.excluded_platforms
       : [],
     main_concern: '生成品牌计划前的线上经营摸底调研报告。',
-    report_tier: 'advanced',
+    report_tier: 'initial',
     report_template_version: 'v3',
     generate_advanced: false,
     merchant_context: merchantContext,
