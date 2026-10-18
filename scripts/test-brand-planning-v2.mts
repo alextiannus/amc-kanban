@@ -38,3 +38,8 @@ assert.equal(planningReviewState(threeStep).planNeedsReview,false)
 assert.equal(planningReviewState({...threeStep,coCreation:{...threeStep.coCreation,direction:{content:'legacy edit',status:'draft'}}}).planNeedsReview,false)
 assert(planningInputsMatch({...planningInputVersions(positioningOnly),direction:'legacy-version'},positioningOnly))
 console.log('PASS: positioning-only strategy confirmation, integrated direction/gaps and legacy direction edits do not invalidate strategy')
+
+const unconfirmed={coCreation:{interview:{content:'Available positioning',status:'draft'}}}
+const draftBased=mergePlanningDraft(unconfirmed,{...draft,expectedRevision:planningRevision(unconfirmed)},'draft-input')
+assert.equal(planningReviewState(draftBased).planNeedsReview,false,'unconfirmed positioning is a usable input, not a false source-change warning')
+assert.equal(planningReviewState({...draftBased,coCreation:{...draftBased.coCreation,interview:{content:'Changed facts',status:'draft'}}}).planNeedsReview,true)

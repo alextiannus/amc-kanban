@@ -1,3 +1,4 @@
+import {readOpenAIStream} from './openai-stream'
 import {textTimeoutMs} from './deadline'
 import { createHash } from 'node:crypto'
 
@@ -82,7 +83,8 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
     const base = c.baseUrl || ({ kopix:'https://www.kopix.ai/v1', deepseek:'https://api.deepseek.com/v1', minimax:'https://api.minimaxi.chat/v1' } as Record<string,string>)[c.provider] || 'https://api.openai.com/v1'
     url = `${base.trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
     headers.Authorization = `Bearer ${c.apiKey}`
-    body = { model:c.modelName, messages:input.messages, max_tokens:maxTokens, stream:false,
+    body = { model:c.modelName, messages:input.messages, max_tokens:maxTokens, stream:input.task==='brand_planning',
+      ...(input.task==='brand_planning'?{stream_options:{include_usage:true}}:{}),
       ...(reasoningEffort ? {reasoning_effort:reasoningEffort} : {}),
       ...(input.temperature !== undefined ? { temperature:input.temperature } : {}),
       ...(input.tools?.length ? { tools:input.tools, tool_choice:input.toolChoice || 'auto', parallel_tool_calls:false } : {}) }
@@ -107,7 +109,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   const timeout = AbortSignal.timeout(textTimeoutMs(c.timeoutMs,input))
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
-  const data = await response.json()
+  const data = protocol==='openai'&&input.task==='brand_planning'&&response.headers.get('content-type')?.includes('text/event-stream')?await readOpenAIStream(response):await response.json()
   logMarketingPlanResponse(c, input, body, response, data, started)
   if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw Object.assign(new TextOutputLimitError({
     finishReason:'length', maxTokens, reasoningEffort:body.reasoning_effort||'unspecified',

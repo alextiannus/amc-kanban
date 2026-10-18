@@ -95,10 +95,10 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     if(!prior||prior.runtime_lane==='conversation')host={...host,...await getNativeHost(true,'conversation')}
   }
   const {actor,pool,app,tools,modelRevision}=host
-  // A rolling-deploy standby can admit durable interactive work, but automatic
-  // tasks must wait until this process owns the sole Core executor. Otherwise
-  // the retiring executor can claim a new-version task and pause it immediately.
-  if((automaticDaily||planningRequest)&&!(await app.runtime.deploymentState()).ownsExecutor)throw nativeError('daily_executor_standby',503)
+  // Wait before admitting planning work until this process owns the sole Core
+  // executor. Otherwise the retiring executor can claim a new-version task
+  // and pause it before its first model call. Same request keys remain reusable.
+  if((automaticDaily||planningRequest||body.kind==='conversation'&&body.topic==='brand_planning')&&!(await app.runtime.deploymentState()).ownsExecutor)throw nativeError('daily_executor_standby',503)
   if(autopilotRunId)await autopilotRun(userId,brandId,autopilotRunId)
   if(automaticDaily&&!(body?.kind==='creative_discovery'&&body.poolIdeaId))throw nativeError('daily_pool_idea_required')
   if(body?.recoveryOfTaskId&&!automaticDaily)throw nativeError('daily_recovery_scope_required',403)

@@ -1,17 +1,16 @@
 import {changePreference,readPreference} from '../src/lib/ai-native/preferences.ts'
 import {readNativeTask,readNativeTaskStatus,listNativeTasks,createNativeTask,controlNativeTask} from '../src/lib/ai-native/service.ts'
 import assert from 'node:assert/strict'
-import {randomUUID} from 'node:crypto'
+import {randomUUID,createHash} from 'node:crypto'
 import {readFile} from 'node:fs/promises'
 import {Pool} from 'pg'
 import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {nativePool,initializeHost,admitIntent,intentForTask} from '../src/lib/ai-native/store.ts'
-import {actorFor,digest,type ConversationIntent} from '../src/lib/ai-native/contract.ts'
+import {actorFor,digest,CORE_ARCHIVE_SHA,type ConversationIntent} from '../src/lib/ai-native/contract.ts'
 import {laneCursors,nextLaneCursor} from '../src/lib/ai-native/runtime-routing.ts'
 import {prisma} from '../src/lib/prisma.ts'
 const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
-const upstream=await readFile('node_modules/@immedi/iaic-core/developer/templates/agent/app.mjs','utf8')
-assert.equal(await readFile('src/lib/ai-native/runtime-application.mjs','utf8'),'// Application-owned composition of public Core modules; upstream template with TaskStore pool injection only.\n'+upstream.replace('export async function openApplication({pool,','export async function openApplication({pool,taskPool=pool,').replace('tasks=new TaskStore({pool});','tasks=new TaskStore({pool:taskPool});'))
+assert.equal(createHash('sha256').update(await readFile(`vendor/core-${CORE_ARCHIVE_SHA}.tgz`)).digest('hex'),CORE_ARCHIVE_SHA,'Core archive remains frozen; host ports are application-owned')
 assert.deepEqual(laneCursors(),{default:undefined,conversation:undefined})
 assert.deepEqual(laneCursors('old-cursor'),{default:'old-cursor',conversation:null})
 assert.deepEqual(laneCursors(nextLaneCursor({default:null,conversation:'next'})!),{default:null,conversation:'next'})
@@ -19,7 +18,7 @@ assert.equal(nextLaneCursor({default:null,conversation:null}),null)
 assert.throws(()=>laneCursors('lanes.not-json'),/invalid_task_cursor/)
 const id=randomUUID(),actor=actorFor(id,id),pool=nativePool(),schema='test_conversation_'+id.replaceAll('-','')
 const taskPool=new Pool({connectionString:process.env.DATABASE_URL,max:8,options:`-c search_path=${schema} -c statement_timeout=30000`})
-let background:any,conversation:any,release!:()=>void,entered!:()=>void,blocked=true
+let background:any,conversation:any,standby:any,release!:()=>void,entered!:()=>void,blocked=true
 const gate=new Promise<void>(r=>release=r),started=new Promise<void>(r=>entered=r)
 const usage={inputTokens:10,outputTokens:10}
 const next=async(request:any)=>{
@@ -33,6 +32,9 @@ const models=(slow:boolean):any=>({profiles:[{id:'fixture',provider:'openai',mod
 const options={version:'lane-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>({brand:{id,name:'Fixture'},productCatalog:[]}),readMarketingWorkspace:async()=>({brandId:id,status:'missing' as const,revision:'0'.repeat(64),workspace:null}),readInsight:async()=>({source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}),readUiPages:async()=>({})}
 let running:Promise<any>|undefined
 try{
+ await prisma.roleDefinition.upsert({where:{id:'AMC_PRINCIPAL'},create:{id:'AMC_PRINCIPAL',name:'Principal',normalizedName:'principal',builtIn:true},update:{enabled:true}})
+ await prisma.modelPolicyRevision.upsert({where:{version:1},create:{version:1,actorId:id,configuration:{defaults:{},exceptions:{}}},update:{}})
+ await prisma.modelPolicyState.upsert({where:{id:'default'},create:{id:'default',version:1},update:{version:1}})
  await prisma.user.create({data:{id,email:`${id}@example.invalid`,password:randomUUID(),businessRoles:{create:{role:'AMC_PRINCIPAL'}}}})
  await prisma.brand.create({data:{id,name:'Lane fixture',status:'ACTIVE',crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}}}})
  await initializeHost(pool);await pool.query(`CREATE SCHEMA ${schema}`)
@@ -40,6 +42,13 @@ try{
  const chat=await composeApplication(pool,models(false),{...options,taskPool});conversation=chat.app
  ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app:background,tools:bg.tools,lane:'default',modelRevision:1})
  ;(globalThis as any).amcConversationHost=Promise.resolve({pool,taskPool,app:conversation,tools:chat.tools,lane:'conversation',modelRevision:1})
+ const other=await composeApplication(pool,models(false),{...options,taskPool,version:'standby-v2'});standby=other.app
+ ;(globalThis as any).amcConversationHost=Promise.resolve({pool,taskPool,app:standby,tools:other.tools,lane:'conversation',modelRevision:1})
+ const standbyKey='standby-'+randomUUID()
+ await assert.rejects(()=>createNativeTask(id,id,{kind:'conversation',topic:'brand_planning',history:[],goal:'Prepare strategy',requestKey:standbyKey}),(error:any)=>error.code==='daily_executor_standby'&&error.statusCode===503)
+ assert.equal((await pool.query('SELECT count(*)::int AS n FROM amc_ai_requests WHERE request_key=$1',[standbyKey])).rows[0].n,0,'standby must not admit or charge a task to an incompatible executor')
+ ;(globalThis as any).amcConversationHost=Promise.resolve({pool,taskPool,app:conversation,tools:chat.tools,lane:'conversation',modelRevision:1})
+ await standby.close();standby=null
  const make=async(app:any,tools:string[],lane:'default'|'conversation',suffix='')=>{
   const intent:ConversationIntent={brandId:id,userId:id,goal:'Discuss a campaign',requestKey:id+'-'+lane+suffix,artifactPath:`work/${digest([actor,id+'-'+lane+suffix])}.json`,kind:'conversation',history:[],topic:'brand_planning'}
   const row=await admitIntent(pool,actor,intent,lane);assert.equal(row.runtime_lane,lane)
@@ -75,5 +84,5 @@ try{
  assert.equal((await controlNativeTask(id,id,extra[0].id,{action:'cancel',requestKey:randomUUID()})).task.status,'cancelled')
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
  await assert.rejects(()=>readNativeTaskStatus(id,id,fresh.id))
- console.log('PASS: independent fenced conversation executor completes behind blocked background; shared receipts/workspace/usage, cross-lane idempotency, ownership, cursor compatibility and exact upstream composition')
-}finally{delete (globalThis as any).amcNativeHost;delete (globalThis as any).amcConversationHost;release();await running;if(background)await background.close();if(conversation)await conversation.close();await taskPool.end();await pool.query(`DROP SCHEMA ${schema} CASCADE`);await pool.end();await prisma.brand.deleteMany({where:{id}});await prisma.user.deleteMany({where:{id}});await prisma.$disconnect()}
+ console.log('PASS: independent fenced conversation executor completes behind blocked background; shared receipts/workspace/usage, cross-lane idempotency, ownership, cursor compatibility and frozen Core archive')
+}finally{delete (globalThis as any).amcNativeHost;delete (globalThis as any).amcConversationHost;release();await running;if(standby)await standby.close();if(background)await background.close();if(conversation)await conversation.close();await taskPool.end();await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await pool.end();await prisma.brand.deleteMany({where:{id}});await prisma.user.deleteMany({where:{id}});await prisma.$disconnect()}

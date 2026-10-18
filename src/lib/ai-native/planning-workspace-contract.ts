@@ -103,7 +103,7 @@ export function planningReviewState(current:any){
  const interview=current.coCreation?.interview,direction=current.coCreation?.direction,plan=current.marketingPlan
  const interviewConfirmed=interview?.status==='confirmed'
  const directionConfirmed=direction?.status==='confirmed'&&interviewConfirmed&&direction.inputVersions?.interview===planningRevision(interview)
- return {interviewConfirmed,directionConfirmed,planNeedsReview:!!plan&&(!interviewConfirmed||!planningInputsMatch(plan.inputVersions,current))}
+ return {interviewConfirmed,directionConfirmed,planNeedsReview:!!plan&&!planningInputsMatch(plan.inputVersions,current)}
 }
 
 /** The editable document contains every validated section, never only the model's short reply. */
