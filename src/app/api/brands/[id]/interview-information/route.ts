@@ -21,7 +21,7 @@ export async function POST(request:Request,{params}:Context){const {id}=await pa
   if((audit?.metadata as any)?.sourceRevision!==source.sourceRevision)throw Object.assign(Error('retry_source_mismatch'),{statusCode:409})
   const previous=await readNativeTask(userId,id,body.retryOf)
   if(previous.status==='waiting'&&previous.waitingReason==='interrupted'){
-   await controlNativeTask(userId,id,body.retryOf,{action:'resume',requestKey:`interview-resume-${body.retryOf}-${new Date(previous.updatedAt||0).getTime()}`})
+   await controlNativeTask(userId,id,body.retryOf,{action:'resume',requestKey:`interview-resume-${body.retryOf}-${Date.parse(String(previous.updatedAt))||0}`})
    return {taskId:body.retryOf,sourceRevision:source.sourceRevision,sources:(audit?.metadata as any)?.sources||source.sources}
   }
   if(previous.status==='waiting'&&previous.waitingReason==='limit'){await controlNativeTask(userId,id,body.retryOf,{action:'cancel',requestKey:`interview-recovery-${body.retryOf}`})}
