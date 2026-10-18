@@ -33,7 +33,7 @@ export function validatePlanningDraft(value:any,scope:PlanningScope):PlanningDra
 }
 export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string){
  const scope=draft.scope,now=new Date().toISOString(),next={...current}
- const saved={...(scope.stage==='interview'?{attachmentIds:current.coCreation?.interview?.attachmentIds||[]}:{}),title:draft.title,content:draft.content,taskId,updatedAt:now,status:'draft'}
+ const saved={...(scope.stage==='interview'?{attachmentIds:current.coCreation?.interview?.attachmentIds||[]}:{}),title:scope.stage==='interview'?'品牌定位':draft.title,content:draft.content,taskId,updatedAt:now,status:'draft'}
  if(scope.stage==='marketing_plan'){
   assertPlanningConfirmed(current)
   saved.content=marketingPlanMarkdown(draft.data,!/[\u4e00-\u9fff]/.test(draft.title+draft.content))
@@ -84,7 +84,7 @@ export function validateMarketingPlan(d:any,start:string){
  if(marketingPlanMarkdown(d).length>24000)return fail('marketing_plan_document_too_long')
  if(Object.keys(d).some(k=>!['brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives'].includes(k)))return fail('unexpected_marketing_plan_field')
 }
-export function planningInputVersions(current:any){return {interview:planningRevision(current.coCreation?.interview||null),direction:planningRevision(current.coCreation?.direction||null)}}
+export function planningInputVersions(current:any){return {interview:planningRevision(current.coCreation?.interview||null),direction:planningRevision(current.coCreation?.direction||null),...(current.coCreation?.principal_strategy?{principalStrategy:planningRevision(current.coCreation.principal_strategy)}:{})}}
 export function assertPlanningConfirmed(current:any){
  const interview=current.coCreation?.interview,direction=current.coCreation?.direction
  if(interview?.status!=='confirmed'||direction?.status!=='confirmed'||direction.inputVersions?.interview!==planningRevision(interview))throw Object.assign(Error('planning_confirmation_required'),{statusCode:409})

@@ -25,9 +25,11 @@ updated: 2026-10-18
 | --- | --- |
 | `GET /api/brands/:id/insight` | 读取统一最新报告、来源状态和真实申请状态；有写权限时核对并同步已完成原任务，不启动新调研 |
 | `GET /api/brands/:id/insight/pdf?version=:version[&download=1]` | 校验品牌权限和当前报告版本，返回原始 PDF；预览 inline，下载 attachment；版本更新返回 409，缺失 404，读取异常 502 |
+| `GET /api/brands/:id/interview-information` | 核对三个来源的版本；不创建模型任务 |
+| `POST /api/brands/:id/interview-information` | 通过当前 AMC Skill 整理品牌定位；同来源复用原 IAIC 任务，来源冲突 409，记录来源审计；失败可显式重试 |
 | `POST /api/brands/:id/insight` | 显式申请或恢复原申请，返回真实申请 ID |
 | `POST /api/brands/:id/ai/tasks/:taskId/planning` | 从原持久任务读取并保存经过验证的候选，不接受浏览器伪造的 AI 产物 |
-| `POST /api/brands/:id/planning-document` | 保存文档或显式确认，提交 stage/action/content/attachmentIds/expectedRevision/requestKey |
+| `POST /api/brands/:id/planning-document` | 保存文档或显式确认，提交 stage/action/content/attachmentIds/expectedRevision/requestKey；principal_strategy 为单独主理人策略输入，访谈结果兼容 interview 键但语义为品牌定位 |
 | `POST /api/brands/:id/planning-document/attachments` | multipart `file`，保存本品牌附件及实际解析状态 |
 
 ## 文档、确认与附件
@@ -56,6 +58,10 @@ updated: 2026-10-18
 真实中央模型和 OBS/Growth 的登录后线上联调、发布及 live 健康标记不属于这些 fixture 测试的证明范围。
 
 
-报告及访谈当前实现（2026-10-18，本地验证通过）：AI Insight 从当前品牌关联的 AMC Growth 同步最新已产出的报告版本，读取该版本正文与 PDF 路径；页面预览与下载同一版本 PDF，不将内部 JSON 字段直接展示为正文。读取失败保留已同步资料并标记同步状态，不把错误当作文件缺失。品牌访谈直接呈现当前资料，下方列出希望补充的信息；去掉准备调研文档操作。已确认资料不会被自动覆盖。
+报告及访谈当前实现（2026-10-18，本地验证通过）：AI Insight 从当前品牌关联的 AMC Growth 同步最新已产出的报告版本，读取该版本正文与 PDF 路径；页面预览与下载同一版本 PDF，不将内部 JSON 字段直接展示为正文。读取失败保留已同步资料并标记同步状态，不把错误当作文件缺失。品牌访谈通过 AMC 营销策略 Skill 统一整理当前品牌定位，下方列出希望补充的信息；去掉准备调研文档操作。已确认资料不会被自动覆盖。
 
 Growth 同步读取品牌报告版本列表与版本详情的 `report_content`、`result.pdf_download_path` 等字段，不再把 `download-json` 原始数据递归转成正文。同步快照与用户确认资料分开；内容未变的轮询不更新快照时间。支持 Growth 返回的 `/public/downloads/brand-intelligence-intake/...pdf` 与 `/downloads/...pdf` 格式。PDF 通过本品牌授权接口读取原始字节；预览与下载共用同一 Blob。访谈仅列来源明确的补充项，已有答案不重复询问；无明确缺口时允许直接补充近期变化。
+
+访谈信息整理当前实现（2026-10-18，本地验证通过）：由 AMC 营销策略 Skill 统一整理最新 AI Insight、现有品牌资料和最新访谈/补充记录，输出“当前信息 → 希望补充的信息”。只按报告、品牌资料和最新访谈三个来源的版本复用真实 IAIC 任务；其中任一变化才更新品牌定位受影响的部分，保留其他已确认内容。每次实际整理使用当前 Skill；Skill/月份/语言变化本身不触发重写。保存和确认仍为用户操作，AI 整理不得自动覆盖用户资料。来源发生变化时不得采用旧整理结果。
+
+品牌访谈的产出为品牌定位（兼容 coCreation.interview 存储）。完整营销策略必须绑定已确认品牌定位、真实当地节假日与节点、主理人策略输入，并依据社交平台默认定位规划内容类型和活动节奏；Subscription 暂不作为策略输入，不规定各平台具体发布次数；不可读和缺失保留待确认。主理人策略输入另行编辑，不触发品牌定位更新；方案输入版本随之失效重审，旧定位不被反复改写。

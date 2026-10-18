@@ -351,11 +351,12 @@ export async function loadBrandPlanBrand(brandId: string) {
 /** Assistant source read: preserve the same workspace projection without dashboard joins. */
 export async function getBrandPlanningContext(brandId: string) {
   const brand=await prisma.brand.findUnique({where:{id:brandId},select:{
-    knowledge:{select:{brandPlan:true,marketingSolution:true,researchReport:true,brandClaim:true}},
+    id:true,name:true,description:true,industry:true,location:true,address:true,phone:true,website:true,
+    knowledge:{select:{market:true,district:true,businessHours:true,stores:true,menuItems:true,brandTone:true,brandPlan:true,marketingSolution:true,researchReport:true,brandClaim:true}},
     brandPlanInterviews:{select:{id:true,rawNotes:true,answers:true,summary:true,completedAt:true},orderBy:{completedAt:'desc'},take:1},
   }})
   if(!brand)return null
-  return {marketingSolution:readMarketingSolutionWorkspace(brand),marketingSolutionRevision:planningRevision(brand.knowledge?.marketingSolution),brandClaim:brand.knowledge?.brandClaim||null,merchantInterview:serializeMerchantInterview(brand.brandPlanInterviews[0])}
+  return {brandInformation:{id:brand.id,name:brand.name,description:brand.description,industry:brand.industry,location:brand.location,address:brand.address,phone:brand.phone,website:brand.website,market:brand.knowledge?.market,district:brand.knowledge?.district,businessHours:brand.knowledge?.businessHours,stores:brand.knowledge?.stores,menuItems:brand.knowledge?.menuItems,brandTone:brand.knowledge?.brandTone},marketingSolution:readMarketingSolutionWorkspace(brand),marketingSolutionRevision:planningRevision(brand.knowledge?.marketingSolution),brandClaim:brand.knowledge?.brandClaim||null,merchantInterview:serializeMerchantInterview(brand.brandPlanInterviews[0])}
 }
 
 export async function getBrandPlan(brandId: string) {
@@ -3069,7 +3070,7 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
 
 async function buildMarketingPlanMarketContext(
   brand: BrandPlanBrand,
-  quarters: NonNullable<BrandPlanWorkspaceData['annualPlan']>['quarterlyPlans']
+  quarters: Array<{year?:number;startMonth?:string}>
 ) {
   const years = uniqueStrings((quarters || [])
     .map((quarter) => quarter.year ? String(quarter.year) : text(quarter.startMonth).slice(0, 4))
@@ -4134,4 +4135,22 @@ export class BrandPlanError extends Error {
     this.status = status
     this.details = details
   }
+}
+
+/** Current strategy inputs deliberately exclude subscription and posting quotas. */
+export async function getBrandMarketingInputs(brandId:string,startMonth:string){
+ const brand=await loadBrandPlanBrand(brandId)
+ if(!brand)return null
+ const w=readMarketingSolutionWorkspace(brand) as any
+ const years=[...new Set([Number(startMonth.slice(0,4)),Number(new Date(Date.UTC(Number(startMonth.slice(0,4)),Number(startMonth.slice(5))+4,1)).getUTCFullYear())])]
+ const market=brand.knowledge?.market||brand.location||brand.address
+ const calendar=market?await buildMarketingPlanMarketContext({...brand,location:market,industry:brand.industry||'Local merchant'},years.map(year=>({year}))):{marketCalendar:{market:null,events:[],gaps:[{reason:'market_not_recorded'}]},storeActivities:serializeStoreActivities(brand.gameConfig)}
+ return {
+  brandPositioning:{content:w.coCreation?.interview?.content||null,status:w.coCreation?.interview?.status||'missing',revision:planningRevision(w.coCreation?.interview||null)},
+  principalStrategy:w.coCreation?.principal_strategy||w.coCreation?.direction||null,
+  marketCalendar:{...calendar.marketCalendar,years,retrievedAt:new Date().toISOString()},
+  platformPlanning:{roleSource:'amc-marketing-expert/SKILL.md',knownBrandPlatforms:[...new Set(brand.accounts.map((account:{platformId:string})=>account.platformId))],cadenceRule:'按每个平台默认定位安排内容类型、渠道分工、预热/活动/复盘节奏；不规定每个平台具体发布次数，不读取订阅配额。'},
+  storeActivities:calendar.storeActivities,
+  usageRule:'以已确认品牌定位为基础，结合真实当地节假日、主理人策略输入及平台默认定位。缺失或不可读必须注明，不虚构节日日期或预算。Subscription 不是当前策略输入，不使用历史套餐、配额和具体发布次数约束策略。主理人输入是策略意愿，不是支付或发布授权。'
+ }
 }

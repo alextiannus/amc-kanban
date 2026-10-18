@@ -1,3 +1,4 @@
+import {prisma} from '../prisma'
 import {createHash} from 'node:crypto'
 import {laneCursors,nextLaneCursor} from './runtime-routing'
 import {activeConversationStatus,wakeConversationWorker} from './conversation-status'
@@ -361,6 +362,23 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
  const history=(await nativeTaskHistory(host.app,host.actor,taskId,false)).history
  const source=(history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
  const skillContent=source?.skill?.content
- const provenance={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
- return savePlanningDraft(userId,brandId,taskId,draft,provenance)
+ let provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
+ if(draft.scope.stage==='marketing_plan')provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null
+ let adoptionDraft=draft
+ if(draft.scope.stage==='interview'){
+  const audit=await prisma.auditLog.findFirst({where:{actorId:userId,resourceId:`interview-info:${brandId}:${taskId}`,action:'INTERVIEW_INFORMATION_SOURCES'}})
+  const binding=await intentForTask(host.pool,host.app,host.actor,taskId)
+  if(binding.intent.requestKey.startsWith('interview-info-')&&!audit)throw nativeError('interview_sources_unavailable',409)
+  const input=audit?.metadata as any
+  if(input){
+   const {readInterviewInformationSources}=await import('../brand-plan/interview-information')
+   const current=await readInterviewInformationSources(brandId,input.language)
+   if(current.sourceRevision!==input.sourceRevision)throw nativeError('interview_sources_changed',409)
+   provenance={...provenance,informationRevision:input.sourceRevision,sourceHashes:input.sourceHashes,interviewInput:input.interviewInput,organizedContentHash:null}
+   // Use the same canonical hashing as the source reader.
+   const {planningRevision}=await import('./planning-workspace-contract');provenance.organizedContentHash=planningRevision(draft.content)
+   adoptionDraft={...draft,expectedRevision:current.workspaceRevision}
+  }
+ }
+ return savePlanningDraft(userId,brandId,taskId,adoptionDraft,provenance)
 }
