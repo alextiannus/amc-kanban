@@ -103,7 +103,7 @@ export async function readIdeaPool(userId:string,brandId:string){
   for(const item of items)item.creative=item.plan_id?calendarCreativeOption((months[item.plan_month]||[]).find((creative:any)=>creative.id===item.plan_id)||{}):null
   const latest=(await pool.query('SELECT local_day,status,started_at,completed_at,added FROM amc_iaic.brand_idea_days WHERE brand_id=$1 ORDER BY local_day DESC LIMIT 1',[brandId])).rows[0]||null
   if(latest?.status==='running'&&Date.now()-new Date(latest.started_at).getTime()>600000)latest.status='interrupted'
-  return {items:rankedIdeas(items).map(item=>({...item,matchScore:matchScore(item)})),minimum:IDEA_POOL_MIN,maximum:IDEA_POOL_MAX,shortfall:Math.max(0,IDEA_POOL_MIN-items.length),latest}
+  return {items:rankedIdeas(items).map(item=>({...item,matchScore:matchScore(item),selectedForCalendar:!!item.creative?.draftId})),minimum:IDEA_POOL_MIN,maximum:IDEA_POOL_MAX,shortfall:Math.max(0,IDEA_POOL_MIN-items.length),latest}
 }
 export async function selectPoolIdea(brandId:string,id:unknown){
   if(typeof id!=='string'||!/^[0-9a-f-]{36}$/i.test(id))throw nativeError('idea_not_found',404)

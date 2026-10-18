@@ -26,6 +26,7 @@ try{
  assert.equal(await prisma.contentDraft.count({where:{brandId}}),0)
  const rows=(await pool.query("SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 ORDER BY (source->>'matchScore')::numeric DESC",[brandId])).rows;ids=rows.map(r=>r.id)
  assert.equal(ids.length,3)
+ await pool.query('UPDATE amc_iaic.brand_ideas SET selected_at=now() WHERE brand_id=$1',[brandId])
  assert.equal((await admit()).reason,'publishing_quantity_not_configured')
  await prisma.brandKnowledge.update({where:{brandId},data:{publishingFreq:{platforms:{instagram:{postsPerMonth:2}}}}})
  const calls=await Promise.all(Array.from({length:5},()=>admit()))

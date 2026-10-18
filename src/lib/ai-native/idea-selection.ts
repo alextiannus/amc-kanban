@@ -36,10 +36,11 @@ export async function admitBrandIdeas(userId:string,brandId:string,ideaId?:strin
   let count=ideaId?1:requiredIdeaCount(request?.input?.frequency||knowledge.publishingFreq||workspace.annualPlan?.publishingFreq,now,brand.timezone||'Asia/Singapore')
   if(!ideaId){const posted=drafts.filter((d:any)=>['published','done'].includes(String(d.status).toLowerCase())&&d.publishedAt&&new Intl.DateTimeFormat('en-CA',{timeZone:brand.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).format(new Date(d.publishedAt))===month).length;count=Math.max(0,count-posted)}
   if(!count)return {ok:true,selected:[],reason:'publishing_quantity_not_configured'}
-  const rows:any[]=ideaId?await tx.$queryRaw`SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND id::text=${ideaId} AND (replaced_at IS NULL OR selected_at IS NOT NULL) FOR UPDATE`:await tx.$queryRaw`SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND replaced_at IS NULL AND selected_at IS NULL ORDER BY created_at,id FOR UPDATE`
+  const rows:any[]=ideaId?await tx.$queryRaw`SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND id::text=${ideaId} AND (replaced_at IS NULL OR selected_at IS NOT NULL) FOR UPDATE`:await tx.$queryRaw`SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND replaced_at IS NULL ORDER BY created_at,id FOR UPDATE`
   if(ideaId&&!rows.length)throw nativeError('idea_not_found',404)
   const selected:any[]=[]
-  for(const row of rankedIdeas(rows).slice(0,count)){
+  const candidates=ideaId?rows:rows.filter(row=>!all.some(i=>(i.nativeDaily?.poolIdeaId===row.id||i.inspirationCreativeId===row.source_id)&&(i.calendarSelection?.draftId||i.schedule?.draftId)))
+  for(const row of rankedIdeas(candidates).slice(0,count)){
    let item=all.find(i=>i.id===`pool_${row.id}`||i.nativeDaily?.poolIdeaId===row.id||i.inspirationCreativeId===row.source_id)
    let bucket=item?Object.keys(months).find(m=>months[m].includes(item))!:month
    if(item?.calendarSelection?.draftId){selected.push({id:row.id,creativeId:item.id,month:bucket,draftId:item.calendarSelection.draftId,replayed:true});continue}
