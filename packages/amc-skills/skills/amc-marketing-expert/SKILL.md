@@ -298,3 +298,9 @@ Output：data 为 `{items:[{id,month,action,plannedTime}],informationToSupplemen
 - 来源的「已记录／已确认」标签应保留其原始含义和日期，不将账号入口、账号归属、公开页面信息与经营方已确认混为一谈。若报告摘要与具体来源状态不一致，以具体证据及待确认状态表述，不能宣称所有渠道均已确认。
 - 资产总量与可用资产数、评论分析样本与公开评论总数属于不同口径，分别标注，不相加或互相替代；不推测差额原因。
 - 面向妈妈和家庭不自动意味着可宣传为适合婴幼儿／儿童。未提出此类宣传目标时，可直接避开无依据主张，不把额外假设变成必须回答的访谈缺口。
+
+### 结构化交付的提交要求
+
+营销策略和行动清单的最终工作区文档必须包含 `kind: "conversation"`、真实 `brandId`、`content`、当前 `contextDigest`、`planningProgress` 和 `planningDraft`。完整内容只写一份 data，摘要不重复全文。严格复制宿主 artifactContract 的字段、类型、作用域、修订号与路径：全年表 annualCalendar 只能有起始年份1月至12月共12项；跨年的月份只放连续六个月 monthlyPlans；每月 resources 和 measurement 都是字符串，不是数组。行动清单 data 只含 items 和 informationToSupplement；每个 item 只含 id、month、action、plannedTime，不能生成 completed 或负责人。按宿主提供的结构化对象 schema 写入，不手工嵌套转义。
+
+写入若返回字段验证错误，仅修正具体错误后重试。成功写入最终回复后，立即用该次真实 receipt 的 path、revision、digest 提交完成验证；不要再次读取或无新反馈反复重写同一份正文。只有完成验证明确拒绝或用户提供新要求时才重新修订，不能把工作区写入成功当成商家已采用或确认。

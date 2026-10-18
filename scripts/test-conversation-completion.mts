@@ -19,3 +19,13 @@ for(const invalid of [{...write,status:'unknown'},{...write,result:{}},{...write
 const general=make([{...context,result:{intent:{kind:'conversation',topic:'general'}}},write],[event]);assert.equal(prepareConversationCompletion(general),general)
 const noWrite=make([context],[]);assert.equal(prepareConversationCompletion(noWrite),noWrite)
 console.log('PASS: submit only successful scoped receipts; retain original model billing/signal; restore tools for verification feedback, new input, unknown write and unrelated intents')
+// Large source results can be omitted from bounded model context. Bind to the
+// admission record rather than depending on the old amc.context result body.
+const omitted=make([{...context,result:null,resultOmitted:true},write],[event])
+const scoped=prepareConversationCompletion(omitted,context.result.intent)
+assert.deepEqual(scoped.tools,[])
+assert(scoped.messages.at(-1)?.content.includes(JSON.stringify(ref)))
+assert.equal(prepareConversationCompletion(make([write],[event]),{kind:'conversation',topic:'general',artifactPath:ref.path}).tools.length,1)
+const rejected=make([write],[event,{kind:'verification',data:{verified:false}}])
+assert.equal(prepareConversationCompletion(rejected,context.result.intent),rejected)
+console.log('PASS: trusted admission restores finish guidance when bounded history omits source results; failed verification still restores repair tools')
