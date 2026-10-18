@@ -1,3 +1,4 @@
+import {PLANNING_TEXT_TIMEOUT_MS} from '../global-text/deadline'
 import {nativeWireTools,nativeWireCalls} from './tool-wire'
 import type { ApplicationOptions, ModelProfile } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 // The public provider JavaScript contract is documented in agent/model-provider.js.
@@ -38,7 +39,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
       let result;try{
-        result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:wire.input,tools:nativeWireTools(wire.tools,full).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}})),toolChoice:'required',maxTokens:nativeOutputTokens(full,model.definition.maxTokensByTask),signal:options.signal||undefined,task:'ai_native'})
+        result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:wire.input,tools:nativeWireTools(wire.tools,full).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}})),toolChoice:'required',maxTokens:nativeOutputTokens(full,model.definition.maxTokensByTask),signal:options.signal||undefined,task:full?'brand_planning':'ai_native',...(full?{timeoutMs:PLANNING_TEXT_TIMEOUT_MS}:{})})
         return new Response(JSON.stringify({id:result.providerReference,provider_usage:result.rawUsage,usage:result.usage,status:'completed',output:nativeWireCalls(result.message?.tool_calls,result,wire.tools,full).map((t:any)=>({type:'function_call',name:t.function.name,arguments:t.function.arguments}))}))
       }finally{
         await recordExecution({source:'mm',executor:'kanban',task:'ai_native',version,modelId:model.id,connectionId:model.connectionId,targetModel:model.definition.modelName,responseModel:result?.responseModel||undefined,status:result?'success':'failed',latencyMs:Date.now()-started})

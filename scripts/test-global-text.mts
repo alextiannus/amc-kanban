@@ -34,6 +34,20 @@ globalThis.fetch=async(url,init)=>{
  return Response.json({model:'glm-5.3-resolved',choices:[{message:{role:'assistant',content:'OK'}}]})
 }
 try{
+ const originalTimeout=AbortSignal.timeout
+ const selectedDeadlines:number[]=[]
+ try{
+  AbortSignal.timeout=(milliseconds:number)=>{selectedDeadlines.push(milliseconds);return new AbortController().signal}
+  await complete({...c,timeoutMs:120000},{task:'brand_planning',timeoutMs:230000,messages:[{role:'user',content:'structured document'}]})
+  assert.equal(selectedDeadlines.at(-1),230000)
+  assert.equal(requests.at(-1).body.reasoning_effort,'low','Long documents retain the existing GLM low default unless centrally set')
+  await complete({...c,timeoutMs:120000},{task:'ai_native',timeoutMs:230000,messages:[{role:'user',content:'ordinary reply'}]})
+  assert.equal(selectedDeadlines.at(-1),110000,'Ordinary calls retain their existing hard ceiling')
+  await complete({...c,timeoutMs:5000},{task:'ai_native',timeoutMs:8000,messages:[{role:'user',content:'short deadline'}]})
+  assert.equal(selectedDeadlines.at(-1),5000)
+  await complete(c,{task:'brand_planning',timeoutMs:999999,messages:[{role:'user',content:'bounded document'}]})
+  assert.equal(selectedDeadlines.at(-1),230000,'Long generation cannot become unbounded')
+ }finally{AbortSignal.timeout=originalTimeout}
  const providerFetch=globalThis.fetch
  const originalInfo=console.info
  const diagnostics:string[]=[]

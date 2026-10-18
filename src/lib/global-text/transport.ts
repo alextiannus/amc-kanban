@@ -1,3 +1,4 @@
+import {textTimeoutMs} from './deadline'
 import { createHash } from 'node:crypto'
 
 export type Connection = { id: string; provider: string; displayName: string; modelName: string; baseUrl: string | null; apiKey: string; timeoutMs?: number | null; reasoningEffort?: 'low'|'high'|'max' }
@@ -77,7 +78,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   if (protocol === 'openai') {
     // GLM-5.3 defaults to max reasoning, which can consume the entire bounded tool/copy
     // output budget before emitting JSON. Explicit central settings take priority.
-    const reasoningEffort=c.reasoningEffort ?? (/^glm-5\.3(?:$|-)/i.test(c.modelName)&&['body_composition','quality_rewrite','ai_native','platform_review','marketing_plan'].includes(input.task||'')?'low':undefined)
+    const reasoningEffort=c.reasoningEffort ?? (/^glm-5\.3(?:$|-)/i.test(c.modelName)&&['body_composition','quality_rewrite','ai_native','brand_planning','platform_review','marketing_plan'].includes(input.task||'')?'low':undefined)
     const base = c.baseUrl || ({ kopix:'https://www.kopix.ai/v1', deepseek:'https://api.deepseek.com/v1', minimax:'https://api.minimaxi.chat/v1' } as Record<string,string>)[c.provider] || 'https://api.openai.com/v1'
     url = `${base.trim().replace(/\/+$/, '').replace(/\/chat\/completions$/, '')}/chat/completions`
     headers.Authorization = `Bearer ${c.apiKey}`
@@ -103,7 +104,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
       generationConfig:{maxOutputTokens:maxTokens,...(input.temperature!==undefined?{temperature:input.temperature}:{})},
       ...(input.tools?.length?{tools:[{functionDeclarations:input.tools.map(t=>t.function)}],...(typeof input.toolChoice==='object'?{toolConfig:{functionCallingConfig:{mode:'ANY',allowedFunctionNames:[input.toolChoice.function.name]}}}:{})}:{}) }
   }
-  const timeout = AbortSignal.timeout(Math.max(1,Math.min(110000, c.timeoutMs || 110000,input.timeoutMs||110000)))
+  const timeout = AbortSignal.timeout(textTimeoutMs(c.timeoutMs,input))
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
   const data = await response.json()
