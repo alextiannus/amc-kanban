@@ -44,7 +44,7 @@ export async function rebalanceIdeaPool(pool:Pool,brandId:string){
  try{
   await client.query('BEGIN');await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`idea-pool:${brandId}`])
   const rows=(await client.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY (selected_at IS NOT NULL) DESC,created_at DESC,id FOR UPDATE',[brandId])).rows
-  const keep=diverseCreatives(rows.map(row=>({...row.source,poolId:row.id})),[],IDEA_POOL_MAX)
+  const keep=diverseCreatives(rows.filter(row=>!row.selected_at).map(row=>({...row.source,poolId:row.id})),[],IDEA_POOL_MAX)
   const ids=new Set(keep.map(source=>source.poolId))
   for(const row of rows)if(!row.selected_at&&!ids.has(row.id))await client.query('UPDATE amc_iaic.brand_ideas SET replaced_at=now() WHERE id=$1',[row.id])
   await client.query('COMMIT')
@@ -74,12 +74,12 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
       await connection.query('BEGIN')
       await connection.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`idea-pool:${facts.id}`])
       const current=(await connection.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY (selected_at IS NOT NULL),created_at,id FOR UPDATE',[facts.id])).rows
-      let count=current.length
+      let count=current.filter(row=>!row.selected_at).length
       const replaceable=current.filter(row=>!row.selected_at)
       const kept=[...current]
       for(const source of diverseCreatives(sources,[],sources.length)){
         if(kept.some(row=>duplicateCreative(row.source,source))||plans.some(item=>duplicateCreative(item,source))||fixed.filter(item=>creativeDirection(item)===creativeDirection(source)).length>=2)continue
-        const same=kept.filter(row=>creativeDirection(row.source)===creativeDirection(source))
+        const same=kept.filter(row=>!row.selected_at&&creativeDirection(row.source)===creativeDirection(source))
         if(same.length>=2){
           const old=same.find(row=>!row.selected_at&&!String(row.id).startsWith('new-'))
           if(!old)continue
