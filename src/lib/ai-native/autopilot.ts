@@ -61,7 +61,7 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
  if(action==='ideas'){
   const ideas=await readIdeaPool(userId,brandId)
   const outputs=(await pool.query('SELECT creative_id,status,run_id FROM amc_iaic.autopilot_outputs WHERE brand_id=$1',[brandId])).rows
-  const candidates=ideas.items.filter((item:any)=>item.creative&&!outputs.some(o=>o.creative_id===item.creative.id)).map((item:any)=>({id:item.creative.id,month:item.plan_month,...item.creative})).slice(0,6)
+  const candidates=ideas.items.filter((item:any)=>item.selected_at&&item.creative?.draftId&&!outputs.some(o=>o.creative_id===item.creative.id)).map((item:any)=>({id:item.creative.id,month:item.plan_month,...item.creative})).slice(0,6)
   const assets=await prisma.mediaAsset.findMany({where:{brandId,sourceType:'upload',mimeType:{startsWith:'image/'}},select:{id:true,filename:true,aiCaption:true,aiTags:true,creativeId:true,rightsStatus:true},orderBy:{createdAt:'desc'},take:50})
   return {ready:outputs.some(o=>o.run_id===runId)||candidates.length>0||!!ideas.latest&&['completed','failed','interrupted'].includes(ideas.latest.status)&&!ideas.items.some((i:any)=>!i.creative&&!i.last_error),candidates,assets,shortfall:ideas.shortfall,note:'Choose only images matching the idea. If none match, wait for materials. Image posts only; no paid video rendering or publication.'}
  }
@@ -146,7 +146,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    const facts=await readBrandFacts(prisma,brandId);if(!facts)throw nativeError('brand_not_found',404)
    await refreshBrandIdeas(pool,facts)
    evidence.matchRequested=true;await progress(pool,run,'ideas',evidence)
-   return {accepted:true,note:'Daily library search is deduplicated by brand local date. Read ideas to await adapted scripts; do not repeatedly start matching.'}
+   return {accepted:true,note:'Daily library search is deduplicated by brand local date. Read the ranked Brand Ideas list. Matching never adapts or produces content; only Like or empty-calendar selection admits production candidates.'}
   }
   if(action==='adapt'){
    if(!evidence.strategyVersionId)throw nativeError('strategy_required')
@@ -155,6 +155,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    const idea=(await pool.query('SELECT plan_month FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND plan_id=$2 AND replaced_at IS NULL',[brandId,input.creativeId])).rows[0]
    if(!idea)throw nativeError('adapted_idea_required')
    const ctx=await readSkuContext({id:userId,type:'HUMAN'},brandId,idea.plan_month,input.creativeId)
+   if(!(ctx.current.current as any)?.calendarSelection?.draftId&&!(ctx.current.current as any)?.schedule?.draftId)throw nativeError('idea_not_selected_for_calendar',409)
    const task=await createNativeTask(userId,brandId,{...ctx.binding,kind:'creative_adaptation',goal:'依据人工已确认 SKU 与固定来源生成完整逐镜脚本和素材需求。',decisionDigest:ctx.current.current.skuDecision?.digest,requestKey:`autopilot-adapt-${digest([runId,input.creativeId,ctx.binding.expectedRevision])}`},false,runId)
    evidence.adaptations={...evidence.adaptations,[input.creativeId]:task.id};await progress(pool,run,'ideas',evidence)
    return {taskId:task.id}
@@ -187,6 +188,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    if(!idea)throw nativeError('adapted_idea_required')
    const revision=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,idea.plan_month,idea.plan_id)
    const latest=revision.revisions[0],creative=revision.current
+   if(!(creative as any)?.calendarSelection?.draftId&&!(creative as any)?.schedule?.draftId)throw nativeError('idea_not_selected_for_calendar',409)
    if(evidence.adapted?.[input.creativeId]!==latest?.id)throw nativeError('autopilot_fresh_adaptation_required')
    if(latest?.ai?.contextDigest!==digest(await readBrandFacts(prisma,brandId)))throw nativeError('autopilot_brand_facts_changed')
    if(!latest||!creative||['archived','deleted'].includes(String(creative.status)))throw nativeError('creative_revision_required')
@@ -242,7 +244,7 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
   const run=await autopilotRun(settings.owner_id,brandId,id)
   let taskId=run.task_id
-  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划、匹配来源候选、建议 SKU，等待人工确认后再基于固定来源与确认摘要生成完整逐镜适配脚本，选择合适的品牌素材，生成并保存每日额度内的图文发布草稿。SKU 决策必须由人工确认；空目录也须人工确认「普通品牌内容，非爆款复刻」决策。确认缺失或失效、必要素材缺失、执行结果未知时明确等待，不得自动确认或绕过门槛。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
+  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划；执行阶段仅将每日匹配来源候选放入按匹配度排序的品牌创意列表。只有 Like 或空日历按已有发布数量选入后才准备制作；选入不设置日期。仅对已选入内容建议 SKU，等待人工确认后再基于固定来源与确认摘要生成完整逐镜适配脚本，选择合适的品牌素材，生成并保存每日额度内的图文发布草稿。SKU 决策必须由人工确认；空目录也须人工确认「普通品牌内容，非爆款复刻」决策。确认缺失或失效、必要素材缺失、执行结果未知时明确等待，不得自动确认或绕过门槛。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
   let task=await readNativeTask(settings.owner_id,brandId,taskId)
   if(task.status==='waiting'&&task.waitingReason==='interrupted'&&task.version===await applicationVersion()){
    const host=await getNativeHost(),actor=actorFor(brandId,settings.owner_id),history=await host.app.runtime.get(actor,taskId,{history:true})

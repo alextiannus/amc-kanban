@@ -13,7 +13,9 @@ async function current(brandId:string,month:string){return prisma.brandMarketing
 export async function readCalendarMatching(userId:string,brandId:string,month:string){
  validateCreativeAddress(month,'matching');await requireActor(actorFor(brandId,userId))
  const [row,knowledge]=await Promise.all([current(brandId,month),prisma.brandKnowledge.findUnique({where:{brandId}})])
- return {request:requestView(row,creativeWorkspace(knowledge))}
+ const workspace=creativeWorkspace(knowledge),request=requestView(row,workspace)
+ const admitted=(workspace.publishingCalendar?.months?.[month]||[]).filter((item:any)=>item.calendarSelection?.draftId&&!['archived','deleted'].includes(item.status)).length
+ return {request:request?{...request,filled:Math.min(request.target,Math.max(request.filled,admitted)),pending:request.pending.slice(Math.max(0,admitted-request.filled)),status:request.status==='complete'?'complete':'source_pool',message:'原创意每日更新到品牌创意列表；Like 或发布队列为空时按需选入，选入不设置发布时间。'}:null}
 }
 export async function requestCalendarMatching(userId:string,brandId:string,body:any){
  const month=body?.month;validateCreativeAddress(month,'matching');await requireActor(actorFor(brandId,userId))

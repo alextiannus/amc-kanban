@@ -4,6 +4,8 @@ import { normalizeCreativeWorkspaceItem, type CreativeWorkspaceItem } from './cr
 import { creativeDraftMarker, creativeDraftMarkerSearches, hasCreativeDraftMarker } from './creativeDraftMarker.ts'
 
 export type CalendarCreativeItem = {
+  calendarSelection?: {draftId:string}
+  nativeSourceSnapshot?: {source?: {matchScore?:number}}
   nativeDaily?: {poolIdeaId:string;taskId:string}
   nativeReviewStatus?: string
   legacy?: {date?:string;platform?:string;status?:string}
@@ -27,6 +29,7 @@ export type CalendarCreativeItem = {
 }
 
 export type CalendarCreativeOption = {
+  matchScore?: number | null
   nativeDaily?: {poolIdeaId:string;taskId:string}
   nativeReviewStatus?: string
   id: string
@@ -137,6 +140,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
 
   return {
     id,
+    matchScore:typeof item.nativeSourceSnapshot?.source?.matchScore==='number'?item.nativeSourceSnapshot.source.matchScore:null,
     date: date || null,
     title,
     platform: platform ? platformLabel(platformSlug, platform) : '',
@@ -152,7 +156,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
     aiCaption,
     postfastControls: objectValue(item.postfastControls),
     productionFormats: item.productionFormats,
-    draftId: text(item.schedule?.draftId) || null,
+    draftId: text(item.schedule?.draftId || item.calendarSelection?.draftId) || null,
   }
 }
 

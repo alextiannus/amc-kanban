@@ -16,7 +16,7 @@ try{
  await initializeIdeaPool(pool)
  assert.equal(brandDay('Asia/Singapore',new Date('2099-10-01T17:00:00Z')),'2099-10-02')
  await Promise.all(Array.from({length:8},()=>refreshBrandIdeas(pool,facts,match as any,day(1))))
- assert.equal(calls,1,'replicas must share the daily admission');assert.equal((await rows()).length,6)
+ assert.equal(calls,1,'replicas must share the daily admission');assert.equal((await rows()).length,8)
  for(let n=2;n<=5;n++)await refreshBrandIdeas(pool,facts,match as any,day(n))
  assert.equal((await rows()).length,18)
  const original=(await rows())[0];await selectPoolIdea(brandId,original.id)
@@ -39,5 +39,5 @@ try{
  const duplicate=before[0],source=(await rows()).find(row=>row.id===duplicate).source
  await refreshBrandIdeas(pool,facts,async()=>({creativeCandidates:[source,source],contentLibraryGaps:[]}) as any,day(10))
  assert.deepEqual((await rows()).map(row=>row.id).sort(),before,'duplicate content results never replace a valid pool item')
- console.log('PASS: brand timezone, 8-way daily claim, 6→18 growth, bounded replacement, selected source retention, outage/no-match/duplicate preservation')
+ console.log('PASS: brand timezone, 8-way daily claim, 8→18 growth, bounded replacement, selected source retention, outage/no-match/duplicate preservation')
 }finally{await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[brandId]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[brandId]);await pool.end();if((globalThis as any).amcIdeaPool)await (await (globalThis as any).amcIdeaPool).end();await prisma.$disconnect()}
