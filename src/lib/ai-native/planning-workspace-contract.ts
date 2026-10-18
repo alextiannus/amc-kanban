@@ -68,25 +68,27 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
 }
 export function planningDraftContract(scope:PlanningScope){
  if(scope.mode!=='draft')return {}
- const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'具体行动，店内配合动作也作为独立任务',plannedTime:'具体计划时间，未知写待确认'}],informationToSupplement:['缺失信息；无则空数组']}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
+ const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'代运营动作，例如制定圣诞活动方案或安排月度素材拍摄；不拆资料问题或活动方案细节',plannedTime:'计划日期或时段'}],informationToSupplement:[]}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
  return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段草案标题',content:scope.stage==='marketing_plan'?'草案摘要、输入来源和关键待确认项；完整方案放入 data，宿主据 data 生成完整可编辑正文，不要重复输出整篇方案':scope.stage==='execution_checklist'?'简短说明清单范围和来源；所有行动完整放入 data.items，不重复整份清单':'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
 }
 
 
+export function annualPlanningMonths(start:string){return Array.from({length:4},(_,quarter)=>planningMonths(start,quarter)).flat()}
 export function sixPlanningMonths(start:string){return [...planningMonths(start),...planningMonths(start,1)]}
 export function marketingPlanShape(start:string){return {
  strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
- annualCalendar:Array.from({length:12},(_,i)=>({month:`${start.slice(0,4)}-${String(i+1).padStart(2,'0')}`,theme:'年度节点主题',campaign:'拟议活动策划，日期未经核实写待确认'})),
- monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['活动名称｜类型（团购／新品促销／节庆促销／其他）｜活动时间｜参与产品与机制｜店内配合｜确认情况（已确认／待商家确认）；确认情况依据商家真实记录，未知写待确认'],channels:['实际渠道'],content:['内容安排'],resources:'执行资源、预算与负责人角色，未知写待确认',measurement:'指标口径及复盘方式'})),
+ annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
+ monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['实际渠道'],content:['内容安排'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
  inStoreActivities:['店内产品、陈列、话术、转化、会员与复购配合'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
 export function validateMarketingPlan(d:any,start:string){
  const str=(x:any)=>typeof x==='string'&&!!x.trim()&&x.length<=4000
  const list=(x:any)=>Array.isArray(x)&&x.length>0&&x.length<=24&&x.every(str)
  if(!d||!['brandCharacteristics','coreSellingPoints','inStoreActivities','brandCreatives'].every(k=>list(d[k]))||!d.swot||!['strengths','weaknesses','opportunities','threats'].every(k=>list(d.swot[k])))return fail('incomplete_marketing_plan')
- if(!Array.isArray(d.annualCalendar)||d.annualCalendar.length!==12||d.annualCalendar.some((m:any,i:number)=>m?.month!==`${start.slice(0,4)}-${String(i+1).padStart(2,'0')}`||!str(m.theme)||!str(m.campaign)))return fail('invalid_annual_calendar')
+ if(!Array.isArray(d.annualCalendar)||d.annualCalendar.length!==12||d.annualCalendar.some((m:any,i:number)=>m?.month!==annualPlanningMonths(start)[i]||!str(m.theme)||!str(m.campaign)))return fail('invalid_annual_calendar')
  if(!Array.isArray(d.monthlyPlans)||d.monthlyPlans.length!==6||d.monthlyPlans.some((m:any,i:number)=>m?.month!==sixPlanningMonths(start)[i]||!['goal','theme','resources','measurement'].every(k=>str(m[k]))||!['activities','channels','content'].every(k=>list(m[k]))))return fail('invalid_six_month_plan')
+ if(d.monthlyPlans.some((m:any)=>m.preparation!==undefined&&(!Array.isArray(m.preparation)||m.preparation.length>12||!m.preparation.every(str))))return fail('invalid_monthly_preparation')
  if(d.strategyDirection!==undefined&&!list(d.strategyDirection)||d.informationToSupplement!==undefined&&(!Array.isArray(d.informationToSupplement)||d.informationToSupplement.length>24||!d.informationToSupplement.every(str)))return fail('invalid_strategy_supplement')
  if(marketingPlanMarkdown(d).length>24000)return fail('marketing_plan_document_too_long')
  if(Object.keys(d).some(k=>!['brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives','strategyDirection','informationToSupplement'].includes(k)))return fail('unexpected_marketing_plan_field')
@@ -116,7 +118,7 @@ export function marketingPlanMarkdown(d:any,english=false){
   `## ${label('核心卖点','Core selling points')}\n${list(d.coreSellingPoints)}`,
   '## SWOT\n'+[['strengths','优势','Strengths'],['weaknesses','劣势','Weaknesses'],['opportunities','机会','Opportunities'],['threats','威胁','Threats']].map(([key,zh,en])=>`### ${label(zh,en)}\n${list(d.swot[key])}`).join('\n\n'),
   `## ${label('全年活动节点与策划','Annual campaigns')}\n`+d.annualCalendar.map((m:any)=>`### ${m.month} · ${m.theme}\n${m.campaign}`).join('\n\n'),
-  `## ${label('未来六个月营销策划','Next six months')}\n`+d.monthlyPlans.map((m:any)=>`### ${m.month} · ${m.theme}\n${m.goal}\n\n${label('活动','Activities')}\n${list(m.activities)}\n\n${label('渠道','Channels')}\n${list(m.channels)}\n\n${label('内容','Content')}\n${list(m.content)}\n\n${label('资源与预算','Resources and budget')}\n${m.resources}\n\n${label('衡量与复盘','Measurement')}\n${m.measurement}`).join('\n\n'),
+  `## ${label('未来六个月营销策划','Next six months')}\n`+d.monthlyPlans.map((m:any)=>`### ${m.month} · ${m.theme}\n${m.goal}\n\n${label('活动','Activities')}\n${list(m.activities)}\n\n${label('后续月份准备','Preparation for later months')}\n${list(m.preparation||[])}\n\n${label('渠道','Channels')}\n${list(m.channels)}\n\n${label('内容','Content')}\n${list(m.content)}\n\n${label('资源与预算','Resources and budget')}\n${m.resources}\n\n${label('衡量与复盘','Measurement')}\n${m.measurement}`).join('\n\n'),
   `## ${label('店内经营配合','In-store operations')}\n${list(d.inStoreActivities)}`,
   `## ${label('品牌营销创意','Brand marketing ideas')}\n${list(d.brandCreatives)}`,
   `## ${label('期望补充信息','Information to supplement')}\n${d.informationToSupplement?.length?list(d.informationToSupplement):label('现有方案未列出明确补充项，可补充近期变化。','No explicit gaps are listed. Add recent changes if needed.')}`,

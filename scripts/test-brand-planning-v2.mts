@@ -43,3 +43,8 @@ const unconfirmed={coCreation:{interview:{content:'Available positioning',status
 const draftBased=mergePlanningDraft(unconfirmed,{...draft,expectedRevision:planningRevision(unconfirmed)},'draft-input')
 assert.equal(planningReviewState(draftBased).planNeedsReview,false,'unconfirmed positioning is a usable input, not a false source-change warning')
 assert.equal(planningReviewState({...draftBased,coCreation:{...draftBased.coCreation,interview:{content:'Changed facts',status:'draft'}}}).planNeedsReview,true)
+
+assert.deepEqual(shape.annualCalendar.map(m=>m.month),["2026-11","2026-12","2027-01","2027-02","2027-03","2027-04","2027-05","2027-06","2027-07","2027-08","2027-09","2027-10"])
+assert.throws(()=>validatePlanningDraft({...draft,data:{...shape,annualCalendar:shape.annualCalendar.map((m,i)=>({...m,month:`2026-${String(i+1).padStart(2,"0")}`}))}},scope),/invalid_annual_calendar/)
+assert(merged.coCreation.marketing_plan.content.includes("Preparation for later months"))
+console.log("PASS: rolling twelve-month calendar starts at requested month and crosses years; calendar-year replacement rejected")

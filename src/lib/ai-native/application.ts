@@ -155,7 +155,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
       const intent=await getIntent(context.actor,context.taskId)
       if(intent.kind!=='conversation'||intent.topic!=='brand_planning'||!intent.planningScope||!['marketing_plan','execution_checklist'].includes(intent.planningScope.stage)||input.path!==intent.artifactPath)return {valid:true}
       try{conversationFrom(input.content,intent);return {valid:true}}
-      catch(error){return {valid:false,feedback:'Correct the final planning JSON before writing: '+(error instanceof Error?error.message:'invalid')+'. Root requires kind=conversation, brandId, content (short reply summary), contextDigest, planningProgress and planningDraft. annualCalendar exactly 12 start-year months; monthlyPlans six rolling months; resources and measurement are strings. Preserve complete draft data.'}}
+      catch(error){return {valid:false,feedback:'Correct the final planning JSON before writing: '+(error instanceof Error?error.message:'invalid')+'. Root requires kind=conversation, brandId, content (short reply summary), contextDigest, planningProgress and planningDraft. annualCalendar exactly twelve rolling months beginning at scope.startMonth; monthlyPlans six rolling months with concise preparation for later campaigns; resources and measurement are strings. Execution checklist contains operation-level work only and informationToSupplement is empty. Preserve complete draft data.'}}
     },
     workspaceWrite:async(input:{path?:string;expectedRevision:number;content:string},context:{actor:NativeActor;taskId?:string},write:()=>Promise<{reference:{path:string;revision:number;digest:string}}>)=>{
       const {actor,taskId}=context

@@ -18,11 +18,14 @@ const call=nativeWireCall({function:{name:writer.name,arguments:JSON.stringify({
 assert.deepEqual(JSON.parse(JSON.parse(call.function.arguments).content),artifact)
 const execution={...scope,stage:'execution_checklist'} as const
 const validate=new Ajv({strict:false}).compile(planningArtifactSchema(execution))
-const checklist={...artifact,planningProgress:{stage:execution.stage,summary:'行动清单'},planningDraft:{...artifact.planningDraft,scope:execution,data:{items:[{id:'oct_1',month:'2026-10',action:'核实公开联系电话',plannedTime:'2026-10-20'}],informationToSupplement:[]}}}
+const checklist={...artifact,planningProgress:{stage:execution.stage,summary:'行动清单'},planningDraft:{...artifact.planningDraft,scope:execution,data:{items:[{id:'oct_1',month:'2026-10',action:'制定圣诞活动方案',plannedTime:'2026-10-20'}],informationToSupplement:[]}}}
 assert(validate(checklist),JSON.stringify(validate.errors))
 for(const extra of [{completed:true},{owner:'某人'}]){const bad=structuredClone(checklist);Object.assign(bad.planningDraft.data.items[0],extra);assert.equal(validate(bad),false)}
-console.log('PASS: full model schema rejects missing conversation kind, cross-year annual rows, array measurements, mismatched scope and AI-owned completion; exact structured transport preserved')
+console.log('PASS: full model schema rejects missing conversation kind, incorrect annual month counts, array measurements, mismatched scope and AI-owned completion; exact structured transport preserved')
 
 const discussion=new Ajv({strict:false}).compile(planningArtifactSchema({...scope,mode:'discuss'}))
 const {planningDraft:_,...reply}=artifact
 assert(discussion(reply),'ordinary stage discussion must not force a whole new draft')
+
+const oldCalendar=structuredClone(artifact);oldCalendar.planningDraft.data.annualCalendar=oldCalendar.planningDraft.data.annualCalendar.map((m,i)=>({...m,month:`2026-${String(i+1).padStart(2,"0")}`}));assert.equal(valid(oldCalendar),false)
+const gapTask=structuredClone(checklist);gapTask.planningDraft.data.informationToSupplement=["电话待确认"];assert.equal(validate(gapTask),false)
