@@ -14,12 +14,12 @@ try{
  await prisma.brand.create({data:{id:emptyId,name:'Optional plan fixture',status:'ARCHIVED'}})
  await savePlanningDocument(emptyId,userId,{stage:'marketing_plan',action:'confirm',content:'Manually written strategy; positioning and report can be supplemented later.',requestKey:randomUUID(),expectedRevision:planningRevision({})})
  const manual:any=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId:emptyId}})).marketingSolution
- assert.equal(manual.marketingPlan.status,'confirmed','A user may directly create and confirm a strategy without prior steps or an AI draft')
+ assert.equal(manual.marketingPlan.status,'active','A user may directly create and confirm a strategy without prior steps or an AI draft')
  await prisma.brand.create({data:{id:brandId,name:'Planning document test',status:'ARCHIVED'}})
  await prisma.brandKnowledge.create({data:{brandId,marketingSolution:current}})
  await send('direction','confirm','Direction')
  await send('interview','save','Interview with source and open questions')
- assert.equal(current.coCreation.interview.status,'draft')
+ assert.equal(current.coCreation.interview.status,'active')
  await send('interview','confirm','Interview with source and open questions')
  await send('direction','save','Direction and selling point evidence')
  await send('direction','confirm','Direction and selling point evidence')
@@ -35,7 +35,7 @@ try{
  assertPlanningConfirmed(current)
  assert.notEqual(current.coCreation.direction.inputVersions.interview,planningRevision(current.coCreation.interview),'Historical direction is stale but no longer blocks final strategy')
  const source=await readMarketingWorkspace(actorFor(brandId,userId))
- assert.equal(source.confirmationState?.interviewConfirmed,true,'Long document projection cannot invalidate trusted positioning confirmation')
+ assert.equal(source.confirmationState?.interviewConfirmed,false,'Generated or edited positioning is usable without a human approval claim')
  const scope={stage:'marketing_plan',mode:'draft',startMonth:'2026-11'} as const
  const full=validatePlanningDraft({scope,expectedRevision:planningRevision(current),title:'Complete plan',content:'Complete planning narrative',data:marketingPlanShape(scope.startMonth)},scope)
  await savePlanningDraft(userId,brandId,'full-plan-fixture',full)
@@ -43,18 +43,18 @@ try{
  assert(current.coCreation.marketing_plan.content.includes('2027-04'),'Editable document contains all six months')
  await send('marketing_plan','confirm',current.coCreation.marketing_plan.content)
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId,kind:'MARKETING_PLAN'}}),2)
- assert.equal(current.marketingPlan.status,'confirmed')
+ assert.equal(current.marketingPlan.status,'active')
  const checkScope={stage:'execution_checklist',mode:'draft',startMonth:'2026-11'} as const
- const checklistDraft=()=>validatePlanningDraft({scope:checkScope,expectedRevision:planningRevision(current),title:'执行清单',content:'店内活动准备',data:{items:[{id:'store',month:'2026-11',action:'布置新品陈列',plannedTime:'待确认'}],informationToSupplement:['确认上新日期']}},checkScope)
+ const checklistDraft=()=>validatePlanningDraft({scope:checkScope,expectedRevision:planningRevision(current),title:'执行清单',content:'店内活动准备',data:{items:[{id:'store',month:'2026-11',action:'安排本月内容发布',plannedTime:'待确认'}],informationToSupplement:[]}},checkScope)
  await savePlanningDraft(userId,brandId,'checklist-fixture',checklistDraft())
  current=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution
  const toggle=async(completed:boolean)=>{await savePlanningDocument(brandId,userId,{stage:'execution_checklist',action:'toggle',itemId:'store',completed,expectedRevision:planningRevision(current)});current=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution}
- await toggle(true);assert.equal(current.executionChecklist.items[0].completedBy,userId)
+ await toggle(true);assert.equal(current.executionChecklist.items.find((v:any)=>v.id==='store').completedBy,userId)
  const checkedRevision=planningRevision(current)
  await assert.rejects(()=>savePlanningDocument(brandId,userId,{stage:'execution_checklist',action:'toggle',itemId:'store',completed:false,expectedRevision:'0'.repeat(64)}),/planning_revision_conflict/)
  await savePlanningDraft(userId,brandId,'checklist-regenerate',checklistDraft())
  current=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution
- assert.equal(current.executionChecklist.items[0].completed,true)
- await toggle(false);assert.equal(current.executionChecklist.items[0].completed,false);assert.equal(current.executionChecklist.items[0].completedAt,null)
+ assert.equal(current.executionChecklist.items.find((v:any)=>v.id==='store').completed,true)
+ await toggle(false);assert.equal(current.executionChecklist.items.find((v:any)=>v.id==='store').completed,false);assert.equal(current.executionChecklist.items.find((v:any)=>v.id==='store').completedAt,null)
  console.log('PASS: draft/confirmation separation, trusted identity, upstream invalidation, conflict and attachment isolation, preserved calendar, audit history')
 }finally{await prisma.auditLog.deleteMany({where:{resourceId:{in:[brandId,emptyId]}}});await prisma.brand.deleteMany({where:{id:{in:[brandId,emptyId]}}});await prisma.$disconnect()}

@@ -22,7 +22,7 @@ export async function savePlanningDraft(userId:string,brandId:string,taskId:stri
   if(['annual','quarter','marketing_plan'].includes(draft.scope.stage)){
    const kind=draft.scope.stage==='marketing_plan'?'MARKETING_PLAN':draft.scope.stage==='annual'?'ANNUAL':'QUARTERLY',period=['annual','marketing_plan'].includes(draft.scope.stage)?draft.scope.startMonth:`${draft.scope.startMonth}:Q${draft.scope.quarter!+1}`
    const prior=await tx.brandMarketingSolution.findFirst({where:{brandId,kind,period},orderBy:{version:'desc'},select:{version:true}})
-   await tx.brandMarketingSolution.create({data:{brandId,kind,period,version:(prior?.version||0)+1,input:{taskId,scope:draft.scope,...provenance},output:draft.scope.stage==='marketing_plan'?next.marketingPlan:next.annualPlan,generationMode:'LLM',createdById:userId}})
+   await tx.brandMarketingSolution.create({data:{brandId,kind,period,status:'ACTIVE',version:(prior?.version||0)+1,input:{taskId,scope:draft.scope,...provenance},output:draft.scope.stage==='marketing_plan'?next.marketingPlan:next.annualPlan,generationMode:'LLM',createdById:userId}})
   }
   const audit=await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'PLANNING_DRAFT_ADOPTED',resourceId:receiptId,resourceType:'BrandMarketingSolution',oldValue:draft.scope.stage==='marketing_plan'?current.marketingPlan||{}:['annual','quarter'].includes(draft.scope.stage)?current.annualPlan||{}:current.coCreation?.[draft.scope.stage]||{},newValue:draft.scope.stage==='marketing_plan'?next.marketingPlan:['annual','quarter'].includes(draft.scope.stage)?next.annualPlan:next.coCreation[draft.scope.stage],metadata:{brandId,taskId,scope:draft.scope}}})
   return {saved:true,receiptId:audit.id,replayed:false}

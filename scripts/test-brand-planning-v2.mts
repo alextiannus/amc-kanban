@@ -18,7 +18,7 @@ const draft=validatePlanningDraft({scope,expectedRevision:planningRevision(curre
 const merged=mergePlanningDraft(current,draft,'task')
 assert.deepEqual(merged.annualPlan,current.annualPlan)
 assert.deepEqual(merged.publishingCalendar,current.publishingCalendar)
-assert.equal(merged.marketingPlan.status,'draft')
+assert.equal(merged.marketingPlan.status,'active')
 assert(merged.coCreation.marketing_plan.content.includes('SWOT'))
 assert(merged.coCreation.marketing_plan.content.includes('2027-04'))
 assert.deepEqual(merged.marketingPlan.inputVersions,planningInputVersions(current))

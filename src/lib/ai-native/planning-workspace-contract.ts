@@ -35,14 +35,14 @@ export function validatePlanningDraft(value:any,scope:PlanningScope):PlanningDra
 }
 export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string){
  const scope=draft.scope,now=new Date().toISOString(),next={...current}
- const saved={...(scope.stage==='interview'?{attachmentIds:current.coCreation?.interview?.attachmentIds||[]}:{}),title:scope.stage==='interview'?'品牌定位':draft.title,content:draft.content,taskId,updatedAt:now,status:'draft'}
+ const saved={...(scope.stage==='interview'?{attachmentIds:current.coCreation?.interview?.attachmentIds||[]}:{}),title:scope.stage==='interview'?'品牌定位':draft.title,content:draft.content,taskId,updatedAt:now,status:'active'}
  if(scope.stage==='execution_checklist'){
   next.executionChecklist=mergeExecutionChecklist(current.executionChecklist,draft.data,now,scope.startMonth)
   next.coCreation={...current.coCreation,execution_checklist:saved};return next
  }
  if(scope.stage==='marketing_plan'){
   saved.content=marketingPlanMarkdown(draft.data,!/[\u4e00-\u9fff]/.test(draft.title+draft.content))
-  next.marketingPlan={...draft.data,content:saved.content,title:draft.title,planningStartMonth:scope.startMonth,taskId,status:'draft',updatedAt:now,inputVersions:planningInputVersions(current)}
+  next.marketingPlan={...draft.data,content:saved.content,title:draft.title,planningStartMonth:scope.startMonth,taskId,status:'active',updatedAt:now,inputVersions:planningInputVersions(current)}
   next.coCreation={...current.coCreation,marketing_plan:saved};return next
  }
  if(!['annual','quarter'].includes(scope.stage)){next.coCreation={...current.coCreation,[scope.stage]:saved};return next}
