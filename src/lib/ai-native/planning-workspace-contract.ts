@@ -68,7 +68,7 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
 }
 export function planningDraftContract(scope:PlanningScope){
  if(scope.mode!=='draft')return {}
- const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',action:'具体行动，店内配合动作也作为独立任务',plannedTime:'具体计划时间，未知写待确认'}],informationToSupplement:['缺失信息；无则空数组']}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
+ const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'具体行动，店内配合动作也作为独立任务',plannedTime:'具体计划时间，未知写待确认'}],informationToSupplement:['缺失信息；无则空数组']}:scope.stage==='marketing_plan'?marketingPlanShape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
  return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段草案标题',content:'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
 }
 
@@ -128,7 +128,7 @@ export function validateExecutionChecklist(data:any){
  const text=(v:any,max:number)=>typeof v==='string'&&!!v.trim()&&v.length<=max
  if(!data||!Array.isArray(data.items)||data.items.length>120||!Array.isArray(data.informationToSupplement)||data.informationToSupplement.length>24||data.informationToSupplement.some((v:any)=>!text(v,2000))||Object.keys(data).some(k=>!['items','informationToSupplement'].includes(k)))return fail('invalid_execution_checklist')
  const ids=new Set<string>()
- for(const item of data.items){if(!item||!text(item.id,100)||!/^[a-zA-Z0-9_-]+$/.test(item.id)||ids.has(item.id)||!text(item.action,2000)||!text(item.plannedTime,200)||Object.keys(item).some(k=>!['id','action','plannedTime'].includes(k)))return fail('invalid_execution_task');ids.add(item.id)}
+ for(const item of data.items){if(!item||!text(item.id,100)||!/^[a-zA-Z0-9_-]+$/.test(item.id)||ids.has(item.id)||!/^20\d{2}-(0[1-9]|1[0-2])$/.test(item.month||'')||!text(item.action,2000)||!text(item.plannedTime,200)||Object.keys(item).some(k=>!['id','month','action','plannedTime'].includes(k)))return fail('invalid_execution_task');ids.add(item.id)}
 }
 export function mergeExecutionChecklist(previous:any,data:any,now:string){
  validateExecutionChecklist(data)

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import {mergeExecutionChecklist,validateExecutionChecklist,mergePlanningDraft,planningScope,planningDraftContract} from '../src/lib/ai-native/planning-workspace-contract'
-const item={id:'store-sign',action:'更新店内节庆陈列',plannedTime:'2026-11-01'}
+const item={id:'store-sign',month:'2026-11',action:'更新店内节庆陈列',plannedTime:'2026-11-01'}
 const data={items:[item],informationToSupplement:[]}
 validateExecutionChecklist(data)
 assert.throws(()=>validateExecutionChecklist({...data,items:[{...item,completed:true}]}))

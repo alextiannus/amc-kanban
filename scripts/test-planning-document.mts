@@ -45,7 +45,7 @@ try{
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId,kind:'MARKETING_PLAN'}}),2)
  assert.equal(current.marketingPlan.status,'confirmed')
  const checkScope={stage:'execution_checklist',mode:'draft',startMonth:'2026-11'} as const
- const checklistDraft=()=>validatePlanningDraft({scope:checkScope,expectedRevision:planningRevision(current),title:'执行清单',content:'店内活动准备',data:{items:[{id:'store',action:'布置新品陈列',plannedTime:'待确认'}],informationToSupplement:['确认上新日期']}},checkScope)
+ const checklistDraft=()=>validatePlanningDraft({scope:checkScope,expectedRevision:planningRevision(current),title:'执行清单',content:'店内活动准备',data:{items:[{id:'store',month:'2026-11',action:'布置新品陈列',plannedTime:'待确认'}],informationToSupplement:['确认上新日期']}},checkScope)
  await savePlanningDraft(userId,brandId,'checklist-fixture',checklistDraft())
  current=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution
  const toggle=async(completed:boolean)=>{await savePlanningDocument(brandId,userId,{stage:'execution_checklist',action:'toggle',itemId:'store',completed,expectedRevision:planningRevision(current)});current=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId}})).marketingSolution}
