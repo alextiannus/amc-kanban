@@ -37,3 +37,8 @@ const again=mergeExecutionChecklist(after,data,'again','2027-02');assert(!again.
 console.log('PASS: AMC scope rejects merchant operations; one-time follow/review preparation carries until human completion and never resets')
 
 assert.doesNotThrow(()=>validateExecutionChecklist({items:[{...item,action:'安排员工培训'}],informationToSupplement:[]}),'historical structural reading remains compatible; current writes enforce AMC scope')
+
+assert.equal(setup.action,"安排店内关注与Google评论贴纸制作、摆放及扫码验证")
+assert.doesNotThrow(()=>assertAmcExecutionChecklist({items:[{...item,id:"amc-follow-review-setup",action:setup.action}],informationToSupplement:[]}))
+assert.equal(carried.items.find((v:any)=>v.id===setup.id).action,setup.action)
+console.log("PASS: mandatory sticker production, placement and QR verification survives preparation carry-forward")

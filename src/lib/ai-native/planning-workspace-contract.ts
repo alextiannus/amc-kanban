@@ -81,7 +81,7 @@ export function marketingPlanShape(start:string){return {
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
  monthlyPlans:sixPlanningMonths(start).map(month=>({month,goal:'本月目标',theme:'主题',activities:['本月活动名称、目的、时间与关键店内配合，简洁标注拟议或已确认；详细活动方案作为独立工作'],preparation:['本月应提前启动的后续月份活动准备，含目标活动月与最迟启动日；无则空数组'],channels:['实际渠道'],content:['内容安排'],resources:'简述必要资源边界，未知不展开逐项索取',measurement:'指标口径及复盘方式'})),
- inStoreActivities:['订阅准备阶段一次性配置店内社媒关注与Google评论引导，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
+ inStoreActivities:['订阅准备阶段一次性安排店内关注与Google评论贴纸制作、摆放及扫码验证，未完成持续跟进；网络评价与下单转化通过Monthly Insight Report检验，不承担门店经营'],brandCreatives:['创意概念、品牌关联、渠道及执行条件']}}
 export function validateMarketingPlan(d:any,start:string){
  const str=(x:any)=>typeof x==='string'&&!!x.trim()&&x.length<=4000
  const list=(x:any)=>Array.isArray(x)&&x.length>0&&x.length<=24&&x.every(str)
@@ -151,7 +151,7 @@ export function mergeExecutionChecklist(previous:any,data:any,now:string,startMo
  // Subscription preparation is a single durable work item, never a recurring monthly task.
  const setup=old.find((v:any)=>v.id===FOLLOW_REVIEW_SETUP_ID)
  if(!items.some((v:any)=>v.id===FOLLOW_REVIEW_SETUP_ID)&&setup?.completed!==true&&(setup||startMonth)){
-  items.unshift({id:FOLLOW_REVIEW_SETUP_ID,month:setup?.month||startMonth,action:'配置店内社媒关注与Google评论引导',plannedTime:setup?.plannedTime||'订阅后的准备阶段',completed:false,completedAt:null,completedBy:null});used.add(FOLLOW_REVIEW_SETUP_ID)
+  items.unshift({id:FOLLOW_REVIEW_SETUP_ID,month:setup?.month||startMonth,action:'安排店内关注与Google评论贴纸制作、摆放及扫码验证',plannedTime:setup?.plannedTime||'订阅后的准备阶段',completed:false,completedAt:null,completedBy:null});used.add(FOLLOW_REVIEW_SETUP_ID)
  }
  // A replacement list must stay concise. Retired work retains human completion history.
  const retiredItems=old.filter((item:any)=>!used.has(item.id)&&!items.some((v:any)=>v.id===item.id)).map((item:any)=>({...item,retiredAt:item.retiredAt||now}))
