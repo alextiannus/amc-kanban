@@ -132,7 +132,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-marketing-expert"
       },
-      "version": "sha256:b9f1e1b19811176b0aaced0c3cc2307d590465093c6a22090c70e3654065571d",
+      "version": "sha256:505bbc2de0e6c52fffdc17d22133b14cecf9beab7fb9ae602b39553509ee3be5",
       "description": "AMC 营销专家，与品牌主或品牌主理人通过多轮对话共同完成 Insight 网络洞察、品牌访谈/品牌定位、完整品牌营销策略及逐月行动清单；适用于品牌营销讨论、年度规划与执行跟踪。"
     },
     {
@@ -537,7 +537,7 @@
     "skills/amc-knowledge/references/file-schemas.md": "6ac342d1d48c897dbb22ff3a15d53a69b574960a30a45c7795c5cd2254818102",
     "skills/amc-knowledge/references/intake-workflow.md": "19d83ff83da008b395cff96a5e13fd08db1f8b8c363da22487aba752e04ac82b",
     "skills/amc-knowledge/references/service-plan-scoping.md": "0190b1cdc46c5a12325a9876d64ae025ab546c8a2b055d5fc3cb403b28e1227f",
-    "skills/amc-marketing-expert/SKILL.md": "f4cf53d6ecc65ef7446967809bd3ff39384d816055a4fda09bf5187a97b67540",
+    "skills/amc-marketing-expert/SKILL.md": "050a2fcee05649137e7ac7fc97c7f1d89b072fa8f1f955b3d76338a3d7207d32",
     "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
     "skills/brand-intelligence-intake/SKILL.md": "aea6f0010f18cc49d576382a1d85ff94e4362cda6298bb4b6fb0fb69cf4fa2ce",
     "skills/brand-intelligence-intake/agents/openai.yaml": "e21863b50a0d25e0fa895efaf7900c2752d8e942989f4960e976698ca4eb0d8a",
