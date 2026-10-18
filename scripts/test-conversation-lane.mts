@@ -92,11 +92,20 @@ try{
  assert.deepEqual(writes.map((c:any)=>c.status),['failed','succeeded'],'invalid format is rejected before execution and corrected in the same task')
  assert((await conversation.ledger.taskUsage(await conversation.scope(actor),checked.id)).complete)
  console.log('PASS: invalid planning JSON rejected before any workspace write; original task corrects it and succeeds with settled usage')
+ const longHistory=[{role:'user' as const,content:'品牌资料'.repeat(2100)}]
+ const longTask=await createNativeTask(id,id,{kind:'conversation',topic:'brand_planning',history:longHistory,goal:'Review complete information',requestKey:'long-'+randomUUID()})
+ const longStored=await conversation.tasks.get(actor,longTask.id)
+ const projected=await conversation.hostContext!.project({actor,task:longStored})
+ assert(Buffer.byteLength(JSON.stringify(projected.data))<1024)
+ const longIntent=(await pool.query('SELECT intent FROM amc_ai_requests WHERE task_id=$1',[longTask.id])).rows[0].intent
+ assert(Buffer.byteLength(JSON.stringify(longIntent))>16384)
+ assert.equal(longIntent.history[0].content,longHistory[0].content,'full immutable history retained outside trusted projection')
+ console.log('PASS: long Chinese conversation admitted through compact immutable host binding without truncating original history')
  const extra=[]
  for(let i=0;i<21;i++)extra.push(await make(conversation,chat.tools,'conversation','-page-'+i))
  const first=await listNativeTasks(id,id);assert(first.page.nextCursor)
  const second=await listNativeTasks(id,id,first.page.nextCursor!);assert.equal(second.page.nextCursor,null)
- const combined=[...first.page.items,...second.page.items].map(t=>t.id);assert.equal(new Set(combined).size,combined.length);assert.equal(combined.length,24,'both queues paginate without dropped or repeated tasks')
+ const combined=[...first.page.items,...second.page.items].map(t=>t.id);assert.equal(new Set(combined).size,combined.length);assert.equal(combined.length,25,'both queues paginate without dropped or repeated tasks')
  assert.equal((await controlNativeTask(id,id,extra[0].id,{action:'cancel',requestKey:randomUUID()})).task.status,'cancelled')
  await prisma.crewMember.updateMany({where:{userId:id},data:{active:false}})
  await assert.rejects(()=>readNativeTaskStatus(id,id,fresh.id))

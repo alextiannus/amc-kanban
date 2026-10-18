@@ -24,7 +24,7 @@ import { prisma } from '../prisma'
 import { canUserAccessBrand } from '../user-management/brandAccess'
 import { readCreativeRevisions,readCreativeQualityReview,prepareCreativeQualityReview,classifyCreativeQualityReview,rejectCreativeQualityRepair } from '../brand-plan/creativeRevisions'
 import {FIDELITY_DIMENSIONS,fidelityReviewContract} from '../brand-plan/creativeFidelity'
-import { conversationFrom, brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
+import { nativeIntentProjection, resolveNativeIntentProjection, conversationFrom, brandFor, isDailyActor, candidateFrom, briefFrom, CORE_ARCHIVE_SHA, digest, nativeError, type NativeIntent, type NativeActor } from './contract'
 import { intentBy } from './store'
 import { readBrandFacts, validateSkuReferences, skuReferenceFeedback } from './facts'
 import { principalFromUser } from '../auth-v2/types'
@@ -218,8 +218,8 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
       return {allowed,recordId:taskId||'amc-current-access',revision:'amc-ai-policy-v1',reason}
     }},
     hostContext:{
-      bind:async({actor,requestKey})=>{const row=await intentBy(pool,actor,'request_key',requestKey);return {schema:'amc-creative-intent',version:'1',reference:row.id,revision:'1',projection:{...row.intent}}},
-      resolve:async({actor,binding})=>({...((await intentBy(pool,actor,'id',binding.reference)).intent)}),
+      bind:async({actor,requestKey})=>{const row=await intentBy(pool,actor,'request_key',requestKey);return {schema:'amc-intent-reference',version:'2',reference:row.id,revision:'1',projection:nativeIntentProjection(row.intent)}},
+      resolve:async({actor,binding})=>resolveNativeIntentProjection((await intentBy(pool,actor,'id',binding.reference)).intent,binding),
       authorize:async({actor,binding})=>{if(!await authorize(actor))return false;await intentBy(pool,actor,'id',binding.reference);return true},
     },
     verifyOutcome:async(_input,result,{actor,history})=>{

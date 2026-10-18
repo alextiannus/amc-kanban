@@ -19,6 +19,13 @@ export type SkuIntent = SkuBinding & {kind:'sku_proposal'|'creative_adaptation';
 export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent | SkuIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
+// Bind a compact immutable reference; prose remains available through amc.context.
+export function nativeIntentProjection(intent:NativeIntent){return {kind:intent.kind,brandId:intent.brandId,userId:intent.userId,payloadDigest:createHash('sha256').update(stableJson(intent)).digest('hex')}}
+export function resolveNativeIntentProjection(intent:NativeIntent,binding:{schema:string;version:string}){
+  if(binding.schema==='amc-creative-intent'&&binding.version==='1')return {...intent}
+  if(binding.schema==='amc-intent-reference'&&binding.version==='2')return nativeIntentProjection(intent)
+  throw nativeError('unsupported_intent_binding',409)
+}
 // Compare SKU JSON values, not their historical order-sensitive digest. JSONB
 // reorders objects recursively; optional undefined fields disappear on storage.
 // Keep every bound field (including source, decision and autopilot) and array
