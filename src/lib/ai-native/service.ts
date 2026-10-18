@@ -363,7 +363,7 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
  const source=(history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
  const skillContent=source?.skill?.content
  let provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
- if(draft.scope.stage==='marketing_plan')provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null
+ if(draft.scope.stage==='marketing_plan'){provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null;provenance.creativeSearch=source?.creativeSearch||null}
  let adoptionDraft=draft
  if(draft.scope.stage==='interview'){
   const audit=await prisma.auditLog.findFirst({where:{actorId:userId,resourceId:`interview-info:${brandId}:${taskId}`,action:'INTERVIEW_INFORMATION_SOURCES'}})

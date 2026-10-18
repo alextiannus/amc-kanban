@@ -76,7 +76,7 @@ export function planningDraftContract(scope:PlanningScope){
 export function annualPlanningMonths(start:string){return Array.from({length:4},(_,quarter)=>planningMonths(start,quarter)).flat()}
 export function sixPlanningMonths(start:string){return [...planningMonths(start),...planningMonths(start,1)]}
 export function marketingPlanShape(start:string){return {
- strategyFramework:{summary:['阶段目标、主客群、主推、内容、转化及本月重点的一页摘要'],diagnosis:['来源观察→优先瓶颈→应对；SWOT对应行动'],objectives:['目标优先级/依据/基线/指标/周期；未知基线如实说明'],audience:['主次客群/消费场景/动机/顾虑/所需证据'],products:['真实产品/角色/优先级/利益/证据/暂不主推理由'],content:['持续主线/目的/品牌专属角度/素材/CTA/表达边界'],channels:['实际平台/角色/内容适配/下一步CTA/入口状态/转化阻力'],exposure:['适用曝光手段/目的/预算与确认状态/测量；无确认不执行'],review:['Monthly Insight指标/来源与限制/继续调整停止条件/次月反馈']},strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
+ strategyFramework:{summary:['阶段目标、主客群、主推、内容、转化及本月重点的一页摘要'],diagnosis:['来源观察→优先瓶颈→应对；SWOT对应行动'],objectives:['目标优先级/依据/基线/指标/周期；未知基线如实说明'],audience:['主次客群/消费场景/动机/顾虑/所需证据'],products:['真实产品/角色/优先级/利益/证据/暂不主推理由'],content:['内容主题、目的、品牌专属创意、真实参考来源、所需素材、希望顾客采取的行动及表达限制'],channels:['实际平台、内容安排、顾客下一步行动、访问或下单方法及目前障碍'],exposure:['适用曝光手段/目的/预算与确认状态/测量；无确认不执行'],review:['Monthly Insight指标/来源与限制/继续调整停止条件/次月反馈']},strategyDirection:['基于品牌定位提出的营销主方向、客群与取舍'],informationToSupplement:['影响当前策划的缺失信息及补充理由；无明确缺口时返回空数组'],
  brandCharacteristics:['品牌特点、定位与客群'],coreSellingPoints:['有来源的核心卖点及表达场景'],
  swot:{strengths:['优势及依据'],weaknesses:['劣势及依据'],opportunities:['机会及依据'],threats:['威胁及依据']},
  annualCalendar:annualPlanningMonths(start).map(month=>({month,theme:'月度活动节点',campaign:'简述品牌适用活动方向与时间；活动详细策划作为独立工作，日期未经核实写待确认'})),
