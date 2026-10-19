@@ -35,7 +35,7 @@ AMCMM AI Native 的主要业务目标是：根据当前品牌资料主动从 AMC
 
 工作台设定入口位于「系统设置 → 工作台设定」，创意工作台不再显示个人偏好编辑器。初始设定从当前品牌名称、行业、语气、受众、产品、市场及内容限制自动生成；已有个人品牌偏好优先保留。品牌默认值随资料更新而重新读取，不自动写入个人记忆；恢复品牌默认会遗忘自定义偏好，保留Core遗忘版本，不能恢复旧内容。切换品牌重新加载且隔离设定；缺失资料不推测。此入口调整及默认投影已上线，生产隔离品牌保存/回读/恢复及权限验收通过。
 
-本次新增流程状态：2026-09-30 已部署；真实 Content 创意库、真实模型、审阅保存及计划回读验收通过；制作交接通过真实组件/模拟 API 验证，未执行真实付费生成或公开发布。首页和 Brand Ideas 预览不新建 AI 任务；用户主动展开任务面板时接受一次有界推荐任务，同一用户/品牌/UTC 日/品牌事实快照复用任务；明确刷新可启动新任务。后台 Runtime 在关页后继续，缺少事实进入同一任务的资料等待。只接受 Content 返回的持久原创意 ID，保留检索快照与摘要；无匹配如实展示，不伪造来源。
+历史上线记录（当前创意准入以创意浏览契约为准）：本次新增流程状态：2026-09-30 已部署；真实 Content 创意库、真实模型、审阅保存及计划回读验收通过；制作交接通过真实组件/模拟 API 验证，未执行真实付费生成或公开发布。首页和 Brand Ideas 预览不新建 AI 任务；用户主动展开任务面板时接受一次有界推荐任务，同一用户/品牌/UTC 日/品牌事实快照复用任务；明确刷新可启动新任务。后台 Runtime 在关页后继续，缺少事实进入同一任务的资料等待。只接受 Content 返回的持久原创意 ID，保留检索快照与摘要；无匹配如实展示，不伪造来源。
 
 用户可编辑标题、策划、文案、素材要求及平台目标；发布日期只通过独立 schedule/unschedule 设置，不属于内容 patch。采用在同一事务保存来源快照、候选、人工差异、真实作者和主理人，CAS/幂等及回读核对；相同推荐仅首次采用，之后走版本编辑。保存后可保留为无日期内容创意，或固定该版本进入制作；付费重做、批准与正式发布各自确认。
 
@@ -210,7 +210,7 @@ AMC-MM keeps an application-owned, persisted idea pool separate from reviewed pu
 
 Six is a replenishment target backed by real library matches, not permission to fabricate sources. Empty matches and outages preserve the existing pool; the UI shows a shortfall. Failed or interrupted searches are not automatically repeated that day because transport completion may be unknown. Startup catches up the current day, not every missed date. Invalid brand time zones fall back to UTC; missing zones use Asia/Singapore.
 
-The dashboard, inbox and brand-idea menu now use one full-screen Creative Browser and the same brand-scoped `/api/brands/:id/ai/brainstorm` feed (implementation and release proof are recorded separately). It combines persisted Content sources with historical saved ideas returned for a fresh decision. Each dashboard mount shows at most one aggregate creative notification per user/brand; individual ideas do not rotate through repeated popups. Opening or switching ideas reads original videos, original script highlights and recommendation reasons without adaptation. Like saves a versioned calendar selection; returned ideas retain their original ID, script and production history. Dislike remains permanent within the brand; defer survives refresh. Explicit Replicate starts the existing script-review/production flow. New automatic matches at or above 90 retain their workflow, but legacy records cannot be automatically re-admitted.
+The dashboard, inbox and brand-idea menu now use one full-screen Creative Browser and the same brand-scoped `/api/brands/:id/ai/brainstorm` feed (implementation and release proof are recorded separately). It combines persisted Content sources with historical saved ideas returned for a fresh decision. Each dashboard mount shows at most one aggregate creative notification per user/brand; individual ideas do not rotate through repeated popups. Opening or switching ideas reads original videos, original script highlights and recommendation reasons without adaptation. Like saves a versioned calendar selection; returned ideas retain their original ID, script and production history. Dislike remains permanent within the brand; defer survives refresh. Explicit Replicate starts the existing script-review/production flow. Every new match, including scores at or above 90, requires a human Like before calendar admission and explicit Replicate before adaptation or production. Automatic discovery only recommends original sources; it never bypasses these decisions.
 
 Storage: `amc_iaic.brand_idea_days` and `amc_iaic.brand_ideas` retain immutable discovery evidence. The unified browser reads them alongside saved calendar records and source-matching receipts. `POST /api/brands/:id/ai/brainstorm` supports `decide` for fixed original sources and `decideSaved` for returned saved records; both authorize current human brand-write access and serialize decisions on the brand lock. Neither Like nor viewing admits an AI task. The historical `/ai/ideas` and `/ai/tasks` APIs remain compatible for existing tasks; they are not the inbox selection entry point.
 
@@ -226,13 +226,13 @@ The isolated production fixture received six real Content sources. Selecting one
 
 相似性规则包括原创意 ID、去掉追踪参数的来源 URL、规范化原创文本和字符三元组相似度（Dice ≥ 0.82）。根据原创证据分类为制作过程、产品展示、品尝、知识、对比、顾客故事、品牌故事、场景、探店、优惠、幽默及未分类。每一方向同时最多两个，优先补齐缺少方向；未分类也限制为两个。此版本使用保守分类和文本相似度，不宣称语义识别完全准确。写入策划的品牌级事务锁内再次核对，防止并发任务绕过限制。
 
-匹配后的每个创意通过 IAIC Core 的持久任务读取当前品牌资料，产品目录存在时绑定真实 SKU，目录为空时生成无 SKU 引用的完整品牌通用脚本，并提供逐项素材需求；成功后自动加入品牌的发布策划，状态为 AI 待审核。无需点击创意才启动适配。Core 负责执行、等待、用量、恢复和产物；应用层仅认领每日检索、关联来源、校验及归档版本。后台任务使用主理人或 OWNER 的当前授权、单独的 brand_daily 范围，按品牌范围单独记录自动任务消耗，不设日额度上限。HTTP 调用不能请求该范围。主理人可在任务列表补充资料、查看等待原因或取消。
+每日匹配只保存原创意和匹配依据到创意浏览；不再为每个匹配自动准入改写任务或加入日历，包括90分以上来源。用户喜欢后加入日历，再显式复刻后通过既有持久任务编写、Review和采用脚本。后台保留来源查询、等待、用量和历史回执，不取消或删除既有制作结果。
 
-当自动适配任务明确停在 `interrupted` 或 `limit`，且 Core 确认该任务用量已完全结清、当前创意未写入策划时，应用可为“补齐六个可审核创意”建立当前应用版本唯一的恢复任务。恢复任务保留前任务 ID 和版本证据，不修改 Core 状态表；同一创意在同一应用版本只准入一次，消耗持续记录，不设每日任务额度上限。已有六个成功策划或当前版本恢复任务已占满缺口时，不再续调。输入等待、未知用量、未知外部结果、取消及其他失败状态不自动重建。滚动部署中的待命实例在取得 Core 执行器所有权前不得准入自动每日任务，避免旧执行器认领新版本任务。已成功生成、但被品牌策划的同方向上限拒绝的池候选会保留完整任务证据并退出活跃池，后续当地日改从其他方向补位；不得绕过方向门禁硬塞重复内容。
+旧自动适配任务与用量历史继续可读；新创意流程不再自动创建恢复改写任务来补足数量。未知外部结果只核对原任务回执，不重建、不自动采用或制作。用户在日历中显式复刻时复用既有权限、固定来源、审阅与幂等协议。
 
-自动入策划的版本记录 actor=AI，并关联授权主理人、品牌、SKU、原始创意快照、Core task 和 artifact。审核前不转入生产草稿；主理人修改保存后记录 HUMAN 版本，再添加素材制作。下载仅包含当前素材清单与拍摄辅助要求，不包含完整脚本或发布文案。新创意替换旧建议时，只归档旧的未审核自动稿，保留不可变版本及已审核的人工作品；已有人工作品占满方向时不再添加第三份。因品牌事实变化而无法保存的任务保留明确状态，等待后续新建议，不重复计费无限重试。
+来源推荐、人工喜欢、脚本改写与 Review／采用分别记录真实操作者和回执；匹配或喜欢均不能冒充脚本完成。旧来源、AI版本、人工作品和制作结果保留，不因退回浏览删除或覆盖。
 
-本地验证已覆盖：品牌时区与八并发每日认领、6→18 增长、来源绑定、六个真实 Core 持久任务（测试模型）、AI/主理人/原创意版本链、幂等重放、审核前无生产草稿、人工审核、自动归档和授权撤销；恢复专项另验证部署版本中断、用量结清门禁、同版本幂等、前任务 ID 保留、当地日额度、六个策划落库及重复轮询不新增任务。TypeScript 和生产构建通过。桌面和手机端消息预览、品牌隔离、已适配脚本详情审核、保存响应丢失重试及素材下载沿用既有回归结果。
+历史自动流程验证记录（不代表当前创意流程）：本地验证已覆盖：品牌时区与八并发每日认领、6→18 增长、来源绑定、六个真实 Core 持久任务（测试模型）、AI/主理人/原创意版本链、幂等重放、审核前无生产草稿、人工审核、自动归档和授权撤销；恢复专项另验证部署版本中断、用量结清门禁、同版本幂等、前任务 ID 保留、当地日额度、六个策划落库及重复轮询不新增任务。TypeScript 和生产构建通过。桌面和手机端消息预览、品牌隔离、已适配脚本详情审核、保存响应丢失重试及素材下载沿用既有回归结果。
 
 发布恢复说明：此次滚动发布时，旧执行器在退出前认领了新版本的 50 个零调用任务，Core 以 version_mismatch 将其暂停。切换完成后，通过公开的 tasks.resume 接口恢复原任务；没有重建任务、修改 Core 状态表或重复模型调用。受限恢复程序为 scripts/reconcile-daily-deploy-interruptions.mts --apply：只处理当前版本校验通过、因旧执行器而 interrupted、调用历史为空且用量已结清的任务。它是发布后的维护操作，不会自动恢复输入等待、未知用量或已执行过模型调用的任务。测试已复现旧执行器暂停六个新任务，再以新执行器恢复同一任务并完成版本保存。
 
@@ -249,13 +249,13 @@ The isolated production fixture received six real Content sources. Selecting one
 
 ## 品牌自动驾驶（2026-10-01，配置与 Agent 能力已上线，全链路生产验收进行中）
 
-系统设置提供品牌级自动驾驶开关，默认开启。未配置品牌由应用默认政策初始化，以当前有效主理人/OWNER 为 User AI 的委托主体，使用品牌可用账号（优先 Instagram，其次 Facebook、小红书、Google Business），默认每日1份；主理人可关闭、调整账号及每日数量（1–3）。已有明确关闭的设置不得覆盖，初始化审计标记 SYSTEM 默认政策，不伪称人工点击授权。开启是对品牌调查、策划以及 SKU 人工确认后的创意适配与图文发布内容生成的持续授权，不替代 SKU 人工确认；正式发布仍必须人工确认，不自动排期或调用发布服务。沿用中央模型，额度不设上限并记录消耗，不购买余额。视频付费渲染继续使用既有制作入口，本期开关自动生成图文内容。
+自动驾驶当前范围：经既有品牌授权继续资料调研、品牌策划和真实来源匹配；全部分数的创意先进入创意浏览。用户喜欢后才进入日历，再显式复刻、Review和采用脚本后通过交互流程制作。后台自动任务在创意决策处等待用户，不自动改写、采用、制作或发布。既有结果仍可核对，不重复付费生成。
 
 自动驾驶的决策与执行由 AMCMM User AI Assistant Agent 承担：读取 Skill、选择并调用能力、使用 IAIC Core 持久任务和 external_result 等待、核对草稿回执。应用后台仅初始化默认配置、每天唤醒原 User AI 任务并投影状态，不用固定步骤流水线冒充 Agent。服务端持久保存授权主体、配置版本和每日业务执行回执；关闭立即阻止后续步骤，已提交外部任务只核对原结果。每一步重验主理人身份、品牌和能力权限；品牌时区每日有界执行，多副本不能重复生成。Google 仅读取精确绑定门店的授权资料，菜单按来源去重、评价与商品事实分开；调研复用 Growth 网络调研和来源快照，缺失资料明确记录，不伪造 SKU 或隐性绑定商家。调研默认七天内复用，User AI 根据已有策划与当前调研决定本次策划内容。每天创意检索仍只认领一次，保留6–18目标及方向上限。
 
 自动生成引用已保存 AI 创意的固定版本，保留原创意、品牌、授权主理人、模型产物和素材来源。图文使用当前品牌匹配素材；缺少必要素材时等待补充，不用无关图片冒充。每个原脚本最多自动生成一次；每日最多配置数量。发布草稿状态仍为 draft，不伪造人工审核。外部生成结果未知停止重提，展示需要核对；并发、关页、关闭开关和权限撤销不能触发重复收费。设置显示步骤、结果和需处理原因，无配置的既有品牌同样按默认政策开启；缺少有效主理人或账号时保持待配置，不执行生成。
 
-自动驾驶本地验证：真实 PostgreSQL + IAIC Runtime（测试模型）验证 Agent 能力决策、资料结果等待与重启恢复、策划/脚本版本/素材追溯、并发幂等、每日数量上限、未知生成结果不重提、默认开启及显式关闭保留、权限隔离；手机/桌面设置验证通过。外部生成提供方在该测试中使用替身，此证据不等于真实模型及全链路生产成功。
+历史自动流程验证记录（不代表当前创意流程）：自动驾驶本地验证：真实 PostgreSQL + IAIC Runtime（测试模型）验证 Agent 能力决策、资料结果等待与重启恢复、策划/脚本版本/素材追溯、并发幂等、每日数量上限、未知生成结果不重提、默认开启及显式关闭保留、权限隔离；手机/桌面设置验证通过。外部生成提供方在该测试中使用替身，此证据不等于真实模型及全链路生产成功。
 
 上线核验：Kanban `1adf2125`、AMC-MM `1fe7dd48` 已部署。19 个具有有效主理人和目标账号的品牌已初始化为默认开启，每日任务全部绑定到对应 User AI。用户明确关闭的配置保持关闭。默认开关、权限、并发幂等、数量限制与手机/桌面设置已通过验证；测试使用替身模型及生成服务，尚不能据此宣称真实模型已完成端到端内容生成。
 
@@ -267,7 +267,7 @@ The isolated production fixture received six real Content sources. Selecting one
 
 用户自己的 AI 助手使用 UserApiKey，代表 Key 所属用户调用其全部已授权业务能力。UI、REST、MCP、内置 User AI 与外部助手共享当前用户角色、品牌范围、领域规则及结果，不因 api_key 来源降权、另设 Agent 白名单或注册要求，也不获得额外权限。Cookie、Bearer 和 x-api-key 是认证方式而非业务权限。显式凭证无效时不得回退另一有效 Cookie；停用用户、Key 撤销/过期和角色/品牌撤权必须对下一次动作生效。内部 Content 服务 Token 不能代替用户授权；下游身份票据保留来源及 credentialId 并重新校验撤销状态。
 
-代理只向固定主系统转发用户凭证；不转发客户端提供的内部角色或用户身份头。模型凭证与用户访问 Key 分离，不向模型、浏览器或日志输出密钥。业务确认规则在各入口一致：自动驾驶生成草稿，正式发布由用户明确确认；外部助手可以表达该确认，但不能从开启自动驾驶推断发布授权。
+代理只向固定主系统转发用户凭证；不转发客户端提供的内部角色或用户身份头。模型凭证与用户访问 Key 分离，不向模型、浏览器或日志输出密钥。业务确认规则在各入口一致：创意先由用户喜欢，再显式复刻、Review和制作，正式发布由用户明确确认；外部助手可以表达该确认，但不能从开启自动驾驶推断发布授权。
 
 验收以相同用户/输入经 UI 会话和 API 调用的结果为准，覆盖创意、知识、素材、视频制作、草稿编辑、通知、审核和排期，以及普通用户/管理员、Key 撤销/过期、用户停用、实时撤权、跨品牌隔离、无效 Key + 有效 Cookie、重复写入与未知结果。能力测试、生产验证和完整 Framework 验收分别记录，不能以代理修复或 HTTP 200 代表完整验收通过。
 

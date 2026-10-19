@@ -55,14 +55,14 @@ try{
  assert.equal(Object.values(knowledge.marketingSolution.publishingCalendar.months).flat().filter((i:any)=>calendarCreativeOption(i)).length,3)
  assert.equal((await prisma.contentDraft.findUniqueOrThrow({where:{id:real.id}})).status,'scheduled')
  assert.equal(await prisma.auditLog.count({where:{actorId:userId,action:'RETURNED_CREATIVE_DECISION_SAVED'}}),3)
- // New automatic high-match sources retain their separate workflow, never re-admit old ones.
+ // Even new >=90 sources must wait for Like; no score authorizes automatic work.
  await prisma.contentDraft.update({where:{id:real.id},data:{status:'archived'}});await prisma.contentDraft.update({where:{id:placeholder.id},data:{status:'archived'}})
  await pool.query('INSERT INTO amc_iaic.brand_ideas(id,brand_id,source_id,source,context_digest,match_id,library_versions) VALUES($1,$2,$3,$4,$5,$6,$7)',[randomUUID(),brandId,'cre_auto',JSON.stringify(source('cre_auto',93)),'context','match','{}'])
  await pool.query('INSERT INTO amc_iaic.brand_ideas(id,brand_id,source_id,source,context_digest,match_id,library_versions) VALUES($1,$2,$3,$4,$5,$6,$7)',[randomUUID(),brandId,'cre_native_only',JSON.stringify(source('cre_native_only',95)),'context','match','{}'])
  await prisma.brandKnowledge.update({where:{brandId},data:{publishingFreq:{platforms:{instagram:{postsPerMonth:4}}}}})
  const automatic=await admitBrandIdeas(userId,brandId,undefined,prisma,async()=>{})
- assert.equal(automatic.selected.length,1);assert.notEqual(automatic.selected[0].creativeId,old.id)
- console.log('PASS real PostgreSQL: legacy/old likes return without deleting data; fresh concurrent Like reuses records, defer durable, inbox pool Like unified, no rewrite, real schedules retained, >=90 new auto only')
+ assert.equal(automatic.selected.length,0);assert.equal(automatic.reason,'human_choice_required');assert((await listBrainstorm(userId,brandId)).items.some(i=>i.sourceId==='cre_auto'))
+ console.log('PASS real PostgreSQL: legacy/old likes return without deleting data; fresh concurrent Like reuses records, defer durable, inbox pool Like unified, no rewrite, real schedules retained, >=90 sources also require Like')
 }finally{
  await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[brandId]);await prisma.auditLog.deleteMany({where:{actorId:userId}});await prisma.contentDraft.deleteMany({where:{brandId}});await prisma.brandMarketingSolution.deleteMany({where:{brandId}});await prisma.brandKnowledge.deleteMany({where:{brandId}});await prisma.brand.deleteMany({where:{id:brandId}});await prisma.user.deleteMany({where:{id:userId}});await pool.end();await prisma.$disconnect()
 }

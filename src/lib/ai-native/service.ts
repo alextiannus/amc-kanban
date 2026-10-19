@@ -1,3 +1,4 @@
+import {creativeIsSelected} from '../brand-plan/creativeVisibility'
 import {prisma} from '../prisma'
 import {createHash} from 'node:crypto'
 import {laneCursors,nextLaneCursor} from './runtime-routing'
@@ -133,6 +134,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
       intent=saved
     }else{
       const ctx=await readSkuContext({id:userId,type:'HUMAN'},brandId,body.month,body.creativeId)
+      if(!creativeIsSelected(ctx.current.current))throw nativeError('idea_not_selected_for_calendar',409)
       if(!ctx.current.canOverwrite)throw nativeError('creative_edit_forbidden',403)
       if(body.expectedRevision!==ctx.binding.expectedRevision)throw nativeError('creative_revision_conflict',409)
       intent={...common,...ctx.binding,kind,...(autopilotRunId?{autopilotRunId}:{}),...(kind==='creative_adaptation'?{decisionDigest:body.decisionDigest}:{})}
@@ -158,6 +160,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   }
   if(intent.kind==='creative'){
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,intent.month,intent.creativeId)
+    if(!creativeIsSelected(current.current))throw nativeError('idea_not_selected_for_calendar',409)
     if(current.expectedRevision!==intent.expectedRevision)throw nativeError('creative_revision_conflict',409)
     if(intent.editMode!=='materials'&&['awaiting_sku','sku_confirmed'].includes(current.current?.adaptationStatus))throw nativeError('sku_confirmation_required_use_creative_adaptation',409)
   }

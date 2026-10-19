@@ -14,10 +14,10 @@ export async function readDislikedCreativeSources(db:any,brandId:string,workspac
 }
 
 // The rollout intentionally returns every previous selection to browsing.
-// This server-owned version is only issued by a fresh choice or new >=90 match.
+// This server-owned version is only issued by a fresh human Like, irrespective of match score.
 export const creativeSourceId=(item:any)=>item?.inspirationCreativeId||item?.source?.inspirationCreativeId||item?.nativeSourceSnapshot?.source?.inspirationCreativeId||null
 export const CREATIVE_SELECTION_POLICY='creative-browser-v2'
-export const creativeIsSelected=(item:any)=>creativeIsVisible(item)&&item?.creativeBrowserSelection?.policy===CREATIVE_SELECTION_POLICY&&['like','automatic_high_match'].includes(item.creativeBrowserSelection.reason)
+export const creativeIsSelected=(item:any)=>creativeIsVisible(item)&&item?.creativeBrowserSelection?.policy===CREATIVE_SELECTION_POLICY&&item.creativeBrowserSelection.reason==='like'
 
 /** Hide only untouched legacy selection placeholders; preserve real work and rows. */
 export function returnedCreativePlaceholderFilters(workspace:any){

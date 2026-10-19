@@ -68,6 +68,7 @@ export async function decideSavedBrainstorm(userId:string,brandId:string,body:an
  if(body.decision==='dislike')return dismissCalendarCreative(userId,brandId,{action:'dismiss',creativeId:body.creativeId,expectedRevision:body.expectedRevision},db)
  return db.$transaction(async(tx:any)=>{
   await authorizeBrainstorm(userId,brandId,true,tx)
+  await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{}})
   await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId"=${brandId} FOR UPDATE`
   const {workspace,entries,disliked}=await browserState(tx,brandId),found=entries.filter(({item})=>item.id===body.creativeId)
   if(found.length!==1)throw nativeError('creative_not_found_or_ambiguous',404)
@@ -116,6 +117,7 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
  const input=parseBrainstormDecision(body)
  return db.$transaction(async(tx:any)=>{
   await authorizeBrainstorm(userId,brandId,true,tx)
+  await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{}})
   await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
   const previous=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_DECISION,period:input.sourceId},orderBy:{version:'desc'}})
   if(previous?.input?.decision===input.decision&&previous?.input?.sourceDigest===input.sourceDigest)return {ok:true,replayed:true,...previous.output,version:previous.version}
@@ -157,7 +159,7 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
  if(Object.keys(body).some(k=>!['action','creativeId'].includes(k))||typeof body.creativeId!=='string')throw nativeError('invalid_brainstorm_request',400)
  await authorizeBrainstorm(userId,brandId,true,db)
  const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,'',body.creativeId,undefined,db)
- if(current.current?.brandDismissal?.decision==='dislike'||!current.current?.brainstorm||!current.canOverwrite)throw nativeError('brainstorm_source_not_found',404)
+ if(!creativeIsSelected(current.current)||current.current?.brandDismissal?.decision==='dislike'||!current.current?.brainstorm||!current.canOverwrite)throw nativeError('brainstorm_source_not_found',404)
  if(current.current.planning?.trim())return {ok:true,creativeId:body.creativeId,alreadyRewritten:true}
  const fixed=current.current.source
  if(!fixed?.inspirationCreativeId||!fixed.sourceRevision||!fixed.sourceDigest)throw nativeError('creative_source_not_found',404)
@@ -182,6 +184,7 @@ export async function dismissCalendarCreative(userId:string,brandId:string,body:
  if(!body||Object.keys(body).some(k=>!['action','creativeId','expectedRevision'].includes(k))||body.action!=='dismiss'||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||''))throw nativeError('invalid_brainstorm_request',400)
  return db.$transaction(async(tx:any)=>{
   await authorizeBrainstorm(userId,brandId,true,tx)
+  await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{}})
   await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
   const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge),months=workspace.publishingCalendar?.months||{}
   const entries=Object.entries(months).flatMap(([month,items]:any)=>Array.isArray(items)?items.filter((i:any)=>i.id===body.creativeId).map((current:any)=>({month,current})):[])

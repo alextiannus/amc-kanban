@@ -18,8 +18,8 @@
         "repository": "amc-kanban",
         "path": "skills/amc-autopilot"
       },
-      "version": "sha256:5238d9c445e320bd98e0a2d01c303890f362ef3db9fa47f9835db5ac1d59b5eb",
-      "description": "User AI Assistant owns authorized autonomous brand research, planning and publishable photo-post creation. Publication requires human confirmation."
+      "version": "sha256:f8bd059774ee3e46f0c96ad2336960e6a3e0b5701e00f71a9ff825ad92322501",
+      "description": "User AI Assistant owns authorized autonomous brand research, planning and original-idea recommendations. Publication requires human confirmation."
     },
     {
       "id": "amc-brand-planning",
@@ -100,7 +100,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-discovery"
       },
-      "version": "sha256:65a7e88561b0aa04aaf8b5c39c4f6d093e0f50e3f36f0e11c27eff4a4da09243",
+      "version": "sha256:20bf471d1fc1e1119571582407ea5442236cde262cb3fd313e58155b8e1cd2c0",
       "description": "Select authoritative creative sources for the brand's SKU confirmation workflow."
     },
     {
@@ -132,7 +132,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-marketing-expert"
       },
-      "version": "sha256:1ffc5e03eb4bc8e69dbb5ba800ce281d6bc3665945e71400c5b9281816a00092",
+      "version": "sha256:27fdbf6909407c6711726cca3d4c18b61e7ccce5619c21b233b00dd0155766cc",
       "description": "AMC 营销专家，与品牌主或品牌主理人通过多轮对话共同完成 Insight 网络洞察、品牌访谈/品牌定位、完整品牌营销策略及逐月行动清单；适用于品牌营销讨论、年度规划与执行跟踪。"
     },
     {
@@ -510,7 +510,7 @@
     "skills/amc-content-copywriting/references/content-defaults.json"
   ],
   "files": {
-    "skills/amc-autopilot/SKILL.md": "3c15265143bf053f18b746b23348b98dd23f627f4deb04c00417eaced8437177",
+    "skills/amc-autopilot/SKILL.md": "6e1e0dd83d355bbdb32ccd4f745096f06bb05a75ecff31e6279b026840995ff1",
     "skills/amc-autopilot/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-brand-planning/SKILL.md": "b3928775c880ca1aae168645ab884c5877ff160a2b725f6972751358cf561d84",
     "skills/amc-brief/SKILL.md": "6c2a096ab3ae40a4acdbb1f81b76d5e81341d158c6165152e64b5afa63c3a89f",
@@ -532,7 +532,7 @@
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-creative/SKILL.md": "fe7167c5a53b33efc7339761ec91ef64f6619c5237eba6047069182cafcca9d7",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-discovery/SKILL.md": "9fc007e2845e99298395e85bbbae3a8a276d91337d5e74bf1754ff1ce4a1fbd9",
+    "skills/amc-discovery/SKILL.md": "deea57f337d66c1e07293d0e7b026f7da3c7a73586c8c1e3f6755a7fc7b0d3d3",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",
     "skills/amc-kanban/references/kanban-openapi.yaml": "1ab3963e32b0b4aaae62a2ced01f6c893d7b034706a814fd089d6a7eff4bc946",
@@ -542,7 +542,7 @@
     "skills/amc-knowledge/references/file-schemas.md": "6ac342d1d48c897dbb22ff3a15d53a69b574960a30a45c7795c5cd2254818102",
     "skills/amc-knowledge/references/intake-workflow.md": "19d83ff83da008b395cff96a5e13fd08db1f8b8c363da22487aba752e04ac82b",
     "skills/amc-knowledge/references/service-plan-scoping.md": "0190b1cdc46c5a12325a9876d64ae025ab546c8a2b055d5fc3cb403b28e1227f",
-    "skills/amc-marketing-expert/SKILL.md": "9408c973a8624f4fdea6d4b6f2238b2d8320016ebb47bf26d6793597770f8425",
+    "skills/amc-marketing-expert/SKILL.md": "b5930d7ea056fc71177be7c8978c1a6846f53b3e1b8be555abccaa82cece5924",
     "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
     "skills/amc-marketing-expert/references/overseas-platform-strategy.md": "fb9fc12c24f19691cfb0bda1fd82595dcd3a2c6e3bd9ce811dbfef75da64ea6a",
     "skills/brand-intelligence-intake/SKILL.md": "aea6f0010f18cc49d576382a1d85ff94e4362cda6298bb4b6fb0fb69cf4fa2ce",

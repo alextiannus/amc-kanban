@@ -61,10 +61,8 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
  }
  if(action==='ideas'){
   const ideas=await readIdeaPool(userId,brandId)
-  const outputs=(await pool.query('SELECT creative_id,status,run_id FROM amc_iaic.autopilot_outputs WHERE brand_id=$1',[brandId])).rows
-  const candidates=ideas.items.filter((item:any)=>item.selected_at&&item.creative?.draftId&&!outputs.some(o=>o.creative_id===item.creative.id)).map((item:any)=>({id:item.creative.id,month:item.plan_month,...item.creative})).slice(0,6)
-  const assets=await prisma.mediaAsset.findMany({where:{brandId,sourceType:'upload',mimeType:{startsWith:'image/'}},select:{id:true,filename:true,aiCaption:true,aiTags:true,creativeId:true,rightsStatus:true},orderBy:{createdAt:'desc'},take:50})
-  return {ready:outputs.some(o=>o.run_id===runId)||candidates.length>0||!!ideas.latest&&['completed','failed','interrupted'].includes(ideas.latest.status)&&!ideas.items.some((i:any)=>!i.creative&&!i.last_error),candidates,assets,shortfall:ideas.shortfall,note:'Choose only images matching the idea. If none match, wait for materials. Image posts only; no paid video rendering or publication.'}
+  const candidates:any[]=[] // Matching and Like never authorize automatic replication.
+  return {ready:true,candidates,assets:[],shortfall:ideas.shortfall,waitingForUser:true,note:'All matches, including scores >=90, go to Browse ideas. Wait for human Like, then explicit Replicate and script Review in the content calendar. Do not adapt or generate automatically; use iaic_wait.'}
  }
  const outputs=(await pool.query('SELECT id,creative_id,revision_id,status,draft_id,error FROM amc_iaic.autopilot_outputs WHERE run_id=$1',[runId])).rows
  const research=run.evidence.researchSnapshotId?await prisma.brandGrowthResearchSnapshot.findFirst({where:{id:run.evidence.researchSnapshotId,brandId},select:{report:true,generatedAt:true}}):null
@@ -82,6 +80,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
   await lock.query('SELECT pg_advisory_lock(hashtextextended($1,0))',[`autopilot-operation:${brandId}`])
   const gate=()=>autopilotRun(userId,brandId,runId)
   const run=await gate(),evidence=run.evidence||{}
+  if(['adapt','save_adaptation','generate'].includes(action))return {waitingForUser:true,nextAction:'replicate_in_calendar',note:'Matching and Like do not authorize adaptation or production. Ask the user to choose Like in Browse ideas, then explicitly Replicate and Review from the content calendar; use iaic_wait.'}
   if(action==='profile'){
    if(!evidence.profileRequested){await queueGoogleBrandImport(brandId);evidence.profileRequested=true;await progress(pool,run,'profile',evidence)}
    return readAutopilot(userId,brandId,runId,'profile')
@@ -147,7 +146,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    const facts=await readBrandFacts(prisma,brandId);if(!facts)throw nativeError('brand_not_found',404)
    await refreshBrandIdeas(pool,facts)
    evidence.matchRequested=true;await progress(pool,run,'ideas',evidence)
-   return {accepted:true,note:'Daily library search is deduplicated by brand local date. Read the ranked Brand Ideas list. Matching never adapts or produces content; only Like or empty-calendar selection admits production candidates.'}
+   return {accepted:true,note:'Daily library search is deduplicated by brand local date. Read the ranked Brand Ideas list. Matching never adapts or produces content; all scores require human Like, followed by explicit Replicate and Review; no automatic production.'}
   }
   if(action==='adapt'){
    if(!evidence.strategyVersionId)throw nativeError('strategy_required')
@@ -248,7 +247,7 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
   const run=await autopilotRun(settings.owner_id,brandId,id)
   let taskId=run.task_id
-  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划；执行阶段仅将每日匹配来源候选放入按匹配度排序的品牌创意列表。只有 Like 或空日历按已有发布数量选入后才准备制作；选入不设置日期。仅对已选入内容建议 SKU，等待人工确认后再基于固定来源与确认摘要生成完整逐镜适配脚本，选择合适的品牌素材，生成并保存每日额度内的图文发布草稿。SKU 决策必须由人工确认；空目录也须人工确认「普通品牌内容，非爆款复刻」决策。确认缺失或失效、必要素材缺失、执行结果未知时明确等待，不得自动确认或绕过门槛。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
+  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划；执行阶段仅将每日匹配来源候选放入按匹配度排序的品牌创意列表。所有匹配度（含90分以上）均先进入创意浏览，等待用户喜欢后才进入内容日历；用户再显式点击复刻后通过现有交互流程改写并Review脚本和制作。当前自动任务只做匹配与推荐，不自动选入日历、改写或制作；调用 iaic_wait 等待用户操作。SKU 决策必须由人工确认；空目录也须人工确认「普通品牌内容，非爆款复刻」决策。确认缺失或失效、必要素材缺失、执行结果未知时明确等待，不得自动确认或绕过门槛。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
   let task=await readNativeTask(settings.owner_id,brandId,taskId)
   if(task.status==='waiting'&&task.waitingReason==='interrupted'&&task.version===await applicationVersion()){
    const host=await getNativeHost(),actor=actorFor(brandId,settings.owner_id),history=await host.app.runtime.get(actor,taskId,{history:true})
