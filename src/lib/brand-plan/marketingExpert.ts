@@ -1,13 +1,13 @@
-import {readFile} from 'node:fs/promises'
+import { readAgentSkill } from '../agent-skills/store'
+import { USER_AI } from '../agent-skills/catalog'
 import {createHash} from 'node:crypto'
-import path from 'node:path'
 
 export type MarketingPlanLLMScope = 'annual_strategy' | 'quarter'
 export const MARKETING_EXPERT_SKILL = 'amc-marketing-expert/SKILL.md'
 
 /** One methodology for native chat, installable Skills and legacy persisted plans. */
 export async function buildMarketingExpertPrompt(scope:MarketingPlanLLMScope,input:Record<string,unknown>){
-  const skill=await readFile(path.join(process.cwd(),'skills',MARKETING_EXPERT_SKILL),'utf8')
+  const skill=(await readAgentSkill(USER_AI,MARKETING_EXPERT_SKILL)).content
   const jsonShape = scope === 'annual_strategy'
     ? {
         goal: '一句年度经营目标',

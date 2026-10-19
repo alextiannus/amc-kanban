@@ -2299,3 +2299,14 @@ model ImmediServiceOrder {
   createdAt DateTime @default(now())
   @@index([brandId, createdAt])
 }
+
+// Overrides and tombstones for bundled and custom Markdown Skills.
+model AgentSkillSetting {
+  agentId   String
+  skillId   String
+  content   String? @db.Text
+  installed Boolean
+  revision  Int @default(1)
+  updatedAt DateTime @default(now()) @updatedAt
+  @@id([agentId, skillId])
+}

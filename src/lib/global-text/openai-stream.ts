@@ -1,7 +1,7 @@
 /** Aggregate OpenAI-compatible tool deltas without exposing intermediate output.
  * Only a complete stream may be returned for the normal validation and ledger.
  */
-export async function readOpenAIStream(response:Response){
+export async function readOpenAIStream(response:Response,onTools?:(calls:readonly any[])=>void){
  const reader=response.body?.getReader();if(!reader)throw Error('Text stream body missing')
  const decoder=new TextDecoder(),calls=new Map<number,any>()
  let buffer='',bytes=0,payload=0,id:string|undefined,model:string|undefined,content='',finish:string|null=null,usage:any,done=false
@@ -28,6 +28,7 @@ export async function readOpenAIStream(response:Response){
     if(typeof part.function?.arguments==='string'){call.function.arguments+=part.function.arguments;payload+=Buffer.byteLength(part.function.arguments)}
     calls.set(part.index,call)
    }
+   if(onTools&&calls.size)try{onTools([...calls.values()])}catch{/* Presentation observers cannot alter billing or completion. */}
    if(payload>2_000_000)throw Error('Text stream content too large')
   }
  }

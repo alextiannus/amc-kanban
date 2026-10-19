@@ -115,7 +115,9 @@
     "skills:check": "python3 packages/amc-skills/scripts/manage.py check --consumer kanban=. --archive-dir public/skills",
     "skills:sync": "python3 packages/amc-skills/scripts/manage.py sync --consumer kanban=.",
     "skills:build": "python3 packages/amc-skills/scripts/manage.py build --archive-dir public/skills",
-    "test:skills-package": "python3 packages/amc-skills/scripts/test_package.py"
+    "test:skills-package": "python3 packages/amc-skills/scripts/test_package.py",
+    "test:agent-skills": "tsx scripts/test-agent-skills.mts",
+    "test:agent-skills-ui": "node scripts/test-agent-skills-ui.mjs"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",

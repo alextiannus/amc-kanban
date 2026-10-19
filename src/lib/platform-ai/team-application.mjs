@@ -7,7 +7,7 @@ const denied=()=>Object.assign(new Error('Platform team access denied'),{statusC
 const principal=actor=>JSON.stringify([actor.scopeId,actor.subjectId]);
 
 // Application-owned composition; no new Core Runtime, role class or task table.
-export async function openPlatformTeam({pool,applicationId,teamId,builtinActor,authorizeMember,profile,resolveSecret,tokenPolicy,verifyOutcome,version,skillRoot,skillEntries=[],modelFactory,workCapabilities=[],executionPolicy}){
+export async function openPlatformTeam({pool,applicationId,teamId,builtinActor,authorizeMember,profile,resolveSecret,tokenPolicy,verifyOutcome,version,skillRoot,skillEntries=[],modelFactory,workCapabilities=[],executionPolicy,skillCatalog=null}){
  if(!/^[a-z][a-z0-9-]{0,50}$/.test(teamId)||builtinActor?.scopeId!==applicationId||!builtinActor.subjectId||[authorizeMember,resolveSecret,verifyOutcome].some(p=>typeof p!=='function')||!profile||profile.id!=='system'||!tokenPolicy||!version||!skillRoot)throw new Error('Explicit team, native identity, system model, allowance, verifier and version configuration required');
  const native=Object.freeze({...builtinActor}),nativeId=principal(native),definitionId='platform-'+teamId;
  const member=async actor=>Boolean(actor&&actor.scopeId===applicationId&&await authorizeMember(actor)===true);
@@ -30,7 +30,7 @@ export async function openPlatformTeam({pool,applicationId,teamId,builtinActor,a
   tools.push(defineCapability({...capability,authorize:async(actor,input)=>await member(actor)&&await capability.authorize(actor,input)===true}));
  }
  tools.push(...createPeerReviewCapabilities({reviews}));
- const self=await openNativeResources({pool,documents,applicationId,definitionId,native,authorize:checkNative,skillRoot,skillEntries});
+ const self=await openNativeResources({pool,documents,applicationId,definitionId,native,authorize:checkNative,skillRoot,skillEntries,skillCatalog:skillCatalog?skillCatalog(checkNative):null});
  const nativeTools=[...tools,...self.capabilities];
  const privateNames=new Set(self.capabilities.map(capability=>capability.name));
  const job={id:definitionId,role:'platform',purpose:'Develop and maintain the platform as a team, preserving concepts, evidence, documentation and finite version lifetimes.',capabilities:['platform.team.work'],configuration:{tools:nativeTools.map(t=>t.name),skills:skillEntries}};

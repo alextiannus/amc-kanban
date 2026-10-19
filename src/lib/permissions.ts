@@ -102,6 +102,7 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
     return groups.map(group => ({ ...group, items: group.items.filter(item => {
       if (item.comingSoon) return false
       if (item.id === 'managementOverview') return canReadOperations(roles, grants)
+      if (item.id === 'agent-skills') return true
       if (item.id === 'user-management' || item.id === 'admin') return admin
       if (item.id === 'amc-growth') return admin || roles.includes('AMC_PRINCIPAL')
       const key = item.id.startsWith('content.') ? item.id + '.read' : MENU_PERMISSIONS[item.id]
@@ -188,6 +189,8 @@ export function getMenuGroups(roles: AppRole[], grants?: string[]): MenuGroupDef
 
   // A role with work_log.read may use logs without being an administrator.
   if (isAdmin || isPrincipal || isOwner) groups.push({ groupLabel: '工作区', items: [{ id: 'logs', view: 'logs', label: '工作日志', icon: 'Activity' }] })
+
+  groups.push({ groupLabel: 'AI Agent', items: [{ id: 'agent-skills', view: 'dashboard', label: 'Agents 与 Skills', icon: 'Bot', href: '/agents' }] })
 
   // ── 4. Admin 系统 ─────────────────────────────────────────────────
   if (isAdmin) {

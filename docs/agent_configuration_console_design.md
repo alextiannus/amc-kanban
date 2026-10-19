@@ -80,6 +80,8 @@ AI 生成的图文是否有“烟火气”和“餐厅专属感”，取决于�
 ---
 
 ## 3. 技能安装与插件中心 (Skill Registry & Plugin Store)
+
+当前 Markdown Skill 管理以 [Agent Skills PRD](prd_agent_skills.md) 为准（本地已实现，未发布）。下列服务开关属于工具/订阅能力，不等同于 Markdown Skill 安装；安装 Skill 不增加服务权限。
 AMC 作为一个模块化平台，不同的品牌主可能有不同的分发渠道与营销策略。技能安装中心支持**一键启用/禁用**智能体的高级工具。
 
 *   **智能短链追踪 (Dub.co Link Sync)**:

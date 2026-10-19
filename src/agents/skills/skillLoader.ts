@@ -1,5 +1,5 @@
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { agentSkills } from '../../lib/agent-skills/store'
+import { COPYWRITER } from '../../lib/agent-skills/catalog'
 
 export interface PlatformSkill {
   name: string
@@ -13,7 +13,6 @@ export interface PlatformSkill {
   samplePosts?: string
 }
 
-const SKILLS_BASE_DIR = join(process.cwd(), 'src', 'agents', 'skills', 'platforms')
 
 // Platform aliases → folder name mapping
 const PLATFORM_ALIASES: Record<string, string> = {
@@ -77,13 +76,10 @@ export async function loadPlatformSkill(platform: string): Promise<PlatformSkill
     console.warn(`[SkillLoader] No skill mapping for platform: "${platform}"`)
     return null
   }
-  const skillPath = join(SKILLS_BASE_DIR, folderName, 'SKILL.md')
-  if (!existsSync(skillPath)) {
-    console.warn(`[SkillLoader] Skill file not found: ${skillPath}`)
-    return null
-  }
   try {
-    const raw = readFileSync(skillPath, 'utf-8')
+    const current = (await agentSkills(COPYWRITER)).find(skill => skill.id === `${folderName}/SKILL.md` && skill.installed)
+    if (!current) return null
+    const raw = current.content
     const { meta, body } = parseFrontmatter(raw)
     const hookFormulas = extractSection(body, 'Hook 公式库|Hook Formula Library')
     const formatRules = extractSection(body, '正文格式规范|Body Format Rules|Format Rules|Post Type Formulas')
@@ -103,7 +99,7 @@ export async function loadPlatformSkill(platform: string): Promise<PlatformSkill
     }
   } catch (err) {
     console.error(`[SkillLoader] Failed to load skill for "${platform}":`, err)
-    return null
+    throw err
   }
 }
 
@@ -112,15 +108,5 @@ export async function loadPlatformSkill(platform: string): Promise<PlatformSkill
  */
 export function formatSkillForPrompt(skill: PlatformSkill | null): string {
   if (!skill) return ''
-  const sections: string[] = [
-    `\n--- PLATFORM SKILL: ${skill.name} v${skill.version} ---`,
-  ]
-  if (skill.hookFormulas) sections.push(`\n[Platform Hook Formulas — Use these as your hook template source]\n${skill.hookFormulas}`)
-  if (skill.formatRules) sections.push(`\n[Platform Format Rules — MUST follow]\n${skill.formatRules}`)
-  if (skill.bannedWords && skill.bannedWords.length > 0) {
-    sections.push(`\n[AI-Tone Banned Words — NEVER use these]\n${skill.bannedWords.join(' | ')}`)
-  }
-  if (skill.samplePosts) sections.push(`\n[Writing Style Reference Samples]\n${skill.samplePosts}`)
-  sections.push(`\n--- END PLATFORM SKILL ---\n`)
-  return sections.join('\n')
+  return `\n--- PLATFORM SKILL: ${skill.name} v${skill.version} ---\n${skill.instructions}\n--- END PLATFORM SKILL ---\n`
 }

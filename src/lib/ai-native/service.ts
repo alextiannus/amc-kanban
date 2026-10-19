@@ -1,3 +1,9 @@
+import {NATIVE_RUNTIME_LIMITS} from './assistant-policy'
+import {AMC_CONTEXT_MAX_BYTES} from './runtime-application.mjs'
+import {inspectAssistantHistory,inspectAssistantUsage} from './assistant-inspection'
+import {agentSkills,readAgentSkill} from '../agent-skills/store'
+import {USER_AI} from '../agent-skills/catalog'
+import {strategyChanges} from './strategy-receipt'
 import {creativeIsSelected} from '../brand-plan/creativeVisibility'
 import {prisma} from '../prisma'
 import {createHash} from 'node:crypto'
@@ -70,7 +76,9 @@ export function startNativeWorker(){
   const maintainAll=()=>{void maintain('default');void maintain('conversation')}
   maintainAll()
   const timer=setInterval(maintainAll,60000);timer.unref()
-  process.once('SIGTERM',()=>{globalState.amcNativeStopping=true;clearInterval(timer);void Promise.allSettled((['default','conversation'] as const).map(async lane=>{const pending=globalState[hostKey(lane)];if(!pending)return;const host=await pending.catch(()=>null);if(host){const result=await host.app.runtime.drain({timeoutMs:20000});if(result.drained)await closeHostPools(host)}}))})
+  let saving=false
+  const saves=setInterval(()=>{if(saving||globalState.amcNativeStopping)return;saving=true;void finalizePlanningTasks().catch(()=>{}).finally(()=>{saving=false})},3000);saves.unref()
+  process.once('SIGTERM',()=>{globalState.amcNativeStopping=true;clearInterval(timer);clearInterval(saves);void Promise.allSettled((['default','conversation'] as const).map(async lane=>{const pending=globalState[hostKey(lane)];if(!pending)return;const host=await pending.catch(()=>null);if(host){const result=await host.app.runtime.drain({timeoutMs:20000});if(result.drained)await closeHostPools(host)}}))})
 }
 async function authorizedHost(userId:string,brandId:string,daily=false){const actor=daily?dailyActorFor(brandId,userId):actorFor(brandId,userId);await requireActor(actor);return {actor,...await getNativeHost()}}
 async function taskHost(userId:string,brandId:string,id:string){
@@ -150,6 +158,11 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     if(!await canReadOperations(actor))throw nativeError('operations_access_denied',403)
     intent={...common,kind:'brand_brief'}
   }
+  if(intent.kind==='conversation'&&intent.afterTaskId){
+    const predecessor=await taskHost(userId,brandId,intent.afterTaskId)
+    const previous=await intentForTask(predecessor.pool,predecessor.app,actor,intent.afterTaskId)
+    if(previous.intent.kind!=='conversation'||!intent.conversationId||(previous.intent.conversationId||previous.intent.contextSessionId)!==intent.conversationId||previous.runtime_lane!=='conversation')throw nativeError('conversation_predecessor_mismatch',409)
+  }
   let prior;try{prior=await intentBy(pool,actor,'request_key',key)}catch(e){if((e as any).statusCode!==404)throw e}
   const skuIntent=intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'
   if(prior){
@@ -157,6 +170,10 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
     if(skuIntent?!sameSkuIntent(prior.intent,intent):prior.digest!==digest(intent))throw nativeError('request_key_reused',409)
     const existing=prior.task_id?{id:prior.task_id}:await (app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',key)
     if(existing){await intentForTask(pool,app,actor,existing.id);return publicTask(app,actor,existing.id)}
+  }
+  if(intent.kind==='conversation'){
+    const required=intent.topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md'
+    try{await readAgentSkill(USER_AI,required)}catch(e){if((e as any).statusCode===404)throw nativeError('required_skill_not_installed',409);throw e}
   }
   if(intent.kind==='creative'){
     const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,intent.month,intent.creativeId)
@@ -188,7 +205,7 @@ export async function listNativeTasks(userId:string,brandId:string,cursor?:strin
     if(cursors[lane]===null)return {items:[],nextCursor:null}
     const selected=lane==='default'?{app,pool}:await getNativeHost(true,lane)
     const page=await selected.app.dispatcher.invoke('tasks.list',{limit:20,...(cursors[lane]?{cursor:cursors[lane]}:{})},{actor}) as {items:Array<{id:string}>;nextCursor:string|null}
-    const items=await Promise.all(page.items.map(async item=>{const row=await intentForTask(selected.pool,selected.app,actor,item.id);return {...item,createdAt:row.created_at,goal:row.intent.goal,kind:row.intent.kind,creativeId:row.intent.kind==='creative'?row.intent.creativeId:null}}))
+    const items=await Promise.all(page.items.map(async item=>{const row=await intentForTask(selected.pool,selected.app,actor,item.id);return {...item,createdAt:row.created_at,goal:row.intent.goal,kind:row.intent.kind,conversationId:row.intent.kind==='conversation'?(row.intent.conversationId||row.intent.contextSessionId||null):null,creativeId:row.intent.kind==='creative'?row.intent.creativeId:null}}))
     return {items,nextCursor:page.nextCursor}
   }
   const [background,conversation]=await Promise.all([readPage('default'),readPage('conversation')])
@@ -245,14 +262,39 @@ export async function nativeTaskHistory(app:Application,actor:NativeActor,id:str
 export async function readNativeTask(userId:string,brandId:string,id:string){
   const host=await taskHost(userId,brandId,id)
   const row=await intentForTask(host.pool,host.app,host.actor,id)
-  return readNativeTaskResult(host,userId,brandId,id,row)
+  return row.intent.kind==='conversation'&&row.intent.conversationId?readConversationSnapshot(host,userId,brandId,id,row):readNativeTaskResult(host,userId,brandId,id,row)
 }
 export async function readNativeTaskStatus(userId:string,brandId:string,id:string){
   const host=await taskHost(userId,brandId,id)
   const row=await intentForTask(host.pool,host.app,host.actor,id)
-  return await activeConversationStatus(host.app,host.actor,id,row.intent.kind)||readNativeTaskResult(host,userId,brandId,id,row)
+  const active=await activeConversationStatus(host.app,host.actor,id,row.intent.kind)
+  return (active?{...active,preview:row.conversation_preview?{text:row.conversation_preview,verified:false}:null}:null)||(row.intent.kind==='conversation'&&row.intent.conversationId?readConversationSnapshot(host,userId,brandId,id,row):readNativeTaskResult(host,userId,brandId,id,row))
 }
-async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
+
+/** Completed conversation artifacts are immutable history. Revalidate ownership,
+ * not old source freshness after the strategy itself has advanced the revision. */
+async function readConversationSnapshot(host:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
+ if(row.intent.kind!=='conversation')throw nativeError('conversation_required',409)
+ const {app,actor,pool}=host
+ const state=await app.runtime.state(actor,id)
+ const raw=await (app.tasks as any).get(actor,id)
+ const history=await (app.tasks as any).history(actor,id)
+ let report=null,planningSave:any=null
+ if(state.status==='succeeded'){
+  const ref=raw.result?.artifacts?.find((a:ArtifactReference)=>a.path===row.intent.artifactPath)
+  if(!ref)throw nativeError('reply_unavailable',503)
+  report=conversationFrom((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
+  if(row.intent.autoSavePlanning){
+   if(report.planningDraft?.scope.stage==='marketing_plan')planningSave=await finalizePlanningResult(pool,userId,brandId,id,report.planningDraft,history.calls)
+   else{planningSave={state:'not_changed',verified:false};await pool.query('UPDATE amc_ai_requests SET planning_result=$1 WHERE task_id=$2 AND subject_id=$3',[JSON.stringify(planningSave),id,userId])}
+  }
+ }
+ const usage=await app.ledger.taskUsage(await app.scope(actor),id)
+ const source=conversationInsight(history.calls)
+ return {id,version:state.version,inputRequest:null,candidate:null,artifact:null,month:undefined,creativeId:undefined,status:state.status,waitingReason:state.waiting_reason,kind:'conversation',goal:row.intent.goal,updatedAt:state.updated_at,report,planningSave,usage,historyUnavailable:null,progress:conversationProgress(state.status,history.calls),planningRecovery:planningWriteRecovery(row.intent,state.status,state.waiting_reason||undefined,history.calls),insight:source?{status:source.status,reportVersionId:source.reportVersionId,partial:source.partial,generatedAt:source.generatedAt}:null}
+}
+
+async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
   const view=await nativeTaskHistory(app,actor,id,row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'),history=view.history,task=projectTask(history)
   // Read usage after the result snapshot: otherwise completion can race an earlier pending ledger read.
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
@@ -279,7 +321,8 @@ async function readNativeTaskResult({actor,app}:Awaited<ReturnType<typeof taskHo
   const adoption=skuAdoption||(row.intent.kind==='creative'&&row.intent.adaptToBrand?await adaptedScriptReceipt(userId,brandId,id,row.intent.month,row.intent.creativeId):null)
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
   const contextSnapshot=row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'?history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result||null:null
-  return {...task,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
+  const planningSave=row.intent.kind==='conversation'&&row.intent.autoSavePlanning&&task.status==='succeeded'&&report?.planningDraft?.scope.stage==='marketing_plan'?await finalizePlanningResult(pool,userId,brandId,id,report.planningDraft,history.calls):null
+  return {...task,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app}=await taskHost(userId,brandId,id)
@@ -363,13 +406,7 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
  if(!draft)throw nativeError('planning_draft_unavailable',409)
  const host=await taskHost(userId,brandId,taskId)
  const history=(await nativeTaskHistory(host.app,host.actor,taskId,false)).history
- const source=(history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
- const skillContent=source?.skill?.content
- let provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
- if(draft.scope.stage==='marketing_plan'){
-  if(source?.creativeSearch||draft.data?.brandCreatives?.some((v:unknown)=>typeof v==='string'&&/cre_ins_[a-zA-Z0-9_-]+/.test(v)))throw nativeError('strategy_scope_changed',409)
-  provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null
- }
+ let provenance=planningProvenance(history.calls,draft)
  let adoptionDraft=draft
  if(draft.scope.stage==='interview'){
   const audit=await prisma.auditLog.findFirst({where:{actorId:userId,resourceId:`interview-info:${brandId}:${taskId}`,action:'INTERVIEW_INFORMATION_SOURCES'}})
@@ -387,4 +424,94 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
   }
  }
  return savePlanningDraft(userId,brandId,taskId,adoptionDraft,provenance)
+}
+
+function planningProvenance(calls:readonly {capability:string;status:string;result?:unknown}[],draft:any){
+ const source=(calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
+ const skillContent=source?.skill?.content
+ const provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
+ if(draft.scope.stage==='marketing_plan'){
+  if(source?.creativeSearch||draft.data?.brandCreatives?.some((v:unknown)=>typeof v==='string'&&/cre_ins_[a-zA-Z0-9_-]+/.test(v)))throw nativeError('strategy_scope_changed',409)
+  provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null
+ }
+ return provenance
+}
+async function finalizePlanningResult(pool:Pool,userId:string,brandId:string,id:string,draft:any,calls:readonly {capability:string;status:string;result?:unknown}[]){
+ try{
+  // savePlanningDraft replays the original receipt before checking revisions.
+  // It also re-reads committed history; persisted status is not authorization.
+  const result=await savePlanningDraft(userId,brandId,id,draft,planningProvenance(calls,draft))
+  await pool.query('UPDATE amc_ai_requests SET planning_result=$1 WHERE task_id=$2 AND subject_id=$3',[JSON.stringify(result),id,userId])
+  return result
+ }catch(error){
+  const e=error as {statusCode?:number;code?:string;message?:string}
+  const result={state:e.statusCode===409?'conflict':'retry',verified:false,code:typeof e.code==='string'&&/^[a-z_]{1,100}$/.test(e.code)?e.code:e.statusCode===409?'planning_revision_conflict':'planning_save_unavailable'}
+  if(e.statusCode===409)await pool.query('UPDATE amc_ai_requests SET planning_result=$1 WHERE task_id=$2 AND subject_id=$3',[JSON.stringify(result),id,userId])
+  return result
+ }
+}
+/** Server-owned completion, independent of browser polling. Never generates or publishes. */
+export async function finalizePlanningTasks(){
+ const {pool}=await getNativeHost()
+ const rows=(await pool.query("SELECT task_id,subject_id,intent->>'brandId' AS brand_id FROM amc_ai_requests WHERE intent->>'autoSavePlanning'='true' AND task_id IS NOT NULL AND planning_result IS NULL ORDER BY planning_checked_at NULLS FIRST,created_at LIMIT 12")).rows
+ for(const row of rows){
+  try{
+   await pool.query('UPDATE amc_ai_requests SET planning_checked_at=now() WHERE task_id=$1 AND subject_id=$2',[row.task_id,row.subject_id])
+   const host=await taskHost(row.subject_id,row.brand_id,row.task_id),state=await host.app.runtime.state(host.actor,row.task_id)
+   if(state.status==='succeeded')await readNativeTask(row.subject_id,row.brand_id,row.task_id)
+   else if(['cancelled','failed'].includes(state.status))await pool.query("UPDATE amc_ai_requests SET planning_result=$1 WHERE task_id=$2 AND subject_id=$3",[JSON.stringify({state:'not_saved',reason:state.status}),row.task_id,row.subject_id])
+  }catch{/* Permission and transport errors never authorize a write. Retry later. */}
+ }
+}
+
+/** Conversations are projections of persisted task admissions, not client-authored receipts. */
+export async function nativeConversations(userId:string,brandId:string,id?:string,before?:string,query?:string){
+ const {actor,pool}=await authorizedHost(userId,brandId)
+ // Repair an accepted Core task whose admission-index acknowledgement was lost.
+ const unlinked=(await pool.query("SELECT request_key,runtime_lane FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND intent->>'kind'='conversation' AND task_id IS NULL ORDER BY created_at DESC LIMIT 12",[actor.scopeId,userId])).rows
+ for(const request of unlinked){
+  const host=await getNativeHost(true,request.runtime_lane||'default')
+  const existing=await (host.app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',request.request_key)
+  if(existing)await intentForTask(pool,host.app,actor,existing.id)
+ }
+ const session="COALESCE(intent->>'conversationId',intent->>'contextSessionId',task_id::text)"
+ if(query!==undefined&&(typeof query!=='string'||query.length>100))throw nativeError('invalid_search')
+ if(!id){
+  const rows=(await pool.query(`SELECT ${session} AS id,(array_agg(intent->>'goal' ORDER BY created_at,id))[1] AS title,max(created_at) AS updated_at,count(*)::integer AS turns FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND intent->>'kind'='conversation' AND task_id IS NOT NULL GROUP BY ${session} ${query?"HAVING bool_or(position(lower($3) in lower(intent->>'goal'))>0)":''} ORDER BY max(created_at) DESC LIMIT 50`,[actor.scopeId,userId,...(query?[query]:[])])).rows
+  return {items:rows.map(r=>({id:r.id,title:r.title.slice(0,80),updatedAt:r.updated_at,turns:r.turns}))}
+ }
+ if(!/^[0-9a-f-]{36}$/i.test(id))throw nativeError('invalid_conversation_id')
+ let cursor:null|{date:string;id:string}=null
+ if(before){try{cursor=JSON.parse(Buffer.from(before,'base64url').toString());if(!cursor||typeof cursor.date!=='string'||!Number.isFinite(Date.parse(cursor.date))||typeof cursor.id!=='string'||!/^[a-f0-9]{64}$/.test(cursor.id))throw Error()}catch{throw nativeError('invalid_cursor')}}
+ const rows=(await pool.query(`SELECT id,task_id,intent,created_at,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_date FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND intent->>'kind'='conversation' AND ${session}=$3 AND task_id IS NOT NULL ${cursor?'AND (created_at,id)<($4::timestamptz,$5)':''} ORDER BY created_at DESC,id DESC LIMIT 11`,[actor.scopeId,userId,id,...(cursor?[cursor.date,cursor.id]:[])])).rows
+ if(!rows.length&&!before)throw nativeError('conversation_not_found',404)
+ const page=rows.slice(0,10),items=[]
+ for(const row of page.reverse()){
+  const task=await readNativeTaskStatus(userId,brandId,row.task_id)
+  const {userId:owner,brandId:brand,artifactPath,autoSavePlanning,...body}=row.intent
+  items.push({taskId:row.task_id,body:{...body,autoSavePlanning},task,createdAt:row.created_at})
+ }
+ const last=page[0]
+ return {id,items,nextCursor:rows.length>10?Buffer.from(JSON.stringify({date:last.cursor_date,id:last.id})).toString('base64url'):null}
+}
+export async function strategyVersions(userId:string,brandId:string){
+ await authorizedHost(userId,brandId)
+ const rows=await prisma.brandMarketingSolution.findMany({where:{brandId,kind:'MARKETING_PLAN'},orderBy:{createdAt:'desc'},take:21,select:{id:true,version:true,period:true,createdAt:true,output:true}})
+ return {items:rows.slice(0,20).map((r:any,i:number)=>({id:r.id,version:r.version,period:r.period,createdAt:r.createdAt,content:(r.output as any)?.content||'',changes:strategyChanges(rows[i+1]?.output,r.output)}))}
+}
+
+/** On-demand diagnostics, never part of the high-frequency progress polling. */
+export async function nativeAssistantRuntime(userId:string,brandId:string){
+ await authorizedHost(userId,brandId)
+ const skills=await agentSkills(USER_AI)
+ return {coreVersion:CORE_VERSION,harness:{...NATIVE_RUNTIME_LIMITS,contextMaxBytes:AMC_CONTEXT_MAX_BYTES},usagePolicy:USAGE_POLICY,skills:skills.map(({id,name,version,installed,source})=>({id,name,version,installed,source})),skillManagement:'administrator',workspace:{persistent:true,scope:'brand_and_user',writes:'task_artifact_only'},memory:{scope:'brand_and_user',writes:'explicit_user_only'}}
+}
+export async function inspectNativeTask(userId:string,brandId:string,id:string){
+ const {app,pool,actor}=await taskHost(userId,brandId,id)
+ const row=await intentForTask(pool,app,actor,id)
+ const state=await app.runtime.state(actor,id)
+ const raw=await (app.tasks as any).get(actor,id)
+ const history=await (app.tasks as any).history(actor,id)
+ const usage=await app.ledger.taskUsage(await app.scope(actor),id)
+ return {id,status:state.status,allowedTools:Array.isArray(raw.input?.allowedTools)?raw.input.allowedTools.filter((name:unknown)=>typeof name==='string'):[],...inspectAssistantHistory(history.calls,raw.result?.artifacts||[],row.intent.artifactPath),usage:inspectAssistantUsage(usage),usagePolicy:USAGE_POLICY}
 }

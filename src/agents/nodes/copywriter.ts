@@ -1,3 +1,5 @@
+import { agentSkills } from '../../lib/agent-skills/store'
+import { COPYWRITER } from '../../lib/agent-skills/catalog'
 import { prisma } from "../../lib/prisma.ts";
 import { callLLM } from "../../lib/llmRouter.ts";
 import { getFewShotExamples } from "../../lib/feedbackService.ts";
@@ -19,7 +21,8 @@ export async function copywriterNode(state: any) {
 
   // Load platform-specific skill (AIERA v2)
   const platformSkill = await loadPlatformSkill(platformLower)
-  const skillPromptBlock = formatSkillForPrompt(platformSkill)
+  const extraSkills = (await agentSkills(COPYWRITER)).filter(skill => skill.installed && skill.source === 'custom')
+  const skillPromptBlock = [formatSkillForPrompt(platformSkill), ...extraSkills.map(skill => `[Skill: ${skill.name}]\n${skill.content}`)].join('\n\n')
 
   if (!brandId) {
     throw new Error("Missing brandId in state.");

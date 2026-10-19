@@ -20,7 +20,11 @@ export async function initializeHost(pool:Pool){
     allowance integer NOT NULL, task_id uuid, created_at timestamptz NOT NULL DEFAULT now(),
     UNIQUE(scope_id,subject_id,request_key));
     CREATE INDEX IF NOT EXISTS amc_ai_requests_daily ON amc_ai_requests(subject_id,created_at);
-    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS runtime_lane text NOT NULL DEFAULT 'default';`)
+    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS runtime_lane text NOT NULL DEFAULT 'default';
+    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS planning_result jsonb;
+    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS conversation_preview text;
+    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS planning_checked_at timestamptz;
+    CREATE INDEX IF NOT EXISTS amc_ai_requests_conversation ON amc_ai_requests(subject_id,(intent->>'brandId'),(intent->>'conversationId'),created_at);`)
 }
 export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeIntent,lane:RuntimeLane='default'){
   const id=digest([actor.scopeId,actor.subjectId,intent.requestKey]),hash=digest(intent)
@@ -38,7 +42,7 @@ export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeInten
 export async function intentBy(pool:Pool,actor:NativeActor,field:'id'|'request_key'|'task_id',value:string){
   const row=(await pool.query(`SELECT * FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND ${field}=$3`,[actor.scopeId,actor.subjectId,value])).rows[0]
   if(!row)throw nativeError('task_not_found',404)
-  return row as {id:string;digest:string;intent:NativeIntent;task_id:string|null;request_key:string;allowance:number;runtime_lane:RuntimeLane;created_at:Date}
+  return row as {conversation_preview?:string;id:string;digest:string;intent:NativeIntent;task_id:string|null;request_key:string;allowance:number;runtime_lane:RuntimeLane;created_at:Date}
 }
 
 // Recover the application index from Core's public binding after an accepted

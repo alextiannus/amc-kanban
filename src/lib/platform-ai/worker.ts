@@ -1,3 +1,5 @@
+import { managedSkillCatalog } from '../agent-skills/runtime'
+import { PLATFORM_AI } from '../agent-skills/catalog'
 import {Pool} from 'pg'
 import {reconcileEngineeringTask} from './recovery'
 import {readFile} from 'node:fs/promises'
@@ -31,6 +33,7 @@ export async function getPlatformTeam(){
         team=await openPlatformTeam({pool,applicationId:PLATFORM_ACTOR.scopeId,teamId:'amc',builtinActor:PLATFORM_ACTOR,
           authorizeMember:async(actor:any)=>actor.scopeId===PLATFORM_ACTOR.scopeId&&[PLATFORM_ACTOR.subjectId,REVIEW_ACTOR.subjectId].includes(actor.subjectId)&&!!(await engineeringConfig(reports))?.enabled,
           profile:{...selected,id:'system'},resolveSecret:models.resolveSecret,modelFactory:models.modelFactory,tokenPolicy:(models.tokenPolicies as any)[selected.id],version,skillRoot:path.join(process.cwd(),'skills'),
+          skillCatalog:(check:(actor:unknown)=>Promise<unknown>)=>managedSkillCatalog(path.join(process.cwd(),'skills'),async actor=>{await check(actor);return true},PLATFORM_AI),
           workCapabilities:engineeringCapabilities(reports,()=>team),
           executionPolicy:{check:async({capability,taskId}:any)=>{
             const enabled=!!(await engineeringConfig(reports))?.enabled
