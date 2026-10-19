@@ -8,9 +8,10 @@ export const UI_PAGES = {
   ai_workspace: ['品牌创意', 'Brand Ideas', 'Browse brand ideas, review and edit scripts, continue tasks and hand off to production.'],
   assets: ['素材库', 'Asset Library', 'Upload, search and select existing brand images and videos for content creation.'],
   game: ['店内活动', 'In-Store Activities', 'Configure in-store games, prizes and permanent QR codes.'],
-  addons: ['可选服务', 'Add-on Services', 'View available services and costs; purchases require the existing page flow.'],
+  addons: ['增值服务', 'Value-added Services', 'View available services and costs; purchases require the existing page flow.'],
   socialInsight: ['数据分析', 'Data Analytics', 'View existing brand account metrics, date ranges and trends.'],
   reports: ['管理报告', 'Management Reports', 'Read, regenerate and export available business reports.'],
+  agent_settings: ['Agent 设置', 'Agent Settings', 'View runtime and installed Skills; edit your brand-scoped personal instructions and preferences. Opening this page does not change settings.'],
   settings: ['系统设置', 'System Settings', 'Assistant preferences, language, voice, memory and autopilot controls.'],
   profile: ['个人中心', 'Profile Center', 'View and edit the current user profile.'],
 } as const
