@@ -45,3 +45,5 @@ for(const key of ['summary','audience','channels','review']){
  assert.equal(valid(broken),false);assert.throws(()=>validateMarketingPlan(broken.planningDraft.data,scope.startMonth))
 }
 console.log('PASS: strategy evidence and audience/conversion/review sections persist in adopted document; old plans remain compatible')
+
+for(const key of ["reply","draft"]){const repeated=structuredClone(artifact);if(key==="reply")repeated.content="x".repeat(801);else repeated.planningDraft.content="x".repeat(801);assert.equal(valid(repeated),false,"full strategy must not be repeated in summary fields")}

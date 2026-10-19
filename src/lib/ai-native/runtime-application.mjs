@@ -20,7 +20,7 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  if(eventWork!==null&&(!scheduling||typeof eventWork?.sourceFor!=='function'||typeof eventWork?.buildTask!=='function'))throw new Error('Event work requires scheduling identity restoration, sourceFor and buildTask ports');
  if(scheduling!==null&&(!scheduling||typeof scheduling.restoreActor!=='function'||(scheduling.isEnabled!==undefined&&typeof scheduling.isEnabled!=='function')))throw new Error('Scheduling requires a trusted restoreActor port and optional isEnabled function');
  if(typeof enablePlans!=='boolean')throw new Error('enablePlans must be a boolean');
- if(!runtimeLimits||Object.getPrototypeOf(runtimeLimits)!==Object.prototype||Object.entries(runtimeLimits).some(([k,v])=>!['maxTurns','maxCalls','maxBatchCalls','modelTimeoutMs','taskTimeoutMs'].includes(k)||!Number.isSafeInteger(v)||v<1))throw new Error('Supply positive integer Runtime limits only');
+ if(!runtimeLimits||Object.getPrototypeOf(runtimeLimits)!==Object.prototype||Object.entries(runtimeLimits).some(([k,v])=>!['maxTurns','maxCalls','maxBatchCalls','maxOutputBytes','modelTimeoutMs','taskTimeoutMs'].includes(k)||!Number.isSafeInteger(v)||v<1))throw new Error('Supply positive integer Runtime limits only');
  if(typeof authorize!=='function'||typeof verifyOutcome!=='function')throw new Error('Supply current application authorization and independent outcome verification');
  if(workspacePreflight!==null&&typeof workspacePreflight!=='function')throw new Error('Workspace preflight must be a host function');
  if(workspaceWrite!==null&&typeof workspaceWrite!=='function')throw new Error('Workspace write guard must be a host function');

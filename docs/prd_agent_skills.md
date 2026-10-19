@@ -1,6 +1,6 @@
 # Agent 与 Skills 管理
 
-状态：本地已实现，未发布。
+状态：2026-10-19 已发布；安装管理经本地数据库及浏览器回归，生产运行配置和实际营销 Skill 加载经真实品牌任务验证。
 
 AMC 看板提供 `/agents`，管理员查看全部已注册 AI Agent 及本仓内置工作流节点、User AI、Platform AI 与独立工程复审模型；其他用户沿用已注册 Agent 可见范围。全局内置 Skills 仅管理员可改；已注册 Agent 的配置也仅管理员可改，自身可通过认证 API 读取有效 Skills。页面不声称能扫描外部设备中的技能。
 
@@ -13,3 +13,5 @@ AMC 看板提供 `/agents`，管理员查看全部已注册 AI Agent 及本仓�
 接口：GET /api/agent-skills 返回有权限的 Agent、有效技能和内置目录；GET /api/agent-skills?agentId=... 返回单 Agent。POST /api/agent-skills 接收 agentId、skillId、action（save/uninstall）、content（save）、expectedVersion。管理员写入；未认证 401、无权限 403、未知 Agent 404。外部 Agent 使用原个人 API Key 调用 GET，仍按角色及授权关系限制可见范围；管理员可查看全部。
 
 验收：权限隔离、安装/编辑/卸载/重装、并发冲突、事务审计、路径与大小限制、运行端加载和卸载生效、缓存失效、手机和桌面布局、错误保留输入。不通过本次测试调用真实付费模型或发布内容。
+
+Assistant 本次发布与实模验收证据见 [2026-10-19 发布记录](assistant-release-2026-10-19.md)。生产应用版本与文档提交分别记录。

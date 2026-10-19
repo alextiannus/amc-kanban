@@ -23,7 +23,9 @@ try{
  '在刚才已保存的完整策略上继续迭代：首月重点聚焦中小企业主的AI营销需求，优先自然内容和产品演示。保留品牌定位与已确认事实，不改实际定价，不把建议预算当授权。更新对应章节并自动保存完整版本，其余章节保持完整。',
  '继续完善刚才的策略：给首月计划补充每周复盘节奏、线索质量观察指标和从内容演示到咨询的转化路径。没有基线的数据标为待建立，不编造转化率。保留上一轮渠道优先级和品牌定位，自动保存完整策略，并简要说明本轮变化。'
  ]
- const body={kind:'conversation',topic:'brand_planning',conversationId:session,contextSessionId:session,autoSavePlanning:true,planningScope:{stage:'marketing_plan',mode:'draft',startMonth:'2026-10'},goal:goals[phase-1],requestKey:`assistant-release-20261019-${phase}`,history:[],...(previous?{afterTaskId:previous.taskId}:{})}
+ let recoveryOfTaskId
+ if(phase===3&&process.argv.includes('--reviewed-output-recovery')){const history=await api('/conversations?id='+session);const failed=history.items.find(i=>i.body.requestKey==='assistant-release-20261019-3');assert(failed?.task.status==='waiting'&&failed.task.waitingReason==='model_output_limit'&&failed.task.usage?.complete,'reviewed and settled original failure required');recoveryOfTaskId=failed.taskId;console.log('AMC_ASSISTANT_ACCEPTANCE '+JSON.stringify({phase,event:'reviewed_recovery',originalTaskId:recoveryOfTaskId,usage:failed.task.usage}))}
+ const body={kind:'conversation',topic:'brand_planning',conversationId:session,contextSessionId:session,autoSavePlanning:true,planningScope:{stage:'marketing_plan',mode:'draft',startMonth:'2026-10'},goal:goals[phase-1],requestKey:`assistant-release-20261019-${phase}${recoveryOfTaskId?'-output-budget-v2':''}`,history:[],...(previous?{afterTaskId:previous.taskId}:{})}
  const admitted=await api('/tasks',body);console.log('AMC_ASSISTANT_ACCEPTANCE '+JSON.stringify({phase,event:'admitted',brandId:brand.id,taskId:admitted.id,session}))
  // Leave the browser disconnected; the persistent server worker owns generation and saving.
  let task

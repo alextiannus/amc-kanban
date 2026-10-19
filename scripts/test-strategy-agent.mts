@@ -12,12 +12,15 @@ import {Pool} from 'pg'
 import {prisma} from '../src/lib/prisma.ts'
 import {composeApplication} from '../src/lib/ai-native/application.ts'
 import {nativePool,initializeHost} from '../src/lib/ai-native/store.ts'
-import {actorFor,conversationInput} from '../src/lib/ai-native/contract.ts'
+import {actorFor,conversationInput,nativeArtifactMaxBytes} from '../src/lib/ai-native/contract.ts'
 import {marketingPlanShape,planningRevision} from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {savePlanningDocument} from '../src/lib/ai-native/planning-document.ts'
 import {savePlanningDraft} from '../src/lib/ai-native/planning-workspace-save.ts'
 import {createNativeTask,readNativeTaskStatus,readNativeTask,nativeConversations,strategyVersions,finalizePlanningTasks,controlNativeTask,inspectNativeTask,nativeAssistantRuntime,listNativeTasks} from '../src/lib/ai-native/service.ts'
 import {activeConversationStatus} from '../src/lib/ai-native/conversation-status.ts'
+assert.equal(nativeArtifactMaxBytes({kind:'conversation',planningScope:{stage:'marketing_plan'}} as any),120000)
+assert.equal(nativeArtifactMaxBytes({kind:'conversation'} as any),32000)
+assert.equal(nativeArtifactMaxBytes({kind:'creative'} as any),32000)
 const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
 const id=randomUUID(),actor=actorFor(id,id),session=randomUUID(),pool=nativePool(),taskPool=nativePool(process.env.DATABASE_URL,'conversation')
 const usage={inputTokens:10,outputTokens:10};let chat:any,bg:any,gate:any,entered:any,hold=false,modelCalls=0,expectedPreference:string|null|undefined
@@ -29,7 +32,8 @@ const next=async(request:any)=>{
  const ctx=find('amc.context').result
  if(expectedPreference!==undefined)assert.equal(ctx.workingPreference.content,expectedPreference,'current explicit preference loaded on every task')
  if(!find('my_write_workspace')){
-  const data=marketingPlanShape('2026-10');data.strategyFramework.summary=[ctx.intent.goal]
+  const data=marketingPlanShape('2026-10');data.strategyFramework.summary=[ctx.intent.goal,...(ctx.intent.goal==='Focus on families'?Array.from({length:4},()=> '完整策略中文回归'.repeat(400)):[])]
+  if(ctx.intent.goal==='Focus on families')assert(Buffer.byteLength(JSON.stringify(data))>32000,'regression exercises a valid structured strategy above the old byte cap')
   if(ctx.intent.afterTaskId){assert(ctx.previousTurn.reply,'follow-up receives the previous verified response');assert.equal(ctx.previousTurn.planningSave.verified,true,'predecessor is automatically saved before follow-up sources load')}
   return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:0,content:JSON.stringify({kind:'conversation',brandId:id,content:'Strategy result: '+ctx.intent.goal,contextDigest:ctx.contextDigest,planningProgress:{stage:'marketing_plan',summary:ctx.intent.goal},planningDraft:{scope:ctx.intent.planningScope,expectedRevision:ctx.planningContext.workspace.revision,title:'品牌营销策略',content:'策略摘要',data}})},usage}
  }
@@ -47,10 +51,11 @@ try{
  await prisma.brand.create({data:{id,name:'Strategy fixture',status:'ACTIVE',crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}}}})
  await initializeHost(pool);await pool.query('CREATE SCHEMA IF NOT EXISTS amc_iaic_conversation')
  bg=await composeApplication(pool,models,options);chat=await composeApplication(pool,models,{...options,taskPool})
+ if(process.env.STRATEGY_TEST_LEGACY_OUTPUT_CAP==='1')(chat.app.runtime as any).maxOutputBytes=32000
  ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app:bg.app,tools:bg.tools,lane:'default',modelRevision:1})
  ;(globalThis as any).amcConversationHost=Promise.resolve({pool,taskPool,app:chat.app,tools:chat.tools,lane:'conversation',modelRevision:1})
  const firstBody=body('Focus on families'),first=await createNativeTask(id,id,firstBody)
- assert.equal((await finish(first.id)).status,'succeeded')
+ const firstState=await finish(first.id);assert.equal(firstState.status,'succeeded',JSON.stringify({reason:firstState.waiting_reason,calls:(await (chat.app.tasks as any).history(actor,first.id)).calls.slice(-1).map((c:any)=>({capability:c.capability,status:c.status,error:c.error}))}))
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id}}),0,'generation is distinct from committed strategy')
  await finalizePlanningTasks() // No browser result polling.
  const saved=await readNativeTask(id,id,first.id)

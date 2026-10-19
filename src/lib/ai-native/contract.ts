@@ -70,7 +70,7 @@ export function briefFrom(content:string,intent:BriefIntent){
 }
 
 export function conversationFrom(content:string,intent:ConversationIntent){
-  if(Buffer.byteLength(content)>(['marketing_plan','execution_checklist'].includes(intent.planningScope?.stage||'')?120000:32000))throw nativeError('reply_too_large')
+  if(Buffer.byteLength(content)>nativeArtifactMaxBytes(intent))throw nativeError('reply_too_large')
   const value=JSON.parse(content)
   if(value.kind!=='conversation'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_evidence_invalid')
   if(intent.planningScope&&(intent.planningScope.mode==='draft'||value.planningDraft!==undefined))value.planningDraft=validatePlanningDraft(value.planningDraft,{...intent.planningScope,mode:'draft'})
@@ -111,3 +111,6 @@ export function conversationInput(body:any){
   if(history.reduce((length:number,turn:{content:string})=>length+turn.content.length,0)>60000)throw nativeError('conversation_history_too_large',413)
   return {...(body.afterTaskId?{afterTaskId:body.afterTaskId}:{}),...(body.conversationId?{conversationId:body.conversationId}:{}),...(body.autoSavePlanning===true&&scope?.stage==='marketing_plan'?{autoSavePlanning:true}:{}),...(body.contextSessionId?{contextSessionId:body.contextSessionId}:{}),...(body.currentPage?{currentPage:body.currentPage}:{}),...(scope?{planningScope:scope}:{}),...(body.planningDraftContext!==undefined?{planningDraftContext:body.planningDraftContext}:{}),history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'afterTaskId'|'conversationId'|'autoSavePlanning'|'contextSessionId'|'history'|'topic'|'planningScope'|'planningDraftContext'|'currentPage'>
 }
+
+/** Match the business artifact validator and execution policy; Runtime adds envelope headroom. */
+export function nativeArtifactMaxBytes(intent:NativeIntent){return intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'?2*1024*1024:intent.kind==='conversation'&&['marketing_plan','execution_checklist'].includes(intent.planningScope?.stage||'')?120000:32000}

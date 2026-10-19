@@ -1,8 +1,8 @@
 # 用户、组织与权限管理 PRD（Auth V2）
 
-User AI 策略会话（本地实现，未发布）：会话列表、关键词搜索、历史分页、任务中心、工具回执、workspace 引用、token 用量及任务恢复仅可访问当前用户在当前授权品牌的记录；同品牌其他用户不能读取该会话。营销策略版本沿用品牌访问权限。自动保存仍以任务原操作者、原始已验证产物、当前工作区版本与审计回执执行；页面关闭、重试、会话切换不扩大权限。 MM 运行配置仅向当前已授权品牌用户展示 User AI 有效 Skill 名称、版本与安装状态，不开放私有 Markdown 内容或全局安装写权限。
+User AI 策略会话（2026-10-19 已上线）：会话列表、关键词搜索、历史分页、任务中心、工具回执、workspace 引用、token 用量及任务恢复仅可访问当前用户在当前授权品牌的记录；同品牌其他用户不能读取该会话。营销策略版本沿用品牌访问权限。自动保存仍以任务原操作者、原始已验证产物、当前工作区版本与审计回执执行；页面关闭、重试、会话切换不扩大权限。 MM 运行配置仅向当前已授权品牌用户展示 User AI 有效 Skill 名称、版本与安装状态，不开放私有 Markdown 内容或全局安装写权限。
 
-Agent 与 Skills 管理（本地已实现，未发布）：看板统一列出有权限的注册 Agent 与内置 Agent，管理员可编辑、安装和卸载 Markdown Skills；数据库版本校验和事务审计，运行端读取有效配置，外部运行端明确标记待接入。详见 [Agent Skills PRD](prd_agent_skills.md)。
+Agent 与 Skills 管理（2026-10-19 已上线）：看板统一列出有权限的注册 Agent 与内置 Agent，管理员可编辑、安装和卸载 Markdown Skills；数据库版本校验和事务审计，运行端读取有效配置，外部运行端明确标记待接入。详见 [Agent Skills PRD](prd_agent_skills.md)。
 
 Content 人像库权限（已本地实现，待发布及供应商验收）：增加品牌范围模块 `content.portraits`，操作为 read、create、update、verify、archive；默认仅 ADMIN 与 AMC_PRINCIPAL 可管理，其他角色经既有权限配置显式授权。管理接口同时校验模块权限和实时品牌范围。视频使用角色同时要求视频生成权限及人像库查看权限，后台提交重新解析当前操作者授权；认证回调只接收一次性会话关联标识，并由服务端查询供应商结果，不使用回调参数直接授予认证状态。Kanban 和 Content 权限契约保持一致。
 
@@ -985,3 +985,5 @@ Admin 专属 GET/PATCH /api/admin/brands/{id}/principal 支持品牌团队内的
 ## 品牌脚本编辑的权限边界
 
 品牌脚本版本保存（`POST /api/brands/:id/content-creatives/:creativeId/revisions`）和既有 AI 修改采用（`POST /api/brands/:id/ai/tasks/:taskId/adopt`）属于发布内容编辑，要求 `draft.update`，不要求 `brand.update`。品牌资料修改和其他 AI 任务入口保留既有权限。路由检查和脚本服务写入检查使用当前角色策略；UI 保存能力使用同一判断，不能以任意品牌 WRITE 权限代替。每次操作仍校验品牌范围，另存绑定真实操作者；他人保管稿禁止覆盖。
+
+Assistant 本次发布与实模验收证据见 [2026-10-19 发布记录](assistant-release-2026-10-19.md)。生产应用版本与文档提交分别记录。
