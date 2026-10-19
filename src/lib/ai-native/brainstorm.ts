@@ -60,7 +60,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
   items.push({...projected,title:projected.title||item.title||'内容创意',sourceDigest:/^[a-f0-9]{64}$/.test(source.sourceDigest||item.source?.sourceDigest||'')?(source.sourceDigest||item.source.sourceDigest):null,matchScore:typeof source.matchScore==='number'&&Number.isFinite(source.matchScore)?source.matchScore:null,savedCreativeId:item.id,poolIdeaId:pool.find((row:any)=>row.source_id===sourceId)?.id,expectedRevision:creativeDigest(item),month,decision:item.creativeBrowserDecision?.decision||null,decisionVersion:0,videoUrl:(source.sourceVideo?.videoUrl||item.source?.originalVideoUrl)?`/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(item.id)}/source/media`:null})
   seen.add(sourceId)
  }
- for(const candidate of [...pool.map((row:any)=>({source:row.source,poolIdeaId:row.id})),...sources.map((source:any)=>({source}))]){
+ for(const candidate of [...sources.map((source:any)=>({source})),...pool.map((row:any)=>({source:row.source,poolIdeaId:row.id}))]){
   const {source}=candidate,id=source?.inspirationCreativeId,choice:any=byId.get(id)
   if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
   seen.add(id);items.push({...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})})
@@ -187,7 +187,7 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
 }
 export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null){
  await authorizeBrainstorm(userId,brandId,false,db)
- const saved=await feed(db,brandId),source=(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source||saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)
+ const saved=await feed(db,brandId),source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)||(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source
  const choices=await decisions(db,brandId,[sourceId])
  if(!source||!eligibleBrainstormSource(source)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
  const raw=await fetchCreativeSourceEvidence(sourceId)

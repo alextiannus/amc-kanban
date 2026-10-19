@@ -115,3 +115,13 @@ await assert.rejects(updateKeywords('loser','早餐 手工包子'),(e:any)=>e.co
 assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'winner')
 listing=await updateKeywords('   ','winner');assert.equal(listing.matchKeywords,'');assert(!captured.at(-1).promotionGoal.includes('匹配主题关键词'));assert.equal(captured.at(-1).sellingPoint,'Merchant；Real food')
 console.log('PASS: keyword provider payload, persistence, cache, reset, validation, permission, failure preservation and concurrent edit protection')
+
+// A refreshed match must use its new score/evidence, even when an older pool row exists.
+db.$queryRaw=async(strings:any)=>String(strings).includes('to_regclass')?[{name:'amc_iaic.brand_ideas'}]:String(strings).includes('SELECT id,source_id')?[{id:'old-pool-row',source_id:'cre_keywords',source:{...source('cre_keywords',80),sourceRevision:'stale'}}]:[]
+listing=await api.listBrainstorm('user','brand',db)
+const refreshed=listing.items.find((i:any)=>i.sourceId==='cre_keywords')
+assert.equal(refreshed.matchScore,91);assert.equal(refreshed.poolIdeaId,undefined)
+await api.decideBrainstorm('user','brand',{action:'decide',sourceId:refreshed.sourceId,sourceDigest:refreshed.sourceDigest,decision:'defer',expectedVersion:0},db)
+console.log('PASS: refreshed evidence takes priority over stale pool duplicates and remains actionable')
+
+assert.equal((await api.brainstormVideo('user','brand','cre_keywords',undefined,db)).status,200)
