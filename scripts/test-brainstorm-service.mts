@@ -61,6 +61,7 @@ const latestFeed=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1);latest
 assert((await api.listBrainstorm('user','brand',db)).needsRefresh);latestFeed.createdAt=new Date()
 const create=async(_u:string,_b:string,body:any)=>{taskCalls++;assert.equal(body.kind,'creative');assert(!body.adaptToBrand);if(!tasks.has(body.requestKey))tasks.set(body.requestKey,'task-'+tasks.size);return {id:tasks.get(body.requestKey)}}
 const first=await api.replicateBrainstorm('user','brand',{action:'replicate',creativeId:liked.creativeId},db,create),second=await api.replicateBrainstorm('user','brand',{action:'replicate',creativeId:liked.creativeId},db,create);assert.equal(first.id,second.id);assert.equal(tasks.size,1)
+delete items[0].brainstorm;await api.replicateBrainstorm('user','brand',{action:'replicate',creativeId:liked.creativeId},db,create)
 evidenceRevision='r2';const taskCount=taskCalls;await assert.rejects(api.replicateBrainstorm('user','brand',{action:'replicate',creativeId:liked.creativeId},db,create),(e:any)=>e.code==='creative_source_changed');assert.equal(taskCalls,taskCount);evidenceRevision='r1'
 access=false;const queries=queryCount;await assert.rejects(api.listBrainstorm('user','foreign',db),(e:any)=>e.code==='brainstorm_access_denied');assert.equal(queryCount,queries);access=true
 write=false;await assert.rejects(choose('cre_later','like',1),(e:any)=>e.code==='brainstorm_access_denied');write=true

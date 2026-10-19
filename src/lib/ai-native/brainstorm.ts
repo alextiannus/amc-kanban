@@ -165,7 +165,7 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
  if(Object.keys(body).some(k=>!['action','creativeId'].includes(k))||typeof body.creativeId!=='string')throw nativeError('invalid_brainstorm_request',400)
  await authorizeBrainstorm(userId,brandId,true,db)
  const current=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,'',body.creativeId,undefined,db)
- if(!creativeIsSelected(current.current)||current.current?.brandDismissal?.decision==='dislike'||!current.current?.brainstorm||!current.canOverwrite)throw nativeError('brainstorm_source_not_found',404)
+ if(!current.current||!creativeIsSelected(current.current)||current.current?.brandDismissal?.decision==='dislike'||!current.canOverwrite)throw nativeError('brainstorm_source_not_found',404)
  if(current.current.planning?.trim())return {ok:true,creativeId:body.creativeId,alreadyRewritten:true}
  const fixed=current.current.source
  if(!fixed?.inspirationCreativeId||!fixed.sourceRevision||!fixed.sourceDigest)throw nativeError('creative_source_not_found',404)
@@ -175,14 +175,14 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
  const task=await createTask(userId,brandId,{kind:'creative',creativeId:body.creativeId,month:current.month,expectedRevision:current.expectedRevision,requestKey,goal:'用户已选择复刻此原创意。请读取完整原创意证据与当前品牌已确认事实，保留原脚本爆款机制、完整分镜顺序与节奏，改写为适合当前品牌的完整脚本及完整拍摄说明。仅使用真实品牌及商品事实，未知信息明确标注。产出候选供用户 Review，不自动采用、制作或发布。'})
  return {ok:true,id:task.id,creativeId:body.creativeId,month:current.month}
 }
-export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma){
+export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null){
  await authorizeBrainstorm(userId,brandId,false,db)
  const saved=await feed(db,brandId),source=(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source||saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)
  const choices=await decisions(db,brandId,[sourceId])
  if(!source||!eligibleBrainstormSource(source)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
  const raw=await fetchCreativeSourceEvidence(sourceId)
  if(raw.creativeId!==sourceId||raw.sourceRevision!==source.sourceRevision||raw.sourceDigest!==source.sourceDigest)throw nativeError('creative_source_changed',409)
- return streamSourceVideoMedia(raw,signal)
+ return streamSourceVideoMedia(raw,signal,range)
 }
 
 // Calendar choices also apply to automatically adapted and legacy saved ideas.
