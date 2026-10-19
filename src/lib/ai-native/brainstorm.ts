@@ -120,7 +120,13 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{}})
   await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
   const previous=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_DECISION,period:input.sourceId},orderBy:{version:'desc'}})
-  if(previous?.input?.decision===input.decision&&previous?.input?.sourceDigest===input.sourceDigest)return {ok:true,replayed:true,...previous.output,version:previous.version}
+  if(previous?.input?.decision===input.decision&&previous?.input?.sourceDigest===input.sourceDigest){
+   if(input.decision==='like'){
+    const {entries}=await browserState(tx,brandId)
+    if(!entries.some(({item})=>item.id===previous.output?.creativeId&&creativeIsSelected(item)))throw nativeError('brainstorm_decision_changed',409)
+   }
+   return {ok:true,replayed:true,...previous.output,version:previous.version}
+  }
   if(['like','dislike'].includes(previous?.input?.decision)||(previous?.version||0)!==input.expectedVersion)throw nativeError('brainstorm_decision_changed',409)
   const saved=await feed(tx,brandId),pool=input.poolIdeaId?(await poolSources(tx,brandId)).find((row:any)=>row.id===input.poolIdeaId&&row.source_id===input.sourceId):null,source=input.poolIdeaId?pool?.source:saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===input.sourceId)
   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
