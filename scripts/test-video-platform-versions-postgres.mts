@@ -21,6 +21,12 @@ try{
  await videoPlatformVersion(userId,brandId,{action:'completeVariant',jobId:parentId,key,childJobId:childId})
  const list:any=await videoPlatformVersion(userId,brandId,{action:'variants',jobId:childId});assert.equal(list.rootId,parentId);assert.equal(list.versions.length,1);assert.equal(list.versions[0].jobId,childId)
  const initial:any=await videoPlatformVersion(userId,brandId,{action:'variantPlan',jobId:childId,platform:'xiaohongshu'});assert.equal(initial.jobId,parentId);assert.equal(initial.execute,false)
+ await prisma.videoProductionJob.update({where:{id:childId},data:{status:'completed',finalVideoUrl:'https://example.test/translated-fixture.mp4'}})
+ const english:any=await videoPlatformVersion(userId,brandId,{...request,language:'en'});assert.equal(english.language,'en');assert.equal(english.execute,true)
+ const replay:any=await videoPlatformVersion(userId,brandId,{...request,jobId:childId,language:'en'});assert.equal(replay.key,english.key);assert.equal(replay.parentId,parentId);assert.equal(replay.execute,false)
+ const explicitChinese:any=await videoPlatformVersion(userId,brandId,{...request,language:'zh'});assert.equal(explicitChinese.language,'zh');assert.equal(explicitChinese.execute,true)
+ const xhsEnglish:any=await videoPlatformVersion(userId,brandId,{...request,platform:'xiaohongshu',language:'en'});assert.equal(xhsEnglish.language,'en');assert.equal(xhsEnglish.execute,true)
+ await assert.rejects(videoPlatformVersion(userId,brandId,{...request,language:'xx'}),/video_market_required/)
  assert.equal((await prisma.videoProductionJob.findUnique({where:{id:parentId}}))?.finalVideoUrl,'https://example.test/fixture.mp4')
  console.log('PASS real PostgreSQL: 8 concurrent version choices admit once; receipt recovery after lost response, owner isolation, child/root navigation and original render retention')
 }finally{await prisma.brandMarketingSolution.deleteMany({where:{brandId}});await prisma.videoProductionJob.deleteMany({where:{brandId}});await prisma.brandKnowledge.deleteMany({where:{brandId}});await prisma.brand.deleteMany({where:{id:brandId}});await prisma.user.deleteMany({where:{id:userId}});await prisma.$disconnect()}
