@@ -94,3 +94,24 @@ const returnedResults=await Promise.all([api.decideSavedBrainstorm('user','brand
 assert.equal(returnedResults.filter((r:any)=>!r.replayed).length,1)
 assert(visibility.creativeIsSelected(knowledge.marketingSolution.publishingCalendar.months['2026-02'][0]));assert.equal(knowledge.marketingSolution.publishingCalendar.months['2026-02'][0].planning,returned.planning)
 console.log('PASS: >75 source-only feed, brand-scoped choices, durable dislikes/defer, concurrent/idempotent likes, atomic audit, no rewrite before Replicate, task-key resume and authorized source media')
+
+// Keyword matching, persistence, cache, permissions, failure and concurrent edits.
+let captured:any[]=[]
+const keywordMatch=async(input:any)=>{captured.push(input);return {contentMatchRequestId:'keywords',creativeCandidates:[source('cre_keywords',91)],contentLibraryGaps:[]}}
+const updateKeywords=(keywords:any,expectedKeywords:any,matcher=keywordMatch)=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords,expectedKeywords},db,matcher)
+listing=await updateKeywords('  早餐  手工包子 ','')
+assert.equal(listing.matchKeywords,'早餐 手工包子');assert.equal(listing.items[0].sourceId,'cre_keywords')
+assert(captured[0].sellingPoint.startsWith('早餐 手工包子'));assert(captured[0].sellingPoint.includes('Merchant'));assert(captured[0].promotionGoal.includes('早餐 手工包子'))
+assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'早餐 手工包子')
+await api.refreshBrainstorm('user','brand',{action:'refresh'},db,keywordMatch);assert.equal(captured.length,1)
+await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,keywordMatch);assert.equal(captured.length,2);assert(captured[1].sellingPoint.startsWith('早餐 手工包子'))
+for(const keywords of [null,[],{},'x'.repeat(301)])await assert.rejects(updateKeywords(keywords,'早餐 手工包子'),(e:any)=>e.code==='invalid_match_keywords')
+await assert.rejects(updateKeywords('other',''),(e:any)=>e.code==='brainstorm_keywords_changed')
+write=false;await assert.rejects(updateKeywords('other','早餐 手工包子'),(e:any)=>e.code==='brainstorm_access_denied');write=true
+await assert.rejects(updateKeywords('failed','早餐 手工包子',async()=>{throw Error('provider-failed')}),/provider-failed/)
+assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'早餐 手工包子')
+beforeTransaction=async()=>{await updateKeywords('winner','早餐 手工包子')}
+await assert.rejects(updateKeywords('loser','早餐 手工包子'),(e:any)=>e.code==='brainstorm_keywords_changed')
+assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'winner')
+listing=await updateKeywords('   ','winner');assert.equal(listing.matchKeywords,'');assert(!captured.at(-1).promotionGoal.includes('匹配主题关键词'));assert.equal(captured.at(-1).sellingPoint,'Merchant；Real food')
+console.log('PASS: keyword provider payload, persistence, cache, reset, validation, permission, failure preservation and concurrent edit protection')
