@@ -5,8 +5,8 @@ export type BrainstormDecision='like'|'dislike'|'defer'
 export const eligibleBrainstormSource=(s:any)=>typeof s?.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(s.inspirationCreativeId)&&typeof s.matchScore==='number'&&Number.isFinite(s.matchScore)&&s.matchScore>75&&typeof s.sourceRevision==='string'&&!!s.sourceRevision&&/^[a-f0-9]{64}$/.test(s.sourceDigest||'')
 export function brainstormCreativeId(brandId:string,sourceId:string){return `brain_${digest([brandId,sourceId]).slice(0,40)}`}
 export function parseBrainstormDecision(body:any){
- if(!body||Object.keys(body).some(k=>!['action','sourceId','sourceDigest','decision','expectedVersion'].includes(k))||body.action!=='decide'||!['like','dislike','defer'].includes(body.decision)||!/^cre_[a-zA-Z0-9_-]+$/.test(body.sourceId||'')||!/^[a-f0-9]{64}$/.test(body.sourceDigest||'')||!Number.isSafeInteger(body.expectedVersion)||body.expectedVersion<0)throw nativeError('invalid_brainstorm_decision',400)
- return body as {action:'decide';sourceId:string;sourceDigest:string;decision:BrainstormDecision;expectedVersion:number}
+ if(!body||Object.keys(body).some(k=>!['action','sourceId','sourceDigest','decision','expectedVersion','poolIdeaId'].includes(k))||body.poolIdeaId!==undefined&&!/^[a-f0-9-]{36}$/i.test(body.poolIdeaId)||body.action!=='decide'||!['like','dislike','defer'].includes(body.decision)||!/^cre_[a-zA-Z0-9_-]+$/.test(body.sourceId||'')||!/^[a-f0-9]{64}$/.test(body.sourceDigest||'')||!Number.isSafeInteger(body.expectedVersion)||body.expectedVersion<0)throw nativeError('invalid_brainstorm_decision',400)
+ return body as {action:'decide';sourceId:string;sourceDigest:string;decision:BrainstormDecision;expectedVersion:number;poolIdeaId?:string}
 }
 export function projectBrainstormSource(source:any,brandId:string,decision:any){
  const originalText=typeof source.sourceEvidence?.originalText==='string'?source.sourceEvidence.originalText:''

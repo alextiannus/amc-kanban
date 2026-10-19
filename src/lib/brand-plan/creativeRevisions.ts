@@ -1,3 +1,4 @@
+import {CREATIVE_SELECTION_POLICY,creativeSourceId} from './creativeVisibility'
 import {resolveCreativeMonth} from './creativeAddress.ts'
 import {MATCH_REQUEST_KIND,planningHash,openTargets,requestTargets} from './matchingContract'
 import {validateCreativeFeedback,readCreativeFeedback,creativeChanges,creativeCandidateChanges,creativeFeedbackDimensions,CANDIDATE_FEEDBACK_KIND,FEEDBACK_WINDOW,VIDEO_EDIT_FEEDBACK_KIND,VIDEO_FEEDBACK_MAX_BYTES,feedbackCursor,parseFeedbackCursor,summarizeCreativeFeedback} from './revisionFeedback'
@@ -254,6 +255,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     }else if(body.saveMode==='overwrite'&&!next.scriptOwner){next.scriptOwner={id:user.id,name:user.nickname||user.id}}
     if((next.nativeDaily||next.planningRequest)&&next.adaptationStatus!=='awaiting_sku'&&!skuConfirmation&&!next.materialRequirements?.some((item:string)=>item.trim()))throw new CreativeRevisionError('material_requirements_required')
     const automatic=ai?.automaticDaily===true||!!ai?.autopilotRunId||!!ai?.planningRequest
+    if(seed&&automatic&&typeof current.nativeSourceSnapshot?.source?.matchScore==='number'&&current.nativeSourceSnapshot.source.matchScore>=90&&!Object.values(workspace.publishingCalendar?.months||{}).flat().some((i:any)=>creativeSourceId(i)===creativeSourceId(current)))next.creativeBrowserSelection={policy:CREATIVE_SELECTION_POLICY,reason:'automatic_high_match',at:new Date().toISOString(),by:user.id}
     const revisionActor=automatic?{id:'amc-mm-user-ai',name:'AMC-MM AI User Assistant',type:'AI',authorizedBy:user.id}:{id:user.id,name:user.nickname || user.id,type:user.type,roles:[user.role,...user.businessRoles.map((role:{role:string})=>role.role)]}
     const sourceReference=revisionSource(next,parentInput.source,new Date().toISOString())
     const {candidatePatch,...aiMetadata}=ai||{}

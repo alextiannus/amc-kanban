@@ -1,3 +1,4 @@
+import {CREATIVE_SELECTION_POLICY,creativeIsSelected,creativeSourceId,readDislikedCreativeSources} from '../brand-plan/creativeVisibility'
 import {prisma} from '../prisma'
 import {canUserAccessBrand} from '../user-management/brandAccess'
 import {readPolicies} from '../role-permissions/store'
@@ -28,11 +29,59 @@ async function decisions(db:any,brandId:string,ids:string[]){
  if(!ids.length)return []
  return db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION,period:{in:ids}},orderBy:{version:'desc'},distinct:['period']})
 }
+// Inbox, library recommendations and returned calendar records share this feed.
+async function poolSources(db:any,brandId:string){
+ if(!db.$queryRaw)return []
+ const exists=await db.$queryRaw`SELECT to_regclass('amc_iaic.brand_ideas')::text AS name`
+ if(!exists[0]?.name)return []
+ return db.$queryRaw`SELECT id,source_id,source,match_id FROM amc_iaic.brand_ideas AS ideas WHERE brand_id=${brandId} AND (replaced_at IS NULL OR selected_at IS NOT NULL OR EXISTS (SELECT 1 FROM "BrandMarketingSolution" AS choice WHERE choice."brandId"=${brandId} AND choice.kind='BRAINSTORM_DECISION' AND choice.period=ideas.source_id AND choice.input->>'decision'='defer')) ORDER BY created_at DESC,id`
+}
+async function browserState(db:any,brandId:string){
+ const knowledge=await db.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge)
+ const entries=Object.entries(workspace.publishingCalendar?.months||{}).flatMap(([month,items]:any)=>Array.isArray(items)?items.filter((i:any)=>i?.id).map((item:any)=>({month,item})):[])
+ const disliked=await readDislikedCreativeSources(db,brandId,workspace)
+ const selected=new Set(entries.filter(({item})=>creativeIsSelected(item)).map(({item})=>creativeSourceId(item)).filter(Boolean))
+ return {workspace,entries,disliked,selected}
+}
 export async function listBrainstorm(userId:string,brandId:string,db:any=prisma){
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db),saved=await feed(db,brandId)
- const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,sources.map((s:any)=>s.inspirationCreativeId))
- const byId=new Map(choices.map((d:any)=>[d.period,d]))
- return {ok:true,brandId,canDecide,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,items:sources.filter((s:any)=>!['like','dislike'].includes((byId.get(s.inspirationCreativeId) as any)?.input?.decision)).map((s:any)=>projectBrainstormSource(s,brandId,byId.get(s.inspirationCreativeId)))}
+ const {entries,disliked,selected}=await browserState(db,brandId),pool=await poolSources(db,brandId)
+ const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
+ const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
+ const items:any[]=[]
+ for(const {month,item} of entries){
+  const sourceId=creativeSourceId(item)||`saved_${digest(item.id)}`
+  if(creativeIsSelected(item)||item.brandDismissal?.decision==='dislike'||disliked.has(sourceId)||selected.has(sourceId)||['archived','deleted','归档','已删除'].includes(item.status))continue
+  const source=item.nativeSourceSnapshot?.source||item.source||{},projected=projectBrainstormSource({...source,inspirationCreativeId:sourceId},brandId,null)
+  items.push({...projected,title:projected.title||item.title||'内容创意',sourceDigest:/^[a-f0-9]{64}$/.test(source.sourceDigest||item.source?.sourceDigest||'')?(source.sourceDigest||item.source.sourceDigest):null,matchScore:typeof source.matchScore==='number'&&Number.isFinite(source.matchScore)?source.matchScore:null,savedCreativeId:item.id,poolIdeaId:pool.find((row:any)=>row.source_id===sourceId)?.id,expectedRevision:creativeDigest(item),month,decision:item.creativeBrowserDecision?.decision||null,decisionVersion:0,videoUrl:(source.sourceVideo?.videoUrl||item.source?.originalVideoUrl)?`/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(item.id)}/source/media`:null})
+  seen.add(sourceId)
+ }
+ for(const candidate of [...pool.map((row:any)=>({source:row.source,poolIdeaId:row.id})),...sources.map((source:any)=>({source}))]){
+  const {source}=candidate,id=source?.inspirationCreativeId,choice:any=byId.get(id)
+  if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
+  seen.add(id);items.push({...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})})
+ }
+ return {ok:true,brandId,canDecide,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,items}
+}
+export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
+ if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
+ if(body.decision==='dislike')return dismissCalendarCreative(userId,brandId,{action:'dismiss',creativeId:body.creativeId,expectedRevision:body.expectedRevision},db)
+ return db.$transaction(async(tx:any)=>{
+  await authorizeBrainstorm(userId,brandId,true,tx)
+  await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId"=${brandId} FOR UPDATE`
+  const {workspace,entries,disliked}=await browserState(tx,brandId),found=entries.filter(({item})=>item.id===body.creativeId)
+  if(found.length!==1)throw nativeError('creative_not_found_or_ambiguous',404)
+  const {month,item}=found[0],sourceId=creativeSourceId(item)
+  if(item.brandDismissal?.decision==='dislike'||disliked.has(sourceId))throw nativeError('brainstorm_source_not_found',404)
+  const previous=item.creativeBrowserDecision
+  if(previous?.expectedRevision===body.expectedRevision&&previous.decision===body.decision)return {ok:true,replayed:true,month,creativeId:item.id,decision:body.decision,expectedRevision:creativeDigest(item),version:0}
+  if(creativeDigest(item)!==body.expectedRevision)throw nativeError('creative_revision_conflict',409)
+  if(creativeIsSelected(item)||sourceId&&entries.some(({item:other})=>other.id!==item.id&&creativeIsSelected(other)&&(creativeSourceId(other))===sourceId))throw nativeError('brainstorm_decision_changed',409)
+  const at=new Date().toISOString(),next={...item,creativeBrowserDecision:{decision:body.decision,expectedRevision:body.expectedRevision,at,by:userId},...(body.decision==='like'?{creativeBrowserSelection:{policy:CREATIVE_SELECTION_POLICY,reason:'like',at,by:userId}}:{})}
+  await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar.months,[month]:workspace.publishingCalendar.months[month].map((i:any)=>i.id===item.id?next:i)}}}}})
+  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'RETURNED_CREATIVE_DECISION_SAVED',resourceType:'BrandCreative',resourceId:item.id,metadata:{brandId,month,decision:body.decision,expectedRevision:body.expectedRevision}}})
+  return {ok:true,replayed:false,month,creativeId:item.id,decision:body.decision,expectedRevision:creativeDigest(next),version:0}
+ })
 }
 export async function refreshBrainstorm(userId:string,brandId:string,body:any,db:any=prisma,match=matchPromotionStrategyCreativeCandidates){
  if(Object.keys(body).some(k=>!['action','force'].includes(k))||body.force!==undefined&&typeof body.force!=='boolean')throw nativeError('invalid_brainstorm_request',400)
@@ -71,24 +120,30 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
   const previous=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_DECISION,period:input.sourceId},orderBy:{version:'desc'}})
   if(previous?.input?.decision===input.decision&&previous?.input?.sourceDigest===input.sourceDigest)return {ok:true,replayed:true,...previous.output,version:previous.version}
   if(['like','dislike'].includes(previous?.input?.decision)||(previous?.version||0)!==input.expectedVersion)throw nativeError('brainstorm_decision_changed',409)
-  const saved=await feed(tx,brandId),source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===input.sourceId)
+  const saved=await feed(tx,brandId),pool=input.poolIdeaId?(await poolSources(tx,brandId)).find((row:any)=>row.id===input.poolIdeaId&&row.source_id===input.sourceId):null,source=input.poolIdeaId?pool?.source:saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===input.sourceId)
   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
   if(source.sourceDigest!==input.sourceDigest)throw nativeError('creative_source_changed',409)
   let creativeId:string|null=null,month:string|null=null
   if(input.decision==='like'){
    creativeId=brainstormCreativeId(brandId,input.sourceId)
    const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge)
-   const months=workspace.publishingCalendar?.months||{},found=Object.entries(months).filter(([,items]:any)=>Array.isArray(items)&&items.some((i:any)=>i.id===creativeId))
+   const months=workspace.publishingCalendar?.months||{}
+   if(Object.values(months).flat().some((i:any)=>i.id!==creativeId&&(creativeSourceId(i))===input.sourceId))throw nativeError('brainstorm_decision_changed',409)
+   const found=Object.entries(months).filter(([,items]:any)=>Array.isArray(items)&&items.some((i:any)=>i.id===creativeId))
    if(found.length>1)throw nativeError('creative_not_found_or_ambiguous',409)
-   if(found.length)month=found[0][0]
+   if(found.length){
+    month=found[0][0]
+    const item=(months[month!] as any[]).find(i=>i.id===creativeId)
+    if(!creativeIsSelected(item))throw nativeError('brainstorm_decision_changed',409)
+   }
    else{
     const brand=await tx.brand.findUnique({where:{id:brandId},select:{timezone:true}}),now=new Date()
     const parts=new Intl.DateTimeFormat('en-CA',{timeZone:brand?.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).formatToParts(now)
     month=`${parts.find(p=>p.type==='year')!.value}-${parts.find(p=>p.type==='month')!.value}`
-    const capturedAt=now.toISOString(),canonical=canonicalCreativeSource({...source,timeline:source.sourceEvidence?.timeline??source.timeline},input.sourceId,capturedAt,{contentMatchRequestId:saved.input.contentMatchRequestId})
+    const capturedAt=now.toISOString(),canonical=canonicalCreativeSource({...source,timeline:source.sourceEvidence?.timeline??source.timeline},input.sourceId,capturedAt,{contentMatchRequestId:pool?.match_id||saved?.input?.contentMatchRequestId||null})
     if(!canonical)throw nativeError('creative_source_not_found',404)
     const title=source.sourceVideo?.title||source.sourcePost?.title||source.title||input.sourceId
-    const item={id:creativeId,brandId,title,planning:'',materialRequirements:[],aiCaption:'',aiTags:[],status:'idea_pending',date:null,schedule:null,platformTargets:[],contentType:source.scriptContent?.kind==='video'?'视频':'图文',inspirationCreativeId:input.sourceId,source:canonical,nativeSourceSnapshot:{source,retrievedAt:capturedAt,contentMatchRequestId:saved.input.contentMatchRequestId},brainstorm:{sourceId:input.sourceId,matchScore:source.matchScore,likedBy:userId,likedAt:capturedAt},createdAt:capturedAt}
+    const item={id:creativeId,brandId,title,planning:'',materialRequirements:[],aiCaption:'',aiTags:[],status:'idea_pending',date:null,schedule:null,platformTargets:[],contentType:source.scriptContent?.kind==='video'?'视频':'图文',inspirationCreativeId:input.sourceId,source:canonical,nativeSourceSnapshot:{source,retrievedAt:capturedAt,contentMatchRequestId:pool?.match_id||saved?.input?.contentMatchRequestId||null},creativeBrowserSelection:{policy:CREATIVE_SELECTION_POLICY,reason:'like',at:capturedAt,by:userId},brainstorm:{sourceId:input.sourceId,matchScore:source.matchScore,likedBy:userId,likedAt:capturedAt},createdAt:capturedAt}
     await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...months,[month]:[...(months[month]||[]),item]}}}}})
    }
   }
@@ -114,7 +169,7 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
 }
 export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma){
  await authorizeBrainstorm(userId,brandId,false,db)
- const saved=await feed(db,brandId),source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)
+ const saved=await feed(db,brandId),source=(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source||saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)
  const choices=await decisions(db,brandId,[sourceId])
  if(!source||!eligibleBrainstormSource(source)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
  const raw=await fetchCreativeSourceEvidence(sourceId)
@@ -136,8 +191,7 @@ export async function dismissCalendarCreative(userId:string,brandId:string,body:
   if(old?.decision==='dislike'||creativeDigest(current)!==body.expectedRevision)throw nativeError('creative_revision_conflict',409)
   const candidateIds=[current.inspirationCreativeId,current.source?.inspirationCreativeId,current.nativeSourceSnapshot?.source?.inspirationCreativeId].filter(Boolean)
   if(new Set(candidateIds).size>1)throw nativeError('creative_source_changed',409)
-  const sourceId=candidateIds[0]
-  if(sourceId&&!/^cre_[a-zA-Z0-9_-]+$/.test(sourceId))throw nativeError('creative_source_changed',409)
+  const sourceId=/^cre_[a-zA-Z0-9_-]+$/.test(candidateIds[0]||'')?candidateIds[0]:undefined
   const hiddenItems=Object.values(months).flat().filter((i:any)=>i.id===body.creativeId||sourceId&&[i.inspirationCreativeId,i.source?.inspirationCreativeId,i.nativeSourceSnapshot?.source?.inspirationCreativeId].includes(sourceId)) as any[]
   const hiddenCreativeIds=hiddenItems.map(i=>i.id),draftIds=hiddenItems.map(i=>i.calendarSelection?.draftId).filter(Boolean),hiddenDraftIds:string[]=[]
   // Only untouched selection placeholders are archived. Real drafts, media,

@@ -1,3 +1,5 @@
+import {returnedCreativePlaceholderFilters} from '@/lib/brand-plan/creativeVisibility'
+import {creativeWorkspace} from '@/lib/brand-plan/creativeRevisionContract'
 import { videoDraftReceipt } from '@/lib/videoDraftReceipt'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -148,10 +150,13 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Invalid draft status' }, { status: 400 })
   }
 
+  const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}})
+  const returnedPlaceholders=returnedCreativePlaceholderFilters(creativeWorkspace(knowledge))
   const [drafts, groupedCounts] = await prisma.$transaction([
     prisma.contentDraft.findMany({
       where: {
         brandId,
+        ...(returnedPlaceholders.length?{NOT:{OR:returnedPlaceholders}}:{}),
         ...(calendar ? { AND: [calendar.where] } : {}),
         ...(status ? { status } : {}),
         ...(q ? {
@@ -170,6 +175,7 @@ export async function GET(request: Request, { params }: Params) {
       by: ['status'],
       where: {
         brandId,
+        ...(returnedPlaceholders.length?{NOT:{OR:returnedPlaceholders}}:{}),
         ...(calendar ? {
           AND: [calendar.where],
           ...(status ? { status } : {}),

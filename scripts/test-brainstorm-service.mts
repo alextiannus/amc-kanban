@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
+import * as visibility from '../src/lib/brand-plan/creativeVisibility.ts'
 import * as contract from '../src/lib/ai-native/brainstorm-contract.ts'
 import * as creativeContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import {canonicalCreativeSource} from '../src/lib/brand-plan/creativeSourceReference.ts'
@@ -22,7 +23,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={
+const deps:any={'../brand-plan/creativeVisibility':visibility,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
  '../promotion-strategy/clients':{fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes'})},
@@ -81,4 +82,14 @@ assert.equal(removed.brandDismissal.decision,'dislike');assert.equal(knowledge.m
 assert.equal(rows.filter(r=>r.kind===contract.BRAINSTORM_DECISION&&r.period==='cre_like').at(-1).input.decision,'dislike')
 await assert.rejects(api.replicateBrainstorm('user','brand',{action:'replicate',creativeId:stored.id},db,create),(e:any)=>e.code==='brainstorm_source_not_found')
 write=false;await assert.rejects(api.dismissCalendarCreative('user','brand',dismissBody,db),(e:any)=>e.code==='brainstorm_access_denied');write=true
+// Returned selections preserve edits and roll back when the audit cannot commit.
+const returned={id:'returned',title:'Old saved idea',planning:'Keep historical script'}
+knowledge.marketingSolution.publishingCalendar.months['2026-02']=[returned]
+const returnedBody={action:'decideSaved',creativeId:returned.id,expectedRevision:creativeContract.creativeDigest(returned),decision:'like'}
+const beforeReturned=structuredClone({rows,knowledge,audits});failAudit=true
+await assert.rejects(api.decideSavedBrainstorm('user','brand',returnedBody,db),/audit-failed/);failAudit=false;assert.deepEqual({rows,knowledge,audits},beforeReturned)
+write=false;await assert.rejects(api.decideSavedBrainstorm('user','brand',returnedBody,db),(e:any)=>e.code==='brainstorm_access_denied');write=true
+const returnedResults=await Promise.all([api.decideSavedBrainstorm('user','brand',returnedBody,db),api.decideSavedBrainstorm('user','brand',returnedBody,db)])
+assert.equal(returnedResults.filter((r:any)=>!r.replayed).length,1)
+assert(visibility.creativeIsSelected(knowledge.marketingSolution.publishingCalendar.months['2026-02'][0]));assert.equal(knowledge.marketingSolution.publishingCalendar.months['2026-02'][0].planning,returned.planning)
 console.log('PASS: >75 source-only feed, brand-scoped choices, durable dislikes/defer, concurrent/idempotent likes, atomic audit, no rewrite before Replicate, task-key resume and authorized source media')

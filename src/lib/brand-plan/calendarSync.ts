@@ -1,4 +1,4 @@
-import {creativeIsVisible} from './creativeVisibility.ts'
+import {creativeIsSelected} from './creativeVisibility.ts'
 import { prisma } from '@/lib/prisma'
 import { creativeWorkspace, monthItems, revisionPeriod, CREATIVE_REVISION_KIND } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeWorkspaceItem } from './creativeWorkspaceContract.ts'
@@ -109,7 +109,7 @@ export function calendarSyncMarker(itemId: string) {
 }
 
 export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCreativeOption | null {
-  if(!creativeIsVisible(item))return null
+  if(!creativeIsSelected(item))return null
   if(['archived','deleted','归档','已删除'].includes(text(item.status).toLowerCase()))return null
   const id = text(item.id)
   const date = text(item.legacy?.date || item.date)
