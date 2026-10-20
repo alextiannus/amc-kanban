@@ -22,6 +22,6 @@ export async function GET(request: Request, { params }: Params) {
   const month = /^\d{4}-\d{2}$/.test(url.searchParams.get('month') || '')
     ? url.searchParams.get('month')!
     : currentMonth()
-  const creatives = await listOpenCalendarCreativeOptions(id, month)
+  const creatives = await listOpenCalendarCreativeOptions(id, month, undefined, {includeHistory:url.searchParams.get('includeHistory')==='true'})
   return NextResponse.json({ ok: true, month, creatives },{headers:{'Cache-Control':'no-store'}})
 }

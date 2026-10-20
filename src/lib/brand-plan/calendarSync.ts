@@ -1,4 +1,4 @@
-import {creativeIsSelected} from './creativeVisibility.ts'
+import {creativeIsSelected,creativeIsVisible} from './creativeVisibility.ts'
 import { prisma } from '@/lib/prisma'
 import { creativeWorkspace, monthItems, revisionPeriod, CREATIVE_REVISION_KIND } from './creativeRevisionContract.ts'
 import { normalizeCreativeWorkspaceItem, type CreativeWorkspaceItem } from './creativeWorkspaceContract.ts'
@@ -32,6 +32,7 @@ export type CalendarCreativeItem = {
 }
 
 export type CalendarCreativeOption = {
+  historical?: boolean
   matchScore?: number | null
   nativeDaily?: {poolIdeaId:string;taskId:string}
   brainstorm?: {sourceId:string;matchScore:number;likedBy:string;likedAt:string}
@@ -108,8 +109,8 @@ export function calendarSyncMarker(itemId: string) {
   return creativeDraftMarker('calendar',itemId)
 }
 
-export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCreativeOption | null {
-  if(!creativeIsSelected(item))return null
+export function calendarCreativeOption(item: CalendarCreativeItem, includeHistory=false): CalendarCreativeOption | null {
+  if(!creativeIsVisible(item)||!includeHistory&&!creativeIsSelected(item))return null
   if(['archived','deleted','归档','已删除'].includes(text(item.status).toLowerCase()))return null
   const id = text(item.id)
   const date = text(item.legacy?.date || item.date)
@@ -145,6 +146,7 @@ export function calendarCreativeOption(item: CalendarCreativeItem): CalendarCrea
 
   return {
     id,
+    ...(creativeIsSelected(item)?{}:{historical:true}),
     matchScore:typeof item.nativeSourceSnapshot?.source?.matchScore==='number'?item.nativeSourceSnapshot.source.matchScore:null,
     date: date || null,
     title,
@@ -174,14 +176,14 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
   return { syncedCount: 0 }
 }
 
-export async function listOpenCalendarCreativeOptions(brandId: string, month: string, db = prisma) {
+export async function listOpenCalendarCreativeOptions(brandId: string, month: string, db = prisma, query:{includeHistory?:boolean}={}) {
   const knowledge = await db.brandKnowledge.findUnique({
     where: { brandId },
     select: { marketingSolution: true, brandPlan: true },
   })
   const items = monthItems(creativeWorkspace(knowledge),month) as CalendarCreativeItem[]
   const options = items
-    .map(calendarCreativeOption)
+      .map(item=>calendarCreativeOption(item,query.includeHistory))
     .filter((item): item is CalendarCreativeOption => Boolean(item))
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
 
@@ -189,7 +191,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
 
   // Marker lookup only projects historical dated plans. New undated ideas
   // receive draft links solely from the explicit scheduling transaction.
-  const legacyOptions = options.filter(item => item.date && !item.draftId)
+    const legacyOptions = options.filter(item => !item.historical && item.date && !item.draftId)
   const markers = legacyOptions.flatMap(item => creativeDraftMarkerSearches('calendar',item.id))
   // Count in the database and return exactly one latest receipt per period.
   // The polling response must not grow with the number of historical versions.

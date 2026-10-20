@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { CreativeRevisionError, record } from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import * as mediaPolicy from '../src/lib/brand-plan/creativeSourceMediaPolicy.ts'
+import * as sourceEvidence from '../src/lib/brand-plan/creativeSourceEvidence.ts'
 
 function load(path:string,deps:Record<string,unknown>) {
   const mod={exports:{} as any}
@@ -17,6 +18,7 @@ const reset=()=>{
 }
 reset()
 const resolver=load('src/lib/brand-plan/creativeSource.ts',{
+ './creativeSourceEvidence':sourceEvidence,
  './creativeSourceMediaPolicy':mediaPolicy,
  './creativeRevisions':{readCreativeRevisions:async(actor:any,brand:string,month:string,id:string)=>{
    assert.equal(actor.id,'trusted');assert.equal(month,'2026-11')

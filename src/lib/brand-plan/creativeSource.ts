@@ -1,5 +1,6 @@
 import { readCreativeRevisions } from './creativeRevisions'
-import { CreativeRevisionError, record } from './creativeRevisionContract'
+import { resolveCreativeSourceEvidence } from './creativeSourceEvidence'
+import { record } from './creativeRevisionContract'
 import { fetchCreativeSourceEvidence } from '../promotion-strategy/clients'
 import { sourceMediaAllowedHosts, sourceMediaLocation, publicSourceMediaUrl } from './creativeSourceMediaPolicy'
 
@@ -11,28 +12,7 @@ export async function resolveCreativeSource(actor:{id:string;type:string},brandI
   const revision = await readCreativeRevisions(actor,brandId,month,creativeId)
   const current = record(revision.current || revision.revisions[0]?.content)
   const stored = record(revision.source)
-  const canonical = record(current.source || (record(stored.snapshot).sourceRevision ? stored.snapshot : null))
-  const snapshot = record(record(current.nativeSourceSnapshot).source || record(record(stored.snapshot).nativeSourceSnapshot).source)
-  const identity = canonical.inspirationCreativeId || current.inspirationCreativeId || stored.creativeId
-  if (typeof identity !== 'string' || !/^cre_[a-zA-Z0-9_-]+$/.test(identity)) throw new CreativeRevisionError('creative_source_not_found',404)
-  // Conflicting references cannot be resolved by silently preferring one.
-  for (const id of [canonical.inspirationCreativeId,current.inspirationCreativeId,stored.creativeId,snapshot.inspirationCreativeId]) {
-    if (id && id !== identity) throw new CreativeRevisionError('creative_source_not_found',404)
-  }
-  const expectedRevision = text(canonical.sourceRevision || snapshot.sourceRevision)
-  // nativeSourceSnapshot.libraryDigest is a batch hash, never a source hash.
-  const expectedDigest = text(canonical.sourceDigest || canonical.libraryDigest || snapshot.sourceDigest)
-  let raw:any
-  try { raw = await fetchCreativeSourceEvidence(identity) }
-  catch (error) {
-    if (error instanceof Error && error.message === 'original_evidence_not_found') throw new CreativeRevisionError('creative_source_not_found',404)
-    if (error instanceof Error && error.message === 'library_evidence_too_large') throw new CreativeRevisionError('library_evidence_too_large',413)
-    throw new CreativeRevisionError('creative_source_unavailable',503)
-  }
-  if (!raw || raw.creativeId !== identity) throw new CreativeRevisionError('creative_source_not_found',404)
-  if (expectedRevision && raw.sourceRevision !== expectedRevision || expectedDigest && raw.sourceDigest !== expectedDigest) throw new CreativeRevisionError('creative_source_changed',409)
-  if (typeof raw.sourceRevision !== 'string' || !/^[a-f0-9]{64}$/.test(raw.sourceDigest || '')) throw new CreativeRevisionError('creative_source_unavailable',503)
-  return {raw,identity,expectedRevision,expectedDigest}
+  return resolveCreativeSourceEvidence(current,stored,fetchCreativeSourceEvidence)
 }
 
 export async function readCreativeSource(actor:{id:string;type:string},brandId:string,month:string,creativeId:string) {

@@ -1,3 +1,4 @@
+import {resolveBrainstormVideos} from './brainstorm-video'
 import {CREATIVE_SELECTION_POLICY,creativeIsSelected,creativeSourceId,readDislikedCreativeSources} from '../brand-plan/creativeVisibility'
 import {prisma} from '../prisma'
 import {canUserAccessBrand} from '../user-management/brandAccess'
@@ -52,21 +53,23 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
  const {entries,disliked,selected}=await browserState(db,brandId),pool=await poolSources(db,brandId)
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
- const items:any[]=[]
+ const candidates:{idea:any;current:any}[]=[]
  for(const {month,item} of entries){
-  const sourceId=creativeSourceId(item)||`saved_${digest(item.id)}`
+  const sourceId=creativeSourceId(item)
+  if(!sourceId)continue
   if(creativeIsSelected(item)||item.brandDismissal?.decision==='dislike'||disliked.has(sourceId)||selected.has(sourceId)||['archived','deleted','归档','已删除'].includes(item.status))continue
   const source=item.nativeSourceSnapshot?.source||item.source||{},projected=projectBrainstormSource({...source,inspirationCreativeId:sourceId},brandId,null)
-  items.push({...projected,title:projected.title||item.title||'内容创意',sourceDigest:/^[a-f0-9]{64}$/.test(source.sourceDigest||item.source?.sourceDigest||'')?(source.sourceDigest||item.source.sourceDigest):null,matchScore:typeof source.matchScore==='number'&&Number.isFinite(source.matchScore)?source.matchScore:null,savedCreativeId:item.id,poolIdeaId:pool.find((row:any)=>row.source_id===sourceId)?.id,expectedRevision:creativeDigest(item),month,decision:item.creativeBrowserDecision?.decision||null,decisionVersion:0,videoUrl:(source.sourceVideo?.videoUrl||item.source?.originalVideoUrl)?`/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(item.id)}/source/media`:null})
+  candidates.push({current:item,idea:{...projected,title:projected.title||item.title||'内容创意',sourceDigest:/^[a-f0-9]{64}$/.test(source.sourceDigest||item.source?.sourceDigest||'')?(source.sourceDigest||item.source.sourceDigest):null,matchScore:typeof source.matchScore==='number'&&Number.isFinite(source.matchScore)?source.matchScore:null,savedCreativeId:item.id,poolIdeaId:pool.find((row:any)=>row.source_id===sourceId)?.id,expectedRevision:creativeDigest(item),month,decision:item.creativeBrowserDecision?.decision||null,decisionVersion:0,videoUrl:(source.sourceVideo?.videoUrl||item.source?.originalVideoUrl)?`/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(item.id)}/source/media`:null}})
   seen.add(sourceId)
  }
  for(const candidate of [...sources.map((source:any)=>({source})),...pool.map((row:any)=>({source:row.source,poolIdeaId:row.id}))]){
   const {source}=candidate,id=source?.inspirationCreativeId,choice:any=byId.get(id)
   if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
-  seen.add(id);items.push({...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})})
+  seen.add(id);candidates.push({current:{source},idea:{...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})}})
  }
+ const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,fetchCreativeSourceEvidence)
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]));items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
- return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,items}
+ return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
