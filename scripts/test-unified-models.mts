@@ -72,5 +72,15 @@ try{
  assert.ok(rollback.version>latest.version!)
  assert.equal(selectModel(await runtimeConfig(),'mm','text','text').id,m1.id)
  await assert.rejects(()=>runtimeConfig({version:999999}),/unavailable/)
+ const stableConnection=await createConnection({name:'Stability AI',protocol:'stability',baseUrl:'https://api.stability.ai',secret:'stable-fixture-key'},'admin')
+ const stableModel=await createModel({connectionId:stableConnection.id,definition:{name:'Stable Audio 3',modelName:'stable-audio-3',capabilities:['music'],inputCapabilities:['audio_output'],timeoutMs:600000,maxRetries:0}},'admin')
+ const stableSelection={...selection,defaults:{...selection.defaults,music:stableModel.id},exceptions:{'content:music_generation:tiktok':stableModel.id}}
+ const stableRevision=await publish(stableSelection,rollback.version,await validation(stableSelection),'admin')
+ const stableRuntime=await runtimeConfig({secrets:true})
+ assert.equal(stableRuntime.version,stableRevision.version)
+ const resolvedStable=stableRuntime.models!.find(m=>m.id===stableModel.id)!
+ assert.equal(resolvedStable.protocol,'stability');assert.equal(resolvedStable.definition.modelName,'stable-audio-3')
+ assert.equal(stableRuntime.secrets![resolvedStable.secretRef],'stable-fixture-key')
+ assert(!JSON.stringify(await overview()).includes('stable-fixture-key'))
  console.log('PASS: migration, encrypted shared connections, rotation, capability checks, CAS publication, rollback and pinned jobs')
 }finally{await pg.close()}

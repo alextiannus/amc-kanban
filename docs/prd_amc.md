@@ -8,6 +8,11 @@
 
 创意匹配关键词（2026-10-20 已上线；服务回归及模拟接口四屏验证通过，真实账号匹配待验收）：创意浏览提供最多 300 字的匹配关键词，用户明确点击「重新匹配」后生效；空值恢复品牌资料默认匹配。设置按品牌保存在浏览匹配记录，重新打开回显；后台自动驾驶匹配不受此设置影响。有品牌编辑权限的用户可修改，仅读用户可查看。关键词参与 Content 检索与评分，不是本地列表筛选；新结果优先，既有稍后决定及来源/选择记录保留。失败不覆盖已生效关键词或结果；旧页面并发修改拒绝覆盖并提示刷新。API refresh 接受 keywords 与 expectedKeywords，成功后 GET 返回 matchKeywords；仍保留真实来源及大于 75 的匹配门槛。验收覆盖输入边界、缓存失效、清空恢复、持久化回显、权限与并发、失败重试及移动端。
 
+
+## Stable Audio music integration (implemented locally; deployment pending)
+
+The unified model catalog supports the stability protocol at https://api.stability.ai with model stable-audio-3, music/audio_output capabilities, 600000 ms timeout and zero submission retries. Credentials use encrypted ModelConnection versions in /admin. Choosing Stability as the music default also replaces MiniMax music task exceptions in the same draft; validated publication activates it. Existing MiniMax speech and historical music remain compatible. Content persists async generation IDs and secret-free original profiles, resumes query-only retrieval after restarts, measures MP3 duration and checkpoints paid bytes before OBS upload. Ambiguous submission outcomes require operator reconciliation.
+
 ## 对话驱动的品牌营销策略（2026-10-19 已上线）
 
 用户通过同一工作空间制定品牌营销策略、补充约束和持续修改。每次有效结构化策略自动保存并回读核对，不增加人工审批、采用按钮或二次确认。比较版本用于理解变化，不是保存门槛。保留原有营销策略模型、版本记录、权限、幂等和冲突检测。保存策略不启动付费制作、广告投放或对外发布。
