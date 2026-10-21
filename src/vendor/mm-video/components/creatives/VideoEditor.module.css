@@ -1,0 +1,23 @@
+.root { color-scheme: dark; background:#101216 !important; color:#eef0f3 !important; }
+.root header,.root footer { background:#191c22 !important; border-color:#30343c !important; }
+.root :global(.bg-white),.root :global(.bg-slate-50) { background:#191d24; }
+.root :global(.text-slate-900),.root :global(.text-slate-700),.root :global(.text-slate-600) { color:#d8dde5; }
+.root :global(.text-slate-500),.root :global(.text-slate-400) { color:#a0a9b7; }
+.root :global(.text-teal-700),.root :global(.text-teal-800) { color:#58ddca; }
+.root :global(.border-slate-200),.root :global(.border-slate-100) { border-color:#303640; }
+.root button,.root select,.root input { border-radius:8px; }
+.root button { transition:background .15s,border-color .15s; }
+.root button:not(:disabled):hover { border-color:#5f6c7d; }
+.root button:disabled { opacity:.38; }
+.root textarea { background:#13161b !important; color:#e5e9ef; caret-color:#57dfce; line-height:1.9; }
+.root textarea::placeholder { color:#778190; }
+.root textarea:disabled { opacity:1; }
+.root :global(.bg-teal-50) { background:#14332f; color:#93e8d9; }
+.root :global(.bg-amber-50) { background:#352d20; color:#f6d391; }
+.root :global(.bg-teal-700) { background:#56e0cb; color:#092c26; }
+.root [role="status"] { font-size:12px; }
+.root [data-editor-track] { background:#191c22; border-top:1px solid #30343c; }
+.root [data-shot][aria-pressed="true"] { border-color:#56e0cb; box-shadow:0 0 0 1px #56e0cb; }
+.root [data-shot] { background:#242a33; border:1px solid #414a58; }
+.root [data-track-ruler] { background:repeating-linear-gradient(90deg,transparent 0,transparent 19px,#3a4350 19px,#3a4350 20px); height:7px; opacity:.8; }
+@media (prefers-reduced-motion:reduce) { .root button { transition:none; } }

@@ -55,7 +55,6 @@ interface SidebarProps {
 const COLLAPSED_KEY = 'amc.sidebar.collapsed'
 const EXTERNAL_WORKSPACE_ITEM_IDS = new Set([
   'inspiration-library',
-  'video-production',
   'viral-copy-scripts',
   'amc-content-roles',
   'amc-growth',
