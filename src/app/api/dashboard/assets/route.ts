@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { publicThumbnail } from '@/lib/assetThumbnails'
 
 async function getAccessibleBrandIds(userId: string, userType: string, role: string) {
   if (userType === 'AI_AGENT') {
@@ -135,6 +136,7 @@ export async function GET(request: Request) {
     })(),
     filename: asset.filename,
     mimeType: asset.mimeType,
+    ...publicThumbnail(asset),
     imageAnalysis: asset.imageAnalysis,
     technicalMetadata: asset.technicalMetadata,
     analysisTask: asset.analysisItems[0] || null,
