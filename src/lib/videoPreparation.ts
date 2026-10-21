@@ -1,3 +1,4 @@
+import {creativeSourceScript} from './brand-plan/creativeSourceScript'
 import {prisma} from './prisma'
 import {authorizeBrainstorm} from './ai-native/brainstorm'
 import {readCreativeSource} from './brand-plan/creativeSource'
@@ -9,7 +10,7 @@ import {nativeError} from './ai-native/contract'
 
 const languages:Record<string,string>={zh:'Simplified Chinese',en:'English',id:'Bahasa Indonesia',ms:'Bahasa Melayu'}
 const text=(v:unknown)=>typeof v==='string'?v.trim():''
-function originalText(source:any){const raw=text(source?.sourceEvidence?.originalText);if(raw)return raw;return (source?.timeline||[]).map((s:any,i:number)=>[`镜头 ${i+1}${typeof s.startSec==='number'&&typeof s.endSec==='number'?` · ${s.startSec}–${s.endSec}s`:''}`,text(s.visualDescription)?`画面：${s.visualDescription}`:'',text(s.voiceover)?`口播：${s.voiceover}`:'',text(s.onScreenText)?`字幕：${s.onScreenText}`:''].filter(Boolean).join('\n')).join('\n\n')}
+const originalText=creativeSourceScript
 export async function prepareVideoScript(userId:string,brandId:string,body:any){
  await authorizeBrainstorm(userId,brandId,true)
  if(body&&['variants','variantPlan','claimVariant','completeVariant'].includes(body.action))return videoPlatformVersion(userId,brandId,body)

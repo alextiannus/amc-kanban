@@ -6,8 +6,10 @@ import * as contract from '../src/lib/ai-native/brainstorm-contract.ts'
 import * as creativeContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import {canonicalCreativeSource} from '../src/lib/brand-plan/creativeSourceReference.ts'
 import {digest,nativeError} from '../src/lib/ai-native/contract.ts'
+import {creativeSourceScript} from '../src/lib/brand-plan/creativeSourceScript.ts'
 import * as videoResolver from '../src/lib/ai-native/brainstorm-video.ts'
 let rows:any[]=[],knowledge:any={marketingSolution:{annual:{keep:'existing'},publishingCalendar:{months:{}}}},audits:any[]=[],access=true,write=true,queryCount=0,failAudit=false,taskCalls=0,evidenceRevision='r1'
+let evidenceTimeline:any[]=[]
 const tasks=new Map<string,string>()
 const filter=(where:any,row:any)=>Object.entries(where||{}).every(([key,value]:any)=>key==='period'&&typeof value==='object'?value.in.includes(row.period):row[key]===value)
 const db:any={
@@ -24,11 +26,11 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'../brand-plan/creativeVisibility':visibility,
+const deps:any={'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
- '../promotion-strategy/clients':{fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes'})},
+ '../promotion-strategy/clients':{fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes',timeline:evidenceTimeline})},
  './facts':{readBrandFacts:async()=>({id:'brand',name:'Merchant',description:'Real food',productCatalog:[]})},'./contract':{digest,nativeError},'./service':{},
  '../brand-plan/creativeRevisionContract':creativeContract,'../brand-plan/creativeRevisions':{readCreativeRevisions:async(_a:any,_b:any,_m:any,id:string)=>{const entry=Object.entries(knowledge.marketingSolution.publishingCalendar.months).flatMap(([month,items]:any)=>items.map((current:any)=>({month,current}))).find((i:any)=>i.current.id===id) as any;return {...entry,canOverwrite:true,expectedRevision:creativeContract.creativeDigest(entry.current)}}},
  '../brand-plan/creativeSourceReference':{canonicalCreativeSource},'../brand-plan/creativeSourceMedia':{streamSourceVideoMedia:async()=>new Response('video')},'./brainstorm-contract':contract,
@@ -129,14 +131,14 @@ console.log('PASS: refreshed evidence takes priority over stale pool duplicates 
 assert.equal((await api.brainstormVideo('user','brand','cre_keywords',undefined,db)).status,200)
 
 // Replication is independent of choices, including old/disliked copies of the source.
-rows.push({id:'copy-feed',brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:999,createdAt:new Date(),output:{sources:[source('cre_copy',91)]}})
+rows.push({id:'copy-feed',brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:999,createdAt:new Date(),output:{sources:[{...source('cre_copy',91),sourceEvidence:{originalText:'好喜欢重庆 #重庆美食',timeline:[{startSec:0,endSec:2,visualDescription:'竹签上的食物',voiceover:'新鲜现做'},{startSec:2,endSec:4,visualDescription:'餐厅全景',cameraMovement:'缓慢推进'}]}}]}})
 const copyBody={action:'copy',sourceId:'cre_copy',requestKey:'copy-request-00000001'}
 const beforeCopy=structuredClone({rows,knowledge,audits});failAudit=true
 await assert.rejects(api.copyBrainstorm('user','brand',copyBody,db),/audit-failed/);failAudit=false;assert.deepEqual({rows,knowledge,audits},beforeCopy)
 const copied=await Promise.all([api.copyBrainstorm('user','brand',copyBody,db),api.copyBrainstorm('user','brand',copyBody,db)])
 assert.equal(copied[0].creativeId,copied[1].creativeId);assert.equal(copied.filter((r:any)=>r.replayed).length,1)
 const firstCopy=knowledge.marketingSolution.publishingCalendar.months[copied[0].month].find((i:any)=>i.id===copied[0].creativeId)
-assert.equal(firstCopy.planning,'Original source script');firstCopy.planning='User script stays intact';firstCopy.schedule={draftId:'original-schedule'};firstCopy.brandDismissal={decision:'dislike'};firstCopy.status='archived'
+assert(firstCopy.planning.includes('镜头 1 · 0–2s'));assert(firstCopy.planning.includes('餐厅全景'));assert(!firstCopy.planning.includes('#重庆美食'));assert(copied[0].revisionId);assert.equal(rows.find(r=>r.id===copied[0].revisionId).output.planning,firstCopy.planning);firstCopy.planning='User script stays intact';firstCopy.schedule={draftId:'original-schedule'};firstCopy.brandDismissal={decision:'dislike'};firstCopy.status='archived'
 const originalCopy=structuredClone(firstCopy),choiceCount=rows.filter(r=>r.kind===contract.BRAINSTORM_DECISION).length
 const nextCopy=await api.copyBrainstorm('user','brand',{action:'copy',creativeId:firstCopy.id,requestKey:'copy-request-00000002'},db)
 assert.notEqual(nextCopy.creativeId,firstCopy.id)
@@ -148,3 +150,11 @@ await assert.rejects(api.copyBrainstorm('user','brand',{...copyBody,sourceId:'cr
 write=false;await assert.rejects(api.copyBrainstorm('user','brand',copyBody,db),(e:any)=>e.code==='brainstorm_access_denied');write=true
 await assert.rejects(api.copyBrainstorm('user','brand',{...copyBody,requestKey:'copy-request-00000003',sourceId:'cre_missing'},db),(e:any)=>e.code==='brainstorm_source_not_found')
 console.log('PASS: copy bypasses choice state, preserves original, clears scheduling, creates separate versions, replays once, enforces permissions and atomic audit')
+
+// Older snapshots contain only captions: resolve pinned shots, never reuse caption.
+evidenceTimeline=[{startSec:0,endSec:1,visualDescription:'完整源镜头',voiceover:'真实口播'}]
+rows.push({id:'sparse-copy-feed',brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:1000,createdAt:new Date(),output:{sources:[source('cre_sparse',91)]}})
+const sparse=await api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_sparse',requestKey:'copy-sparse-0000001'},db)
+const sparseItem=knowledge.marketingSolution.publishingCalendar.months[sparse.month].find((i:any)=>i.id===sparse.creativeId)
+assert(sparseItem.planning.includes('完整源镜头'));assert(!sparseItem.planning.includes('Original source script'));assert.equal(rows.find(r=>r.id===sparse.revisionId).output.id,sparse.creativeId)
+console.log('PASS: caption-only cached source resolves pinned timeline and creates a usable initial revision')

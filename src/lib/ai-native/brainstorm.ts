@@ -1,3 +1,4 @@
+import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
 import {resolveBrainstormVideos} from './brainstorm-video'
 import {CREATIVE_SELECTION_POLICY,creativeIsSelected,creativeSourceId,readDislikedCreativeSources} from '../brand-plan/creativeVisibility'
 import {prisma} from '../prisma'
@@ -10,7 +11,7 @@ import {readBrandFacts} from './facts'
 import {digest,nativeError} from './contract'
 import {createNativeTask} from './service'
 import {hasCreativeDraftMarker} from '../brand-plan/creativeDraftMarker'
-import {creativeDigest,creativeWorkspace} from '../brand-plan/creativeRevisionContract'
+import {CREATIVE_REVISION_KIND,revisionPeriod,revisionSource,creativeDigest,creativeWorkspace} from '../brand-plan/creativeRevisionContract'
 import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
 import {canonicalCreativeSource} from '../brand-plan/creativeSourceReference'
 import {streamSourceVideoMedia} from '../brand-plan/creativeSourceMedia'
@@ -206,15 +207,26 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
   const brand=await tx.brand.findUnique({where:{id:brandId},select:{timezone:true}})
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:brand?.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).formatToParts(now)
   const month=`${parts.find(p=>p.type==='year')!.value}-${parts.find(p=>p.type==='month')!.value}`
-  const item:any={...(original||{}),id:creativeId,brandId,title:original?.title||source.sourceVideo?.title||source.sourcePost?.title||source.title||sourceId,planning:original?.planning||(typeof source?.sourceEvidence?.originalText==='string'?source.sourceEvidence.originalText:''),materialRequirements:original?.materialRequirements||[],aiCaption:original?.aiCaption||'',aiTags:original?.aiTags||[],contentType:original?.contentType||(source.scriptContent?.kind==='video'||source.sourceVideo?.videoUrl||canonical.originalVideoUrl?'视频':'图文'),inspirationCreativeId:sourceId,source:canonical,nativeSourceSnapshot:original?.nativeSourceSnapshot||{source,retrievedAt:at},status:'idea_pending',date:null,schedule:null,scriptOwner:{id:userId,name:user.nickname||userId},createdAt:at,updatedAt:at,creativeBrowserSelection:{policy:CREATIVE_SELECTION_POLICY,reason:'like',at,by:userId},replicationCopy:{requestKey:body.requestKey,sourceCreativeId:original?.id||null,sourceId,at}}
+  // Older feed snapshots can contain only the post caption. Resolve missing
+  // shot evidence using the pinned identity, never reinterpret that caption.
+  if(!creativeSourceScript(canonical)){
+   const raw=await fetchCreativeSourceEvidence(sourceId)
+   if(raw?.creativeId!==sourceId||raw.sourceRevision!==canonical.sourceRevision||raw.sourceDigest!==canonical.sourceDigest)throw nativeError('creative_source_changed',409)
+   canonical={...canonical,timeline:raw.timeline||raw.sourceEvidence?.timeline||[],sourceEvidence:raw.sourceEvidence||canonical.sourceEvidence}
+  }
+  const originalCaption=source?.sourceEvidence?.originalText
+  const uneditedCaptionCopy=original?.replicationCopy&&original.planning===originalCaption&&!await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,input:{path:['creativeId'],equals:original.id}},orderBy:{version:'desc'}})
+  const planning=original?.planning&&!uneditedCaptionCopy?original.planning:creativeSourceScript(canonical)
+  const item:any={...(original||{}),id:creativeId,brandId,title:original?.title||source.sourceVideo?.title||source.sourcePost?.title||source.title||sourceId,planning,materialRequirements:original?.materialRequirements||[],aiCaption:original?.aiCaption||'',aiTags:original?.aiTags||[],contentType:original?.contentType||(source.scriptContent?.kind==='video'||source.sourceVideo?.videoUrl||canonical.originalVideoUrl?'视频':'图文'),inspirationCreativeId:sourceId,source:canonical,nativeSourceSnapshot:original?.nativeSourceSnapshot||{source,retrievedAt:at},status:'idea_pending',date:null,schedule:null,scriptOwner:{id:userId,name:user.nickname||userId},createdAt:at,updatedAt:at,creativeBrowserSelection:{policy:CREATIVE_SELECTION_POLICY,reason:'like',at,by:userId},replicationCopy:{requestKey:body.requestKey,sourceCreativeId:original?.id||null,sourceId,at}}
   for(const key of ['brandDismissal','creativeBrowserDecision','calendarSelection','brainstorm','revisionId','legacy','nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt','platform','platformSlug'])delete item[key]
   if(original){item.derivedFromCreativeId=original.id;item.copiedFrom={creativeId:original.id,contentHash:creativeDigest(original)}}
   await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...months,[month]:[...(months[month]||[]),item]}}}}})
-  const output={creativeId,month}
+  const revision=await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId),version:1,status:'DRAFT',generationMode:'HUMAN_COPY',createdById:userId,input:{creativeId,month,brand:{id:brandId},actor:{id:userId,name:user.nickname||userId,type:'HUMAN'},principals:[],origin:'human',source:revisionSource(item,null,at)},output:item}})
+  const output={creativeId,month,revisionId:revision.id}
   await tx.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_COPY',period:creativeId,version:1,status:'SAVED',generationMode:'HUMAN_COPY',createdById:userId,input:{requestDigest},output}})
   await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CREATIVE_REPLICATION_COPIED',resourceType:'BrandCreative',resourceId:creativeId,metadata:{brandId,sourceId,sourceCreativeId:original?.id||null}}})
   return {ok:true,replayed:false,...output}
- })
+ },{maxWait:10000,timeout:30000})
 }
 export async function replicateBrainstorm(userId:string,brandId:string,body:any,db:any=prisma,createTask=createNativeTask){
  if(Object.keys(body).some(k=>!['action','creativeId'].includes(k))||typeof body.creativeId!=='string')throw nativeError('invalid_brainstorm_request',400)
