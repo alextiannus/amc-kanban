@@ -1,3 +1,4 @@
+import * as sourceResolver from '../src/lib/brand-plan/creativeSourceEvidence.ts'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
@@ -26,7 +27,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
@@ -45,7 +46,7 @@ let feedVersion=0
 const match=async()=>({contentMatchRequestId:'match',creativeCandidates:feedVersion++?[source('cre_new',92),source('cre_like',80),source('cre_no',90)]:[source('cre_boundary',75),source('cre_like',80),source('cre_no',90),source('cre_later',88)],contentLibraryGaps:[]})
 listing=await api.refreshBrainstorm('user','brand',{action:'refresh'},db,match)
 assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_like','cre_no','cre_later']);assert.equal(taskCalls,0);assert.deepEqual(knowledge.marketingSolution.publishingCalendar.months,{})
-assert.equal(listing.items[0].originalScript,'Original source script');assert(!JSON.stringify(listing).includes('secret=yes'));assert.deepEqual(listing.items[0].viralElements,['Opening hook','Reveal contrast'])
+assert.equal(listing.items[0].originalScript,'');assert(!JSON.stringify(listing).includes('secret=yes'));assert.deepEqual(listing.items[0].viralElements,['Opening hook','Reveal contrast'])
 const choose=(sourceId:string,decision:string,expectedVersion=0)=>api.decideBrainstorm('user','brand',{action:'decide',sourceId,decision,expectedVersion,sourceDigest:'a'.repeat(64)},db)
 const both=await Promise.all([choose('cre_like','like'),choose('cre_like','like')]);assert(both.some((r:any)=>r.replayed));const liked=both[0]
 const items:any[]=Object.values(knowledge.marketingSolution.publishingCalendar.months).flat();assert.equal(items.length,1);assert.equal(items[0].planning,'');assert.equal(items[0].date,null);assert.equal(items[0].schedule,null);assert.equal(taskCalls,0);assert.equal(knowledge.marketingSolution.annual.keep,'existing')
@@ -158,3 +159,13 @@ const sparse=await api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cr
 const sparseItem=knowledge.marketingSolution.publishingCalendar.months[sparse.month].find((i:any)=>i.id===sparse.creativeId)
 assert(sparseItem.planning.includes('完整源镜头'));assert(!sparseItem.planning.includes('Original source script'));assert.equal(rows.find(r=>r.id===sparse.revisionId).output.id,sparse.creativeId)
 console.log('PASS: caption-only cached source resolves pinned timeline and creates a usable initial revision')
+
+// Legacy items accepted by browsing must also be copyable without canonical source.
+const legacyItem={id:'legacy-browser',title:'Legacy',inspirationCreativeId:'cre_legacy',nativeSourceSnapshot:{source:{inspirationCreativeId:'cre_legacy',sourceRevision:'r1',sourceDigest:'a'.repeat(64)}}}
+Object.values(knowledge.marketingSolution.publishingCalendar.months)[0].push(legacyItem)
+const legacyCopy=await api.copyBrainstorm('user','brand',{action:'copy',creativeId:legacyItem.id,requestKey:'legacy-copy-request-1'},db)
+assert(legacyCopy.current.planning.includes('画面：'))
+assert.equal(legacyCopy.current.source.sourceRevision,'r1')
+assert.equal(legacyCopy.current.source.inspirationCreativeId,'cre_legacy')
+assert(!legacyItem.source)
+console.log('PASS legacy browser source copy shares evidence resolver and returns initial script/revision')

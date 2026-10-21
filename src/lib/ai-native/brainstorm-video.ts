@@ -1,3 +1,4 @@
+import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
 import {revisionSource} from '../brand-plan/creativeRevisionContract'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
 import {sourceMediaAllowedHosts,sourceMediaLocation,publicSourceMediaUrl} from '../brand-plan/creativeSourceMediaPolicy'
@@ -26,7 +27,7 @@ export async function resolveBrainstormVideos(candidates:{idea:any;current:any}[
     if(!video)continue
     const controlled=video.search||sourceMediaAllowedHosts().has(video.hostname)||/\.myhuaweicloud\.com$/i.test(video.hostname)
     const mediaPath=idea.savedCreativeId?`content-creatives/${encodeURIComponent(idea.savedCreativeId)}/source/media`:`ai/brainstorm/${encodeURIComponent(idea.sourceId)}/media`
-    resolved[index]={...idea,videoStatus:'available',videoUrl:controlled?`/api/brands/${encodeURIComponent(brandId)}/${mediaPath}`:video.href,thumbnailUrl:publicSourceMediaUrl(raw.thumbnailUrl),originalScript:typeof raw.sourceEvidence?.originalText==='string'?raw.sourceEvidence.originalText:idea.originalScript}
+    resolved[index]={...idea,videoStatus:'available',videoUrl:controlled?`/api/brands/${encodeURIComponent(brandId)}/${mediaPath}`:video.href,thumbnailUrl:publicSourceMediaUrl(raw.thumbnailUrl),originalScript:creativeSourceScript(raw),editingScript:current.planning?.trim()||creativeSourceScript(raw)}
    }catch(error){
     const code=(error as any)?.code||(error as Error).message
     if(!['creative_source_not_found','creative_source_changed','library_evidence_too_large'].includes(code))incomplete=true

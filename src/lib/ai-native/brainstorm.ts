@@ -1,3 +1,4 @@
+import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
 import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
 import {resolveBrainstormVideos} from './brainstorm-video'
 import {CREATIVE_SELECTION_POLICY,creativeIsSelected,creativeSourceId,readDislikedCreativeSources} from '../brand-plan/creativeVisibility'
@@ -179,6 +180,25 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
 export async function copyBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='copy'||Object.keys(body).some(k=>!['action','requestKey','creativeId','sourceId','poolIdeaId'].includes(k))||typeof body.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(body.requestKey)||!!body.creativeId===!!body.sourceId||body.creativeId&&(typeof body.creativeId!=='string'||body.creativeId.length>200)||body.sourceId&&(typeof body.sourceId!=='string'||!/^cre_[a-zA-Z0-9_-]+$/.test(body.sourceId))||body.poolIdeaId&&(typeof body.poolIdeaId!=='string'||body.poolIdeaId.length>200))throw nativeError('invalid_brainstorm_request',400)
  const creativeId=`copy_${digest([brandId,userId,body.requestKey]).slice(0,40)}`,requestDigest=digest(body)
+ // Resolve remote evidence before taking the brand write lock. Recheck the
+ // current record's identity/pins under that lock before committing the copy.
+ await authorizeBrainstorm(userId,brandId,true,db)
+ const existing=await db.brandMarketingSolution.findFirst({where:{brandId,kind:'BRAINSTORM_COPY',period:creativeId},orderBy:{version:'desc'}})
+ if(existing){if(existing.input?.requestDigest!==requestDigest)throw nativeError('idempotency_conflict',409);return {ok:true,replayed:true,...existing.output}}
+ let resolved:any=null
+ if(body.creativeId){
+  const state=creativeWorkspace(await db.brandKnowledge.findUnique({where:{brandId}}))
+  const matches=Object.values(state.publishingCalendar?.months||{}).flat().filter((i:any)=>i?.id===body.creativeId)
+  if(matches.length!==1)throw nativeError('creative_not_found_or_ambiguous',404)
+  const current=matches[0] as any
+  resolved=(await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchCreativeSourceEvidence)).raw
+ }else{
+  const saved=await feed(db,brandId)
+  const source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId)||(await poolSources(db,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
+  if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
+  const current={inspirationCreativeId:body.sourceId,nativeSourceSnapshot:{source}}
+  resolved=(await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchCreativeSourceEvidence)).raw
+ }
  return db.$transaction(async(tx:any)=>{
   const {user}=await authorizeBrainstorm(userId,brandId,true,tx)
   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{}})
@@ -194,26 +214,25 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
    original=found[0];sourceId=creativeSourceId(original)
    source=original.nativeSourceSnapshot?.source||original.source
    canonical=original.source
-   if(!sourceId||!canonical?.sourceRevision||!canonical?.sourceDigest)throw nativeError('creative_source_not_found',404)
+   if(!sourceId)throw nativeError('creative_source_not_found',404)
+   // Use exactly the same legacy identity and pinned-version rules as browsing.
+   const {raw}=await resolveCreativeSourceEvidence(original,revisionSource(original,null,at),async id=>{if(resolved?.creativeId!==id)throw nativeError('creative_source_changed',409);return resolved})
+   canonical=canonicalCreativeSource({...raw,inspirationCreativeId:sourceId},sourceId,at,canonical||{})
+   source=source||canonical
   }else{
    const saved=await feed(tx,brandId)
    source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId)
    if(!source)source=(await poolSources(tx,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
    if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
    sourceId=body.sourceId
-   canonical=canonicalCreativeSource({...source,timeline:source.sourceEvidence?.timeline??source.timeline},sourceId,at)
+   const current={inspirationCreativeId:sourceId,nativeSourceSnapshot:{source}}
+   const {raw}=await resolveCreativeSourceEvidence(current,revisionSource(current,null,at),async()=>resolved)
+   canonical=canonicalCreativeSource({...source,...raw,inspirationCreativeId:sourceId,timeline:raw.timeline?.length?raw.timeline:source.sourceEvidence?.timeline??source.timeline},sourceId,at)
    if(!canonical)throw nativeError('creative_source_not_found',404)
   }
   const brand=await tx.brand.findUnique({where:{id:brandId},select:{timezone:true}})
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:brand?.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).formatToParts(now)
   const month=`${parts.find(p=>p.type==='year')!.value}-${parts.find(p=>p.type==='month')!.value}`
-  // Older feed snapshots can contain only the post caption. Resolve missing
-  // shot evidence using the pinned identity, never reinterpret that caption.
-  if(!creativeSourceScript(canonical)){
-   const raw=await fetchCreativeSourceEvidence(sourceId)
-   if(raw?.creativeId!==sourceId||raw.sourceRevision!==canonical.sourceRevision||raw.sourceDigest!==canonical.sourceDigest)throw nativeError('creative_source_changed',409)
-   canonical={...canonical,timeline:raw.timeline||raw.sourceEvidence?.timeline||[],sourceEvidence:raw.sourceEvidence||canonical.sourceEvidence}
-  }
   const originalCaption=source?.sourceEvidence?.originalText
   const uneditedCaptionCopy=original?.replicationCopy&&original.planning===originalCaption&&!await tx.brandMarketingSolution.findFirst({where:{brandId,kind:CREATIVE_REVISION_KIND,input:{path:['creativeId'],equals:original.id}},orderBy:{version:'desc'}})
   const planning=original?.planning&&!uneditedCaptionCopy?original.planning:creativeSourceScript(canonical)
@@ -222,7 +241,7 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
   if(original){item.derivedFromCreativeId=original.id;item.copiedFrom={creativeId:original.id,contentHash:creativeDigest(original)}}
   await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...months,[month]:[...(months[month]||[]),item]}}}}})
   const revision=await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId),version:1,status:'DRAFT',generationMode:'HUMAN_COPY',createdById:userId,input:{creativeId,month,brand:{id:brandId},actor:{id:userId,name:user.nickname||userId,type:'HUMAN'},principals:[],origin:'human',source:revisionSource(item,null,at)},output:item}})
-  const output={creativeId,month,revisionId:revision.id}
+  const output={creativeId,month,revisionId:revision.id,current:item}
   await tx.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_COPY',period:creativeId,version:1,status:'SAVED',generationMode:'HUMAN_COPY',createdById:userId,input:{requestDigest},output}})
   await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CREATIVE_REPLICATION_COPIED',resourceType:'BrandCreative',resourceId:creativeId,metadata:{brandId,sourceId,sourceCreativeId:original?.id||null}}})
   return {ok:true,replayed:false,...output}
