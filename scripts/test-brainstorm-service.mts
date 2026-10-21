@@ -127,3 +127,24 @@ await api.decideBrainstorm('user','brand',{action:'decide',sourceId:refreshed.so
 console.log('PASS: refreshed evidence takes priority over stale pool duplicates and remains actionable')
 
 assert.equal((await api.brainstormVideo('user','brand','cre_keywords',undefined,db)).status,200)
+
+// Replication is independent of choices, including old/disliked copies of the source.
+rows.push({id:'copy-feed',brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:999,createdAt:new Date(),output:{sources:[source('cre_copy',91)]}})
+const copyBody={action:'copy',sourceId:'cre_copy',requestKey:'copy-request-00000001'}
+const beforeCopy=structuredClone({rows,knowledge,audits});failAudit=true
+await assert.rejects(api.copyBrainstorm('user','brand',copyBody,db),/audit-failed/);failAudit=false;assert.deepEqual({rows,knowledge,audits},beforeCopy)
+const copied=await Promise.all([api.copyBrainstorm('user','brand',copyBody,db),api.copyBrainstorm('user','brand',copyBody,db)])
+assert.equal(copied[0].creativeId,copied[1].creativeId);assert.equal(copied.filter((r:any)=>r.replayed).length,1)
+const firstCopy=knowledge.marketingSolution.publishingCalendar.months[copied[0].month].find((i:any)=>i.id===copied[0].creativeId)
+assert.equal(firstCopy.planning,'Original source script');firstCopy.planning='User script stays intact';firstCopy.schedule={draftId:'original-schedule'};firstCopy.brandDismissal={decision:'dislike'};firstCopy.status='archived'
+const originalCopy=structuredClone(firstCopy),choiceCount=rows.filter(r=>r.kind===contract.BRAINSTORM_DECISION).length
+const nextCopy=await api.copyBrainstorm('user','brand',{action:'copy',creativeId:firstCopy.id,requestKey:'copy-request-00000002'},db)
+assert.notEqual(nextCopy.creativeId,firstCopy.id)
+const nextItem=knowledge.marketingSolution.publishingCalendar.months[nextCopy.month].find((i:any)=>i.id===nextCopy.creativeId)
+assert.equal(nextItem.planning,firstCopy.planning);assert.equal(nextItem.schedule,null);assert.equal(nextItem.brandDismissal,undefined);assert.equal(nextItem.status,'idea_pending')
+assert.deepEqual(knowledge.marketingSolution.publishingCalendar.months[copied[0].month].find((i:any)=>i.id===firstCopy.id),originalCopy)
+assert.equal(rows.filter(r=>r.kind===contract.BRAINSTORM_DECISION).length,choiceCount)
+await assert.rejects(api.copyBrainstorm('user','brand',{...copyBody,sourceId:'cre_other'},db),(e:any)=>e.code==='idempotency_conflict')
+write=false;await assert.rejects(api.copyBrainstorm('user','brand',copyBody,db),(e:any)=>e.code==='brainstorm_access_denied');write=true
+await assert.rejects(api.copyBrainstorm('user','brand',{...copyBody,requestKey:'copy-request-00000003',sourceId:'cre_missing'},db),(e:any)=>e.code==='brainstorm_source_not_found')
+console.log('PASS: copy bypasses choice state, preserves original, clears scheduling, creates separate versions, replays once, enforces permissions and atomic audit')

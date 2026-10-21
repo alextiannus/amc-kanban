@@ -174,6 +174,48 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
   return {ok:true,...output,version:decision.version}
  })
 }
+// Explicit replication creates a new editable version; browsing choices are independent.
+export async function copyBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
+ if(!body||body.action!=='copy'||Object.keys(body).some(k=>!['action','requestKey','creativeId','sourceId','poolIdeaId'].includes(k))||typeof body.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(body.requestKey)||!!body.creativeId===!!body.sourceId||body.creativeId&&(typeof body.creativeId!=='string'||body.creativeId.length>200)||body.sourceId&&(typeof body.sourceId!=='string'||!/^cre_[a-zA-Z0-9_-]+$/.test(body.sourceId))||body.poolIdeaId&&(typeof body.poolIdeaId!=='string'||body.poolIdeaId.length>200))throw nativeError('invalid_brainstorm_request',400)
+ const creativeId=`copy_${digest([brandId,userId,body.requestKey]).slice(0,40)}`,requestDigest=digest(body)
+ return db.$transaction(async(tx:any)=>{
+  const {user}=await authorizeBrainstorm(userId,brandId,true,tx)
+  await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{}})
+  await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId"=${brandId} FOR UPDATE`
+  const prior=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:'BRAINSTORM_COPY',period:creativeId},orderBy:{version:'desc'}})
+  if(prior){if(prior.input?.requestDigest!==requestDigest)throw nativeError('idempotency_conflict',409);return {ok:true,replayed:true,...prior.output}}
+  const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge),months=workspace.publishingCalendar?.months||{}
+  let original:any=null,source:any=null,sourceId:string,canonical:any
+  const now=new Date(),at=now.toISOString()
+  if(body.creativeId){
+   const found=Object.values(months).flat().filter((i:any)=>i?.id===body.creativeId)
+   if(found.length!==1)throw nativeError('creative_not_found_or_ambiguous',404)
+   original=found[0];sourceId=creativeSourceId(original)
+   source=original.nativeSourceSnapshot?.source||original.source
+   canonical=original.source
+   if(!sourceId||!canonical?.sourceRevision||!canonical?.sourceDigest)throw nativeError('creative_source_not_found',404)
+  }else{
+   const saved=await feed(tx,brandId)
+   source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId)
+   if(!source)source=(await poolSources(tx,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
+   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
+   sourceId=body.sourceId
+   canonical=canonicalCreativeSource({...source,timeline:source.sourceEvidence?.timeline??source.timeline},sourceId,at)
+   if(!canonical)throw nativeError('creative_source_not_found',404)
+  }
+  const brand=await tx.brand.findUnique({where:{id:brandId},select:{timezone:true}})
+  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:brand?.timezone||'Asia/Singapore',year:'numeric',month:'2-digit'}).formatToParts(now)
+  const month=`${parts.find(p=>p.type==='year')!.value}-${parts.find(p=>p.type==='month')!.value}`
+  const item:any={...(original||{}),id:creativeId,brandId,title:original?.title||source.sourceVideo?.title||source.sourcePost?.title||source.title||sourceId,planning:original?.planning||(typeof source?.sourceEvidence?.originalText==='string'?source.sourceEvidence.originalText:''),materialRequirements:original?.materialRequirements||[],aiCaption:original?.aiCaption||'',aiTags:original?.aiTags||[],contentType:original?.contentType||(source.scriptContent?.kind==='video'||source.sourceVideo?.videoUrl||canonical.originalVideoUrl?'视频':'图文'),inspirationCreativeId:sourceId,source:canonical,nativeSourceSnapshot:original?.nativeSourceSnapshot||{source,retrievedAt:at},status:'idea_pending',date:null,schedule:null,scriptOwner:{id:userId,name:user.nickname||userId},createdAt:at,updatedAt:at,creativeBrowserSelection:{policy:CREATIVE_SELECTION_POLICY,reason:'like',at,by:userId},replicationCopy:{requestKey:body.requestKey,sourceCreativeId:original?.id||null,sourceId,at}}
+  for(const key of ['brandDismissal','creativeBrowserDecision','calendarSelection','brainstorm','revisionId','legacy','nativeDaily','planningRequest','nativeReviewStatus','draftId','publishedAt','platform','platformSlug'])delete item[key]
+  if(original){item.derivedFromCreativeId=original.id;item.copiedFrom={creativeId:original.id,contentHash:creativeDigest(original)}}
+  await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...months,[month]:[...(months[month]||[]),item]}}}}})
+  const output={creativeId,month}
+  await tx.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_COPY',period:creativeId,version:1,status:'SAVED',generationMode:'HUMAN_COPY',createdById:userId,input:{requestDigest},output}})
+  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CREATIVE_REPLICATION_COPIED',resourceType:'BrandCreative',resourceId:creativeId,metadata:{brandId,sourceId,sourceCreativeId:original?.id||null}}})
+  return {ok:true,replayed:false,...output}
+ })
+}
 export async function replicateBrainstorm(userId:string,brandId:string,body:any,db:any=prisma,createTask=createNativeTask){
  if(Object.keys(body).some(k=>!['action','creativeId'].includes(k))||typeof body.creativeId!=='string')throw nativeError('invalid_brainstorm_request',400)
  await authorizeBrainstorm(userId,brandId,true,db)
