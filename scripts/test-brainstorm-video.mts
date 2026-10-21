@@ -10,7 +10,7 @@ const read=async(id:string)=>{calls.push(id);if(id==='cre_missing')throw Error('
 const result=await resolveBrainstormVideos(before,'brand',read)
 assert.deepEqual(result.items.map(i=>i.savedCreativeId),['restored','duplicate'])
 assert(result.videoResolutionIncomplete)
-assert(result.items.every(i=>i.videoStatus==='available'&&i.originalScript.includes('镜头 2')&&i.editingScript==='Brand script retained'&&i.videoUrl.startsWith('/api/brands/brand/content-creatives/')))
+assert(result.items.every(i=>i.videoStatus==='available'&&i.originalScript.includes('镜头 2')&&i.editingScript===i.originalScript&&i.videoUrl.startsWith('/api/brands/brand/content-creatives/')))
 assert(!JSON.stringify(result).includes('secret'))
 assert.equal(calls.filter(id=>id==='cre_good').length,1)
 assert(!calls.includes('saved_fake'));assert(!calls.includes('cre_other'))

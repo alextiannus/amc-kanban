@@ -169,3 +169,8 @@ assert.equal(legacyCopy.current.source.sourceRevision,'r1')
 assert.equal(legacyCopy.current.source.inspirationCreativeId,'cre_legacy')
 assert(!legacyItem.source)
 console.log('PASS legacy browser source copy shares evidence resolver and returns initial script/revision')
+
+const originalMode=await api.copyBrainstorm('user','brand',{action:'copy',creativeId:firstCopy.id,scriptMode:'original',requestKey:'original-script-copy-1'},db)
+assert.equal(originalMode.current.planning,creativeSourceScript({timeline:evidenceTimeline}))
+assert.notEqual(originalMode.current.planning,firstCopy.planning)
+console.log('PASS explicit original-video replication ignores legacy brand templates without changing original record')
