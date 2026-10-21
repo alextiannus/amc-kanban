@@ -24,7 +24,7 @@ export default function VideoEditor({actorId,brandId,params}:{actorId:string;bra
  const [picker,setPicker]=useState(false),[library,setLibrary]=useState<PreparationAsset[]>([]),[checked,setChecked]=useState<string[]>([]),[uploading,setUploading]=useState(false)
  const chooseCallback=useRef<((a:PreparationAsset[])=>void)|undefined>(undefined),currentJob=useRef<VideoProductionJob|null>(null),cancelled=useRef(false),submission=useRef(false),alive=useRef(true),assembled=useRef(new Set<string>()),autoSaved=useRef(new Set<string>())
  const base=`/api/brands/${encodeURIComponent(brandId)}`
- const accept=(value:VideoProductionJob)=>{if(value.brandId!==brandId||value.ownedByCurrentActor!==true)throw Error('当前账号无法读取此品牌的视频任务。');currentJob.current=value;if(alive.current)setJob(value)}
+ const accept=(value:VideoProductionJob)=>{if(value.brandId!==brandId||value.ownedByCurrentActor!==true)throw Error('当前账号无法读取此品牌的视频任务。');if(currentJob.current?.finalVideoUrl!==value.finalVideoUrl||currentJob.current?.id!==value.id)setSaved(false);currentJob.current=value;if(alive.current)setJob(value)}
  const restore=(value:VideoEditorInput)=>{setSource(value);setScript(old=>old||value.script);setOriginal(value.script);setAssets(value.assets.map(a=>({...a,selected:true})));setPlatforms(value.targetPlatforms||['tiktok']);setDuration(value.targetDurationSec||10);setTemplateId(value.templateId||'')}
  const showEditor=()=>{setStudio(false);const url=new URL(location.href);url.searchParams.delete('videoView');history.replaceState(history.state,'',url)}
  const leave=()=>{window.location.assign(`/board?brandId=${encodeURIComponent(brandId)}`)}
@@ -50,7 +50,7 @@ export default function VideoEditor({actorId,brandId,params}:{actorId:string;bra
    }catch(e){if(!stopped)setError((e as Error).message)}finally{if(!stopped)timer=setTimeout(tick,4000)}}
   timer=setTimeout(tick,2000);return()=>{stopped=true;clearTimeout(timer)}
  },[job?.id,job?.status])
- useEffect(()=>{if(job?.status==='completed'&&job.finalVideoUrl&&!autoSaved.current.has(job.id)){autoSaved.current.add(job.id);void save(job)}},[job?.id,job?.status,job?.finalVideoUrl])
+ useEffect(()=>{if(job?.status==='completed'&&job.finalVideoUrl&&!autoSaved.current.has(job.id+':'+job.finalVideoUrl)){autoSaved.current.add(job.id+':'+job.finalVideoUrl);void save(job)}},[job?.id,job?.status,job?.finalVideoUrl])
  const generate:PreparationProps['onGenerate']=async(decision,language,options)=>{if(submission.current||unconfirmed||loading||!caps)return;submission.current=true;cancelled.current=false;setBusy(true);setError('');setSaved(false);setStudio(true)
   const text=options?.script||script,now=new Date().toISOString(),pending:VideoProductionJob={id:`pending_video_${crypto.randomUUID()}`,brandId,title:text.slice(0,40)||'新建视频',idea:text,platform:platforms[0],status:'queued',progress:0,scenes:[],createdAt:now,updatedAt:now};currentJob.current=pending;setJob(pending)
   try{const data=await api('/api/video-editor/jobs',{brandId,title:pending.title,idea:text,script:text,reviewedScript:true,generationLanguages:options?.languages,language,materialDecision:decision,targetPlatforms:platforms,platform:platforms[0],voiceoverMode:templateId?'on':'auto',targetDurationSec:templateId?undefined:duration,templateId:templateId||undefined,creatorType:templates.find(v=>v.id===templateId)?.builtinScript?.creatorType||'product_showcase',creativeId:source.creativeId,creativeRevisionId:source.creativeRevisionId,sourceMonth:source.sourceMonth,originVideoJobId:source.originVideoJobId,assets:assets.filter(a=>a.selected)})
