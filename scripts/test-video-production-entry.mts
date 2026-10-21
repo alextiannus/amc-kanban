@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict'
+import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 const read = (path: string) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const [sidebar, page, entry] = await Promise.all([
@@ -8,7 +8,11 @@ const [sidebar, page, entry] = await Promise.all([
 ])
 assert.match(sidebar, /activeBrand\.id/)
 assert.match(sidebar, /brandId=/)
-assert.match(page, /contentEntry\('video-making', '\/admin\/video-making', brandId, true\)/)
+assert.match(page, /authenticateCurrentSession/)
+assert.match(page, /allows\(principal,'content\.video-making\.read'\)/)
+assert.match(page, /canAccessBrandScope\(principal,brandId\)/)
+assert.match(page, /https:\/\/amc-mm\.immedi\.ai\/dashboard/)
+assert.match(page, /videoEditor:'1'/)
 assert.match(entry, /authenticateCurrentSession/)
 assert.match(entry, /allows\(principal, `content\.\$\{module\}\.read`\)/)
 assert.match(entry, /canAccessBrandScope\(principal, brandId\)/)
