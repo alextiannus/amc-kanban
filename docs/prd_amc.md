@@ -1,5 +1,10 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+
+## Stable Audio music integration (implemented locally; deployment pending)
+
+The unified model catalog supports the stability protocol at https://api.stability.ai with model stable-audio-3, music/audio_output capabilities, 600000 ms timeout and zero submission retries. Credentials use encrypted ModelConnection versions in /admin. Choosing Stability as the music default also replaces MiniMax music task exceptions in the same draft; validated publication activates it. Existing MiniMax speech and historical music remain compatible. Content persists async generation IDs and secret-free original profiles, resumes query-only retrieval after restarts, measures MP3 duration and checkpoints paid bytes before OBS upload. Ambiguous submission outcomes require operator reconciliation.
+
 ## `/BUG` 与 Platform AI 工程维护（2026-10-15，已上线并完成真实修复验收）
 
 文字对话识别 `/BUG`（大小写无关，可附描述），独立持久上报并返回编号，原聊天继续。报告绑定真实用户、品牌、页面、会话及有界近期对话；稳定请求键保证重试复用原报告，所有读取重新验证身份和品牌权限。报告内容属于不可信排查线索，不能选择工程身份、仓库、凭据或发布政策。

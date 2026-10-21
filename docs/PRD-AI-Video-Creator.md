@@ -18,7 +18,7 @@ AMC 视频能力按任务解耦，不绑定任何单一厂商：
 - `amc-kanban` 负责工作台入口、身份签名、当前商家上下文、品牌素材记录和 OBS 上传；后续发布阶段再负责排期、社交平台授权与 PostFast 调用，不执行视频/TTS 供应商任务。
 - 新项目只允许选择状态为 `ready`、类型为视频且时间轴非空的创意。已有参考视频分析型项目继续可查看和完成，但不再提供该模式的新建入口。
 - 视频生成固定使用 Seedance 2.0 profile，兼容降级范围仅为 Seedance Standard、Fast、Mini；Seedance 不负责生成字幕或口播。
-- AMC-Content 保存并解析视频、TTS和媒体处理供应商配置；AMC-Kanban 只保存社交平台/PostFast密钥，不接触内容生产供应商密钥。
+- Kanban unified model management owns encrypted AI connections and published model policies. Content executes video, speech and music with the selected revision; historical pre-activation profiles retain their compatibility path. PostFast publishing credentials remain separate.
 
 端到端流程为：
 
@@ -44,6 +44,7 @@ storyboard_generation
 video_prompt_generation
 video_generation
 tts_generation
+music_generation
 creative_quality_review
 ```
 
@@ -60,6 +61,13 @@ creative_quality_review
 5. 全部失败则任务失败，绝不伪造成功结果。
 
 配置变更只影响新任务。历史资产继续绑定原 profile、真实模型名、提示词版本和 fallback 路径。
+
+
+When unified model management is active, its published default and task exceptions take precedence over legacy local profile selection. The local sequence above applies to the pre-activation compatibility path.
+
+### Stable Audio music (implemented locally; deployment pending)
+
+Background music supports the `stability` protocol and `stable-audio-3` through Kanban unified model management. Configure the encrypted connection at `https://api.stability.ai`, music/audio_output capabilities, 600000 ms timeout and zero submission retries. Selecting the music default also replaces existing MiniMax music exceptions in the same saved draft; preflight and publication remain required. Content generates one 10-120 second instrumental MP3, persists the async task ID and original secret-free profile before polling, resumes retrieval with the original credential revision, measures actual duration and checkpoints paid bytes before OBS persistence. Unknown submission outcomes and missing/expired results require reconciliation; they never trigger automatic resubmission. MiniMax TTS and historical music compatibility are retained.
 
 ## 3. 创意应用与逐镜编辑
 

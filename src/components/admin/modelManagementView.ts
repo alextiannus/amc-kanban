@@ -23,3 +23,15 @@ export function groupIssues(issues:string[]){
  }
  return [...groups.values()].sort((a,b)=>a.category.localeCompare(b.category))
 }
+/** Switch the music default and old MiniMax music overrides in one saved draft. */
+export function selectCapabilityDefault(selection:any,capability:string,id:string,models:any[],connections:any[]){
+ const defaults={...selection.defaults},exceptions={...selection.exceptions}
+ if(id)defaults[capability]=id;else delete defaults[capability]
+ const protocol=(modelId:string)=>connections.find(c=>c.id===models.find(m=>m.id===modelId)?.connectionId)?.protocol
+ if(capability==='music'&&protocol(id)==='stability'){
+  for(const [key,value]of Object.entries(exceptions)){
+   if(['music','music_generation'].includes(key.split(':')[1])&&protocol(String(value))==='minimax')exceptions[key]=id
+  }
+ }
+ return {...selection,defaults,exceptions}
+}

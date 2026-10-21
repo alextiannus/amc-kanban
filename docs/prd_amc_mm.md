@@ -1,5 +1,10 @@
 # AMC-MM 品牌主端产品需求文档 (PRD)
 
+
+## Stable Audio background music (implemented locally; deployment pending)
+
+Video background music can use Stable Audio 3 selected in Kanban unified model management. The project brief and existing 10-120 second business duration produce one continuous instrumental MP3. Task IDs survive restarts, polling resumes against the original model connection version, and paid results are reused after upload failures. Existing music assets and MiniMax narration remain compatible. Final acceptance requires rendered background music mixed with narration.
+
 ## `/BUG` 与 Platform AI 工程维护（2026-10-15，已上线并完成真实修复验收）
 
 文字对话识别 `/BUG`（大小写无关，可附描述），独立持久上报并返回编号，原聊天继续。报告绑定真实用户、品牌、页面、会话及有界近期对话；稳定请求键保证重试复用原报告，所有读取重新验证身份和品牌权限。报告内容属于不可信排查线索，不能选择工程身份、仓库、凭据或发布政策。

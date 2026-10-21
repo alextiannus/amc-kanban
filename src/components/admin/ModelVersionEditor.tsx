@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { modelCapabilityLabels } from './modelManagementView'
 
 const field='w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm'
-const protocols=['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance']
+const protocols=['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance']
 export default function ModelVersionEditor({model,connections,busy,error,onClose,onSave}:{model:any;connections:any[];busy:boolean;error:string;onClose:()=>void;onSave:(model:any)=>Promise<boolean>}){
   const d=model?.definition,oldConnection=connections.find(c=>c.id===model?.connectionId)
   const [mode,setMode]=useState(connections.length?'reuse':'new')
@@ -16,6 +16,12 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
   const [parameters,setParameters]=useState(JSON.stringify({temperature:d?.temperature,jsonMode:d?.jsonMode,maxTokensByTask:d?.maxTokensByTask||{},reasoningEffort:d?.reasoningEffort,videoConstraints:d?.videoConstraints,costMetadata:d?.costMetadata},null,2))
   const [localError,setLocalError]=useState('')
   const dialog=useRef<HTMLDialogElement>(null)
+  function chooseProtocol(protocol:string){
+    setConnection({...connection,protocol,...(protocol==='stability'?{baseUrl:'https://api.stability.ai',name:'Stability AI'}:{})})
+    if(protocol==='stability'){
+      setName('Stable Audio 3');setModelName('stable-audio-3');setCapabilities(['music']);setInputs('audio_output');setTimeoutValue(600000);setRetries(0);setParameters('{}')
+    }
+  }
   useEffect(()=>{dialog.current?.showModal();return ()=>dialog.current?.close()},[])
   async function submit(event:React.FormEvent){
     event.preventDefault();setLocalError('')
@@ -34,7 +40,7 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
         <label className="block text-sm">供应商连接<select aria-label="连接操作" className={field} value={mode} onChange={e=>setMode(e.target.value)}>{connections.length>0&&<option value="reuse">复用已有连接</option>}<option value="new">新增连接</option>{oldConnection&&<option value="edit">修改当前连接 / 更换密钥</option>}</select></label>
         {mode==='reuse'?<label className="block text-sm">选择连接<select className={field} value={connectionId} onChange={e=>setConnectionId(e.target.value)}>{connections.map(c=><option value={c.id} key={c.id}>{c.name} · {c.protocol} · {c.id.slice(0,8)}</option>)}</select><span className="text-xs text-slate-500">密钥已保存，无需重复填写。</span></label>:<div className="grid md:grid-cols-2 gap-3">
           <label className="text-sm">供应商名称<input required className={field} value={connection.name} onChange={e=>setConnection({...connection,name:e.target.value})} placeholder="例如 Kopix"/></label>
-          <label className="text-sm">接口协议<select className={field} value={connection.protocol} onChange={e=>setConnection({...connection,protocol:e.target.value})}>{protocols.map(p=><option key={p}>{p}</option>)}</select></label>
+          <label className="text-sm">接口协议<select className={field} value={connection.protocol} onChange={e=>chooseProtocol(e.target.value)}>{protocols.map(p=><option key={p}>{p}</option>)}</select></label>
           <label className="text-sm md:col-span-2">接口地址<input type="url" required className={field} value={connection.baseUrl} onChange={e=>setConnection({...connection,baseUrl:e.target.value})} placeholder="https://www.kopix.ai/v1"/></label>
           <label className="text-sm md:col-span-2">API 密钥<input type="password" autoComplete="new-password" required={mode==='new'} className={field} value={connection.secret} onChange={e=>setConnection({...connection,secret:e.target.value})} placeholder={mode==='edit'?'不更改地址或协议时可留空保留原密钥':'输入供应商 API Key'}/></label>
           {connection.protocol==='kopix'&&<p className="text-xs text-slate-500 md:col-span-2">普通生成可填写 API Key。人像库请使用独立视频连接，填写加密保存的 JSON 凭据包：apiKey、accessKey、secretKey、projectName（默认 default）、portraitModels（默认空数组）。仅将真实验证通过的模型名加入 portraitModels，清空数组可关闭人像生成。凭据不会回显。</p>}

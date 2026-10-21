@@ -19,8 +19,8 @@ export const MEDIA_RULES:Record<string,{capability:string;protocols:string[];inp
  speech_synthesis:{capability:'speech_synthesis',protocols:['minimax'],inputs:['audio_output']},
  tts_generation:{capability:'speech_synthesis',protocols:['minimax'],inputs:['audio_output']},
  tts:{capability:'speech_synthesis',protocols:['minimax'],inputs:['audio_output']},
- music:{capability:'music',protocols:['minimax'],inputs:['audio_output']},
- music_generation:{capability:'music',protocols:['minimax'],inputs:['audio_output']},
+ music:{capability:'music',protocols:['minimax','stability'],inputs:['audio_output']},
+ music_generation:{capability:'music',protocols:['minimax','stability'],inputs:['audio_output']},
 }
 export function mediaRule(task:string){const rule=MEDIA_RULES[task];if(!rule)throw new Error('Unknown media task: '+task);return rule}
 export function assertMediaModel(task:string,model:any){
