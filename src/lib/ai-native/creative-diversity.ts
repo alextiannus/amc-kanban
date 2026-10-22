@@ -68,13 +68,13 @@ export function exceedsCreativeSubjectLimit(candidate:any,existing:any[],product
  const subjects=creativeSubjectIds(candidate,productCatalog)
  return subjects.length>0&&existing.filter(item=>creativeSubjectIds(item,productCatalog).some(subject=>subjects.includes(subject))).length>=maximum
 }
-export function diverseCreatives<T>(candidates:T[],existing:T[],limit:number,counts:Partial<Record<Direction,number>>={}){
+export function diverseCreatives<T>(candidates:T[],existing:T[],limit:number,counts:Partial<Record<Direction,number>>={},maxPerDirection=2){
  const used={...counts};for(const item of existing){const direction=creativeDirection(item);used[direction]=(used[direction]||0)+1}
  const result:T[]=[],remaining=[...candidates]
  while(result.length<limit&&remaining.length){
   remaining.sort((a,b)=>(used[creativeDirection(a)]||0)-(used[creativeDirection(b)]||0))
   const item=remaining.shift()!,direction=creativeDirection(item)
-  if((used[direction]||0)>=2||[...existing,...result].some(other=>duplicateCreative(item,other)))continue
+  if((used[direction]||0)>=maxPerDirection||[...existing,...result].some(other=>duplicateCreative(item,other)))continue
   result.push(item);used[direction]=(used[direction]||0)+1
  }
  return result

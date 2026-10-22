@@ -87,10 +87,10 @@ export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotion
       let count=current.filter(row=>!row.selected_at).length
       const replaceable=current.filter(row=>!row.selected_at)
       const kept=[...current]
-      for(const source of diverseCreatives(sources,[],sources.length)){
-        if(kept.some(row=>duplicateCreative(row.source,source))||plans.filter(creativeIsVisible).some(item=>duplicateCreative(item,source))||fixed.filter(item=>creativeDirection(item)===creativeDirection(source)).length>=2)continue
+      for(const source of diverseCreatives(sources,[],sources.length,{},8)){
+        if(kept.some(row=>duplicateCreative(row.source,source))||plans.filter(creativeIsVisible).some(item=>duplicateCreative(item,source)))continue
         const same=kept.filter(row=>!row.selected_at&&creativeDirection(row.source)===creativeDirection(source))
-        if(same.length>=2){
+        if(same.length>=8){
           const old=same.find(row=>!row.selected_at&&!String(row.id).startsWith('new-'))
           if(!old)continue
           await connection.query('UPDATE amc_iaic.brand_ideas SET replaced_at=now() WHERE id=$1',[old.id]);kept.splice(kept.indexOf(old),1);replaceable.splice(replaceable.indexOf(old),1);count--
