@@ -178,6 +178,6 @@ console.log('PASS explicit original-video replication ignores legacy brand templ
 // Saved-calendar likes are stored on the creative, not necessarily in BRAINSTORM_DECISION.
 knowledge.marketingSolution.publishingCalendar.months['2026-10']=[{id:'saved-calendar-only',source:source('cre_calendar_only',90),creativeBrowserSelection:{policy:visibility.CREATIVE_SELECTION_POLICY,reason:'like'}}]
 let matcherExclusions:string[]=[]
-await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async(input:any)=>{matcherExclusions=input.excludeCreativeIds;return {contentMatchRequestId:'calendar-exclusion',creativeCandidates:[],contentLibraryGaps:[]}})
+await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async(input:any)=>{matcherExclusions=input.excludeCreativeIds;assert.equal(input.market,undefined,'reference-video sources are not restricted to the brand location');return {contentMatchRequestId:'calendar-exclusion',creativeCandidates:[],contentLibraryGaps:[]}})
 assert(matcherExclusions.includes('cre_calendar_only'),'already selected calendar sources must be excluded before matching, otherwise every refresh can return an empty visible feed')
 console.log('PASS calendar-only selections excluded before matching')
