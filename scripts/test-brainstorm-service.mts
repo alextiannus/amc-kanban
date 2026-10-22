@@ -37,7 +37,7 @@ const deps:any={'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-
  '../brand-plan/creativeSourceReference':{canonicalCreativeSource},'../brand-plan/creativeSourceMedia':{streamSourceVideoMedia:async()=>new Response('video')},'./brainstorm-contract':contract,
 }
 const mod={exports:{} as any}
-new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/ai-native/brainstorm.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports)
+new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/ai-native/brainstorm.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports)
 const api=mod.exports
 const source=(id:string,matchScore:number)=>({inspirationCreativeId:id,matchScore,sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceVideo:{title:id,videoUrl:'https://media.example/video.mp4?secret=yes'},sourceEvidence:{scope:'full_source',originalText:'Original source script',timeline:[{narrativePurpose:'Reveal contrast'}]},scriptContent:{kind:'video',opening:'Opening hook'},recommendationReason:'Matches the brand product'})
 assert(!contract.eligibleBrainstormSource(source('cre_boundary',75)));assert(contract.eligibleBrainstormSource(source('cre_good',75.1)));assert(!contract.eligibleBrainstormSource(source('cre_bad',NaN)))
@@ -174,3 +174,10 @@ const originalMode=await api.copyBrainstorm('user','brand',{action:'copy',creati
 assert.equal(originalMode.current.planning,creativeSourceScript({timeline:evidenceTimeline}))
 assert.notEqual(originalMode.current.planning,firstCopy.planning)
 console.log('PASS explicit original-video replication ignores legacy brand templates without changing original record')
+
+// Saved-calendar likes are stored on the creative, not necessarily in BRAINSTORM_DECISION.
+knowledge.marketingSolution.publishingCalendar.months['2026-10']=[{id:'saved-calendar-only',source:source('cre_calendar_only',90),creativeBrowserSelection:{policy:visibility.CREATIVE_SELECTION_POLICY,reason:'like'}}]
+let matcherExclusions:string[]=[]
+await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async(input:any)=>{matcherExclusions=input.excludeCreativeIds;return {contentMatchRequestId:'calendar-exclusion',creativeCandidates:[],contentLibraryGaps:[]}})
+assert(matcherExclusions.includes('cre_calendar_only'),'already selected calendar sources must be excluded before matching, otherwise every refresh can return an empty visible feed')
+console.log('PASS calendar-only selections excluded before matching')
