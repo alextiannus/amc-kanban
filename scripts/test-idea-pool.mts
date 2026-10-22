@@ -9,7 +9,7 @@ const url=new URL(process.env.DATABASE_URL||'')
 assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
 const pool=nativePool(),brandId=`pool-test-${randomUUID()}`,facts={id:brandId,name:'Test brand',timezone:'Asia/Singapore',knowledge:{},productCatalog:[]}
 let calls=0,index=0
-const match=async(input:any)=>{calls++;assert(input.requirePersistedCreative);const active=(await pool.query('SELECT source FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL',[brandId])).rows;const counts:any={};for(const row of active)counts[row.source.creativeDirection]=(counts[row.source.creativeDirection]||0)+1;const directions=[...DIRECTIONS].sort((a,b)=>(counts[a]||0)-(counts[b]||0));return {contentMatchRequestId:'match-test',creativeCandidates:Array.from({length:input.requestedCandidateCount},(_,n)=>({inspirationCreativeId:`cre_ins_${brandId}_${index++}`,creativeDirection:directions[n%directions.length],sourceVideo:{title:randomUUID()+randomUUID()},assetNeeds:['Product close-up, vertical, 5 seconds'],scriptContent:{title:'Product story',body:'Show product and invite a visit'}})),libraryVersions:{},contentLibraryGaps:[]}}
+const match=async(input:any)=>{calls++;assert(input.requirePersistedCreative);assert.equal(input.minimumMatchScore,75);assert.equal(input.market,undefined);const active=(await pool.query('SELECT source FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL',[brandId])).rows;const counts:any={};for(const row of active)counts[row.source.creativeDirection]=(counts[row.source.creativeDirection]||0)+1;const directions=[...DIRECTIONS].sort((a,b)=>(counts[a]||0)-(counts[b]||0));return {contentMatchRequestId:'match-test',creativeCandidates:Array.from({length:input.requestedCandidateCount},(_,n)=>({inspirationCreativeId:`cre_ins_${brandId}_${index++}`,matchScore:90,sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceEvidence:{scope:'full_source',timeline:[{id:'shot1',visualDescription:'Actual source'}]},creativeDirection:directions[n%directions.length],sourceVideo:{videoUrl:'https://fixture.example/video.mp4',title:randomUUID()+randomUUID()},assetNeeds:['Product close-up, vertical, 5 seconds'],scriptContent:{title:'Product story',body:'Show product and invite a visit'}})),libraryVersions:{},contentLibraryGaps:[]}}
 const day=(n:number)=>new Date(`2099-10-${String(n).padStart(2,'0')}T10:00:00Z`)
 const rows=async()=>(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY created_at,id',[brandId])).rows
 try{
@@ -34,10 +34,23 @@ try{
  await assert.rejects(()=>refreshBrandIdeas(pool,facts,failing as any,day(8)))
  await refreshBrandIdeas(pool,facts,failing as any,day(8));assert.equal(failCalls,1)
  assert.deepEqual((await rows()).map(row=>row.id).sort(),before,'failure retains existing pool')
+ for(const minutes of [16,32])await assert.rejects(()=>refreshBrandIdeas(pool,facts,failing as any,new Date(day(8).getTime()+minutes*60000)))
+ await refreshBrandIdeas(pool,facts,failing as any,new Date(day(8).getTime()+48*60000));assert.equal(failCalls,3,'recovery is capped at three attempts per local day')
  await refreshBrandIdeas(pool,facts,async()=>({creativeCandidates:[],contentLibraryGaps:[]}) as any,day(9))
  assert.deepEqual((await rows()).map(row=>row.id).sort(),before,'no matches must not evict existing ideas')
  const duplicate=before[0],source=(await rows()).find(row=>row.id===duplicate).source
  await refreshBrandIdeas(pool,facts,async()=>({creativeCandidates:[source,source],contentLibraryGaps:[]}) as any,day(10))
  assert.deepEqual((await rows()).map(row=>row.id).sort(),before,'duplicate content results never replace a valid pool item')
+ // A restarted lease owner must not admit the old process's late response.
+ let release!:()=>void,entered!:()=>void
+ const started=new Promise<void>(resolve=>entered=resolve),gate=new Promise<void>(resolve=>release=resolve)
+ const old=refreshBrandIdeas(pool,facts,async(input:any)=>{entered();await gate;return match(input)},day(11))
+ await started
+ await refreshBrandIdeas(pool,facts,match as any,new Date(day(11).getTime()+16*60000))
+ const afterRecovery=(await rows()).map(row=>row.id).sort()
+ release();assert.equal((await old).skipped,true)
+ assert.deepEqual((await rows()).map(row=>row.id).sort(),afterRecovery,'stale owner cannot write late results')
+ await refreshBrandIdeas(pool,facts,async()=>({creativeCandidates:[{inspirationCreativeId:'cre_low',matchScore:75,sourceRevision:'r',sourceDigest:'a'.repeat(64),sourceVideo:{videoUrl:'https://fixture.example/v.mp4'}}],contentLibraryGaps:[]}) as any,day(12))
+ assert.deepEqual((await rows()).map(row=>row.id).sort(),afterRecovery,'unqualified candidates never enter nightly browser pool')
  console.log('PASS: brand timezone, 8-way daily claim, 8→18 growth, bounded replacement, selected source retention, outage/no-match/duplicate preservation')
 }finally{await pool.query('DELETE FROM amc_iaic.brand_ideas WHERE brand_id=$1',[brandId]);await pool.query('DELETE FROM amc_iaic.brand_idea_days WHERE brand_id=$1',[brandId]);await pool.end();if((globalThis as any).amcIdeaPool)await (await (globalThis as any).amcIdeaPool).end();await prisma.$disconnect()}

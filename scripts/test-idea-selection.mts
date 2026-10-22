@@ -18,14 +18,14 @@ let ids:string[]=[]
 try{
  await initializeIdeaPool(pool)
  await prisma.user.create({data:{id:userId,email:`${userId}@example.test`,type:'HUMAN',status:'ACTIVE',role:'ADMIN',password:'test-only-not-a-credential'}})
- await prisma.brand.create({data:{id:brandId,name:'TEST ONLY ranked ideas',timezone:'Asia/Singapore'}})
+ await prisma.brand.create({data:{id:brandId,name:'TEST ONLY ranked ideas',timezone:'Asia/Singapore'},select:{id:true}})
  await prisma.brandKnowledge.create({data:{brandId,negPrompts:[],marketingSolution:{}}})
  // Matching itself must create neither a calendar draft nor a localized script.
- const source=(n:number)=>({inspirationCreativeId:`cre_selection_${n}`,matchScore:n,creativeDirection:['process','product','tasting','education','comparison','brand_story','occasion','offer'][n%8],sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceVideo:{title:randomUUID()+randomUUID()},sourceEvidence:{scope:'full_source'},scriptContent:{kind:'video',body:`Original script ${n}`},timeline:[{narrativePurpose:'Original scene'}]})
+ const source=(n:number)=>({inspirationCreativeId:`cre_selection_${n}`,matchScore:n,creativeDirection:['process','product','tasting','education','comparison','brand_story','occasion','offer'][n%8],sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceVideo:{title:randomUUID()+randomUUID(),videoUrl:"https://example.test/source.mp4"},sourceEvidence:{scope:'full_source'},scriptContent:{kind:'video',body:`Original script ${n}`},timeline:[{narrativePurpose:'Original scene'}]})
  await refreshBrandIdeas(pool,{id:brandId,name:'TEST ONLY',timezone:'Asia/Singapore',knowledge:{}},async()=>({creativeCandidates:[source(98),source(80),source(70)],contentLibraryGaps:[]}) as any,now)
  assert.equal(await prisma.contentDraft.count({where:{brandId}}),0)
  const rows=(await pool.query("SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 ORDER BY (source->>'matchScore')::numeric DESC",[brandId])).rows;ids=rows.map(r=>r.id)
- assert.equal(ids.length,3)
+ assert.equal(ids.length,2)
  await pool.query('UPDATE amc_iaic.brand_ideas SET selected_at=now() WHERE brand_id=$1',[brandId])
  assert.equal((await admit()).reason,'human_choice_required')
  await prisma.brandKnowledge.update({where:{brandId},data:{publishingFreq:{platforms:{instagram:{postsPerMonth:2}}}}})
@@ -48,7 +48,7 @@ try{
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId,kind:'CREATIVE_ITEM'}}),0,'selection creates no adapted revision')
  // Like does not manufacture a production placeholder or a publishable script.
  assert.equal(await prisma.contentDraft.count({where:{brandId}}),0)
- await assert.rejects(()=>admit(ids[2]),(e:any)=>e.code==='idea_not_found')
+ await assert.rejects(()=>admit(randomUUID()),(e:any)=>e.code==='idea_not_found')
  assert.equal((await admit()).selected.length,0)
  console.log('PASS: source-only matching, no automatic admission at any score, concurrent human Like/replay, no placeholder or adaptation/production')
 }finally{

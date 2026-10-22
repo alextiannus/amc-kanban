@@ -1,3 +1,4 @@
+import * as brainstormMatch from '../src/lib/ai-native/brainstorm-match.ts'
 import * as sourceResolver from '../src/lib/brand-plan/creativeSourceEvidence.ts'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
@@ -27,7 +28,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
