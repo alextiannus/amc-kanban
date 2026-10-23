@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "incremental": false },
+  "include": [
+    "../src/lib/growthMerchantDirectory.ts",
+    "../src/app/api/internal/growth/merchants/route.ts",
+    "../src/app/api/internal/growth/merchants/[brandId]/route.ts"
+  ]
+}

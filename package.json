@@ -89,6 +89,8 @@
     "test:growth-google-sync": "node --experimental-strip-types scripts/test-growth-google-sync.mts",
     "test:growth-report-viewer": "node --experimental-strip-types scripts/test-growth-report-viewer.mts",
     "test:growth-research-context": "node --experimental-strip-types scripts/test-growth-research-context.mts",
+    "test:growth-merchant-directory": "node --experimental-strip-types scripts/test-growth-merchant-directory.mts",
+    "typecheck:growth-merchant-directory": "tsc --project scripts/tsconfig.growth-directory.json --incremental false",
     "verify:oss": "node --experimental-strip-types scripts/verify-oss-production.mts",
     "test:e2e-basic": "node --experimental-strip-types scripts/test-e2e-basic-flows.mts",
     "test:game-permanent-qr": "node --experimental-strip-types scripts/test-game-permanent-qr.mts",
