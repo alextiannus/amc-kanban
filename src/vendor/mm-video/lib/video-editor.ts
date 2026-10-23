@@ -1,13 +1,14 @@
 export interface VideoEditorInput {
+  speakerVoices?:Record<string,string>
   scriptReview?:{policy:'merchant-script-v1';language:string}
-  materialDecision?:import('@/vendor/mm-video/lib/video-material-bindings').VideoMaterialBindings
+  materialDecision?:import('./video-material-bindings').VideoMaterialBindings
   variantRootJobId?:string
   variantParentJobId?:string
   variantKey?:string
-  language?: import('@/vendor/mm-video/lib/video-languages').VideoLanguage
+  language?: import('./video-languages').VideoLanguage
 
   originVideoJobId?:string|null
-  generationLanguages?: import('@/vendor/mm-video/lib/video-languages').ScriptLanguage[]
+  generationLanguages?: import('./video-languages').ScriptLanguage[]
   targetPlatforms?: string[]
   missingAssetIds?: string[]
   brandId: string
@@ -27,7 +28,7 @@ export interface VideoEditorInput {
 }
 
 export interface VideoDraftReference {
-  revisions?: import('@/vendor/mm-video/lib/video-revisions').VideoRevision[]
+  revisions?: import('./video-revisions').VideoRevision[]
   revisionsHasMore?: boolean
   jobId?: string | null
   videoProjectId?: string | null

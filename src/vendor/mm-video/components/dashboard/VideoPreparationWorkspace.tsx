@@ -16,7 +16,7 @@ export type PreparationProps={
   platforms:string[];onPlatformsChange:(value:string[])=>void;
   templates:BasicVideoTemplate[];templateId:string;onTemplateChange:(id:string)=>void;templateError?:string;templatesLoading:boolean;
   assetsBusy?:boolean;initialLanguage?:ScriptLanguage;initialGenerationLanguages?:ScriptLanguage[];maxImages?:number;maxVideos?:number;duration:number;onDurationChange:(value:number)=>void;minDuration?:number;maxDuration?:number;capabilityError?:string;onRetryCapabilities:()=>void;
-  onBack:()=>void;onImageMode:()=>void;onGenerate:(decision?:MaterialDecision,language?:ScriptLanguage,options?:{languages:ScriptLanguage[];script:string})=>void;generateDisabled:boolean;
+  onBack:()=>void;onImageMode:()=>void;onGenerate:(decision?:MaterialDecision,language?:ScriptLanguage,options?:{languages:ScriptLanguage[];script:string;speakerVoices?:Record<string,string>})=>void;generateDisabled:boolean;
   onRestore:(draft:PreparationDraft)=>void;t:VideoTranslate;isEn:boolean
 }
 export default function VideoPreparationWorkspace(p:PreparationProps){return <CreativeVideoPreparation {...p}/> }

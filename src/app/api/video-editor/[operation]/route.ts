@@ -5,6 +5,7 @@ import {allows} from '@/lib/role-permissions/store'
 export const dynamic='force-dynamic'
 const routes:Record<string,{path:string;methods:string[]}>= {
  jobs:{path:'/api/content/video-jobs',methods:['GET','POST','PATCH']},
+ voices:{path:'/api/content/video/voices',methods:['GET']},
  capabilities:{path:'/api/content/video/capabilities',methods:['GET']},
  presets:{path:'/api/content/video/presets',methods:['GET']},
 }
