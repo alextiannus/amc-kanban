@@ -1,5 +1,8 @@
 import {returnedCreativePlaceholderFilters} from '@/lib/brand-plan/creativeVisibility'
 import {creativeWorkspace} from '@/lib/brand-plan/creativeRevisionContract'
+import { resolveDraftAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
+import { lockBrandSync } from '@/lib/socialAccountLocks'
+import { SocialAccountBindingError } from '@/lib/socialAccountIdentity'
 import { videoDraftReceipt } from '@/lib/videoDraftReceipt'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -243,7 +246,7 @@ export async function GET(request: Request, { params }: Params) {
   return NextResponse.json({ drafts: resolvedDrafts, counts })
 }
 
-export async function POST(request: Request, { params }: Params) {
+async function createDraft(request: Request, { params }: Params) {
   const { id: brandId } = await params
   const actor = await ensureWriteAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -267,37 +270,9 @@ export async function POST(request: Request, { params }: Params) {
   let accountId = typeof body.accountId === 'string' && body.accountId ? body.accountId : ''
   if (!accountId) return NextResponse.json({ error: 'accountId is required' }, { status: 400 })
 
-  if (accountId.startsWith('unconfigured_')) {
-    const platformId = accountId.replace('unconfigured_', '')
-    let placeholderAccount = await prisma.socialAccount.findFirst({
-      where: { unboundAt: null, brandId, platformId, handle: 'unconfigured' }
-    })
-    if (!placeholderAccount) {
-      const getDisplayName = (pId: string) => {
-        const lower = pId.toLowerCase()
-        if (lower === 'google_business' || lower === 'google') return 'Google Business (未配置)'
-        if (lower === 'xiaohongshu' || lower === 'rednote' || lower === 'red' || lower === 'xhs') return '小红书 / Rednote (未配置)'
-        if (lower === 'instagram') return 'Instagram (未配置)'
-        if (lower === 'facebook') return 'Facebook (未配置)'
-        if (lower === 'tiktok') return 'TikTok (未配置)'
-        return `${pId.charAt(0).toUpperCase() + pId.slice(1)} (未配置)`
-      }
-      placeholderAccount = await prisma.socialAccount.create({
-        data: {
-          brandId,
-          platformId,
-          handle: 'unconfigured',
-          displayName: getDisplayName(platformId),
-        }
-      })
-    }
-    accountId = placeholderAccount.id
-  }
-
-  const draftAccount = await prisma.socialAccount.findFirst({
-    where: { unboundAt: null, id: accountId, brandId },
-    select: { platformId: true },
-  })
+  const draftAccount = accountId.startsWith('unconfigured_')
+    ? { platformId: draftPlatform(accountId.slice('unconfigured_'.length)) }
+    : await prisma.socialAccount.findFirst({ where: { unboundAt: null, id: accountId, brandId }, select: { platformId: true } })
   if (!draftAccount) return NextResponse.json({ error: 'accountId is invalid for this brand' }, { status: 400 })
   if (body.gbpLocationId !== undefined && body.gbpLocationId !== null && typeof body.gbpLocationId !== 'string') {
     return NextResponse.json({ error: 'gbpLocationId must be a string or null' }, { status: 400 })
@@ -353,6 +328,9 @@ export async function POST(request: Request, { params }: Params) {
   }
   let videoReplay = false
   const draft = await prisma.$transaction(async (tx: any) => {
+    const boundAccount = await resolveDraftAccount(tx, brandId, accountId, status === 'draft' && !scheduledAt && !publishedAt && !platformPostId && !postUrl && body.createTask !== true)
+    accountId = boundAccount.id
+    body.accountId = accountId
     if (videoJobId) {
       const receipt = await videoDraftReceipt(tx, brandId, videoJobId, normalizeStringArray(body.mediaUrls), accountId)
       if ('error' in receipt) return { videoError: receipt.error, status: receipt.status }
@@ -536,4 +514,11 @@ function normalizeOptionalPastDate(value: unknown, fallback: Date | null): Date 
   const parsed = new Date(value)
   if (Number.isNaN(parsed.getTime()) || parsed.getTime() > Date.now()) return false
   return parsed
+}
+
+export async function POST(request: Request, context: Params) {
+  try { return await createDraft(request, context) } catch (error) {
+    if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    throw error
+  }
 }

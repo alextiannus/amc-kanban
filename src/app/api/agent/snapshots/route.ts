@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     .map((update: { accountId?: unknown }) => update.accountId)
     .filter((id: unknown): id is string => typeof id === 'string')
   const accounts = await prisma.socialAccount.findMany({
-    where: { id: { in: accountIds } },
+    where: { id: { in: accountIds }, unboundAt: null, NOT: { handle: 'unconfigured' } },
     select: { id: true, brandId: true },
   })
   if (accounts.length !== new Set(accountIds).size) {

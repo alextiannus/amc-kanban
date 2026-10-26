@@ -1,3 +1,6 @@
+import { channelAccountWhere, isPurePlaceholder, reconcilePlaceholderAccounts } from './socialAccountPlaceholder.ts'
+import { lockAccountBinding, lockBrandSync } from './socialAccountLocks.ts'
+export { lockAccountBinding, lockBrandSync } from './socialAccountLocks.ts'
 import { prisma } from './prisma.ts'
 import { postfastFetchAccounts, postfastListPosts, type PostFastAccount } from './integrations/postfast.ts'
 import { accountPlatform, assertAccountBound, localForProvider, providerForLocal, sameLegacyAccount, uniqueAccount, SocialAccountBindingError } from './socialAccountIdentity.ts'
@@ -5,6 +8,7 @@ import { accountPlatform, assertAccountBound, localForProvider, providerForLocal
 export { assertAccountBound, SocialAccountBindingError } from './socialAccountIdentity.ts'
 
 export async function saveSocialAccount(brandId: string, data: { platformId: string; handle: string; [key: string]: unknown }, restore = false, actorId?: string) {
+  if (data.handle.trim() === 'unconfigured') throw new SocialAccountBindingError('Select or connect a real social account for publishing.', 409, 'PLACEHOLDER_ACCOUNT')
   return prisma.$transaction(async (tx: any) => {
     await lockBrandSync(tx, brandId)
     const identity = { id: '', platformId: accountPlatform(data.platformId), handle: data.handle.trim(), profileUrl: data.profileUrl as string | null }
@@ -23,18 +27,6 @@ export async function saveSocialAccount(brandId: string, data: { platformId: str
     } })
     return saved
   })
-}
-
-// Transaction-scoped advisory locks work across web and cron processes. Never use
-// session locks on a pooled connection. Network requests below have bounded timeouts.
-export async function lockAccountBinding(tx: any, accountId: string) {
-  const rows = await tx.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(${`social-account:${accountId}`}, 0)) AS locked`
-  if (!rows[0]?.locked) throw new SocialAccountBindingError('该账号正在同步或发布，请稍后重试。', 409, 'ACCOUNT_BUSY')
-}
-
-export async function lockBrandSync(tx: any, brandId: string) {
-  const rows = await tx.$queryRaw`SELECT pg_try_advisory_xact_lock(hashtextextended(${`social-account-sync:${brandId}`}, 0)) AS locked`
-  if (!rows[0]?.locked) throw new SocialAccountBindingError('账号绑定正在更新，请稍后重试。', 409, 'ACCOUNT_BUSY')
 }
 
 export async function withBoundAccount<T>(accountId: string, work: (account: any, tx: any) => Promise<T>): Promise<T> {
@@ -82,16 +74,17 @@ export async function syncSocialAccountBindings(brandId: string, remotes: PostFa
         locals.push(created)
       }
     }
+    await reconcilePlaceholderAccounts(tx, brandId, true, new Set(remotes.map(remote => remote.id)))
     // Only prune empty legacy records. Historical references and unbound records
     // are never cascade-deleted by a snapshot refresh.
     const brand = await tx.brand.findUnique({ where: { id: brandId }, select: { googlePreferOAuth: true, googleRefreshToken: true, googleLocationId: true } })
     for (const local of locals) {
-      if (local.unboundAt || (accountPlatform(local.platformId) === 'google' && brand?.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId)) continue
+      if (local.handle === 'unconfigured' || local.unboundAt || (accountPlatform(local.platformId) === 'google' && brand?.googlePreferOAuth && brand.googleRefreshToken && brand.googleLocationId)) continue
       if (providerForLocal(local, remotes)) continue
       await lockAccountBinding(tx, local.id)
       await tx.socialAccount.deleteMany({ where: { id: local.id, unboundAt: null, drafts: { none: {} }, actionItems: { none: {} }, snapshots: { none: {} }, inboxConversations: { none: {} } } })
     }
-    return tx.socialAccount.findMany({ where: { brandId, unboundAt: null }, select: {
+    return tx.socialAccount.findMany({ where: { brandId, ...channelAccountWhere }, select: {
       id: true, platformId: true, handle: true, displayName: true, followerCount: true,
       followerDelta: true, ratingScore: true, snapshotAt: true, profileUrl: true, autoPilot: true, postfastAccountId: true,
       connectionStatus: true, disabledReason: true, inboxCapable: true, followerCountUpdatedAt: true,
@@ -118,6 +111,7 @@ export async function resolveLocalPublishAccount(input: { apiKey: string; platfo
     local = uniqueAccount(locals.filter((a: any) => !a.unboundAt && a.handle !== 'unconfigured' && accountPlatform(a.platformId) === accountPlatform(input.platform)))
   }
   assertAccountBound(local)
+  if (local.handle === 'unconfigured') throw new SocialAccountBindingError('Select or connect a real social account for publishing.', 409, 'PLACEHOLDER_ACCOUNT')
   if (accountPlatform(local.platformId) !== accountPlatform(input.platform)) throw new SocialAccountBindingError('账号与所选发布平台不匹配。')
   const remote = providerForLocal(local, remotes)
   if (!remote) throw new SocialAccountBindingError('未找到该账号对应的 PostFast 身份，请核对绑定并同步账号。')
@@ -130,6 +124,13 @@ export async function unbindSocialAccount(brandId: string, accountId: string, ac
     await lockAccountBinding(tx, accountId)
     const account = await tx.socialAccount.findFirst({ where: { id: accountId, brandId } })
     if (!account) throw new SocialAccountBindingError('Account not found', 404, 'ACCOUNT_NOT_FOUND')
+    if (isPurePlaceholder(account)) {
+      if (account.autoPilot) {
+        await tx.socialAccount.update({ where: { id: accountId }, data: { autoPilot: false } })
+        await tx.auditLog.create({ data: { actorId, actorType: 'HUMAN', action: 'SOCIAL_ACCOUNT_PLACEHOLDER_HIDDEN', resourceType: 'SocialAccount', resourceId: accountId, oldValue: { autoPilot: true }, newValue: { autoPilot: false }, metadata: { brandId, publish: false } } })
+      }
+      return { ok: true }
+    }
     if (account.unboundAt) return { ok: true }
     const pending = await tx.contentDraft.count({ where: { brandId, accountId, OR: [
       { status: { in: ['scheduled', 'publishing'] } },

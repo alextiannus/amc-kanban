@@ -107,7 +107,7 @@ async function findOwnerBrand(ownerId: string, brandId?: string | null) {
       phone: true,
       address: true,
       accounts: {
-        where: { unboundAt: null },
+        where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         select: {
           platformId: true,
           handle: true,
@@ -144,7 +144,7 @@ async function findBrandForSubscription(brandId: string) {
       phone: true,
       address: true,
       accounts: {
-        where: { unboundAt: null },
+        where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         select: {
           platformId: true,
           handle: true,

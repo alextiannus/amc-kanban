@@ -1,3 +1,8 @@
+import { resolveDraftAccount, draftPlatform } from '../src/lib/socialAccountPlaceholder.ts'
+import { lockBrandSync } from '../src/lib/socialAccountLocks.ts'
+import { SocialAccountBindingError } from '../src/lib/socialAccountIdentity.ts'
+import * as creativeVisibility from '../src/lib/brand-plan/creativeVisibility.ts'
+import * as creativeRevisionContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -24,12 +29,18 @@ let user: any = null
 let allowed = false
 let reads = 0
 const deps: Record<string, any> = {
+  '@/lib/brand-plan/creativeVisibility': creativeVisibility,
+  '@/lib/brand-plan/creativeRevisionContract': creativeRevisionContract,
   '@/lib/videoDraftReceipt': {},
+  '@/lib/socialAccountPlaceholder': { resolveDraftAccount, draftPlatform },
+  '@/lib/socialAccountLocks': { lockBrandSync },
+  '@/lib/socialAccountIdentity': { SocialAccountBindingError },
   'next/server': { NextResponse: { json: (data: any, init: any) => Response.json(data, init) } },
   '@/lib/auth': { getSession: async () => user ? { user } : null, extractApiKey: () => null },
   '@/lib/brandAccess': { canSessionAccessBrandProject: async () => allowed },
   '@/lib/calendarDraftQuery': { calendarDraftQuery },
   '@/lib/prisma': { prisma: {
+    brandKnowledge: { findUnique: async () => null },
     $transaction: (queries: any[]) => Promise.all(queries),
     contentDraft: {
       findMany: async (args: any) => {

@@ -132,9 +132,10 @@ export async function PATCH(request: Request, { params }: Params) {
 
     if (nextAutoPilot !== undefined) {
       await tx.socialAccount.updateMany({
-        where: { unboundAt: null, brandId: id },
+        where: { unboundAt: null, brandId: id, NOT: { handle: 'unconfigured' } },
         data: { autoPilot: nextAutoPilot },
       })
+      await tx.socialAccount.updateMany({ where: { brandId: id, handle: 'unconfigured' }, data: { autoPilot: false } })
     }
 
     await tx.auditLog.create({

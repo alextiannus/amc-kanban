@@ -475,7 +475,9 @@ ${contentIdea || 'No details provided.'}`
   }
 
   const accountOptions = useMemo(() => {
-    const list = [...accounts]
+    const list = accounts.map(account => account.handle === 'unconfigured'
+      ? { ...account, autoPilot: false }
+      : account)
 
     // Add unconfigured placeholder accounts from createdDrafts if any
     if (createdDrafts && createdDrafts.length > 0) {

@@ -266,7 +266,7 @@ export async function loadBrandPlanBrand(brandId: string) {
         orderBy: { createdAt: 'desc' },
         take: 1,
       },
-      accounts: { where: { unboundAt: null },
+      accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         select: {
           id: true,
           platformId: true,

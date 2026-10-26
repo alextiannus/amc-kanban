@@ -10,7 +10,7 @@ export async function GET(_request: Request, { params }: Params) {
   const { id } = await params
   const session = await getSession()
   if (!session?.user || !await canOwnBrand(id, session.user.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const brand = await prisma.brand.findUnique({ where: { id }, select: { name: true, address: true, location: true, knowledge: { select: { stores: true } }, accounts: { where: { unboundAt: null }, select: { platformId: true, profileUrl: true, handle: true } }, googlePlaceId: true, googleBusinessUrl: true, googleReviewUrl: true, googleBrandImport: { select: { status: true, lastError: true } } } })
+  const brand = await prisma.brand.findUnique({ where: { id }, select: { name: true, address: true, location: true, knowledge: { select: { stores: true } }, accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { platformId: true, profileUrl: true, handle: true } }, googlePlaceId: true, googleBusinessUrl: true, googleReviewUrl: true, googleBrandImport: { select: { status: true, lastError: true } } } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const entries = brandGoogleMapsEntries(brand, brand.knowledge?.stores)
   const mapsUrl = entries[0]?.url || ''

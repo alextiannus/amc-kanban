@@ -117,6 +117,7 @@ export async function enqueuePostfastDelivery(input: {
     await lockAccountBinding(tx, accountId)
     const account = await tx.socialAccount.findFirst({ where: { id: accountId, brandId: input.brandId } })
     assertAccountBound(account)
+    if (account?.handle === 'unconfigured') throw new Error('Publishing requires a real configured account.')
 
     const concurrent = await tx.postfastDeliveryJob.findFirst({
       where: { draftId: input.draftId, status: { in: [...POSTFAST_DELIVERY_ACTIVE_STATUSES] } },

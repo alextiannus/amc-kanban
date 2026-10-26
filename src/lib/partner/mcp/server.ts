@@ -1,3 +1,5 @@
+import { resolveDraftAccount, resolveDraftPlatformAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
+import { lockBrandSync } from '@/lib/socialAccountLocks'
 import { MCP_PERMISSIONS } from '@/lib/role-permissions/mcp'
 import { allows } from '@/lib/role-permissions/store'
 import { principalFromUser } from '@/lib/auth-v2/types'
@@ -128,25 +130,6 @@ function marketingPlanPeriodLabel(plan: NonNullable<BrandPlanWorkspaceData['annu
   return plan.theme || plan.goal || 'brand_marketing_plan'
 }
 
-async function ensureCalendarAccount(brandId: string, platform: string) {
-  const platformId = normalizeCalendarPlatform(platform)
-  const account = await prisma.socialAccount.findFirst({
-    where: { unboundAt: null, brandId, platformId },
-    orderBy: { updatedAt: 'desc' },
-  })
-  if (account) return account
-  return prisma.socialAccount.create({
-    data: {
-      brandId,
-      platformId,
-      handle: 'unconfigured',
-      displayName: platformId === 'xiaohongshu'
-        ? '小红书 / Rednote (未配置)'
-        : `${platformId.charAt(0).toUpperCase()}${platformId.slice(1)} (未配置)`,
-    },
-  })
-}
-
 function accountHandleFromExternal(account: any, platformId: string) {
   const handle = String(account?.handle || account?.username || account?.displayName || '').trim()
   return handle || `unconfigured-${platformId}`
@@ -181,7 +164,6 @@ async function createDraftsFromCalendarItems(input: {
   const selectedItems = input.items.slice(0, input.limit)
   const results = await Promise.all(selectedItems.map(async (item) => {
     const platformId = normalizeCalendarPlatform(String(item.platformSlug || item.platform || 'instagram'))
-    const account = await ensureCalendarAccount(input.brandId, platformId)
     let caption = ''
     let hashtags: string[] = []
     let provenance: unknown = null
@@ -212,7 +194,9 @@ async function createDraftsFromCalendarItems(input: {
     }
 
     const scheduledAt = item.date ? new Date(item.date) : null
-    const draft = await prisma.contentDraft.create({
+    const draft = await prisma.$transaction(async (tx: any) => {
+      const account = await resolveDraftPlatformAccount(tx, input.brandId, platformId)
+      return tx.contentDraft.create({
       data: {
         brandId: input.brandId,
         accountId: account.id,
@@ -236,6 +220,7 @@ async function createDraftsFromCalendarItems(input: {
         hashtags: true,
         agentNote: true,
       },
+      })
     })
 
     if (input.assetIds?.length) {
@@ -251,7 +236,7 @@ async function createDraftsFromCalendarItems(input: {
     return {
       calendarItemId: item.id,
       platform: platformId,
-      accountId: account.id,
+      accountId: draft.accountId,
       draft,
       generation: generationError
         ? { ok: false, error: generationError }
@@ -362,7 +347,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
             postfastApiKey: true,
             googlePlaceId: true,
             googleApiKey: true,
-            accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, displayName: true, autoPilot: true } },
+            accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { id: true, platformId: true, handle: true, displayName: true, autoPilot: true } },
           },
         })
         if (!brand) return { content: [{ type: 'text' as const, text: 'Error: Brand not found' }], isError: true }
@@ -404,7 +389,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
               brand: {
                 select: {
                   id: true, name: true, description: true, location: true, timezone: true, autoPilot: true,
-                  accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
+                  accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
                 },
               },
             },
@@ -1714,9 +1699,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       let resolvedAccountId = accountId?.trim()
       if (resolvedAccountId) {
         if (resolvedAccountId.startsWith('unconfigured_')) {
-          const platformId = resolvedAccountId.replace('unconfigured_', '')
-          const account = await ensureCalendarAccount(brandId, platformId)
-          resolvedAccountId = account.id
+          // Resolve and persist this virtual platform in the save transaction.
         } else {
           const localAccount = await prisma.socialAccount.findFirst({
             where: { unboundAt: null, id: resolvedAccountId, brandId },
@@ -1754,8 +1737,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         }
       }
 
-      const accountForLocation = resolvedAccountId
-        ? await prisma.socialAccount.findFirst({
+      const accountForLocation = resolvedAccountId?.startsWith('unconfigured_')
+        ? { platformId: draftPlatform(resolvedAccountId.slice('unconfigured_'.length)) }
+        : resolvedAccountId ? await prisma.socialAccount.findFirst({
             where: { unboundAt: null, id: resolvedAccountId, brandId },
             select: { platformId: true },
           })
@@ -1781,6 +1765,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       }
 
       const draft = await prisma.$transaction(async (tx: any) => {
+        await lockBrandSync(tx, brandId, true)
+        if (resolvedAccountId) resolvedAccountId = (await resolveDraftAccount(tx, brandId, resolvedAccountId, !draftId)).id
+        if (draftId) await tx.$queryRaw`SELECT id FROM "ContentDraft" WHERE id = ${draftId} AND "brandId" = ${brandId} FOR UPDATE`
         let savedId: string
 
         if (draftId) {

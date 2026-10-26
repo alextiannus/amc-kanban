@@ -268,6 +268,7 @@ export async function GET(req: Request, { params }: Params) {
     where: { id: brandId },
     include: {
       accounts: {
+        where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         select: { id: true, platformId: true, handle: true, displayName: true },
       },
       subscriptions: {

@@ -120,7 +120,11 @@
     "test:skills-package": "python3 packages/amc-skills/scripts/test_package.py",
     "test:agent-skills": "tsx scripts/test-agent-skills.mts",
     "test:agent-skills-ui": "node scripts/test-agent-skills-ui.mjs",
-    "test:growth-v5": "tsx scripts/test-growth-v5-integration.mts"
+    "test:growth-v5": "tsx scripts/test-growth-v5-integration.mts",
+    "test:social-account-placeholders": "node --import tsx scripts/test-social-account-placeholders.mts",
+    "social-accounts:repair:dry-run": "node --import tsx scripts/repair-social-account-placeholders.mts --dry-run",
+    "social-accounts:repair": "node --import tsx scripts/repair-social-account-placeholders.mts --apply",
+    "test:social-account-placeholder-concurrency": "node --import tsx scripts/test-social-account-placeholder-concurrency.mts"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",

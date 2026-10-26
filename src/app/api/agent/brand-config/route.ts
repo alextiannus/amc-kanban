@@ -84,7 +84,7 @@ export async function GET(request: Request) {
                 larkOwnerId: true,
                 postfastApiKey: true, googleApiKey: true,
                 larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
-                accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
+                accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
               },
             },
           },
@@ -107,7 +107,7 @@ export async function GET(request: Request) {
       larkDriveFolderId: true, larkOwnerId: true,
       postfastApiKey: true, googleApiKey: true,
       larkAppId: true, larkAppSecret: true, larkBotWebhook: true,
-      accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
+      accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
   })
 
@@ -184,7 +184,7 @@ export async function POST(request: Request) {
   const brandWithRelations = await prisma.brand.findUnique({
     where: { id: brand.id },
     include: {
-      accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
+      accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { id: true, platformId: true, handle: true, autoPilot: true } },
     },
   })
 

@@ -4,7 +4,7 @@ import {prisma} from '../prisma'
 import {readGrowthInsightSources,writeGrowthInsightSources} from '../growthDataCenter'
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex').slice(0,24)
 async function sourceIdentity(brandId:string){
- const brand=await prisma.brand.findUnique({where:{id:brandId},include:{knowledge:true,accounts:{where:{unboundAt:null},select:{platformId:true,profileUrl:true}}}})
+ const brand=await prisma.brand.findUnique({where:{id:brandId},include:{knowledge:true,accounts:{where:{unboundAt:null,NOT:{handle:'unconfigured'}},select:{platformId:true,profileUrl:true}}}})
  if(!brand)throw Object.assign(Error('brand_not_found'),{statusCode:404})
  const latest=await prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'},select:{report:true}})
  const seed:any[]=[]

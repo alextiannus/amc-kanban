@@ -268,6 +268,8 @@ export async function runDailySnapshotCrawler(): Promise<{ successCount: number;
   const accounts = await prisma.socialAccount.findMany({
     where: {
       platformId: 'instagram',
+      unboundAt: null,
+      NOT: { handle: 'unconfigured' },
       brand: {
         status: 'ACTIVE',
       },

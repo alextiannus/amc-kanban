@@ -454,6 +454,14 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
 3. **全局运营看板 (Global Operation Overview)**
    * 老板可以在 Dashboard 上拥有一个全局视角，一目了然地看到所有自媒体账号的健康状态和当下的运营动作。
 
+### Draft placeholders and real social channels (implemented locally; deployment pending)
+
+- The reserved handle `unconfigured` represents an internal draft platform, always with `autoPilot=false`. Channel lists, operating-account counts and sync snapshots exclude it. Draft creation and manual historical entries retain `unconfigured_<platform>` support and show a readable platform/unconfigured label. Brand toggles and account PATCH cannot enable placeholder publishing or convert placeholders into real accounts.
+- Draft save/edit, bulk creation, brand calendars and MCP share transaction-scoped account resolution and existing platform aliases. Explicit real IDs are strictly validated. New plain drafts choose a uniquely connected real account when its stable identity is valid; otherwise they reuse an internal placeholder. Historical records retain their platform association. Calendar resync preserves an existing real account selection.
+- PostFast sync reconciles in the same transaction. A target must be the only bound real account on the same brand/platform, have a stable PostFast ID, CONNECTED status and no disabled reason. Only status=draft records with no schedule/publication time, provider post ID, post URL, any delivery job or ActionItem may move. Only accountId/updatedAt change; content and assets are preserved and no publication is triggered. Ambiguous, disabled, historical, reviewed or scheduled records retain their association for manual account selection. Brand/account advisory locks and draft row locks protect revalidation; repeat sync is idempotent.
+- A pure placeholder has no provider ID, authorization/login credentials or profile URL. Mixed identities are hidden but never automatically moved or removed. Placeholder unbind only disables autoPilot and returns {ok:true}, without provider calls or a real-account unboundAt marker. DELETE returns 409 PLACEHOLDER_HAS_REFERENCES when referenced and never cascades its drafts. Cleanup requires every reference to be empty, including AI creation settings and historical runs; configuration writers share the brand lock and revalidate the account. Audits record account/draft IDs, counts and skip reasons without credentials or draft text.
+- No schema migration. The maintenance tool defaults to dry-run and requires either --brand-id or --all. It verifies current provider availability/health before reconciliation and rechecks the brand configuration under its lock. Archived brands, brands without a provider key and provider failures only have placeholder autoPilot disabled; their account identities and draft associations are retained. Each brand is transactional, failed brands do not prevent the remaining brands from being checked, and reports contain no credentials. Dry-run uses read-only transactions and reports the same provider-verified decisions without changing data. An invalid provider key requires an authorized replacement from the same workspace; no unrelated key is automatically assigned. Real-account unbind/restore, third-party authorization and publication confirmation remain unchanged.
+
 ### PostFast key 解绑与待分配池（已部署，2026-09-20）
 
 - Admin 的已分配 key 提供“解绑并回池”，确认中展示品牌名称；未分配 key 的“退役”单独保留，不再把解绑显示为删除。
@@ -1503,7 +1511,7 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 ### 账号管理与删除能力
 - **前端删除操作**：在 `DashboardHome.tsx` 的每个社交账号卡片（`KpiCard`）右上角新增删除（垃圾桶）图标。用户点击并二次确认后，直接调用 DELETE 接口，成功后自动刷新账号配置。
 - **前端新增渠道入口**：在“账号资产配置”标题右侧新增“+ 绑定新账号”按钮，连通已有的 `AddAccountModal`，让主理人可以自助添加绑定社交媒体账号。
-- **后端依赖级删除支持**：更新 `/api/brands/[id]/accounts/[aid]` 的 `DELETE` 接口，在删除 `SocialAccount` 前，同步以事务形式安全清除关联 of `ActionItem` 和 `ContentDraft` 数据，避免违反外键约束。
+- **Account deletion protection**: `DELETE /api/brands/[id]/accounts/[aid]` keeps existing real-account behavior. Referenced internal placeholders return `409 PLACEHOLDER_HAS_REFERENCES` and never cascade drafts, tasks, statistics or messages; only pure, completely unreferenced placeholders may be removed.
 
 ### 取消订阅账号看板过滤
 - **账号快照过滤**：在 `/api/data-analysis` 与 `/api/public/snapshots` 接口中，只查询并展现对应品牌拥有当前有效（未到期且 status 为 ACTIVE）的订阅计划的社媒账号快照。

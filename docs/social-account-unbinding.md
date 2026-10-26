@@ -1,17 +1,27 @@
-# 社交账号单独解绑
+# Individual social-account unbinding
 
-状态：本次开发，待部署。适用于 Kanban 品牌执行账号，不修改 Growth 商户资料或第三方授权。
+Status: existing real-account behavior; placeholder protection implemented locally, deployment pending. No schema migration is added by this repair. Scope: Kanban brand execution accounts; Growth merchant facts and third-party authorization are unchanged.
 
-`POST /api/brands/{id}/accounts/{aid}/unbind`：登录用户须有品牌写权限。成功返回 `{ok:true}`，重复解绑仍成功；未授权为 401，无品牌权限或账号不属于品牌为 404。账号仍保留在数据库，写入 `unboundAt`、关闭 `autoPilot` 并记录审计，不调用旧 DELETE 接口。
+`POST /api/brands/{id}/accounts/{aid}/unbind` requires login and brand write access. Unauthorized requests return 401; inaccessible brands or foreign accounts return 404. Successful and repeated unbinding returns `{ok:true}`.
 
-存在未完成本地排期、发布任务或远端排期时返回 409 和可读错误；远端身份歧义、状态查询失败或分页未完成时保留绑定。操作不取消任何远端帖子。同步及发布按稳定 PostFast 账号 ID 匹配，旧记录按规范化平台和 handle/主页唯一匹配；不得只按平台选择另一个账号。
+Real accounts keep their history, receive `unboundAt`, disable `autoPilot` and write an audit. Brand/account advisory locks serialize sync and publication. Local pending delivery or incomplete remote schedule checks block unbinding; provider outages and ambiguous identities fail closed. Remote posts and OAuth authorizations are never cancelled by this operation. Sync preserves real-account tombstones. Only explicit account reconnection can restore one, with automatic publication disabled.
 
-解绑后活跃列表及发布选择器排除该账号，历史草稿、任务、帖子和统计关联继续保留。同步不得清除解绑标记或删除解绑记录。已有草稿须先选择一个有效绑定账号才能再次发布。显式 `POST /api/brands/{id}/accounts` 可恢复匹配的解绑账号，自动发布默认关闭；普通 PATCH、自动同步及 Agent/MCP upsert 均不恢复。
+Pure internal placeholders are already excluded from channel lists. Their unbind operation disables autoPilot, retains history, skips provider calls and does not write a real-account unboundAt marker. Mixed identities retain normal conservative identity checks. Placeholder DELETE cannot cascade history. The UI refreshes after success and retains readable errors on failure.
 
-发布与解绑共享数据库锁，跨进程生效。解绑检查本地状态并完整查询远端未完成排期后才更新；网络查询失败时禁止解绑。Google 平台别名统一用于身份匹配，同平台多个账号互不覆盖。
+Whole-brand PostFast key release is a separate Admin operation; placeholder cleanup does not revoke authorization or reclaim the key.
 
-UI：底部保存按钮旁提供红色描边解绑按钮，确认使用已保存的平台和账号。请求期间禁止编辑、保存、重复解绑及关闭；成功关闭面板并刷新，失败留在原处显示错误。
+### Draft placeholders and real social channels (implemented locally; deployment pending)
 
-部署前应用新增可空字段的 Prisma 迁移并生成客户端；现有行默认继续绑定，不回写历史数据。验证权限、幂等、隔离、同步、排期阻塞、并发互斥、历史保留和显式重绑。
+- The reserved handle `unconfigured` represents an internal draft platform, always with `autoPilot=false`. Channel lists, operating-account counts and sync snapshots exclude it. Draft creation and manual historical entries retain `unconfigured_<platform>` support and show a readable platform/unconfigured label. Brand toggles and account PATCH cannot enable placeholder publishing or convert placeholders into real accounts.
+- Draft save/edit, bulk creation, brand calendars and MCP share transaction-scoped account resolution and existing platform aliases. Explicit real IDs are strictly validated. New plain drafts choose a uniquely connected real account when its stable identity is valid; otherwise they reuse an internal placeholder. Historical records retain their platform association. Calendar resync preserves an existing real account selection.
+- PostFast sync reconciles in the same transaction. A target must be the only bound real account on the same brand/platform, have a stable PostFast ID, CONNECTED status and no disabled reason. Only status=draft records with no schedule/publication time, provider post ID, post URL, any delivery job or ActionItem may move. Only accountId/updatedAt change; content and assets are preserved and no publication is triggered. Ambiguous, disabled, historical, reviewed or scheduled records retain their association for manual account selection. Brand/account advisory locks and draft row locks protect revalidation; repeat sync is idempotent.
+- A pure placeholder has no provider ID, authorization/login credentials or profile URL. Mixed identities are hidden but never automatically moved or removed. Placeholder unbind only disables autoPilot and returns {ok:true}, without provider calls or a real-account unboundAt marker. DELETE returns 409 PLACEHOLDER_HAS_REFERENCES when referenced and never cascades its drafts. Cleanup requires every reference to be empty, including AI creation settings and historical runs; configuration writers share the brand lock and revalidate the account. Audits record account/draft IDs, counts and skip reasons without credentials or draft text.
+- No schema migration. The maintenance tool defaults to dry-run and requires either --brand-id or --all. It verifies current provider availability/health before reconciliation and rechecks the brand configuration under its lock. Archived brands, brands without a provider key and provider failures only have placeholder autoPilot disabled; their account identities and draft associations are retained. Each brand is transactional, failed brands do not prevent the remaining brands from being checked, and reports contain no credentials. Dry-run uses read-only transactions and reports the same provider-verified decisions without changing data. An invalid provider key requires an authorized replacement from the same workspace; no unrelated key is automatically assigned. Real-account unbind/restore, third-party authorization and publication confirmation remain unchanged.
 
-整品牌 PostFast key 回收属于独立的 Admin“解绑并回池”操作（已部署，2026-09-20），见 [主 PRD](./prd_amc.md)。单账号解绑保留远端授权，不会自动令 key 可分配给其他品牌；key 回池前必须确认 PostFast 工作区已无账号和排期。
+### Production data reconciliation verified on 2026-10-26
+
+- Checked all 66 brands, including 29 active brands. All 44 placeholder autoPilot flags across 18 brands were disabled; 16 plain, unscheduled drafts moved to unique live-verified accounts, and five pure placeholders with no remaining references were removed.
+- Post-commit readback verified all 478 affected content records: content hashes were unchanged; 335 published records and 102 plans retained their full rows and associations. All 93 real account records and total draft, asset-reference and delivery-job counts were unchanged. A repeated provider-verified dry-run proposed zero updates, moves or removals; 39 referenced/retained placeholders remain with autoPilot=false.
+- Black Yaya (??????) returned an invalid-workspace-key error from PostFast; no replacement key was assigned in the local pool. Its placeholder was disabled and 258 historical TikTok records retained. Restoring live synchronization requires a valid key for the original workspace; an unrelated empty workspace must not be substituted.
+- Enterprise Catering and Yan Bang Cai have no provider configuration. ABC Restaurant, IDN Delivery Chinatown and Hua Po Po returned empty live account lists. These require account onboarding, not placeholder deletion.
+- This records database/provider evidence only. Code deployment is independently checked through `/api/health/version` and served channel behavior.

@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       location: true,
       address: true,
       googlePlaceId: true,
-      accounts: { where: { unboundAt: null },
+      accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true },
       },
     },

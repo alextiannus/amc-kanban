@@ -95,7 +95,7 @@ export async function POST(req: Request, { params }: Params) {
       location: true,
       address: true,
       googlePlaceId: true,
-      accounts: { where: { unboundAt: null },
+      accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         select: { id: true, platformId: true, handle: true, displayName: true },
       },
     },

@@ -1,3 +1,7 @@
+import type { Prisma } from "@prisma/client"
+import { resolveDraftPlatformAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
+import { lockBrandSync } from '@/lib/socialAccountLocks'
+import { SocialAccountBindingError } from '@/lib/socialAccountIdentity'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -102,46 +106,22 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
-    // 1. Fetch brand accounts
-    let accounts = await prisma.socialAccount.findMany({
-      where: { unboundAt: null, brandId }
-    })
-
     const selectedCopywriters = copywritersFromIds(copywriterIds)
-    const defaultPlatforms = (selectedCopywriters.length > 0 ? selectedCopywriters : COPYWRITER_ROSTER)
-      .map((copywriter) => copywriter.platform)
-
-    // Ensure placeholders exist for selected copywriter platforms if they are not configured
-    for (const platformId of defaultPlatforms) {
-      const aliasesForPlatform = platformAliases(platformId)
-      const exists = accounts.some((a: any) => {
-        const pId = a.platformId.toLowerCase()
-        return aliasesForPlatform.includes(pId)
-      })
-      if (!exists) {
-        const handle = 'unconfigured'
-        let placeholderAccount = await prisma.socialAccount.findFirst({
-          where: { unboundAt: null, brandId, platformId, handle }
-        })
-        if (!placeholderAccount) {
-          const getDisplayName = (pId: string) => {
-            if (pId === 'xiaohongshu') return '小红书 / Rednote (未配置)'
-            if (pId === 'instagram') return 'Instagram (未配置)'
-            if (pId === 'facebook') return 'Facebook (未配置)'
-            return `${pId.charAt(0).toUpperCase() + pId.slice(1)} (未配置)`
-          }
-          placeholderAccount = await prisma.socialAccount.create({
-            data: {
-              brandId,
-              platformId,
-              handle,
-              displayName: getDisplayName(platformId)
-            }
-          })
-        }
-        accounts.push(placeholderAccount)
+    const defaultPlatforms = (selectedCopywriters.length > 0 ? selectedCopywriters : COPYWRITER_ROSTER).map(copywriter => copywriter.platform)
+    let accounts = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await lockBrandSync(tx, brandId, true)
+      const current = await tx.socialAccount.findMany({ where: { brandId, unboundAt: null } })
+      const chosen = current.filter(account => account.handle !== 'unconfigured')
+      for (const platform of defaultPlatforms) {
+        if (!chosen.some(account => draftPlatform(account.platformId) === draftPlatform(platform))) chosen.push(await resolveDraftPlatformAccount(tx, brandId, platform))
       }
-    }
+      // Concrete placeholder selection remains available for draft-only creation.
+      if (singleAccountId) {
+        const selected = current.find(account => account.id === singleAccountId)
+        if (selected?.handle === 'unconfigured' && !chosen.some(account => account.id === selected.id)) chosen.push(await resolveDraftPlatformAccount(tx, brandId, selected.platformId, false))
+      }
+      return chosen
+    })
 
     // Build effective idea — fall back to brand name if caller didn't provide one
     const idea: string = (rawIdea && rawIdea.trim()) ? rawIdea.trim() : `${brand.name}品牌内容创作`
@@ -232,7 +212,7 @@ export async function POST(request: Request, { params }: Params) {
 
         return {
           platform: account.platformId,
-          accountId: account.id,
+          accountId: account.handle === 'unconfigured' ? `unconfigured_${account.platformId}` : account.id,
           displayName: copywriter ? `${copywriter.name} · ${copywriter.handle}` : account.displayName,
           copywriter,
           copywriterId: copywriter?.id,
@@ -253,6 +233,7 @@ export async function POST(request: Request, { params }: Params) {
 
     return NextResponse.json({ success: true, drafts: draftResults })
   } catch (error: any) {
+    if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     console.error('[Bulk Generate Error]:', error)
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 })
   }

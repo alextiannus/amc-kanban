@@ -97,7 +97,7 @@ export async function GET(request: Request) {
             googleBusinessUrl: true,
             googleReviewUrl: true,
             googleLinksMeta: true,
-            accounts: { where: { unboundAt: null },
+            accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
               select: {
                 id: true, postfastAccountId: true, platformId: true,
                 profileUrl: true,
@@ -150,7 +150,7 @@ export async function GET(request: Request) {
               googleBusinessUrl: true,
               googleReviewUrl: true,
               googleLinksMeta: true,
-              accounts: { where: { unboundAt: null },
+              accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
                 select: {
                   id: true, postfastAccountId: true, platformId: true,
                   profileUrl: true,
@@ -174,7 +174,7 @@ export async function GET(request: Request) {
           googleReviewUrl: true,
           googleBusinessUrl: true,
           accounts: {
-            where: { unboundAt: null },
+            where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
             select: { id: true, postfastAccountId: true, platformId: true, profileUrl: true, handle: true },
           },
         },

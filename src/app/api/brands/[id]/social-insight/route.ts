@@ -527,7 +527,7 @@ export async function GET(req: Request, { params }: Params) {
       take: 100,
     }),
     prisma.socialAccount.findMany({
-      where: { brandId: id },
+      where: { brandId: id, unboundAt: null, NOT: { handle: 'unconfigured' } },
       select: {
         id: true, platformId: true, handle: true, displayName: true,
         followerCount: true, followerDelta: true, ratingScore: true,
