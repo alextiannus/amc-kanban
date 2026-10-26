@@ -1,4 +1,6 @@
 import {planningReviewState,planningRevision} from '../ai-native/planning-workspace-contract'
+import { startResearchRequest, synchronizeResearchRequest } from './researchRequests'
+import { v5ResearchReport, type ResearchRequest } from '../growthResearchV5'
 import {buildMarketingExpertPrompt,type MarketingPlanLLMScope} from './marketingExpert'
 import { protectTrackedCreativeChanges } from './creativeRevisions'
 import { CREATIVE_REVISION_KIND, CreativeRevisionError, revisionPeriod } from './creativeRevisionContract'
@@ -79,6 +81,7 @@ type CalendarVideoScriptData = {
 }
 
 export type BrandPlanWorkspaceData = {
+  researchRequest?: ResearchRequest
   researchReport?: {
     snapshotId?: string
     generatedAt: string
@@ -361,7 +364,9 @@ export async function getBrandPlanningContext(brandId: string) {
 }
 
 export async function getBrandPlan(brandId: string) {
-  const brand = await loadBrandPlanBrand(brandId)
+  let brand = await loadBrandPlanBrand(brandId)
+  if (!brand) return null
+  if (await synchronizeResearchRequest(brand)) brand = await loadBrandPlanBrand(brandId)
   if (!brand) return null
   const marketingSolution = readMarketingSolutionWorkspace(brand)
   const merchantInterview = serializeMerchantInterview(brand.brandPlanInterviews[0])
@@ -404,11 +409,10 @@ export async function runBrandPlanAction(input: {
   }
   let next = current
   if (input.action === 'generate_research_report') {
-    const researchReport = await saveResearchReport(brand.id, await buildGrowthResearchReport(brand))
-    next = {
-      ...current,
-      researchReport,
-    }
+    await startResearchRequest(brand)
+    const started = await getBrandPlan(brand.id)
+    if (!started) throw new BrandPlanError('brand_not_found', 404)
+    return { ok: true, action: input.action, ...started }
   } else if (input.action === 'save_merchant_interview') {
     if (!isGrowthResearchReport(current.researchReport)) {
       throw new BrandPlanError('growth_research_report_required', 409)
@@ -622,6 +626,8 @@ export async function buildGrowthResearchReport(brand: BrandPlanBrand, options?:
   if (!['completed', 'needs_review', 'initial_ready'].includes(text(job.status))) {
     throw new BrandPlanError('growth_research_still_running', 409)
   }
+  const v5 = v5ResearchReport(brand, job)
+  if (v5) return v5
   const result = objectValue(job.result)
   const reportVersions = objectValue(job.report_versions)
   const advancedReport = objectValue(reportVersions.advanced)
@@ -778,7 +784,7 @@ const ADDON_CAPABILITY_IDS: Record<string, string[]> = {
   twelveeat_delivery_ops: ['menu_optimization'],
 }
 
-async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
+export async function buildGrowthMerchantContext(brand: BrandPlanBrand) {
   const observedAt = new Date().toISOString()
   const knowledge = brand.knowledge
   const rawStores = objectList(knowledge?.stores)
@@ -991,17 +997,18 @@ function isGrowthResearchReport(report: BrandPlanWorkspaceData['researchReport']
 
 export async function saveResearchReport(
   brandId: string,
-  report: NonNullable<BrandPlanWorkspaceData['researchReport']>
+  report: NonNullable<BrandPlanWorkspaceData['researchReport']>,
+  database: Prisma.TransactionClient = prisma
 ): Promise<NonNullable<BrandPlanWorkspaceData['researchReport']>> {
   const reportForSnapshot = { ...report }
   delete reportForSnapshot.snapshotId
   const dataHash = hashJson(reportForSnapshot)
-  const existing = await prisma.brandGrowthResearchSnapshot.findFirst({
+  const existing = await database.brandGrowthResearchSnapshot.findFirst({
     where: { brandId, dataHash },
     orderBy: { generatedAt: 'desc' },
     select: { id: true },
   })
-  const snapshot = existing || await prisma.brandGrowthResearchSnapshot.create({
+  const snapshot = existing || await database.brandGrowthResearchSnapshot.create({
     data: {
       brandId,
       source: isGrowthResearchReport(report) ? 'amc-growth' : 'amc-kanban',
@@ -1013,7 +1020,7 @@ export async function saveResearchReport(
     select: { id: true },
   })
   const persistedReport = { ...reportForSnapshot, snapshotId: snapshot.id }
-  await prisma.brandKnowledge.upsert({
+  await database.brandKnowledge.upsert({
     where: { brandId },
     update: { researchReport: persistedReport as Prisma.InputJsonValue },
     create: { brandId, negPrompts: [], researchReport: persistedReport as Prisma.InputJsonValue },
@@ -3015,6 +3022,7 @@ function compactMarketingPlanInputForLLM(input: Record<string, unknown>, scope: 
     },
     researchReport: {
       summary: text(researchReport.summary).slice(0, scope === 'quarter' ? 420 : 900),
+      reportMarkdown: researchReport.reportTemplateVersion === 'v5' ? text(researchReport.reportMarkdown).slice(0, scope === 'quarter' ? 14000 : 28000) : undefined,
       brandImage: text(researchReport.brandImage).slice(0, scope === 'quarter' ? 240 : 500),
       marketingStatus: text(researchReport.marketingStatus).slice(0, scope === 'quarter' ? 220 : 500),
       marketAnalysis: text(researchReport.marketAnalysis).slice(0, scope === 'quarter' ? 320 : 700),

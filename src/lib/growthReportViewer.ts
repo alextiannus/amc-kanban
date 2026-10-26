@@ -1,6 +1,7 @@
 export type GrowthReportViewerReference = {
   viewerUrl?: string
   reportVersionId?: string
+  reportTemplateVersion?: string
 }
 
 export type GrowthReportVersionCandidate = {
@@ -31,25 +32,28 @@ function candidateRecord(value: unknown) {
     : {}
 }
 
-export function selectLatestGrowthV3ReportVersionReference(
+export function selectLatestGrowthResearchReportVersionReference(
   versions: GrowthReportVersionCandidate[]
 ): GrowthReportViewerReference | null {
   const matches = versions.flatMap((version) => {
     const result = candidateRecord(version.result)
     if (candidateText(version.tier).toLocaleLowerCase() !== 'initial') return []
-    if (candidateText(result.report_template_version).toLocaleLowerCase() !== 'v3') return []
+    const template = candidateText(result.report_template_version).toLocaleLowerCase()
+    if (!['v3', 'v4', 'v5'].includes(template)) return []
     const reportVersionId = candidateText(version.report_version_id)
     if (!REPORT_VERSION_ID.test(reportVersionId)) return []
     return [{
       timestamp: candidateText(version.created_at),
+      priority: template === 'v5' ? 1 : 0,
       reference: {
         reportVersionId,
+        reportTemplateVersion: template,
         viewerUrl: candidateText(version.viewer_url) || undefined,
       },
     }]
   })
 
-  matches.sort((left, right) => right.timestamp.localeCompare(left.timestamp))
+  matches.sort((left, right) => right.priority - left.priority || right.timestamp.localeCompare(left.timestamp))
   return matches[0]?.reference || null
 }
 
@@ -84,3 +88,6 @@ export function canUseGrowthStandaloneReport(principal: GrowthReportPrincipal) {
   return principal.actorType === 'HUMAN'
     && (principal.globalRoles || []).some((role) => GROWTH_STAFF_ROLES.has(role))
 }
+
+// Compatibility name for historical callers. New reports prefer V5.
+export const selectLatestGrowthV3ReportVersionReference = selectLatestGrowthResearchReportVersionReference

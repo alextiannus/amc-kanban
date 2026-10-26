@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import {
-  selectLatestGrowthV3ReportVersionReference,
+  selectLatestGrowthResearchReportVersionReference,
   type GrowthReportVersionCandidate,
 } from '@/lib/growthReportViewer'
 
@@ -49,7 +49,7 @@ async function growthRequest(path: string, init: RequestInit) {
 export async function readGrowthReportArtifact(pathValue: string) {
   const path = pathValue.startsWith('/') ? pathValue : `/${pathValue}`
   const allowed = /^\/v1\/admin\/report-versions\/\d+\/(download|download-json)$/.test(path)
-    || /^\/(?:public\/)?downloads\/brand-intelligence-intake\/[A-Za-z0-9_./-]+\.pdf$/.test(path)
+    || /^\/(?:public\/)?downloads\/brand-intelligence-intake\/(?!.*\.\.)[A-Za-z0-9_./-]+\.pdf$/.test(path)
   if (!allowed) throw new GrowthDataCenterError(400, 'growth_report_artifact_path_invalid')
   const response = await growthRequest(path, { method: 'GET' })
   if (!response.ok) throw new GrowthDataCenterError(response.status, `growth_report_artifact_failed:${response.status}`)
@@ -251,6 +251,10 @@ export async function readGrowthMerchantData(brandKey: string) {
 }
 
 export type GrowthBrandIntelligenceJob = {
+  requested_stage?: string | null
+  latest_evidence_snapshot_id?: string | null
+  initial_evidence_snapshot_id?: string | null
+  automatic_report?: { blockers?: Array<{ code?: string; message?: string }> } | null
   ok?: boolean
   accepted?: boolean
   job_id?: string
@@ -298,7 +302,7 @@ export type GrowthBrandIntelligenceJob = {
   error?: unknown
 }
 
-export async function findLatestGrowthV3ReportReference(input: {
+export async function findLatestGrowthResearchReportReference(input: {
   growthBrandKeys: Array<string | null | undefined>
 }) {
   const brandKeys = [...new Set(input.growthBrandKeys.map((value) => String(value || '').trim()).filter(Boolean))]
@@ -311,7 +315,7 @@ export async function findLatestGrowthV3ReportReference(input: {
     }
     versions.push(...(payload.items || []))
   }
-  return selectLatestGrowthV3ReportVersionReference(versions)
+  return selectLatestGrowthResearchReportVersionReference(versions)
 }
 
 /** Brand-bound latest report, including advanced and monthly reports; no V3 initial-only filter. */
@@ -381,7 +385,8 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
       : [],
     main_concern: '生成品牌计划前的线上经营摸底调研报告。',
     report_tier: 'initial',
-    report_template_version: 'v3',
+    report_template_version: 'v5',
+    auto_generate_report: true,
     generate_advanced: false,
     merchant_context: merchantContext,
     source: 'amc-kanban-brand-plan',
@@ -421,7 +426,7 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   const jobId = created.job_id || options.jobId
   if (!jobId) throw new GrowthDataCenterError(502, 'growth_research_job_missing')
 
-  const maxWaitMs = options.maxWaitMs ?? Math.max(30000, Number(process.env.AMC_GROWTH_REPORT_WAIT_MS || 240000))
+  const maxWaitMs = options.maxWaitMs ?? 0
   const pollIntervalMs = Math.max(2000, Number(process.env.AMC_GROWTH_REPORT_POLL_MS || 5000))
   const deadline = Date.now() + maxWaitMs
   let job: GrowthBrandIntelligenceJob = created
@@ -441,6 +446,18 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
 export async function readGrowthResearchJob(jobId:string) {
   const response=await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}`,{method:'GET'})
   if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_research_status_failed')
+  return await response.json() as GrowthBrandIntelligenceJob
+}
+
+export async function regenerateGrowthV5FromSnapshot(brandId: string, jobId: string, merchantContext: Record<string, unknown>, requestKey: string) {
+  const response = await growthRequest(`/v1/brand-intelligence/jobs/${encodeURIComponent(jobId)}/automatic-report`, {
+    method: 'POST', headers: { 'x-amc-brand-id': brandId },
+    body: JSON.stringify({ merchant_context: merchantContext, request_key: requestKey }),
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    throw new GrowthDataCenterError(response.status, data.error || 'growth_regeneration_failed')
+  }
   return await response.json() as GrowthBrandIntelligenceJob
 }
 
@@ -525,3 +542,6 @@ async function growthInsightSourcesRequest(input:Record<string,unknown>,write:bo
  if(!/^[a-f0-9]{64}$/.test(value.revision||'')||!Array.isArray(value.sources))throw new GrowthDataCenterError(502,'growth_sources_invalid')
  return value
 }
+
+// Compatibility name for historical callers. New reports prefer V5.
+export const findLatestGrowthV3ReportReference = findLatestGrowthResearchReportReference

@@ -6,9 +6,9 @@ import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
 
 type Params = { params: Promise<{ id: string }> }
 
-function filename(brandName: string, extension: string) {
+function filename(brandName: string, extension: string, version = 'v3') {
   const safe = brandName.replace(/[^A-Za-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'merchant'
-  return `${safe}-objective-research-v3.${extension}`
+  return `${safe}-research-${version}.${extension}`
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -31,13 +31,14 @@ export async function GET(request: Request, { params }: Params) {
     return new Response(markdown, {
       headers: {
         'content-type': 'text/markdown; charset=utf-8',
-        'content-disposition': `attachment; filename="${filename(data.brand.name, 'md')}"`,
+        'content-disposition': `attachment; filename="${filename(data.brand.name, 'md', report.reportTemplateVersion)}"`,
         'cache-control': 'private, no-store',
       },
     })
   }
 
   if (format === 'json') {
+    if (report.reportTemplateVersion === 'v5') return NextResponse.json({ error: 'Structured report not available' }, { status: 404 })
     if (!report.structuredReport) return NextResponse.json({ error: 'Structured report not found' }, { status: 404 })
     return new Response(`${JSON.stringify(report.structuredReport, null, 2)}\n`, {
       headers: {
@@ -56,7 +57,7 @@ export async function GET(request: Request, { params }: Params) {
     return new Response(artifact.body, {
       headers: {
         'content-type': artifact.contentType.includes('pdf') ? artifact.contentType : 'application/pdf',
-        'content-disposition': `attachment; filename="${filename(data.brand.name, 'pdf')}"`,
+        'content-disposition': `attachment; filename="${filename(data.brand.name, 'pdf', report.reportTemplateVersion)}"`,
         'cache-control': 'private, no-store',
       },
     })

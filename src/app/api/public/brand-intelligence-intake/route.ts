@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
       other_links: text((body as any).otherLinks ?? (body as any).other_links),
       main_concern: text((body as any).mainConcern ?? (body as any).main_concern),
       source: 'amc-official-website',
+      report_template_version: 'v5',
       force_refresh: Boolean((body as any).forceRefresh ?? (body as any).force_refresh),
     }
 

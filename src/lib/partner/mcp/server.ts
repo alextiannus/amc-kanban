@@ -2318,7 +2318,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
 
   registerTool(
     'generate_brand_research_report',
-    'Generate or refresh the brand research report used as the baseline for marketing planning.',
+    'Start or resume an asynchronous V5 brand research report. Read the brand plan to check progress before using its completed report.',
     {
       brandId: z.string().describe('Brand ID inside this personal MCP user permission scope.'),
     },
@@ -2476,6 +2476,10 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         if (refreshResearch || !initial?.marketingSolution?.researchReport) {
           const research = await runBrandPlanAction({ brandId, action: 'generate_research_report', body: {} })
           steps.push({ step: 'generate_research_report', ok: true, snapshotId: research.marketingSolution.researchReport?.snapshotId })
+          const request = research.marketingSolution.researchRequest
+          if (request && request.status !== 'completed') return { content: [{ type: 'text' as const,
+            text: JSON.stringify({ ok: true, pending: true, steps, researchRequest: request,
+              note: 'Research is still running or needs confirmation. Read the brand plan again before generating the marketing plan.' }, null, 2) }] }
         }
 
         const annual = await runBrandPlanAction({ brandId, action: 'generate_annual_plan', body: {} })

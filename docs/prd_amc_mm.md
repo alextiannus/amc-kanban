@@ -26,6 +26,13 @@ MM 015b218、Kanban 4837b3ee 和 Content ae3f73d 已部署；东北人餐厅正�
 创意匹配关键词（2026-10-20 已上线；服务回归及模拟接口四屏验证通过，真实账号匹配待验收）：创意浏览提供最多 300 字的匹配关键词，用户明确点击「重新匹配」后生效；空值恢复品牌资料默认匹配。设置按品牌保存在浏览匹配记录，重新打开回显；夜间品牌创意预取复用此关键词；其他自动驾驶策划匹配不受此设置影响。有品牌编辑权限的用户可修改，仅读用户可查看。关键词参与 Content 检索与评分，不是本地列表筛选；新结果优先，既有稍后决定及来源/选择记录保留。匹配请求排除已进入日历的来源和明确不喜欢的来源，不能只在返回后过滤，避免反复匹配同一批已处理创意导致空列表（修复待部署验收）。失败不覆盖已生效关键词或结果；旧页面并发修改拒绝覆盖并提示刷新。API refresh 接受 keywords 与 expectedKeywords，成功后 GET 返回 matchKeywords；仍保留真实来源及大于 75 的匹配门槛。验收覆盖输入边界、缓存失效、清空恢复、持久化回显、权限与并发、失败重试及移动端。
 
 
+Kanban／MM 商家调研统一 V5（本地实现，待部署验收）：新建及重新生成明确使用 `report_template_version=v5`、`report_tier=initial`、`generate_advanced=false`。Tavily 完整正文及来源为主干，加入社交媒体概览；只提供 Markdown 阅读、Markdown 下载和 PDF 下载，历史 V1–V4 保留原样。沿用绑定账号、门店及商家资料，不将第三方调研自动发布为已确认知识。内部 Kanban 品牌调研可设置 `auto_generate_report=true`；Growth 保存固定证据快照后，无阻塞自动排队生成，身份冲突等阻塞保留待确认，不伪造人工或 AI 审核。后台任务保存快照、模板修订号和来源，重复点击、服务重启不重复采集或生成。
+
+Kanban 创建调研立即返回任务标识，将请求关联保存在现有 JSON 字段；查询原任务并同步完成结果，离开页面不影响 Growth 执行。V5 以 Markdown、来源快照、报告版本及下载地址回写，不要求 V3 结构化 JSON；失败保留上一份成功报告，过期任务不能覆盖新请求或人工更新。策划、访谈和 User AI 可读取 V5 Markdown，并保留来源与未知信息。公开官网入口由 Growth 服务端固定 V5，保留原授权、确认与限流，不接受内部自动生成参数。
+
+查看报告沿用品牌权限。ADMIN／AMC_PRINCIPAL 优先打开最新 V5 的 Growth SSO 独立阅读页，无 V5 时保留历史版本；普通商家使用 Kanban／MM 受保护的 Markdown 阅读页。MM 不再绑定固定旧分享链接。V5 无 JSON 导出，不显示内部任务、路径或技术统计。发布顺序 Growth → Kanban → MM；本地通过、推送、部署及供应商验收分别记录，不批量升级历史报告、不新增数据库表。
+
+
 ## Stable Audio background music (implemented locally; deployment pending)
 
 Video background music can use Stable Audio 3 selected in Kanban unified model management. The project brief and existing 10-120 second business duration produce one continuous instrumental MP3. Task IDs survive restarts, polling resumes against the original model connection version, and paid results are reused after upload failures. Existing music assets and MiniMax narration remain compatible. Final acceptance requires rendered background music mixed with narration.
@@ -134,7 +141,7 @@ AMCMM 全屏和嵌入式 User Assistant 输入框增加麦克风听写与 Voice 
 
 Tap to Talk 右侧提供与上传按钮同风格的文字转换图标（文/A），点击打开独立全屏 AI Assistant 对话页，顶部提供返回与当前品牌标识，中间消息区滚动，底部固定输入框并适配键盘和安全区。新会话主动询问「关于品牌营销，你有什么新的想法吗？」；打开页面不发起模型请求，首次回答携带开场问题并进入品牌策划语境，已有会话继续原主题。关闭或 Escape 返回首页，保留历史、未发送输入及原任务。全屏升级于 2026-10-13 随 AMCMM `2b09110` 上线；320/390/768/1440 实际组件、关闭/焦点恢复、草稿保留、键盘可视区、品牌隔离回归及生产构建通过。用户可在当前品牌下与自己的 User AI Assistant 连续文字交互，默认提供「讨论品牌策划」快捷对话。文字模式默认不启用麦克风、不自动播报；保留按用户和品牌隔离的对话与原任务恢复入口。网络超时/回执丢失复用原请求键；明确拒绝可修改重发，失败不覆盖用户已输入的下一条消息。
 
-文字对话使用 IAIC User AI 任务运行时和现有中央模型配置，不绕过用户/品牌权限。品牌策划讨论自动读取 `amc-marketing-expert/SKILL.md`（AMC 营销专家，2026-10-14 已上线：Kanban `35606803` / MM `cbd2012`）；旧 `amc-brand-planning` 保留为兼容入口，通过只读 `amc.growth_insight` 获取当前品牌的 AMC Growth 最新 V3 insight report，标明报告版本、日期与缺口。同时核对品牌关联与本品牌既有 Growth 证据快照中的调研关联；长报告按章节截取而非仅保留开头。在线读取无结果/失败时，可使用明确标记日期及非实时状态的已保存 Growth 快照。未关联、无报告、服务失败分别反馈；不编造洞察，也不自动发起付费报告。
+文字对话使用 IAIC User AI 任务运行时和现有中央模型配置，不绕过用户/品牌权限。品牌策划讨论自动读取 `amc-marketing-expert/SKILL.md`（AMC 营销专家，2026-10-14 已上线：Kanban `35606803` / MM `cbd2012`）；旧 `amc-brand-planning` 保留为兼容入口，通过只读 `amc.growth_insight` 获取当前品牌的 AMC Growth 最新 V5 Markdown report（兼容历史 V3），标明报告版本、日期与缺口。同时核对品牌关联与本品牌既有 Growth 证据快照中的调研关联；长报告按章节截取而非仅保留开头。在线读取无结果/失败时，可使用明确标记日期及非实时状态的已保存 Growth 快照。未关联、无报告、服务失败分别反馈；不编造洞察，也不自动发起付费报告。
 
 品牌策划现行实现（2026-10-18）：AI Insight → 品牌访谈/品牌定位 → 品牌营销策略 → 执行清单。第一步只展示最新已完成品牌报告，包括摸底报告及已保存的月度 Management Report；无报告显示「品牌报告尚未完成」及「Request an AI Insight Report」，申请必须持久化、幂等并绑定真实 Growth 任务，失败不可冒充无数据。访谈通过 AMC 营销策略 Skill 综合最新报告、品牌资料和最新访谈形成品牌定位，并在下方列出希望补充的信息，保留来源与确认状态，支持编辑、对话、文件和图片；不再要求生成调研文档；营销方向与卖点并入第三步完整营销策略，不再独立确认。方案包含品牌特点、核心卖点、SWOT、全年活动节点和策划、滚动未来六个月月度安排、店内经营配合及营销创意。保留旧季度及日历数据。Skill 版本和输入版本随方案留存；对外学习经来源核验、案例评测及 AMC 审核后升级，不自动改写已确认方案。
 
@@ -812,7 +819,7 @@ Google 账号配置后的自动资料补充按 [品牌知识与来源契约](prd
 
 视频 Review 闭环（已上线并完成个人 Key 真实视频验证）：视频制作记录保存所选 creativeId；未发布、未排期的草稿可以修改已有文案、标签和素材。发布中/已发布/已排期内容保留原有控制，排期内容先取消排期再修改。`POST /api/notifications` 接受 videoJobId，仅为当前用户可访问且已完成的视频创建一次站内通知；重复请求不重新置为未读，不向邮件/飞书发送消息。通知跳转回该视频制作页，允许查看和继续编辑；正式发布仍需明确确认。
 
-自动驾驶调研状态契约（已上线，完整生产流程验收中）：Growth 的 evidence_review 是待 AI 审阅，initial_ready 是初级报告可读取，均不能作为无限外部等待。User AI 读取绑定原任务的证据快照、来源、blockers 和 warnings。无 blockers 时可以明确提交 AI 审阅并复用原任务生成报告；快照变化必须重读。存在门店身份歧义等 blockers 时不得批准或猜测门店；若通用品牌策划不依赖缺失事实，可以记录 AI 对固定快照的审阅说明与限制，基于已确认品牌事实继续，不能声称完整报告已完成。策略保存该原任务和快照引用，发布仍需人确认。
+V5 内部品牌调研由 Growth 在无阻塞时自动生成；evidence_review 表示需确认阻塞。旧任务兼容原 AI 审阅路径，不绕过身份核验；报告不自动成为已发布事实。
 
 升级恢复：代码/Skill 版本不兼容时不得篡改 Core 原任务版本。维护程序只对已结清用量、没有 running/unknown 能力调用的等待或尚未执行的排队任务创建当前版本后继任务；先经 Core 取消旧任务，后继继续同一应用业务 run、原调研 job 和生成回执，并记录 predecessor。未知用量保持需核对。前一天未完成的自动驾驶 run 优先继续，不每天重新调研或新建生产任务。跨日续接不因原日期过期而拒绝生成；每日计划产出数量按品牌时区的实际生成日期跨 run 汇总，running/未知结果同样占计划名额；这是用户配置的内容数量，不是消耗额度。每轮原有数量上限仍保留，当天计划数量完成时通过 Core external_result 等待下一品牌日，不重复请求生成，也不要求人工确认额度。当天已达计划数量不新建业务轮次。
 

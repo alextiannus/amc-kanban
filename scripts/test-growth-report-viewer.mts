@@ -78,6 +78,7 @@ const latest = selectLatestGrowthV3ReportVersionReference([
 ])
 assert.deepEqual(latest, {
   reportVersionId: '40',
+  reportTemplateVersion: 'v3',
   viewerUrl: '/dashboard/reports/versions/40',
 })
 
@@ -87,7 +88,7 @@ assert.deepEqual(
     report_version_id: '41',
     result: { report_template_version: 'v3' },
   }]),
-  { reportVersionId: '41', viewerUrl: undefined }
+  { reportVersionId: '41', reportTemplateVersion: 'v3', viewerUrl: undefined }
 )
 
 assert.equal(

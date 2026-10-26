@@ -71,7 +71,7 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
 }
 function researchExcerpt(value:unknown){
  const r=(value||{}) as any,s=r.structuredReport||{}
- return JSON.stringify({summary:r.summary,brandImage:r.brandImage,marketingStatus:r.marketingStatus,marketAnalysis:r.marketAnalysis,issues:r.issues,growthPoints:r.growthPoints,missingQuestions:r.missingQuestions,sources:s.sources||r.dataSources,coverage:r.sourceCoverage,structuredOverview:s.executive_summary||s.brand_overview}).slice(0,8000)
+ return JSON.stringify({markdown:r.reportTemplateVersion==='v5'?r.reportMarkdown:undefined,summary:r.summary,brandImage:r.brandImage,marketingStatus:r.marketingStatus,marketAnalysis:r.marketAnalysis,issues:r.issues,growthPoints:r.growthPoints,missingQuestions:r.missingQuestions,sources:s.sources||r.dataSources,coverage:r.sourceCoverage,structuredOverview:s.executive_summary||s.brand_overview}).slice(0,8000)
 }
 export const autopilotAdapters={generate:generateContentDirect}
 export async function executeAutopilot(userId:string,brandId:string,runId:string,action:string,input:any,adapters=autopilotAdapters){

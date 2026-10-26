@@ -1,5 +1,12 @@
 # Brand Knowledge Compliance Validation PRD & Design Doc
 
+
+Kanban／MM 商家调研统一 V5（本地实现，待部署验收）：新建及重新生成明确使用 `report_template_version=v5`、`report_tier=initial`、`generate_advanced=false`。Tavily 完整正文及来源为主干，加入社交媒体概览；只提供 Markdown 阅读、Markdown 下载和 PDF 下载，历史 V1–V4 保留原样。沿用绑定账号、门店及商家资料，不将第三方调研自动发布为已确认知识。内部 Kanban 品牌调研可设置 `auto_generate_report=true`；Growth 保存固定证据快照后，无阻塞自动排队生成，身份冲突等阻塞保留待确认，不伪造人工或 AI 审核。后台任务保存快照、模板修订号和来源，重复点击、服务重启不重复采集或生成。
+
+Kanban 创建调研立即返回任务标识，将请求关联保存在现有 JSON 字段；查询原任务并同步完成结果，离开页面不影响 Growth 执行。V5 以 Markdown、来源快照、报告版本及下载地址回写，不要求 V3 结构化 JSON；失败保留上一份成功报告，过期任务不能覆盖新请求或人工更新。策划、访谈和 User AI 可读取 V5 Markdown，并保留来源与未知信息。公开官网入口由 Growth 服务端固定 V5，保留原授权、确认与限流，不接受内部自动生成参数。
+
+查看报告沿用品牌权限。ADMIN／AMC_PRINCIPAL 优先打开最新 V5 的 Growth SSO 独立阅读页，无 V5 时保留历史版本；普通商家使用 Kanban／MM 受保护的 Markdown 阅读页。MM 不再绑定固定旧分享链接。V5 无 JSON 导出，不显示内部任务、路径或技术统计。发布顺序 Growth → Kanban → MM；本地通过、推送、部署及供应商验收分别记录，不批量升级历史报告、不新增数据库表。
+
 Merchant voiceover current implementation contract (pending deployment): [merchant-voiceover.md](./merchant-voiceover.md).
 
 This document details the product requirements and technical design for the Brand Knowledge Compliance validation features implemented in the AI Marketing Crew (AMC) dashboard.

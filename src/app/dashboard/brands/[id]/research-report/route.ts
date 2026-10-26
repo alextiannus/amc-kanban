@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
+import { renderResearchMarkdownPage } from '@/lib/researchMarkdownPage'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { getBrandPlan } from '@/lib/brand-plan/service'
-import { findLatestGrowthV3ReportReference } from '@/lib/growthDataCenter'
+import { findLatestGrowthResearchReportReference } from '@/lib/growthDataCenter'
 import { canUseGrowthStandaloneReport, growthReportSsoHref } from '@/lib/growthReportViewer'
 import { publicKanbanOrigin } from '@/lib/publicKanbanOrigin'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
@@ -181,10 +182,10 @@ export async function GET(request: Request, { params }: Params) {
   const requestUrl = new URL(request.url)
   const localReportPath = requestUrl.pathname
   if (canUseGrowthStandaloneReport(auth.principal)) {
-    const latestGrowthReport = await findLatestGrowthV3ReportReference({
+    const latestGrowthReport = await findLatestGrowthResearchReportReference({
       growthBrandKeys: [data.brand.growthBrandKey, report?.growthBrandKey],
     }).catch((error) => {
-      console.error('[growth-report] latest V3 lookup failed:', error)
+      console.error('[growth-report] latest research report lookup failed:', error)
       return null
     })
     const growthReportHref = growthReportSsoHref(latestGrowthReport || report || {}, localReportPath)
@@ -194,6 +195,12 @@ export async function GET(request: Request, { params }: Params) {
   }
 
   const rawReport = report?.reportMarkdown || report?.reportContent || ''
+  if (report?.reportTemplateVersion === 'v5' && rawReport) {
+    return new NextResponse(renderResearchMarkdownPage({ brandName: data.brand.name, markdown: rawReport,
+      downloadBase: `/api/brands/${encodeURIComponent(id)}/research-report`,
+      hasPdf: Boolean(report.pdfDownloadPath || report.pdfReportPath) }),
+    { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, no-store' } })
+  }
   if (!report || !rawReport) {
     return new NextResponse(
       renderReportPage({

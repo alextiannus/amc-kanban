@@ -36,7 +36,8 @@ export async function POST(request: Request, { params }: Params) {
       action: action as Parameters<typeof runBrandPlanAction>[0]['action'],
       body,
     })
-    return NextResponse.json(data)
+    const pending = data.marketingSolution?.researchRequest
+    return NextResponse.json(data, { status: action === 'generate_research_report' && pending && !['completed', 'failed', 'cancelled', 'superseded'].includes(pending.status) ? 202 : 200 })
   } catch (error) {
     if (error instanceof CreativeRevisionError) return NextResponse.json({ error: error.code }, { status: error.status })
     if (error instanceof BrandPlanError) {

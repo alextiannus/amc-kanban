@@ -4,6 +4,8 @@ import BrandServiceOrders from './BrandServiceOrders'
 
 import CreativePlanPanel from '../creatives/CreativePlanPanel'
 import React, { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import Image from 'next/image'
 import {
   X, ChevronLeft, Save,
@@ -95,6 +97,8 @@ type StoreEntitlements = {
 }
 
 type BrandPlanWorkspaceData = {
+  researchRequest?: { id: string; jobId?: string; status: string; error?: string; blockers?: Array<{ code?: string; message?: string }> }
+
   researchReport?: {
     snapshotId?: string
     generatedAt: string
@@ -535,11 +539,11 @@ function brandPlanErrorMessage(error: unknown) {
   if (code === 'brand_plan_update_required') return '请先生成营销计划。'
   if (code === 'annual_plan_required') return '请先生成营销计划。'
   if (code === 'quarter_plan_required') return '请先补齐季度计划。'
-  if (code === 'growth_research_report_required') return '请先完成客观数据调研报告 V3，再保存访谈记录。'
+  if (code === 'growth_research_report_required') return '请先完成商家调研报告 V5，再保存访谈记录。'
   if (code === 'growth_research_report_missing') return '客观数据调研任务已完成，但报告正文没有保存下来，请稍后重试。'
   if (code === 'growth_research_v3_missing') return 'Growth 已完成任务，但没有返回 V3 结构化报告，请稍后重试。'
-  if (code === 'growth_research_still_running') return '客观数据调研报告 V3 还在整理，请稍后再看。'
-  if (code === 'growth_research_failed') return '客观数据调研报告 V3 没有生成成功，请稍后重试。'
+  if (code === 'growth_research_still_running') return '商家调研报告 V5 还在整理，请稍后再看。'
+  if (code === 'growth_research_failed') return '商家调研报告 V5 没有生成成功，请稍后重试。'
   if (code === 'growth_research_create_failed') return '客观数据调研没有启动成功，请稍后重试。'
   if (code.startsWith('marketing_plan_llm_failed')) return '营销计划没有生成成功，请检查模型配置后重试。'
   if (code === 'calendar_creative_review_llm_failed') return '内容创意审核没有生成成功，请检查模型配置后重试。'
@@ -739,6 +743,9 @@ function BrandProfileContent({
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMarkdown, setProfileMarkdown] = useState('')
   const [brandPlanData, setBrandPlanData] = useState<BrandPlanWorkspaceData>({})
+  const researchRequest = brandPlanData.researchRequest
+  const researchActive = Boolean(researchRequest && !['completed', 'failed', 'cancelled', 'superseded'].includes(researchRequest.status))
+  const researchStatusLabel = ({ starting: '正在启动调研', collecting: '正在采集资料', generating: '正在整理报告', needs_confirmation: '需要确认资料', failed: '调研未完成，请重试' } as Record<string, string>)[researchRequest?.status || ''] || ''
   const [publishingScheduleDraft, setPublishingScheduleDraft] = useState<PublishingScheduleDraft>({})
   const [publishingScheduleSaveState, setPublishingScheduleSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const publishingScheduleSaveReadyRef = useRef(false)
@@ -822,11 +829,12 @@ function BrandProfileContent({
   }
 
 
-  const loadBrandPlanWorkspace = async () => {
+  const loadBrandPlanWorkspace = async (isCurrent: () => boolean = () => true) => {
     try {
       const res = await fetch(`/api/brands/${brandId}/brand-plan`, { cache: 'no-store' })
       if (!res.ok) return
       const data = await res.json()
+      if (!isCurrent()) return
       const marketingSolution = data.marketingSolution || data.brandPlan
       const workspace = marketingSolution && typeof marketingSolution === 'object' && !Array.isArray(marketingSolution)
         ? marketingSolution as BrandPlanWorkspaceData
@@ -937,6 +945,13 @@ function BrandProfileContent({
     ])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId])
+
+  useEffect(() => {
+    if (!researchActive) return
+    let active = true
+    const timer = setInterval(() => { void loadBrandPlanWorkspace(() => active) }, 5000)
+    return () => { active = false; clearInterval(timer) }
+  }, [brandId, researchActive])
 
 
   const handleSaveProfile = async (nextMarkdown?: string) => {
@@ -1387,8 +1402,9 @@ ${storeLines}
   const handleGenerateResearchReport = async () => {
     setPlanGenerating('research')
     try {
-      const nextPlan = await runBrandPlanAction('generate_research_report', '客观数据调研报告 V3 已生成')
-      if ((nextPlan?.marketingSolution || nextPlan?.brandPlan)?.researchReport) setShowResearchReport(true)
+      const nextPlan = await runBrandPlanAction('generate_research_report', '调研任务已启动')
+      const nextWorkspace = nextPlan?.marketingSolution || nextPlan?.brandPlan
+      if (nextWorkspace?.researchReport && nextWorkspace.researchRequest?.status === 'completed') setShowResearchReport(true)
       await loadBrandPlanWorkspace()
     } finally {
       setPlanGenerating(null)
@@ -1517,6 +1533,7 @@ ${storeLines}
     return Array.isArray(value) ? value : fallback
   }
   const report = brandPlanData.researchReport
+  const researchTitle = `商家调研报告 ${(report?.reportTemplateVersion || 'v5').toUpperCase()}`
   const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report`
   const growthReportMarkdown = report?.reportMarkdown || report?.reportContent || ''
   const interview = merchantInterview
@@ -1558,12 +1575,24 @@ ${storeLines}
       <div className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl dark:bg-slate-900">
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
           <div>
-            <h3 className="text-sm font-black text-slate-900 dark:text-white">客观数据调研报告 V3</h3>
+            <h3 className="text-sm font-black text-slate-900 dark:text-white">{researchTitle}</h3>
             <p className="mt-1 text-xs text-slate-400">{report?.generatedAt ? new Date(report.generatedAt).toLocaleString() : '尚未生成'}</p>
           </div>
           <button type="button" onClick={() => setShowResearchReport(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-5 text-sm">
+          {report?.reportTemplateVersion === 'v5' ? (
+            <>
+              <div className="flex flex-wrap gap-3 text-xs text-teal-700">
+                <a href={growthResearchReportHref} target="_blank" rel="noreferrer">打开完整报告</a>
+                <a href={`${growthResearchDownloadHref}?format=markdown`}>下载 Markdown</a>
+                {(report.pdfDownloadPath || report.pdfReportPath) && <a href={`${growthResearchDownloadHref}?format=pdf`}>下载 PDF</a>}
+              </div>
+              <article className="prose prose-slate max-w-none break-words dark:prose-invert [&_table]:block [&_table]:overflow-x-auto">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthReportMarkdown}</ReactMarkdown>
+              </article>
+            </>
+          ) : (<>
           {report?.sourceSystem === 'amc-growth' ? (
             <section className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800 dark:border-blue-900 dark:bg-blue-950/20 dark:text-blue-200">
               <p className="font-black">AMC-Growth 报告</p>
@@ -1609,6 +1638,7 @@ ${storeLines}
               ))}
             </>
           )}
+          </>)}
         </div>
       </div>
     </div>
@@ -1933,36 +1963,42 @@ ${storeLines}
           </section>
 
           <section className="grid gap-3 lg:grid-cols-2">
-            {/* 客观数据调研报告 V3 compact row */}
+            {/* 商家调研报告 V5 compact row */}
             <div
               role="button"
               tabIndex={0}
               onClick={(event) => {
-                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) openAiContentEditor({ target: 'research_report', title: '编辑客观数据调研报告 V3', value: report })
+                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) openAiContentEditor({ target: 'research_report', title: '编辑商家调研报告 V5', value: report })
               }}
               onKeyDown={(event) => {
                 if ((event.key === 'Enter' || event.key === ' ') && report) {
                   event.preventDefault()
-                  openAiContentEditor({ target: 'research_report', title: '编辑客观数据调研报告 V3', value: report })
+                  openAiContentEditor({ target: 'research_report', title: '编辑商家调研报告 V5', value: report })
                 }
               }}
               className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
-              title={report ? '点击编辑客观数据调研报告 V3' : '尚未生成客观数据调研报告 V3'}
+              title={report ? '点击编辑商家调研报告 V5' : '尚未生成商家调研报告 V5'}
             >
               <FileText className="h-4 w-4 shrink-0 text-blue-500" />
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-black text-slate-900 dark:text-white">客观数据调研报告 V3</p>
-                <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{report ? report.summary : '尚未获取调研报告'}</p>
+                <p className="text-xs font-black text-slate-900 dark:text-white">{researchTitle}</p>
+                <p className="mt-0.5 line-clamp-1 text-[11px] leading-relaxed text-slate-500">{researchStatusLabel || (report ? report.summary : '尚未取得调研报告')}</p>
+                {researchRequest?.error && <p className="mt-1 text-xs text-amber-700">{researchRequest.error}</p>}
+                {researchRequest?.status === 'needs_confirmation' && <p className="mt-1 text-xs text-amber-700">
+                  需要确认门店资料。
+                  {researchRequest.jobId && <a target="_blank" rel="noreferrer" className="ml-1 underline"
+                    href={`/api/integrations/amc-growth/sso/start?returnTo=${encodeURIComponent(`/dashboard/jobs/${researchRequest.jobId}`)}`}>管理员处理确认</a>}
+                </p>}
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handleGenerateResearchReport}
-                  disabled={Boolean(planGenerating)}
+                  disabled={Boolean(planGenerating) || researchActive}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-bold text-white disabled:opacity-60"
                 >
-                  {planGenerating === 'research' ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                  {report ? '重新生成' : '生成报告'}
+                  {(planGenerating === 'research' || researchActive) ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  {researchActive ? (researchStatusLabel || '调研中') : report ? '重新生成' : '生成报告'}
                 </button>
                 <a
                   href={report ? growthResearchReportHref : undefined}

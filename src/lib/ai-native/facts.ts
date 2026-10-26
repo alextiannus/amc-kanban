@@ -28,7 +28,7 @@ export async function readBrandFacts(db:any,brandId:string){
     const strategy=rawKnowledge.marketingSolution?.autopilotStrategy
     const report=rawKnowledge.researchReport
     const {marketingSolution,researchReport,...rest}=rawKnowledge
-    facts.knowledge={...rest,...(strategy?{contentStrategy:{title:strategy.title,content:String(strategy.content||'').slice(0,5000),source:'AI proposal, not verified merchant facts'}}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
+    facts.knowledge={...rest,...(strategy?{contentStrategy:{title:strategy.title,content:String(strategy.content||'').slice(0,5000),source:'AI proposal, not verified merchant facts'}}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.reportMarkdown||report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
   }
   return {...facts,...(dislikedSourceIds.length?{dislikedSourceIds}:{}),productCatalog:skuFacts(facts.knowledge?.menuItems),creativePortfolio,knowledge:facts.knowledge||{brandTone:null,negPrompts:[],audienceAssumptions:null,productAssumptions:null,menuItems:null,businessHours:null,brandVoice:null,market:null,brandImage:null,promotionFocus:null}}
 }

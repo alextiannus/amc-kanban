@@ -138,7 +138,7 @@ AMCMM 全屏和嵌入式 User Assistant 输入框增加麦克风听写与 Voice 
 
 Tap to Talk 右侧提供与上传按钮同风格的文字转换图标（文/A），点击打开独立全屏 AI Assistant 对话页，顶部提供返回与当前品牌标识，中间消息区滚动，底部固定输入框并适配键盘和安全区。新会话主动询问「关于品牌营销，你有什么新的想法吗？」；打开页面不发起模型请求，首次回答携带开场问题并进入品牌策划语境，已有会话继续原主题。关闭或 Escape 返回首页，保留历史、未发送输入及原任务。全屏升级于 2026-10-13 随 AMCMM `2b09110` 上线；320/390/768/1440 实际组件、关闭/焦点恢复、草稿保留、键盘可视区、品牌隔离回归及生产构建通过。用户可在当前品牌下与自己的 User AI Assistant 连续文字交互，默认提供「讨论品牌策划」快捷对话。文字模式默认不启用麦克风、不自动播报；保留按用户和品牌隔离的对话与原任务恢复入口。网络超时/回执丢失复用原请求键；明确拒绝可修改重发，失败不覆盖用户已输入的下一条消息。
 
-文字对话使用 IAIC User AI 任务运行时和现有中央模型配置，不绕过用户/品牌权限。品牌策划讨论自动读取 `amc-marketing-expert/SKILL.md`（AMC 营销专家，2026-10-14 已上线：Kanban `35606803` / MM `cbd2012`）；旧 `amc-brand-planning` 保留为兼容入口，通过只读 `amc.growth_insight` 获取当前品牌的 AMC Growth 最新 V3 insight report，标明报告版本、日期与缺口。同时核对品牌关联与本品牌既有 Growth 证据快照中的调研关联；长报告按章节截取而非仅保留开头。在线读取无结果/失败时，可使用明确标记日期及非实时状态的已保存 Growth 快照。未关联、无报告、服务失败分别反馈；不编造洞察，也不自动发起付费报告。
+文字对话使用 IAIC User AI 任务运行时和现有中央模型配置，不绕过用户/品牌权限。品牌策划讨论自动读取 `amc-marketing-expert/SKILL.md`（AMC 营销专家，2026-10-14 已上线：Kanban `35606803` / MM `cbd2012`）；旧 `amc-brand-planning` 保留为兼容入口，通过只读 `amc.growth_insight` 获取当前品牌的 AMC Growth 最新 V5 Markdown report（兼容历史 V3），标明报告版本、日期与缺口。同时核对品牌关联与本品牌既有 Growth 证据快照中的调研关联；长报告按章节截取而非仅保留开头。在线读取无结果/失败时，可使用明确标记日期及非实时状态的已保存 Growth 快照。未关联、无报告、服务失败分别反馈；不编造洞察，也不自动发起付费报告。
 
 品牌策划现行实现（2026-10-18）：AI Insight → 品牌访谈/品牌定位 → 品牌营销策略 → 执行清单。第一步只展示最新已完成品牌报告，包括摸底报告及已保存的月度 Management Report；无报告显示「品牌报告尚未完成」及「Request an AI Insight Report」，申请必须持久化、幂等并绑定真实 Growth 任务，失败不可冒充无数据。访谈通过 AMC 营销策略 Skill 综合最新报告、品牌资料和最新访谈形成品牌定位，并在下方列出希望补充的信息，保留来源与确认状态，支持编辑、对话、文件和图片；不再要求生成调研文档；营销方向与卖点并入第三步完整营销策略，不再独立确认。方案包含品牌特点、核心卖点、SWOT、全年活动节点和策划、滚动未来六个月月度安排、店内经营配合及营销创意。保留旧季度及日历数据。Skill 版本和输入版本随方案留存；对外学习经来源核验、案例评测及 AMC 审核后升级，不自动改写已确认方案。
 
@@ -2055,14 +2055,12 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 - `ADMIN` 拥有 Provider 验证和非敏感配置权限；`AMC_PRINCIPAL` 可管理任务和人工复核，但不能修改基础设施配置。
 - `AMC_KNOWLEDGE_TOKEN` 继续用于内部 API/MCP 应急访问，不作为 Dashboard 的常规登录方式。
 - 官网 V2 初级报告使用质量优先的受控 AI 策略：主模型最多 40 秒、一个备用模型最多 15 秒、总截止时间 58 秒；输出使用 JSON 模式，超时或全部模型失败时使用规则分析安全回退并正常交付单一报告版本。该策略同时适用于中文和英文初级报告，不改变高级报告策略。
-- Kanban 品牌策划生成“客观数据调研报告”时显式请求 Growth `report_template_version=v3`、`report_tier=initial`、`generate_advanced=false`。V1/V2 历史报告、下载、链接和旧调用继续保留；Growth 的公开 intake 与其他入口仍默认 V2，除非调用方明确选择 V3。
-- V3 是后续品牌计划与内容 brief 使用的证据型商家增长底稿，不是 Kanban 任务或发布文案。一个品牌生成一份报告；多门店的事实、评论、商圈和竞品按稳定门店 ID 隔离后再汇总。报告同时保存 Markdown、PDF 和版本化结构化 JSON；Kanban 下游只读取结构化字段，不依赖 Markdown 标题解析。
-- Kanban 调用 V3 时发送已确认品牌/门店资料、固定社媒账号与明确排除平台、菜单商品、去除顾客姓名的最新评论样本、素材元数据盘点、有效订阅与能力 ID、已确认竞品。Growth 继续负责公开来源采集和证据判断；来源冲突必须并列显示，缺失或过期数据必须标记待确认或本次未取得。
-- V3 的完整增长建议不受套餐限制；“当前计划内可执行”只允许使用 Kanban 根据计划和附加服务确定后传入的能力 ID，其余建议进入升级讨论。没有有效订阅时统一显示“订阅计划待确认”。报告生成不得自动创建任务、排期、ContentDraft 或发布文案。
-- 品牌用户通过 Kanban 权限查看并下载 V3 Markdown、PDF 和 JSON；不得因此获得 Growth Dashboard 权限。`ADMIN`、`AMC_PRINCIPAL` 仍可通过现有 SSO 深链进入 Growth 原报告版本。重新生成必须创建不可变的新版本并保留旧版本。
-- Kanban 的最新报告“查看”对 `ADMIN`、`AMC_PRINCIPAL` 使用 Growth SSO 深链 `/dashboard/reports/versions/:id?view=standalone`。这两个角色访问 Kanban `/dashboard/brands/:id/research-report` 时，服务端应先按品牌解析 Growth 最新 V3 版本，再自动进入同一 SSO 沉浸页；该模式继续校验 Growth Session，但不渲染后台左侧导航、账户退出、返回报告库、分享和删除，只显示封面、目录、正文以及 PDF/Markdown 下载。普通 Growth 后台报告链接保持不变；品牌用户、API Key 请求，或 Growth 查询失败且本地也缺少合法版本 ID 时仍使用 Kanban 本地报告页，不得借沉浸展示模式绕过授权或形成重定向循环。
+Kanban／MM 商家调研统一 V5（本地实现，待部署验收）：新建及重新生成明确使用 `report_template_version=v5`、`report_tier=initial`、`generate_advanced=false`。Tavily 完整正文及来源为主干，加入社交媒体概览；只提供 Markdown 阅读、Markdown 下载和 PDF 下载，历史 V1–V4 保留原样。沿用绑定账号、门店及商家资料，不将第三方调研自动发布为已确认知识。内部 Kanban 品牌调研可设置 `auto_generate_report=true`；Growth 保存固定证据快照后，无阻塞自动排队生成，身份冲突等阻塞保留待确认，不伪造人工或 AI 审核。后台任务保存快照、模板修订号和来源，重复点击、服务重启不重复采集或生成。
+
+Kanban 创建调研立即返回任务标识，将请求关联保存在现有 JSON 字段；查询原任务并同步完成结果，离开页面不影响 Growth 执行。V5 以 Markdown、来源快照、报告版本及下载地址回写，不要求 V3 结构化 JSON；失败保留上一份成功报告，过期任务不能覆盖新请求或人工更新。策划、访谈和 User AI 可读取 V5 Markdown，并保留来源与未知信息。公开官网入口由 Growth 服务端固定 V5，保留原授权、确认与限流，不接受内部自动生成参数。
+
+查看报告沿用品牌权限。ADMIN／AMC_PRINCIPAL 优先打开最新 V5 的 Growth SSO 独立阅读页，无 V5 时保留历史版本；普通商家使用 Kanban／MM 受保护的 Markdown 阅读页。MM 不再绑定固定旧分享链接。V5 无 JSON 导出，不显示内部任务、路径或技术统计。发布顺序 Growth → Kanban → MM；本地通过、推送、部署及供应商验收分别记录，不批量升级历史报告、不新增数据库表。
 - 品牌主张访谈沿用品牌写权限和已保存 Growth 调研报告校验。访谈记录与 `BrandKnowledge.brandClaim` 必须在同一事务内保存，任一步失败全部回滚；访谈保存只更新这两项，不重写营销方案、调研报告或发布频率，也不因本次品牌主张更新时间变化误报创意版本冲突。营销方案编辑仍保留版本冲突保护。本项为本地修复，服务层替身回归已验证保存、回读、并发方案保留与失败回滚，待发布及生产验收。
-- Kanban 品牌计划读取报告时，`BrandKnowledge.marketingSolution.researchReport` 是当前权威值；旧 `BrandKnowledge.researchReport` 和 `brandPlan.researchReport` 仅在当前工作区没有报告时兜底，历史高级报告不得覆盖后来生成的 V3。点击“查看”统一先进入受品牌权限保护的 Kanban 报告入口；对 `ADMIN`、`AMC_PRINCIPAL`，服务端使用稳定 `growthBrandKey` 调用 Growth 报告版本接口，筛选 V3 初级报告并按生成时间打开最新不可变版本，不得从不含 `report_versions` 的任务列表推测版本号；Growth 暂不可用时才回退已保存版本或 Kanban 本地页。
 - Kanban 到 Growth 的 SSO 重定向必须使用部署配置中的公网 Origin：Kanban 为 `NEXT_PUBLIC_APP_URL`（生产缺失或误配为回环地址时固定回退 `https://amc-kanban.immedi.ai`），Growth 为 `AMC_GROWTH_URL`（缺失时回退 `https://amc-growth.immedi.ai`）。Render 内部 `localhost:10000`、`127.0.0.1`、`0.0.0.0` 或 `[::1]` 只能用于进程监听，绝不能出现在浏览器 `Location`。
 - `/api/internal/llm-generate` 只对持有内部服务令牌的调用方接受可选生成策略，包括 JSON 输出、温度、总截止时间、分次超时和最大尝试次数；调用取消必须向 Provider 传播。Provider、模型、尝试次数和耗时只进入内部响应与审计，不通过公开评估 API 暴露。
 - 公开 intake 路径、响应格式、60 天去重、配额与 TikHub 两阶段任务保持不变；现有 Bearer Token API 保持兼容。
@@ -2153,7 +2151,6 @@ AMC-MM 视频 Review 闭环目标：保留 creativeId，允许未发布草稿编
 
 MCP 诊断接口仅当前 ADMIN 可访问，会话与本人 API Key 同权。诊断响应不包含凭证头、原始异常堆栈或配置密钥。
 
-自动驾驶调研状态契约（实施中）：Growth 的 evidence_review 是待 AI 审阅，initial_ready 是初级报告可读取，均不能作为无限外部等待。User AI 读取绑定原任务的证据快照、来源、blockers 和 warnings。无 blockers 时可以明确提交 AI 审阅并复用原任务生成报告；快照变化必须重读。存在门店身份歧义等 blockers 时不得批准或猜测门店；若通用品牌策划不依赖缺失事实，可以记录 AI 对固定快照的审阅说明与限制，基于已确认品牌事实继续，不能声称完整报告已完成。策略保存该原任务和快照引用，发布仍需人确认。
 
 - 平台原始图标的九个固定 JPG 路径允许匿名 GET/HEAD；不扩大整个目录或其他页面的匿名访问范围。
 
@@ -2210,3 +2207,4 @@ Assistant 本次发布与实模验收证据见 [2026-10-19 发布记录](assista
 - 音频质量错误明确提示响度/峰值问题与复用现有画面重试合成，避免误导用户重做分镜。
 
 字幕呈现（已发布）：整段脚本制作中，没有字幕字段或字幕明确为“无”时不自动镜像口播；显式字幕保留原文。字幕按短句分时呈现，不把整段文字同时叠加，文本不截断。用户显式启用口播字幕时，逐字字幕同样分时展示。
+Growth 自动生成契约：V5 内部品牌调研无阻塞时由服务自动生成；evidence_review 仅在身份等阻塞需要确认时等待。旧任务仍兼容原 AI 审阅路径，不绕过 blockers。自动生成不等于事实确认，发布仍需现有确认。
