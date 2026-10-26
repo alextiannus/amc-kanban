@@ -705,7 +705,9 @@ Never include any markdown backticks, conversational preamble, or explanation ou
   const selectedAssetIds = useMemo(() => attachedMedia.filter(m => m.type === 'asset').map(m => m.id), [attachedMedia])
   const selectedDraft = useMemo(() => drafts.find((draft) => draft.id === selectedId) || null, [drafts, selectedId])
   const accountOptions = useMemo(() => {
-    const list = [...accounts]
+    const list = accounts.map(account => account.handle === 'unconfigured'
+      ? { ...account, autoPilot: false, displayName: `${platformLabel(account.platformId)}（未配置）` }
+      : account)
     
     // Add unconfigured placeholder accounts if they are not already in accounts
     const hasGoogle = list.some(a => ['google', 'google_business'].includes(a.platformId.toLowerCase()))
@@ -2007,7 +2009,9 @@ function DraftCard({
 }) {
   const media = mediaForDraft(draft)
   const platform = draft.account?.platformId
-  const accountName = draft.account?.displayName || draft.account?.handle || platformLabel(platform)
+  const accountName = draft.account?.handle === 'unconfigured'
+    ? `${platformLabel(platform)}（未配置）`
+    : draft.account?.displayName || draft.account?.handle || platformLabel(platform)
 
   return (
     <div

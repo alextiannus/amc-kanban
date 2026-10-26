@@ -1,3 +1,6 @@
+import { resolveDraftAccount, draftPlatform } from '../src/lib/socialAccountPlaceholder.ts'
+import { lockBrandSync } from '../src/lib/socialAccountLocks.ts'
+import { SocialAccountBindingError } from '../src/lib/socialAccountIdentity.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -27,16 +30,20 @@ const contentDraft = {
 }
 const prisma = {
   contentDraft,
-  socialAccount: { findFirst: async () => ({ platformId: 'tiktok' }) },
-  $transaction: async (task: any) => task({ contentDraft }),
+  socialAccount: { findFirst: async () => ({ id: 'account', brandId: 'brand', handle: 'real-account', unboundAt: null, platformId: 'tiktok' }) },
+  $transaction: async (task: any) => task({ ...prisma, $queryRaw: async () => [{ locked: true }] }),
 }
 const deps: Record<string, any> = {
+  '@/lib/socialAccountPlaceholder': { resolveDraftAccount, draftPlatform },
+  '@/lib/socialAccountLocks': { lockBrandSync },
+  '@/lib/socialAccountIdentity': { SocialAccountBindingError },
   'next/server': { NextResponse: { json: Response.json } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN' } }), extractApiKey: () => null },
   '@/lib/prisma': { prisma },
   '@/lib/brandAccess': { canSessionAccessBrandProject: async () => allowed },
   '@/lib/integrations/huaweiObs': { persistDraftSnapshotToObs: async () => {} },
   '@/lib/compliance': {}, '@/lib/audit': {}, '@/lib/events': {}, '@/lib/postfastDelivery': {},
+  '@/lib/postfastPublishAccount': { checkPostfastPublishAccount: async () => { throw new Error('Unexpected provider check during metadata edit') } },
   '@/lib/integrations/postfast': { sanitizePostFastDraftControls }, // Any provider call during metadata editing must fail this test.
 }
 const source = readFileSync(new URL('../src/app/api/brands/[id]/drafts/[draftId]/route.ts', import.meta.url), 'utf8')

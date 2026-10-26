@@ -319,7 +319,7 @@ export async function loadBrandProfileSnapshot(brandId: string): Promise<BrandSn
       larkDriveFolderId: true,
       larkBotWebhook: true,
       larkOwnerId: true,
-      accounts: { where: { unboundAt: null },
+      accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } },
         orderBy: [{ platformId: 'asc' }, { handle: 'asc' }],
         select: {
           id: true,

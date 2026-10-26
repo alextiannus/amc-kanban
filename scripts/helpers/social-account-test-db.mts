@@ -5,6 +5,8 @@ export function bindingTestDb() {
   const held = new Set<string>()
   function matches(row: any, where: any): boolean {
     return Object.entries(where || {}).every(([key, value]: [string, any]) => {
+      if (key === 'NOT') return !matches(row, value)
+      if (key === 'AND') return value.every((v: any) => matches(row, v))
       if (key === 'OR') return value.some((v: any) => matches(row, v))
       if (key === 'drafts' || key === 'actionItems' || key === 'snapshots' || key === 'inboxConversations') return !(row[key]?.length)
       if (key === 'postfastDeliveryJobs') return row.jobs?.some((j: any) => matches(j, value.some)) || false

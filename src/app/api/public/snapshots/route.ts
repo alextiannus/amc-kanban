@@ -11,6 +11,8 @@ export async function GET(request: Request) {
   try {
     const accounts = await prisma.socialAccount.findMany({
       where: {
+        unboundAt: null,
+        NOT: { handle: 'unconfigured' },
         brand: {
           status: 'ACTIVE',
           subscriptions: {

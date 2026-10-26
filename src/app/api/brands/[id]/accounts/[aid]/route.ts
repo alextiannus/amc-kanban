@@ -1,3 +1,5 @@
+import { isPurePlaceholder, placeholderReferences } from '@/lib/socialAccountPlaceholder'
+import { lockBrandSync } from '@/lib/socialAccountLocks'
 import { withBoundAccount, lockAccountBinding, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
@@ -31,6 +33,8 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!account) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
 
   const body = await request.json()
+  if (account.handle === 'unconfigured' && (Boolean(body.autoPilot) || ['handle', 'profileUrl', 'loginUsername', 'loginPassword'].some(field => body[field] !== undefined))) return NextResponse.json({ error: '占位记录仅用于草稿，请选择或接入真实账号。', code: 'PLACEHOLDER_ACCOUNT' }, { status: 409 })
+  if (typeof body.handle === 'string' && body.handle.trim() === 'unconfigured' && account.handle !== 'unconfigured') return NextResponse.json({ error: '不能将真实账号改为占位记录。', code: 'PLACEHOLDER_ACCOUNT' }, { status: 409 })
   if (body.handle !== undefined && (typeof body.handle !== 'string' || !body.handle.trim())) return NextResponse.json({ error: '账号名称不能为空' }, { status: 400 })
   for (const field of ['displayName', 'profileUrl'] as const) if (body[field] !== undefined && typeof body[field] !== 'string') return NextResponse.json({ error: `${field} 格式错误` }, { status: 400 })
   if (body.profileUrl?.trim()) {
@@ -40,17 +44,20 @@ export async function PATCH(request: Request, { params }: Params) {
 
   let updated
   try {
-    updated = await withBoundAccount(aid, async (_account, tx) => tx.socialAccount.update({
-      where: { id: aid },
-      data: {
-        ...(body.handle !== undefined && { handle: body.handle.trim() }),
-        ...(body.displayName !== undefined && { displayName: opt(body.displayName) }),
-        ...(body.profileUrl !== undefined && { profileUrl: opt(body.profileUrl.trim()) }),
-        ...(body.loginUsername !== undefined && { loginUsername: opt(body.loginUsername) }),
-        ...(body.loginPassword !== undefined && { loginPassword: opt(body.loginPassword) }),
-        ...(body.autoPilot !== undefined && { autoPilot: Boolean(body.autoPilot) }),
-      },
-    }))
+    updated = await withBoundAccount(aid, async (_account, tx) => {
+      if (_account.handle === 'unconfigured' && (Boolean(body.autoPilot) || ['handle', 'profileUrl', 'loginUsername', 'loginPassword'].some(field => body[field] !== undefined))) throw new SocialAccountBindingError('占位记录仅用于草稿，请选择或接入真实账号。', 409, 'PLACEHOLDER_ACCOUNT')
+      return tx.socialAccount.update({
+        where: { id: aid },
+        data: {
+          ...(body.handle !== undefined && { handle: body.handle.trim() }),
+          ...(body.displayName !== undefined && { displayName: opt(body.displayName) }),
+          ...(body.profileUrl !== undefined && { profileUrl: opt(body.profileUrl.trim()) }),
+          ...(body.loginUsername !== undefined && { loginUsername: opt(body.loginUsername) }),
+          ...(body.loginPassword !== undefined && { loginPassword: opt(body.loginPassword) }),
+          ...(_account.handle === 'unconfigured' ? { autoPilot: false } : body.autoPilot !== undefined ? { autoPilot: Boolean(body.autoPilot) } : {}),
+        },
+      })
+    })
   } catch (error) {
     if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     throw error
@@ -81,11 +88,24 @@ export async function DELETE(_req: Request, { params }: Params) {
   const brand = await prisma.brand.findFirst({ where: { id: brandId } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  let placeholderDeleted = false
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await lockBrandSync(tx, brandId)
       await lockAccountBinding(tx, aid)
       const existing = await tx.socialAccount.findFirst({ where: { id: aid, brandId } })
+      if (!existing) throw new SocialAccountBindingError('Account not found', 404, 'ACCOUNT_NOT_FOUND')
       if (existing?.unboundAt) throw new SocialAccountBindingError('已解绑账号保留历史记录，不能删除。')
+      if (existing?.handle === 'unconfigured') {
+        if (!isPurePlaceholder(existing)) throw new SocialAccountBindingError('占位记录混有授权身份，请先核对账号。', 409, 'PLACEHOLDER_IDENTITY_CONFLICT')
+        await tx.$queryRaw`SELECT id FROM "SocialAccount" WHERE id = ${aid} AND "brandId" = ${brandId} FOR UPDATE`
+        const refs = await placeholderReferences(tx, brandId, aid)
+        if (Object.values(refs).some(count => count > 0)) throw new SocialAccountBindingError('该占位记录仍有关联内容，请先在草稿中选择真实账号。', 409, 'PLACEHOLDER_HAS_REFERENCES')
+        await tx.socialAccount.deleteMany({ where: { id: aid, brandId } })
+        placeholderDeleted = true
+        await tx.auditLog.create({ data: { actorId: session.user.id, actorType: 'HUMAN', action: 'SOCIAL_ACCOUNT_PLACEHOLDER_DELETED', resourceType: 'SocialAccount', resourceId: aid, metadata: { brandId, publish: false } } })
+        return
+      }
       // Legacy destructive deletion remains separate from the new unbind action.
       await tx.actionItem.deleteMany({ where: { accountId: aid, brandId } })
       await tx.contentDraft.deleteMany({ where: { accountId: aid, brandId } })
@@ -96,7 +116,7 @@ export async function DELETE(_req: Request, { params }: Params) {
     throw error
   }
 
-  await reclaimPostfastKeyForBrandIfUnused({ brandId, reason: 'account_deleted' }).catch((error) => {
+  if (!placeholderDeleted) await reclaimPostfastKeyForBrandIfUnused({ brandId, reason: 'account_deleted' }).catch((error) => {
     console.error('[account-delete] PostFast key reclaim check failed:', error)
   })
 

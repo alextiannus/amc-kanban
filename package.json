@@ -109,7 +109,11 @@
     "test:postfast-account-health": "node --import tsx scripts/test-postfast-account-health.mts",
     "test:creative-revisions": "node --import tsx scripts/test-creative-revision-route.mts && node --import tsx scripts/test-creative-revisions.mts",
     "test:creative-diversity": "node --experimental-strip-types scripts/test-creative-diversity.mts",
-    "test:ai-native": "node --import tsx scripts/test-ai-native-usage.mts && node --import tsx scripts/test-ai-native-http.mts && node --import tsx scripts/test-ai-native.mts"
+    "test:ai-native": "node --import tsx scripts/test-ai-native-usage.mts && node --import tsx scripts/test-ai-native-http.mts && node --import tsx scripts/test-ai-native.mts",
+    "test:social-account-placeholders": "node --import tsx scripts/test-social-account-placeholders.mts",
+    "social-accounts:repair:dry-run": "node --import tsx scripts/repair-social-account-placeholders.mts --dry-run",
+    "social-accounts:repair": "node --import tsx scripts/repair-social-account-placeholders.mts --apply",
+    "test:social-account-placeholder-concurrency": "node --import tsx scripts/test-social-account-placeholder-concurrency.mts"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",

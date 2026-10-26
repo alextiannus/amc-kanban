@@ -53,7 +53,7 @@ export async function listOperations(actor: AuthPrincipal, params: URLSearchPara
     id: true, name: true, location: true, status: true,
     subscriptions: { select: { id: true, planName: true, status: true, feeWaived: true, contractStartDate: true, contractEndDate: true, createdAt: true } },
     crew: { select: { members: { select: memberSelect } } },
-    accounts: { where: { unboundAt: null }, select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, connectionStatus: true, disabledReason: true }, orderBy: [{ platformId: 'asc' }, { id: 'asc' }] },
+    accounts: { where: { unboundAt: null, NOT: { handle: 'unconfigured' } }, select: { id: true, platformId: true, handle: true, displayName: true, profileUrl: true, followerCount: true, followerDelta: true, ratingScore: true, snapshotAt: true, connectionStatus: true, disabledReason: true }, orderBy: [{ platformId: 'asc' }, { id: 'asc' }] },
   } })
   // Select the current contract first: historical paid records must not revive a waived brand.
   const brands = subscribedBrands.filter(b => !selectSubscription(b.subscriptions, now).feeWaived)

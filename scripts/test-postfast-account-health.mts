@@ -1,3 +1,6 @@
+import { resolveDraftAccount, draftPlatform } from '../src/lib/socialAccountPlaceholder.ts'
+import { lockBrandSync } from '../src/lib/socialAccountLocks.ts'
+import { SocialAccountBindingError } from '../src/lib/socialAccountIdentity.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -28,10 +31,12 @@ let state:any, deleted=0,writes=0,checks=0,allow=false,resubmitMode='success'
 function reset(){state={id:'draft',brandId:'brand',accountId:'local',caption:'Keep this draft',gbpLocationId:null,status:'scheduled',scheduledAt:new Date('2026-10-01T00:00:00Z'),platformPostId:'old-post',publishedAt:null,updatedAt:new Date()};deleted=0;writes=0;checks=0}
 const prisma:any={
  contentDraft:{findFirst:async()=>({...state}),findUnique:async()=>({...state}),findUniqueOrThrow:async()=>({...state}),update:async({data}:any)=>{writes++;for(const[k,v]of Object.entries(data))if(v!==undefined)state[k]=v;return {...state}}},
- socialAccount:{findFirst:async()=>({platformId:'instagram'})},brand:{findUnique:async()=>({postfastApiKey:'mock-only',timezone:'Asia/Singapore'})},
+ socialAccount:{findFirst:async()=>({id:'local',brandId:'brand',handle:'real',unboundAt:null,platformId:'instagram'})},brand:{findUnique:async()=>({postfastApiKey:'mock-only',timezone:'Asia/Singapore'})},
+ $queryRaw:async()=>[{locked:true}],
  $transaction:async(work:Function)=>work(prisma),
 }
 const route=compile('src/app/api/brands/[id]/drafts/[draftId]/route.ts',{
+ '@/lib/socialAccountPlaceholder':{resolveDraftAccount,draftPlatform},'@/lib/socialAccountLocks':{lockBrandSync},'@/lib/socialAccountIdentity':{SocialAccountBindingError},
  'next/server':{NextResponse:{json:(data:any,init:any)=>Response.json(data,init)}},
  '@/lib/auth':{getSession:async()=>({user:{id:'operator',type:'HUMAN',role:'ADMIN'}}),extractApiKey:()=>null},
  '@/lib/prisma':{prisma},'@/lib/brandAccess':{canSessionAccessBrandProject:async()=>true},

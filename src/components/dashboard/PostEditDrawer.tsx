@@ -1738,7 +1738,7 @@ Return the output strictly in a valid JSON array format, containing:
                 <div className="flex items-end gap-4">
                   {COPYWRITER_ROSTER.map((copywriter) => {
                     const configuredAccount = accounts.find(a =>
-                      platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
+                      a.handle !== 'unconfigured' && platformAliases(copywriter.platform).includes((a.platformId || '').toLowerCase())
                     )
                     const effectiveId = draftAccountIdForCopywriter(copywriter, accounts)
                     const isConfigured = !!configuredAccount

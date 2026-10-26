@@ -1,3 +1,6 @@
+import { resolveDraftAccount, draftPlatform } from '../src/lib/socialAccountPlaceholder.ts'
+import { lockBrandSync } from '../src/lib/socialAccountLocks.ts'
+import { SocialAccountBindingError } from '../src/lib/socialAccountIdentity.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -24,6 +27,10 @@ let user: any = null
 let allowed = false
 let reads = 0
 const deps: Record<string, any> = {
+  '@/lib/videoDraftReceipt': {},
+  '@/lib/socialAccountPlaceholder': { resolveDraftAccount, draftPlatform },
+  '@/lib/socialAccountLocks': { lockBrandSync },
+  '@/lib/socialAccountIdentity': { SocialAccountBindingError },
   'next/server': { NextResponse: { json: (data: any, init: any) => Response.json(data, init) } },
   '@/lib/auth': { getSession: async () => user ? { user } : null, extractApiKey: () => null },
   '@/lib/brandAccess': { canSessionAccessBrandProject: async () => allowed },

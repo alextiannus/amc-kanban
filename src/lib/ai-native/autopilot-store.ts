@@ -51,7 +51,9 @@ export async function autopilotSettings(userId:string,brandId:string,body?:any) 
     const c=await pool.connect()
     try {
       await c.query('BEGIN')
+      await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`social-account-sync:${brandId}`])
       await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`autopilot-config:${brandId}`])
+      if (body.enabled && !(await c.query('SELECT id FROM public."SocialAccount" WHERE id=$1 AND "brandId"=$2 AND "unboundAt" IS NULL', [accountId, brandId])).rowCount) throw nativeError('autopilot_account_required')
       const old=(await c.query('SELECT * FROM amc_iaic.autopilot_settings WHERE brand_id=$1',[brandId])).rows[0]
       if ((old?.revision||0)!==body.revision) throw nativeError('autopilot_settings_conflict',409)
       await c.query(`INSERT INTO amc_iaic.autopilot_settings(brand_id,owner_id,enabled,revision,account_id,daily_limit) VALUES($1,$2,$3,1,$4,$5)
@@ -86,6 +88,10 @@ export async function initializeBrandAutopilotDefault(brandId:string){
   const c=await pool.connect()
   try{
    await c.query('BEGIN')
+   await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`social-account-sync:${brandId}`])
+   if (!(await c.query('SELECT id FROM public."SocialAccount" WHERE id=$1 AND "brandId"=$2 AND "unboundAt" IS NULL', [account.id, brandId])).rowCount) {
+    await c.query('ROLLBACK');return
+   }
    const saved=await c.query(`INSERT INTO amc_iaic.autopilot_settings(brand_id,owner_id,enabled,revision,account_id,daily_limit) VALUES($1,$2,true,1,$3,1) ON CONFLICT DO NOTHING RETURNING brand_id`,[brandId,member.userId,account.id])
    if(saved.rowCount)await c.query(`INSERT INTO public."AuditLog"(id,"actorType",action,"resourceType","resourceId",metadata,timestamp) VALUES($1,'SYSTEM','AUTOPILOT_DEFAULT_ENABLED','Brand',$2,$3,now())`,[crypto.randomUUID(),brandId,JSON.stringify({policy:'amcmm-user-ai-default-on-v1',principalId:member.userId,accountId:account.id,dailyLimit:1,publish:false})])
    await c.query('COMMIT');return

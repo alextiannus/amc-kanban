@@ -1552,7 +1552,7 @@ ${storeLines}
     annualPlan?.subscriptionStrategy?.platformCoverage?.includes(platform.slug)
   )
   const publishingScheduleCount = publishingScheduleTotal(publishingScheduleDraft)
-  const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts : []
+  const socialAccounts: SocialAccountSummary[] = Array.isArray(brandSettings?.accounts) ? brandSettings.accounts.filter(account => account.handle !== 'unconfigured') : []
   const postfastSyncedAt = typeof brandSettings?.postfastSyncedAt === 'string' ? brandSettings.postfastSyncedAt : null
   const sourceStatusItems = [
     { label: '客观数据调研', value: report ? '已完成' : '待完成', status: report ? 'ready' : 'pending' },

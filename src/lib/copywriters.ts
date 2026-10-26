@@ -74,9 +74,9 @@ export function platformAliases(platform: string): string[] {
 
 export function draftAccountIdForCopywriter(
   copywriter: CopywriterPersona,
-  accounts: Array<{ id?: string; platformId?: string | null }>,
+  accounts: Array<{ id?: string; platformId?: string | null; handle?: string | null }>,
 ): string {
   const aliases = platformAliases(copywriter.platform)
-  const account = accounts.find((item) => aliases.includes((item.platformId || '').toLowerCase()))
+  const account = accounts.find((item) => item.handle !== 'unconfigured' && aliases.includes((item.platformId || '').toLowerCase()))
   return account?.id || `unconfigured_${copywriter.platform}`
 }

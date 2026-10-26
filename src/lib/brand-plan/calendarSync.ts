@@ -1,3 +1,5 @@
+import { resolveDraftPlatformAccount } from '../socialAccountPlaceholder.ts'
+import { lockBrandSync } from '../socialAccountLocks.ts'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
@@ -152,24 +154,6 @@ function scheduledAtForDate(date: string) {
   return new Date(`${date}T10:00:00.000+08:00`)
 }
 
-async function ensurePlaceholderAccount(tx: Prisma.TransactionClient, brandId: string, platformSlug: string) {
-  const existing = await tx.socialAccount.findFirst({
-    where: { unboundAt: null, brandId, platformId: platformSlug, handle: 'unconfigured' },
-    select: { id: true },
-  })
-  if (existing) return existing.id
-  const created = await tx.socialAccount.create({
-    data: {
-      brandId,
-      platformId: platformSlug,
-      handle: 'unconfigured',
-      displayName: `${platformLabel(platformSlug)} (未配置)`,
-    },
-    select: { id: true },
-  })
-  return created.id
-}
-
 export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month: string, items: CalendarCreativeItem[]) {
   const confirmed = items
     .filter((item) => !['ai_pending_review','已删除', '归档', 'archived', 'deleted'].includes(text(item.status).toLowerCase()))
@@ -179,10 +163,10 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
   if (!confirmed.length) return { syncedCount: 0 }
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await lockBrandSync(tx, brandId, true)
     let syncedCount = 0
     for (const item of confirmed) {
       const marker = calendarSyncMarker(item.id)
-      const accountId = await ensurePlaceholderAccount(tx, brandId, item.platformSlug)
       const caption = `${item.title}\n\n${item.planning || item.product}`.trim()
       const agentNote = [
         marker,
@@ -190,10 +174,15 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
         `platform:${item.platform}`,
         item.materialRequirements.length ? `material:${item.materialRequirements.join('；')}` : '',
       ].filter(Boolean).join('\n')
+      await tx.$queryRaw`SELECT id FROM "ContentDraft" WHERE "brandId" = ${brandId} AND "agentNote" ILIKE ${`%${marker}%`} ORDER BY id FOR UPDATE`
       const existing = await tx.contentDraft.findFirst({
         where: { brandId, agentNote: { contains: marker, mode: 'insensitive' } },
-        select: { id: true, status: true },
+        select: { id: true, status: true, accountId: true },
       })
+      if (existing && ['publishing', 'published', 'done', 'scheduled'].includes(existing.status)) continue
+      const accountId = existing?.accountId
+        ? existing.accountId
+        : (await resolveDraftPlatformAccount(tx, brandId, item.platformSlug)).id
       if (existing && !['publishing', 'published', 'done', 'scheduled'].includes(existing.status)) {
         await tx.contentDraft.update({
           where: { id: existing.id },

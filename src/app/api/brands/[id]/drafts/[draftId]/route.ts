@@ -1,3 +1,6 @@
+import { resolveDraftAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
+import { lockBrandSync } from '@/lib/socialAccountLocks'
+import { SocialAccountBindingError } from '@/lib/socialAccountIdentity'
 import { checkPostfastPublishAccount } from '@/lib/postfastPublishAccount'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -132,7 +135,7 @@ export async function GET(request: Request, { params }: Params) {
   return NextResponse.json({ draft: { ...draft, postUrl } })
 }
 
-export async function PATCH(request: Request, { params }: Params) {
+async function patchDraft(request: Request, { params }: Params) {
   const { id: brandId, draftId } = await params
   const actor = await ensureAccess(request, brandId)
   if (!actor) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -220,40 +223,16 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!accountIdVal) {
       return NextResponse.json({ error: 'accountId is required (platform must be determined)' }, { status: 400 })
     }
-    if (accountIdVal.startsWith('unconfigured_')) {
-      const platformId = accountIdVal.replace('unconfigured_', '')
-      let placeholderAccount = await prisma.socialAccount.findFirst({
-        where: { unboundAt: null, brandId, platformId, handle: 'unconfigured' }
-      })
-      if (!placeholderAccount) {
-        const getDisplayName = (pId: string) => {
-          const lower = pId.toLowerCase()
-          if (lower === 'google_business' || lower === 'google') return 'Google Business (未配置)'
-          if (lower === 'xiaohongshu' || lower === 'rednote' || lower === 'red' || lower === 'xhs') return '小红书 / Rednote (未配置)'
-          if (lower === 'instagram') return 'Instagram (未配置)'
-          if (lower === 'facebook') return 'Facebook (未配置)'
-          if (lower === 'tiktok') return 'TikTok (未配置)'
-          return `${pId.charAt(0).toUpperCase() + pId.slice(1)} (未配置)`
-        }
-        placeholderAccount = await prisma.socialAccount.create({
-          data: {
-            brandId,
-            platformId,
-            handle: 'unconfigured',
-            displayName: getDisplayName(platformId),
-          }
-        })
-      }
-      body.accountId = placeholderAccount.id
-    }
+    body.accountId = accountIdVal
   }
 
   if (body.gbpLocationId !== undefined && body.gbpLocationId !== null && typeof body.gbpLocationId !== 'string') {
     return NextResponse.json({ error: 'gbpLocationId must be a string or null' }, { status: 400 })
   }
   const nextAccountId = typeof body.accountId === 'string' ? body.accountId : existing.accountId
-  const nextAccount = nextAccountId
-    ? await prisma.socialAccount.findFirst({
+  const nextAccount = nextAccountId?.startsWith('unconfigured_')
+    ? { platformId: draftPlatform(nextAccountId.slice('unconfigured_'.length)) }
+    : nextAccountId ? await prisma.socialAccount.findFirst({
         where: { unboundAt: null, id: nextAccountId, brandId },
         select: { platformId: true },
       })
@@ -351,6 +330,14 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   const draft = await prisma.$transaction(async (tx: any) => {
+    await lockBrandSync(tx, brandId, true)
+    await tx.$queryRaw`SELECT id FROM "ContentDraft" WHERE id = ${draftId} AND "brandId" = ${brandId} FOR UPDATE`
+    const current = await tx.contentDraft.findFirst({ where: { id: draftId, brandId } })
+    if (!current) throw new SocialAccountBindingError('Draft not found', 404, 'DRAFT_NOT_FOUND')
+    const requestedAccountId = typeof body.accountId === 'string' ? body.accountId : current.accountId
+    if (!requestedAccountId) throw new SocialAccountBindingError('accountId is required', 400, 'ACCOUNT_NOT_FOUND')
+    const boundAccount = await resolveDraftAccount(tx, brandId, requestedAccountId, false)
+    if (body.accountId !== undefined) body.accountId = boundAccount.id
     const updated = await tx.contentDraft.update({
       // Prevent controls from overwriting a concurrent edit or publication transition.
       where: { id: draftId, ...(hasPostfastControlsUpdate ? { updatedAt: existing.updatedAt } : {}) },
@@ -593,4 +580,11 @@ export async function DELETE(request: Request, { params }: Params) {
 
   await prisma.contentDraft.delete({ where: { id: draftId } })
   return NextResponse.json({ ok: true, deleted: true, draftId })
+}
+
+export async function PATCH(request: Request, context: Params) {
+  try { return await patchDraft(request, context) } catch (error) {
+    if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+    throw error
+  }
 }
