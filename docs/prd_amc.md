@@ -454,7 +454,7 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
 3. **全局运营看板 (Global Operation Overview)**
    * 老板可以在 Dashboard 上拥有一个全局视角，一目了然地看到所有自媒体账号的健康状态和当下的运营动作。
 
-### Draft placeholders and real social channels (implemented locally; deployment pending)
+### Draft placeholders and real social channels (deployed and verified 2026-10-26)
 
 - The reserved handle `unconfigured` represents an internal draft platform, always with `autoPilot=false`. Channel lists, operating-account counts and sync snapshots exclude it. Draft creation and manual historical entries retain `unconfigured_<platform>` support and show a readable platform/unconfigured label. Brand toggles and account PATCH cannot enable placeholder publishing or convert placeholders into real accounts.
 - Draft save/edit, bulk creation, brand calendars and MCP share transaction-scoped account resolution and existing platform aliases. Explicit real IDs are strictly validated. New plain drafts choose a uniquely connected real account when its stable identity is valid; otherwise they reuse an internal placeholder. Historical records retain their platform association. Calendar resync preserves an existing real account selection.

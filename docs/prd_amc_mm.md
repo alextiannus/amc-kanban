@@ -346,7 +346,7 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
 - 需要随时知道"内容发没发、效果怎么样"
 - 希望 AI 自动处理大部分事情，只在关键节点需要自己确认
 
-### Draft placeholders and real social channels (implemented locally; deployment pending)
+### Draft placeholders and real social channels (deployed and verified 2026-10-26)
 
 - The reserved handle `unconfigured` represents an internal draft platform, always with `autoPilot=false`. Channel lists, operating-account counts and sync snapshots exclude it. Draft creation and manual historical entries retain `unconfigured_<platform>` support and show a readable platform/unconfigured label. Brand toggles and account PATCH cannot enable placeholder publishing or convert placeholders into real accounts.
 - Draft save/edit, bulk creation, brand calendars and MCP share transaction-scoped account resolution and existing platform aliases. Explicit real IDs are strictly validated. New plain drafts choose a uniquely connected real account when its stable identity is valid; otherwise they reuse an internal placeholder. Historical records retain their platform association. Calendar resync preserves an existing real account selection.

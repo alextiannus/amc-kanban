@@ -1,6 +1,6 @@
 # Individual social-account unbinding
 
-Status: existing real-account behavior; placeholder protection implemented locally, deployment pending. No schema migration is added by this repair. Scope: Kanban brand execution accounts; Growth merchant facts and third-party authorization are unchanged.
+Status: real-account behavior and placeholder protection deployed; production version and channel responses verified on 2026-10-26. No schema migration is added by this repair. Scope: Kanban brand execution accounts; Growth merchant facts and third-party authorization are unchanged.
 
 `POST /api/brands/{id}/accounts/{aid}/unbind` requires login and brand write access. Unauthorized requests return 401; inaccessible brands or foreign accounts return 404. Successful and repeated unbinding returns `{ok:true}`.
 
@@ -10,7 +10,7 @@ Pure internal placeholders are already excluded from channel lists. Their unbind
 
 Whole-brand PostFast key release is a separate Admin operation; placeholder cleanup does not revoke authorization or reclaim the key.
 
-### Draft placeholders and real social channels (implemented locally; deployment pending)
+### Draft placeholders and real social channels (deployed and verified 2026-10-26)
 
 - The reserved handle `unconfigured` represents an internal draft platform, always with `autoPilot=false`. Channel lists, operating-account counts and sync snapshots exclude it. Draft creation and manual historical entries retain `unconfigured_<platform>` support and show a readable platform/unconfigured label. Brand toggles and account PATCH cannot enable placeholder publishing or convert placeholders into real accounts.
 - Draft save/edit, bulk creation, brand calendars and MCP share transaction-scoped account resolution and existing platform aliases. Explicit real IDs are strictly validated. New plain drafts choose a uniquely connected real account when its stable identity is valid; otherwise they reuse an internal placeholder. Historical records retain their platform association. Calendar resync preserves an existing real account selection.
@@ -24,4 +24,4 @@ Whole-brand PostFast key release is a separate Admin operation; placeholder clea
 - Post-commit readback verified all 478 affected content records: content hashes were unchanged; 335 published records and 102 plans retained their full rows and associations. All 93 real account records and total draft, asset-reference and delivery-job counts were unchanged. A repeated provider-verified dry-run proposed zero updates, moves or removals; 39 referenced/retained placeholders remain with autoPilot=false.
 - Black Yaya (??????) returned an invalid-workspace-key error from PostFast; no replacement key was assigned in the local pool. Its placeholder was disabled and 258 historical TikTok records retained. Restoring live synchronization requires a valid key for the original workspace; an unrelated empty workspace must not be substituted.
 - Enterprise Catering and Yan Bang Cai have no provider configuration. ABC Restaurant, IDN Delivery Chinatown and Hua Po Po returned empty live account lists. These require account onboarding, not placeholder deletion.
-- This records database/provider evidence only. Code deployment is independently checked through `/api/health/version` and served channel behavior.
+- Code commit `5d82e5c9509f6852f789af75d0cef34e85bf0483` was confirmed live through `/api/health/version`. All 29 active brands returned HTTP 200 from their public brand-strategy endpoint, with zero placeholder channels and real-account counts matching the database. Database/provider recovery remains separate from channel visibility; the invalid/missing-key and empty-workspace cases above are not claimed recovered.
