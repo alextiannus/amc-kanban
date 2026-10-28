@@ -1,3 +1,4 @@
+import {browseFeedSql,browsePoolSql} from './browse-source'
 import {readBrowseKnowledge} from './browse-knowledge'
 import {brainstormMatchRequest,brainstormTagContext,BRAINSTORM_KEYWORD_POLICY} from './brainstorm-match'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
@@ -37,16 +38,17 @@ function matchKeywords(value:unknown):string{
  if(typeof value!=='string'||value.length>300)throw nativeError('invalid_match_keywords',400)
  return value.trim().replace(/\s+/g,' ')
 }
-async function feed(db:any,brandId:string){return db.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_FEED,period:'sources'},orderBy:{version:'desc'}})}
+async function feed(db:any,brandId:string,compact=false){if(compact&&db.$queryRawUnsafe)return (await db.$queryRawUnsafe(browseFeedSql,brandId))[0]||null;return db.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_FEED,period:'sources'},orderBy:{version:'desc'}})}
 async function decisions(db:any,brandId:string,ids:string[]){
  if(!ids.length)return []
  return db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION,period:{in:ids}},orderBy:{version:'desc'},distinct:['period']})
 }
 // Inbox, library recommendations and returned calendar records share this feed.
-async function poolSources(db:any,brandId:string){
+async function poolSources(db:any,brandId:string,compact=false){
  if(!db.$queryRaw)return []
  const exists=await db.$queryRaw`SELECT to_regclass('amc_iaic.brand_ideas')::text AS name`
  if(!exists[0]?.name)return []
+ if(compact&&db.$queryRawUnsafe)return db.$queryRawUnsafe(browsePoolSql,brandId)
  return db.$queryRaw`SELECT id,source_id,source,match_id FROM amc_iaic.brand_ideas AS ideas WHERE brand_id=${brandId} AND (replaced_at IS NULL OR selected_at IS NOT NULL OR EXISTS (SELECT 1 FROM "BrandMarketingSolution" AS choice WHERE choice."brandId"=${brandId} AND choice.kind='BRAINSTORM_DECISION' AND choice.period=ideas.source_id AND choice.input->>'decision'='defer')) ORDER BY created_at DESC,id`
 }
 async function browserState(db:any,brandId:string,compact=false){
@@ -60,7 +62,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
  const started=performance.now()
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
  const authorizedAt=performance.now()
- const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId),browserState(db,brandId,true),poolSources(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
+ const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId,true),browserState(db,brandId,true),poolSources(db,brandId,true),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
  const candidates:{idea:any;current:any}[]=[]
