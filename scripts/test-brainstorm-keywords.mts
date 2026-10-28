@@ -13,3 +13,7 @@ assert(brainstormMatchRequest(brand,'custom phrase','request',[]).sellingPoint.s
 assert.deepEqual(brainstormMatchingTags({name:'Sparse brand',industry:'Pilates'},''),['Pilates','Sparse brand'])
 assert(!brainstormMatchingTags({...brand,description:'x'.repeat(5000),productCatalog:[],knowledge:{}},'').some(t=>t.length>80))
 console.log('PASS factual product/USP keywords, priority, deduplication, manual override, sparse profiles and matcher/UI parity')
+
+const account=brainstormMatchingTags({name:'AI Marketing Crew',description:'AI Marketing Crew 是面向新加坡本地生活商家的 AI 自媒体代运营与增长服务品牌。本账号分享内容主要为本地美食探店，寻找共同的美食爱好者。'},'')
+assert.equal(account[0],'本地美食探店');assert(!account.includes('AI'));assert(!account.includes('Marketing'))
+console.log('PASS explicit account content positioning takes priority over corporate boilerplate')

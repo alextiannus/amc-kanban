@@ -1,5 +1,5 @@
 export const BRAINSTORM_KEYWORD_POLICY='brand-products-and-selling-points-v1'
-const generic=new Set(['品牌','产品','商品','服务','特色','卖点','主打','招牌','新品','商家主推','热销','高复购','餐饮','美食','餐厅','品牌内容','内容','提供','我们','客户','消费者','以及','通过','可以','进行','优质','专业','体验','brand','product','products','service','services','food','restaurant','the','and','with','for','our','your','from','that','this','have','are'])
+const generic=new Set(['品牌','产品','商品','服务','特色','卖点','主打','招牌','新品','商家主推','热销','高复购','餐饮','美食','餐厅','品牌内容','内容','提供','我们','客户','消费者','以及','通过','可以','进行','优质','专业','体验','AI','ai','面向','本地','生活','帮助','持续','产出','提升','主要','希望','寻找','共同','包括','核心','必要','目标','市场','优先','品牌主张','brand','product','products','service','services','food','restaurant','the','and','with','for','our','your','from','that','this','have','are'])
 const segmenter=new Intl.Segmenter('zh',{granularity:'word'})
 const text=(value:unknown)=>typeof value==='string'?value.trim().replace(/\s+/g,' '):''
 function phrases(value:unknown):string[]{
@@ -17,9 +17,11 @@ export function brainstormMatchingTags(facts:any,keywords:string):string[]{
  const catalog=Array.isArray(facts?.productCatalog)?facts.productCatalog:[]
  const priority=[...catalog].sort((a,b)=>Number(!!b.isSignature||!!b.isMerchantPick)-Number(!!a.isSignature||!!a.isMerchantPick)).slice(0,4)
  const products=priority.flatMap(s=>phrases(s.name)),features=priority.flatMap(s=>[...(s.tags||[]).flatMap(phrases),...phrases(s.description)]).slice(0,4)
- const candidates=[...products,...phrases(facts?.knowledge?.productAssumptions).slice(0,4),...features,...phrases(facts?.knowledge?.promotionFocus).slice(0,3),...phrases(facts?.description).slice(0,6)]
+ const contentFocus=text(facts?.description).split(/[。.!！?？\n]/).filter(part=>/(?:本账号|账号定位|内容定位|内容主要|内容方向|account focus|content focus)/i.test(part)).flatMap(part=>phrases(part.replace(/^.*?(?:主要为|主要是|定位为|定位是|内容方向[:：]|账号定位[:：]|content focus[:：]|account focus[:：])\s*/i,''))).slice(0,4)
+ const brandWords=new Set([text(facts?.name).toLowerCase(),...Array.from(segmenter.segment(text(facts?.name))).map(s=>s.segment.toLowerCase())])
+ const candidates=[...contentFocus,...products,...phrases(facts?.knowledge?.productAssumptions).slice(0,4),...features,...phrases(facts?.knowledge?.promotionFocus).slice(0,3),...phrases(facts?.description).slice(0,6)]
  const result:string[]=[],seen=new Set<string>();let length=0
- for(const phrase of candidates){const key=phrase.toLowerCase();if(seen.has(key)||length+phrase.length>280)continue;seen.add(key);result.push(phrase);length+=phrase.length+1;if(result.length===12)break}
+ for(const phrase of candidates){const key=phrase.toLowerCase();if(brandWords.has(key)||seen.has(key)||length+phrase.length>280)continue;seen.add(key);result.push(phrase);length+=phrase.length+1;if(result.length===12)break}
  // Sparse profiles still use truthful identifying context instead of invented
  // products. Unverified research and AI strategy never enter this projection.
  if(!result.length)for(const value of [facts?.industry,facts?.name]){const v=text(value);if(v&&!result.includes(v))result.push(v)}
