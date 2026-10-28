@@ -1,3 +1,4 @@
+import {publicThumbnail} from '@/lib/assetThumbnails'
 import { triggerDesignerAutoTag } from '@/lib/designer'
 /**
  * Unified Asset Upload API
@@ -423,13 +424,16 @@ export async function GET(request: Request, { params }: Params) {
   const sourceGroup = url.searchParams.get('sourceGroup') || 'all'
   const assetIds = url.searchParams.get('assetIds')?.split(',').filter(Boolean)
   if (!['all','original','ai_clip','finished'].includes(sourceGroup) || (assetIds && (assetIds.length > 40 || new Set(assetIds).size !== assetIds.length))) return NextResponse.json({error:'Invalid asset filter'}, {status:400})
+  const picker = url.searchParams.get('view') === 'picker'
+  const assetType = url.searchParams.get('assetType') || 'all'
+  if (!['all','image','video'].includes(assetType)) return NextResponse.json({error:'Invalid asset type'}, {status:400})
   const folder = (url.searchParams.get('folder') || '').trim()
   const paginated = url.searchParams.has('page') || url.searchParams.has('pageSize')
   const page = Number(url.searchParams.get('page') ?? 1)
   const pageSize = Number(url.searchParams.get('pageSize') ?? 12)
   const usage = url.searchParams.get('usage') ?? 'all'
   const mediaType = url.searchParams.get('mediaType')
-  if (paginated && (!Number.isSafeInteger(page) || page < 1 || page > 1_000_000 ||
+  if ((paginated||picker) && (!Number.isSafeInteger(page) || page < 1 || page > 1_000_000 ||
     !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100)) {
     return NextResponse.json({ error: 'Invalid pagination: page must be 1–1000000 and pageSize must be 1–100' }, { status: 400 })
   }
@@ -460,6 +464,12 @@ export async function GET(request: Request, { params }: Params) {
   }
   if (sourceGroup !== 'all') where.sourceType = sourceGroup === 'finished' ? 'generated_video' : sourceGroup === 'ai_clip' ? 'ai_video' : { notIn: ['generated_video','ai_video','basic_video_reference'] }
   if (assetIds) where.id = { in: assetIds }
+  if (picker) {
+    if (assetType!=='all') where.mimeType = { startsWith: assetType+'/', mode:'insensitive' }
+    if (assetType === 'all') where.AND = [...(Array.isArray(where.AND)?where.AND:where.AND?[where.AND]:[]), {OR:[{mimeType:{startsWith:'image/',mode:'insensitive'}},{mimeType:{startsWith:'video/',mode:'insensitive'}}]}]
+    const rows = await prisma.mediaAsset.findMany({where, select:{id:true,url:true,mimeType:true,filename:true,aiCaption:true,aiTags:true,sourceType:true,sizeBytes:true,technicalMetadata:true},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1})
+    return NextResponse.json({assets:rows.slice(0,pageSize).map((asset:any)=>({id:asset.id,url:asset.sourceType==='postfast'&&!/^(https?:|\/)/.test(asset.url)?`/api/integrations/postfast/file/${brandId}/${asset.url}`:asset.url,mimeType:asset.mimeType.toLowerCase(),filename:asset.filename,aiCaption:asset.aiCaption,aiTags:asset.aiTags,sourceType:asset.sourceType,...publicThumbnail(asset)})),pagination:{page,pageSize,hasMore:rows.length>pageSize}}, {headers:{'Cache-Control':'private, no-store'}})
+  }
   const [assets, total] = await Promise.all([
     prisma.mediaAsset.findMany({
       where,

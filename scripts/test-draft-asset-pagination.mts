@@ -18,6 +18,7 @@ function matches(row: any, where: any): boolean {
     if (typeof value === 'object' && value !== null) {
       if ('in' in value) return value.in.includes(row[key])
       if ('notIn' in value) return !value.notIn.includes(row[key])
+      if ('startsWith' in value) return String(row[key]??'').toLowerCase().startsWith(value.startsWith.toLowerCase())
       if ('contains' in value) return String(row[key] ?? '').toLowerCase().includes(value.contains.toLowerCase())
       if ('equals' in value) return String(row[key]).toLowerCase() === value.equals.toLowerCase()
       return false
@@ -32,6 +33,7 @@ let counts = 0
 let lastWhere: any
 const deps: Record<string, any> = {
   'next/server': { NextResponse: { json: (data: any, init: any) => Response.json(data, init) } },
+  '@/lib/assetThumbnails': {publicThumbnail:()=>({thumbnailUrl:'https://preview.test/480.webp',thumbnailStatus:'ready'})},
   '@/lib/auth': { getSession: async () => user ? { user } : null, extractApiKey: () => null },
   '@/lib/brandAccess': { canSessionAccessBrandProject: async () => allowed },
   '@/lib/prisma': { prisma: {
@@ -103,3 +105,13 @@ assert.deepEqual((await read('?page=1&pageSize=30&assetIds='+thirty.join(','))).
 assert.equal((await request('?assetIds='+Array.from({length:41},(_,i)=>'id-'+i).join(','))).status,400)
 assert.equal((await request('?assetIds='+rows[0].id+','+rows[0].id)).status,400,'duplicate asset filters are rejected')
 console.log('PASS original/AI/finished filters, accurate totals, manual finished selection and brand-scoped ID lookup')
+
+const beforePickerCounts=counts
+const picker=await read('?view=picker&page=1&pageSize=24&assetType=video')
+assert.equal(picker.assets.length,24);assert(picker.pagination.hasMore)
+assert(picker.assets.every((a:any)=>a.mimeType==='video/mp4'&&a.thumbnailUrl.endsWith('/480.webp')))
+assert.equal(counts,beforePickerCounts,'picker avoids full count query')
+assert(!('technicalMetadata' in picker.assets[0]));assert(!('shootBatch' in picker.assets[0]));assert(!('folders' in picker))
+assert.equal((await request('?view=picker&pageSize=0')).status,400)
+assert.equal((await request('?view=picker&assetType=bad')).status,400)
+console.log('PASS lightweight picker: scoped filters, previews, bounded page, no count or private metadata')
