@@ -21,10 +21,14 @@ import {streamSourceVideoMedia} from '../brand-plan/creativeSourceMedia'
 import {BRAINSTORM_FEED,BRAINSTORM_DECISION,eligibleBrainstormSource,brainstormCreativeId,parseBrainstormDecision,projectBrainstormSource} from './brainstorm-contract'
 
 export async function authorizeBrainstorm(userId:string,brandId:string,write=false,db:any=prisma){
- if(!await canUserAccessBrand(brandId,userId,write?'WRITE':'READ',db))throw nativeError('brainstorm_access_denied',404)
- const user=await db.user.findUnique({where:{id:userId},include:{businessRoles:true,owner:{include:{businessRoles:true}}}})
+ const [allowed,user,{policies}]=await Promise.all([
+  canUserAccessBrand(brandId,userId,write?'WRITE':'READ',db),
+  db.user.findUnique({where:{id:userId},include:{businessRoles:true,owner:{include:{businessRoles:true}}}}),
+  readPolicies(db),
+ ])
+ if(!allowed)throw nativeError('brainstorm_access_denied',404)
  if(!user||user.type!=='HUMAN'||user.status!=='ACTIVE')throw nativeError('brainstorm_access_denied',404)
- const principal=principalFromUser(user,'session'),{policies}=await readPolicies(db)
+ const principal=principalFromUser(user,'session')
  const canDecide=principal.globalRoles.includes('ADMIN')||effectiveGrants((principal.permissionRoleIds||[]).filter(id=>Object.hasOwn(policies,id)),policies).includes('draft.update')
  if(write&&!canDecide)throw nativeError('creative_edit_forbidden',403)
  return {user,canDecide}
