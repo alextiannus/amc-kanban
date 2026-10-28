@@ -47,3 +47,12 @@ await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsRead
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1,'completed rewrite must not reload facts')
 assert.equal(modelCalls,beforeEmpty+1)
 console.log('PASS backend efficiency: no full facts for context/translation, no model for empty original, exact edited text preservation, minimal original-only prompt, rewrite receipt reuses facts/result')
+const failed=records.get('video_script_'+creativeDigest(['u','b',rewriteBody.requestKey]))
+failed.status='FAILED'
+const callsBeforeFailureRead=modelCalls
+for(let i=0;i<2;i++)await assert.rejects(preparation.prepareVideoScript('u','b',rewriteBody),/video_script_failed/)
+assert.equal(modelCalls,callsBeforeFailureRead,'checking a failed receipt must not retry a paid model call')
+assert.equal(factsReads,1)
+await preparation.prepareVideoScript('u','b',{...rewriteBody,requestKey:'explicit-new-rewrite-123'})
+assert.equal(modelCalls,callsBeforeFailureRead+1,'an explicit new rewrite can try again')
+console.log('PASS failed receipt is terminal; only a new request invokes the model again')

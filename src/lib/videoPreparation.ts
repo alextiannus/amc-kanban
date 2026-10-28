@@ -36,7 +36,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
  const claimed=await prisma.$transaction(async (tx:any)=>{
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`
   const existing=await tx.brandMarketingSolution.findUnique({where:{id}})
-  if(existing){if(creativeDigest(existing.input)!==creativeDigest(input))throw nativeError('video_script_request_conflict',409);if(existing.status==='FAILED'){await tx.brandMarketingSolution.update({where:{id},data:{status:'GENERATING',llmError:null}});return {existing:null}}return {existing}}
+  if(existing){if(creativeDigest(existing.input)!==creativeDigest(input))throw nativeError('video_script_request_conflict',409);return {existing}}
   await tx.brandMarketingSolution.create({data:{id,brandId,kind:'VIDEO_SCRIPT_PREPARATION',period:requestKey,input,output:{},status:'GENERATING',createdById:userId}})
   return {existing:null}
  })
