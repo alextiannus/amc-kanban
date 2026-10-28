@@ -8,6 +8,7 @@ import * as mediaPolicy from '../src/lib/brand-plan/creativeSourceMediaPolicy.ts
 function load(path:string,deps:Record<string,unknown>){const mod={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText)((key:string)=>{assert(key in deps,key);return deps[key]},mod,mod.exports);return mod.exports}
 let url='https://media.example/video.mp4?X-Amz-Signature=hidden',hostIp='93.184.216.34',status=200,type='video/mp4',length:string|undefined,bytes=4,contentRange='',requestedRange:string|null=null,calls=0,auth:any=null
 const open=load('src/lib/brand-plan/creativeSourceMedia.ts',{
+ '../promotion-strategy/clients':{fetchCreativeSourceThumbnail:async()=>new Response('cover',{headers:{'Content-Type':'image/webp'}})},
  './creativeSourceMediaPolicy':mediaPolicy,
  './creativeSource':{resolveCreativeSource:async(actor:any,brand:string)=>{if(actor.id!=='trusted'||brand!=='brand')throw new CreativeRevisionError('creative_access_denied',404);return{raw:{originalVideoUrl:url}}}},
  './creativeRevisionContract':{CreativeRevisionError},
@@ -25,6 +26,8 @@ const open=load('src/lib/brand-plan/creativeSourceMedia.ts',{
    });return req
  }},
 })
+assert.equal((await open.readCreativeSourceMedia({id:'trusted',type:'HUMAN'},'brand','','creative',undefined,null,true)).headers.get('Content-Type'),'image/webp')
+await assert.rejects(open.readCreativeSourceMedia({id:'intruder',type:'HUMAN'},'brand','','creative',undefined,null,true))
 const route=load('src/app/api/brands/[id]/content-creatives/[creativeId]/source/media/route.ts',{
  '@/lib/user-management/auth':{resolveSessionOrApiKey:async()=>auth},
  '@/lib/brand-plan/creativeSourceMedia':open,

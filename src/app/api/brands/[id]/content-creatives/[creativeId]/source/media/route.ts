@@ -9,7 +9,7 @@ export async function GET(request:Request,context:{params:Promise<{id:string;cre
     const auth=await resolveSessionOrApiKey(request)
     if(!auth)return json('Unauthorized',401)
     const {id,creativeId}=await context.params
-    return await readCreativeSourceMedia(auth.user,id,new URL(request.url).searchParams.get('month')||'',creativeId,request.signal,request.headers.get('range'))
+    return await readCreativeSourceMedia(auth.user,id,new URL(request.url).searchParams.get('month')||'',creativeId,request.signal,request.headers.get('range'),new URL(request.url).searchParams.get('kind')==='thumbnail')
   } catch(error) {
     if(error instanceof CreativeRevisionError)return json(error.code,error.status)
     return json('creative_source_media_unavailable',502)

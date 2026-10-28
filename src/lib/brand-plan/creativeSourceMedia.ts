@@ -1,3 +1,4 @@
+import {fetchCreativeSourceThumbnail} from '../promotion-strategy/clients'
 import { lookup } from 'node:dns/promises'
 import { request as httpsRequest } from 'node:https'
 import { isIP } from 'node:net'
@@ -13,9 +14,9 @@ function publicIpv4(address:string) {
   return !(a===0||a===10||a===127||a>=224||a===100&&b>=64&&b<=127||a===169&&b===254||a===172&&b>=16&&b<=31||a===192&&(b===168||b===0)||a===198&&(b===18||b===19))
 }
 
-export async function readCreativeSourceMedia(actor:{id:string;type:string},brandId:string,month:string,creativeId:string,signal?:AbortSignal,range?:string|null) {
+export async function readCreativeSourceMedia(actor:{id:string;type:string},brandId:string,month:string,creativeId:string,signal?:AbortSignal,range?:string|null,thumbnail=false) {
   const {raw}=await resolveCreativeSource(actor,brandId,month,creativeId)
-  return streamSourceVideoMedia(raw,signal,range)
+  return thumbnail?fetchCreativeSourceThumbnail(raw,signal):streamSourceVideoMedia(raw,signal,range)
 }
 
 export async function streamSourceVideoMedia(raw:{originalVideoUrl?:unknown},signal?:AbortSignal,range?:string|null){

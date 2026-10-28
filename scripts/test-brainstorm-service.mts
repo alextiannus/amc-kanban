@@ -42,7 +42,7 @@ new Function('require','module','exports',ts.transpileModule(readFileSync('src/l
 const api=mod.exports
 const source=(id:string,matchScore:number)=>({inspirationCreativeId:id,matchScore,sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceVideo:{title:id,videoUrl:'https://media.example/video.mp4?secret=yes'},sourceEvidence:{scope:'full_source',originalText:'Original source script',timeline:[{narrativePurpose:'Reveal contrast'}]},scriptContent:{kind:'video',opening:'Opening hook'},recommendationReason:'Matches the brand product'})
 assert(!contract.eligibleBrainstormSource(source('cre_boundary',75)));assert(contract.eligibleBrainstormSource(source('cre_good',75.1)));assert(!contract.eligibleBrainstormSource(source('cre_bad',NaN)))
-let listing=await api.listBrainstorm('user','brand',db);assert(listing.needsRefresh);assert.equal(rows.length,0)
+let listing=await api.listBrainstorm('user','brand',db);assert(listing.needsRefresh);assert.equal(rows.length,0);assert.deepEqual(listing.matchingTags,['Merchant','Real food'])
 let feedVersion=0
 const match=async()=>({contentMatchRequestId:'match',creativeCandidates:feedVersion++?[source('cre_new',92),source('cre_like',80),source('cre_no',90)]:[source('cre_boundary',75),source('cre_like',80),source('cre_no',90),source('cre_later',88)],contentLibraryGaps:[]})
 listing=await api.refreshBrainstorm('user','brand',{action:'refresh'},db,match)

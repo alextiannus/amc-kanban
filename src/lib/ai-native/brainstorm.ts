@@ -1,4 +1,4 @@
-import {brainstormMatchRequest} from './brainstorm-match'
+import {brainstormMatchRequest,brainstormMatchingTags} from './brainstorm-match'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
 import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
 import {resolveBrainstormVideos} from './brainstorm-video'
@@ -8,7 +8,7 @@ import {canUserAccessBrand} from '../user-management/brandAccess'
 import {readPolicies} from '../role-permissions/store'
 import {effectiveGrants} from '../role-permissions/contract'
 import {principalFromUser} from '../auth-v2/types'
-import {matchPromotionStrategyCreativeCandidates,fetchCreativeSourceEvidence} from '../promotion-strategy/clients'
+import {matchPromotionStrategyCreativeCandidates,fetchCreativeSourceEvidence,fetchCreativeSourceThumbnail} from '../promotion-strategy/clients'
 import {readBrandFacts} from './facts'
 import {digest,nativeError} from './contract'
 import {createNativeTask} from './service'
@@ -52,8 +52,8 @@ async function browserState(db:any,brandId:string){
  return {workspace,entries,disliked,selected}
 }
 export async function listBrainstorm(userId:string,brandId:string,db:any=prisma){
- const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db),saved=await feed(db,brandId)
- const {entries,disliked,selected}=await browserState(db,brandId),pool=await poolSources(db,brandId)
+ const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
+ const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId),browserState(db,brandId),poolSources(db,brandId),readBrandFacts(db,brandId)])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
  const candidates:{idea:any;current:any}[]=[]
@@ -72,7 +72,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
  }
  const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,fetchCreativeSourceEvidence)
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]));items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
- return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
+ return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:saved?.input?.matchingTags||brainstormMatchingTags(facts,saved?.input?.matchKeywords||''),needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
@@ -127,7 +127,7 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
   const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId))
   const seen=new Set<string>(),sources=[...incoming,...retained].filter((s:any)=>eligibleBrainstormSource(s)&&!seen.has(s.inspirationCreativeId)&&!!seen.add(s.inspirationCreativeId))
   if(Buffer.byteLength(JSON.stringify(sources))>2*1024*1024)throw nativeError('library_evidence_too_large',413)
-  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords},output:{sources}}})
+  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:brainstormMatchingTags(facts,keywords)},output:{sources}}})
  })
  return listBrainstorm(userId,brandId,db)
 }
@@ -264,14 +264,14 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
  const task=await createTask(userId,brandId,{kind:'creative',creativeId:body.creativeId,month:current.month,expectedRevision:current.expectedRevision,requestKey,goal:'用户已选择复刻此原创意。请读取完整原创意证据与当前品牌已确认事实，保留原脚本爆款机制、完整分镜顺序与节奏，改写为适合当前品牌的完整脚本及完整拍摄说明。仅使用真实品牌及商品事实，未知信息明确标注。产出候选供用户 Review，不自动采用、制作或发布。'})
  return {ok:true,id:task.id,creativeId:body.creativeId,month:current.month}
 }
-export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null){
+export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null,thumbnail=false){
  await authorizeBrainstorm(userId,brandId,false,db)
  const saved=await feed(db,brandId),source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)||(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source
  const choices=await decisions(db,brandId,[sourceId])
  if(!source||!eligibleBrainstormSource(source)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
  const raw=await fetchCreativeSourceEvidence(sourceId)
  if(raw.creativeId!==sourceId||raw.sourceRevision!==source.sourceRevision||raw.sourceDigest!==source.sourceDigest)throw nativeError('creative_source_changed',409)
- return streamSourceVideoMedia(raw,signal,range)
+ return thumbnail?fetchCreativeSourceThumbnail(raw,signal):streamSourceVideoMedia(raw,signal,range)
 }
 
 // Calendar choices also apply to automatically adapted and legacy saved ideas.

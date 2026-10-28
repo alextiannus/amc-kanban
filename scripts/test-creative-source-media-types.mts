@@ -6,12 +6,14 @@ import ts from 'typescript'
 // Check actual networking implementation against installed Node/Web typings,
 // isolating unrelated database/Next application imports rather than transpiling.
 const source=readFileSync('src/lib/brand-plan/creativeSourceMedia.ts','utf8')
+  .replace("'../promotion-strategy/clients'","'task4/thumbnails'")
   .replace("'./creativeSource'","'task4/source'")
   .replace("'./creativeRevisionContract'","'task4/contract'")
   .replace("'./creativeSourceMediaPolicy'","'task4/policy'")
 const files:Record<string,string>={
  [resolve('scripts/task4-media-check.ts')]:source,
- [resolve('scripts/task4-media-check.d.ts')]:`declare module 'task4/source' {export function resolveCreativeSource(actor:{id:string;type:string},brandId:string,month:string,creativeId:string):Promise<{raw:any}>;}
+ [resolve('scripts/task4-media-check.d.ts')]:`declare module 'task4/thumbnails' {export function fetchCreativeSourceThumbnail(raw:any,signal?:AbortSignal):Promise<Response>;}
+declare module 'task4/source' {export function resolveCreativeSource(actor:{id:string;type:string},brandId:string,month:string,creativeId:string):Promise<{raw:any}>;}
 declare module 'task4/contract' {export class CreativeRevisionError extends Error {constructor(code:string,status?:number);code:string;status:number;}}
 declare module 'task4/policy' {export function sourceMediaAllowedHosts():Set<string>;export function sourceMediaLocation(value:unknown):URL|null;}`,
 }
