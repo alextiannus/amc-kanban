@@ -70,7 +70,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
   if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
   seen.add(id);candidates.push({current:{source},idea:{...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})}})
  }
- const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,fetchCreativeSourceEvidence)
+ const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,id=>fetchCreativeSourceEvidence(id,'browse'))
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]));items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
  return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:saved?.input?.keywordPolicy===BRAINSTORM_KEYWORD_POLICY?saved.input.matchingTags:brainstormMatchingTags(facts,saved?.input?.matchKeywords||''),needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }

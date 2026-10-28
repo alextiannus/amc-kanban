@@ -67,11 +67,11 @@ export async function matchPromotionStrategyCreativeBatch(input: unknown) {
   }
 }
 
-export async function fetchCreativeSourceEvidence(creativeId:string) {
+export async function fetchCreativeSourceEvidence(creativeId:string,projection?:'browse'|'media') {
   const baseUrl=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'') || (isLocal?'http://localhost:4010':'')
   if(!baseUrl)throw new Error('amc_content_service_not_configured')
   const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim() || (isLocal?'local-service-token':'')
-  const response=await fetch(`${baseUrl}/v1/content-library/source-evidence`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify({creativeId})})
+  const response=await fetch(`${baseUrl}/v1/content-library/source-evidence`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(15000),headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify({creativeId,...(projection?{projection}:{})})})
   if(!response.ok){await response.body?.cancel();throw new Error(response.status===413?'library_evidence_too_large':response.status===404?'original_evidence_not_found':'original_evidence_unavailable')}
   const configured=Number(process.env.AMC_SOURCE_EVIDENCE_MAX_BYTES)
   const limit=Number.isSafeInteger(configured)&&configured>0&&configured<=64*1024*1024?configured:8*1024*1024
