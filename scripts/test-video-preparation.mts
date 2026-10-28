@@ -44,6 +44,10 @@ assert.equal(emptyResult.script,edited);assert.equal(emptyResult.originalScript,
 assert.deepEqual(await preparation.prepareVideoScript('u','b',emptyBody),emptyResult)
 const rewriteBody={...body,action:'rewrite',requestKey:'rewrite-facts-test-123'}
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1)
+assert(lastPrompt.includes('NOT evidence of this brand'))
+assert(lastPrompt.includes('otherwise remove the claim or use neutral wording'))
+assert(lastPrompt.includes('originalScript must be a faithful translation'))
+assert(!lastPrompt.includes('Preserve shot order, timing, visual subjects, facts, names and prices'))
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1,'completed rewrite must not reload facts')
 assert.equal(modelCalls,beforeEmpty+1)
 console.log('PASS backend efficiency: no full facts for context/translation, no model for empty original, exact edited text preservation, minimal original-only prompt, rewrite receipt reuses facts/result')
