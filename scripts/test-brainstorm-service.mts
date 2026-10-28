@@ -32,7 +32,7 @@ const deps:any={'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSour
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
- '../promotion-strategy/clients':{fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes',timeline:evidenceTimeline})},
+ '../promotion-strategy/clients':{fetchBrandMatchingTags:async(context:any)=>({policy:'material-brand-tags-v2',tags:(context.keywords||'Real food').split(/[,，;；\n]+/).map((label:string)=>({id:'tag_'+label,label,aliases:[]}))}),fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes',timeline:evidenceTimeline})},
  './facts':{readBrandFacts:async()=>({id:'brand',name:'Merchant',description:'Real food',productCatalog:[]})},'./contract':{digest,nativeError},'./service':{},
  '../brand-plan/creativeRevisionContract':creativeContract,'../brand-plan/creativeRevisions':{readCreativeRevisions:async(_a:any,_b:any,_m:any,id:string)=>{const entry=Object.entries(knowledge.marketingSolution.publishingCalendar.months).flatMap(([month,items]:any)=>items.map((current:any)=>({month,current}))).find((i:any)=>i.current.id===id) as any;return {...entry,canOverwrite:true,expectedRevision:creativeContract.creativeDigest(entry.current)}}},
  '../brand-plan/creativeSourceReference':{canonicalCreativeSource},'../brand-plan/creativeSourceMedia':{streamSourceVideoMedia:async()=>new Response('video')},'./brainstorm-contract':contract,
@@ -120,7 +120,7 @@ assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'早餐
 beforeTransaction=async()=>{await updateKeywords('winner','早餐 手工包子')}
 await assert.rejects(updateKeywords('loser','早餐 手工包子'),(e:any)=>e.code==='brainstorm_keywords_changed')
 assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'winner')
-listing=await updateKeywords('   ','winner');assert.equal(listing.matchKeywords,'');assert(captured.at(-1).promotionGoal.includes('Real food'));assert.equal(captured.at(-1).sellingPoint,'Real food；Merchant；Real food')
+listing=await updateKeywords('   ','winner');assert.equal(listing.matchKeywords,'');assert.equal(captured.at(-1).brandTagContext.description,'Real food');assert.equal(captured.at(-1).sellingPoint,'Merchant；Real food')
 console.log('PASS: keyword provider payload, persistence, cache, reset, validation, permission, failure preservation and concurrent edit protection')
 
 // A refreshed match must use its new score/evidence, even when an older pool row exists.

@@ -33,6 +33,7 @@ export async function matchPromotionStrategyCreativeCandidates(input: unknown) {
   const data = await response.json().catch(() => ({})) as { error?: string }
   if (!response.ok) throw new Error(data.error || `promotion_strategy_creative_match_failed:${response.status}`)
   return data as {
+    brandTags?:{policy:string;tags:BrandMatchingTag[]}
     contentMatchRequestId: string
     libraryVersions: Record<string, unknown>
     creativeCandidates: Array<Record<string, unknown>>
@@ -100,4 +101,16 @@ export async function fetchCreativeSourceThumbnail(raw:{creativeId:string;source
  const data=await response.json()
  if(data.creativeId!==raw.creativeId||data.sourceRevision!==raw.sourceRevision||data.sourceDigest!==raw.sourceDigest||data.mimeType!=='image/webp'||typeof data.image!=='string'||data.image.length>1_400_000||!/^[A-Za-z0-9+/]+={0,2}$/.test(data.image))throw new Error('creative_thumbnail_unavailable')
  return new Response(Buffer.from(data.image,'base64'),{headers:{'Content-Type':'image/webp','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}})
+}
+
+export type BrandMatchingTag={id:string;label:string;aliases:string[]}
+export async function fetchBrandMatchingTags(context:unknown):Promise<{policy:string;vocabularyVersion:string;tags:BrandMatchingTag[]}>{
+ const baseUrl=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'')||(isLocal?'http://localhost:4010':'')
+ if(!baseUrl)throw new Error('amc_content_service_not_configured')
+ const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()||(isLocal?'local-service-token':'')
+ const response=await fetch(`${baseUrl}/v1/content-library/brand-tags`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify(context)})
+ if(!response.ok)throw new Error('brand_tags_unavailable')
+ const data=await response.json()
+ if(data.policy!=='material-brand-tags-v2'||!Array.isArray(data.tags)||data.tags.length>32||data.tags.some((t:any)=>typeof t.id!=='string'||!t.id.startsWith('tag_')||typeof t.label!=='string'||!Array.isArray(t.aliases)))throw new Error('invalid_brand_tags')
+ return data
 }
