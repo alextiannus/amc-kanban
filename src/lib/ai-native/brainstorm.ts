@@ -1,3 +1,4 @@
+import {readBrowseKnowledge} from './browse-knowledge'
 import {brainstormMatchRequest,brainstormTagContext,BRAINSTORM_KEYWORD_POLICY} from './brainstorm-match'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
 import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
@@ -44,8 +45,8 @@ async function poolSources(db:any,brandId:string){
  if(!exists[0]?.name)return []
  return db.$queryRaw`SELECT id,source_id,source,match_id FROM amc_iaic.brand_ideas AS ideas WHERE brand_id=${brandId} AND (replaced_at IS NULL OR selected_at IS NOT NULL OR EXISTS (SELECT 1 FROM "BrandMarketingSolution" AS choice WHERE choice."brandId"=${brandId} AND choice.kind='BRAINSTORM_DECISION' AND choice.period=ideas.source_id AND choice.input->>'decision'='defer')) ORDER BY created_at DESC,id`
 }
-async function browserState(db:any,brandId:string){
- const knowledge=await db.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge)
+async function browserState(db:any,brandId:string,compact=false){
+ const knowledge=compact?await readBrowseKnowledge(db,brandId):await db.brandKnowledge.findUnique({where:{brandId}}),workspace=creativeWorkspace(knowledge)
  const entries=Object.entries(workspace.publishingCalendar?.months||{}).flatMap(([month,items]:any)=>Array.isArray(items)?items.filter((i:any)=>i?.id).map((item:any)=>({month,item})):[])
  const disliked=await readDislikedCreativeSources(db,brandId,workspace)
  const selected=new Set(entries.filter(({item})=>creativeIsSelected(item)).map(({item})=>creativeSourceId(item)).filter(Boolean))
@@ -55,7 +56,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
  const started=performance.now()
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
  const authorizedAt=performance.now()
- const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId),browserState(db,brandId),poolSources(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
+ const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId),browserState(db,brandId,true),poolSources(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
  const candidates:{idea:any;current:any}[]=[]
