@@ -22,3 +22,9 @@ assert.equal(fresh.items[0].thumbnailUrl,'/api/brands/other-brand/ai/brainstorm/
 assert.equal(fresh.items[0].videoUrl,'/api/brands/other-brand/ai/brainstorm/cre_good/media')
 assert.deepEqual(await resolveBrainstormVideos([],'brand',read),{items:[],videoResolutionIncomplete:false})
 console.log('PASS video eligibility: unlinked/title-only hidden, legacy URL recovered, request deduplication, pins/conflicts, missing media, transient failure, no mutation, brand-scoped proxy')
+
+const inline=await resolveBrainstormVideos([{idea:{sourceId:'cre_good'},current:{source:reference('cre_good')}}],'brand',async id=>({...await read(id),thumbnailDataUrl:'data:image/webp;base64,Y292ZXI='}))
+assert.equal(inline.items[0].thumbnailUrl,'data:image/webp;base64,Y292ZXI=')
+const unsafeInline=await resolveBrainstormVideos([{idea:{sourceId:'cre_good'},current:{source:reference('cre_good')}}],'brand',async id=>({...await read(id),thumbnailDataUrl:'data:image/svg+xml,unsafe'}))
+assert(unsafeInline.items[0].thumbnailUrl.endsWith('?kind=thumbnail'))
+console.log('PASS only validated cached WebP covers inline; unsafe data stays on guarded media route')

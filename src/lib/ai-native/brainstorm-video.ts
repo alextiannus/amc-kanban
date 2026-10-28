@@ -27,7 +27,7 @@ export async function resolveBrainstormVideos(candidates:{idea:any;current:any}[
     if(!video)continue
     const controlled=video.search||sourceMediaAllowedHosts().has(video.hostname)||/\.myhuaweicloud\.com$/i.test(video.hostname)
     const mediaPath=idea.savedCreativeId?`content-creatives/${encodeURIComponent(idea.savedCreativeId)}/source/media`:`ai/brainstorm/${encodeURIComponent(idea.sourceId)}/media`
-    resolved[index]={...idea,videoStatus:'available',videoUrl:controlled?`/api/brands/${encodeURIComponent(brandId)}/${mediaPath}`:video.href,thumbnailUrl:`/api/brands/${encodeURIComponent(brandId)}/${mediaPath}?kind=thumbnail`,originalScript:creativeSourceScript(raw),editingScript:creativeSourceScript(raw)}
+    resolved[index]={...idea,videoStatus:'available',videoUrl:controlled?`/api/brands/${encodeURIComponent(brandId)}/${mediaPath}`:video.href,thumbnailUrl:typeof raw.thumbnailDataUrl==='string'&&raw.thumbnailDataUrl.length<=65558&&/^data:image\/webp;base64,[A-Za-z0-9+/]+={0,2}$/.test(raw.thumbnailDataUrl)?raw.thumbnailDataUrl:`/api/brands/${encodeURIComponent(brandId)}/${mediaPath}?kind=thumbnail`,originalScript:creativeSourceScript(raw),editingScript:creativeSourceScript(raw)}
    }catch(error){
     const code=(error as any)?.code||(error as Error).message
     if(!['creative_source_not_found','creative_source_changed','library_evidence_too_large'].includes(code))incomplete=true
