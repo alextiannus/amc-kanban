@@ -99,6 +99,12 @@ export async function GET(request: Request, { params }: Params) {
     if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // The home companion needs identity/voice fields, not the full calendar JSON.
+  if (new URL(request.url).searchParams.get('view') === 'companion') {
+    const knowledge = await prisma.brandKnowledge.findUnique({where:{brandId},select:{brandId:true,brandTone:true,audienceAssumptions:true,productAssumptions:true,voiceId:true,companionVoiceId:true}})
+    return NextResponse.json({brandId,brandTone:knowledge?.brandTone||'',audienceAssumptions:knowledge?.audienceAssumptions||'',productAssumptions:knowledge?.productAssumptions||'',voiceId:knowledge?.voiceId||'',companionVoiceId:knowledge?.companionVoiceId||knowledge?.voiceId||''},{headers:{'Cache-Control':'no-store'}})
+  }
+
   const knowledge = await prisma.brandKnowledge.findUnique({ where: { brandId } })
   if (!knowledge) return NextResponse.json({ ...EMPTY_KNOWLEDGE, brandId })
 
