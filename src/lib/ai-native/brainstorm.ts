@@ -8,8 +8,8 @@ import {canUserAccessBrand} from '../user-management/brandAccess'
 import {readPolicies} from '../role-permissions/store'
 import {effectiveGrants} from '../role-permissions/contract'
 import {principalFromUser} from '../auth-v2/types'
-import {matchPromotionStrategyCreativeCandidates,fetchBrandMatchingTags,fetchCreativeSourceEvidence,fetchCreativeSourceThumbnail} from '../promotion-strategy/clients'
-import {readBrandFacts} from './facts'
+import {matchPromotionStrategyCreativeCandidates,fetchBrainstormBrowse,fetchCreativeSourceEvidence,fetchCreativeSourceThumbnail} from '../promotion-strategy/clients'
+import {readBrandFacts,skuFacts} from './facts'
 import {digest,nativeError} from './contract'
 import {createNativeTask} from './service'
 import {hasCreativeDraftMarker} from '../brand-plan/creativeDraftMarker'
@@ -52,9 +52,10 @@ async function browserState(db:any,brandId:string){
  return {workspace,entries,disliked,selected}
 }
 export async function listBrainstorm(userId:string,brandId:string,db:any=prisma){
+ const started=performance.now()
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
- const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId),browserState(db,brandId),poolSources(db,brandId),readBrandFacts(db,brandId)])
- const tagsPromise=fetchBrandMatchingTags(brainstormTagContext(facts,saved?.input?.matchKeywords||'')).catch(()=>null)
+ const authorizedAt=performance.now()
+ const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId),browserState(db,brandId),poolSources(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
  const candidates:{idea:any;current:any}[]=[]
@@ -71,9 +72,13 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
   if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
   seen.add(id);candidates.push({current:{source},idea:{...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})}})
  }
- const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,id=>fetchCreativeSourceEvidence(id,'browse'))
+ const dataAt=performance.now()
+ const browse=await fetchBrainstormBrowse(candidates.map(c=>c.idea.sourceId),brainstormTagContext({...facts,productCatalog:skuFacts(facts?.knowledge?.menuItems)},saved?.input?.matchKeywords||''))
+ const evidence=new Map(browse.items.map((entry:any)=>[entry.creativeId,entry]))
+ const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,async id=>{const entry:any=evidence.get(id);if(!entry?.source)throw new Error(entry?.error||'original_evidence_unavailable');return entry.source})
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]));items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
- const tagResult=await tagsPromise
+ const tagResult=browse.brandTags
+ console.info('[brainstorm-timing]',JSON.stringify({brandId,authorizationMs:Math.round(authorizedAt-started),dataMs:Math.round(dataAt-authorizedAt),contentMs:Math.round(performance.now()-dataAt),totalMs:Math.round(performance.now()-started),candidates:candidates.length,items:items.length}))
  return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){

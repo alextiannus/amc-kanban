@@ -16,7 +16,7 @@ const tasks=new Map<string,string>()
 const filter=(where:any,row:any)=>Object.entries(where||{}).every(([key,value]:any)=>key==='period'&&typeof value==='object'?value.in.includes(row.period):row[key]===value)
 const db:any={
  user:{findUnique:async()=>({id:'user',type:'HUMAN',status:'ACTIVE',businessRoles:[]})},
- brand:{findUnique:async()=>({timezone:'Asia/Singapore'})},
+ brand:{findUnique:async()=>({id:'brand',name:'Merchant',description:'Real food',timezone:'Asia/Singapore'})},
  brandKnowledge:{findUnique:async()=>{queryCount++;return structuredClone(knowledge)},upsert:async()=>knowledge,update:async({data}:any)=>{knowledge={...knowledge,...structuredClone(data)};return knowledge}},
  brandMarketingSolution:{
   findFirst:async({where}:any)=>{queryCount++;return rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version)[0]||null},
@@ -33,16 +33,19 @@ const deps:any={'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSour
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
  '../promotion-strategy/clients':{fetchBrandMatchingTags:async(context:any)=>({policy:'material-brand-tags-v2',tags:(context.keywords||'Real food').split(/[,，;；\n]+/).map((label:string)=>({id:'tag_'+label,label,aliases:[]}))}),fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes',timeline:evidenceTimeline})},
- './facts':{readBrandFacts:async()=>({id:'brand',name:'Merchant',description:'Real food',productCatalog:[]})},'./contract':{digest,nativeError},'./service':{},
+ './facts':{skuFacts:()=>[],readBrandFacts:async()=>({id:'brand',name:'Merchant',description:'Real food',productCatalog:[]})},'./contract':{digest,nativeError},'./service':{},
  '../brand-plan/creativeRevisionContract':creativeContract,'../brand-plan/creativeRevisions':{readCreativeRevisions:async(_a:any,_b:any,_m:any,id:string)=>{const entry=Object.entries(knowledge.marketingSolution.publishingCalendar.months).flatMap(([month,items]:any)=>items.map((current:any)=>({month,current}))).find((i:any)=>i.current.id===id) as any;return {...entry,canOverwrite:true,expectedRevision:creativeContract.creativeDigest(entry.current)}}},
  '../brand-plan/creativeSourceReference':{canonicalCreativeSource},'../brand-plan/creativeSourceMedia':{streamSourceVideoMedia:async()=>new Response('video')},'./brainstorm-contract':contract,
 }
+let browseCalls=0
+const clients=deps['../promotion-strategy/clients']
+clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{browseCalls++;return {brandTags:await clients.fetchBrandMatchingTags(context),items:await Promise.all(ids.map(async creativeId=>({creativeId,source:await clients.fetchCreativeSourceEvidence(creativeId)})))}}
 const mod={exports:{} as any}
 new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/ai-native/brainstorm.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports)
 const api=mod.exports
 const source=(id:string,matchScore:number)=>({inspirationCreativeId:id,matchScore,sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceVideo:{title:id,videoUrl:'https://media.example/video.mp4?secret=yes'},sourceEvidence:{scope:'full_source',originalText:'Original source script',timeline:[{narrativePurpose:'Reveal contrast'}]},scriptContent:{kind:'video',opening:'Opening hook'},recommendationReason:'Matches the brand product'})
 assert(!contract.eligibleBrainstormSource(source('cre_boundary',75)));assert(contract.eligibleBrainstormSource(source('cre_good',75.1)));assert(!contract.eligibleBrainstormSource(source('cre_bad',NaN)))
-let listing=await api.listBrainstorm('user','brand',db);assert(listing.needsRefresh);assert.equal(rows.length,0);assert.deepEqual(listing.matchingTags,['Real food'])
+let listing=await api.listBrainstorm('user','brand',db);assert(listing.needsRefresh);assert.equal(rows.length,0);assert.deepEqual(listing.matchingTags,['Real food']);assert.equal(browseCalls,1)
 let feedVersion=0
 const match=async()=>({contentMatchRequestId:'match',creativeCandidates:feedVersion++?[source('cre_new',92),source('cre_like',80),source('cre_no',90)]:[source('cre_boundary',75),source('cre_like',80),source('cre_no',90),source('cre_later',88)],contentLibraryGaps:[]})
 listing=await api.refreshBrainstorm('user','brand',{action:'refresh'},db,match)

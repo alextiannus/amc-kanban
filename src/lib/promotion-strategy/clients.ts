@@ -114,3 +114,22 @@ export async function fetchBrandMatchingTags(context:unknown):Promise<{policy:st
  if(data.policy!=='material-brand-tags-v2'||!Array.isArray(data.tags)||data.tags.length>32||data.tags.some((t:any)=>typeof t.id!=='string'||!t.id.startsWith('tag_')||typeof t.label!=='string'||!Array.isArray(t.aliases)))throw new Error('invalid_brand_tags')
  return data
 }
+
+/** One Content round trip for current source revisions, video covers and brand tags. */
+export async function fetchBrainstormBrowse(creativeIds:string[],brandTagContext:unknown){
+ const baseUrl=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'')||(isLocal?'http://localhost:4010':'')
+ if(!baseUrl)throw new Error('amc_content_service_not_configured')
+ const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()||(isLocal?'local-service-token':'')
+ const unique=[...new Set(creativeIds)],chunks=Array.from({length:Math.max(1,Math.ceil(unique.length/72))},(_,i)=>unique.slice(i*72,(i+1)*72))
+ const pages=await Promise.all(chunks.map(async(ids,index)=>{
+  const response=await fetch(`${baseUrl}/v1/content-library/browse-sources`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify({creativeIds:ids,...(index===0?{brandTagContext}:{})})})
+  if(!response.ok){await response.body?.cancel();throw new Error('original_evidence_unavailable')}
+  if(!response.body)throw new Error('original_evidence_unavailable')
+  const reader=response.body.getReader(),parts:Uint8Array[]=[];let size=0
+  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>16*1024*1024){await reader.cancel();throw new Error('library_evidence_too_large')}parts.push(value)}}finally{reader.releaseLock()}
+  const data=JSON.parse(Buffer.concat(parts,size).toString('utf8'))
+  if(!Array.isArray(data.items)||data.items.length!==ids.length||data.items.some((x:any)=>!ids.includes(x.creativeId)))throw new Error('invalid_browse_sources')
+  return data
+ }))
+ return {items:pages.flatMap(p=>p.items),brandTags:pages[0].brandTags as {policy:string;tags:BrandMatchingTag[]}|null}
+}
