@@ -2,7 +2,7 @@ export const BRAINSTORM_KEYWORD_POLICY='material-brand-tags-v2'
 const text=(v:unknown,max=5000)=>typeof v==='string'?v.trim().slice(0,max):''
 /** Only confirmed application facts, never research excerpts or AI strategy proposals. */
 export function brainstormTagContext(facts:any,keywords:string){
- return {name:text(facts?.name,200),industry:text(facts?.industry,200),description:text(facts?.description),features:text(facts?.knowledge?.productAssumptions,3000),services:text(facts?.knowledge?.promotionFocus,3000),keywords:text(keywords,300),products:(facts?.productCatalog||[]).slice(0,24).map((p:any)=>({name:text(p.name,160),description:text(p.description,400),tags:Array.isArray(p.tags)?p.tags.filter((t:unknown)=>typeof t==='string').slice(0,6).map((t:string)=>text(t,40)):[]}))}
+ return {brandId:facts?.id,name:text(facts?.name,200),industry:text(facts?.industry,200),description:text(facts?.description),features:text(facts?.knowledge?.productAssumptions,3000),services:text(facts?.knowledge?.promotionFocus,3000),keywords:text(keywords,300),products:(facts?.productCatalog||[]).slice(0,24).map((p:any)=>({name:text(p.name,160),description:text(p.description,400),tags:Array.isArray(p.tags)?p.tags.filter((t:unknown)=>typeof t==='string').slice(0,6).map((t:string)=>text(t,40)):[]}))}
 }
 /** Content owns decomposition and canonical IDs for both explicit refresh and nightly prefetch. */
 export function brainstormMatchRequest(facts:any,keywords:string,requestId:string,excluded:string[],directionCounts?:Record<string,number>){

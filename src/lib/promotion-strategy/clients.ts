@@ -111,7 +111,7 @@ export async function fetchBrandMatchingTags(context:unknown):Promise<{policy:st
  const response=await fetch(`${baseUrl}/v1/content-library/brand-tags`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify(context)})
  if(!response.ok)throw new Error('brand_tags_unavailable')
  const data=await response.json()
- if(data.policy!=='material-brand-tags-v2'||!Array.isArray(data.tags)||data.tags.length>32||data.tags.some((t:any)=>typeof t.id!=='string'||!t.id.startsWith('tag_')||typeof t.label!=='string'||!Array.isArray(t.aliases)))throw new Error('invalid_brand_tags')
+ if(data.policy!=='material-brand-tags-v2'||!Array.isArray(data.tags)||data.tags.some((t:any)=>typeof t.id!=='string'||!t.id.startsWith('tag_')||typeof t.label!=='string'||!Array.isArray(t.aliases)))throw new Error('invalid_brand_tags')
  return data
 }
 
@@ -132,4 +132,13 @@ export async function fetchBrainstormBrowse(creativeIds:string[],brandTagContext
   return data
  }))
  return {items:pages.flatMap(p=>p.items),brandTags:pages[0].brandTags as {policy:string;tags:BrandMatchingTag[]}|null}
+}
+
+export async function fetchBrandKeywords(input:unknown){
+ const baseUrl=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'')||(isLocal?'http://localhost:4010':'')
+ if(!baseUrl)throw new Error('amc_content_service_not_configured')
+ const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()||(isLocal?'local-service-token':'')
+ const response=await fetch(`${baseUrl}/v1/content-library/brand-keywords`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify(input)})
+ const data=await response.json();if(!response.ok)throw Object.assign(new Error(data.error||'brand_keywords_unavailable'),{code:data.error||'brand_keywords_unavailable',statusCode:response.status})
+ return data
 }

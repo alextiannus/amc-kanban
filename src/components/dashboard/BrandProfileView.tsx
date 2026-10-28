@@ -1,4 +1,5 @@
 'use client'
+import BrandKeywords from '../shared/BrandKeywords'
 
 import BrandServiceOrders from './BrandServiceOrders'
 
@@ -2047,6 +2048,7 @@ ${storeLines}
           </section>
 
           {/* Section 2: plan input, not rendered */}
+          <BrandKeywords key={brandId} brandId={brandId}/>
 
 
 

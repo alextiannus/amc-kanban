@@ -41,6 +41,7 @@ const deps:any={'./browse-source':browseSource,'./browse-knowledge':browseKnowle
 }
 let browseCalls=0
 const clients=deps['../promotion-strategy/clients']
+clients.fetchBrandKeywords=async()=>({revision:1,tags:[]})
 clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{browseCalls++;return {brandTags:await clients.fetchBrandMatchingTags(context),items:await Promise.all(ids.map(async creativeId=>({creativeId,source:await clients.fetchCreativeSourceEvidence(creativeId)})))}}
 const mod={exports:{} as any}
 new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/ai-native/brainstorm.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports)
@@ -195,6 +196,7 @@ console.log('PASS calendar-only selections excluded before matching')
 db.$queryRaw=async()=>[]
 rows=[{brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:1,createdAt:new Date(),input:{},output:{sources:Array.from({length:25},(_,i)=>source('cre_progressive_'+i,90))}}];knowledge={marketingSolution:{publishingCalendar:{months:{}}}}
 const resolvedIds:string[][]=[],originalBrowse=clients.fetchBrainstormBrowse
+clients.fetchBrandKeywords=async()=>({revision:1,tags:[]})
 clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{resolvedIds.push(ids);return originalBrowse(ids,context)}
 const preview=await api.listBrainstorm('user','brand',db,true)
 assert.equal(preview.hasMore,true);assert.equal(preview.canDecide,false);assert.equal(preview.items.length,8);assert.equal(resolvedIds[0].length,8)
@@ -202,3 +204,23 @@ const complete=await api.listBrainstorm('user','brand',db)
 assert.equal(complete.hasMore,false);assert.equal(complete.canDecide,true);assert.equal(complete.items.length,25);assert.equal(resolvedIds[1].length,25)
 assert.deepEqual(preview.items.map((i:any)=>i.sourceId),complete.items.slice(0,8).map((i:any)=>i.sourceId))
 console.log('PASS first-screen source bound, read-only partial feed, complete fallback and stable order')
+
+// Incremental matching appends durably, replays receipts and never calls errors exhaustion.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}};db.$queryRaw=async()=>[];evidenceRevision='r1';evidenceTimeline=[]
+let moreCalls=0,exclusions:any[]=[]
+const moreMatch=async(input:any)=>{moreCalls++;exclusions.push(input.excludeCreativeIds);return {contentMatchRequestId:'more',creativeCandidates:[source('cre_more'+moreCalls,91)],contentLibraryGaps:[]}}
+const firstMore={action:'loadMore',requestKey:'more-request-000001'}
+const firstResult=await api.loadMoreBrainstorm('user','brand',firstMore,db,moreMatch)
+assert.equal(firstResult.items[0].sourceId,'cre_more1');assert.equal(firstResult.exhausted,false)
+assert.deepEqual(await api.loadMoreBrainstorm('user','brand',firstMore,db,moreMatch),firstResult);assert.equal(moreCalls,1)
+await api.loadMoreBrainstorm('user','brand',{...firstMore,requestKey:'more-request-000002'},db,moreMatch)
+assert(exclusions[1].includes('cre_more1'));assert.deepEqual((await api.listBrainstorm('user','brand',db)).items.map((i:any)=>i.sourceId),['cre_more1','cre_more2'])
+const count=rows.length
+await assert.rejects(api.loadMoreBrainstorm('user','brand',{...firstMore,requestKey:'more-request-000003'},db,async()=>({creativeCandidates:[],contentLibraryGaps:[{status:503}]})))
+assert.equal(rows.length,count)
+const end=await api.loadMoreBrainstorm('user','brand',{...firstMore,requestKey:'more-request-000004'},db,async()=>({contentMatchRequestId:'end',creativeCandidates:[],contentLibraryGaps:[]}))
+assert.equal(end.exhausted,true);assert.deepEqual(end.items,[])
+write=false;await assert.rejects(api.loadMoreBrainstorm('user','brand',firstMore,db,moreMatch));write=true
+beforeTransaction=async()=>{await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async()=>({contentMatchRequestId:'replace',creativeCandidates:[],contentLibraryGaps:[]}))}
+await assert.rejects(api.loadMoreBrainstorm('user','brand',{...firstMore,requestKey:'more-request-000005'},db,moreMatch),(e:any)=>e.code==='brainstorm_round_changed')
+console.log('PASS incremental matching: durable append, source exclusions, idempotency, failure vs exhaustion, access and concurrent refresh')

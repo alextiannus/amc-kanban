@@ -1,3 +1,5 @@
+import {brainstormTagContext} from '../ai-native/brainstorm-match'
+import {skuFacts} from '../ai-native/facts'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { prisma } from '@/lib/prisma'
 import type { PlanningActor } from '@/lib/growthPlanning'
@@ -61,6 +63,7 @@ export async function generatePromotionStrategyPlan(input: {
     for (const point of promotionPoints) {
       const match = await matchPromotionStrategyCreativeCandidates({
         merchantId: brand.id,
+        brandTagContext:brainstormTagContext({...brand,knowledge,productCatalog:skuFacts(knowledge.menuItems)},''),
         merchantName: brand.name,
         merchantCategory: category,
         market,

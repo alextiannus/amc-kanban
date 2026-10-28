@@ -1,4 +1,5 @@
 'use client'
+import BrandKeywords from '../shared/BrandKeywords'
 
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
@@ -176,7 +177,8 @@ export function PromotionStrategyWorkspace({
               </select>
             </Field>
             <Field label="月度目标"><textarea className="field min-h-24" value={goal} onChange={(event) => setGoal(event.target.value)} /></Field>
-            <Field label="推广点">
+            <BrandKeywords key={brandId} brandId={brandId}/>
+            <Field label="推广点说明">
               <textarea className="field min-h-36" value={sellingPoints} onChange={(event) => setSellingPoints(event.target.value)} />
             </Field>
           </aside>
