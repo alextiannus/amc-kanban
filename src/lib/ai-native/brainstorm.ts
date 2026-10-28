@@ -280,10 +280,10 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
 }
 export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null,thumbnail=false){
  await authorizeBrainstorm(userId,brandId,false,db)
- const saved=await feed(db,brandId),source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)||(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source
- const choices=await decisions(db,brandId,[sourceId])
+ const [saved,choices]=await Promise.all([feed(db,brandId,true),decisions(db,brandId,[sourceId])])
+ const source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)||(await poolSources(db,brandId,true)).find((row:any)=>row.source_id===sourceId)?.source
  if(!source||!eligibleBrainstormSource(source)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
- const raw=await fetchCreativeSourceEvidence(sourceId)
+ const raw=await fetchCreativeSourceEvidence(sourceId,'media')
  if(raw.creativeId!==sourceId||raw.sourceRevision!==source.sourceRevision||raw.sourceDigest!==source.sourceDigest)throw nativeError('creative_source_changed',409)
  return thumbnail?fetchCreativeSourceThumbnail(raw,signal):streamSourceVideoMedia(raw,signal,range)
 }

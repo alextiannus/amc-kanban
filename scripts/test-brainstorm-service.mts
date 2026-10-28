@@ -13,7 +13,7 @@ import {digest,nativeError} from '../src/lib/ai-native/contract.ts'
 import {creativeSourceScript} from '../src/lib/brand-plan/creativeSourceScript.ts'
 import * as videoResolver from '../src/lib/ai-native/brainstorm-video.ts'
 let rows:any[]=[],knowledge:any={marketingSolution:{annual:{keep:'existing'},publishingCalendar:{months:{}}}},audits:any[]=[],access=true,write=true,queryCount=0,failAudit=false,taskCalls=0,evidenceRevision='r1'
-let evidenceTimeline:any[]=[]
+let evidenceTimeline:any[]=[],evidenceProjections:(string|undefined)[]=[]
 const tasks=new Map<string,string>()
 const filter=(where:any,row:any)=>Object.entries(where||{}).every(([key,value]:any)=>key==='period'&&typeof value==='object'?value.in.includes(row.period):row[key]===value)
 const db:any={
@@ -34,7 +34,7 @@ const deps:any={'./browse-source':browseSource,'./browse-knowledge':browseKnowle
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
- '../promotion-strategy/clients':{fetchBrandMatchingTags:async(context:any)=>({policy:'material-brand-tags-v2',tags:(context.keywords||'Real food').split(/[,，;；\n]+/).map((label:string)=>({id:'tag_'+label,label,aliases:[]}))}),fetchCreativeSourceEvidence:async(id:string)=>({creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes',timeline:evidenceTimeline})},
+ '../promotion-strategy/clients':{fetchBrandMatchingTags:async(context:any)=>({policy:'material-brand-tags-v2',tags:(context.keywords||'Real food').split(/[,，;；\n]+/).map((label:string)=>({id:'tag_'+label,label,aliases:[]}))}),fetchCreativeSourceEvidence:async(id:string,projection?:string)=>{evidenceProjections.push(projection);return {creativeId:id,sourceRevision:evidenceRevision,sourceDigest:'a'.repeat(64),originalVideoUrl:'https://media.example/video.mp4?secret=yes',timeline:evidenceTimeline}}},
  './facts':{skuFacts:()=>[],readBrandFacts:async()=>({id:'brand',name:'Merchant',description:'Real food',productCatalog:[]})},'./contract':{digest,nativeError},'./service':{},
  '../brand-plan/creativeRevisionContract':creativeContract,'../brand-plan/creativeRevisions':{readCreativeRevisions:async(_a:any,_b:any,_m:any,id:string)=>{const entry=Object.entries(knowledge.marketingSolution.publishingCalendar.months).flatMap(([month,items]:any)=>items.map((current:any)=>({month,current}))).find((i:any)=>i.current.id===id) as any;return {...entry,canOverwrite:true,expectedRevision:creativeContract.creativeDigest(entry.current)}}},
  '../brand-plan/creativeSourceReference':{canonicalCreativeSource},'../brand-plan/creativeSourceMedia':{streamSourceVideoMedia:async()=>new Response('video')},'./brainstorm-contract':contract,
@@ -78,6 +78,8 @@ access=false;const queries=queryCount;await assert.rejects(api.listBrainstorm('u
 write=false;await assert.rejects(choose('cre_later','like',1),(e:any)=>e.code==='brainstorm_access_denied');write=true
 await assert.rejects(api.brainstormVideo('user','brand','cre_no',undefined,db),(e:any)=>e.code==='brainstorm_source_not_found')
 assert.equal((await api.brainstormVideo('user','brand','cre_new',undefined,db)).status,200)
+assert.equal(evidenceProjections.at(-1),'media','playback must not transfer the full original script')
+evidenceRevision='changed';await assert.rejects(api.brainstormVideo('user','brand','cre_new',undefined,db),(e:any)=>e.code==='creative_source_changed');evidenceRevision='r1'
 // A saved idea can later be disliked, without deleting its source/script/schedule.
 const stored=Object.values(knowledge.marketingSolution.publishingCalendar.months).flat()[0] as any
 stored.planning='Saved brand script';stored.schedule={draftId:'keep-scheduled-draft'}
