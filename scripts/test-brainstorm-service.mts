@@ -190,3 +190,15 @@ let matcherExclusions:string[]=[]
 await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async(input:any)=>{matcherExclusions=input.excludeCreativeIds;assert.equal(input.market,undefined,'reference-video sources are not restricted to the brand location');return {contentMatchRequestId:'calendar-exclusion',creativeCandidates:[],contentLibraryGaps:[]}})
 assert(matcherExclusions.includes('cre_calendar_only'),'already selected calendar sources must be excluded before matching, otherwise every refresh can return an empty visible feed')
 console.log('PASS calendar-only selections excluded before matching')
+
+// First screen resolves only the leading eight candidates. Full reads remain exhaustive.
+db.$queryRaw=async()=>[]
+rows=[{brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:1,createdAt:new Date(),input:{},output:{sources:Array.from({length:25},(_,i)=>source('cre_progressive_'+i,90))}}];knowledge={marketingSolution:{publishingCalendar:{months:{}}}}
+const resolvedIds:string[][]=[],originalBrowse=clients.fetchBrainstormBrowse
+clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{resolvedIds.push(ids);return originalBrowse(ids,context)}
+const preview=await api.listBrainstorm('user','brand',db,true)
+assert.equal(preview.hasMore,true);assert.equal(preview.canDecide,false);assert.equal(preview.items.length,8);assert.equal(resolvedIds[0].length,8)
+const complete=await api.listBrainstorm('user','brand',db)
+assert.equal(complete.hasMore,false);assert.equal(complete.canDecide,true);assert.equal(complete.items.length,25);assert.equal(resolvedIds[1].length,25)
+assert.deepEqual(preview.items.map((i:any)=>i.sourceId),complete.items.slice(0,8).map((i:any)=>i.sourceId))
+console.log('PASS first-screen source bound, read-only partial feed, complete fallback and stable order')

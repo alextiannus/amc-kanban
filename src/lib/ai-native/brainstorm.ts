@@ -58,7 +58,7 @@ async function browserState(db:any,brandId:string,compact=false){
  const selected=new Set(entries.filter(({item})=>creativeIsSelected(item)).map(({item})=>creativeSourceId(item)).filter(Boolean))
  return {workspace,entries,disliked,selected}
 }
-export async function listBrainstorm(userId:string,brandId:string,db:any=prisma){
+export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,firstScreen=false){
  const started=performance.now()
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
  const authorizedAt=performance.now()
@@ -79,14 +79,17 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
   if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
   seen.add(id);candidates.push({current:{source},idea:{...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})}})
  }
+ const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]))
+ candidates.sort((a,b)=>(ranks.get(a.idea.sourceId)??Infinity)-(ranks.get(b.idea.sourceId)??Infinity))
+ const hasMore=firstScreen&&candidates.length>8,requested=firstScreen?candidates.slice(0,8):candidates
  const dataAt=performance.now()
- const browse=await fetchBrainstormBrowse(candidates.map(c=>c.idea.sourceId),brainstormTagContext({...facts,productCatalog:skuFacts(facts?.knowledge?.menuItems)},saved?.input?.matchKeywords||''))
+ const browse=await fetchBrainstormBrowse(requested.map(c=>c.idea.sourceId),brainstormTagContext({...facts,productCatalog:skuFacts(facts?.knowledge?.menuItems)},saved?.input?.matchKeywords||''))
  const evidence=new Map(browse.items.map((entry:any)=>[entry.creativeId,entry]))
- const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,async id=>{const entry:any=evidence.get(id);if(!entry?.source)throw new Error(entry?.error||'original_evidence_unavailable');return entry.source})
- const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]));items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
+ const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(requested,brandId,async id=>{const entry:any=evidence.get(id);if(!entry?.source)throw new Error(entry?.error||'original_evidence_unavailable');return entry.source})
+ items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
  const tagResult=browse.brandTags
- console.info('[brainstorm-timing]',JSON.stringify({brandId,authorizationMs:Math.round(authorizedAt-started),dataMs:Math.round(dataAt-authorizedAt),contentMs:Math.round(performance.now()-dataAt),totalMs:Math.round(performance.now()-started),candidates:candidates.length,items:items.length}))
- return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
+ console.info('[brainstorm-timing]',JSON.stringify({brandId,authorizationMs:Math.round(authorizedAt-started),dataMs:Math.round(dataAt-authorizedAt),contentMs:Math.round(performance.now()-dataAt),totalMs:Math.round(performance.now()-started),candidates:candidates.length,requested:requested.length,firstScreen,items:items.length}))
+ return {ok:true,brandId,canDecide:canDecide&&!hasMore,hasMore,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
