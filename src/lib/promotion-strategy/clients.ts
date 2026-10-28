@@ -120,7 +120,7 @@ export async function fetchBrainstormBrowse(creativeIds:string[],brandTagContext
  const baseUrl=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'')||(isLocal?'http://localhost:4010':'')
  if(!baseUrl)throw new Error('amc_content_service_not_configured')
  const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()||(isLocal?'local-service-token':'')
- const unique=[...new Set(creativeIds)],chunks=Array.from({length:Math.max(1,Math.ceil(unique.length/72))},(_,i)=>unique.slice(i*72,(i+1)*72))
+ const unique=[...new Set(creativeIds.filter(id=>typeof id==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(id)))],chunks=Array.from({length:Math.max(1,Math.ceil(unique.length/72))},(_,i)=>unique.slice(i*72,(i+1)*72))
  const pages=await Promise.all(chunks.map(async(ids,index)=>{
   const response=await fetch(`${baseUrl}/v1/content-library/browse-sources`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(10000),headers:{'content-type':'application/json',authorization:`Bearer ${token}`},body:JSON.stringify({creativeIds:ids,...(index===0?{brandTagContext}:{})})})
   if(!response.ok){await response.body?.cancel();throw new Error('original_evidence_unavailable')}
