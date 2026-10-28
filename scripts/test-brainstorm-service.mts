@@ -42,7 +42,7 @@ new Function('require','module','exports',ts.transpileModule(readFileSync('src/l
 const api=mod.exports
 const source=(id:string,matchScore:number)=>({inspirationCreativeId:id,matchScore,sourceRevision:'r1',sourceDigest:'a'.repeat(64),sourceVideo:{title:id,videoUrl:'https://media.example/video.mp4?secret=yes'},sourceEvidence:{scope:'full_source',originalText:'Original source script',timeline:[{narrativePurpose:'Reveal contrast'}]},scriptContent:{kind:'video',opening:'Opening hook'},recommendationReason:'Matches the brand product'})
 assert(!contract.eligibleBrainstormSource(source('cre_boundary',75)));assert(contract.eligibleBrainstormSource(source('cre_good',75.1)));assert(!contract.eligibleBrainstormSource(source('cre_bad',NaN)))
-let listing=await api.listBrainstorm('user','brand',db);assert(listing.needsRefresh);assert.equal(rows.length,0);assert.deepEqual(listing.matchingTags,['Merchant','Real food'])
+let listing=await api.listBrainstorm('user','brand',db);assert(listing.needsRefresh);assert.equal(rows.length,0);assert.deepEqual(listing.matchingTags,['Real food'])
 let feedVersion=0
 const match=async()=>({contentMatchRequestId:'match',creativeCandidates:feedVersion++?[source('cre_new',92),source('cre_like',80),source('cre_no',90)]:[source('cre_boundary',75),source('cre_like',80),source('cre_no',90),source('cre_later',88)],contentLibraryGaps:[]})
 listing=await api.refreshBrainstorm('user','brand',{action:'refresh'},db,match)
@@ -119,7 +119,7 @@ assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'早餐
 beforeTransaction=async()=>{await updateKeywords('winner','早餐 手工包子')}
 await assert.rejects(updateKeywords('loser','早餐 手工包子'),(e:any)=>e.code==='brainstorm_keywords_changed')
 assert.equal((await api.listBrainstorm('user','brand',db)).matchKeywords,'winner')
-listing=await updateKeywords('   ','winner');assert.equal(listing.matchKeywords,'');assert(!captured.at(-1).promotionGoal.includes('匹配主题关键词'));assert.equal(captured.at(-1).sellingPoint,'Merchant；Real food')
+listing=await updateKeywords('   ','winner');assert.equal(listing.matchKeywords,'');assert(captured.at(-1).promotionGoal.includes('Real food'));assert.equal(captured.at(-1).sellingPoint,'Real food；Merchant；Real food')
 console.log('PASS: keyword provider payload, persistence, cache, reset, validation, permission, failure preservation and concurrent edit protection')
 
 // A refreshed match must use its new score/evidence, even when an older pool row exists.

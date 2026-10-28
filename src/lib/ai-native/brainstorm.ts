@@ -1,4 +1,4 @@
-import {brainstormMatchRequest,brainstormMatchingTags} from './brainstorm-match'
+import {brainstormMatchRequest,brainstormMatchingTags,BRAINSTORM_KEYWORD_POLICY} from './brainstorm-match'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
 import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
 import {resolveBrainstormVideos} from './brainstorm-video'
@@ -72,7 +72,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma)
  }
  const {items,videoResolutionIncomplete}=await resolveBrainstormVideos(candidates,brandId,fetchCreativeSourceEvidence)
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]));items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
- return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:saved?.input?.matchingTags||brainstormMatchingTags(facts,saved?.input?.matchKeywords||''),needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
+ return {ok:true,brandId,canDecide,matchKeywords:saved?.input?.matchKeywords||'',matchingTags:saved?.input?.keywordPolicy===BRAINSTORM_KEYWORD_POLICY?saved.input.matchingTags:brainstormMatchingTags(facts,saved?.input?.matchKeywords||''),needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
@@ -127,7 +127,7 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
   const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId))
   const seen=new Set<string>(),sources=[...incoming,...retained].filter((s:any)=>eligibleBrainstormSource(s)&&!seen.has(s.inspirationCreativeId)&&!!seen.add(s.inspirationCreativeId))
   if(Buffer.byteLength(JSON.stringify(sources))>2*1024*1024)throw nativeError('library_evidence_too_large',413)
-  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:brainstormMatchingTags(facts,keywords)},output:{sources}}})
+  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:brainstormMatchingTags(facts,keywords),keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources}}})
  })
  return listBrainstorm(userId,brandId,db)
 }
