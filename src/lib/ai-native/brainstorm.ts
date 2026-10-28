@@ -341,8 +341,9 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
  const period=digest([userId,body.requestKey]),receiptWhere={brandId,kind:'BRAINSTORM_MORE',period}
  const replay=await db.brandMarketingSolution.findFirst({where:receiptWhere,orderBy:{version:'desc'}})
  if(replay)return replay.output
- const [previous,facts,state,pool,choices]=await Promise.all([feed(db,brandId),readBrandFacts(db,brandId),browserState(db,brandId,true),poolSources(db,brandId,true),db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},distinct:['period'],select:{period:true}})])
- if(!facts)throw nativeError('brand_context_unavailable',404)
+ const [previous,rawFacts,state,pool,choices]=await Promise.all([feed(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}}),browserState(db,brandId,true),poolSources(db,brandId,true),db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},distinct:['period'],select:{period:true}})])
+ if(!rawFacts)throw nativeError('brand_context_unavailable',404)
+ const facts={...rawFacts,productCatalog:skuFacts(rawFacts.knowledge?.menuItems)}
  const keywords=previous?.input?.matchKeywords||'',context=brainstormTagContext(facts,keywords)
  const currentKeywords=await fetchBrandKeywords({action:'read',brandId,context})
  const excluded=[...new Set<string>([...(previous?.output?.sources||[]).map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id),...state.entries.map(({item}:any)=>creativeSourceId(item)),...state.selected,...state.disliked,...choices.map((d:any)=>d.period)].filter(Boolean))]
