@@ -1,0 +1,7 @@
+---
+description: Mandatory shared AMC PRD change history
+alwaysApply: true
+---
+
+Read and follow the repository root `AGENTS.md`, including the mandatory AMC PRD version history policy.
+Every PRD change must be recorded in `/Users/immedi/Documents/ChatGPT/AMC/VERSION_HISTORY.md` before completing the task. Read `/Users/immedi/Documents/ChatGPT/AMC/AGENTS.md` for the full policy. Report the new record ID in the final response.

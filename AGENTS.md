@@ -65,3 +65,12 @@ Canonical files:
 文件型 Skill 的维护源统一为 `packages/amc-skills/skills`，`manifest.json` 记录用途、宿主依赖、来源、Skill 依赖及逐文件哈希。原 `skills/`、平台 Skill 和 Growth/Content 路径为显式同步的兼容副本，不独立维护。外部 Agent 通过该包的 GitHub 目录安装全部 external 或单项 Skill；host/repository 技能需显式选择并满足依赖。Content TypeScript 生成的原生/去AI/兼容规则以标注来源的仓库默认快照收录，数据库覆盖和品牌数据不导出。安装不授予 MCP 或业务操作权限。发布前须运行包校验、消费者漂移检查、确定性 ZIP 与临时安装测试。原营销 Skill 下载继续兼容，整包为 `public/skills/amc-skills.zip`。此次 GitHub 发布与运行时部署状态分别核验，不把包创建称作线上行为验证。
 
 修改任一 Skill 后，从包源运行 `refresh`、`sync --consumer kanban=.`、`build --archive-dir public/skills` 和 `check --consumer kanban=. --archive-dir public/skills`；不要手改生成副本或只重建营销 ZIP。
+
+<!-- BEGIN:amc-prd-version-history -->
+## Mandatory AMC PRD version history
+
+Before working, read `/Users/immedi/Documents/ChatGPT/AMC/AGENTS.md` and the shared ledger `/Users/immedi/Documents/ChatGPT/AMC/VERSION_HISTORY.md`.
+Every PRD addition, edit (including wording), deletion, rename, or rollback MUST append a record to that shared ledger in the same delivery. This includes product requirements recorded under other filenames. Keep PRD bodies consistent with the current design; history does not replace updating superseded requirements.
+Record a unique ID, timestamp/timezone, author, request source, repository/file/section, before/after changes, reason, impact, implementation/deployment status, and actual validation. Reference commits/PRs only if they exist. Preserve previous entries and concurrent edits; corrections require a new entry. Verify that every changed PRD is covered and report the history ID in the final response. Unlogged PRD work is incomplete.
+This is the single shared ledger for Kanban, Growth, Content, and MM. If unavailable, report the blocker; when moving to another machine, migrate the shared ledger and update all pointers together. Carry these instructions into new repositories/worktrees. These requirements supplement existing PRD current-truth rules; no automatic Git/CI enforcement is installed.
+<!-- END:amc-prd-version-history -->
