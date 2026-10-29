@@ -4,13 +4,14 @@ import ts from 'typescript'
 import {creativeSourceScript} from '../src/lib/brand-plan/creativeSourceScript'
 import {creativeDigest} from '../src/lib/brand-plan/creativeRevisionContract'
 const records=new Map<string,any>(),jobs=new Map<string,any>();let modelCalls=0,authorized=true,sourceReads=0,factsReads=0,lastPrompt=''
+let modelOverride:any=null
 let tail=Promise.resolve()
 const db:any={brandMarketingSolution:{findUnique:async({where}:any)=>records.get(where.id)||null,create:async({data}:any)=>{records.set(data.id,structuredClone(data));return data},update:async({where,data}:any)=>{const value={...records.get(where.id),...data};records.set(where.id,value);return value},findMany:async({where}:any)=>[...records.values()].filter(r=>r.brandId===where.brandId&&r.kind===where.kind&&r.period===where.period&&r.createdById===where.createdById)},videoProductionJob:{findUnique:async({where}:any)=>jobs.get(where.id)||null,findFirst:async({where}:any)=>[...jobs.values()].find(j=>j.brandId===where.brandId&&j.createdBy===where.createdBy&&j.plan?._mmVideoJob?.editor?.variantKey===where.plan.equals)||null},brand:{findUnique:async()=>({location:'ID',knowledge:{market:'ID'}})},$queryRaw:async()=>[]}
 db.$transaction=async(fn:any)=>{const previous=tail;let release!:()=>void;tail=new Promise<void>(r=>release=r);await previous;try{return await fn(db)}finally{release()}}
 const nativeError=(code:string,status=400)=>Object.assign(Error(code),{code,status})
 function load(file:string,deps:any){const m={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>{if(!(key in deps))throw Error('Unexpected dependency '+key);return deps[key]},m,m.exports);return m.exports}
 const variants=load('src/lib/videoPlatformVersions.ts',{'./prisma':{prisma:db},'./role-permissions/delegation':{requireActorPermission:async()=>{}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
-const preparation=load('src/lib/videoPreparation.ts',{'./brand-plan/creativeSourceScript':{creativeSourceScript},'./prisma':{prisma:db},'./videoPlatformVersions':variants,'./ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!authorized)throw nativeError('denied',403)}},'./brand-plan/creativeSource':{readCreativeSource:async()=>{sourceReads++;return {sourceDigest:'a'.repeat(64),sourceEvidence:{originalText:'发布文案 #美食'},timeline:[{visualDescription:'鱼的特写',voiceover:'新鲜现做'}]}}},'./ai-native/facts':{readVideoRewriteFacts:async()=>{factsReads++;return {name:'A brand',knowledge:{market:'ID'}}}},'./llmRouter':{callLLM:async(_task:string,prompt:string)=>{modelCalls++;lastPrompt=prompt;assert(prompt.includes('Bahasa Indonesia'));assert(prompt.includes('originalScript'));return {text:JSON.stringify({script:'Adegan 1\nVisual: Ikan segar',originalScript:'Ikan asli'}),provider:'fixture',modelName:'fixture'}}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
+const preparation=load('src/lib/videoPreparation.ts',{'./brand-plan/creativeSourceScript':{creativeSourceScript},'./prisma':{prisma:db},'./videoPlatformVersions':variants,'./ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!authorized)throw nativeError('denied',403)}},'./brand-plan/creativeSource':{readCreativeSource:async()=>{sourceReads++;return {sourceDigest:'a'.repeat(64),sourceEvidence:{originalText:'发布文案 #美食'},timeline:[{visualDescription:'鱼的特写',voiceover:'新鲜现做'}]}}},'./ai-native/facts':{readVideoRewriteFacts:async()=>{factsReads++;return {name:'A brand',knowledge:{market:'ID'}}}},'./llmRouter':{callLLM:async(_task:string,prompt:string)=>{modelCalls++;lastPrompt=prompt;assert(prompt.includes('Bahasa Indonesia'));assert(prompt.includes('originalScript'));return {text:JSON.stringify(modelOverride||{script:'Adegan 1\nVisual: Ikan segar',originalScript:'Ikan asli'}),provider:'fixture',modelName:'fixture'}}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
 const body={action:'translate',creativeId:'idea',language:'id',script:'镜头 1\n画面：鱼',requestKey:'test-translation-123'}
 authorized=false;await assert.rejects(preparation.prepareVideoScript('u','b',body),/denied/);assert.equal(modelCalls,0);authorized=true
 const responses=await Promise.allSettled(Array.from({length:4},()=>preparation.prepareVideoScript('u','b',body)));assert.equal(modelCalls,1);assert(responses.some(r=>r.status==='fulfilled'));assert.equal((await preparation.prepareVideoScript('u','b',body)).language,'id');assert.equal(modelCalls,1)
@@ -72,3 +73,17 @@ assert.equal(narrowFacts.knowledge.brandImage,'Open kitchen')
 assert.equal(narrowFacts.knowledge.menuItems,undefined,'do not duplicate raw catalog in model input')
 assert.equal(narrowFacts.knowledge.promotionFocus,'Member offer valid through 2030')
 console.log('PASS rewrite facts: actual products, activity and environment; no portfolio/research query or duplicated catalog')
+
+const localized={...rewriteBody,requestKey:"merchant-dialog-123",instructions:"Our store has an open kitchen; use the two-person package",targetDurationSec:20}
+await preparation.prepareVideoScript("u","b",localized)
+assert(lastPrompt.includes(localized.instructions));assert(lastPrompt.includes("targetDurationSec"));assert(lastPrompt.includes("current script"))
+await assert.rejects(preparation.prepareVideoScript("u","b",{...localized,instructions:"changed"}),/request_conflict/)
+await assert.rejects(preparation.prepareVideoScript("u","b",{...localized,requestKey:"too-long-message-123",instructions:"x".repeat(6001)}),/invalid_video_preparation/)
+console.log("PASS merchant instructions are bounded, supplied to model, and part of idempotent request identity")
+
+modelOverride={script:"Scene 1 · 0–20s\nVisual: Our store",originalScript:"Original scene",language:"en",durationSec:20}
+const localizedResult=await preparation.prepareVideoScript("u","b",{...localized,requestKey:"dialog-language-duration-123",instructions:"English narration, 20 seconds"})
+assert.equal(localizedResult.language,"en");assert.equal(localizedResult.durationSec,20)
+modelOverride={...modelOverride,language:"unsupported"}
+await assert.rejects(preparation.prepareVideoScript("u","b",{...localized,requestKey:"dialog-invalid-output-123"}),/video_script_failed/)
+console.log("PASS rewrite language and duration metadata; unsupported language output rejected")
