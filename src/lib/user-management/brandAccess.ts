@@ -31,8 +31,9 @@ export async function canUserAccessBrand(
   userId: string,
   action: string = 'READ',
   db = prisma,
+  requestPolicies?: Record<string, string[]>,
 ): Promise<boolean> {
-  const { policies } = await readPolicies(db)
+  const policies = requestPolicies ?? (await readPolicies(db)).policies
   const allowedRoles = ['ADMIN', ...Object.keys(policies).filter(role => PERMISSION_MODULES.some(module => module.scope === '已授权品牌' && module.actions.some(op => (action === 'READ' ? op === 'read' : op !== 'read') && effectiveGrants([role], policies).includes(module.id + '.' + op))))]
 
   const queryUserIds = [userId]

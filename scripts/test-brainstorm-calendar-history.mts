@@ -11,7 +11,7 @@ const items=[selected,history,empty,{id:'disliked',title:'Hidden',brandDismissal
 const knowledge={marketingSolution:{publishingCalendar:{months:{'2026-10':items}}}},snapshot=structuredClone(knowledge)
 let writes=0
 const db:any={brandKnowledge:{findUnique:async()=>knowledge,update:async()=>{writes++}},$queryRaw:async()=>[],contentDraft:{findMany:async()=>[],create:async()=>{writes++}}}
-const deps:any={'./creativeVisibility.ts':visibility,'@/lib/prisma':{prisma:db},'./creativeRevisionContract.ts':contract,'./creativeDraftMarker.ts':markers,'./creativeWorkspaceContract.ts':{normalizeCreativeWorkspaceItem:(raw:any)=>({id:raw.id})}}
+const deps:any={'./calendarProjection':{calendarMonthProjectionSql:''},'./creativeVisibility.ts':visibility,'@/lib/prisma':{prisma:db},'./creativeRevisionContract.ts':contract,'./creativeDraftMarker.ts':markers,'./creativeWorkspaceContract.ts':{normalizeCreativeWorkspaceItem:(raw:any)=>({id:raw.id})}}
 const mod={exports:{} as any}
 new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/brand-plan/calendarSync.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)((name:string)=>{assert(name in deps,name);return deps[name]},mod,mod.exports)
 assert.equal(mod.exports.calendarCreativeOption(empty),null)

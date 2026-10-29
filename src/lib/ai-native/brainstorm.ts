@@ -22,10 +22,11 @@ import {streamSourceVideoMedia} from '../brand-plan/creativeSourceMedia'
 import {BRAINSTORM_FEED,BRAINSTORM_DECISION,eligibleBrainstormSource,brainstormCreativeId,parseBrainstormDecision,projectBrainstormSource} from './brainstorm-contract'
 
 export async function authorizeBrainstorm(userId:string,brandId:string,write=false,db:any=prisma){
+ const policyRead=readPolicies(db)
  const [allowed,user,{policies}]=await Promise.all([
-  canUserAccessBrand(brandId,userId,write?'WRITE':'READ',db),
+  policyRead.then(({policies})=>canUserAccessBrand(brandId,userId,write?'WRITE':'READ',db,policies)),
   db.user.findUnique({where:{id:userId},include:{businessRoles:true,owner:{include:{businessRoles:true}}}}),
-  readPolicies(db),
+  policyRead,
  ])
  if(!allowed)throw nativeError('brainstorm_access_denied',404)
  if(!user||user.type!=='HUMAN'||user.status!=='ACTIVE')throw nativeError('brainstorm_access_denied',404)

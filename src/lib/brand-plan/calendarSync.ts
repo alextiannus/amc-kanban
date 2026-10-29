@@ -1,3 +1,4 @@
+import {calendarMonthProjectionSql} from './calendarProjection'
 import {creativeIsSelected,creativeIsVisible} from './creativeVisibility.ts'
 import { prisma } from '@/lib/prisma'
 import { creativeWorkspace, monthItems, revisionPeriod, CREATIVE_REVISION_KIND } from './creativeRevisionContract.ts'
@@ -177,7 +178,7 @@ export async function syncConfirmedCalendarItemsToDrafts(brandId: string, month:
 }
 
 export async function listOpenCalendarCreativeOptions(brandId: string, month: string, db = prisma, query:{includeHistory?:boolean}={}) {
-  const knowledge = await db.brandKnowledge.findUnique({
+  const knowledge = db.$queryRawUnsafe ? (await db.$queryRawUnsafe(calendarMonthProjectionSql,brandId,month))[0] : await db.brandKnowledge.findUnique({
     where: { brandId },
     select: { marketingSolution: true, brandPlan: true },
   })
