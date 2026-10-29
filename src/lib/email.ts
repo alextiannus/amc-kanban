@@ -35,6 +35,7 @@ export interface SendEmailOptions {
   html: string
   text?: string
   replyTo?: string
+  messageId?: string
   attachments?: any[]
 }
 
@@ -42,6 +43,7 @@ export interface EmailResult {
   success: boolean
   messageId?: string
   error?: string
+  deliveryState?: 'NOT_SENT' | 'UNKNOWN'
 }
 
 function buildServiceTermsPdfAttachments() {
@@ -108,7 +110,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
 
   if (!smtp) {
     console.warn('[email] SMTP not configured — skipping email send')
-    return { success: false, error: 'SMTP not configured' }
+    return { success: false, error: 'SMTP not configured', deliveryState: 'NOT_SENT' }
   }
   try {
     const transporter = nodemailer.createTransport({
@@ -131,13 +133,19 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
       text: options.text,
       replyTo: options.replyTo,
       attachments: options.attachments,
+      messageId: options.messageId,
     })
 
-    console.log(`[email] Sent message ${info.messageId} to ${options.to}`)
+    if (!info.accepted?.length) {
+      return { success: false, error: 'SMTP rejected recipient', deliveryState: 'NOT_SENT' }
+    }
+    console.log('[email] SMTP accepted message')
     return { success: true, messageId: info.messageId }
   } catch (err: any) {
-    console.error('[email] Send failed:', err)
-    return { success: false, error: err?.message ?? String(err) }
+    console.error('[email] Send failed', { code: err?.code, command: err?.command })
+    const beforeData = ['CONN', 'EHLO', 'HELO', 'STARTTLS', 'AUTH', 'API', 'MAIL FROM', 'RCPT TO'].some(command => String(err?.command || '').startsWith(command))
+    const rejected = Number(err?.responseCode) >= 400 && Number(err?.responseCode) <= 599
+    return { success: false, error: 'SMTP send failed', deliveryState: beforeData || rejected ? 'NOT_SENT' : 'UNKNOWN' }
   }
 }
 

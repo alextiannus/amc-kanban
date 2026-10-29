@@ -2310,3 +2310,23 @@ model AgentSkillSetting {
   updatedAt DateTime @default(now()) @updatedAt
   @@id([agentId, skillId])
 }
+
+// Immutable MM quotation and durable SMTP delivery receipt. Intentionally kept
+// independently of Brand/User deletion, as a commercial record.
+model SubscriptionQuotation {
+  subscriptionId String   @id
+  recipient      String
+  snapshot       Json
+  pdf            Bytes?
+  state          String   @default("PENDING") // PENDING | PREPARING | SENDING | SENT | FAILED | UNKNOWN
+  leaseToken     String?
+  attempts       Int      @default(0)
+  nextAttemptAt  DateTime @default(now())
+  lastError      String?
+  messageId      String?
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([state, nextAttemptAt])
+}
