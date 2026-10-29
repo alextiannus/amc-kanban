@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
-import {calendarSummarySql} from '../src/lib/brand-plan/calendarProjection.ts'
+import {calendarSummarySql,queryCalendarRead} from '../src/lib/brand-plan/calendarProjection.ts'
 let authenticated=true,allowed=true,reads=0,fullReads=0
 const mod={exports:{} as any},deps:any={
  '@/lib/prisma':{prisma:{$queryRawUnsafe:async(sql:string,id:string)=>{assert.equal(sql,calendarSummarySql);assert.equal(id,'brand');reads++;return[{marketingSolution:{publishingCalendar:{months:{}}}}]}}},
- '@/lib/brand-plan/calendarProjection':{calendarSummarySql},
+ '@/lib/brand-plan/calendarProjection':{calendarSummarySql,queryCalendarRead},
  '@/lib/brand-plan/creativeRevisions':{CreativeRevisionError:class extends Error{}},
  'next/server':{NextResponse:{json:(data:any,init?:any)=>Response.json(data,init)}},
  '@/lib/user-management/auth':{resolveSessionOrApiKey:async()=>authenticated?{user:{id:'actor',type:'HUMAN',role:'USER'}}:null},

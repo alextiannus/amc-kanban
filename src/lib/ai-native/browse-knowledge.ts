@@ -1,3 +1,4 @@
+import {queryCalendarRead} from '../brand-plan/calendarProjection'
 /** Read-only projection. Writes must always read the complete workspace. */
 export const browseKnowledgeSql=`
 with workspace as materialized (
@@ -22,5 +23,5 @@ select jsonb_build_object('publishingCalendar',jsonb_build_object('months',coale
 `
 export async function readBrowseKnowledge(db:any,brandId:string){
  if(!db.$queryRawUnsafe)return db.brandKnowledge.findUnique({where:{brandId}})
- return (await db.$queryRawUnsafe(browseKnowledgeSql,brandId))[0]||null
+ return (await queryCalendarRead(db,browseKnowledgeSql,brandId))[0]||null
 }

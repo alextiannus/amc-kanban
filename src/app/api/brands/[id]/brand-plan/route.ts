@@ -1,5 +1,5 @@
 import {prisma} from '@/lib/prisma'
-import {calendarSummarySql} from '@/lib/brand-plan/calendarProjection'
+import {calendarSummarySql,queryCalendarRead} from '@/lib/brand-plan/calendarProjection'
 import { CreativeRevisionError } from '@/lib/brand-plan/creativeRevisions'
 import { NextResponse } from 'next/server'
 import { resolveSessionOrApiKey } from '@/lib/user-management/auth'
@@ -21,7 +21,7 @@ export async function GET(request: Request, { params }: Params) {
   const canRead = await canSessionAccessBrandProject(id, auth.user.id, auth.user.type, auth.user.role)
   if (!canRead) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if(new URL(request.url).searchParams.get('view')==='calendar'){
-    const rows=await prisma.$queryRawUnsafe(calendarSummarySql,id)
+    const rows=await queryCalendarRead(prisma,calendarSummarySql,id)
     return NextResponse.json({ok:true,...(rows[0]||{marketingSolution:{}})},{headers:{'Cache-Control':'no-store'}})
   }
   const data = await getBrandPlan(id)
