@@ -245,3 +245,13 @@ assert.equal(calendarFirst.nextCursor,'saved:saved-7')
 const calendarNext=await api.listBrainstorm('user','brand',db,true,calendarFirst.nextCursor,true)
 assert.equal(calendarNext.items.length,2);assert.equal(calendarNext.hasMore,false)
 console.log('PASS saved cards sharing a source retain exact cursor identity')
+
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}}
+let batchCalls=0
+const batch=async(request:any)=>{batchCalls++;assert.equal(request.requestedCandidateCount,4);assert.equal(request.matchingTagId,"tag_food");return {contentMatchRequestId:"batch",creativeCandidates:[source("cre_batch_a",90),source("cre_batch_b",95)],contentLibraryGaps:[{status:503,reason:"other branch timeout"}]}}
+const batchRequest={action:"loadMore",requestKey:"batch-request-000001",tagId:"tag_food"}
+const batchResult=await api.loadMoreBrainstorm("user","brand",batchRequest,db,batch)
+assert.equal(batchResult.items.length,2);assert.equal(batchResult.exhausted,false)
+assert.deepEqual(await api.loadMoreBrainstorm("user","brand",batchRequest,db,batch),batchResult);assert.equal(batchCalls,1)
+await assert.rejects(api.loadMoreBrainstorm("user","brand",{...batchRequest,requestKey:"batch-request-000002"},db,async()=>({creativeCandidates:[],contentLibraryGaps:[{status:503}]})),(e:any)=>e.code==="content_library_unavailable")
+console.log("PASS partial failure retains validated batch, scoped tag, replay, and failed searches never exhaust")

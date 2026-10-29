@@ -341,9 +341,10 @@ export async function dismissCalendarCreative(userId:string,brandId:string,body:
 
 /** One durable, idempotent step per request lets the browser append each real match. */
 export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,db:any=prisma,match=matchPromotionStrategyCreativeCandidates){
- if(!body||Object.keys(body).some(k=>!['action','requestKey'].includes(k))||! /^[a-zA-Z0-9_-]{16,100}$/.test(body.requestKey||''))throw nativeError('invalid_brainstorm_request',400)
+ if(!body||Object.keys(body).some(k=>!['action','requestKey','tagId'].includes(k))||! /^[a-zA-Z0-9_-]{16,100}$/.test(body.requestKey||''))throw nativeError('invalid_brainstorm_request',400)
+ if(body.tagId!==undefined&&(typeof body.tagId!=='string'||body.tagId.length>160))throw nativeError('invalid_brainstorm_request',400)
  await authorizeBrainstorm(userId,brandId,true,db)
- const period=digest([userId,body.requestKey]),receiptWhere={brandId,kind:'BRAINSTORM_MORE',period}
+ const period=digest([userId,body.requestKey,body.tagId||'']),receiptWhere={brandId,kind:'BRAINSTORM_MORE',period}
  const replay=await db.brandMarketingSolution.findFirst({where:receiptWhere,orderBy:{version:'desc'}})
  if(replay)return replay.output
  const [previous,rawFacts,state,pool,choices]=await Promise.all([feed(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}}),browserState(db,brandId,true),poolSources(db,brandId,true),db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},distinct:['period'],select:{period:true}})])
@@ -353,18 +354,19 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
  const currentKeywords=await fetchBrandKeywords({action:'read',brandId,context})
  const excluded=[...new Set<string>([...(previous?.output?.sources||[]).map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id),...state.entries.map(({item}:any)=>creativeSourceId(item)),...state.selected,...state.disliked,...choices.map((d:any)=>d.period)].filter(Boolean))]
  if(excluded.length>2000)throw nativeError('brainstorm_history_limit',409)
- const response=await match({...brainstormMatchRequest(facts,keywords,`more-${period}`,excluded),requestedCandidateCount:1})
- if(!Array.isArray(response.creativeCandidates)||(response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
- const source:any=response.creativeCandidates.find((s:any)=>eligibleBrainstormSource(s)&&!excluded.includes(s.inspirationCreativeId))
+ const response=await match({...brainstormMatchRequest(facts,keywords,`more-${period}`,excluded),requestedCandidateCount:4,...(body.tagId?{matchingTagId:body.tagId}:{})})
+ if(!Array.isArray(response.creativeCandidates)||(!response.creativeCandidates.length&&(response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400)))throw nativeError('content_library_unavailable',503)
+ const incoming:any[]=response.creativeCandidates.filter((s:any)=>eligibleBrainstormSource(s)&&!excluded.includes(s.inspirationCreativeId))
+ const source=incoming[0]
  // A malformed, repeated or unavailable source is not proof of exhaustion.
  if(!source&&response.creativeCandidates.length)throw nativeError('content_library_unavailable',503)
- let item:any=null
+ let items:any[]=[]
  if(source){
-  const browse=await fetchBrainstormBrowse([source.inspirationCreativeId],context)
-  const evidence:any=browse.items.find((e:any)=>e.creativeId===source.inspirationCreativeId)
-  const resolved=await resolveBrainstormVideos([{current:{source},idea:projectBrainstormSource(source,brandId,null)}],brandId,async()=>{if(!evidence?.source)throw Error('original_evidence_unavailable');return evidence.source})
+  const browse=await fetchBrainstormBrowse(incoming.map(s=>s.inspirationCreativeId),context)
+  const evidence=new Map(browse.items.map((e:any)=>[e.creativeId,e]))
+  const resolved=await resolveBrainstormVideos(incoming.map(source=>({current:{source},idea:projectBrainstormSource(source,brandId,null)})),brandId,async id=>{const entry:any=evidence.get(id);if(!entry?.source)throw Error('original_evidence_unavailable');return entry.source})
   if(resolved.videoResolutionIncomplete||!resolved.items.length)throw nativeError('original_evidence_unavailable',503)
-  item=resolved.items[0]
+  items=resolved.items
  }
  // Detect a keyword edit during matching before publishing its result.
  const checked=await fetchBrandKeywords({action:'read',brandId,context})
@@ -378,13 +380,13 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
   const latest=await feed(tx,brandId)
   if(latest?.id!==previous?.id)throw nativeError('brainstorm_round_changed',409)
   if(source){
-   const sources=[...(latest?.output?.sources||[]),source]
+   const sources=[...(latest?.output?.sources||[]),...incoming]
    if(Buffer.byteLength(JSON.stringify(sources))>2*1024*1024)throw nativeError('library_evidence_too_large',413)
-   const now=await browserState(tx,brandId,true),decision=await decisions(tx,brandId,[source.inspirationCreativeId])
-   if(now.selected.has(source.inspirationCreativeId)||now.disliked.has(source.inspirationCreativeId)||decision.some((d:any)=>['like','dislike'].includes(d.input?.decision)))throw nativeError('brainstorm_round_changed',409)
+   const now=await browserState(tx,brandId,true),decision=await decisions(tx,brandId,incoming.map(s=>s.inspirationCreativeId))
+   if(incoming.some(s=>now.selected.has(s.inspirationCreativeId)||now.disliked.has(s.inspirationCreativeId))||decision.some((d:any)=>['like','dislike'].includes(d.input?.decision)))throw nativeError('brainstorm_round_changed',409)
    await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{...latest?.input,matchKeywords:keywords,brandKeywordRevision:currentKeywords.revision,keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources}}})
   }
-  const output={ok:true,brandId,items:item?[item]:[],exhausted:!source}
+  const output={ok:true,brandId,items,exhausted:!source}
   await tx.brandMarketingSolution.create({data:{...receiptWhere,version:1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId},output}})
   return output
  })
