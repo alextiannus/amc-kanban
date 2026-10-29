@@ -1,12 +1,12 @@
 /** Read-only projection. Writes must always read the complete workspace. */
 export const browseKnowledgeSql=`
-with workspace as (
- select coalesce("brandPlan",'{}'::jsonb)||coalesce("marketingSolution",'{}'::jsonb) as value
+with workspace as materialized (
+ select coalesce("marketingSolution"->'publishingCalendar',"brandPlan"->'publishingCalendar') as value
  from "BrandKnowledge" where "brandId"=$1
-), months as (
+), months as materialized (
  select m.key as month,m.value
- from workspace w cross join lateral jsonb_each(case when jsonb_typeof(w.value->'publishingCalendar'->'months')='object' then w.value->'publishingCalendar'->'months' else '{}'::jsonb end) m
-), projected as (
+ from workspace w cross join lateral jsonb_each(case when jsonb_typeof(w.value->'months')='object' then w.value->'months' else '{}'::jsonb end) m
+), projected as materialized (
  select month,coalesce(jsonb_agg(case when
    (i->'brandDismissal'->>'decision'='dislike') or
    (i->'creativeBrowserSelection'->>'policy'='creative-browser-v2' and i->'creativeBrowserSelection'->>'reason'='like') or
