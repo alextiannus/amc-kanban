@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
+import {readVideoRewriteSkill} from '../src/lib/videoRewriteSkill'
 import {creativeSourceScript} from '../src/lib/brand-plan/creativeSourceScript'
 import {creativeDigest} from '../src/lib/brand-plan/creativeRevisionContract'
 const records=new Map<string,any>(),jobs=new Map<string,any>();let modelCalls=0,authorized=true,sourceReads=0,factsReads=0,lastPrompt=''
@@ -11,7 +12,7 @@ db.$transaction=async(fn:any)=>{const previous=tail;let release!:()=>void;tail=n
 const nativeError=(code:string,status=400)=>Object.assign(Error(code),{code,status})
 function load(file:string,deps:any){const m={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>{if(!(key in deps))throw Error('Unexpected dependency '+key);return deps[key]},m,m.exports);return m.exports}
 const variants=load('src/lib/videoPlatformVersions.ts',{'./prisma':{prisma:db},'./role-permissions/delegation':{requireActorPermission:async()=>{}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
-const preparation=load('src/lib/videoPreparation.ts',{'./brand-plan/creativeSourceScript':{creativeSourceScript},'./prisma':{prisma:db},'./videoPlatformVersions':variants,'./ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!authorized)throw nativeError('denied',403)}},'./brand-plan/creativeSource':{readCreativeSource:async()=>{sourceReads++;return {sourceDigest:'a'.repeat(64),sourceEvidence:{originalText:'发布文案 #美食'},timeline:[{visualDescription:'鱼的特写',voiceover:'新鲜现做'}]}}},'./ai-native/facts':{readVideoRewriteFacts:async()=>{factsReads++;return {name:'A brand',knowledge:{market:'ID'}}}},'./llmRouter':{callLLM:async(_task:string,prompt:string)=>{modelCalls++;lastPrompt=prompt;assert(prompt.includes('Bahasa Indonesia'));assert(prompt.includes('originalScript'));return {text:JSON.stringify(modelOverride||{script:'Adegan 1\nVisual: Ikan segar',originalScript:'Ikan asli'}),provider:'fixture',modelName:'fixture'}}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
+const preparation=load('src/lib/videoPreparation.ts',{'./brand-plan/creativeSourceScript':{creativeSourceScript},'./videoRewriteSkill':{readVideoRewriteSkill},'./prisma':{prisma:db},'./videoPlatformVersions':variants,'./ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!authorized)throw nativeError('denied',403)}},'./brand-plan/creativeSource':{readCreativeSource:async()=>{sourceReads++;return {sourceDigest:'a'.repeat(64),sourceEvidence:{originalText:'发布文案 #美食'},timeline:[{visualDescription:'鱼的特写',voiceover:'新鲜现做'}]}}},'./ai-native/facts':{readVideoRewriteFacts:async()=>{factsReads++;return {name:'A brand',knowledge:{market:'ID'}}}},'./llmRouter':{callLLM:async(_task:string,prompt:string)=>{modelCalls++;lastPrompt=prompt;assert(prompt.includes('Bahasa Indonesia')||JSON.parse(prompt.split('\n').at(-1)!).language==='id');assert(prompt.includes('originalScript'));return {text:JSON.stringify(modelOverride||{script:'Adegan 1\nVisual: Ikan segar',originalScript:'Ikan asli',language:'id',durationSec:8}),provider:'fixture',modelName:'fixture'}}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
 const body={action:'translate',creativeId:'idea',language:'id',script:'镜头 1\n画面：鱼',requestKey:'test-translation-123'}
 authorized=false;await assert.rejects(preparation.prepareVideoScript('u','b',body),/denied/);assert.equal(modelCalls,0);authorized=true
 const responses=await Promise.allSettled(Array.from({length:4},()=>preparation.prepareVideoScript('u','b',body)));assert.equal(modelCalls,1);assert(responses.some(r=>r.status==='fulfilled'));assert.equal((await preparation.prepareVideoScript('u','b',body)).language,'id');assert.equal(modelCalls,1)
@@ -45,9 +46,16 @@ assert.equal(emptyResult.script,edited);assert.equal(emptyResult.originalScript,
 assert.deepEqual(await preparation.prepareVideoScript('u','b',emptyBody),emptyResult)
 const rewriteBody={...body,action:'rewrite',requestKey:'rewrite-facts-test-123'}
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1)
-assert(lastPrompt.includes('NOT evidence of this brand'));assert(lastPrompt.includes('store environment'));assert(lastPrompt.includes('A campaign theme is not proof of an active offer'));assert(lastPrompt.includes('validity is unknown'))
-assert(lastPrompt.includes('otherwise remove the claim or use neutral wording'))
-assert(lastPrompt.includes('originalScript must be a faithful translation'))
+const loadedSkill=await readVideoRewriteSkill()
+assert(lastPrompt.startsWith(loadedSkill.text),'runtime must use actual packaged workflow')
+const rewritePayload=JSON.parse(lastPrompt.split('\n').at(-1)!)
+assert.equal(rewritePayload.script,rewriteBody.script)
+assert.equal(rewritePayload.originalScript,undefined,'original script is never sent to rewrite model')
+assert(!lastPrompt.includes('鱼的特写'),'source-only words must not reach rewrite prompt')
+const rewriteReceipt=await preparation.prepareVideoScript('u','b',rewriteBody)
+assert.equal(rewriteReceipt.originalScript,undefined,'rewrite model cannot overwrite restore source')
+assert.equal(rewriteReceipt.originalScriptUnchanged,true)
+assert.equal(rewriteReceipt.rewriteSkill.version,loadedSkill.version)
 assert(!lastPrompt.includes('Preserve shot order, timing, visual subjects, facts, names and prices'))
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1,'completed rewrite must not reload facts')
 assert.equal(modelCalls,beforeEmpty+1)
@@ -76,7 +84,7 @@ console.log('PASS rewrite facts: actual products, activity and environment; no p
 
 const localized={...rewriteBody,requestKey:"merchant-dialog-123",instructions:"Our store has an open kitchen; use the two-person package",targetDurationSec:20}
 await preparation.prepareVideoScript("u","b",localized)
-assert(lastPrompt.includes(localized.instructions));assert(lastPrompt.includes("targetDurationSec"));assert(lastPrompt.includes("current script"))
+assert(lastPrompt.includes(localized.instructions));assert(lastPrompt.includes("targetDurationSec"));assert(lastPrompt.includes("current editor value"))
 await assert.rejects(preparation.prepareVideoScript("u","b",{...localized,instructions:"changed"}),/request_conflict/)
 await assert.rejects(preparation.prepareVideoScript("u","b",{...localized,requestKey:"too-long-message-123",instructions:"x".repeat(6001)}),/invalid_video_preparation/)
 console.log("PASS merchant instructions are bounded, supplied to model, and part of idempotent request identity")

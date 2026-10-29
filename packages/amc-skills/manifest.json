@@ -84,7 +84,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-creative"
       },
-      "version": "sha256:e4996a6b56e5e47716226c31e300b0c3f6d18cac5008a9aa1a11e68597ad4fbd",
+      "version": "sha256:eca23f7a92751f6b37385cee91efb3122b001a9a12b50f63733184ddfd3f14eb",
       "description": "Edit a brand creative or prepare the confirmed SKU adaptation artifact."
     },
     {
@@ -504,6 +504,11 @@
       "source": "skills/amc-marketing-expert/references/overseas-platform-strategy.md",
       "consumer": "kanban",
       "target": "skills/amc-marketing-expert/references/overseas-platform-strategy.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-rewrite.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-rewrite.md"
     }
   ],
   "generatedResources": [
@@ -530,8 +535,9 @@
     "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json": "31204879c1538b0e9ed5862f689689f021560776b5069eef62817dadccacda65",
     "skills/amc-conversation/SKILL.md": "dc483eea2d5c3b4d4dfd625cdb697fa2adc243d212af2ae3ad1f5c29874039a6",
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-creative/SKILL.md": "fe7167c5a53b33efc7339761ec91ef64f6619c5237eba6047069182cafcca9d7",
+    "skills/amc-creative/SKILL.md": "a32d40018411865b5571e8a7b4222bc200211ebedb099984442745b0d239a86d",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-creative/references/video-rewrite.md": "cdac0093424939ef6558b089a40aad8b17b7a7c2fe09479c9292464205767581",
     "skills/amc-discovery/SKILL.md": "bbb16b1fe16a3d30820b2edead05d5640367477b2127cb5ebeb05d68cbb181ef",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",
