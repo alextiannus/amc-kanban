@@ -109,6 +109,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   // and pause it before its first model call. Same request keys remain reusable.
   if((automaticDaily||planningRequest||body.kind==='conversation'&&body.topic==='brand_planning')&&!(await app.runtime.deploymentState()).ownsExecutor)throw nativeError('daily_executor_standby',503)
   if(autopilotRunId)await autopilotRun(userId,brandId,autopilotRunId)
+  if(automaticDaily||body?.kind==='creative_discovery'&&body.proactive===true)throw nativeError('interactive_keyword_matching_only',409)
   if(automaticDaily&&!(body?.kind==='creative_discovery'&&body.poolIdeaId))throw nativeError('daily_pool_idea_required')
   if(body?.recoveryOfTaskId&&!automaticDaily)throw nativeError('daily_recovery_scope_required',403)
   if(body?.kind==='creative_discovery'&&body.poolIdeaId){
@@ -325,9 +326,13 @@ async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof t
   return {...task,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
-  const {actor,app}=await taskHost(userId,brandId,id)
+  const {actor,app,pool}=await taskHost(userId,brandId,id)
   if(!['cancel','resume','provide_input','control_result'].includes(body?.action))throw nativeError('invalid_task_action')
   const key=requestKey(body.requestKey)
+  if(['resume','provide_input'].includes(body.action)){
+    const row=await intentForTask(pool,app,actor,id)
+    if(row.intent.kind==='creative_discovery'&&row.intent.automaticDaily)throw nativeError('interactive_keyword_matching_only',409)
+  }
   if(['resume','provide_input'].includes(body.action))assertUsageSettled(await app.ledger.taskUsage(await app.scope(actor),id))
   const input={id,...(body.action==='provide_input'?{input:body.input}:{}),...(body.action==='control_result'?{requestKey:key}:{})}
   const receipt=await app.dispatcher.invoke(`tasks.${body.action}`,input,{actor,callId:key})

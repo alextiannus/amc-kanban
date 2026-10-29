@@ -7,15 +7,14 @@ const transpile=(s:string)=>ts.transpileModule(s,{compilerOptions:{module:ts.Mod
 const module={exports:{} as any}
 new Function('require','module','exports',transpile(readFileSync('src/lib/ai-native/idea-pool.ts','utf8')))((name:string)=>name.endsWith('matchingContract')?{localPlanningTime}:name.endsWith('daily-planning')?{advanceDailyPlanning:async()=>{}}:{},module,module.exports)
 const {runIdeaPoolMaintenance,ideaRefreshDue}=module.exports
-const now=new Date('2026-10-29T18:00:00Z'),old=new Date(+now-16*60000)
-assert(ideaRefreshDue(null,now));assert(!ideaRefreshDue({status:'completed'},now));assert(!ideaRefreshDue({status:'running',attempts:1,started_at:now},now));assert(ideaRefreshDue({status:'failed',attempts:2,started_at:old},now));assert(!ideaRefreshDue({status:'failed',attempts:3,started_at:old},now))
-let reads=0,queries=0,refreshes=0
-const db={brand:{findMany:async(args:any)=>{assert.deepEqual(args.select,{id:true,timezone:true});return [{id:'day',timezone:'UTC'},{id:'completed',timezone:'Asia/Singapore'},{id:'retry',timezone:'Asia/Singapore'},{id:'busy',timezone:'Asia/Singapore'}]}}}
-const pool={query:async(_sql:string,params:any[])=>{queries++;assert(!params[0].includes('day'));return {rows:[{brand_id:'completed',local_day:'2026-10-30',status:'completed'}, {brand_id:'retry',local_day:'2026-10-30',status:'failed',attempts:2,started_at:old},{brand_id:'busy',local_day:'2026-10-30',status:'running',attempts:1,started_at:now}]}}}
-await runIdeaPoolMaintenance(pool,db,async(_db:any,id:string)=>{reads++;assert.equal(id,'retry');return {id}},async()=>{refreshes++},now)
-assert.equal(queries,1);assert.equal(reads,1);assert.equal(refreshes,1)
-await runIdeaPoolMaintenance({query:()=>{throw Error('daytime must not query daily ledger')}},{brand:{findMany:async()=>[{id:'day',timezone:'UTC'}]}},()=>{throw Error('daytime must not load facts')},()=>{},now)
-console.log('PASS daytime and completed/leased daily work avoids heavy reads; due retry alone hydrates facts')
+assert.equal(ideaRefreshDue(null),false)
+const forbidden=()=>{throw Error('retired worker must not access data')}
+const result=await runIdeaPoolMaintenance({query:forbidden},{brand:{findMany:forbidden}},forbidden,forbidden)
+assert.equal(result.reason,'interactive_keyword_matching_only')
+assert.equal((await module.exports.refreshBrandIdeas({query:forbidden},{})).skipped,true)
+assert.equal(module.exports.startIdeaPoolWorker().enabled,false)
+assert(!readFileSync('src/instrumentation.ts','utf8').includes('startIdeaPoolWorker'))
+console.log('PASS retired discovery worker performs zero queries, matches or scheduling')
 const autopilot=readFileSync('src/lib/ai-native/autopilot.ts','utf8'),scheduler=autopilot.slice(autopilot.indexOf('const state=globalThis as typeof globalThis&{autopilotWorker'))
 let time=1000000,tick:any,defaults=0,admissions=0,defaultsQueries=0,revision=1,status='waiting'
 class Clock extends Date{static now(){return time}}

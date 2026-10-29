@@ -1,12 +1,8 @@
 import {readDislikedCreativeSources,creativeIsVisible,creativeSourceId} from '../brand-plan/creativeVisibility'
 import {rankedIdeas,matchScore} from './idea-selection-policy'
-import {brainstormMatchRequest} from './brainstorm-match'
 import {BRAINSTORM_FEED,eligibleBrainstormSource} from './brainstorm-contract'
-import {localPlanningTime} from '../brand-plan/matchingContract'
-import {creativeDirection,diverseCreatives,duplicateCreative} from './creative-diversity'
-import {advanceDailyPlanning} from './daily-planning'
+import {diverseCreatives} from './creative-diversity'
 import {calendarCreativeOption} from '../brand-plan/calendarSync'
-import {randomUUID} from 'node:crypto'
 import type {Pool} from 'pg'
 import {nativePool} from './store'
 import {actorFor,digest,nativeError} from './contract'
@@ -53,56 +49,9 @@ export async function rebalanceIdeaPool(pool:Pool,brandId:string){
   await client.query('COMMIT')
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
-export async function refreshBrandIdeas(pool:Pool,facts:any,match=matchPromotionStrategyCreativeCandidates,now=new Date()){
-  const day=brandDay(facts.timezone,now),leaseId=randomUUID()
-  const claimed=await pool.query(`INSERT INTO amc_iaic.brand_idea_days(brand_id,local_day,started_at,lease_id) VALUES($1,$2,$3,$4)
-    ON CONFLICT(brand_id,local_day) DO UPDATE SET status='running',started_at=excluded.started_at,completed_at=null,error=null,lease_id=excluded.lease_id,attempts=amc_iaic.brand_idea_days.attempts+1
-    WHERE amc_iaic.brand_idea_days.status IN ('failed','running') AND amc_iaic.brand_idea_days.attempts<3
-      AND amc_iaic.brand_idea_days.started_at < excluded.started_at-interval '15 minutes' RETURNING brand_id`,[facts.id,day,now,leaseId])
-  if(!claimed.rowCount)return {skipped:true}
-  try{
-    const previous=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 ORDER BY (replaced_at IS NULL) DESC,created_at DESC,id LIMIT 72',[facts.id])).rows
-    const active=previous.filter(row=>!row.replaced_at)
-    const knowledge=await prisma.brandKnowledge.findUnique({where:{brandId:facts.id},select:{marketingSolution:true}})
-    const plans:any[]=Object.values((knowledge?.marketingSolution as any)?.publishingCalendar?.months||{}).flat().filter((item:any)=>item&&!['archived','deleted','published','done','已发布','已完成','归档','已删除'].includes(item.status))
-    const disliked=await readDislikedCreativeSources(prisma,facts.id,knowledge?.marketingSolution)
-    const fixed=plans.filter(creativeIsVisible).filter(item=>!item.nativeDaily||item.nativeReviewStatus!=='pending_review')
-    const counts:Record<string,number>={};for(const item of fixed){const direction=creativeDirection(item);counts[direction]=Math.min(2,(counts[direction]||0)+1)}
-    for(const row of active){const direction=creativeDirection(row.source);counts[direction]=Math.max(counts[direction]||0,1)}
-    const excluded=[...new Set([...disliked,...plans.map(creativeSourceId).filter(Boolean),...previous.map(row=>row.source_id)])].slice(0,72)
-    const feed=await prisma.brandMarketingSolution.findFirst({where:{brandId:facts.id,kind:BRAINSTORM_FEED,period:'sources'},orderBy:{version:'desc'},select:{input:true}})
-    const keywords=String((feed?.input as any)?.matchKeywords||'').slice(0,300)
-    const response=await match(brainstormMatchRequest(facts,keywords,`daily-${facts.id}-${day}`,excluded,counts))
-    const seen=new Set([...disliked,...plans.map(creativeSourceId).filter(Boolean),...previous.map(row=>row.source_id)])
-    const sources=(response.creativeCandidates||[]).filter(source=>eligibleBrainstormSource(source)&&!!(source.sourceVideo as {videoUrl?:string}|undefined)?.videoUrl&&!seen.has(source.inspirationCreativeId)&&!!seen.add(source.inspirationCreativeId)).slice(0,8).map(sourceExcerpt)
-    if(!sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
-    const connection=await pool.connect()
-    let added=0
-    try{
-      await connection.query('BEGIN')
-      const owned=await connection.query('SELECT brand_id FROM amc_iaic.brand_idea_days WHERE brand_id=$1 AND local_day=$2 AND lease_id=$3 FOR UPDATE',[facts.id,day,leaseId])
-      if(!owned.rowCount){await connection.query('ROLLBACK');return {skipped:true}}
-      await connection.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`idea-pool:${facts.id}`])
-      const current=(await connection.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND replaced_at IS NULL ORDER BY (selected_at IS NOT NULL),created_at,id FOR UPDATE',[facts.id])).rows
-      let count=current.filter(row=>!row.selected_at).length
-      const replaceable=current.filter(row=>!row.selected_at)
-      const kept=[...current]
-      for(const source of diverseCreatives(sources,[],sources.length,{},8)){
-        if(kept.some(row=>duplicateCreative(row.source,source))||plans.filter(creativeIsVisible).some(item=>duplicateCreative(item,source)))continue
-        const same=kept.filter(row=>!row.selected_at&&creativeDirection(row.source)===creativeDirection(source))
-        if(same.length>=8){
-          const old=same.find(row=>!row.selected_at&&!String(row.id).startsWith('new-'))
-          if(!old)continue
-          await connection.query('UPDATE amc_iaic.brand_ideas SET replaced_at=now() WHERE id=$1',[old.id]);kept.splice(kept.indexOf(old),1);replaceable.splice(replaceable.indexOf(old),1);count--
-        }
-        if(count>=IDEA_POOL_MAX){const oldest=replaceable.shift();if(!oldest)break;await connection.query('UPDATE amc_iaic.brand_ideas SET replaced_at=now() WHERE id=$1',[oldest.id]);kept.splice(kept.findIndex(row=>row.id===oldest.id),1);count--}
-        await connection.query('INSERT INTO amc_iaic.brand_ideas(id,brand_id,source_id,source,context_digest,match_id,library_versions) VALUES($1,$2,$3,$4,$5,$6,$7)',[randomUUID(),facts.id,source.inspirationCreativeId,JSON.stringify(source),digest(facts),response.contentMatchRequestId||'',JSON.stringify(response.libraryVersions||{})]);count++;added++;kept.push({id:'new-'+added,source,selected_at:null,plan_id:null})
-      }
-      await connection.query("UPDATE amc_iaic.brand_idea_days SET status='completed',completed_at=now(),added=$3 WHERE brand_id=$1 AND local_day=$2",[facts.id,day,added])
-      await connection.query('COMMIT')
-    }catch(e){await connection.query('ROLLBACK');throw e}finally{connection.release()}
-    return {skipped:false,added}
-  }catch(e){await pool.query("UPDATE amc_iaic.brand_idea_days SET status='failed',completed_at=now(),error='daily_search_unavailable' WHERE brand_id=$1 AND local_day=$2 AND lease_id=$3",[facts.id,day,leaseId]);throw e}
+/** Retired: historical callers must not restart background discovery. */
+export async function refreshBrandIdeas(_pool:Pool,_facts:any,_match=matchPromotionStrategyCreativeCandidates,_now=new Date()){
+ return {skipped:true,reason:'interactive_keyword_matching_only'}
 }
 export async function readIdeaPool(userId:string,brandId:string){
   await requireActor(actorFor(brandId,userId))
@@ -131,30 +80,9 @@ export async function poolIdeaLibrary(brandId:string,id:string,facts:any):Promis
   const payload={contentMatchRequestId:idea.match_id,sources:[idea.source],gaps:[],libraryVersions:idea.library_versions,contextDigest:digest(facts)}
   return {...payload,libraryDigest:digest(payload),retrievedAt:new Date(idea.created_at).toISOString()}
 }
-// Cheap eligibility checks precede the large brand/workspace projection.
-export function ideaRefreshDue(row:any,now=new Date()){
- return !row||(['failed','running'].includes(row.status)&&Number(row.attempts)<3&&new Date(row.started_at).getTime()<now.getTime()-15*60_000)
+// Compatibility exports intentionally perform no reads, matches or scheduling.
+export function ideaRefreshDue(_row:any,_now=new Date()){return false}
+export async function runIdeaPoolMaintenance(_pool:Pool,_db:any=prisma,_factsReader=readBrandFacts,_refresh=refreshBrandIdeas,_now=new Date(),_isStopped=()=>false){
+ return {skipped:true,reason:'interactive_keyword_matching_only'}
 }
-export async function runIdeaPoolMaintenance(pool:Pool,db:any=prisma,factsReader=readBrandFacts,refresh=refreshBrandIdeas,now=new Date(),isStopped=()=>false){
- const brands=await db.brand.findMany({where:{status:'ACTIVE'},select:{id:true,timezone:true}})
- const due=brands.flatMap((brand:any)=>{try{const local=localPlanningTime(brand.timezone,now);return local.night?[{...brand,day:local.day}]:[]}catch{return []}})
- const rows=due.length?(await pool.query('SELECT brand_id,local_day,status,attempts,started_at FROM amc_iaic.brand_idea_days WHERE brand_id=ANY($1::text[]) AND local_day=ANY($2::text[])',[due.map((b:any)=>b.id),[...new Set(due.map((b:any)=>b.day))]])).rows:[]
- const byDay=new Map(rows.map(row=>[`${row.brand_id}:${row.local_day}`,row]))
- for(const brand of due){
-  if(isStopped())break
-  if(!ideaRefreshDue(byDay.get(`${brand.id}:${brand.day}`),now))continue
-  try{const facts=await factsReader(db,brand.id);if(facts)await refresh(pool,facts,undefined,now)}catch{console.error('[idea-pool] daily brand search unavailable',brand.id)}
- }
- for(const brand of brands){if(isStopped())break;await advanceDailyPlanning(pool,brand.id)}
-}
-export function startIdeaPoolWorker(){
- if(state.amcIdeaPoolWorker)return
- state.amcIdeaPoolWorker=true
- let running=false,stopped=false
- const tick=async()=>{
-  if(running||stopped)return;running=true
-  try{await runIdeaPoolMaintenance(await database(),prisma,readBrandFacts,refreshBrandIdeas,new Date(),()=>stopped)}catch{console.error('[idea-pool] worker unavailable')}finally{running=false}
- }
- void tick();const timer=setInterval(()=>void tick(),60000);timer.unref()
- process.once('SIGTERM',()=>{stopped=true;clearInterval(timer)})
-}
+export function startIdeaPoolWorker(){return {enabled:false,reason:'interactive_keyword_matching_only'}}

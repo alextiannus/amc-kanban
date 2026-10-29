@@ -4,7 +4,7 @@ import type {Pool} from 'pg'
 import type {Prisma} from '@prisma/client'
 import {prisma} from '../prisma'
 import {autopilotDb,requireAutopilotOwner,initializeBrandAutopilotDefault} from './autopilot-store'
-import {brandDay,initializeIdeaPool,refreshBrandIdeas,readIdeaPool} from './idea-pool'
+import {brandDay,readIdeaPool} from './idea-pool'
 import {applicationVersion} from './application'
 import {readBrandFacts} from './facts'
 import {digest,nativeError,actorFor} from './contract'
@@ -140,14 +140,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    })
    evidence.strategyVersionId=saved.id;await progress(pool,run,'strategy',evidence);return {strategyVersionId:saved.id,saved:true}
   }
-  if(action==='match'){
-   if(!evidence.strategyVersionId)throw nativeError('strategy_required')
-   await initializeIdeaPool(pool)
-   const facts=await readBrandFacts(prisma,brandId);if(!facts)throw nativeError('brand_not_found',404)
-   await refreshBrandIdeas(pool,facts)
-   evidence.matchRequested=true;await progress(pool,run,'ideas',evidence)
-   return {accepted:true,note:'Daily library search is deduplicated by brand local date. Read the ranked Brand Ideas list. Matching never adapts or produces content; all scores require human Like, followed by explicit Replicate and Review; no automatic production.'}
-  }
+  if(action==='match')return {waitingForUser:true,nextAction:'browse_ideas',note:'Periodic AI discovery is disabled. Browse ideas performs fixed keyword matching on demand. Do not poll or start a creative_discovery task; use iaic_wait for the user to browse and choose.'}
   if(action==='adapt'){
    if(!evidence.strategyVersionId)throw nativeError('strategy_required')
    if(evidence.adaptations?.[input.creativeId])return {taskId:evidence.adaptations[input.creativeId]}

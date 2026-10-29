@@ -18,8 +18,8 @@
         "repository": "amc-kanban",
         "path": "skills/amc-autopilot"
       },
-      "version": "sha256:f8bd059774ee3e46f0c96ad2336960e6a3e0b5701e00f71a9ff825ad92322501",
-      "description": "User AI Assistant owns authorized autonomous brand research, planning and original-idea recommendations. Publication requires human confirmation."
+      "version": "sha256:a2a0c1375508e3928a5f97057b918f73165bae6cb19dad7d8e6ddf907f46502c",
+      "description": "User AI Assistant owns authorized autonomous brand research and planning; discovery is interactive. Publication requires human confirmation."
     },
     {
       "id": "amc-brand-planning",
@@ -510,7 +510,7 @@
     "skills/amc-content-copywriting/references/content-defaults.json"
   ],
   "files": {
-    "skills/amc-autopilot/SKILL.md": "6e1e0dd83d355bbdb32ccd4f745096f06bb05a75ecff31e6279b026840995ff1",
+    "skills/amc-autopilot/SKILL.md": "3805d582661b20a99525ac37cfeef5e991fbeb18696c232759b9fbd91dd05535",
     "skills/amc-autopilot/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-brand-planning/SKILL.md": "b3928775c880ca1aae168645ab884c5877ff160a2b725f6972751358cf561d84",
     "skills/amc-brief/SKILL.md": "6c2a096ab3ae40a4acdbb1f81b76d5e81341d158c6165152e64b5afa63c3a89f",
