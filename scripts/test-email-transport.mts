@@ -27,8 +27,13 @@ test('Gmail uses resolved IPv4 with TLS identity and preserves deterministic mai
 test('custom SMTP configuration remains unchanged; connection failures remain safely retryable', async () => {
   const custom = await fixture('smtp.example.com')
   assert.equal(custom.lookups, 0); assert.equal(custom.transport.host, 'smtp.example.com')
-  const failed = await fixture('smtp.gmail.com', { code: 'ETIMEDOUT', command: 'CONN' })
+  const failed = await fixture('smtp.gmail.com', { code: 'ETIMEDOUT', command: 'CONN', message: 'Connection timeout' })
   assert.equal(failed.result.deliveryState, 'NOT_SENT')
   const unknown = await fixture('smtp.gmail.com', { code: 'ETIMEDOUT', command: 'DATA' })
   assert.equal(unknown.result.deliveryState, 'UNKNOWN')
+})
+
+test('idle socket timeout cannot authorize another send even when Nodemailer labels it CONN', async () => {
+  const f = await fixture('smtp.gmail.com', { code: 'ETIMEDOUT', command: 'CONN', message: 'Timeout' })
+  assert.equal(f.result.deliveryState, 'UNKNOWN')
 })

@@ -148,10 +148,13 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
     console.log('[email] SMTP accepted message')
     return { success: true, messageId: info.messageId }
   } catch (err: any) {
-    console.error('[email] Send failed', { code: err?.code, command: err?.command })
+    // Nodemailer reports idle socket timeouts as command CONN even after DATA.
+    // Only its explicit connection/greeting timeout messages prove no mail was sent.
+    const idleTimeout = err?.code === 'ETIMEDOUT' && !['Connection timeout', 'Greeting never received'].includes(err?.message)
+    console.error('[email] Send failed', { code: err?.code, command: err?.command, idleTimeout })
     const beforeData = ['CONN', 'EHLO', 'HELO', 'STARTTLS', 'AUTH', 'API', 'MAIL FROM', 'RCPT TO'].some(command => String(err?.command || '').startsWith(command))
     const rejected = Number(err?.responseCode) >= 400 && Number(err?.responseCode) <= 599
-    return { success: false, error: 'SMTP send failed', deliveryState: beforeData || rejected ? 'NOT_SENT' : 'UNKNOWN' }
+    return { success: false, error: 'SMTP send failed', deliveryState: !idleTimeout && (beforeData || rejected) ? 'NOT_SENT' : 'UNKNOWN' }
   }
 }
 
