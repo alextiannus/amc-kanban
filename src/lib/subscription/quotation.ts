@@ -85,7 +85,7 @@ export function buildQuotation(input: {
 export const quotationMoney = (value: number) => (value / 100).toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export function quotationEmail(quote: QuotationSnapshot) {
-  const text = `Dear ${quote.customer},\n\nYour AMC subscription request has been submitted. Your quotation ${quote.number} is attached.\n\nBrand: ${quote.brandName}\nPlan: ${quote.planName}\nTerm: ${quote.durationMonths} months\nSubtotal: SGD ${quotationMoney(quote.subtotalCents)}\nGST (9%): SGD ${quotationMoney(quote.gstCents)}\nQuotation total: SGD ${quotationMoney(quote.totalCents)}\n\nThis quotation is not a tax invoice or confirmation of payment. Payment and activation follow your subscription order.\n\nDELIVERYCHINATOWN PTE. LTD.\nUEN / GST Reg No: 201835327N`
+  const text = `Dear ${quote.customer},\n\nYour AMC subscription request has been submitted. Your quotation ${quote.number} is attached.\n\nBrand: ${quote.brandName}\nPlan: ${quote.planName}\nTerm: ${quote.durationMonths} months\nSubtotal: SGD ${quotationMoney(quote.subtotalCents)}\nGST (9%): SGD ${quotationMoney(quote.gstCents)}\nQuotation total: SGD ${quotationMoney(quote.totalCents)}\n\nThis quotation is valid for 30 days from the quotation date.\n\nThis quotation is not a tax invoice or confirmation of payment. Payment and activation follow your subscription order.\n\nDELIVERYCHINATOWN PTE. LTD.\nUEN / GST Reg No: 201835327N`
   const escaped = text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
   return { subject: `AMC Quotation ${quote.number}`, text, html: `<div style="font-family:Arial,sans-serif;line-height:1.7;white-space:pre-wrap">${escaped}</div>` }
 }

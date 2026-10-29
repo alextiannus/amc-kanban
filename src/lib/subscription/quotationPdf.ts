@@ -77,6 +77,7 @@ export async function renderQuotationPdf(quote: QuotationSnapshot): Promise<Buff
   y = Math.max(y + 10, 182)
   const date = new Intl.DateTimeFormat('en-SG', { timeZone: 'Asia/Singapore', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(quote.issuedAt))
   paragraph(`Quotation date: ${date}     Subscription term: ${quote.durationMonths} months`, { size: 9 })
+  paragraph('Validity: This quotation is valid for 30 days from the quotation date.', { size: 9 })
   paragraph(`Reference: ${quote.number}`, { size: 9 })
   y += 8
   const tableHeader = () => {
