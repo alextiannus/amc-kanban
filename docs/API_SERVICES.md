@@ -146,6 +146,8 @@ API Key 必须映射到 active AMC Agent User。新 Key 只存 Hash，并检查 
 
 ## 3.5 Subscription Service
 
+MM 成功提交订阅后统一发送 Quotation，替代旧附服务条款的品牌创建/订阅成功通知。`POST /api/mm/subscription` 支持可选 `quotationCompanyName` / `quotationUen`，返回 `quotation: {number,status,message}`。报价及收件人固定到 SubscriptionQuotation；SMTP 明确未受理才重试，UNKNOWN 待核对，不盲目重发。Stripe 确认复用同一报价，非 MM 客户端保持现有通知行为。
+
 职责：订阅计划、支付确认、品牌绑定、Admin 订阅管理。
 
 接口：

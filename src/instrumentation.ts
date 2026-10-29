@@ -32,6 +32,8 @@ export async function register() {
     startAssetAnalysisWorker()
     const { startImmediErpWorker } = await import('./lib/integrations/immediErpWorker')
     startImmediErpWorker()
+    const { startSubscriptionQuotationWorker } = await import('./lib/subscription/quotationService')
+    startSubscriptionQuotationWorker()
     const { startGoogleBrandImportWorker } = await import('./lib/googleBrandImport')
     startGoogleBrandImportWorker()
   }

@@ -1,10 +1,11 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { activateSubscriptionByPaymentSession, createBrandForActivatedSubscription } from '@/lib/subscription/service'
 import { triggerErpOnboardingFlow } from '@/lib/integrations/immediErp'
 import Stripe from 'stripe'
 import { sendSubscriptionSuccessEmail } from '@/lib/email'
+import { queueSubscriptionQuotation, dispatchSubscriptionQuotation } from '@/lib/subscription/quotationService'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
@@ -64,9 +65,13 @@ export async function POST(request: Request) {
     ? checkout.metadata.pendingBrandTimezone.trim()
     : ''
 
+  const existingQuotation = await prisma.subscriptionQuotation.findUnique({ where: { subscriptionId }, select: { subscriptionId: true } })
+  const useQuotation = Boolean(existingQuotation) || checkout.metadata?.clientType === 'mm' || request.headers.get('x-client-type') === 'mm'
+
   const createdBrand = pendingBrandName
     ? await createBrandForActivatedSubscription({
         subscriptionId,
+        notificationMode: useQuotation ? 'quotation' : 'service_terms',
         ownerId: session.user.id,
         name: pendingBrandName,
         description: pendingBrandDescription || null,
@@ -96,14 +101,28 @@ export async function POST(request: Request) {
         const bObj = await prisma.brand.findUnique({ where: { id: sub.brandId }, select: { name: true } })
         targetBrandName = bObj?.name || ''
       }
-      sendSubscriptionSuccessEmail({
-        to: userObj.email,
-        nickname: userObj.nickname || userObj.email.split('@')[0],
-        brandName: targetBrandName || '您的品牌',
-        planName: sub.planName,
-      }).catch((emailErr) => {
-        console.error('[confirm_subscription_email] background email failed:', emailErr)
-      })
+      if (useQuotation) {
+        const brand = createdBrand?.ok ? createdBrand.brand : sub.brandId
+          ? await prisma.brand.findUnique({ where: { id: sub.brandId }, select: { name: true, address: true } }) : null
+        await queueSubscriptionQuotation({
+          subscriptionId, userId: session.user.id, recipient: userObj.email,
+          customer: targetBrandName || userObj.nickname || userObj.email,
+          brandName: targetBrandName || brand?.name || '', address: pendingBrandAddress || brand?.address || undefined,
+        })
+        after(async () => {
+          try { await dispatchSubscriptionQuotation(subscriptionId) }
+          catch { console.error('[confirm_subscription] Quotation dispatch deferred to durable worker') }
+        })
+      } else {
+        sendSubscriptionSuccessEmail({
+          to: userObj.email,
+          nickname: userObj.nickname || userObj.email.split('@')[0],
+          brandName: targetBrandName || '您的品牌',
+          planName: sub.planName,
+        }).catch((emailErr) => {
+          console.error('[confirm_subscription_email] background email failed:', emailErr)
+        })
+      }
     }
   } catch (emailErr) {
     console.error('[confirm_subscription_email] failed to initiate success email:', emailErr)

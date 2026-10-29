@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
@@ -6,7 +6,8 @@ import Stripe from 'stripe'
 import { SUBSCRIPTION_PLANS, SUBSCRIPTION_ADDONS, DEFAULT_SUBSCRIPTION_TERMS_VERSION, calculatePricing, normalizeAddonQuantity } from '@/lib/subscription/catalog'
 import { buildOfflineInvoiceResponse, buildBillingActivatedResponse, buildBillingActivationData } from '@/lib/subscription/workflow'
 import { createBrandForActivatedSubscription } from '@/lib/subscription/service'
-import { sendSubscriptionSuccessEmail } from '@/lib/email'
+import { queueSubscriptionQuotation, dispatchSubscriptionQuotation } from '@/lib/subscription/quotationService'
+import { authenticateRequest, canAccessBrand } from '@/lib/auth-v2'
 
 const stripeKey = process.env.STRIPE_SECRET_KEY
 const stripe = stripeKey ? new Stripe(stripeKey) : null
@@ -24,6 +25,14 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json()
+    for (const [field, maxLength] of [['quotationCompanyName', 200], ['quotationUen', 32]] as const) {
+      const value = body[field]
+      if (value !== undefined && (typeof value !== 'string' || value.length > maxLength || /[\u0000-\u001f\u007f]/.test(value))) {
+        return NextResponse.json({ error: `Invalid ${field}` }, { status: 400 })
+      }
+    }
+    const quotationCompanyName = String(body.quotationCompanyName || '').trim()
+    const quotationUen = String(body.quotationUen || '').trim()
     const url = new URL(request.url)
     const queryBrandId = url.searchParams.get('brandId')
     const rawBrandId = String(body.brandId ?? queryBrandId ?? '').trim()
@@ -40,6 +49,26 @@ export async function POST(request: NextRequest) {
     // The MM proxy always sets x-client-type: mm (see amc-mm/src/app/api/subscription/route.ts).
     // Kanban-originated requests (admin panel, brand owner dashboard) have no such header.
     const isMmRequest = body.clientType === 'mm' || request.headers.get('x-client-type') === 'mm'
+
+    const quotationUser = isMmRequest ? await prisma.user.findUnique({
+      where: { id: session.user.id }, select: { email: true, nickname: true },
+    }) : null
+    if (isMmRequest && !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(quotationUser?.email || '')) {
+      return NextResponse.json({ error: '请先为账号绑定有效邮箱，以接收订阅报价' }, { status: 400 })
+    }
+    async function quotationFor(subscriptionId: string, brandName: string, address?: string, originalTotal?: number) {
+      if (!isMmRequest) return undefined
+      const receipt = await queueSubscriptionQuotation({
+        subscriptionId, userId: session!.user.id, recipient: quotationUser!.email,
+        customer: brandName || quotationUser!.nickname || quotationUser!.email,
+        brandName, address, originalTotal, companyName: quotationCompanyName, uen: quotationUen,
+      })
+      after(async () => {
+        try { await dispatchSubscriptionQuotation(subscriptionId) }
+        catch { console.error('[quotation] Dispatch interrupted; durable worker will recover') }
+      })
+      return { number: receipt.number, status: receipt.state, message: receipt.state === 'UNKNOWN' ? '报价发送状态待核对，请勿重复提交' : receipt.state === 'SENT' ? '报价已提交邮件服务' : '报价已保存，将发送至您的账号邮箱' }
+    }
 
     console.log('[MM-Sub] POST start', {
       userId: session.user.id,
@@ -64,70 +93,6 @@ export async function POST(request: NextRequest) {
     }
     if (pendingBrandName && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(resolvedOwnerEmail)) {
       return NextResponse.json({ error: '品牌主邮件格式无效' }, { status: 400 })
-    }
-
-    if (pendingBrandName) {
-      const { findOrCreateBrandOwnerAccount } = await import('@/lib/brandOwnerAccount')
-      const brandOwner = await findOrCreateBrandOwnerAccount(resolvedOwnerEmail)
-      if (brandOwner.ok) {
-        const brandOwnerId = brandOwner.user.id
-        const existingBrand = await prisma.brand.findFirst({
-          where: {
-            ownerId: brandOwnerId,
-            name: pendingBrandName,
-            status: 'ACTIVE',
-          },
-          include: {
-            subscriptions: {
-              where: { status: 'PENDING' },
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-            },
-          },
-        })
-
-        if (existingBrand) {
-          console.log(`[MM-Sub] Found existing active brand: ${existingBrand.id} for owner: ${brandOwnerId}`)
-          const existingPendingSub = existingBrand.subscriptions[0]
-          if (existingPendingSub) {
-            console.log(`[MM-Sub] Reusing existing pending subscription: ${existingPendingSub.id}`)
-            const rawRequestedMode = body.paymentMode ?? body.paymentMethod
-            const isBillingRequest = rawRequestedMode === 'BILLING' || rawRequestedMode === 'invoice'
-            if (isMmRequest && isBillingRequest) {
-              const activationData = buildBillingActivationData(existingPendingSub.durationMonths)
-              const activatedSub = await prisma.brandSubscription.update({
-                where: { id: existingPendingSub.id },
-                data: activationData,
-              })
-              return NextResponse.json({
-                success: true,
-                status: 'ACTIVE',
-                message: '品牌已创建并激活，7天试用已开始',
-                subscriptionId: activatedSub.id,
-                subscription: activatedSub,
-                brand: existingBrand,
-              })
-            }
-            return NextResponse.json({
-              success: true,
-              status: 'PENDING',
-              message: '订阅申请已提交，等待付款确认后由 Admin 激活',
-              subscriptionId: existingPendingSub.id,
-              subscription: existingPendingSub,
-              brand: existingBrand,
-            })
-          } else {
-            console.log(`[MM-Sub] Brand exists but has no pending subscription. Mapping request to existing brand: ${existingBrand.id}`)
-            brandId = existingBrand.id
-            pendingBrandName = ''
-          }
-        }
-      }
-    }
-
-    if (brandId) {
-      const exists = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
-      if (!exists) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
     }
 
     const planId = String(body.planId ?? 'essential')
@@ -160,7 +125,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const summary = calculatePricing(planId, durationMonths, uniqueAddonIds, addonQuantities)
+    let summary: ReturnType<typeof calculatePricing>
+    try { summary = calculatePricing(planId, durationMonths, uniqueAddonIds, addonQuantities) }
+    catch { return NextResponse.json({ error: 'Invalid subscription pricing or duration' }, { status: 400 }) }
     const selectedAddons = SUBSCRIPTION_ADDONS.filter((a: any) => uniqueAddonIds.includes(a.id)).map((addon: any) => ({
       ...addon,
       quantity: normalizeAddonQuantity(addon.id, addonQuantities[addon.id] ?? 1),
@@ -200,6 +167,93 @@ export async function POST(request: NextRequest) {
 
     const finalTotalDue = Math.max(0, Math.round(summary.totalDueUsd - promoDiscountAmount))
 
+    if (pendingBrandName) {
+      const { findOrCreateBrandOwnerAccount } = await import('@/lib/brandOwnerAccount')
+      const brandOwner = await findOrCreateBrandOwnerAccount(resolvedOwnerEmail)
+      if (brandOwner.ok) {
+        const brandOwnerId = brandOwner.user.id
+        const existingBrand = await prisma.brand.findFirst({
+          where: {
+            ownerId: brandOwnerId,
+            name: pendingBrandName,
+            status: 'ACTIVE',
+          },
+          include: {
+            subscriptions: {
+              where: { status: 'PENDING' },
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+            },
+          },
+        })
+
+        if (existingBrand) {
+          console.log(`[MM-Sub] Found existing active brand: ${existingBrand.id} for owner: ${brandOwnerId}`)
+          const principal = await authenticateRequest(request)
+          if (!principal || !await canAccessBrand(principal, existingBrand.id, 'subscription.manage')) {
+            return NextResponse.json({ error: '无此品牌的订阅管理权限' }, { status: 403 })
+          }
+          const candidate = existingBrand.subscriptions[0]
+          const addonKey = (items: unknown) => JSON.stringify((Array.isArray(items) ? items : []).map((item: any) => [item.id, item.quantity ?? 1, item.usd, item.pricing]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))))
+          const existingPendingSub = candidate && candidate.createdById === session.user.id
+            && candidate.planId === selectedPlan.id && candidate.durationMonths === summary.durationMonths
+            && candidate.totalDueUsd === finalTotalDue && candidate.currency === 'SGD'
+            && addonKey(candidate.selectedAddons) === addonKey(selectedAddons) ? candidate : null
+          if (existingPendingSub) {
+            console.log(`[MM-Sub] Reusing existing pending subscription: ${existingPendingSub.id}`)
+            const rawRequestedMode = body.paymentMode ?? body.paymentMethod
+            const isBillingRequest = rawRequestedMode === 'BILLING' || rawRequestedMode === 'invoice'
+            if (isMmRequest && isBillingRequest) {
+              const activationData = buildBillingActivationData(existingPendingSub.durationMonths)
+              const activatedSub = await prisma.brandSubscription.update({
+                where: { id: existingPendingSub.id },
+                data: activationData,
+              })
+              const quotation = await quotationFor(activatedSub.id, existingBrand.name, undefined, summary.totalDueUsd)
+              return NextResponse.json({
+                quotation,
+                success: true,
+                status: 'ACTIVE',
+                message: '品牌已创建并激活，7天试用已开始',
+                subscriptionId: activatedSub.id,
+                subscription: activatedSub,
+                brand: existingBrand,
+              })
+            }
+            const quotation = await quotationFor(existingPendingSub.id, existingBrand.name, undefined, summary.totalDueUsd)
+            return NextResponse.json({
+              quotation,
+              success: true,
+              status: 'PENDING',
+              message: '订阅申请已提交，等待付款确认后由 Admin 激活',
+              subscriptionId: existingPendingSub.id,
+              subscription: existingPendingSub,
+              brand: existingBrand,
+            })
+          } else {
+            console.log(`[MM-Sub] Brand exists but has no pending subscription. Mapping request to existing brand: ${existingBrand.id}`)
+            brandId = existingBrand.id
+            pendingBrandName = ''
+          }
+        }
+      }
+    }
+
+    if (brandId) {
+      const exists = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true } })
+      if (!exists) return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
+      const principal = await authenticateRequest(request)
+      if (!principal || !await canAccessBrand(principal, brandId, 'subscription.manage')) {
+        return NextResponse.json({ error: '无此品牌的订阅管理权限' }, { status: 403 })
+      }
+    }
+
+    if (paymentMode === 'ONLINE' && !stripe) {
+      return NextResponse.json({ error: 'Stripe is not configured on main server' }, { status: 503 })
+    }
+    const existingQuotationBrand = brandId ? await prisma.brand.findUnique({ where: { id: brandId }, select: { name: true } }) : null
+    const quotationBrandName = pendingBrandName || existingQuotationBrand?.name || ''
+
     console.log(`[MM-Sub] creating BrandSubscription (${Date.now() - t0}ms since start)`)
     const pendingSub = await prisma.brandSubscription.create({
       data: {
@@ -209,7 +263,7 @@ export async function POST(request: NextRequest) {
         planName: selectedPlan.name,
         durationMonths: summary.durationMonths,
         billedMonths: summary.billedMonths,
-        monthlyBaseUsd: summary.monthlyBaseUsd,
+        monthlyBaseUsd: Math.round(summary.monthlyBaseUsd),
         recurringAddonsUsd: summary.recurringAddonsUsd,
         oneTimeAddonsUsd: summary.oneTimeAddonsUsd,
         totalDueUsd: finalTotalDue,
@@ -284,6 +338,7 @@ export async function POST(request: NextRequest) {
               console.log(`[MM-Sub] calling createBrandForActivatedSubscription (ADMIN, ${Date.now() - t0}ms)`)
               const result = await createBrandForActivatedSubscription({
                 subscriptionId: pendingSub.id,
+                notificationMode: isMmRequest ? 'quotation' : 'service_terms',
                 ownerId: session.user.id,
                 name: pendingBrandName,
                 description: pendingBrandDescription || null,
@@ -306,11 +361,13 @@ export async function POST(request: NextRequest) {
 
         const activatedSubscription = await prisma.brandSubscription.findUnique({ where: { id: pendingSub.id } })
         console.log(`[MM-Sub] BILLING ADMIN success (${Date.now() - t0}ms)`)
+        const quotation = await quotationFor(pendingSub.id, quotationBrandName, pendingBrandAddress, summary.totalDueUsd)
         return NextResponse.json({
+          quotation,
           success: true,
           ...buildBillingActivatedResponse({
             subscriptionId: pendingSub.id,
-            totalDueUsd: summary.totalDueUsd,
+            totalDueUsd: finalTotalDue,
             agentId: createdBrand?.ok ? (createdBrand as any).agentId || null : null,
           }),
           subscription: activatedSubscription,
@@ -326,6 +383,7 @@ export async function POST(request: NextRequest) {
             console.log(`[MM-Sub] calling createBrandForActivatedSubscription for PENDING sub (${Date.now() - t0}ms)`)
             const result = await createBrandForActivatedSubscription({
               subscriptionId: pendingSub.id,
+              notificationMode: isMmRequest ? 'quotation' : 'service_terms',
               ownerId: session.user.id,
               name: pendingBrandName,
               description: pendingBrandDescription || null,
@@ -348,7 +406,9 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`[MM-Sub] BILLING pending — responding (${Date.now() - t0}ms)`)
+      const quotation = await quotationFor(pendingSub.id, quotationBrandName, pendingBrandAddress, summary.totalDueUsd)
       return NextResponse.json({
+        quotation,
         success: true,
         status: 'PENDING',
         message: '订阅申请已提交，等待付款确认后由 Admin 激活',
@@ -360,13 +420,15 @@ export async function POST(request: NextRequest) {
 
     if (paymentMode === 'OFFLINE') {
       console.log(`[MM-Sub] OFFLINE path — responding invoice (${Date.now() - t0}ms)`)
-      return NextResponse.json(
-        buildOfflineInvoiceResponse({
+      const quotation = await quotationFor(pendingSub.id, quotationBrandName, pendingBrandAddress, summary.totalDueUsd)
+      return NextResponse.json({
+        quotation,
+        ...buildOfflineInvoiceResponse({
           subscriptionId: pendingSub.id,
           status: pendingSub.status,
-          totalDueUsd: summary.totalDueUsd,
-        })
-      )
+          totalDueUsd: finalTotalDue,
+        }),
+      })
     }
 
     if (!stripe) {
@@ -398,7 +460,7 @@ export async function POST(request: NextRequest) {
         quantity: 1,
         price_data: {
           currency: 'sgd',
-          unit_amount: summary.totalDueUsd * 100,
+          unit_amount: finalTotalDue * 100,
           product_data: {
             name: `AMC ${selectedPlan.name} x ${summary.durationMonths} months`,
             description: `Billed months: ${summary.billedMonths}. Includes selected addons.`,
@@ -414,6 +476,7 @@ export async function POST(request: NextRequest) {
       line_items: lineItems,
       metadata: {
         subscriptionId: pendingSub.id,
+        clientType: isMmRequest ? 'mm' : 'kanban',
         planId,
         paymentMode,
         durationMonths: String(summary.durationMonths),
@@ -439,7 +502,9 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`[MM-Sub] ONLINE success, responding with checkoutUrl (${Date.now() - t0}ms)`)
+    const quotation = await quotationFor(pendingSub.id, quotationBrandName, pendingBrandAddress, summary.totalDueUsd)
     return NextResponse.json({
+      quotation,
       success: true,
       subscriptionId: pendingSub.id,
       checkoutSessionId: sessionCheckout.id,
