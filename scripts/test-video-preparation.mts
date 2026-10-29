@@ -95,3 +95,16 @@ assert.equal(localizedResult.language,"en");assert.equal(localizedResult.duratio
 modelOverride={...modelOverride,language:"unsupported"}
 await assert.rejects(preparation.prepareVideoScript("u","b",{...localized,requestKey:"dialog-invalid-output-123"}),/video_script_failed/)
 console.log("PASS rewrite language and duration metadata; unsupported language output rejected")
+
+modelOverride={originalScript:'Naskah asli yang diterjemahkan'}
+const originalAcrossLanguages=await preparation.prepareVideoScript('u','b',{...body,originalOnly:true,script:'当前中文编辑内容应保持原样',requestKey:'restore-cross-language-123'})
+assert.equal(originalAcrossLanguages.script,'当前中文编辑内容应保持原样')
+assert.equal(originalAcrossLanguages.originalScript,modelOverride.originalScript)
+modelOverride={originalScript:'原文并没有翻译成目标语言'}
+await assert.rejects(preparation.prepareVideoScript('u','b',{...body,originalOnly:true,script:'Current edited script',requestKey:'restore-wrong-language-123'}),/video_script_failed/)
+for(const language of ['constructor','toString','__proto__']){
+ await assert.rejects(preparation.prepareVideoScript('u','b',{...body,language,requestKey:'invalid-language-key-123'}),/invalid_video_preparation/)
+ modelOverride={script:'Scene 1: product',language,durationSec:8}
+ await assert.rejects(preparation.prepareVideoScript('u','b',{...localized,requestKey:'invalid-model-'+language+'-123'}),/video_script_failed/)
+}
+console.log('PASS original-only validates translated original, preserves different-language editor text, and rejects inherited language keys')

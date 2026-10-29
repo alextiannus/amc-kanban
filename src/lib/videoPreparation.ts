@@ -30,7 +30,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
  if(!brand)throw nativeError('brand_not_found',404)
  if(body.action==='context')return {brandId,creativeId,originalScript:originalText(source),sourceDigest:source?.sourceDigest||null,originalVideoUrl:source?.originalVideoUrl||null,market:brand.knowledge?.market||brand.location||null}
  const language=text(body.language),script=typeof body.script==='string'?body.script:'',requestKey=text(body.requestKey)
- if(!languages[language]||!script.trim()||script.length>12000||!/^[-\w]{12,100}$/.test(requestKey))throw nativeError('invalid_video_preparation',400)
+ if(!Object.hasOwn(languages,language)||!script.trim()||script.length>12000||!/^[-\w]{12,100}$/.test(requestKey))throw nativeError('invalid_video_preparation',400)
  const originalScript=originalText(source)
  const instructions=body.action==='rewrite'?text(body.instructions):'',targetDurationSec=body.action==='rewrite'?body.targetDurationSec:undefined
  if(instructions.length>6000||(targetDurationSec!==undefined&&(!Number.isFinite(targetDurationSec)||targetDurationSec<=0||targetDurationSec>600)))throw nativeError('invalid_video_preparation',400)
@@ -66,8 +66,9 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
   if(body.originalOnly===true)parsed.script=script
   if(typeof parsed.script!=='string'||!parsed.script.trim()||parsed.script.length>12000||(!brandRewrite&&(typeof parsed.originalScript!=='string'||parsed.originalScript.length>30000||Boolean(originalScript)!==Boolean(parsed.originalScript.trim()))))throw Error('invalid_script_response')
   const resultLanguage=brandRewrite?parsed.language:language
-  if(!languages[resultLanguage]||(brandRewrite&&(!Number.isFinite(parsed.durationSec)||parsed.durationSec<=0||parsed.durationSec>600)))throw Error('invalid_script_response')
-  if((resultLanguage==='zh'&&!/[\u3400-\u9fff]/.test(parsed.script))||(resultLanguage!=='zh'&&/[\u3400-\u9fff]{4,}/.test(parsed.script)))throw Error('script_language_mismatch')
+  if(typeof resultLanguage!=='string'||!Object.hasOwn(languages,resultLanguage)||(brandRewrite&&(!Number.isFinite(parsed.durationSec)||parsed.durationSec<=0||parsed.durationSec>600)))throw Error('invalid_script_response')
+  const translatedText=originalOnly?parsed.originalScript:parsed.script
+  if((resultLanguage==='zh'&&!/[\u3400-\u9fff]/.test(translatedText))||(resultLanguage!=='zh'&&/[\u3400-\u9fff]{4,}/.test(translatedText)))throw Error('script_language_mismatch')
   const output={brandId,creativeId,language:resultLanguage,...(brandRewrite&&parsed.durationSec!==undefined?{durationSec:parsed.durationSec}:{}),script:parsed.script,...(rewriteSkill?{originalScriptUnchanged:true,rewriteSkill:{id:rewriteSkill.id,resource:rewriteSkill.resource,version:rewriteSkill.version}}:{originalScript:parsed.originalScript}),sourceDigest:source?.sourceDigest||null}
   await prisma.brandMarketingSolution.update({where:{id},data:{status:'READY',output,llmProvider:result.provider,llmModel:result.modelName}})
   return output
