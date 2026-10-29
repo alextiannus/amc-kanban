@@ -10,6 +10,7 @@
  */
 
 import nodemailer from 'nodemailer'
+import { lookup } from 'node:dns/promises'
 import { prisma } from './prisma'
 import {
   SUBSCRIPTION_TERMS_FILENAMES,
@@ -113,16 +114,21 @@ export async function sendEmail(options: SendEmailOptions): Promise<EmailResult>
     return { success: false, error: 'SMTP not configured', deliveryState: 'NOT_SENT' }
   }
   try {
+    // Use the verified Gmail IPv4 route, while keeping TLS certificate
+    // verification bound to the configured hostname.
+    const gmail = smtp.host.toLowerCase() === 'smtp.gmail.com'
+    const host = gmail ? (await lookup(smtp.host, { family: 4 }).catch((error: NodeJS.ErrnoException & { command?: string }) => { error.command = 'CONN'; throw error })).address : smtp.host
     const transporter = nodemailer.createTransport({
-      host: smtp.host,
+      host,
+      ...(gmail ? { tls: { servername: smtp.host } } : {}),
       port: smtp.port,
       secure: smtp.secure,
       auth: smtp.user
         ? { user: smtp.user, pass: smtp.password }
         : undefined,
-      connectionTimeout: 5000,
-      greetingTimeout: 5000,
-      socketTimeout: 10000,
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 60000,
     })
 
     const info = await transporter.sendMail({
