@@ -5,6 +5,23 @@ import {canUserAccessBrand} from './user-management/brandAccess'
 import {requireActorPermission} from './role-permissions/delegation'
 import {videoDraftForLibrary} from './videoLineage'
 const fail=(code:string,status:number)=>Object.assign(new Error(code),{code,status})
+export async function resumeLibraryVideo(userId:string,brandId:string,input:{assetId?:unknown},db:any=prisma){
+ if(!await canUserAccessBrand(brandId,userId,'WRITE'))throw fail('not_found',404)
+ await requireActorPermission(userId,'content.video-making.create',brandId)
+ const assetId=typeof input.assetId==='string'?input.assetId.trim():''
+ if(!assetId||assetId.length>200)throw fail('asset_required',400)
+ const asset=await db.mediaAsset.findFirst({where:{id:assetId,brandId},select:{technicalMetadata:true}})
+ const draft=asset?.technicalMetadata?.videoDraft,editor=draft?.editor
+ if(!editor||editor.brandId!==brandId||typeof editor.script!=='string'||!editor.script.trim()||editor.script.length>12000)throw fail('video_script_unavailable',409)
+ const owned=draft.jobId?await db.videoProductionJob.findFirst({where:{id:draft.jobId,brandId,createdBy:userId},select:{id:true}}):null
+ if(owned)return {mode:'owned',jobId:owned.id}
+ // Shared library snapshots are brand resources, not permission to read another
+ // member's private job. Copy only editable content; never their job/plan/receipt.
+ const ids=[...new Set((Array.isArray(editor.assets)?editor.assets:[]).map((a:any)=>a?.id).filter((id:any)=>typeof id==='string'))].slice(0,40) as string[]
+ const rows=await db.mediaAsset.findMany({where:{brandId,id:{in:ids}},select:{id:true,url:true,mimeType:true,aiCaption:true}})
+ const byId=new Map(rows.map((a:any)=>[a.id,a])),assets=ids.flatMap(id=>byId.has(id)?[byId.get(id)]:[])
+ return {mode:'copy',editor:{brandId,script:editor.script,templateId:null,creativeId:null,targetDurationSec:Number.isFinite(editor.targetDurationSec)&&editor.targetDurationSec>0&&editor.targetDurationSec<=600?editor.targetDurationSec:15,assets,missingAssetIds:[...new Set([...ids.filter(id=>!byId.has(id)),...(Array.isArray(editor.missingAssetIds)?editor.missingAssetIds.filter((id:any)=>typeof id==='string'):[])])],language:['zh','en','id','ms'].includes(editor.language)?editor.language:undefined,targetPlatforms:['tiktok'],lineageWarning:'shared_library_copy'}}
+}
 export async function saveVideoToLibrary(userId:string,brandId:string,input:{videoJobId?:unknown}){
  if(!await canUserAccessBrand(brandId,userId,'WRITE'))throw fail('not_found',404)
  await requireActorPermission(userId,'asset.create',brandId)
