@@ -58,6 +58,12 @@ export async function GET(request: Request) {
       },
     }
 
+    // Dashboard bootstrap only needs its brand selector, not every report snapshot.
+    // Apply this projection after the identical authorization/filter construction.
+    const projection = searchParams.get('view') === 'selector'
+      ? { select: { id:true,name:true,description:true,location:true,address:true,phone:true,website:true,timezone:true,autoPilot:true,status:true,logoUrl:true,industry:true,growthBrandKey:true } }
+      : { include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect } }
+
     const activeBrandFilter = {
       status: 'ACTIVE' as const,
     }
@@ -66,7 +72,7 @@ export async function GET(request: Request) {
     if (isAmcOperator(sessionUser)) {
       const allBrands = await prisma.brand.findMany({
         where: activeBrandFilter,
-        include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+        ...projection,
         orderBy: { createdAt: 'asc' },
       })
       return NextResponse.json(allBrands)
@@ -119,7 +125,7 @@ export async function GET(request: Request) {
         ...activeBrandFilter,
         OR: queryOr
       },
-      include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect },
+      ...projection,
       orderBy: { createdAt: 'asc' },
     })
 
