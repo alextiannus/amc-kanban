@@ -20,7 +20,7 @@ import {CREATIVE_REVISION_KIND,revisionPeriod,revisionSource,creativeDigest,crea
 import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
 import {canonicalCreativeSource} from '../brand-plan/creativeSourceReference'
 import {streamSourceVideoMedia} from '../brand-plan/creativeSourceMedia'
-import {BRAINSTORM_FEED,BRAINSTORM_DECISION,compactBrainstormSource,brainstormSourceBatch,eligibleBrainstormSource,brainstormCreativeId,parseBrainstormDecision,projectBrainstormSource} from './brainstorm-contract'
+import {BRAINSTORM_FEED,BRAINSTORM_DECISION,relevantDefaultBrainstormSource,compactBrainstormSource,brainstormSourceBatch,eligibleBrainstormSource,brainstormCreativeId,parseBrainstormDecision,projectBrainstormSource} from './brainstorm-contract'
 
 export async function authorizeBrainstorm(userId:string,brandId:string,write=false,db:any=prisma){
  const policyRead=readPolicies(db)
@@ -65,7 +65,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
  const authorizedAt=performance.now()
  const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId,true),browserState(db,brandId,true),poolSources(db,brandId,true),separateKeywords?Promise.resolve(null):db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
- const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
+ const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource).filter((s:any)=>relevantDefaultBrainstormSource(s,saved?.input?.matchKeywords||'')),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
  const candidates:{idea:any;current:any}[]=[]
  for(const {month,item} of entries){
@@ -78,7 +78,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  }
  for(const candidate of [...sources.map((source:any)=>({source})),...pool.map((row:any)=>({source:row.source,poolIdeaId:row.id}))]){
   const {source}=candidate,id=source?.inspirationCreativeId,choice:any=byId.get(id)
-  if(!eligibleBrainstormSource(source)||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
+  if(!eligibleBrainstormSource(source)||!relevantDefaultBrainstormSource(source,saved?.input?.matchKeywords||'')||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
   seen.add(id);candidates.push({current:{source},idea:{...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})}})
  }
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]))

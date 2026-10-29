@@ -1,4 +1,4 @@
-export const BRAINSTORM_KEYWORD_POLICY='fixed-keywords-v1'
+export const BRAINSTORM_KEYWORD_POLICY='fixed-keywords-v2'
 const text=(v:unknown,max=5000)=>typeof v==='string'?v.trim().slice(0,max):''
 /** Only confirmed application facts, never research excerpts or AI strategy proposals. */
 export function brainstormTagContext(facts:any,keywords:string){

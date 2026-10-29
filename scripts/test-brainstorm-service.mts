@@ -310,3 +310,15 @@ assert.equal(rows.filter(r=>r.kind==='BRAINSTORM_SOURCE').length,sourceRows,'sam
 beforeTransaction=async()=>{const row=rows.find(r=>r.id===indexId);row.version++}
 await assert.rejects(api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'reference-race-000001'},db,async()=>({contentMatchRequestId:'race',creativeCandidates:[source('cre_race_ref',91)],contentLibraryGaps:[]})),(e:any)=>e.code==='brainstorm_round_changed')
 console.log('PASS source references: bounded writes, version dedup, exact like evidence, cross-brand/version isolation and concurrent index guard')
+
+assert.equal(contract.relevantDefaultBrainstormSource({matchingPolicy:'fixed-keywords-v1',keywordTagIds:[]}),false)
+assert.equal(contract.relevantDefaultBrainstormSource({matchingPolicy:'fixed-keywords-v1',keywordTagIds:['brand']}),true)
+assert.equal(contract.relevantDefaultBrainstormSource({matchingPolicy:'fixed-keywords-v1',keywordTagIds:[]},'用户明确搜索'),true)
+assert.equal(contract.relevantDefaultBrainstormSource({matchingPolicy:'fixed-keywords-v2',keywordTagIds:[]}),true)
+console.log('PASS legacy generic-only default recommendations hidden; explicit search and new scoped results preserved')
+rows.push({id:'legacy-generic-feed',brandId:'brand',kind:'BRAINSTORM_FEED',period:'sources',version:10000,createdAt:new Date(),input:{matchKeywords:''},output:{sources:[{...source('cre_generic_food',300),matchingPolicy:'fixed-keywords-v1',keywordTagIds:[]},{...source('cre_relevant_shoe',200),matchingPolicy:'fixed-keywords-v1',keywordTagIds:['shoe']}]}})
+const legacyRowsBefore=JSON.stringify(rows)
+const scopedListing=await api.listBrainstorm('user','brand',db,true)
+assert.deepEqual(scopedListing.items.map((i:any)=>i.sourceId),['cre_relevant_shoe'])
+assert.equal(JSON.stringify(rows),legacyRowsBefore,'read filter never rewrites or deletes history')
+console.log('PASS stale generic-only recommendations removed before cursor/evidence loading, historical rows untouched')
