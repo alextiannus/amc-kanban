@@ -74,3 +74,11 @@ export function skuReferenceFeedback(value:{skuIds?:unknown;planning?:string;pat
  const missing=ids.map(id=>catalog.find((sku:any)=>sku.id===id)).filter((sku:any)=>!script.includes(sku.name)).map((sku:any)=>({skuId:sku.id,exactName:sku.name}))
  return 'planning must include these exact catalog names (including bilingual text and punctuation). They may appear in a product-reference line, not necessarily spoken copy: '+JSON.stringify(missing)
 }
+
+// Only merchant fields relevant to rewriting; no creative portfolio or research queries.
+export async function readVideoRewriteFacts(db:any,brandId:string){
+ const brand=await db.brand.findUnique({where:{id:brandId},select:{name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{brandTone:true,negPrompts:true,menuItems:true,businessHours:true,brandVoice:true,market:true,brandImage:true,promotionFocus:true}}}})
+ if(!brand)return null
+ const {menuItems,...knowledge}=brand.knowledge||{}
+ return {...brand,knowledge,productCatalog:skuFacts(menuItems)}
+}

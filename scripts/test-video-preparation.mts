@@ -10,7 +10,7 @@ db.$transaction=async(fn:any)=>{const previous=tail;let release!:()=>void;tail=n
 const nativeError=(code:string,status=400)=>Object.assign(Error(code),{code,status})
 function load(file:string,deps:any){const m={exports:{} as any};new Function('require','module','exports',ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>{if(!(key in deps))throw Error('Unexpected dependency '+key);return deps[key]},m,m.exports);return m.exports}
 const variants=load('src/lib/videoPlatformVersions.ts',{'./prisma':{prisma:db},'./role-permissions/delegation':{requireActorPermission:async()=>{}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
-const preparation=load('src/lib/videoPreparation.ts',{'./brand-plan/creativeSourceScript':{creativeSourceScript},'./prisma':{prisma:db},'./videoPlatformVersions':variants,'./ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!authorized)throw nativeError('denied',403)}},'./brand-plan/creativeSource':{readCreativeSource:async()=>{sourceReads++;return {sourceDigest:'a'.repeat(64),sourceEvidence:{originalText:'发布文案 #美食'},timeline:[{visualDescription:'鱼的特写',voiceover:'新鲜现做'}]}}},'./ai-native/facts':{readBrandFacts:async()=>{factsReads++;return {name:'A brand',knowledge:{market:'ID'}}}},'./llmRouter':{callLLM:async(_task:string,prompt:string)=>{modelCalls++;lastPrompt=prompt;assert(prompt.includes('Bahasa Indonesia'));assert(prompt.includes('originalScript'));return {text:JSON.stringify({script:'Adegan 1\nVisual: Ikan segar',originalScript:'Ikan asli'}),provider:'fixture',modelName:'fixture'}}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
+const preparation=load('src/lib/videoPreparation.ts',{'./brand-plan/creativeSourceScript':{creativeSourceScript},'./prisma':{prisma:db},'./videoPlatformVersions':variants,'./ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!authorized)throw nativeError('denied',403)}},'./brand-plan/creativeSource':{readCreativeSource:async()=>{sourceReads++;return {sourceDigest:'a'.repeat(64),sourceEvidence:{originalText:'发布文案 #美食'},timeline:[{visualDescription:'鱼的特写',voiceover:'新鲜现做'}]}}},'./ai-native/facts':{readVideoRewriteFacts:async()=>{factsReads++;return {name:'A brand',knowledge:{market:'ID'}}}},'./llmRouter':{callLLM:async(_task:string,prompt:string)=>{modelCalls++;lastPrompt=prompt;assert(prompt.includes('Bahasa Indonesia'));assert(prompt.includes('originalScript'));return {text:JSON.stringify({script:'Adegan 1\nVisual: Ikan segar',originalScript:'Ikan asli'}),provider:'fixture',modelName:'fixture'}}},'./brand-plan/creativeRevisionContract':{creativeDigest},'./ai-native/contract':{nativeError}})
 const body={action:'translate',creativeId:'idea',language:'id',script:'镜头 1\n画面：鱼',requestKey:'test-translation-123'}
 authorized=false;await assert.rejects(preparation.prepareVideoScript('u','b',body),/denied/);assert.equal(modelCalls,0);authorized=true
 const responses=await Promise.allSettled(Array.from({length:4},()=>preparation.prepareVideoScript('u','b',body)));assert.equal(modelCalls,1);assert(responses.some(r=>r.status==='fulfilled'));assert.equal((await preparation.prepareVideoScript('u','b',body)).language,'id');assert.equal(modelCalls,1)
@@ -44,7 +44,7 @@ assert.equal(emptyResult.script,edited);assert.equal(emptyResult.originalScript,
 assert.deepEqual(await preparation.prepareVideoScript('u','b',emptyBody),emptyResult)
 const rewriteBody={...body,action:'rewrite',requestKey:'rewrite-facts-test-123'}
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1)
-assert(lastPrompt.includes('NOT evidence of this brand'))
+assert(lastPrompt.includes('NOT evidence of this brand'));assert(lastPrompt.includes('store environment'));assert(lastPrompt.includes('A campaign theme is not proof of an active offer'));assert(lastPrompt.includes('validity is unknown'))
 assert(lastPrompt.includes('otherwise remove the claim or use neutral wording'))
 assert(lastPrompt.includes('originalScript must be a faithful translation'))
 assert(!lastPrompt.includes('Preserve shot order, timing, visual subjects, facts, names and prices'))
@@ -60,3 +60,15 @@ assert.equal(factsReads,1)
 await preparation.prepareVideoScript('u','b',{...rewriteBody,requestKey:'explicit-new-rewrite-123'})
 assert.equal(modelCalls,callsBeforeFailureRead+1,'an explicit new rewrite can try again')
 console.log('PASS failed receipt is terminal; only a new request invokes the model again')
+
+let factsQuery:any
+const factsService=load('src/lib/ai-native/facts.ts',{'../brand-plan/creativeVisibility':{},'../sku-library/service.ts':{skuIsNew:()=>false}})
+const narrowFacts=await factsService.readVideoRewriteFacts({brand:{findUnique:async(query:any)=>{factsQuery=query;return {name:'Merchant',description:'Small storefront',knowledge:{promotionFocus:'Member offer valid through 2030',brandImage:'Open kitchen',menuItems:[{id:'dish',name:'Signature dish'}]}}}}},'b')
+assert.equal(factsQuery.where.id,'b')
+assert.equal(factsQuery.select.knowledge.select.marketingSolution,undefined)
+assert.equal(factsQuery.select.knowledge.select.researchReport,undefined)
+assert.equal(narrowFacts.productCatalog[0].name,'Signature dish')
+assert.equal(narrowFacts.knowledge.brandImage,'Open kitchen')
+assert.equal(narrowFacts.knowledge.menuItems,undefined,'do not duplicate raw catalog in model input')
+assert.equal(narrowFacts.knowledge.promotionFocus,'Member offer valid through 2030')
+console.log('PASS rewrite facts: actual products, activity and environment; no portfolio/research query or duplicated catalog')
