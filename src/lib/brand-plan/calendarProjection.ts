@@ -9,6 +9,6 @@ export const calendarSummaryFields=['id','date','brainstorm','brandDismissal','c
 export const calendarSummarySql=`with calendar as materialized (${calendarValueSql}), months as materialized (
  select m.key, m.value from calendar c cross join lateral jsonb_each(case when jsonb_typeof(c.value->'months')='object' then c.value->'months' else '{}'::jsonb end) m
 ), projected as materialized (
- select key,coalesce((select jsonb_agg((select coalesce(jsonb_object_agg(f.key,f.value),'{}'::jsonb) from jsonb_each(case when jsonb_typeof(i)='object' then i else '{}'::jsonb end) f where f.key=any(array[${calendarSummaryFields.map(f=>"'"+f+"'").join(',')}]::text[])) order by ord)
+ select key,coalesce((select jsonb_agg((select coalesce(jsonb_object_agg(f.key,i->f.key),'{}'::jsonb) from unnest(array[${calendarSummaryFields.map(f=>"'"+f+"'").join(',')}]::text[]) f(key) where jsonb_typeof(i)='object' and i ? f.key) order by ord)
  from jsonb_array_elements(case when jsonb_typeof(value)='array' then value else '[]'::jsonb end) with ordinality a(i,ord)),'[]'::jsonb) as items from months
 ) select jsonb_build_object('publishingCalendar',jsonb_build_object('months',coalesce(jsonb_object_agg(key,items),'{}'::jsonb))) as "marketingSolution" from projected`
