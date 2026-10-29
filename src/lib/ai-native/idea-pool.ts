@@ -131,19 +131,30 @@ export async function poolIdeaLibrary(brandId:string,id:string,facts:any):Promis
   const payload={contentMatchRequestId:idea.match_id,sources:[idea.source],gaps:[],libraryVersions:idea.library_versions,contextDigest:digest(facts)}
   return {...payload,libraryDigest:digest(payload),retrievedAt:new Date(idea.created_at).toISOString()}
 }
+// Cheap eligibility checks precede the large brand/workspace projection.
+export function ideaRefreshDue(row:any,now=new Date()){
+ return !row||(['failed','running'].includes(row.status)&&Number(row.attempts)<3&&new Date(row.started_at).getTime()<now.getTime()-15*60_000)
+}
+export async function runIdeaPoolMaintenance(pool:Pool,db:any=prisma,factsReader=readBrandFacts,refresh=refreshBrandIdeas,now=new Date(),isStopped=()=>false){
+ const brands=await db.brand.findMany({where:{status:'ACTIVE'},select:{id:true,timezone:true}})
+ const due=brands.flatMap((brand:any)=>{try{const local=localPlanningTime(brand.timezone,now);return local.night?[{...brand,day:local.day}]:[]}catch{return []}})
+ const rows=due.length?(await pool.query('SELECT brand_id,local_day,status,attempts,started_at FROM amc_iaic.brand_idea_days WHERE brand_id=ANY($1::text[]) AND local_day=ANY($2::text[])',[due.map((b:any)=>b.id),[...new Set(due.map((b:any)=>b.day))]])).rows:[]
+ const byDay=new Map(rows.map(row=>[`${row.brand_id}:${row.local_day}`,row]))
+ for(const brand of due){
+  if(isStopped())break
+  if(!ideaRefreshDue(byDay.get(`${brand.id}:${brand.day}`),now))continue
+  try{const facts=await factsReader(db,brand.id);if(facts)await refresh(pool,facts,undefined,now)}catch{console.error('[idea-pool] daily brand search unavailable',brand.id)}
+ }
+ for(const brand of brands){if(isStopped())break;await advanceDailyPlanning(pool,brand.id)}
+}
 export function startIdeaPoolWorker(){
-  if(state.amcIdeaPoolWorker)return
-  state.amcIdeaPoolWorker=true
-  let running=false,stopped=false
-  const tick=async()=>{
-    if(running||stopped)return;running=true
-    try{
-      const pool=await database()
-      // Durable daily lease: one successful refresh, bounded recovery after failures/restarts.
-      const brands=await prisma.brand.findMany({where:{status:'ACTIVE'},select:{id:true}})
-      for(const brand of brands){if(stopped)break;try{const facts=await readBrandFacts(prisma,brand.id);if(facts&&localPlanningTime(facts.timezone).night)await refreshBrandIdeas(pool,facts)}catch{console.error('[idea-pool] daily brand search unavailable',brand.id)}try{await advanceDailyPlanning(pool,brand.id)}catch{console.error('[idea-pool] daily planning unavailable',brand.id)}}
-    }catch{console.error('[idea-pool] worker unavailable')}finally{running=false}
-  }
-  void tick();const timer=setInterval(()=>void tick(),60000);timer.unref()
-  process.once('SIGTERM',()=>{stopped=true;clearInterval(timer)})
+ if(state.amcIdeaPoolWorker)return
+ state.amcIdeaPoolWorker=true
+ let running=false,stopped=false
+ const tick=async()=>{
+  if(running||stopped)return;running=true
+  try{await runIdeaPoolMaintenance(await database(),prisma,readBrandFacts,refreshBrandIdeas,new Date(),()=>stopped)}catch{console.error('[idea-pool] worker unavailable')}finally{running=false}
+ }
+ void tick();const timer=setInterval(()=>void tick(),60000);timer.unref()
+ process.once('SIGTERM',()=>{stopped=true;clearInterval(timer)})
 }

@@ -77,7 +77,7 @@ export function startNativeWorker(){
   maintainAll()
   const timer=setInterval(maintainAll,60000);timer.unref()
   let saving=false
-  const saves=setInterval(()=>{if(saving||globalState.amcNativeStopping)return;saving=true;void finalizePlanningTasks().catch(()=>{}).finally(()=>{saving=false})},3000);saves.unref()
+  const saves=setInterval(()=>{if(saving||globalState.amcNativeStopping)return;saving=true;void finalizePlanningTasks().catch(()=>{}).finally(()=>{saving=false})},15000);saves.unref()
   process.once('SIGTERM',()=>{globalState.amcNativeStopping=true;clearInterval(timer);clearInterval(saves);void Promise.allSettled((['default','conversation'] as const).map(async lane=>{const pending=globalState[hostKey(lane)];if(!pending)return;const host=await pending.catch(()=>null);if(host){const result=await host.app.runtime.drain({timeoutMs:20000});if(result.drained)await closeHostPools(host)}}))})
 }
 async function authorizedHost(userId:string,brandId:string,daily=false){const actor=daily?dailyActorFor(brandId,userId):actorFor(brandId,userId);await requireActor(actor);return {actor,...await getNativeHost()}}
@@ -189,7 +189,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':['conversation','sku_proposal','creative_adaptation'].includes(intent.kind)?'':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
   const task=await publicTask(app,actor,receipt.id)
-  if(intent.kind==='conversation')wakeConversationWorker(app)
+  wakeConversationWorker(app)
   return task
 }
 async function publicTask(app:Application,actor:NativeActor,id:string){
@@ -331,6 +331,7 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
   if(['resume','provide_input'].includes(body.action))assertUsageSettled(await app.ledger.taskUsage(await app.scope(actor),id))
   const input={id,...(body.action==='provide_input'?{input:body.input}:{}),...(body.action==='control_result'?{requestKey:key}:{})}
   const receipt=await app.dispatcher.invoke(`tasks.${body.action}`,input,{actor,callId:key})
+  if(['resume','provide_input'].includes(body.action))wakeConversationWorker(app)
   return {receipt,task:await app.runtime.state(actor,id).then(t=>({id:t.id,status:t.status,waitingReason:t.waiting_reason}))}
 }
 export async function adoptNativeCandidate(userId:string,brandId:string,id:string,body:any,autopilotRunId?:string){
@@ -453,7 +454,7 @@ async function finalizePlanningResult(pool:Pool,userId:string,brandId:string,id:
 /** Server-owned completion, independent of browser polling. Never generates or publishes. */
 export async function finalizePlanningTasks(){
  const {pool}=await getNativeHost()
- const rows=(await pool.query("SELECT task_id,subject_id,intent->>'brandId' AS brand_id FROM amc_ai_requests WHERE intent->>'autoSavePlanning'='true' AND task_id IS NOT NULL AND planning_result IS NULL ORDER BY planning_checked_at NULLS FIRST,created_at LIMIT 12")).rows
+ const rows=(await pool.query("SELECT task_id,subject_id,intent->>'brandId' AS brand_id FROM amc_ai_requests WHERE intent->>'autoSavePlanning'='true' AND task_id IS NOT NULL AND planning_result IS NULL AND (planning_checked_at IS NULL OR planning_checked_at < now()-interval '30 seconds') ORDER BY planning_checked_at NULLS FIRST,created_at LIMIT 12")).rows
  for(const row of rows){
   try{
    await pool.query('UPDATE amc_ai_requests SET planning_checked_at=now() WHERE task_id=$1 AND subject_id=$2',[row.task_id,row.subject_id])

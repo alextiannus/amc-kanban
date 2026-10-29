@@ -84,5 +84,5 @@ export async function openPlatformTeam({pool,applicationId,teamId,builtinActor,a
  ];
  const publicDispatcher=new CapabilityDispatcher({capabilities:publicCapabilities});
  try{await runtime.initialize();}catch(error){await runtime.stop();throw error;}
- return {dispatcher:publicDispatcher,runtime,tasks,self,workspace,reviews,ledger,budgetScope,registry,models,start:()=>runtime.start(),close:()=>runtime.stop()};
+ return {dispatcher:publicDispatcher,runtime,tasks,self,workspace,reviews,ledger,budgetScope,registry,models,start:()=>{runtime.start(30000);void runtime.tick().catch(()=>console.warn("[amc-platform] initial executor check deferred"));},close:()=>runtime.stop()};
 }

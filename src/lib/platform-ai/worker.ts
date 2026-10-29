@@ -60,8 +60,9 @@ export async function getPlatformTeam(){
 export async function tickPlatformReports(){
   const pool=await reportPool()
   if(!(await engineeringConfig(pool))?.enabled)return
-  const team=await getPlatformTeam()
   const rows=(await pool.query("SELECT id,task_id FROM public.amc_bug_reports WHERE runtime_closed_at IS NULL AND status NOT IN ('paused','failed','cancelled') ORDER BY created_at LIMIT 20")).rows
+  if(!rows.length)return
+  const team=await getPlatformTeam()
   for(const row of rows){
     try{
     if(!row.task_id){
@@ -86,6 +87,6 @@ export function startPlatformWorker(){
   state.amcPlatformWorker=true
   let running=false,stopping=false
   const tick=async()=>{if(running||stopping)return;running=true;try{await tickPlatformReports()}catch(error){console.error('[amc-platform] worker unavailable',error instanceof Error?error.name:'unknown')}finally{running=false}}
-  const timer=setInterval(()=>void tick(),5000);timer.unref();void tick()
+  const timer=setInterval(()=>void tick(),30000);timer.unref();void tick()
   process.once('SIGTERM',()=>{stopping=true;clearInterval(timer);void state.amcPlatformTeam?.then(async team=>{const result=await team.runtime.drain({timeoutMs:20000});if(result.drained)await team.pool.end()})})
 }

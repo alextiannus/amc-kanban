@@ -65,5 +65,5 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  dispatcher.tasks=runtime;
  try{await runtime.initialize();}catch(error){await runtime.stop();throw error;}
  const entry={capabilities:dispatcher.capabilities,invoke:(name,input,context)=>name==='agent.work'?startSessionTask({sessions,actor:context.actor,input,startTask:()=>dispatcher.invoke(name,input,context)}):dispatcher.invoke(name,input,context)};
- return {dispatcher:entry,hostContext:hostContexts,mandates:assistantMandates,runtime,tasks,taskListing,plans,deferred,events,eventSubscriptions,eventTasks,registry,memory,workspace,skills,knowledge,knowledgeStore,sessions,models,modelRouting,ledger,scope,start:()=>{deferred?.start();runtime.start();},close:async()=>{await deferred?.stop();await runtime.stop();}};
+ return {dispatcher:entry,hostContext:hostContexts,mandates:assistantMandates,runtime,tasks,taskListing,plans,deferred,events,eventSubscriptions,eventTasks,registry,memory,workspace,skills,knowledge,knowledgeStore,sessions,models,modelRouting,ledger,scope,start:()=>{deferred?.start(60000);runtime.start(30000);void runtime.tick().catch(()=>console.warn("[amc-ai] initial executor check deferred"));},close:async()=>{await deferred?.stop();await runtime.stop();}};
 }

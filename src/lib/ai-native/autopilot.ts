@@ -258,9 +258,33 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
  }finally{await c.query('SELECT pg_advisory_unlock(hashtextextended($1,0))',[`autopilot-admission:${brandId}`]);c.release()}
 }
 const state=globalThis as typeof globalThis&{autopilotWorker?:boolean}
+export function autopilotCheckDelay(status:string|undefined){
+ return ['waiting','waiting_input','paused','succeeded','failed','cancelled'].includes(status||'')?300000:60000
+}
 export function startAutopilotWorker(){
  if(state.autopilotWorker)return;state.autopilotWorker=true
- let busy=false,stopped=false
- const tick=async()=>{if(busy||stopped)return;busy=true;try{const pool=await autopilotDb();for(const brand of await prisma.brand.findMany({where:{status:'ACTIVE'},select:{id:true}})){try{await initializeBrandAutopilotDefault(brand.id)}catch{console.error('[autopilot] default setup unavailable',brand.id)}}for(const row of (await pool.query('SELECT brand_id FROM amc_iaic.autopilot_settings WHERE enabled=true')).rows){if(stopped)break;try{await admitAutopilotDay(pool,row.brand_id)}catch{console.error('[autopilot] admission unavailable',row.brand_id)}}}catch{console.error('[autopilot] worker unavailable')}finally{busy=false}}
+ let busy=false,stopped=false,nextDefaults=0
+ const checked=new Map<string,{revision:number;at:number;status:string}>()
+ const tick=async()=>{
+  if(busy||stopped)return;busy=true
+  try{
+   const pool=await autopilotDb(),now=Date.now()
+   if(now>=nextDefaults){
+    const missing=(await pool.query(`SELECT b.id FROM public."Brand" b WHERE b.status='ACTIVE' AND NOT EXISTS (SELECT 1 FROM amc_iaic.autopilot_settings s WHERE s.brand_id=b.id)`)).rows
+    for(const brand of missing){if(stopped)break;try{await initializeBrandAutopilotDefault(brand.id)}catch{console.error('[autopilot] default setup unavailable',brand.id)}}
+    nextDefaults=now+300000
+   }
+   const rows=(await pool.query(`SELECT s.brand_id,s.revision,r.status FROM amc_iaic.autopilot_settings s LEFT JOIN LATERAL (SELECT status FROM amc_iaic.autopilot_runs WHERE brand_id=s.brand_id AND owner_id=s.owner_id ORDER BY updated_at DESC LIMIT 1) r ON true WHERE s.enabled=true`)).rows
+   const enabled=new Set(rows.map(row=>row.brand_id));for(const id of checked.keys())if(!enabled.has(id))checked.delete(id)
+   for(const row of rows){
+    if(stopped)break
+    const previous=checked.get(row.brand_id)
+    if(previous&&previous.revision===row.revision&&previous.status===row.status&&now-previous.at<autopilotCheckDelay(row.status))continue
+    // Back off failures as well; admission retains its fresh authorization and durable lock.
+    checked.set(row.brand_id,{revision:row.revision,at:now,status:row.status})
+    try{await admitAutopilotDay(pool,row.brand_id)}catch{console.error('[autopilot] admission unavailable',row.brand_id)}
+   }
+  }catch{console.error('[autopilot] worker unavailable')}finally{busy=false}
+ }
  void tick();const timer=setInterval(()=>void tick(),30000);timer.unref();process.once('SIGTERM',()=>{stopped=true;clearInterval(timer)})
 }
