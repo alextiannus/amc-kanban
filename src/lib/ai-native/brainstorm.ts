@@ -81,10 +81,11 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  }
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]))
  candidates.sort((a,b)=>(ranks.get(a.idea.sourceId)??Infinity)-(ranks.get(b.idea.sourceId)??Infinity))
- const start=after?candidates.findIndex(c=>c.idea.sourceId===after)+1:0
+ const cursorKey=(c:{idea:any})=>c.idea.savedCreativeId?`saved:${c.idea.savedCreativeId}`:c.idea.sourceId
+ const start=after?candidates.findIndex(c=>cursorKey(c)===after)+1:0
  if(after&&start===0)throw nativeError('brainstorm_cursor_changed',409)
  const hasMore=firstScreen&&candidates.length>start+8,requested=firstScreen?candidates.slice(start,start+8):candidates
- const nextCursor=hasMore?requested.at(-1)?.idea.sourceId:undefined
+ const nextCursor=hasMore?cursorKey(requested[requested.length-1]):undefined
  const dataAt=performance.now()
  const browse=await fetchBrainstormBrowse(requested.map(c=>c.idea.sourceId),separateKeywords?undefined:brainstormTagContext({...facts,productCatalog:skuFacts(facts?.knowledge?.menuItems)},saved?.input?.matchKeywords||''))
  const evidence=new Map(browse.items.map((entry:any)=>[entry.creativeId,entry]))

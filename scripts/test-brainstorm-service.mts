@@ -237,3 +237,11 @@ assert.equal(new Set(pages.flatMap(p=>p.items.map((i:any)=>i.sourceId))).size,25
 await assert.rejects(api.listBrainstorm('user','brand',db,true,'cre_missing',true),(e:any)=>e.code==='brainstorm_cursor_changed')
 db.brand.findUnique=findBrand
 console.log('PASS bounded cursor pages, no duplicate sources, no brand facts/tag dependency, invalid cursor rejection')
+
+// Saved calendar revisions may share a source; cursors address the exact card.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{'2026-10':Array.from({length:10},(_,i)=>({id:'saved-'+i,title:'Saved '+i,source:source('cre_shared',90)}))}}}}
+const calendarFirst=await api.listBrainstorm('user','brand',db,true,undefined,true)
+assert.equal(calendarFirst.nextCursor,'saved:saved-7')
+const calendarNext=await api.listBrainstorm('user','brand',db,true,calendarFirst.nextCursor,true)
+assert.equal(calendarNext.items.length,2);assert.equal(calendarNext.hasMore,false)
+console.log('PASS saved cards sharing a source retain exact cursor identity')
