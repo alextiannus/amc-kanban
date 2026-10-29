@@ -19,7 +19,7 @@ const filter=(where:any,row:any)=>Object.entries(where||{}).every(([key,value]:a
 const db:any={
  user:{findUnique:async()=>({id:'user',type:'HUMAN',status:'ACTIVE',businessRoles:[]})},
  brand:{findUnique:async()=>({id:'brand',name:'Merchant',description:'Real food',timezone:'Asia/Singapore'})},
- brandKnowledge:{findUnique:async()=>{queryCount++;return structuredClone(knowledge)},upsert:async()=>knowledge,update:async({data}:any)=>{knowledge={...knowledge,...structuredClone(data)};return knowledge}},
+ brandKnowledge:{findUnique:async()=>{queryCount++;return structuredClone(knowledge)},upsert:async(args:any)=>{assert.deepEqual(args.select,{id:true});return {id:"knowledge"}},update:async({data}:any)=>{knowledge={...knowledge,...structuredClone(data)};return knowledge}},
  brandMarketingSolution:{
   findFirst:async({where}:any)=>{queryCount++;return rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version)[0]||null},
   findMany:async({where,distinct,take}:any)=>{queryCount++;const found=rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version||b.createdAt-a.createdAt),seen=new Set();return found.filter(row=>!distinct||!seen.has(row.period)&&!!seen.add(row.period)).slice(0,take||Infinity)},
