@@ -1,3 +1,4 @@
+import * as brainstormStorage from '../src/lib/ai-native/brainstorm-storage.ts'
 import * as browseSource from '../src/lib/ai-native/browse-source.ts'
 import * as browseKnowledge from '../src/lib/ai-native/browse-knowledge.ts'
 import * as brainstormMatch from '../src/lib/ai-native/brainstorm-match.ts'
@@ -21,7 +22,8 @@ const db:any={
  brand:{findUnique:async()=>({id:'brand',name:'Merchant',description:'Real food',timezone:'Asia/Singapore'})},
  brandKnowledge:{findUnique:async()=>{queryCount++;return structuredClone(knowledge)},upsert:async(args:any)=>{assert.deepEqual(args.select,{id:true});return {id:"knowledge"}},update:async({data}:any)=>{knowledge={...knowledge,...structuredClone(data)};return knowledge}},
  brandMarketingSolution:{
-  findFirst:async({where}:any)=>{queryCount++;return rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version)[0]||null},
+  update:async({where,data}:any)=>{const row=rows.find(r=>r.id===where.id);Object.assign(row,structuredClone(data));return row},
+  findFirst:async({where}:any)=>{queryCount++;return structuredClone(rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version)[0]||null)},
   findMany:async({where,distinct,take}:any)=>{queryCount++;const found=rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version||b.createdAt-a.createdAt),seen=new Set();return found.filter(row=>!distinct||!seen.has(row.period)&&!!seen.add(row.period)).slice(0,take||Infinity)},
   create:async({data}:any)=>{const row={...structuredClone(data),id:'row-'+rows.length,createdAt:new Date()};rows.push(row);return row}},
  auditLog:{create:async({data}:any)=>{if(failAudit)throw Error('audit-failed');audits.push(data)}},
@@ -30,7 +32,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
@@ -199,7 +201,7 @@ const resolvedIds:string[][]=[],originalBrowse=clients.fetchBrainstormBrowse
 clients.fetchBrandKeywords=async()=>({revision:1,tags:[]})
 clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{resolvedIds.push(ids);return originalBrowse(ids,context)}
 const preview=await api.listBrainstorm('user','brand',db,true)
-assert.equal(preview.hasMore,true);assert.equal(preview.canDecide,false);assert.equal(preview.items.length,8);assert.equal(resolvedIds[0].length,8)
+assert.equal(preview.hasMore,true);assert.equal(preview.canDecide,true);assert.equal(preview.items.length,8);assert.equal(resolvedIds[0].length,8)
 const complete=await api.listBrainstorm('user','brand',db)
 assert.equal(complete.hasMore,false);assert.equal(complete.canDecide,true);assert.equal(complete.items.length,25);assert.equal(resolvedIds[1].length,25)
 assert.deepEqual(preview.items.map((i:any)=>i.sourceId),complete.items.slice(0,8).map((i:any)=>i.sourceId))
@@ -269,7 +271,9 @@ assert(Buffer.byteLength(JSON.stringify(historical))>2*1024*1024)
 const nextBatch={action:'loadMore',requestKey:'large-history-000001'}
 const continued=await api.loadMoreBrainstorm('user','brand',nextBatch,db,async()=>({contentMatchRequestId:'large-next',creativeCandidates:[source('cre_after_large',91)],contentLibraryGaps:[]}))
 assert.equal(continued.items.length,1);assert.equal(continued.exhausted,false)
-const latestLarge=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1).output.sources
+const latestRefs=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1).output.sources
+assert(Buffer.byteLength(JSON.stringify(latestRefs))<50000)
+const latestLarge=await Promise.all(latestRefs.map((ref:any)=>brainstormStorage.storedBrainstormSource(db,'brand',ref)))
 assert.equal(latestLarge.length,25)
 assert(Buffer.byteLength(JSON.stringify(latestLarge))>2*1024*1024,'legitimate original text is not truncated to fit a cumulative cap')
 for(let i=0;i<24;i++){
@@ -285,3 +289,24 @@ const beforeOversize=rows.length
 await assert.rejects(api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'oversize-batch-000001'},db,async()=>({contentMatchRequestId:'oversize',creativeCandidates:[{...source('cre_oversize',91),sourceEvidence:{originalText:'x'.repeat(2*1024*1024)}}],contentLibraryGaps:[]})),(e:any)=>e.code==='library_evidence_too_large')
 assert.equal(rows.length,beforeOversize,'a genuinely oversized new batch writes no feed/receipt')
 console.log('PASS large history continues, immutable full timeline/text and identity, compact analysis, idempotency, per-batch limit')
+
+const feedsBefore=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).length
+const sourcesBefore=rows.filter(r=>r.kind==='BRAINSTORM_SOURCE').length
+const indexId=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1).id
+await api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'reference-next-000001'},db,async()=>({contentMatchRequestId:'next',creativeCandidates:[source('cre_next_ref',91)],contentLibraryGaps:[]}))
+assert.equal(rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).length,feedsBefore,'continuation updates one lightweight index, no cumulative history copy')
+assert.equal(rows.filter(r=>r.kind==='BRAINSTORM_SOURCE').length,sourcesBefore+1,'only the new source gets a snapshot')
+assert.equal(rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1).id,indexId)
+const ref=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1).output.sources[0]
+await assert.rejects(brainstormStorage.storedBrainstormSource(db,'another-brand',ref))
+await assert.rejects(brainstormStorage.storedBrainstormSource(db,'brand',{...ref,sourceDigest:'b'.repeat(64)}))
+await api.decideBrainstorm('user','brand',{action:'decide',sourceId:ref.inspirationCreativeId,sourceDigest:ref.sourceDigest,decision:'like',expectedVersion:0},db)
+const referenceLiked:any=Object.values(knowledge.marketingSolution.publishingCalendar.months).flat()[0]
+assert.deepEqual(referenceLiked.nativeSourceSnapshot.source.sourceEvidence.timeline,historicalSnapshot[0].sourceEvidence.timeline)
+assert.equal(referenceLiked.nativeSourceSnapshot.source.sourceEvidence.originalText,historicalSnapshot[0].sourceEvidence.originalText)
+const sourceRows=rows.filter(r=>r.kind==='BRAINSTORM_SOURCE').length
+await brainstormStorage.storeBrainstormSources(db,'brand','user',[historicalSnapshot[0]])
+assert.equal(rows.filter(r=>r.kind==='BRAINSTORM_SOURCE').length,sourceRows,'same source version saved only once')
+beforeTransaction=async()=>{const row=rows.find(r=>r.id===indexId);row.version++}
+await assert.rejects(api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'reference-race-000001'},db,async()=>({contentMatchRequestId:'race',creativeCandidates:[source('cre_race_ref',91)],contentLibraryGaps:[]})),(e:any)=>e.code==='brainstorm_round_changed')
+console.log('PASS source references: bounded writes, version dedup, exact like evidence, cross-brand/version isolation and concurrent index guard')

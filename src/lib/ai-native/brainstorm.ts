@@ -1,3 +1,4 @@
+import {storeBrainstormSources,storedBrainstormSource} from './brainstorm-storage'
 import {browseFeedSql,browsePoolSql} from './browse-source'
 import {readBrowseKnowledge} from './browse-knowledge'
 import {brainstormMatchRequest,brainstormTagContext,BRAINSTORM_KEYWORD_POLICY} from './brainstorm-match'
@@ -94,7 +95,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
  const tagResult=browse.brandTags
  console.info('[brainstorm-timing]',JSON.stringify({brandId,authorizationMs:Math.round(authorizedAt-started),dataMs:Math.round(dataAt-authorizedAt),contentMs:Math.round(performance.now()-dataAt),totalMs:Math.round(performance.now()-started),candidates:candidates.length,requested:requested.length,firstScreen,items:items.length}))
- return {ok:true,brandId,canDecide:canDecide&&!hasMore,hasMore,...(nextCursor?{nextCursor}:{}),matchKeywords:saved?.input?.matchKeywords||'',brandKeywordRevision:(tagResult as any)?.revision,keywordsChanged:!!(tagResult as any)?.revision&&saved?.input?.brandKeywordRevision!==(tagResult as any).revision,matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
+ return {ok:true,brandId,canDecide,hasMore,...(nextCursor?{nextCursor}:{}),matchKeywords:saved?.input?.matchKeywords||'',brandKeywordRevision:(tagResult as any)?.revision,keywordsChanged:!!(tagResult as any)?.revision&&saved?.input?.brandKeywordRevision!==(tagResult as any).revision,matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
@@ -144,14 +145,14 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{},select:{id:true}})
   await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
   const latest=await feed(tx,brandId)
-  if(latest?.id!==previous?.id){if(editing)throw nativeError('brainstorm_keywords_changed',409);return}
+  if(latest?.id!==previous?.id||latest?.version!==previous?.version){if(editing)throw nativeError('brainstorm_keywords_changed',409);return}
   // Decisions and refreshes share the same brand lock. Re-read deferred choices
   // after acquiring it so a concurrent defer cannot be lost by this refresh.
   const previousSources=latest?.output?.sources||[],previousChoices=await decisions(tx,brandId,previousSources.map((s:any)=>s.inspirationCreativeId))
   const deferredIds=new Set(previousChoices.filter((d:any)=>d.input?.decision==='defer').map((d:any)=>d.period))
   const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId)).map(compactBrainstormSource)
   const seen=new Set<string>(),sources=[...incoming,...retained].filter((s:any)=>eligibleBrainstormSource(s)&&!seen.has(s.inspirationCreativeId)&&!!seen.add(s.inspirationCreativeId))
-  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:(response.brandTags as any)?.revision??currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:response.brandTags?.tags?.map((t:any)=>t.label)||[],matchingTagDefinitions:response.brandTags?.tags||[],keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources}}})
+  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:(response.brandTags as any)?.revision??currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:response.brandTags?.tags?.map((t:any)=>t.label)||[],matchingTagDefinitions:response.brandTags?.tags||[],keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}})
  })
  return listBrainstorm(userId,brandId,db)
 }
@@ -170,7 +171,7 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
    return {ok:true,replayed:true,...previous.output,version:previous.version}
   }
   if(['like','dislike'].includes(previous?.input?.decision)||(previous?.version||0)!==input.expectedVersion)throw nativeError('brainstorm_decision_changed',409)
-  const saved=await feed(tx,brandId),pool=input.poolIdeaId?(await poolSources(tx,brandId)).find((row:any)=>row.id===input.poolIdeaId&&row.source_id===input.sourceId):null,source=input.poolIdeaId?pool?.source:saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===input.sourceId)
+  const saved=await feed(tx,brandId),pool=input.poolIdeaId?(await poolSources(tx,brandId)).find((row:any)=>row.id===input.poolIdeaId&&row.source_id===input.sourceId):null,source=input.poolIdeaId?pool?.source:await storedBrainstormSource(tx,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===input.sourceId))
   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
   if(source.sourceDigest!==input.sourceDigest)throw nativeError('creative_source_changed',409)
   let creativeId:string|null=null,month:string|null=null
@@ -221,7 +222,7 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
   resolved=(await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchCreativeSourceEvidence)).raw
  }else{
   const saved=await feed(db,brandId)
-  const source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId)||(await poolSources(db,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
+  const source=await storedBrainstormSource(db,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId))||(await poolSources(db,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
   const current={inspirationCreativeId:body.sourceId,nativeSourceSnapshot:{source}}
   resolved=(await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchCreativeSourceEvidence)).raw
@@ -248,7 +249,7 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
    source=source||canonical
   }else{
    const saved=await feed(tx,brandId)
-   source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId)
+   source=await storedBrainstormSource(tx,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId))
    if(!source)source=(await poolSources(tx,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
    if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
    sourceId=body.sourceId
@@ -378,12 +379,14 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
   const receipt=await tx.brandMarketingSolution.findFirst({where:receiptWhere,orderBy:{version:'desc'}})
   if(receipt)return receipt.output
   const latest=await feed(tx,brandId)
-  if(latest?.id!==previous?.id)throw nativeError('brainstorm_round_changed',409)
+  if(latest?.id!==previous?.id||latest?.version!==previous?.version)throw nativeError('brainstorm_round_changed',409)
   if(source){
    const sources=[...(latest?.output?.sources||[]).map(compactBrainstormSource),...incoming]
    const now=await browserState(tx,brandId,true),decision=await decisions(tx,brandId,incoming.map(s=>s.inspirationCreativeId))
    if(incoming.some(s=>now.selected.has(s.inspirationCreativeId)||now.disliked.has(s.inspirationCreativeId))||decision.some((d:any)=>['like','dislike'].includes(d.input?.decision)))throw nativeError('brainstorm_round_changed',409)
-   await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{...latest?.input,matchKeywords:keywords,brandKeywordRevision:currentKeywords.revision,keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources}}})
+   const data={version:(latest?.version||0)+1,input:{...latest?.input,matchKeywords:keywords,brandKeywordRevision:currentKeywords.revision,keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}
+   if(latest?.output?.storagePolicy==='references-v1')await tx.brandMarketingSolution.update({where:{id:latest.id},data})
+   else await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,...data}})
   }
   const output={ok:true,brandId,items,exhausted:!source}
   await tx.brandMarketingSolution.create({data:{...receiptWhere,version:1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId},output}})
