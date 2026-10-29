@@ -18,3 +18,18 @@ export function projectBrainstormSource(source:any,brandId:string,decision:any){
   videoUrl:source.sourceVideo?.videoUrl?`/api/brands/${encodeURIComponent(brandId)}/ai/brainstorm/${encodeURIComponent(source.inspirationCreativeId)}/media`:null,
   thumbnailUrl:publicSourceMediaUrl(source.sourceVideo?.thumbnailUrl||source.sourcePost?.coverUrl),originalScript:originalText,viralElements:elements,recommendationReason:typeof source.recommendationReason==='string'?source.recommendationReason:'',decision:decision?.input?.decision||null,decisionVersion:decision?.version||0}
 }
+
+/** Keep pinned evidence needed by browsing/selection without repeating raw analysis.
+ * Full analysis remains in Content and immutable earlier feed versions; replication
+ * already reloads evidence and validates its revision/digest before copying.
+ */
+export function compactBrainstormSource(source:any){
+ if(!source?.sourceEvidence||typeof source.sourceEvidence!=='object'||Array.isArray(source.sourceEvidence))return source
+ const {analysis,features,...evidence}=source.sourceEvidence
+ return {...source,sourceEvidence:evidence}
+}
+export function brainstormSourceBatch(sources:any[]){
+ const compact=sources.map(compactBrainstormSource)
+ if(Buffer.byteLength(JSON.stringify(compact))>2*1024*1024)throw nativeError('library_evidence_too_large',413)
+ return compact
+}

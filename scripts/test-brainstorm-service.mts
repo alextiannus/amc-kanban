@@ -259,3 +259,29 @@ console.log("PASS partial failure retains validated batch, scoped tag, replay, a
 const brandRead=db.brand.findUnique;db.brand.findUnique=async(args:any)=>{assert.deepEqual(Object.keys(args.select.knowledge.select).sort(),["menuItems","productAssumptions","promotionFocus"]);return brandRead(args)}
 await api.refreshBrainstorm("user","brand",{action:"refresh",force:true},db,async()=>({contentMatchRequestId:"lean",creativeCandidates:[],contentLibraryGaps:[]}));db.brand.findUnique=brandRead
 console.log("PASS refresh reads only matching facts, never research or whole brand workspace")
+
+// Regression: the old cumulative 2 MiB guard blocked normal continuation.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}};evidenceRevision='r1'
+const historical=Array.from({length:24},(_,i)=>({...source(`cre_large_${i}`,91),sourceEvidence:{...source(`cre_large_${i}`,91).sourceEvidence,originalText:'文'.repeat(32000),analysis:{raw:'x'.repeat(50000)},features:{raw:'y'.repeat(50000)}}}))
+const historicalSnapshot=structuredClone(historical)
+rows.push({id:'large-original',brandId:'brand',kind:contract.BRAINSTORM_FEED,period:'sources',version:1,createdAt:new Date(),input:{},output:{sources:historical}})
+assert(Buffer.byteLength(JSON.stringify(historical))>2*1024*1024)
+const nextBatch={action:'loadMore',requestKey:'large-history-000001'}
+const continued=await api.loadMoreBrainstorm('user','brand',nextBatch,db,async()=>({contentMatchRequestId:'large-next',creativeCandidates:[source('cre_after_large',91)],contentLibraryGaps:[]}))
+assert.equal(continued.items.length,1);assert.equal(continued.exhausted,false)
+const latestLarge=rows.filter(r=>r.kind===contract.BRAINSTORM_FEED).at(-1).output.sources
+assert.equal(latestLarge.length,25)
+assert(Buffer.byteLength(JSON.stringify(latestLarge))>2*1024*1024,'legitimate original text is not truncated to fit a cumulative cap')
+for(let i=0;i<24;i++){
+ assert.deepEqual(latestLarge[i].sourceEvidence.timeline,historicalSnapshot[i].sourceEvidence.timeline)
+ assert.equal(latestLarge[i].sourceEvidence.originalText,historicalSnapshot[i].sourceEvidence.originalText)
+ assert.equal(latestLarge[i].sourceDigest,historicalSnapshot[i].sourceDigest)
+ assert.equal(latestLarge[i].sourceEvidence.analysis,undefined)
+ assert.equal(latestLarge[i].sourceEvidence.features,undefined)
+}
+assert.deepEqual(historical,historicalSnapshot,'old source snapshots remain immutable')
+assert.deepEqual(await api.loadMoreBrainstorm('user','brand',nextBatch,db,async()=>{throw Error('must replay')}),continued)
+const beforeOversize=rows.length
+await assert.rejects(api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'oversize-batch-000001'},db,async()=>({contentMatchRequestId:'oversize',creativeCandidates:[{...source('cre_oversize',91),sourceEvidence:{originalText:'x'.repeat(2*1024*1024)}}],contentLibraryGaps:[]})),(e:any)=>e.code==='library_evidence_too_large')
+assert.equal(rows.length,beforeOversize,'a genuinely oversized new batch writes no feed/receipt')
+console.log('PASS large history continues, immutable full timeline/text and identity, compact analysis, idempotency, per-batch limit')

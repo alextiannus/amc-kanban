@@ -19,7 +19,7 @@ import {CREATIVE_REVISION_KIND,revisionPeriod,revisionSource,creativeDigest,crea
 import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
 import {canonicalCreativeSource} from '../brand-plan/creativeSourceReference'
 import {streamSourceVideoMedia} from '../brand-plan/creativeSourceMedia'
-import {BRAINSTORM_FEED,BRAINSTORM_DECISION,eligibleBrainstormSource,brainstormCreativeId,parseBrainstormDecision,projectBrainstormSource} from './brainstorm-contract'
+import {BRAINSTORM_FEED,BRAINSTORM_DECISION,compactBrainstormSource,brainstormSourceBatch,eligibleBrainstormSource,brainstormCreativeId,parseBrainstormDecision,projectBrainstormSource} from './brainstorm-contract'
 
 export async function authorizeBrainstorm(userId:string,brandId:string,write=false,db:any=prisma){
  const policyRead=readPolicies(db)
@@ -138,7 +138,7 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
  const response=await match(brainstormMatchRequest({...facts,id:brandId},keywords,`brainstorm-${brandId}-${digest([facts.name,facts.description,keywords,Date.now()]).slice(0,16)}`,excludedSourceIds))
  if(!Array.isArray(response.creativeCandidates)||typeof response.contentMatchRequestId!=='string')throw nativeError('content_library_unavailable',503)
  if((response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400)&&!response.creativeCandidates?.length)throw nativeError('content_library_unavailable',503)
- const incoming=response.creativeCandidates.filter(eligibleBrainstormSource)
+ const incoming=brainstormSourceBatch(response.creativeCandidates.filter(eligibleBrainstormSource))
  await db.$transaction(async(tx:any)=>{
   await authorizeBrainstorm(userId,brandId,editing,tx)
   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{},select:{id:true}})
@@ -149,9 +149,8 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
   // after acquiring it so a concurrent defer cannot be lost by this refresh.
   const previousSources=latest?.output?.sources||[],previousChoices=await decisions(tx,brandId,previousSources.map((s:any)=>s.inspirationCreativeId))
   const deferredIds=new Set(previousChoices.filter((d:any)=>d.input?.decision==='defer').map((d:any)=>d.period))
-  const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId))
+  const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId)).map(compactBrainstormSource)
   const seen=new Set<string>(),sources=[...incoming,...retained].filter((s:any)=>eligibleBrainstormSource(s)&&!seen.has(s.inspirationCreativeId)&&!!seen.add(s.inspirationCreativeId))
-  if(Buffer.byteLength(JSON.stringify(sources))>2*1024*1024)throw nativeError('library_evidence_too_large',413)
   await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:(response.brandTags as any)?.revision??currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:response.brandTags?.tags?.map((t:any)=>t.label)||[],matchingTagDefinitions:response.brandTags?.tags||[],keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources}}})
  })
  return listBrainstorm(userId,brandId,db)
@@ -357,7 +356,7 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
  if(excluded.length>2000)throw nativeError('brainstorm_history_limit',409)
  const response=await match({...brainstormMatchRequest(facts,keywords,`more-${period}`,excluded),requestedCandidateCount:4,...(body.tagId?{matchingTagId:body.tagId}:{})})
  if(!Array.isArray(response.creativeCandidates)||(!response.creativeCandidates.length&&(response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400)))throw nativeError('content_library_unavailable',503)
- const incoming:any[]=response.creativeCandidates.filter((s:any)=>eligibleBrainstormSource(s)&&!excluded.includes(s.inspirationCreativeId))
+ const incoming:any[]=brainstormSourceBatch(response.creativeCandidates.filter((s:any)=>eligibleBrainstormSource(s)&&!excluded.includes(s.inspirationCreativeId)))
  const source=incoming[0]
  // A malformed, repeated or unavailable source is not proof of exhaustion.
  if(!source&&response.creativeCandidates.length)throw nativeError('content_library_unavailable',503)
@@ -381,8 +380,7 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
   const latest=await feed(tx,brandId)
   if(latest?.id!==previous?.id)throw nativeError('brainstorm_round_changed',409)
   if(source){
-   const sources=[...(latest?.output?.sources||[]),...incoming]
-   if(Buffer.byteLength(JSON.stringify(sources))>2*1024*1024)throw nativeError('library_evidence_too_large',413)
+   const sources=[...(latest?.output?.sources||[]).map(compactBrainstormSource),...incoming]
    const now=await browserState(tx,brandId,true),decision=await decisions(tx,brandId,incoming.map(s=>s.inspirationCreativeId))
    if(incoming.some(s=>now.selected.has(s.inspirationCreativeId)||now.disliked.has(s.inspirationCreativeId))||decision.some((d:any)=>['like','dislike'].includes(d.input?.decision)))throw nativeError('brainstorm_round_changed',409)
    await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{...latest?.input,matchKeywords:keywords,brandKeywordRevision:currentKeywords.revision,keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources}}})
