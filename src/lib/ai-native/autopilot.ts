@@ -5,13 +5,12 @@ import type {Prisma} from '@prisma/client'
 import {prisma} from '../prisma'
 import {autopilotDb,requireAutopilotOwner,initializeBrandAutopilotDefault} from './autopilot-store'
 import {brandDay,readIdeaPool} from './idea-pool'
-import {applicationVersion} from './application'
 import {readBrandFacts} from './facts'
-import {digest,nativeError,actorFor} from './contract'
+import {digest,nativeError} from './contract'
 import {queueGoogleBrandImport} from '../googleBrandImportQueue'
 import {loadBrandPlanBrand,buildGrowthResearchReport,saveResearchReport} from '../brand-plan/service'
 import {readGrowthResearchJob,growthAutopilotEvidence} from '../growthDataCenter'
-import {createNativeTask,readNativeTask,getNativeHost,adoptNativeCandidate} from './service'
+import {createNativeTask,readNativeTask,adoptNativeCandidate} from './service'
 import {readCreativeRevisions} from '../brand-plan/creativeRevisions'
 import {readSkuContext} from '../brand-plan/creativeSkuDecision'
 import {generateContentDirect} from '../amc-content/contentGenerationService'
@@ -62,7 +61,7 @@ export async function readAutopilot(userId:string,brandId:string,runId:string,ac
  if(action==='ideas'){
   const ideas=await readIdeaPool(userId,brandId)
   const candidates:any[]=[] // Matching and Like never authorize automatic replication.
-  return {ready:true,candidates,assets:[],shortfall:ideas.shortfall,waitingForUser:true,note:'All matches, including scores >=90, go to Browse ideas. Wait for human Like, then explicit Replicate and script Review in the content calendar. Do not adapt or generate automatically; use iaic_wait.'}
+  return {ready:true,candidates,assets:[],shortfall:ideas.shortfall,waitingForUser:true,note:'All matches, including scores >=90, go to Browse ideas. Wait for human Like, then explicit Replicate and script Review in the content calendar. Do not adapt or generate automatically; save a handoff report and finish.'}
  }
  const outputs=(await pool.query('SELECT id,creative_id,revision_id,status,draft_id,error FROM amc_iaic.autopilot_outputs WHERE run_id=$1',[runId])).rows
  const research=run.evidence.researchSnapshotId?await prisma.brandGrowthResearchSnapshot.findFirst({where:{id:run.evidence.researchSnapshotId,brandId},select:{report:true,generatedAt:true}}):null
@@ -80,7 +79,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
   await lock.query('SELECT pg_advisory_lock(hashtextextended($1,0))',[`autopilot-operation:${brandId}`])
   const gate=()=>autopilotRun(userId,brandId,runId)
   const run=await gate(),evidence=run.evidence||{}
-  if(['adapt','save_adaptation','generate'].includes(action))return {waitingForUser:true,nextAction:'replicate_in_calendar',note:'Matching and Like do not authorize adaptation or production. Ask the user to choose Like in Browse ideas, then explicitly Replicate and Review from the content calendar; use iaic_wait.'}
+  if(['adapt','save_adaptation','generate'].includes(action))return {waitingForUser:true,nextAction:'replicate_in_calendar',note:'Matching and Like do not authorize adaptation or production. Ask the user to choose Like in Browse ideas, then explicitly Replicate and Review from the content calendar; save a handoff report and finish.'}
   if(action==='profile'){
    if(!evidence.profileRequested){await queueGoogleBrandImport(brandId);evidence.profileRequested=true;await progress(pool,run,'profile',evidence)}
    return readAutopilot(userId,brandId,runId,'profile')
@@ -140,7 +139,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    })
    evidence.strategyVersionId=saved.id;await progress(pool,run,'strategy',evidence);return {strategyVersionId:saved.id,saved:true}
   }
-  if(action==='match')return {waitingForUser:true,nextAction:'browse_ideas',note:'Periodic AI discovery is disabled. Browse ideas performs fixed keyword matching on demand. Do not poll or start a creative_discovery task; use iaic_wait for the user to browse and choose.'}
+  if(action==='match')return {waitingForUser:true,nextAction:'browse_ideas',note:'Periodic AI discovery is disabled. Browse ideas performs fixed keyword matching on demand. Do not poll or start a creative_discovery task; save a handoff report and finish; the user browses and chooses in the UI.'}
   if(action==='adapt'){
    if(!evidence.strategyVersionId)throw nativeError('strategy_required')
    if(evidence.adaptations?.[input.creativeId])return {taskId:evidence.adaptations[input.creativeId]}
@@ -240,14 +239,9 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
   const run=await autopilotRun(settings.owner_id,brandId,id)
   let taskId=run.task_id
-  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行当前品牌已授权的自动驾驶目标。读取 amc-autopilot Skill 和当前授权，由 User AI Assistant 调研品牌、整理可授权获取的门店/SKU/评价资料、制定品牌策划；执行阶段仅将每日匹配来源候选放入按匹配度排序的品牌创意列表。所有匹配度（含90分以上）均先进入创意浏览，等待用户喜欢后才进入内容日历；用户再显式点击复刻后通过现有交互流程改写并Review脚本和制作。当前自动任务只做匹配与推荐，不自动选入日历、改写或制作；调用 iaic_wait 等待用户操作。SKU 决策必须由人工确认；空目录也须人工确认「普通品牌内容，非爆款复刻」决策。确认缺失或失效、必要素材缺失、执行结果未知时明确等待，不得自动确认或绕过门槛。正式发布必须人工确认。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
-  let task=await readNativeTask(settings.owner_id,brandId,taskId)
-  if(task.status==='waiting'&&task.waitingReason==='interrupted'&&task.version===await applicationVersion()){
-   const host=await getNativeHost(),actor=actorFor(brandId,settings.owner_id),history=await host.app.runtime.get(actor,taskId,{history:true})
-   if(!history.calls.length&&!history.events.some(event=>event.kind==='model_requested')&&(await host.app.ledger.taskUsage(await host.app.scope(actor),taskId)).complete){await host.app.dispatcher.invoke('tasks.resume',{id:taskId},{actor,callId:`autopilot-rollout-${taskId}`});task=await readNativeTask(settings.owner_id,brandId,taskId)}
-  }
-  const continuationPending=task.status==='cancelled'&&run.evidence.versionContinuationPending
-  await pool.query('UPDATE amc_iaic.autopilot_runs SET status=$2,error=$3,updated_at=now() WHERE id=$1',[id,continuationPending?'waiting':task.status,continuationPending?'version_continuation_pending':task.inputRequest?.question||task.waitingReason||null])
+  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行已授权的品牌调研和策划。读取 amc-autopilot Skill、amc.context 和 amc.autopilot.status。复用实际回执，保存能完成的研究和策略。创意匹配仅由用户在创意浏览按固定关键词发起，不自动匹配、改写、制作或发布。需要用户 Like、复刻、SKU确认、Review、素材或必要资料时，保存真实交接报告并完成当前任务，不调用 iaic_wait。不得把交接或缺失信息冒充制作成功。实际外部任务仅等待原始回执，不重复提交。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
+  const task=await readNativeTask(settings.owner_id,brandId,taskId)
+  await pool.query('UPDATE amc_iaic.autopilot_runs SET status=$2,error=$3,updated_at=now() WHERE id=$1',[id,task.status,task.inputRequest?.question||task.waitingReason||null])
  }finally{await c.query('SELECT pg_advisory_unlock(hashtextextended($1,0))',[`autopilot-admission:${brandId}`]);c.release()}
 }
 const state=globalThis as typeof globalThis&{autopilotWorker?:boolean}

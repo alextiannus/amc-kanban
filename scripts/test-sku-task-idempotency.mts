@@ -56,6 +56,8 @@ const app:any={
 }
 ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:[],modelRevision:1})
 const service=compile('src/lib/ai-native/service.ts',{
+  './conversation-status':{wakeConversationWorker:()=>{}},
+  '../brand-plan/creativeVisibility':{creativeIsSelected:()=>true},
   './contract':contract,'./store':store,'./autopilot-capabilities':{AUTOPILOT_TOOLS:[]},
   './application':{requireActor:async()=>{if(revoked)throw contract.nativeError('ai_access_denied',403)}},
   './autopilot':{autopilotRun:async()=>{runChecks++;if(!runEnabled)throw contract.nativeError('autopilot_disabled',409)}},
@@ -65,7 +67,7 @@ const service=compile('src/lib/ai-native/service.ts',{
     readBoundSkuContext:async()=>{if(!contextAvailable)throw Error('source_unavailable')},
   },
 })
-const bodyFor=(kind:string,key:string)=>({kind,creativeId:'idea',month:'2026-11',expectedRevision:revision,requestKey:key,goal:'  SKU task  ',...(kind==='creative_adaptation'?{decisionDigest}:{})})
+const bodyFor=(kind:string,key:string)=>({kind,creativeId:'idea',month:'2026-11',expectedRevision:revision,requestKey:key,goal:`  SKU task ${key}  `,...(kind==='creative_adaptation'?{decisionDigest}:{})})
 const rowFor=(key:string)=>store.intentBy(pool,actor,'request_key',key)
 const conflict=(fn:()=>Promise<unknown>)=>assert.rejects(fn,(e:any)=>e.code==='request_key_reused'&&e.statusCode===409)
 
@@ -81,7 +83,7 @@ try{
     assert.notEqual(saved.digest,contract.digest(saved.intent),'actual JSONB key order differs from the original persisted digest')
     assert.equal(saved.task_id===null,mode!=='none')
     contextAvailable=false // Replay must keep the admitted snapshot even after live source changes.
-    const replay=await service.createNativeTask('human','brand',{...body,goal:'SKU task'},false,run)
+    const replay=await service.createNativeTask('human','brand',{...body,goal:`SKU task ${key}`},false,run)
     assert.equal(replay.id,tasks.get(key).id)
     assert.equal(dispatches,before.dispatches+(mode==='before_dispatch'?1:0))
     assert.equal(created,beforeCreated+1,'every loss window produces exactly one task')
@@ -104,7 +106,7 @@ try{
   // order and nested JSON evidence. Compare values, retain the original record.
   for(const kind of ['sku_proposal','creative_adaptation'])for(const autopilot of [false,true]){
     const key=`legacy-${kind}-${autopilot}`,body=bodyFor(kind,key)
-    const legacy:any={kind,sourceEvidence:{timeline:[{visual:{movement:'pan',shot:'wide'},id:'shot-1'},{visual:{movement:'hold',shot:'close'},id:'shot-2'}],origin:{title:'Original',id:'source'}},...binding,requestKey:key,artifactPath:`work/${contract.digest([actor,key])}.json`,goal:'SKU task',userId:'human',...(autopilot?{autopilotRunId:runId}:{}),...(kind==='creative_adaptation'?{decisionDigest}:{})}
+    const legacy:any={kind,sourceEvidence:{timeline:[{visual:{movement:'pan',shot:'wide'},id:'shot-1'},{visual:{movement:'hold',shot:'close'},id:'shot-2'}],origin:{title:'Original',id:'source'}},...binding,requestKey:key,artifactPath:`work/${contract.digest([actor,key])}.json`,goal:`SKU task ${key}`,userId:'human',...(autopilot?{autopilotRunId:runId}:{}),...(kind==='creative_adaptation'?{decisionDigest}:{})}
     const old=await store.admitIntent(pool,actor,legacy)
     assert.notEqual(contract.digest(legacy),contract.digest(old.intent))
     assert.notDeepEqual(Object.keys(old.intent.sourceEvidence.origin),Object.keys(legacy.sourceEvidence.origin),'nested objects really passed through JSONB')
@@ -122,7 +124,7 @@ try{
 
   // A concurrent admission can appear after both service lookups. Its original
   // order may differ, so the store's locked comparison must also be JSONB-safe.
-  const raceBody=bodyFor('sku_proposal','sku-late-admission'),raceIntent:any={kind:'sku_proposal',...binding,userId:'human',goal:'SKU task',requestKey:raceBody.requestKey,artifactPath:`work/${contract.digest([actor,raceBody.requestKey])}.json`}
+  const raceBody=bodyFor('sku_proposal','sku-late-admission'),raceIntent:any={kind:'sku_proposal',...binding,userId:'human',goal:`SKU task ${raceBody.requestKey}`,requestKey:raceBody.requestKey,artifactPath:`work/${contract.digest([actor,raceBody.requestKey])}.json`}
   const raced=await store.admitIntent(pool,actor,raceIntent)
   hiddenRequestKey=raceBody.requestKey;hiddenReads=2;contextAvailable=true
   const racedTask=await service.createNativeTask('human','brand',raceBody)

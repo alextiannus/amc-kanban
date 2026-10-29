@@ -18,7 +18,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-autopilot"
       },
-      "version": "sha256:a2a0c1375508e3928a5f97057b918f73165bae6cb19dad7d8e6ddf907f46502c",
+      "version": "sha256:5610e0ec3426f8737693586013e4639e1a5c06e5cbe7c0fa089ab42655cf7b92",
       "description": "User AI Assistant owns authorized autonomous brand research and planning; discovery is interactive. Publication requires human confirmation."
     },
     {
@@ -100,7 +100,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-discovery"
       },
-      "version": "sha256:20bf471d1fc1e1119571582407ea5442236cde262cb3fd313e58155b8e1cd2c0",
+      "version": "sha256:e820ce3b95032f81d139b3138f9aac733b6142e08ee9d4ea7f3e23399ee6c842",
       "description": "Select authoritative creative sources for the brand's SKU confirmation workflow."
     },
     {
@@ -510,7 +510,7 @@
     "skills/amc-content-copywriting/references/content-defaults.json"
   ],
   "files": {
-    "skills/amc-autopilot/SKILL.md": "3805d582661b20a99525ac37cfeef5e991fbeb18696c232759b9fbd91dd05535",
+    "skills/amc-autopilot/SKILL.md": "7037e323277acbdd92a1536f7540113cbcf56ff1c91e1ec0a050a2a8b1003df5",
     "skills/amc-autopilot/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-brand-planning/SKILL.md": "b3928775c880ca1aae168645ab884c5877ff160a2b725f6972751358cf561d84",
     "skills/amc-brief/SKILL.md": "6c2a096ab3ae40a4acdbb1f81b76d5e81341d158c6165152e64b5afa63c3a89f",
@@ -532,7 +532,7 @@
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-creative/SKILL.md": "fe7167c5a53b33efc7339761ec91ef64f6619c5237eba6047069182cafcca9d7",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-discovery/SKILL.md": "deea57f337d66c1e07293d0e7b026f7da3c7a73586c8c1e3f6755a7fc7b0d3d3",
+    "skills/amc-discovery/SKILL.md": "bbb16b1fe16a3d30820b2edead05d5640367477b2127cb5ebeb05d68cbb181ef",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",
     "skills/amc-kanban/references/kanban-openapi.yaml": "1ab3963e32b0b4aaae62a2ced01f6c893d7b034706a814fd089d6a7eff4bc946",

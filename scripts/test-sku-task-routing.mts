@@ -22,13 +22,15 @@ const rows=new Map<string,any>(),taskId='11111111-1111-4111-8111-111111111111'
 const pool={query:async()=>({rows:[]})},app={runtime:{state:async()=>({id:taskId,status:'queued',input:{goal:'SKU'},version:1,updated_at:'now'})},dispatcher:{invoke:async(_name:string,input:any)=>{dispatches++;allowedTools=input.allowedTools;return {id:taskId}}}}
 ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:['amc.context','amc.creative','amc.library','amc.operations','my_write_workspace'],modelRevision:1})
 const service=compile('src/lib/ai-native/service.ts',{
+  './conversation-status':{wakeConversationWorker:()=>{}},
+  '../brand-plan/creativeVisibility':{creativeIsSelected:()=>true},
   '../brand-plan/creativeFidelity':fidelity,
   './contract':contract,'./application':{requireActor:async()=>{if(revoked)throw contract.nativeError('ai_access_denied',403)}},'../model-management/registry':{runtimeConfig:async()=>({version:1})},
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[]},'../brand-plan/creativeSkuDecision':skuDeps,'./sku-workflow':workflow,
   './recommendations':{adaptedScriptReceipt:async()=>savedReceipt},
   './autopilot':{autopilotRun:async()=>({})},
   '../brand-plan/creativeRevisions':{readCreativeQualityReview:async()=>quality,saveCreativeRevision:async(...args:any[])=>{saves++;assert(args[6].skuBinding.decisionDigest);return {receipt:{id:'saved-adaptation',contentHash:'saved-hash',content:{id:'idea',adaptationStatus:'adapted'}}}},readCreativeRevisions:async()=>({revisions:[{contentHash:'saved-hash'}]})},
-  './store':{intentBy:async(_p:any,_a:any,_f:any,key:string)=>{const r=rows.get(key);if(!r)throw contract.nativeError('not_found',404);return r},admitIntent:async(_p:any,_a:any,intent:any)=>{lastIntent=intent;const r={id:'request',intent,digest:contract.digest(intent),task_id:taskId};rows.set(intent.requestKey,r);return r},intentForTask:async()=>({intent:lastIntent})},
+  './store':{intentBy:async(_p:any,_a:any,_f:any,key:string)=>{const r=rows.get(key);if(!r)throw contract.nativeError('not_found',404);return r},admitIntent:async(_p:any,_a:any,intent:any)=>{lastIntent=intent;const r={id:'request',intent,request_key:intent.requestKey,digest:contract.digest(intent),task_id:taskId};rows.set(intent.requestKey,r);return r},intentForTask:async()=>({intent:lastIntent})},
 })
 const body={kind:'sku_proposal',creativeId:'idea',month:'2026-11',expectedRevision:currentRevision,goal:'Suggest SKU roles',requestKey:'proposal-one'}
 await service.createNativeTask('human','brand',body)
@@ -75,7 +77,7 @@ const application=compile('src/lib/ai-native/application.ts',{
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[],autopilotCapabilities:()=>[]},
   '@immedi/iaic-core/capabilities/index.js':{defineCapability:(v:any)=>v},'node:crypto':await import('node:crypto'),'node:path':await import('node:path'),
 })
-await application.composeApplication(pool,{}, {version:'fixture',authorize:async()=>true,readContext:async()=>facts})
+await application.composeApplication(pool,{}, {skillRoot:'skills',version:'fixture',authorize:async()=>true,readContext:async()=>facts})
 const snapshot={libraryDigest:'c'.repeat(64),contextDigest:contract.digest(facts),sources:[{inspirationCreativeId:'cre_source'}]}
 const verify=async(skill='amc-discovery/SKILL.md')=>configured.verifyOutcome({}, {artifacts:[{path:lastIntent.artifactPath}]},{actor:contract.actorFor('brand','human'),history:{calls:[
   {capability:'amc.context',status:'succeeded',result:{intent:lastIntent}},
@@ -108,19 +110,12 @@ const autopilot=compile('src/lib/ai-native/autopilot.ts',{
 })
 ;(app as any).workspace={read:async()=>({content:artifactContent})}
 ;(app.runtime as any).get=async()=>({status:'succeeded',result:{artifacts:[{path:lastIntent.artifactPath,digest:'artifact-digest'}]},calls:[]})
-await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/sku_confirmation_required_use_creative_adaptation/);assert.equal(saves,0)
-legacyTask=false;const oldDecision=confirmed;confirmed=null
-await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/sku_confirmation_required/);assert.equal(saves,0)
-confirmed=oldDecision
-artifactContent=JSON.stringify({...produced,shots:[]})
-await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/adapted_script_required/);assert.equal(saves,0)
-artifactContent=JSON.stringify({...produced,sourceDigest:'0'.repeat(64)})
-await assert.rejects(()=>autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'}),/sku_artifact_binding_mismatch/);assert.equal(saves,0)
-artifactContent=JSON.stringify(produced)
-const adopted=await autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'})
-assert.equal(adopted.revisionId,'saved-adaptation');assert.equal(saves,1)
-legacyTask=true;assert.equal((await autopilot.executeAutopilot('human','brand','run','save_adaptation',{creativeId:'idea'})).revisionId,'saved-adaptation');assert.equal(saves,1);assert.equal(unlocks,6)
+for(const action of ['adapt','save_adaptation','generate']){
+ const handoff=await autopilot.executeAutopilot('human','brand','run',action,{creativeId:'idea'})
+ assert.equal(handoff.waitingForUser,true);assert.match(handoff.note,/handoff report and finish/);assert.equal(saves,0)
+}
+assert.equal(unlocks,3)
 assert.match(readFileSync('src/lib/ai-native/calendar-planning.ts','utf8'),/每条仅输出 sourceCreativeId、title、rationale/)
 delete (globalThis as any).amcNativeHost
-console.log('PASS actual composeApplication verifier correction and executeAutopilot legacy rejection, confirmed adoption and historical receipt')
+console.log('PASS actual composeApplication verifier correction and executeAutopilot handoff without unauthorized production')
 console.log('PASS SKU task admission, restricted tools, selected-only context, validated artifact, replay and revoked access')

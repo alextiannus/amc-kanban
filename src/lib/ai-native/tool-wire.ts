@@ -5,9 +5,9 @@ import type {Completion} from '../global-text/transport'
 
 const workspaceWriter=(tool:any)=>{const p=tool?.parameters?.properties;return !!(p?.path&&p?.content&&p?.expectedRevision)}
 export function nativeWireTools(tools:any[],structuredWorkspace=false,scope?:PlanningScope){
- return tools.map(tool=>{
+ return tools.filter(tool=>tool.name!=='iaic_wait').map(tool=>{
   if(structuredWorkspace&&workspaceWriter(tool))return {...tool,description:tool.description+' For this planning draft, supply content as a complete JSON OBJECT matching artifactContract, not as a JSON-encoded string. The host serializes it losslessly before the normal workspace write and verification.',parameters:{...tool.parameters,properties:{...tool.parameters.properties,content:scope?planningArtifactSchema(scope):{type:'object',description:'Complete planning reply artifact as a JSON object; follow the trusted artifactContract.',additionalProperties:true},...(tool.parameters.properties.mediaType?{mediaType:{type:'string',const:'application/json'}}:{})}}}
-  return tool.name==='iaic_finish'?{...tool,description:tool.description+' Supply literal JSON: {"result":{"summary":"Candidate ready","artifacts":[{"path":"COPY EXACT RECEIPT PATH","revision":1,"digest":"COPY EXACT RECEIPT DIGEST"}]}}. Copy actual workspace reference values. Use a short summary, not the candidate document. No JavaScript expressions, concatenation, markdown fences or ellipses.'}:tool
+  return tool.name==='iaic_finish'?{...tool,description:tool.description+' Complete the current reply, putting necessary questions and next user steps in the artifact; never wait for human interaction or claim unfinished business operations succeeded. Supply literal JSON: {"result":{"summary":"Candidate ready","artifacts":[{"path":"COPY EXACT RECEIPT PATH","revision":1,"digest":"COPY EXACT RECEIPT DIGEST"}]}}. Copy actual workspace reference values. Use a short summary, not the candidate document. No JavaScript expressions, concatenation, markdown fences or ellipses.'}:tool
  })
 }
 export function nativeWireCall(call:any,result:Completion,tools:any[]=[],structuredWorkspace=false,binding?:ConversationIntent){

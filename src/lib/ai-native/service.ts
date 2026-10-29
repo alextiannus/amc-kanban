@@ -1,3 +1,4 @@
+import {dailyGate,sweepLifecycle} from './task-lifecycle.mjs'
 import {NATIVE_RUNTIME_LIMITS} from './assistant-policy'
 import {AMC_CONTEXT_MAX_BYTES} from './runtime-application.mjs'
 import {inspectAssistantHistory,inspectAssistantUsage} from './assistant-inspection'
@@ -73,7 +74,8 @@ export function startNativeWorker(){
       }
     }catch(e){console.error('[amc-ai] host unavailable',lane,e instanceof Error?e.name:'unknown')}finally{checking.delete(lane)}
   }
-  const maintainAll=()=>{void maintain('default');void maintain('conversation')}
+  const sweep=dailyGate(async()=>{const host=await getNativeHost();await sweepLifecycle(host.pool,await applicationVersion())})
+  const maintainAll=()=>{void maintain('default');void maintain('conversation');void sweep()}
   maintainAll()
   const timer=setInterval(maintainAll,60000);timer.unref()
   let saving=false
@@ -185,7 +187,8 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
   // An admitted SKU request may not yet have reached Core. Resume it with the
   // same identity and stored digest instead of re-admitting its JSONB readback.
-  const row=skuIntent&&prior?prior:await admitIntent(pool,actor,intent,host.lane||'default')
+  const row=skuIntent&&prior?prior:await admitIntent(pool,actor,intent,host.lane||'default',async(id,connection)=>(await connection.query(`SELECT status FROM ${host.lane==='conversation'?'amc_iaic_conversation':'amc_iaic'}.iaic_tasks WHERE id=$1 AND employee_id=$2 AND erp_user=$3`,[id,actor.scopeId,actor.subjectId])).rows[0]?.status||'missing')
+  if(row.request_key!==key){if(row.task_id)return publicTask(app,actor,row.task_id);throw nativeError('task_admission_pending_retry',503)}
   if((row.runtime_lane||'default')!==(host.lane||'default'))return createNativeTask(userId,brandId,body,automaticDaily,autopilotRunId,planningRequest)
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':['conversation','sku_proposal','creative_adaptation'].includes(intent.kind)?'':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])

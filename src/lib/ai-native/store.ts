@@ -1,5 +1,5 @@
 import type { Application } from '@immedi/iaic-core/developer/templates/agent/app.mjs'
-import { Pool } from 'pg'
+import { Pool, type PoolClient } from 'pg'
 import { isDailyActor, digest, sameSkuIntent, nativeError, type NativeIntent, type NativeActor } from './contract'
 
 export type RuntimeLane='default'|'conversation'
@@ -22,11 +22,14 @@ export async function initializeHost(pool:Pool){
     CREATE INDEX IF NOT EXISTS amc_ai_requests_daily ON amc_ai_requests(subject_id,created_at);
     ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS runtime_lane text NOT NULL DEFAULT 'default';
     ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS planning_result jsonb;
+    ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS operation_key text;
+    CREATE INDEX IF NOT EXISTS amc_ai_requests_operation ON amc_ai_requests(scope_id,subject_id,runtime_lane,operation_key,created_at DESC);
     ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS conversation_preview text;
     ALTER TABLE amc_ai_requests ADD COLUMN IF NOT EXISTS planning_checked_at timestamptz;
     CREATE INDEX IF NOT EXISTS amc_ai_requests_conversation ON amc_ai_requests(subject_id,(intent->>'brandId'),(intent->>'conversationId'),created_at);`)
 }
-export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeIntent,lane:RuntimeLane='default'){
+export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeIntent,lane:RuntimeLane='default',readStatus?:(id:string,connection:PoolClient)=>Promise<string>){
+  const operationKey=digest({...intent,requestKey:undefined,artifactPath:undefined})
   const id=digest([actor.scopeId,actor.subjectId,intent.requestKey]),hash=digest(intent)
   const c=await pool.connect()
   try{
@@ -35,7 +38,13 @@ export async function admitIntent(pool:Pool,actor:NativeActor,intent:NativeInten
     await c.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',['amc-ai-admission:'+(autopilot?`autopilot:${intent.brandId}`:isDailyActor(actor)?actor.scopeId:actor.subjectId)])
     const old=(await c.query('SELECT * FROM amc_ai_requests WHERE id=$1',[id])).rows[0]
     if(old){if(old.digest!==hash&&!sameSkuIntent(old.intent,intent))throw nativeError('request_key_reused',409);await c.query('COMMIT');return old}
-    const row=(await c.query('INSERT INTO amc_ai_requests(id,scope_id,subject_id,request_key,digest,intent,allowance,runtime_lane) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',[id,actor.scopeId,actor.subjectId,intent.requestKey,hash,JSON.stringify(intent),0,lane])).rows[0]
+    if(readStatus){
+      const candidates=(await c.query(`SELECT * FROM amc_ai_requests WHERE scope_id=$1 AND subject_id=$2 AND runtime_lane=$3 AND operation_key=$4 AND created_at>now()-interval '24 hours' ORDER BY created_at DESC LIMIT 10`,[actor.scopeId,actor.subjectId,lane,operationKey])).rows
+      for(const candidate of candidates){
+        if(!candidate.task_id||['queued','running','waiting'].includes(await readStatus(candidate.task_id,c))){await c.query('COMMIT');return candidate}
+      }
+    }
+    const row=(await c.query('INSERT INTO amc_ai_requests(id,scope_id,subject_id,request_key,digest,intent,allowance,runtime_lane,operation_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',[id,actor.scopeId,actor.subjectId,intent.requestKey,hash,JSON.stringify(intent),0,lane,operationKey])).rows[0]
     await c.query('COMMIT');return row
   }catch(e){await c.query('ROLLBACK');throw e}finally{c.release()}
 }
