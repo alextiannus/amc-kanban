@@ -67,10 +67,14 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId,true),browserState(db,brandId,true),poolSources(db,brandId,true),separateKeywords?Promise.resolve(null):db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource).filter((s:any)=>relevantDefaultBrainstormSource(s,saved?.input?.matchKeywords||'')),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
+ const currentSourceIds=new Set(sources.map((s:any)=>s.inspirationCreativeId))
  const candidates:{idea:any;current:any}[]=[]
  for(const {month,item} of entries){
   const sourceId=creativeSourceId(item)
   if(!sourceId)continue
+  // Legacy adapted calendar ideas are not new keyword matches. Preserve their records,
+  // but require a current matched source before returning them to discovery.
+  if(saved?.input?.keywordPolicy?.startsWith('fixed-keywords-')&&!currentSourceIds.has(sourceId))continue
   if(creativeIsSelected(item)||item.brandDismissal?.decision==='dislike'||disliked.has(sourceId)||selected.has(sourceId)||['archived','deleted','归档','已删除'].includes(item.status))continue
   const source=item.nativeSourceSnapshot?.source||item.source||{},projected=projectBrainstormSource({...source,inspirationCreativeId:sourceId},brandId,null)
   candidates.push({current:item,idea:{...projected,title:projected.title||item.title||'内容创意',sourceDigest:/^[a-f0-9]{64}$/.test(source.sourceDigest||item.source?.sourceDigest||'')?(source.sourceDigest||item.source.sourceDigest):null,matchScore:typeof source.matchScore==='number'&&Number.isFinite(source.matchScore)?source.matchScore:null,savedCreativeId:item.id,poolIdeaId:pool.find((row:any)=>row.source_id===sourceId)?.id,expectedRevision:creativeDigest(item),month,decision:item.creativeBrowserDecision?.decision||null,decisionVersion:0,videoUrl:(source.sourceVideo?.videoUrl||item.source?.originalVideoUrl)?`/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(item.id)}/source/media`:null}})

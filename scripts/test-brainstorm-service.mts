@@ -322,3 +322,10 @@ const scopedListing=await api.listBrainstorm('user','brand',db,true)
 assert.deepEqual(scopedListing.items.map((i:any)=>i.sourceId),['cre_relevant_shoe'])
 assert.equal(JSON.stringify(rows),legacyRowsBefore,'read filter never rewrites or deletes history')
 console.log('PASS stale generic-only recommendations removed before cursor/evidence loading, historical rows untouched')
+
+rows.find(r=>r.id==='legacy-generic-feed').input.keywordPolicy='fixed-keywords-v1'
+knowledge.marketingSolution.publishingCalendar.months={'2026-10':[{id:'old-auto-adaptation',status:'ai_pending_review',title:'Brand script adapted from unrelated food',inspirationCreativeId:'cre_old_food',source:source('cre_old_food',10)}]}
+const oldCalendar=JSON.stringify(knowledge)
+assert.deepEqual((await api.listBrainstorm('user','brand',db,true)).items.map((i:any)=>i.sourceId),['cre_relevant_shoe'])
+assert.equal(JSON.stringify(knowledge),oldCalendar,'old calendar script/history is retained without becoming a new match')
+console.log('PASS legacy unselected calendar cannot bypass current keyword scope')
