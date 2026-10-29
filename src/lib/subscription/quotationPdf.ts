@@ -7,6 +7,13 @@ import { quotationMoney, type QuotationSnapshot } from './quotation'
 // A4 template, shared by initial delivery and every retry. The saved PDF is
 // immutable; changes to the catalogue or template cannot rewrite a sent quote.
 export async function renderQuotationPdf(quote: QuotationSnapshot): Promise<Buffer> {
+  // Normalize compatibility glyphs (for example Kangxi radicals copied from PDFs)
+  // for display only. Keep the persisted commercial snapshot unchanged.
+  const display = (value: string) => value.normalize('NFKC')
+  quote = { ...quote, customer: display(quote.customer), uen: quote.uen ? display(quote.uen) : quote.uen,
+    recipient: display(quote.recipient), brandName: display(quote.brandName), address: display(quote.address),
+    planName: display(quote.planName), services: quote.services.map(display),
+    lines: quote.lines.map(line => ({ ...line, description: display(line.description) })) }
   const doc = await PDFDocument.create()
   doc.registerFontkit(fontkit)
   doc.setTitle(`AMC Quotation ${quote.number}`)

@@ -54,6 +54,14 @@ test('PDF supports Chinese customer names, all packages, long rows and multipage
   assert.ok((await PDFDocument.load(await renderQuotationPdf(long))).getPageCount() >= 3)
 })
 
+test('PDF renders compatibility Chinese radicals without mutating the saved snapshot', async () => {
+  const quote = buildQuotation({ ...input, address: '顾 客 在 哪 ⾥ , 内 容 就 去 哪 ⾥', customer: 'ＴＥＳＴ 商户' })
+  const saved = JSON.stringify(quote)
+  const parsed = await PDFDocument.load(await renderQuotationPdf(quote))
+  assert.ok(parsed.getPageCount() >= 1)
+  assert.equal(JSON.stringify(quote), saved)
+})
+
 // Run the real migration in a disposable PostgreSQL engine. This store adapter
 // translates Prisma predicates to SQL so concurrency exercises real CAS/PK rules.
 async function fixture() {
