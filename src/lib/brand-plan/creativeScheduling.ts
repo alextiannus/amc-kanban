@@ -159,7 +159,7 @@ async function writeSchedule(actor: Actor, brandId: string, creativeId: string, 
       await tx.contentDraft.update({where:{id:draft.id},data:{scheduledAt:null,agentNote:expectedNote}})
     }
     const next = {...current,schedule:link,updatedAt:now.toISOString()}
-    await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:nextWorkspace(workspace,month,creativeId,next) as Prisma.InputJsonValue}})
+    await tx.brandKnowledge.update({where:{brandId},select:{id:true},data:{marketingSolution:nextWorkspace(workspace,month,creativeId,next) as Prisma.InputJsonValue}})
     const verifiedKnowledge = await tx.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true,brandPlan:true}})
     const verified = findCreative(creativeWorkspace(verifiedKnowledge),month,creativeId)
     const verifiedDraft = await tx.contentDraft.findUnique({where:{id:link?.draftId || previous!.draftId},select:{id:true,status:true,scheduledAt:true,agentNote:true}})

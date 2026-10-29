@@ -260,7 +260,7 @@ export async function saveCreativeRevision(actor: Actor, brandId: string, month:
     const persistedAi=ai?{...aiMetadata,...(candidatePatch?{reviewChanges:creativeCandidateChanges(current,candidatePatch,next,month,!!body.saveMode)}:{})}:undefined
     const entry = await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period,version:revision,status:'DRAFT',generationMode:ai?.planningRequest?'AI_PLAN_MATCHING':ai?.autopilotRunId?'AI_AUTOPILOT_ADAPTATION':automatic?'AI_DAILY_ADAPTATION':'MANUAL_EDIT',createdById:user.id,input:{creativeId,month,brand:brandSnapshot,actor:revisionActor,principals,origin:ai?.planningRequest?'plan_matching':ai?.autopilotRunId?'automatic_user_ai_adaptation':automatic?'automatic_daily_adaptation':ai?'ai_assisted':user.type==='HUMAN'?'human':'agent',...(persistedAi?{ai:persistedAi}:{}),feedback:feedback||null,changes:creativeChanges(current,next),dimensions:creativeFeedbackDimensions(next,sourceReference),source:sourceReference,parentRevisionId:parent.id,originalRevisionId:parentInput.originalRevisionId || parent.id,requestKey,requestHash},output:next as Prisma.InputJsonValue}})
     const nextWorkspace = {...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...workspace.publishingCalendar?.months,[month]:(seed||copy ? [...monthItems(workspace,month),next] : monthItems(workspace,month).map(item=>item.id===creativeId ? next : item))}}}
-    await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:nextWorkspace as Prisma.InputJsonValue}})
+    await tx.brandKnowledge.update({where:{brandId},select:{id:true},data:{marketingSolution:nextWorkspace as Prisma.InputJsonValue}})
     await tx.auditLog.create({data:{actorId:user.id,actorType:automatic?'AI':user.type,actorName:automatic?'AMC-MM AI User Assistant':user.nickname,action:'CREATIVE_REVISION_SAVED',resourceType:'BrandCreative',resourceId:creativeId,oldValue:{hash:body.expectedRevision,parentRevisionId:parent.id},newValue:{revisionId:entry.id,revision,hash:creativeDigest(next)},metadata:{brandId,month,...(persistedAi?{ai:persistedAi}:{}),principalIds:principals.map(member=>member.userId),sourceCreativeId:sourceReference.creativeId || null}}})
     return {ok:true,replayed:false,receipt:present(entry)}
   },{maxWait:10000,timeout:15000})
@@ -421,6 +421,6 @@ export async function reconcileRetiredDailyPlans(brandId:string,userId:string){
   const workspace=creativeWorkspace(knowledge)
   const active:any[]=await tx.$queryRaw`SELECT id FROM amc_iaic.brand_ideas WHERE brand_id=${brandId} AND replaced_at IS NULL FOR SHARE`
   const changed=await retireDailyPlans(tx,workspace,brandId,user,new Set(active.map(row=>row.id)))
-  if(changed)await tx.brandKnowledge.update({where:{brandId},data:{marketingSolution:workspace}})
+  if(changed)await tx.brandKnowledge.update({where:{brandId},select:{id:true},data:{marketingSolution:workspace}})
  },{maxWait:10000,timeout:15000})
 }
