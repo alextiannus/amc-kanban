@@ -23,8 +23,8 @@ try{
  assert.deepEqual(Object.keys(creativeWorkspace(await readBrowseKnowledge(db,'brand')).publishingCalendar.months),['2026-11'])
  const raw=(await pg.query(calendarProjectionSql,['brand'])).rows[0] as any
  const monthly=(await pg.query(calendarMonthProjectionSql,['brand','2026-11'])).rows[0] as any
- assert.deepEqual(raw.marketingSolution,monthly.marketingSolution)
- assert.equal(creativeDigest(monthly.marketingSolution.publishingCalendar.months['2026-11'][0]),creativeDigest(candidate))
+ assert.deepEqual(raw.marketingSolution.publishingCalendar.months['2026-11'],monthly.items)
+ assert.equal(creativeDigest(monthly.items[0]),creativeDigest(candidate))
  const summary=(await pg.query(calendarSummarySql,['brand'])).rows[0] as any
  assert.deepEqual(summary.marketingSolution.publishingCalendar.months['2026-11'][0],Object.fromEntries(Object.entries(candidate).filter(([key])=>calendarSummaryFields.includes(key))))
  console.log('PASS SQL calendar projection: exact candidate digest, selected/disliked identity parity, legacy merge, tiny payload, no writes')

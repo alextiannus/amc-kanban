@@ -182,7 +182,7 @@ export async function listOpenCalendarCreativeOptions(brandId: string, month: st
     where: { brandId },
     select: { marketingSolution: true, brandPlan: true },
   })
-  const items = monthItems(creativeWorkspace(knowledge),month) as CalendarCreativeItem[]
+  const items = (Array.isArray(knowledge?.items)?knowledge.items:monthItems(creativeWorkspace(knowledge),month)) as CalendarCreativeItem[]
   const options = items
       .map(item=>calendarCreativeOption(item,query.includeHistory))
     .filter((item): item is CalendarCreativeOption => Boolean(item))
