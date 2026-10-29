@@ -212,6 +212,7 @@ try {
   rows.find(row => row.id === 'owned')!.plan = { _mmVideoJob: { videoReceipt: { ownerId: 'receipt-owner', editorActorId: 'receipt-editor', signature: 'secret-signature' } } }
   const internal = compile('src/app/api/internal/content/video-jobs/route.ts', {
     'node:crypto': await import('node:crypto'),
+    '@/lib/videoJobHistory': { listTrustedVideoJobs: () => { throw new Error('history listing is tested separately') } },
     '@/lib/videoJobAccess': {
       readTrustedVideoJob: async (actorId: string, id: string) => {
         const found = rows.find(row => row.id === id)

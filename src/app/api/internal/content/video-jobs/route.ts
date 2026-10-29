@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { readTrustedVideoJob, resolveTrustedVideoJobActor } from '@/lib/videoJobAccess'
 import { serializeTrustedVideoJob } from '@/lib/videoJobContract'
 import { saveVideoJob } from '@/lib/videoJobPersistence'
+import { listTrustedVideoJobs } from '@/lib/videoJobHistory'
 
 const unauthorized = () => Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -18,6 +19,12 @@ export async function POST(request: Request) {
     if (Buffer.byteLength(raw, 'utf8') > 9 * 1024 * 1024) return Response.json({ error: 'video_job_payload_too_large' }, { status: 413 })
     const body = JSON.parse(raw)
     const actorId = text(body?.actorId)
+    if (body?.action === 'list') {
+      const brandId = text(body.brandId)
+      if (!actorId || !brandId || body.job !== undefined) return Response.json({ error: 'actorId and brandId are required' }, { status: 400 })
+      const history = await listTrustedVideoJobs(actorId, brandId, body.status, body.cursor)
+      return Response.json({ success: true, ...history }, { headers: { 'Cache-Control': 'no-store' } })
+    }
     if (body?.job !== undefined) {
       if (!actorId || !body.job || typeof body.job !== 'object' || Array.isArray(body.job)) return Response.json({ error: 'actorId and job are required' }, { status: 400 })
       const brandId = text(body.job.brandId)
