@@ -126,13 +126,14 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
  const previous=await feed(db,brandId),previousKeywords=previous?.input?.matchKeywords||''
  if(editing&&expected!==previousKeywords)throw nativeError('brainstorm_keywords_changed',409)
  const keywords=requested??previousKeywords
- const facts=await readBrandFacts(db,brandId)
+ const rawFacts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})
+ const facts=rawFacts?{...rawFacts,productCatalog:skuFacts(rawFacts.knowledge?.menuItems)}:null
  if(!facts)throw nativeError('brand_context_unavailable',404)
  const currentKeywords=await fetchBrandKeywords({action:'read',brandId,context:brainstormTagContext(facts,'')})
  if(previous&&previous.input?.brandKeywordRevision===currentKeywords.revision&&previous.input?.keywordPolicy===BRAINSTORM_KEYWORD_POLICY&&keywords===previousKeywords&&!body.force&&Date.now()-new Date(previous.createdAt).getTime()<30*60000)return listBrainstorm(userId,brandId,db)
 
  const excluded=await db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},orderBy:{createdAt:'desc'},distinct:['period'],take:72,select:{period:true}})
- const {selected,disliked}=await browserState(db,brandId)
+ const {selected,disliked}=await browserState(db,brandId,true)
  const excludedSourceIds=[...new Set([...excluded.map((d:any)=>d.period),...selected,...disliked])]
  const response=await match(brainstormMatchRequest({...facts,id:brandId},keywords,`brainstorm-${brandId}-${digest([facts.name,facts.description,keywords,Date.now()]).slice(0,16)}`,excludedSourceIds))
  if(!Array.isArray(response.creativeCandidates)||typeof response.contentMatchRequestId!=='string')throw nativeError('content_library_unavailable',503)

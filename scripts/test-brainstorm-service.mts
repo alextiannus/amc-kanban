@@ -255,3 +255,7 @@ assert.equal(batchResult.items.length,2);assert.equal(batchResult.exhausted,fals
 assert.deepEqual(await api.loadMoreBrainstorm("user","brand",batchRequest,db,batch),batchResult);assert.equal(batchCalls,1)
 await assert.rejects(api.loadMoreBrainstorm("user","brand",{...batchRequest,requestKey:"batch-request-000002"},db,async()=>({creativeCandidates:[],contentLibraryGaps:[{status:503}]})),(e:any)=>e.code==="content_library_unavailable")
 console.log("PASS partial failure retains validated batch, scoped tag, replay, and failed searches never exhaust")
+
+const brandRead=db.brand.findUnique;db.brand.findUnique=async(args:any)=>{assert.deepEqual(Object.keys(args.select.knowledge.select).sort(),["menuItems","productAssumptions","promotionFocus"]);return brandRead(args)}
+await api.refreshBrainstorm("user","brand",{action:"refresh",force:true},db,async()=>({contentMatchRequestId:"lean",creativeCandidates:[],contentLibraryGaps:[]}));db.brand.findUnique=brandRead
+console.log("PASS refresh reads only matching facts, never research or whole brand workspace")
