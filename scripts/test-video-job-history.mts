@@ -8,12 +8,12 @@ const compile=(file:string,deps:Record<string,unknown>)=>{
  new Function('require','module','exports',output)((key:string)=>{assert(key in deps,key);return deps[key]},mod,mod.exports)
  return mod.exports
 }
-const date=new Date('2026-10-29T01:00:00Z')
+const date=new Date()
 const rows=Array.from({length:23},(_,i)=>({id:`job-${String(99-i).padStart(3,'0')}`,brandId:'brand',createdBy:'actor',title:`Video ${i}`,platform:'tiktok',status:i===0?'completed':'generating',progress:40,thumbnailUrl:null,finalVideoUrl:i===0?'/final.mp4':null,createdAt:date,updatedAt:date,plan:{_mmVideoJob:{language:'zh',generationStage:'video_generation',videoReceipt:{secret:'never-return'}}}}))
 rows.push({...rows[0],id:'foreign-owner',createdBy:'other'},{...rows[0],id:'foreign-brand',brandId:'other'},{...rows[0],id:'legacy-owner',createdBy:null as any})
 let active=true,allowed=true,reads=0,saves=0
 const calls:any[]=[]
-const matches=(row:any,where:any)=>row.brandId===where.brandId&&row.createdBy===where.createdBy&&(!where.status||where.status.in.includes(row.status))&&(!where.OR||row.createdAt<where.OR[0].createdAt.lt||(+row.createdAt===+where.OR[1].createdAt&&row.id<where.OR[1].id.lt))
+const matches=(row:any,where:any)=>row.brandId===where.brandId&&row.createdBy===where.createdBy&&(!where.updatedAt||where.updatedAt.gte&&row.updatedAt>=where.updatedAt.gte||where.updatedAt.lt&&row.updatedAt<where.updatedAt.lt)&&(!where.status||where.status.in.includes(row.status))&&(!where.OR||row.createdAt<where.OR[0].createdAt.lt||(+row.createdAt===+where.OR[1].createdAt&&row.id<where.OR[1].id.lt))
 const prisma={user:{findUnique:async()=>active?{id:'actor',status:'ACTIVE',type:'HUMAN',role:'USER'}:null},videoProductionJob:{
  findMany:async(query:any)=>{reads++;calls.push(query);return rows.filter(row=>matches(row,query.where)).sort((a,b)=>b.createdAt.valueOf()-a.createdAt.valueOf()||b.id.localeCompare(a.id)).slice(0,query.take)},
  count:async(query:any)=>{calls.push(query);return rows.filter(row=>matches(row,query.where)).length},
@@ -28,6 +28,16 @@ assert.equal(second.items.length,3);assert.equal(second.nextCursor,null)
 assert.equal(new Set([...first.items,...second.items].map(x=>x.id)).size,23,'same-timestamp pagination must not duplicate records')
 const completed=await history.listTrustedVideoJobs('actor','brand','completed')
 assert.equal(completed.items.length,1);assert.equal(completed.items[0].hasFinalVideo,true)
+const stale={...rows[1],id:'historical-stuck',createdAt:new Date('2026-08-30'),updatedAt:new Date('2026-08-30')}
+rows.push(stale)
+const running=await history.listTrustedVideoJobs('actor','brand','active')
+assert.equal(running.activeCount,22);assert(running.items.every(item=>item.status==='generating'&&item.id!=='historical-stuck'))
+const attention=await history.listTrustedVideoJobs('actor','brand','needs_attention')
+assert.equal(attention.items.length,1);assert.equal(attention.items[0].status,'needs_attention');assert.equal(stale.status,'generating','history projection must not rewrite provider state')
+const cutoff=history.videoHistoryActivityCutoff(date.getTime())
+assert.equal(history.videoHistoryDisplayStatus({...stale,updatedAt:cutoff},cutoff),'generating')
+assert.equal(history.videoHistoryDisplayStatus({...stale,status:'completed'},cutoff),'completed')
+assert.equal(history.videoHistoryDisplayStatus({...stale,updatedAt:date},cutoff),'generating','fresh updates on old jobs remain active')
 assert(calls.every(q=>q.where.createdBy==='actor'&&q.where.brandId==='brand'))
 assert(calls.filter(q=>q.select).every(q=>!q.select.sceneExecutions&&!q.select.finalExecution&&!q.select.voiceoverState))
 for(const [status,cursor] of [['invented',''],['all','bad-cursor'],['active','x'.repeat(801)]])await assert.rejects(history.listTrustedVideoJobs('actor','brand',status,cursor),e=>(e as any).status===400)

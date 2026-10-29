@@ -7,11 +7,19 @@ type HistoryRow = Pick<VideoProductionJob, 'id' | 'brandId' | 'title' | 'platfor
 export const VIDEO_HISTORY_STATUSES = {
   all: undefined,
   active: ['queued', 'generating', 'assembling'],
+  needs_attention: ['queued', 'generating', 'assembling'],
   review: ['ready_for_review'],
   completed: ['completed'],
   failed: ['failed'],
   cancelled: ['cancelled'],
 } as const
+
+// A persisted nonterminal snapshot is not proof that an old renderer is still working.
+export const VIDEO_ACTIVITY_WINDOW_MS = 20 * 60 * 1000
+export function videoHistoryActivityCutoff(now = Date.now()) { return new Date(now - VIDEO_ACTIVITY_WINDOW_MS) }
+export function videoHistoryDisplayStatus(row: Pick<HistoryRow, 'status' | 'updatedAt'>, cutoff: Date) {
+  return (VIDEO_HISTORY_STATUSES.active as readonly string[]).includes(row.status) && row.updatedAt < cutoff ? 'needs_attention' : row.status
+}
 
 const invalid = () => Object.assign(new Error('Invalid video history query'), { status: 400 })
 export function videoHistoryQuery(status: unknown, cursor: unknown) {
@@ -35,20 +43,22 @@ export async function listTrustedVideoJobs(actorId: string, brandId: string, sta
   await resolveTrustedVideoJobActor(actorId, brandId, 'READ')
   const owner = { brandId, createdBy: actorId }
   const statuses = VIDEO_HISTORY_STATUSES[filter]
+  const cutoff = videoHistoryActivityCutoff()
+  const freshness = filter === 'active' ? { updatedAt: { gte: cutoff } } : filter === 'needs_attention' ? { updatedAt: { lt: cutoff } } : {}
   const [rows, activeCount] = await Promise.all([
     prisma.videoProductionJob.findMany({
-      where: { ...owner, ...(statuses ? { status: { in: [...statuses] } } : {}),
+      where: { ...owner, ...freshness, ...(statuses ? { status: { in: [...statuses] } } : {}),
         ...(after ? { OR: [{ createdAt: { lt: after.createdAt } }, { createdAt: after.createdAt, id: { lt: after.id } }] } : {}) },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 21,
       select: { id: true, brandId: true, title: true, platform: true, status: true, progress: true,
         thumbnailUrl: true, finalVideoUrl: true, createdAt: true, updatedAt: true, plan: true },
     }),
-    prisma.videoProductionJob.count({ where: { ...owner, status: { in: [...VIDEO_HISTORY_STATUSES.active] } } }),
+    prisma.videoProductionJob.count({ where: { ...owner, status: { in: [...VIDEO_HISTORY_STATUSES.active] }, updatedAt: { gte: cutoff } } }),
   ])
   const items = rows.slice(0, 20).map((row: HistoryRow) => {
     const plan = row.plan as { _mmVideoJob?: { language?: unknown; generationStage?: unknown } } | null
     const runtime = plan?._mmVideoJob
-    return { id: row.id, brandId: row.brandId, title: row.title, platform: row.platform, status: row.status,
+    return { id: row.id, brandId: row.brandId, title: row.title, platform: row.platform, status: videoHistoryDisplayStatus(row, cutoff),
       progress: Math.max(0, Math.min(100, row.progress)), thumbnailUrl: row.thumbnailUrl,
       hasFinalVideo: Boolean(row.finalVideoUrl),
       language: typeof runtime?.language === 'string' && ['zh','en','id','ms','bilingual'].includes(runtime.language) ? runtime.language : null,
