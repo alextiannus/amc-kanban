@@ -42,7 +42,7 @@ const deps:any={'./browse-source':browseSource,'./browse-knowledge':browseKnowle
 let browseCalls=0
 const clients=deps['../promotion-strategy/clients']
 clients.fetchBrandKeywords=async()=>({revision:1,tags:[]})
-clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{browseCalls++;return {brandTags:await clients.fetchBrandMatchingTags(context),items:await Promise.all(ids.map(async creativeId=>({creativeId,source:await clients.fetchCreativeSourceEvidence(creativeId)})))}}
+clients.fetchBrainstormBrowse=async(ids:string[],context:any)=>{browseCalls++;return {brandTags:context?await clients.fetchBrandMatchingTags(context):null,items:await Promise.all(ids.map(async creativeId=>({creativeId,source:await clients.fetchCreativeSourceEvidence(creativeId)})))}}
 const mod={exports:{} as any}
 new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/ai-native/brainstorm.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((key:string)=>deps[key]||{},mod,mod.exports)
 const api=mod.exports
@@ -224,3 +224,16 @@ write=false;await assert.rejects(api.loadMoreBrainstorm('user','brand',firstMore
 beforeTransaction=async()=>{await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async()=>({contentMatchRequestId:'replace',creativeCandidates:[],contentLibraryGaps:[]}))}
 await assert.rejects(api.loadMoreBrainstorm('user','brand',{...firstMore,requestKey:'more-request-000005'},db,moreMatch),(e:any)=>e.code==='brainstorm_round_changed')
 console.log('PASS incremental matching: durable append, source exclusions, idempotency, failure vs exhaustion, access and concurrent refresh')
+
+// Cursor pages never repeat the full source lookup or load brand facts/tags.
+rows=rows.filter(r=>r.kind!==contract.BRAINSTORM_FEED&&r.kind!==contract.BRAINSTORM_DECISION)
+knowledge={marketingSolution:{publishingCalendar:{months:{}}}}
+rows.push({kind:contract.BRAINSTORM_FEED,brandId:'brand',period:'sources',version:1,createdAt:new Date(),input:{},output:{sources:Array.from({length:25},(_,i)=>source('cre_page_'+i,90))}})
+const findBrand=db.brand.findUnique;db.brand.findUnique=async()=>{throw Error('first screen must not read brand product facts')}
+const pages:any[]=[];let cursor:string|undefined
+for(let n=0;n<4;n++){const page=await api.listBrainstorm('user','brand',db,true,cursor,true);pages.push(page);cursor=page.nextCursor;assert.equal(page.matchingTagsUnavailable,true)}
+assert.deepEqual(pages.map(p=>p.items.length),[8,8,8,1]);assert.equal(pages[3].hasMore,false);assert.equal(pages[3].canDecide,true)
+assert.equal(new Set(pages.flatMap(p=>p.items.map((i:any)=>i.sourceId))).size,25)
+await assert.rejects(api.listBrainstorm('user','brand',db,true,'cre_missing',true),(e:any)=>e.code==='brainstorm_cursor_changed')
+db.brand.findUnique=findBrand
+console.log('PASS bounded cursor pages, no duplicate sources, no brand facts/tag dependency, invalid cursor rejection')
