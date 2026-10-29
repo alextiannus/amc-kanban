@@ -369,7 +369,7 @@ export async function POST(request: Request, { params }: Params) {
         const [brand, extTools, identity] = await Promise.all([
           prisma.brand.findUnique({
             where: { id: brandId },
-            include: { knowledge: true, companionSkills: { where: { isEnabled: true } } },
+            select: { id:true,name:true,description:true,location:true,knowledge:{select:{menuItems:true,slangDict:true}},companionSkills:{where:{isEnabled:true},select:{displayName:true,systemPrompt:true}} },
           }),
           McpClientManager.aggregateExternalTools(brandId),
           resolveBrandIdentity(brandId),
