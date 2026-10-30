@@ -3,6 +3,7 @@ import { readTrustedVideoJob, resolveTrustedVideoJobActor } from '@/lib/videoJob
 import { serializeTrustedVideoJob } from '@/lib/videoJobContract'
 import { saveVideoJob } from '@/lib/videoJobPersistence'
 import { listTrustedVideoJobs } from '@/lib/videoJobHistory'
+import { videoHistoryDeletionContext, deleteVideoHistory } from '@/lib/videoJobDeletion'
 
 const unauthorized = () => Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -19,6 +20,17 @@ export async function POST(request: Request) {
     if (Buffer.byteLength(raw, 'utf8') > 9 * 1024 * 1024) return Response.json({ error: 'video_job_payload_too_large' }, { status: 413 })
     const body = JSON.parse(raw)
     const actorId = text(body?.actorId)
+    if (body?.action === 'history_delete_context' || body?.action === 'delete_history') {
+      const id = text(body.id), brandId = text(body.brandId)
+      if (!actorId || !id || !brandId || body.job !== undefined) return Response.json({ error: 'actorId, id and brandId are required' }, { status: 400 })
+      if (body.action === 'history_delete_context') {
+        const jobs = await videoHistoryDeletionContext(actorId, brandId, id)
+        return Response.json({ success: true, jobs: jobs.map(job => ({ ...serializeTrustedVideoJob(job), historyDeletedAt: job.historyDeletedAt })) }, { headers: { 'Cache-Control': 'no-store' } })
+      }
+      const deleted = await deleteVideoHistory(actorId, brandId, id, body.expectedIds)
+      const { activeCount } = await listTrustedVideoJobs(actorId, brandId)
+      return Response.json({ success: true, ...deleted, activeCount }, { headers: { 'Cache-Control': 'no-store' } })
+    }
     if (body?.action === 'list') {
       const brandId = text(body.brandId)
       if (!actorId || !brandId || body.job !== undefined) return Response.json({ error: 'actorId and brandId are required' }, { status: 400 })

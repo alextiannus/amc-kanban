@@ -41,7 +41,7 @@ export function videoHistoryQuery(status: unknown, cursor: unknown) {
 export async function listTrustedVideoJobs(actorId: string, brandId: string, status?: unknown, cursor?: unknown) {
   const { filter, after } = videoHistoryQuery(status, cursor)
   await resolveTrustedVideoJobActor(actorId, brandId, 'READ')
-  const owner = { brandId, createdBy: actorId }
+  const owner = { brandId, createdBy: actorId, historyDeletedAt: null }
   const statuses = VIDEO_HISTORY_STATUSES[filter]
   const cutoff = videoHistoryActivityCutoff()
   const freshness = filter === 'active' ? { updatedAt: { gte: cutoff } } : filter === 'needs_attention' ? { updatedAt: { lt: cutoff } } : {}

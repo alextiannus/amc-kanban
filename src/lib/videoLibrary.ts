@@ -13,7 +13,7 @@ export async function resumeLibraryVideo(userId:string,brandId:string,input:{ass
  const asset=await db.mediaAsset.findFirst({where:{id:assetId,brandId},select:{technicalMetadata:true}})
  const draft=asset?.technicalMetadata?.videoDraft,editor=draft?.editor
  if(!editor||editor.brandId!==brandId||typeof editor.script!=='string'||!editor.script.trim()||editor.script.length>12000)throw fail('video_script_unavailable',409)
- const owned=draft.jobId?await db.videoProductionJob.findFirst({where:{id:draft.jobId,brandId,createdBy:userId},select:{id:true}}):null
+ const owned=draft.jobId?await db.videoProductionJob.findFirst({where:{id:draft.jobId,brandId,createdBy:userId,historyDeletedAt:null},select:{id:true}}):null
  if(owned)return {mode:'owned',jobId:owned.id}
  // Shared library snapshots are brand resources, not permission to read another
  // member's private job. Copy only editable content; never their job/plan/receipt.
@@ -30,7 +30,7 @@ export async function saveVideoToLibrary(userId:string,brandId:string,input:{vid
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
   await tx.$queryRaw`SELECT id FROM "VideoProductionJob" WHERE id=${jobId} AND "brandId"=${brandId} FOR UPDATE`
   const job=await tx.videoProductionJob.findFirst({where:{id:jobId,brandId}})
-  if(!job)throw fail('not_found',404)
+  if(!job||job.historyDeletedAt)throw fail('not_found',404)
   if(job.status!=='completed'||!job.finalVideoUrl)throw fail('video_not_ready',409)
   const metadata=(job.plan as any)?._mmVideoJob||{}
   const rows=await tx.mediaAsset.findMany({where:{brandId,id:{in:job.assetIds}},select:{id:true,url:true,mimeType:true,aiCaption:true}})

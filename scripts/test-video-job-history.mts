@@ -13,7 +13,7 @@ const rows=Array.from({length:23},(_,i)=>({id:`job-${String(99-i).padStart(3,'0'
 rows.push({...rows[0],id:'foreign-owner',createdBy:'other'},{...rows[0],id:'foreign-brand',brandId:'other'},{...rows[0],id:'legacy-owner',createdBy:null as any})
 let active=true,allowed=true,reads=0,saves=0
 const calls:any[]=[]
-const matches=(row:any,where:any)=>row.brandId===where.brandId&&row.createdBy===where.createdBy&&(!where.updatedAt||where.updatedAt.gte&&row.updatedAt>=where.updatedAt.gte||where.updatedAt.lt&&row.updatedAt<where.updatedAt.lt)&&(!where.status||where.status.in.includes(row.status))&&(!where.OR||row.createdAt<where.OR[0].createdAt.lt||(+row.createdAt===+where.OR[1].createdAt&&row.id<where.OR[1].id.lt))
+const matches=(row:any,where:any)=>!row.historyDeletedAt&&row.brandId===where.brandId&&row.createdBy===where.createdBy&&(!where.updatedAt||where.updatedAt.gte&&row.updatedAt>=where.updatedAt.gte||where.updatedAt.lt&&row.updatedAt<where.updatedAt.lt)&&(!where.status||where.status.in.includes(row.status))&&(!where.OR||row.createdAt<where.OR[0].createdAt.lt||(+row.createdAt===+where.OR[1].createdAt&&row.id<where.OR[1].id.lt))
 const prisma={user:{findUnique:async()=>active?{id:'actor',status:'ACTIVE',type:'HUMAN',role:'USER'}:null},videoProductionJob:{
  findMany:async(query:any)=>{reads++;calls.push(query);return rows.filter(row=>matches(row,query.where)).sort((a,b)=>b.createdAt.valueOf()-a.createdAt.valueOf()||b.id.localeCompare(a.id)).slice(0,query.take)},
  count:async(query:any)=>{calls.push(query);return rows.filter(row=>matches(row,query.where)).length},
@@ -38,7 +38,7 @@ const cutoff=history.videoHistoryActivityCutoff(date.getTime())
 assert.equal(history.videoHistoryDisplayStatus({...stale,updatedAt:cutoff},cutoff),'generating')
 assert.equal(history.videoHistoryDisplayStatus({...stale,status:'completed'},cutoff),'completed')
 assert.equal(history.videoHistoryDisplayStatus({...stale,updatedAt:date},cutoff),'generating','fresh updates on old jobs remain active')
-assert(calls.every(q=>q.where.createdBy==='actor'&&q.where.brandId==='brand'))
+assert(calls.every(q=>q.where.createdBy==='actor'&&q.where.brandId==='brand'&&q.where.historyDeletedAt===null))
 assert(calls.filter(q=>q.select).every(q=>!q.select.sceneExecutions&&!q.select.finalExecution&&!q.select.voiceoverState))
 for(const [status,cursor] of [['invented',''],['all','bad-cursor'],['active','x'.repeat(801)]])await assert.rejects(history.listTrustedVideoJobs('actor','brand',status,cursor),e=>(e as any).status===400)
 const before=reads;allowed=false
@@ -51,6 +51,7 @@ const originalToken=process.env.CONTENT_SERVICE_INTERNAL_TOKEN
 process.env.CONTENT_SERVICE_INTERNAL_TOKEN='test-internal-token'
 try{
  const route=compile('src/app/api/internal/content/video-jobs/route.ts',{
+  '@/lib/videoJobDeletion':{},
   'node:crypto':await import('node:crypto'),'@/lib/videoJobAccess':access,'@/lib/videoJobContract':{serializeTrustedVideoJob:()=>{throw Error('list must not serialize full jobs')}},
   '@/lib/videoJobPersistence':{saveVideoJob:()=>{saves++;throw Error('list must not save')}},'@/lib/videoJobHistory':history,
  })

@@ -90,6 +90,8 @@ const nodeCrypto = await import('node:crypto')
 const videoJobAccess = await import('../src/lib/videoJobAccess.ts')
 const videoJobContract = await import('../src/lib/videoJobContract.ts')
 const compileInternalRoute = () => compile('src/app/api/internal/content/video-jobs/route.ts', {
+  '@/lib/videoJobDeletion': {},
+  '@/lib/videoJobHistory': {},
   'node:crypto': nodeCrypto,
   '@/lib/videoJobAccess': videoJobAccess,
   '@/lib/videoJobContract': videoJobContract,

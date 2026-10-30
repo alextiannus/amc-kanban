@@ -23,9 +23,9 @@ export async function saveVideoJob(actor: VideoJobActor, body: any) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'video-job:' + id}))::text`
     const existing = await tx.videoProductionJob.findUnique({
       where: { id },
-      select: { id: true, brandId: true, createdBy: true, plan: true, creativeId: true, idea: true, assetIds: true, mediaUrls: true },
+      select: { id: true, brandId: true, createdBy: true, historyDeletedAt: true, plan: true, creativeId: true, idea: true, assetIds: true, mediaUrls: true },
     })
-    if (existing && (existing.brandId !== brandId || !existing.createdBy || existing.createdBy !== actor.id)) throw failure('Not found', 404)
+    if (existing && (existing.historyDeletedAt || existing.brandId !== brandId || !existing.createdBy || existing.createdBy !== actor.id)) throw failure('Not found', 404)
     await requireActorPermission(actor.id, 'content.video-making.create', brandId)
 
     const oldEditor = (existing?.plan as any)?._mmVideoJob?.editor
@@ -54,7 +54,7 @@ export async function saveVideoJob(actor: VideoJobActor, body: any) {
     if (metadata.editor) {
       const original = existing || (!metadata.editor.creativeRevisionId && metadata.editor.originVideoJobId
         ? await tx.videoProductionJob.findUnique({ where: { id: metadata.editor.originVideoJobId } }) : null)
-      if (original && (original.brandId !== brandId || original.createdBy !== actor.id)) throw failure('video_lineage_not_found', 404)
+      if (original && (original.historyDeletedAt || original.brandId !== brandId || original.createdBy !== actor.id)) throw failure('video_lineage_not_found', 404)
       const originalEditor = (original?.plan as any)?._mmVideoJob?.editor
       const legacyExisting = original?.creativeId && !originalEditor?.creativeRevisionId && !metadata.editor.creativeRevisionId
         ? editorForLibrary(original, await tx.mediaAsset.findMany({ where: { brandId, id: { in: original.assetIds || [] } },

@@ -7,11 +7,12 @@ export async function register() {
     // No permission result is cached or reused for a user request.
     const { prisma } = await import('./lib/prisma')
     const { readPolicies } = await import('./lib/role-permissions/store')
+    const { ensureVideoHistorySchema } = await import('./lib/videoHistorySchema')
     // Do not poison Next's cached instrumentation promise on a brief DB restart.
     // Keep the instance unready and workers stopped until authorization data is available.
     let attempts = 0
     for (;;) {
-      try { await prisma.$connect(); await readPolicies(); break }
+      try { await prisma.$connect(); await ensureVideoHistorySchema(); await readPolicies(); break }
       catch (error) {
         const delay = Math.min(1000 * 2 ** Math.min(attempts++, 4), 15000)
         console.warn('[startup] database/policy initialization retry', { attempt: attempts, delayMs: delay, code: (error as {code?: string; errorCode?: string})?.code || (error as {errorCode?: string})?.errorCode || 'initialization_failed' })

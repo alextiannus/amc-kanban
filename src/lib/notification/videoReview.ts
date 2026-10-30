@@ -8,7 +8,7 @@ export async function notifyVideoReview(userId: string, input: unknown) {
   const id = typeof body?.videoJobId === 'string' ? body.videoJobId.trim() : ''
   if (!id || id.length > 200) throw Object.assign(new Error('video_job_required'), { status: 400, code: 'video_job_required' })
   const job = await prisma.videoProductionJob.findUnique({ where: { id } })
-  if (!job || !await canSessionAccessBrandProject(job.brandId, userId, 'HUMAN')) {
+  if (!job || job.historyDeletedAt || !await canSessionAccessBrandProject(job.brandId, userId, 'HUMAN')) {
     throw Object.assign(new Error('not_found'), { status: 404, code: 'not_found' })
   }
   if (job.status !== 'completed' || !job.finalVideoUrl) {

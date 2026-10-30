@@ -19,7 +19,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
  const creativeId=text(body.creativeId)
  let source:any=null
  const origin=typeof body.originVideoJobId==='string'?await prisma.videoProductionJob.findUnique({where:{id:body.originVideoJobId}}):null
- if(body.originVideoJobId&&(!origin||origin.brandId!==brandId||origin.createdBy!==userId))throw nativeError('video_not_found',404)
+ if(body.originVideoJobId&&(!origin||origin.historyDeletedAt||origin.brandId!==brandId||origin.createdBy!==userId))throw nativeError('video_not_found',404)
  const pinned=(origin?.plan as any)?._mmVideoJob?.editor?.sourceReference
  if(pinned)source={timeline:pinned.timeline||pinned.scriptContent?.timeline||[],sourceEvidence:{originalText:pinned.sourceEvidence?.originalText||pinned.scriptContent?.originalText||''},sourceDigest:pinned.sourceDigest||pinned.libraryDigest||null}
  const [resolvedSource,brand]=await Promise.all([

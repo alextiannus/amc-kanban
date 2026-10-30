@@ -31,7 +31,7 @@ export async function GET(request: Request) {
     const job = await prisma.videoProductionJob.findFirst({
       where: { id, ...(brandId ? { brandId } : {}) },
     })
-    if (!job || !job.createdBy || job.createdBy !== actor.id) return videoJobNotFoundResponse()
+    if (!job || job.historyDeletedAt || !job.createdBy || job.createdBy !== actor.id) return videoJobNotFoundResponse()
 
     const ok = await canSessionAccessBrandProject(job.brandId, actor.id, actor.type, actor.role)
     if (!ok) return videoJobNotFoundResponse()

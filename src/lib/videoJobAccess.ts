@@ -17,7 +17,7 @@ export async function readTrustedVideoJob(actorId: string, id: string, brandId?:
     prisma.user.findUnique({ where: { id: actorId }, select: { status: true } }),
     prisma.videoProductionJob.findFirst({ where: { id, ...(brandId ? { brandId } : {}) } }),
   ])
-  if (user?.status !== 'ACTIVE' || !job || !job.createdBy || job.createdBy !== actorId) throw notFound()
+  if (user?.status !== 'ACTIVE' || !job || job.historyDeletedAt || !job.createdBy || job.createdBy !== actorId) throw notFound()
   if (!await canUserAccessBrand(job.brandId, actorId, 'READ')) throw notFound()
   return job
 }

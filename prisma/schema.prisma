@@ -947,6 +947,7 @@ model VideoShootBatch {
 }
 
 model VideoProductionJob {
+  historyDeletedAt DateTime?
   voiceoverState  Json?
   id              String   @id
   brandId         String
