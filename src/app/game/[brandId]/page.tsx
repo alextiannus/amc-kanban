@@ -1,3 +1,4 @@
+import { getPermanentGameUrl } from '@/lib/gameQr'
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { getActivityShareBrand, activityShareImageUrl } from '@/lib/activityShareMetadata'
@@ -6,19 +7,21 @@ import CustomerGameClient from './CustomerGameClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function CustomerGamePage({ params }: { params: Promise<{ brandId: string }> }) {
+export default async function CustomerGamePage({ params, searchParams }: { params: Promise<{ brandId: string }>; searchParams: Promise<{ store?: string }> }) {
   const { brandId } = await params
-  return <CustomerGameClient brandId={brandId} />
+  const { store = '' } = await searchParams
+  return <CustomerGameClient key={`${brandId}:${store}`} brandId={brandId} storeId={store} />
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ brandId: string }> }): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ brandId: string }>; searchParams: Promise<{ store?: string }> }): Promise<Metadata> {
   const { brandId } = await params
-  const brand = await getActivityShareBrand(brandId)
+  const { store = '' } = await searchParams
+  const brand = await getActivityShareBrand(brandId, store)
   if (!brand) return { title: '店内活动', robots: { index: false, follow: false } }
   const language = (await headers()).get('accept-language')?.split(',')[0]?.trim().toLowerCase() || 'zh'
   const locale = language.startsWith('zh') ? 'zh' : 'en'
   const copy = activitySharePresentation(brand.name, brand.page, locale)
-  const url = `https://amc.immedi.ai/game/${encodeURIComponent(brandId)}`
+  const url = getPermanentGameUrl(brandId, store)
   const image = activityShareImageUrl(brandId, brand, locale)
   return {
     title: { absolute: copy.title }, description: copy.description, applicationName: brand.name,

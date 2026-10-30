@@ -14,7 +14,7 @@ export const activityTextDefaults = {
   reviewNote: { zh: '在 Google 留下你的真实评价', en: 'Share your honest experience on Google' },
 } as const
 export type ActivityTextKey = keyof typeof activityTextDefaults
-export type ActivityPage = { text: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, string>>>>; links: Record<string, string>; drawEnabled?: boolean; translations?: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, { source: string; value: string }>>>> }
+export type ActivityPage = { manualAccounts?: { platformId: 'xiaohongshu'; handle: string; profileUrl: string }[]; text: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, string>>>>; links: Record<string, string>; drawEnabled?: boolean; translations?: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, { source: string; value: string }>>>> }
 export function activityLinkKey(platform: string, handle: string) { return `${platform.toLowerCase()}:${encodeURIComponent(handle)}` }
 export function activitySourceText(page: ActivityPage | null | undefined, key: ActivityTextKey, locale: 'zh' | 'en', reward?: string | null) {
   const direct = page?.text?.[locale]?.[key]
@@ -66,6 +66,16 @@ export function normalizeActivityPage(input: unknown): ActivityPage {
   if (input == null) return out
   if (typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid activity page')
   const source = input as Record<string, unknown>
+  if (source.manualAccounts !== undefined) {
+    if (!Array.isArray(source.manualAccounts) || source.manualAccounts.length > 10) throw new Error('Maximum 10 manual accounts')
+    out.manualAccounts = source.manualAccounts.map(account => {
+      if (!account || account.platformId !== 'xiaohongshu' || typeof account.handle !== 'string' || !account.handle.trim() || account.handle.length > 80 || typeof account.profileUrl !== 'string' || account.profileUrl.length > 2048) throw new Error('Enter an account name and Xiaohongshu profile link')
+      const url = new URL(account.profileUrl.trim())
+      if (url.protocol !== 'https:' || url.username || url.password || url.port || !['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com', 'www.xhslink.com'].includes(url.hostname) || url.pathname === '/') throw new Error('Use an official HTTPS Xiaohongshu profile or share link')
+      return { platformId: 'xiaohongshu' as const, handle: account.handle.trim(), profileUrl: url.href }
+    })
+    if (new Set(out.manualAccounts.map(a => a.handle)).size !== out.manualAccounts.length) throw new Error('Account names must be unique')
+  }
   if (source.drawEnabled !== undefined) {
     if (typeof source.drawEnabled !== 'boolean') throw new Error('Invalid activity selection')
     out.drawEnabled = source.drawEnabled

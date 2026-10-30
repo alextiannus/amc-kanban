@@ -1,3 +1,5 @@
+import { getActivityShareBrand } from '@/lib/activityShareMetadata'
+import { notFound } from 'next/navigation'
 import PosterClient from './PosterClient'
 
 export const dynamic = 'force-dynamic'
@@ -23,9 +25,14 @@ export default async function GamePosterPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const [{ brandId }, query] = await Promise.all([params, searchParams])
+  const storeId = cleanText(query.store, '')
+  const brand = await getActivityShareBrand(brandId, storeId)
+  if (!brand) notFound()
   return (
     <PosterClient
       brandId={brandId}
+      storeId={storeId}
+      storeLabel={storeId ? brand.name : ''}
       title={cleanText(query.title, 'Scan & Win!')}
       desc={cleanText(query.desc, 'Leave a review to spin and win rewards instantly!')}
       theme={cleanTheme(query.theme)}

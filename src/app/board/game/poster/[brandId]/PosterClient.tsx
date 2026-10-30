@@ -16,11 +16,15 @@ const themeMap: Record<PosterTheme, { accent: string; soft: string }> = {
 
 export default function PosterClient({
   brandId,
+  storeId,
+  storeLabel,
   title,
   desc,
   theme,
 }: {
   brandId: string
+  storeId?: string
+  storeLabel?: string
   title: string
   desc: string
   theme: PosterTheme
@@ -29,11 +33,12 @@ export default function PosterClient({
   const colors = themeMap[theme] || themeMap.black
 
   useEffect(() => {
-    void QRCode.toDataURL(getPermanentGameUrl(brandId), PERMANENT_GAME_QR_OPTIONS).then(setQrCodeUrl)
-  }, [brandId])
+    void QRCode.toDataURL(getPermanentGameUrl(brandId, storeId), PERMANENT_GAME_QR_OPTIONS).then(setQrCodeUrl)
+  }, [brandId, storeId])
 
   return (
     <main className="min-h-screen bg-slate-100 p-6 text-slate-950 print:bg-white print:p-0">
+      {storeLabel && <p className="text-center text-lg font-semibold">{storeLabel}</p>}
       <div className="mx-auto flex min-h-[80vh] max-w-lg flex-col items-center justify-center gap-4 print:min-h-0">
         <section
           className="flex aspect-square w-full max-w-[420px] flex-col items-center justify-between overflow-hidden rounded-[28px] border-[10px] bg-white p-8 text-center shadow-xl print:max-w-[80mm] print:rounded-none print:border-[4px] print:p-3 print:shadow-none"

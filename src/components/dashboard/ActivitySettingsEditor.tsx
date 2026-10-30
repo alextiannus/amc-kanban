@@ -159,6 +159,7 @@ export default function ActivitySettingsEditor({ brandId, brandName, isEn = fals
   const [error, setError] = useState<string | null>(null)
 
   // QR code state
+  const [activityStoreId, setActivityStoreId] = useState('')
   const [qrCodeUrl, setQrCodeUrl] = useState('')
 
   // Poster customizations
@@ -220,7 +221,9 @@ export default function ActivitySettingsEditor({ brandId, brandName, isEn = fals
 
   useEffect(() => {
     let active = true
-    void QRCode.toDataURL(getPermanentGameUrl(brandId), PERMANENT_GAME_QR_OPTIONS)
+    setQrCodeUrl('')
+    if (!activityStoreId) return
+    void QRCode.toDataURL(getPermanentGameUrl(brandId, activityStoreId), PERMANENT_GAME_QR_OPTIONS)
       .then((dataUrl) => {
         if (active) setQrCodeUrl(dataUrl)
       })
@@ -228,7 +231,7 @@ export default function ActivitySettingsEditor({ brandId, brandName, isEn = fals
     return () => {
       active = false
     }
-  }, [brandId])
+  }, [brandId, activityStoreId])
 
   const handleSave = async () => {
     if (!config || drawRequestPending.current) return
@@ -314,7 +317,8 @@ export default function ActivitySettingsEditor({ brandId, brandName, isEn = fals
 
 
   const openPosterPrint = () => {
-    const printUrl = `${getPermanentPosterUrl(brandId)}?title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
+    if (!activityStoreId) return
+    const printUrl = `${getPermanentPosterUrl(brandId, activityStoreId)}${activityStoreId ? '&' : '?'}title=${encodeURIComponent(posterTitle)}&desc=${encodeURIComponent(posterDesc)}&theme=${stickerTheme}`
     window.open(printUrl, '_blank')
   }
 
@@ -416,7 +420,7 @@ export default function ActivitySettingsEditor({ brandId, brandName, isEn = fals
 
       </div>
 
-      <FollowEntryCard key={brandId} brandId={brandId} brandName={brandName} qrCodeUrl={qrCodeUrl} isEn={isEn} rewardDescription={followRewardDescription} onRewardChange={setFollowRewardDescription} onRewardSaved={setSavedFollowRewardDescription} activityVersion={activityPreviewVersion} previewActivity={drawSelected} onPageDirtyChange={setPageDirty} onDrawSelection={enabled => { setDrawSelected(enabled); setWheelSettingsExpanded(false) }} onEditDraw={() => setWheelSettingsExpanded(true)} previewConfig={previewConfig}>
+      <FollowEntryCard onStoreChange={setActivityStoreId} key={brandId} brandId={brandId} brandName={brandName} qrCodeUrl={qrCodeUrl} isEn={isEn} rewardDescription={followRewardDescription} onRewardChange={setFollowRewardDescription} onRewardSaved={setSavedFollowRewardDescription} activityVersion={activityPreviewVersion} previewActivity={drawSelected} onPageDirtyChange={setPageDirty} onDrawSelection={enabled => { setDrawSelected(enabled); setWheelSettingsExpanded(false) }} onEditDraw={() => setWheelSettingsExpanded(true)} previewConfig={previewConfig}>
 
       {drawSelected && <button type="button" aria-expanded={wheelSettingsExpanded} aria-controls="in-store-lucky-draw-settings" onClick={() => setWheelSettingsExpanded(value => !value)} className={`${activitySecondary} w-full`}><Gift size={15}/>{wheelSettingsExpanded ? t('收起轮盘配置', 'Collapse draw settings') : t('编辑轮盘配置', 'Edit draw settings')}{wheelSettingsExpanded ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}</button>}
 
@@ -1014,7 +1018,7 @@ export default function ActivitySettingsEditor({ brandId, brandName, isEn = fals
 
             <button
               onClick={openPosterPrint}
-              disabled={!qrCodeUrl}
+              disabled={!qrCodeUrl || !activityStoreId}
               className={`${activitySecondary} w-full`}
             >
               <Printer size={13} />

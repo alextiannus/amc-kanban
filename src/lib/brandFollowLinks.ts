@@ -1,5 +1,6 @@
 import { activityLinkKey, type ActivityPage } from './activityPage'
 export type FollowBrand = {
+  activityStoreId?: string
   activityPage?: ActivityPage
   name?: string
   address?: string | null
@@ -63,7 +64,7 @@ export function brandGoogleMapsEntries(brand: Pick<FollowBrand, 'name' | 'addres
 export function brandFollowLinks(brand?: FollowBrand) {
   const seen = new Set<string>()
   const links: { platform: string; handle: string; url: string; review: boolean }[] = []
-  for (const account of brand?.accounts ?? []) {
+  for (const account of [...(brand?.accounts ?? []), ...(brand?.activityPage?.manualAccounts ?? [])]) {
     const url = publicHttpUrl(account.profileUrl)
     if (!url || seen.has(url)) continue
     seen.add(url)
@@ -87,7 +88,7 @@ export function brandFollowLinks(brand?: FollowBrand) {
   const review = publicHttpUrl(brand?.googleReviewUrl) || (configuredPlaceId ? `https://search.google.com/local/writereview?placeid=${encodeURIComponent(configuredPlaceId)}` : null)
   if (review) links.push({ platform: 'google', handle: '', url: review, review: true })
   return links.map(link => {
-    const key = activityLinkKey(link.platform, link.review ? 'review' : link.handle)
+    const key = activityLinkKey(link.platform, brand?.activityStoreId && ['google', 'google_maps'].includes(link.platform) ? `${brand.activityStoreId}:${link.review ? 'review' : 'map'}` : link.review ? 'review' : link.handle)
     return { ...link, mapSearch: link.platform === 'google_maps' && mapsEntries.some(entry => entry.url === link.url && entry.kind === 'search'), key, originalUrl: link.url, url: publicHttpUrl(brand?.activityPage?.links?.[key]) || link.url }
   })
 }

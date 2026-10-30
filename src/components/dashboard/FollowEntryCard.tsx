@@ -7,16 +7,31 @@ import { activityTextDefaults, activitySourceText, activityPageDraftSnapshot, ac
 import { activitySharePresentation } from '@/lib/activitySharePresentation'
 import { BRAND_ACCOUNTS_CHANGED } from '@/lib/brandAccountEvents'
 import { activityPrimary, activitySecondary } from './activityUi'
-import { getPermanentGameUrl } from '@/lib/gameQr'
+import QRCode from 'qrcode'
+import { getPermanentGameUrl, PERMANENT_GAME_QR_OPTIONS } from '@/lib/gameQr'
 import { AMC_QR_LOGO, drawAmcQrBackground } from '@/lib/amcQrArtwork'
 
-export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = false, rewardDescription, onRewardChange, onRewardSaved, activityVersion = 0, previewConfig, previewActivity = false, onDrawSelection, onEditDraw, onPageDirtyChange, children }: {
-  brandId: string; brandName: string; qrCodeUrl: string; isEn?: boolean
+export default function FollowEntryCard({ brandId, brandName, onStoreChange, isEn = false, rewardDescription, onRewardChange, onRewardSaved, activityVersion = 0, previewConfig, previewActivity = false, onDrawSelection, onEditDraw, onPageDirtyChange, children }: {
+  brandId: string; brandName: string; qrCodeUrl: string; onStoreChange?: (id: string) => void; isEn?: boolean
   rewardDescription: string; onRewardChange: (value: string) => void; onRewardSaved?: (value: string) => void; activityVersion?: number; previewConfig?: Record<string, unknown>; previewActivity?: boolean; onDrawSelection?: (enabled: boolean) => void; onEditDraw?: () => void; onPageDirtyChange?: (dirty: boolean) => void; children?: ReactNode
 }) {
   const previewFrame = useRef<HTMLIFrameElement>(null)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
+  const [stores, setStores] = useState<{ id: string; name: string; address: string }[]>([])
+  const [storeId, setStoreId] = useState('')
+  const [qr, setQr] = useState({ url: '', image: '' })
+  const [accountName, setAccountName] = useState('')
+  const [accountUrl, setAccountUrl] = useState('')
+  const selectedStore = stores.find(store => store.id && store.id === storeId)
+  const url = getPermanentGameUrl(brandId, storeId)
+  const qrCodeUrl = selectedStore && qr.url === url ? qr.image : ''
+  useEffect(() => { onStoreChange?.(storeId) }, [storeId, onStoreChange])
+  useEffect(() => {
+    let active = true
+    if (storeId) void QRCode.toDataURL(url, PERMANENT_GAME_QR_OPTIONS).then(image => { if (active) setQr({ url, image }) }).catch(() => { if (active) setQr({ url: '', image: '' }) })
+    return () => { active = false }
+  }, [url, storeId])
   const [page, setPage] = useState<ActivityPage>({ text: {}, links: {} })
   const [revision, setRevision] = useState('')
   const [savedSnapshot, setSavedSnapshot] = useState('')
@@ -46,6 +61,9 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
         const data = await res.json()
         if (controller.signal.aborted) return
         const next = normalizeActivityPage(data.activityPage)
+        const choices = Array.isArray(data.activityStores) ? data.activityStores : []
+        setStores(choices)
+        setStoreId(current => choices.some((s: { id: string }) => s.id && s.id === current) ? current : choices.length === 1 ? choices[0].id : '')
         setPage(next)
         setSavedSharePage(next)
         setRevision(data.revision)
@@ -62,12 +80,12 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brandId, loadVersion])
   const sendPreview = useCallback(() => {
-    previewFrame.current?.contentWindow?.postMessage({ type: 'AMC_GAME_PREVIEW_UPDATE', brandId, config: previewConfig, rewardDescription, previewActivity: page.drawEnabled ?? previewActivity, activityPage: page, editing: Boolean(revision) && !savingPage }, new URL(getPermanentGameUrl(brandId)).origin)
-  }, [brandId, previewConfig, rewardDescription, previewActivity, page, revision, savingPage])
+    previewFrame.current?.contentWindow?.postMessage({ type: 'AMC_GAME_PREVIEW_UPDATE', brandId, config: previewConfig, rewardDescription, previewActivity: page.drawEnabled ?? previewActivity, activityPage: page, editing: Boolean(revision) && !savingPage }, new URL(getPermanentGameUrl(brandId, storeId)).origin)
+  }, [brandId, storeId, previewConfig, rewardDescription, previewActivity, page, revision, savingPage])
   useEffect(() => {
     sendPreview()
     const receive = (event: MessageEvent) => {
-      if (event.origin !== new URL(getPermanentGameUrl(brandId)).origin || event.source !== previewFrame.current?.contentWindow || event.data?.brandId !== brandId) return
+      if (event.origin !== new URL(getPermanentGameUrl(brandId, storeId)).origin || event.source !== previewFrame.current?.contentWindow || event.data?.brandId !== brandId) return
       if (event.data.type === 'AMC_GAME_PREVIEW_READY') sendPreview()
       const data = event.data
       if (!revision || savingPage) return
@@ -104,15 +122,15 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
     }
     window.addEventListener('message', receive)
     return () => window.removeEventListener('message', receive)
-  }, [brandId, sendPreview, onEditDraw, onRewardChange, revision, savingPage, rewardDescription])
+  }, [brandId, storeId, sendPreview, onEditDraw, onRewardChange, revision, savingPage, rewardDescription])
   useEffect(() => {
     const refresh = (event: Event) => {
       if ((event as CustomEvent<{ brandId: string }>).detail?.brandId !== brandId) return
-      previewFrame.current?.contentWindow?.postMessage({ type: 'AMC_GAME_PREVIEW_REFRESH_ACCOUNTS', brandId }, new URL(getPermanentGameUrl(brandId)).origin)
+      previewFrame.current?.contentWindow?.postMessage({ type: 'AMC_GAME_PREVIEW_REFRESH_ACCOUNTS', brandId }, new URL(getPermanentGameUrl(brandId, storeId)).origin)
     }
     window.addEventListener(BRAND_ACCOUNTS_CHANGED, refresh)
     return () => window.removeEventListener(BRAND_ACCOUNTS_CHANGED, refresh)
-  }, [brandId])
+  }, [brandId, storeId])
   const [translationPending, setTranslationPending] = useState(false)
   useEffect(() => {
     if (!revision || savingPage || !activityTranslationTasks(page, rewardDescription).length) return
@@ -156,15 +174,14 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
     try {
       if (navigator.share) {
         const copy = activitySharePresentation(brandName, savedSharePage, isEn ? 'en' : 'zh')
-        await navigator.share({ title: copy.title, text: copy.description, url: getPermanentGameUrl(brandId) })
+        await navigator.share({ title: copy.title, text: copy.description, url: getPermanentGameUrl(brandId, storeId) })
       }
-      else { await navigator.clipboard.writeText(getPermanentGameUrl(brandId)); setNotice(isEn ? 'Page link copied.' : '页面链接已复制。') }
+      else { await navigator.clipboard.writeText(getPermanentGameUrl(brandId, storeId)); setNotice(isEn ? 'Page link copied.' : '页面链接已复制。') }
     } catch (err) { if (err instanceof Error && err.name === 'AbortError') return
-      try { await navigator.clipboard.writeText(getPermanentGameUrl(brandId)); setNotice(isEn ? 'Page link copied. Share it anywhere.' : '页面链接已复制，可粘贴分享。') }
+      try { await navigator.clipboard.writeText(getPermanentGameUrl(brandId, storeId)); setNotice(isEn ? 'Page link copied. Share it anywhere.' : '页面链接已复制，可粘贴分享。') }
       catch { setError(isEn ? 'Unable to share. Open the published page and copy its address.' : '分享失败，请打开已发布页面复制地址。') } }
   }
   const invitation = { zh: '扫一扫，成为我们的朋友吧', en: 'Scan to stay in touch', zhNote: '店里的新鲜事，想继续分享给你。', enNote: 'A little more of our world, shared with you.' }
-  const url = getPermanentGameUrl(brandId)
 
   const [googleSync, setGoogleSync] = useState<{ brandId: string; status: string; lastError?: string } | null>(null)
   useEffect(() => {
@@ -206,7 +223,9 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       ctx.textAlign = 'center'
       ctx.fillStyle = '#132523'
       ctx.font = '700 40px sans-serif'
-      ctx.fillText(brandName, canvas.width / 2, 125, canvas.width - 160)
+      ctx.fillText(brandName, canvas.width / 2, 105, canvas.width - 160)
+      ctx.font = '28px sans-serif'
+      ctx.fillText([selectedStore?.name, selectedStore?.address].filter(Boolean).join(' · '), canvas.width / 2, 162, canvas.width - 160)
       ctx.font = '800 52px sans-serif'
       ctx.fillText(invitation.zh, canvas.width / 2, 230, canvas.width - 160)
       ctx.font = '700 40px sans-serif'
@@ -255,7 +274,7 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
   async function saveStickerImage() {
     if (!sticker || savingImage) return
     setStickerNotice('')
-    const file = new File([sticker.blob], `brand-sticker-${brandId}.png`, { type: 'image/png' })
+    const file = new File([sticker.blob], `brand-sticker-${brandId}-${storeId}.png`, { type: 'image/png' })
     try {
       if (navigator.canShare?.({ files: [file] }) && navigator.share) {
         setSavingImage(true)
@@ -271,7 +290,7 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
   function downloadSticker() {
     if (!sticker) return
     const anchor = document.createElement('a')
-    anchor.download = `brand-sticker-${brandId}.png`
+    anchor.download = `brand-sticker-${brandId}-${storeId}.png`
     anchor.href = sticker.url
     document.body.append(anchor)
     anchor.click()
@@ -279,9 +298,25 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
   }
 
   return <section className="space-y-4 text-slate-900 dark:text-slate-100" aria-label={isEn ? 'Activity page builder' : '活动页编辑器'}>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <label className="block text-sm font-bold" htmlFor="activity-store">{isEn ? 'Store for this sticker' : '这张贴纸所属门店'}</label>
+      <select id="activity-store" value={storeId} disabled={busy || savingImage} onChange={e => { setStoreId(e.target.value); stickerDialog.current?.close(); setSticker(null) }} className="mt-3 w-full rounded-xl border border-slate-300 bg-transparent p-3 text-base">
+        <option value="">{isEn ? 'Choose a store' : '请选择门店'}</option>
+        {stores.map((store, index) => <option key={store.id || index} value={store.id} disabled={!store.id}>{store.name} · {store.address}{!store.id ? (isEn ? ' — Save store details first' : ' — 请先保存门店资料') : ''}</option>)}
+      </select>
+      <p className="mt-2 text-xs text-slate-500">{isEn ? 'Each store has its own permanent link and QR sticker. Only its Google Maps address is shown.' : '每家门店都有专属固定链接和二维码贴纸，只展示该门店的 Google Maps 地址。'}</p>
+      {storeId && <p className="mt-2 break-all text-xs text-slate-500">{url}</p>}
+    </div>
+    <fieldset disabled={!revision || savingPage} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+      <legend className="px-1 text-sm font-bold">{isEn ? 'Xiaohongshu account' : '小红书媒体账号'}</legend>
+      <p className="mb-3 text-xs text-slate-500">{isEn ? 'Add a public profile for customers to follow. Shared across stores; publishing authorization is separate.' : '手动添加主页供顾客关注，品牌各门店共用；此操作不关联自动发布授权。'}</p>
+      {(page.manualAccounts || []).map(account => <div key={account.handle} className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800"><div className="min-w-0"><strong className="text-sm">{account.handle}</strong><p className="break-all text-xs text-slate-500">{account.profileUrl}</p></div><button type="button" className={activitySecondary} onClick={() => setPage(current => ({ ...current, links: Object.fromEntries(Object.entries(current.links).filter(([key]) => key !== `xiaohongshu:${encodeURIComponent(account.handle)}`)), manualAccounts: current.manualAccounts?.filter(a => a.handle !== account.handle) }))}>{isEn ? 'Remove' : '删除'}</button></div>)}
+      <div className="grid gap-3 sm:grid-cols-2"><label className="text-xs">{isEn ? 'Account name' : '账号名称'}<input value={accountName} maxLength={80} onChange={e => setAccountName(e.target.value)} className="mt-1 w-full rounded-xl border p-3 text-base dark:bg-slate-900" placeholder={isEn ? 'Store account name' : '输入小红书账号名称'}/></label><label className="text-xs">{isEn ? 'Profile or share link' : '主页或分享链接'}<input type="url" value={accountUrl} onChange={e => setAccountUrl(e.target.value)} className="mt-1 w-full rounded-xl border p-3 text-base dark:bg-slate-900" placeholder="https://www.xiaohongshu.com/user/profile/…"/></label></div>
+      <button type="button" className={`${activitySecondary} mt-3`} disabled={!accountName.trim() || !accountUrl.trim()} onClick={() => { try { const next = normalizeActivityPage({ ...page, manualAccounts: [...(page.manualAccounts || []), { platformId: 'xiaohongshu', handle: accountName, profileUrl: accountUrl }] }); setPage(next); setAccountName(''); setAccountUrl(''); setError('') } catch { setError(isEn ? 'Enter a unique account name and an official HTTPS Xiaohongshu profile or share link.' : '请输入不重复的账号名称及小红书官方 HTTPS 主页或分享链接。') } }}>{isEn ? 'Add account' : '添加账号'}</button>
+    </fieldset>
     <fieldset disabled={!revision || savingPage} className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
       <legend className="sr-only">{isEn ? 'Choose activities' : '选择活动'}</legend>
-      <div className="mb-3 flex items-center justify-between gap-2"><h3 className="text-sm font-bold">{isEn ? 'Choose activities' : '选择活动'}</h3><span className="text-xs text-slate-500">{isEn ? 'One page · One QR code' : '一张活动页 · 一个二维码'}</span></div>
+      <div className="mb-3 flex items-center justify-between gap-2"><h3 className="text-sm font-bold">{isEn ? 'Choose activities' : '选择活动'}</h3><span className="text-xs text-slate-500">{isEn ? 'One store · One QR code' : '一家门店 · 一个二维码'}</span></div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex items-center gap-3 rounded-xl border border-blue-300 bg-blue-50 p-3 text-left text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100"><Check size={18}/><span><strong className="block text-sm">{isEn ? 'Follow & review' : '关注评价'}</strong><span className="mt-1 block text-xs opacity-70">{isEn ? 'Included · Linked accounts appear automatically' : '默认加入 · 自动展示已绑定账号'}</span></span></div>
         <label className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 ${page.drawEnabled ?? previewActivity ? 'border-blue-300 bg-blue-50 text-blue-900 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-100' : 'border-slate-200 dark:border-slate-700'}`}>
@@ -298,7 +333,7 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
         <div id="activity-preview-panel" className="min-w-0">
           {googleSync?.brandId === brandId && (googleSync.status === 'WAITING_FOR_LOCATIONS' || googleSync.lastError === 'GOOGLE_LOCATIONS_PENDING_SYNC' || googleSync.lastError === 'GOOGLE_LOCATION_SELECTION_REQUIRED') && <p role="status" data-testid="google-location-notice" className="mb-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">{isEn ? 'Google location details are still being synchronized.' : 'Google 门店资料仍在同步中。'}</p>}
           <div className="mx-auto w-full max-w-[440px] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-            <iframe ref={previewFrame} onLoad={sendPreview} key={`${brandId}-${activityVersion}`} src={`${url}?preview=1&revision=${activityVersion}`} title={isEn ? 'Customer activity page preview' : '顾客活动页预览'} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerPolicy="strict-origin-when-cross-origin" className="block h-[min(76svh,840px)] min-h-[480px] w-full border-0"/>
+            <iframe ref={previewFrame} onLoad={sendPreview} key={`${brandId}-${storeId}-${activityVersion}`} src={`${url}${storeId ? '&' : '?'}preview=1&revision=${activityVersion}`} title={isEn ? 'Customer activity page preview' : '顾客活动页预览'} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerPolicy="strict-origin-when-cross-origin" className="block h-[min(76svh,840px)] min-h-[480px] w-full border-0"/>
           </div>
         </div>
         <aside id="activity-edit-panel" className="min-w-0 space-y-3">
@@ -307,9 +342,9 @@ export default function FollowEntryCard({ brandId, brandName, qrCodeUrl, isEn = 
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-200 pt-4 dark:border-slate-800">
         <button type="button" className={activitySecondary} disabled={!qrCodeUrl || busy} ref={stickerTrigger} onClick={() => void openStickerPreview()}><QrCode size={14}/>{busy ? (isEn ? 'Preparing…' : '正在生成…') : (isEn ? 'QR sticker' : '二维码贴纸')}</button>
-        <button type="button" className={activitySecondary} onClick={() => void sharePage()}><Share2 size={14}/>{isEn ? 'Share page' : '分享页面'}</button>
+        <button type="button" className={activitySecondary} disabled={!selectedStore} onClick={() => void sharePage()}><Share2 size={14}/>{isEn ? 'Share page' : '分享页面'}</button>
         <a href={url} target="_blank" rel="noopener noreferrer" className={activitySecondary}><ExternalLink size={14}/>{isEn ? 'Open published page' : '打开已发布页面'}</a>
-        <button type="button" className={activitySecondary} onClick={() => void navigator.clipboard.writeText(url).then(() => setNotice(isEn ? 'Link copied.' : '链接已复制。')).catch(() => setError(isEn ? 'Unable to copy link.' : '复制失败。'))}><Copy size={14}/>{isEn ? 'Copy link' : '复制链接'}</button>
+        <button type="button" className={activitySecondary} disabled={!selectedStore} onClick={() => void navigator.clipboard.writeText(url).then(() => setNotice(isEn ? 'Link copied.' : '链接已复制。')).catch(() => setError(isEn ? 'Unable to copy link.' : '复制失败。'))}><Copy size={14}/>{isEn ? 'Copy link' : '复制链接'}</button>
       </div>
       <p className="mt-2 text-xs text-slate-500">{dirty ? (isEn ? 'Draft changes are not included in shared pages until saved.' : '分享与二维码打开已保存页面，草稿需保存后生效。') : (isEn ? 'Permanent QR code. Update this page without reprinting.' : '固定二维码，更新活动页后无需重新打印。')}</p>
     </div>

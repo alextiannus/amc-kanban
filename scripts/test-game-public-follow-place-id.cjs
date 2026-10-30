@@ -11,7 +11,9 @@ const failWrite = () => assert.fail('Public follow entry must not create games o
 const activityModule = { exports: {} }
 new Function('module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/activityPage.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(activityModule, activityModule.exports)
 const linksModule = { exports: {} }; new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/brandFollowLinks.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(() => activityModule.exports, linksModule, linksModule.exports)
+const storesModule = { exports: {} }; new Function('require', 'module', 'exports', ts.transpileModule(fs.readFileSync(path.resolve(__dirname, '../src/lib/activityStores.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(() => linksModule.exports, storesModule, storesModule.exports)
 const dependencies = {
+  '@/lib/activityStores': storesModule.exports,
   '@/lib/brandFollowLinks': linksModule.exports,
   '@/lib/activityPageTranslation': {translateActivityPage: async page => activityModule.exports.normalizeActivityPage(page)},
   '@/lib/brandFollowAccounts': { resolveBrandFollowAccounts: async accounts => accounts.map(({platformId,handle,profileUrl})=>({platformId,handle,profileUrl})) },
@@ -72,7 +74,7 @@ new Function('require', 'module', 'exports', compiled)(name => {
   brandFixture.googlePlaceId = null
   brandFixture.address = '22 TEST Street'
   brandFixture.location = 'Singapore'
-  brandFixture.knowledge = { stores: [{name:'TEST West',address:'33 West Street',googleBusiness:{placeId:'ChIJ_WEST'}}] }
+  brandFixture.knowledge = { stores: [{storeId:'west',name:'TEST West',address:'33 West Street',googleBusiness:{placeId:'ChIJ_WEST'}}] }
   for (const hasConfig of [false,true]) {
     configured = hasConfig
     const result = await (await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'))).json()
@@ -83,7 +85,20 @@ new Function('require', 'module', 'exports', compiled)(name => {
     const fallback = await (await moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'))).json()
     assert.equal(fallback.brand.googleMapEntries[0].kind,'search')
     assert.equal(new URL(fallback.brand.googleMapEntries[0].url).searchParams.get('query'),'TEST Brand 22 TEST Street Singapore')
-    brandFixture.knowledge = { stores: [{name:'TEST West',address:'33 West Street',googleBusiness:{placeId:'ChIJ_WEST'}}] }
+    brandFixture.knowledge = { stores: [{storeId:'west',name:'TEST West',address:'33 West Street',googleBusiness:{placeId:'ChIJ_WEST'}}] }
+  }
+  brandFixture.knowledge = { stores: [{storeId:'north',name:'North',address:'North Road',isPrimary:true},{storeId:'south',name:'South',address:'South Road'}] }
+  brandFixture.googleBusinessUrl='https://maps.google.com/?cid=north'
+  for (const hasConfig of [false,true]) {
+    configured=hasConfig
+    const read=async store=>moduleUnderTest.exports.GET(new Request('https://example.test/api/game/config?brandId=TEST&public=true'+(store?'&store='+store:'')))
+    assert.equal((await (await read()).json()).brand.storeSelectionRequired,true)
+    const south=await (await read('south')).json()
+    assert.equal(south.brand.activityStoreId,'south')
+    assert.equal(south.brand.googleMapEntries.length,1)
+    assert.match(south.brand.googleMapEntries[0].url,/South/)
+    assert.doesNotMatch(south.brand.googleMapEntries[0].url,/north/)
+    assert.equal((await read('missing')).status,404)
   }
   console.log('PASS public configured and follow-only entry retains configured Place ID without creating a game or requiring authentication.')
 })().catch(error => { console.error(error); process.exitCode = 1 })

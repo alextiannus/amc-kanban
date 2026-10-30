@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+import { scopeActivityBrand } from '@/lib/activityStores'
 import { brandGoogleMapsEntries } from '@/lib/brandFollowLinks'
 import { translateActivityPage } from '@/lib/activityPageTranslation'
 import { resolveBrandFollowAccounts, type StoredFollowAccount } from '@/lib/brandFollowAccounts'
@@ -44,19 +45,19 @@ type BrandEntrySource = {
   knowledge: { marketingSolution: unknown; stores?: unknown } | null
 }
 
-async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: string; brand: BrandEntrySource }>(config: T) {
+async function prepareBrandEntryConfig<T extends { brandId: string; themeColor: string; brand: BrandEntrySource }>(config: T, storeId = '') {
   const { googleLinksMeta, googleLocationId, knowledge, postfastApiKey, accounts, ...brand } = config.brand
   return {
     ...config,
     brandThemeColor: configuredBrandColor(knowledge?.marketingSolution),
-    brand: {
+    brand: scopeActivityBrand({
       ...brand,
       googleMapEntries: brandGoogleMapsEntries({ ...brand, accounts }, knowledge?.stores),
       activityPage: await translateActivityPage(brand.activityPage, brand.followRewardDescription),
       followRewardDescription: followRewardDescription(brand.followRewardDescription),
       accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, config.brandId),
       googleReviewAppUrl: googleReviewAppUrlFromMeta(googleLinksMeta),
-    },
+    }, knowledge?.stores, storeId),
   }
 }
 
@@ -183,7 +184,7 @@ export async function GET(request: Request) {
       const { knowledge, postfastApiKey, accounts, googleLocationId, ...brandFields } = brand
       const publicBrand = { ...brandFields, googleMapEntries: brandGoogleMapsEntries({ ...brandFields, accounts }, knowledge?.stores), activityPage: await translateActivityPage(brandFields.activityPage, brandFields.followRewardDescription), followRewardDescription: followRewardDescription(brandFields.followRewardDescription), accounts: await resolveBrandFollowAccounts(accounts, postfastApiKey, googleLocationId, brandId) }
       return NextResponse.json({
-        hasActivity: false, brand: publicBrand, brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
+        hasActivity: false, brand: scopeActivityBrand(publicBrand, knowledge?.stores, url.searchParams.get('store') || ''), brandThemeColor: configuredBrandColor(knowledge?.marketingSolution), title: '', description: null, themeColor: configuredBrandColor(knowledge?.marketingSolution) || '#334155',
         taskReviewEnabled: false, taskGoogleMapsEnabled: false,
         taskXiaohongshuEnabled: false, taskInstagramEnabled: false,
         templateType: 'WHEEL', prizes: [],
@@ -191,7 +192,7 @@ export async function GET(request: Request) {
     }
     if (!config) return NextResponse.json({ error: 'Game config not found' }, { status: 404 })
 
-    const responseConfig = await prepareBrandEntryConfig(config)
+    const responseConfig = await prepareBrandEntryConfig(config, url.searchParams.get('store') || '')
 
     const configuredRound = await prisma.gameActivityRound.findFirst({ where: { gameConfigId: config.id }, select: { id: true } })
     const hasActivity = (Boolean(configuredRound) || responseConfig.brand.activityPage.drawEnabled === true) && responseConfig.brand.activityPage.drawEnabled !== false
@@ -210,7 +211,7 @@ export async function GET(request: Request) {
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : 'Internal Server Error'
     console.error('[GET /api/game/config]', e)
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: message === 'Activity store not found' ? 404 : 500 })
   }
 }
 

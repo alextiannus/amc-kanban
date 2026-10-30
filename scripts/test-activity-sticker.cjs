@@ -15,13 +15,13 @@ const blob = new Blob(['TEST PNG'], {type:'image/png'})
 const sticker = {url:'blob:https://example.test/sticker',blob}
 function saveClient(navigator) {
  const notices=[], opened=[], busy=[]
- const run = vm.runInNewContext(extract('saveStickerImage')+';saveStickerImage', {sticker, savingImage:false, brandId:'test', File, navigator, isEn:false, mounted:{current:true},setStickerNotice:value=>notices.push(value),setSavingImage:value=>busy.push(value),window:{open:(...args)=>opened.push(args)}})
+ const run = vm.runInNewContext(extract('saveStickerImage')+';saveStickerImage', {sticker, savingImage:false, brandId:'test',storeId:'north', File, navigator, isEn:false, mounted:{current:true},setStickerNotice:value=>notices.push(value),setSavingImage:value=>busy.push(value),window:{open:(...args)=>opened.push(args)}})
  return {run,notices,opened,busy}
 }
 ;(async()=>{
  let shared
  const native=saveClient({canShare:data=>data.files[0].type==='image/png',share:async data=>{shared=data}})
- await native.run();assert.equal(shared.files[0].name,'brand-sticker-test.png');assert.equal(await shared.files[0].text(),'TEST PNG');assert.equal(native.opened.length,0);assert.equal(native.busy.at(-1),false)
+ await native.run();assert.equal(shared.files[0].name,'brand-sticker-test-north.png');assert.equal(await shared.files[0].text(),'TEST PNG');assert.equal(native.opened.length,0);assert.equal(native.busy.at(-1),false)
  const cancelled=saveClient({canShare:()=>true,share:async()=>{throw {name:'AbortError'}}})
  await cancelled.run();assert.equal(cancelled.opened.length,0);assert.equal(cancelled.notices.length,1,'Cancellation must not trigger a download or new tab')
  const fallback=saveClient({canShare:()=>false})
@@ -29,8 +29,8 @@ function saveClient(navigator) {
  const failed=saveClient({canShare:()=>true,share:async()=>{throw new Error('unavailable')}})
  await failed.run();assert.match(failed.notices.at(-1),/长按/);assert.equal(failed.opened.length,0)
  let clicks=0,removes=0;const anchor={click:()=>clicks++,remove:()=>removes++}
- vm.runInNewContext(extract('downloadSticker')+';downloadSticker()', {sticker,brandId:'test',document:{createElement:()=>anchor,body:{append:()=>{}}}})
- assert.equal(anchor.href,sticker.url);assert.equal(anchor.download,'brand-sticker-test.png');assert.equal(clicks,1);assert.equal(removes,1)
+ vm.runInNewContext(extract('downloadSticker')+';downloadSticker()', {sticker,brandId:'test',storeId:'north',document:{createElement:()=>anchor,body:{append:()=>{}}}})
+ assert.equal(anchor.href,sticker.url);assert.equal(anchor.download,'brand-sticker-test-north.png');assert.equal(clicks,1);assert.equal(removes,1)
  assert.doesNotMatch(extract('openStickerPreview'),/anchor\.click|window\.open|\.toDataURL/)
  console.log('PASS sticker preview without automatic download; PNG file sharing, cancellation, original-image fallback, failed-share guidance and matching Blob download.')
 })().catch(error=>{console.error(error);process.exitCode=1})

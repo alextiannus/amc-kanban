@@ -28,7 +28,7 @@ const translator=compile('src/lib/activityPageTranslation.ts',{'./activityPage':
  const failed=await translator.translateActivityPage({text:{zh:{greeting:'失败测试'}},links:{}},'')
  assert.equal(contract.activityText(failed,'greeting','en'),'失败测试')
  await translator.translateActivityPage({text:{zh:{greeting:'失败测试'}},links:{}},'');assert.equal(calls,2,'Failures have a retry cooldown')
- const share=compile('src/lib/activityShare.ts');let opened=[],copied=[]
+ const share=compile('src/lib/activityShare.ts',{'./gameQr':compile('src/lib/gameQr.ts')});let opened=[],copied=[]
  assert.equal(await share.shareActivityPage('brand','Brand','Share this place',{share:async data=>opened.push(data),clipboard:{writeText:async v=>copied.push(v)}}),'shared')
  assert.equal(opened[0].url,'https://amc.immedi.ai/game/brand');assert.equal(copied.length,0)
  assert.equal(await share.shareActivityPage('brand','Brand','Share',{clipboard:{writeText:async v=>copied.push(v)}}),'copied');assert.equal(copied.pop(),'https://amc.immedi.ai/game/brand')

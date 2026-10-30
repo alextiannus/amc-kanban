@@ -10,10 +10,10 @@ export const PERMANENT_GAME_QR_OPTIONS = {
   },
 }
 
-export function getPermanentGameUrl(brandId: string): string {
-  return `${PERMANENT_GAME_ORIGIN}/game/${encodeURIComponent(brandId)}`
+export function getPermanentGameUrl(brandId: string, storeId?: string): string {
+  return `${PERMANENT_GAME_ORIGIN}/game/${encodeURIComponent(brandId)}${storeId ? `?store=${encodeURIComponent(storeId)}` : ''}`
 }
 
-export function getPermanentPosterUrl(brandId: string): string {
-  return `${PERMANENT_GAME_ORIGIN}/board/game/poster/${encodeURIComponent(brandId)}`
+export function getPermanentPosterUrl(brandId: string, storeId?: string): string {
+  return `${PERMANENT_GAME_ORIGIN}/board/game/poster/${encodeURIComponent(brandId)}${storeId ? `?store=${encodeURIComponent(storeId)}` : ''}`
 }

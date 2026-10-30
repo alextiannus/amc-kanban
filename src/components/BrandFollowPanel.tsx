@@ -108,7 +108,7 @@ export default function BrandFollowPanel({ brandId, brand, shareBrand, locale, t
       setShareNotice('')
       const savedBrand = shareBrand || brand
       const copy = activitySharePresentation(savedBrand?.name || '', savedBrand?.activityPage, locale)
-      const result = await shareActivityPage(brandId, copy.title, copy.description, navigator)
+      const result = await shareActivityPage(brandId, copy.title, copy.description, navigator, brand?.activityStoreId)
       if (result === 'copied') setShareNotice('copied')
       if (result === 'failed') setShareNotice('failed')
     }} className="flex min-h-16 w-full items-center gap-3 px-5 py-4 text-left text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-current">

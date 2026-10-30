@@ -1,6 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 
+import { getPermanentGameUrl } from '@/lib/gameQr'
 import { isActivityPreviewOrigin } from '@/lib/activityPreviewOrigin'
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { activityText, normalizeActivityPage, type ActivityPage, type ActivityTextKey } from '@/lib/activityPage'
@@ -34,6 +35,10 @@ type GameConfig = {
   templateType: 'WHEEL' | 'GRID'
   prizes: Prize[]
   brand?: {
+    activityStoreId?: string
+    activityStoreName?: string
+    activityStores?: { id: string; name: string; address: string }[]
+    storeSelectionRequired?: boolean
     activityPage?: ActivityPage
     name?: string
     address?: string | null
@@ -707,7 +712,7 @@ function GameBoard({
   )
 }
 
-export default function CustomerGameClient({ brandId }: { brandId: string }) {
+export default function CustomerGameClient({ brandId, storeId = '' }: { brandId: string; storeId?: string }) {
   const savedPreviewConfig = useRef<GameConfig | null>(null)
   const previewBrandOverrides = useRef<NonNullable<GameConfig['brand']>>({})
   const [draftActivity, setDraftActivity] = useState(false)
@@ -907,7 +912,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       if (refreshing) { refreshAgain = true; return }
       refreshing = true
       try {
-        const response = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' })
+        const response = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true&store=${encodeURIComponent(storeId)}`, { cache: 'no-store' })
         if (!response.ok) return
         const fresh = await response.json() as GameConfig
         if (stopped || !fresh.brand) return
@@ -955,7 +960,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
       setLoading(true)
       setError('')
       try {
-        const configRes = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true`, { cache: 'no-store' })
+        const configRes = await fetch(`/api/game/config?brandId=${encodeURIComponent(brandId)}&public=true&store=${encodeURIComponent(storeId)}`, { cache: 'no-store' })
         if (!configRes.ok) throw new Error(copy[detectedLocale].activityNotReady)
         const configData = await configRes.json() as GameConfig
         savedPreviewConfig.current = configData
@@ -965,7 +970,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           const parentOrigin = new URL(document.referrer).origin
           if (isActivityPreviewOrigin(parentOrigin, window.location.origin)) window.parent.postMessage({ type: 'AMC_GAME_PREVIEW_READY', brandId }, parentOrigin)
         }
-        if (configData.hasActivity !== false) {
+        if (configData.hasActivity !== false && !configData.brand?.storeSelectionRequired) {
           await refreshStatus(id)
         } else {
           setStatus(null)
@@ -979,7 +984,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
 
     void load()
     return () => window.clearTimeout(initializeTimer)
-  }, [brandId, refreshStatus])
+  }, [brandId, storeId, refreshStatus])
 
   useEffect(() => {
     const activeRoundId = status?.activeRound?.id
@@ -1281,6 +1286,8 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
     )
   }
 
+  if (config?.brand?.storeSelectionRequired) return <main className="min-h-screen bg-amber-50 px-5 py-16 text-slate-900"><div className="mx-auto max-w-md space-y-4"><p className="text-sm">{config.brand.name}</p><h1 className="text-2xl font-bold">{locale === 'zh' ? '请选择你所在的门店' : 'Choose your store'}</h1>{config.brand.activityStores?.map((store, i) => store.id ? <a className="block rounded-2xl border bg-white p-5 shadow-sm" key={store.id} href={getPermanentGameUrl(brandId, store.id)}><strong>{store.name}</strong><span className="mt-2 block text-sm text-slate-500">{store.address}</span></a> : <p key={i}>{store.name} · {locale === 'zh' ? '门店资料待完善' : 'Store details pending'}</p>)}</div></main>
+
   if (error && !config) {
     return (
       <main className="min-h-screen bg-slate-950 text-white flex items-center justify-center px-6">
@@ -1344,6 +1351,7 @@ export default function CustomerGameClient({ brandId }: { brandId: string }) {
           <div className="flex items-center justify-center gap-2">
             <ActivityInlineText as="p" field="brandName" className="inline-block max-w-full break-words rounded-full border bg-white/50 px-4 py-1 text-sm font-bold" style={{ borderColor: entryTheme.border }}>{pageText('brandName') || config?.brand?.name || t.defaultBrand}</ActivityInlineText>
           </div>
+          {config?.brand?.activityStoreId && <p className="mt-2 text-xs leading-5 text-slate-600">{[config.brand.activityStoreName, config.brand.address].filter(Boolean).join(' · ')}</p>}
           <ActivityInlineText as="h1" field="greeting" className="mt-3 text-2xl font-black leading-tight text-slate-900">{pageText('greeting')}</ActivityInlineText>
           <ActivityInlineText as="p" field="greetingNote" className="mt-2 text-sm leading-5 text-slate-600">{pageText('greetingNote')}</ActivityInlineText>
         </header>

@@ -1,5 +1,6 @@
 export const maxDuration = 30
 
+import { activityStores } from '@/lib/activityStores'
 import { createHash } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
@@ -52,9 +53,9 @@ export async function GET(_request: Request, { params }: Params) {
   const { id } = await params
   const session = await getSession()
   if (!session?.user || !await canOwnBrand(id, session.user.id)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const brand = await prisma.brand.findUnique({ where: { id }, select: { activityPage: true, followRewardDescription: true } })
+  const brand = await prisma.brand.findUnique({ where: { id }, select: { name: true, address: true, knowledge: { select: { stores: true } }, activityPage: true, followRewardDescription: true } })
   if (!brand) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json({ activityPage: await translateActivityPage(brand.activityPage, brand.followRewardDescription), followRewardDescription: brand.followRewardDescription, revision: revision(brand.activityPage, brand.followRewardDescription) }, { headers: { 'Cache-Control': 'no-store' } })
+  return NextResponse.json({ activityStores: activityStores(brand.knowledge?.stores, brand), activityPage: await translateActivityPage(brand.activityPage, brand.followRewardDescription), followRewardDescription: brand.followRewardDescription, revision: revision(brand.activityPage, brand.followRewardDescription) }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
 /** Translate a private draft without publishing it or changing any brand fields. */
