@@ -43,3 +43,22 @@ assert(selected)
 assert.equal(conversationFrom(JSON.parse(strategyDocumentCall(text,selected,'my_write_workspace').function.arguments).content,discussion).planningDraft?.content,text)
 assert.equal(strategyDocumentBinding(request([context,skill,{capability:'amc.strategy_document',status:'failed',result:{format:'markdown'}}]),discussion),null)
 console.log('PASS: discussion stays unchanged until document mode is explicitly selected; full revisions use the same raw document path')
+
+// Exercise actual Core wire aliases, not only the unencoded capability names.
+const {wireToolNames}=await import('@immedi/iaic-core/agent/tool-names.js')
+const originalTools=[{name:'amc.strategy_document'},{name:'amc.documents'},writer]
+const wireNames=wireToolNames(originalTools)
+const filtered=strategyDocumentTools(originalTools.map((t,i)=>({...t,name:wireNames[i]})))
+assert.deepEqual(filtered.map(t=>t.name),['amc_documents'])
+assert.deepEqual(strategyChanges({content:'old',monthlyPlans:[{month:'2026-11'}]},merged.marketingPlan),['content'])
+assert.deepEqual(strategyChanges({...merged.marketingPlan,monthlyPlans:[]},merged.marketingPlan),[])
+let unblock!:()=>void
+const blocked=new Promise<void>(r=>unblock=r)
+const slow=latestPreviewWriter(()=>blocked)
+slow.push('pending preview')
+const flushed=await Promise.race([slow.flush(10).then(()=>true),new Promise<boolean>(r=>setTimeout(()=>r(false),100))])
+assert(flushed,'a stalled preview must not prevent the authoritative artifact from completing')
+unblock();await slow.flush()
+const rejected=latestPreviewWriter(async()=>{throw new Error('preview storage unavailable')})
+rejected.push('best effort');await rejected.flush()
+console.log('PASS: actual provider alias pruning, document-only change receipts and bounded/rejected preview storage')

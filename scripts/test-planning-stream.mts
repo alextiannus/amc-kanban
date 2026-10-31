@@ -36,3 +36,8 @@ try{
  assert.equal(result.text,markdown);assert.equal(previews.at(-1),markdown);assert.equal(result.message.tool_calls,undefined);assert.equal(result.usage?.input_tokens,18)
 }finally{globalThis.fetch=original}
 console.log('PASS: plain Markdown streams without JSON conversion, preserves source text, preview and final usage')
+
+const observedFailure=await readOpenAIStream(response(textFrames),undefined,()=>{throw new Error('presentation failure')})
+assert.equal(observedFailure.choices[0].message.content,markdown)
+assert.deepEqual(observedFailure.usage,usage)
+console.log('PASS: failing text preview observer cannot abort final content or lose provider usage')

@@ -7,6 +7,8 @@ export async function savePlanningDocument(brandId:string,userId:string,input:an
  if(input?.stage==='execution_checklist'&&input.action==='toggle')return toggleExecutionTask(brandId,userId,input)
  if(!['interview','direction','marketing_plan','principal_strategy'].includes(input.stage)||!['save','confirm'].includes(input.action)||typeof input.content!=='string'||!input.content.trim()||input.content.length>24000||!/^[a-f0-9]{64}$/.test(input.expectedRevision||''))return reject('invalid_planning_document')
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
+  await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '3000ms'")
+  await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '10000ms'")
   await tx.$queryRaw`SELECT id FROM "Brand" WHERE id=${brandId} FOR UPDATE`
   const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}}),current=(knowledge?.marketingSolution||{}) as any
   const key=input.stage,old=current.coCreation?.[key]
@@ -31,7 +33,7 @@ export async function savePlanningDocument(brandId:string,userId:string,input:an
   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,marketingSolution:next},update:{marketingSolution:next}})
   await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:input.action==='confirm'?'PLANNING_DOCUMENT_CONFIRMED':'PLANNING_DOCUMENT_SAVED',resourceType:'BrandMarketingSolution',resourceId:brandId,oldValue:old||{},newValue:document,metadata:{stage:key,expectedRevision:input.expectedRevision}}})
   return {revision:planningRevision(next),document}
- })
+ },{maxWait:5000,timeout:30000})
 }
 
 async function toggleExecutionTask(brandId:string,userId:string,input:any){

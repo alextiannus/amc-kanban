@@ -18,7 +18,7 @@ export async function readOpenAIStream(response:Response,onTools?:(calls:readonl
    if(choice.index!==0)throw Error('Text stream has unsupported choice')
    if(choice.finish_reason)finish=choice.finish_reason
    const delta=choice.delta||{}
-   if(typeof delta.content==='string'){content+=delta.content;payload+=Buffer.byteLength(delta.content);onText?.(content)}
+   if(typeof delta.content==='string'){content+=delta.content;payload+=Buffer.byteLength(delta.content);try{onText?.(content)}catch{/* Preview observers cannot alter billing or completion. */}}
    for(const part of delta.tool_calls||[]){
     if(!Number.isInteger(part.index)||part.index<0||part.index>=64)throw Error('Text stream tool limit')
     const call=calls.get(part.index)||{id:'',type:'function',function:{name:'',arguments:''}}
