@@ -70,6 +70,12 @@ export async function merchantWorkspace(userId:string,brandId:string,input:any,d
  // Lost save responses are safely reconciled by identical content, never overwrite a newer edit.
  let old:any=null;try{old=await store.read(scope,{path})}catch(e){if((e as any).statusCode!==404)throw e}
  if(old?.content===content)return {id:input.id,revision:old.reference.revision,digest:old.reference.digest,updatedAt:old.createdAt}
- const artifact=await store.write(scope,{path,content,mediaType:'application/json',expectedRevision:input.expectedRevision,source:{kind:'user-edit',title:draft.title,stage:draft.pendingRewrite?'rewrite_pending':draft.rewriteCandidate?'candidate_review':'script_draft'}})
+ let stage=draft.pendingRewrite?'rewrite_pending':draft.rewriteCandidate?'candidate_review':'script_draft'
+ if(!deps&&stage==='script_draft'&&typeof draft.priorRewriteTask==='string'&&/^[0-9a-f-]{36}$/i.test(draft.priorRewriteTask)){
+  const receipt=await prisma.brandMarketingSolution.findFirst({where:{brandId,createdById:userId,kind:'VIDEO_SCRIPT_PREPARATION',status:'READY',output:{path:['taskId'],equals:draft.priorRewriteTask}},select:{output:true}})
+  const result=receipt?.output as any
+  if(result?.script===draft.versions[draft.language].script&&result?.language===draft.language)stage='script_ready'
+ }
+ const artifact=await store.write(scope,{path,content,mediaType:'application/json',expectedRevision:input.expectedRevision,source:{kind:'user-edit',title:draft.title,stage}})
  return {id:input.id,revision:artifact.reference.revision,digest:artifact.reference.digest,updatedAt:artifact.createdAt}
 }
