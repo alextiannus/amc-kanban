@@ -27,7 +27,7 @@ import {
 } from '@immedi/iaic-core';
 
 // This is application-owned composition. Each imported Core module remains independently replaceable.
-export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles,resolveSecret,modelFactory,userModels=null,routing=null,tokenPolicies,authorize,verifyOutcome,version,runtimeLimits={},taskCursorKey=null,toolCallLimits,enablePlans=false,scheduling=null,eventWork=null,executionPolicy=null,mandates=null,extraCapabilities=[],releaseBinding=null,hostContext=null,workspaceWrite=null,workspacePreflight=null,skillCatalog=null,taskLifecycle=false}){
+export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles,resolveSecret,modelFactory,userModels=null,routing=null,tokenPolicies,authorize,verifyOutcome,version,runtimeLimits={},taskCursorKey=null,toolCallLimits,enablePlans=false,scheduling=null,eventWork=null,executionPolicy=null,mandates=null,extraCapabilities=[],releaseBinding=null,hostContext=null,workspaceWrite=null,workspacePreflight=null,skillCatalog=null,taskLifecycle=false,requestExecutorHandoff=false}){
  if(releaseBinding!==null&&(!releaseBinding||releaseBinding.implementationRevision!==version))throw new Error('Release binding must match the explicit application version');
  if(!Array.isArray(extraCapabilities))throw new Error('extraCapabilities must be an array of host-defined Capabilities');
  if(mandates!==null&&(typeof mandates?.authorizeGrant!=='function'||typeof mandates?.sourceFor!=='function'))throw new Error('Mandates require trusted authorizeGrant and sourceFor ports');
@@ -93,7 +93,7 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  }
  runtime=new LifecycleRuntime({...runtimeLimits,store:tasks,dispatcher,mandates:assistantMandates,model:{name:'host-model-resolver'},resolveModel:request=>(modelRouting||models).resolve(request),context:createAmcContextAssembler({skillRoot,skillCatalog:skills,planProvider:plans?({actor,task})=>plans.read(actor,{id:task.id}):null,overflow:'omit-old-results',sessionProvider:({actor,task})=>task.input.session?sessions.context(actor,task.input.session):null}),version,agentIdentity,trustedContext:hostContexts});
  dispatcher.tasks=runtime;
- try{await runtime.initialize();}catch(error){await runtime.stop();throw error;}
+ try{await runtime.initialize({requestHandoff:requestExecutorHandoff});}catch(error){await runtime.stop();throw error;}
  const entry={capabilities:dispatcher.capabilities,invoke:(name,input,context)=>name==='agent.work'?startSessionTask({sessions,actor:context.actor,input,startTask:()=>dispatcher.invoke(name,input,context)}):dispatcher.invoke(name,input,context)};
  return {dispatcher:entry,hostContext:hostContexts,mandates:assistantMandates,runtime,tasks,taskListing,plans,deferred,events,eventSubscriptions,eventTasks,registry,memory,workspace,skills,knowledge,knowledgeStore,sessions,models,modelRouting,ledger,scope,start:()=>{deferred?.start(60000);runtime.start(30000);void runtime.tick().catch(()=>console.warn("[amc-ai] initial executor check deferred"));},close:async()=>{await deferred?.stop();await runtime.stop();}};
 }

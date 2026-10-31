@@ -61,6 +61,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
    return output
   }
   if(['failed','cancelled','needs_revision'].includes(task.status))return {status:task.status,taskId,qualityReview:(task as any).qualityReview||null,originalScriptUnchanged:true}
+  if(['waiting','paused'].includes(task.status))return {status:'paused',taskId,taskStatus:task.status,waitingReason:task.waitingReason,usage:task.usage,originalScriptUnchanged:true}
   return {status:'pending',taskId,taskStatus:task.status,originalScriptUnchanged:true}
  }
  if(claimed.existing?.status==='READY')return claimed.existing.output

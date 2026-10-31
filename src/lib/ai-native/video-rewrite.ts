@@ -5,6 +5,12 @@ import {stableJson} from '../brand-plan/creativeRevisionContract'
 export const videoRewriteEnabled=(brandId:string)=>(process.env.AMC_VIDEO_AGENT_BRANDS??'cmr1sictu003eio2auldwt26m').split(',').map(v=>v.trim()).filter(Boolean).includes(brandId)
 export const VIDEO_SKILL='amc-creative/SKILL.md'
 export const VIDEO_RESOURCE='references/video-rewrite.md'
+// Explicitly requested disciplines are required; other craft references remain agent-selected.
+export function requestedVideoCraft(goal:string){return [
+ [/导演|director|叙事|narrative/i,'references/video-director.md'],
+ [/运镜|camera|镜头运动/i,'references/video-camera.md'],
+ [/制作|production|音效|audio|时长/i,'references/video-production.md'],
+].filter(([pattern])=>(pattern as RegExp).test(goal)).map(([,resource])=>resource as string)}
 export const videoDigest=(value:unknown)=>createHash('sha256').update(stableJson(value)).digest('hex')
 export type VideoRewriteIntent={kind:'video_rewrite';brandId:string;userId:string;goal:string;requestKey:string;artifactPath:string;script:string;language:'zh'|'en'|'id'|'ms';durationSec:number;editorRevision:string;facts:unknown;factsDigest:string;noVoice:boolean;noOverlay:boolean;singleSegment:boolean;predecessorTaskId?:string}
 export type VideoIssue={code:string;severity:'error'|'warning';location:string;message:string}
@@ -42,6 +48,10 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
   const words=a.language==='zh'?s.spokenText.replace(/\s/g,'').length:s.spokenText.trim().split(/\s+/).filter(Boolean).length
   if(words>(s.end-s.start)*(a.language==='zh'?4:2))issue('speech_timing_risk',s.id,'Shorten speech to fit natural timing; this is an estimate, not measured audio.')
   for(const c of s.camera)if(!interval(c,s.start,s.end)||!str(c.description,1000)||typeof c.stable!=='boolean')throw fail('video_camera_invalid')
+  for(const c of s.camera){
+   const positive=c.description.replace(/(?:不|无|禁止|避免|不要)[^，。；;]*|\b(?:no|without|avoid)\b[^,.;]*/gi,'')
+   if(c.stable&&/拉远|推近|下移|上移|摇移|环绕|变焦|\b(?:zoom|dolly|panning|orbit|tracking)\b/i.test(positive))issue('camera_stability_mismatch',s.id,'A stable reading window cannot contain described camera movement. Rewrite the camera description or mark it moving and relocate the overlay.')
+  }
   for(const o of s.overlays){
    if(!interval(o,s.start,s.end)||!str(o.text,300)||!o.text.trim())throw fail('video_overlay_invalid')
    if(o.end-o.start<Math.max(1.5,Array.from(o.text).length/6))issue('overlay_reading_time',s.id,'Extend readable overlay duration or shorten text.')
@@ -56,12 +66,13 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
 }
 export function serializeVideo(a:VideoArtifact){
  const line=(s:string)=>s.replace(/\s*\n+\s*/g,' ')
- const labels={zh:['镜头','画面','动作','口播','文字','声音','运镜','待拍'],en:['Scene','Visual','Action','Speech','Overlay','Sound','Camera','Needed'],id:['Adegan','Visual','Aksi','Ucapan','Teks','Suara','Kamera','Kebutuhan'],ms:['Babak','Visual','Aksi','Pertuturan','Teks','Bunyi','Kamera','Keperluan']}[a.language]
- return a.segments.map((s,i)=>[`${labels[0]} ${i+1} · ${s.start}–${s.end}s`,`${labels[1]}：${s.visual}`,`${labels[2]}：${s.action}`,`${labels[3]}：${s.spokenText||'—'}`,`${labels[4]}：${s.overlays.map(o=>`${o.start}–${o.end}s ${o.text}`).join('；')||'—'}`,`${labels[5]}：${s.audio}`,`${labels[6]}：${s.camera.map(c=>`${c.start}–${c.end}s ${c.description}`).join('；')}`,...(s.plannedNeeds.length?[`${labels[7]}：${s.plannedNeeds.join('；')}`]:[])].map(line).join('\n')).join('\n\n')
+ const labels={zh:['镜头','画面','动作','口播','字幕','声音','运镜','备注'],en:['Scene','Visual','Action','Speech','Overlay','Sound','Camera','Needed'],id:['Adegan','Visual','Aksi','Ucapan','Teks','Bunyi','Kamera','Kebutuhan'],ms:['Babak','Visual','Aksi','Pertuturan','Teks','Bunyi','Kamera','Keperluan']}[a.language]
+ return a.segments.map((s,i)=>[`${labels[0]} ${i+1} · ${s.start}–${s.end}s`,`${labels[1]}：${s.visual}`,`${labels[2]}：${s.action}`,`${labels[3]}：${s.spokenText||(a.language==='zh'?'无':'none')}`,`${labels[4]}：${s.overlays.map(o=>`${o.start}–${o.end}s ${o.text}`).join('；')||(a.language==='zh'?'无':'none')}`,`${labels[5]}：${s.audio}`,`${labels[6]}：${s.camera.map(c=>`${c.start}–${c.end}s ${c.description}`).join('；')}`,...(s.plannedNeeds.length?[`${labels[7]}：${s.plannedNeeds.join('；')}`]:[])].map(line).join('\n')).join('\n\n')
 }
-export function requireVideoSkill(calls:any[]){
+export function requireVideoSkill(calls:any[],goal=''){
  const main=calls.findIndex(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&!c.input?.resource)
  const workflow=calls.findIndex(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&c.input?.resource===VIDEO_RESOURCE)
  if(main<0||workflow<=main)throw fail('read_video_skill_then_workflow_first')
+ for(const resource of requestedVideoCraft(goal))if(!calls.some((c,i)=>i>workflow&&c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&c.input?.resource===resource))throw fail('read_requested_video_resource:'+resource)
  return calls.filter(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded').map(c=>({id:c.input.id,resource:c.input.resource??null,version:c.result?.version,skillVersion:c.result?.skillVersion}))
 }

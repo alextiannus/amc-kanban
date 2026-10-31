@@ -53,7 +53,7 @@ export async function getNativeHost(start=true,lane:RuntimeLane='default'):Promi
         await lock.query("SELECT pg_advisory_lock(hashtextextended('amc-iaic-initialize',0))")
         await initializeHost(pool)
         if(taskPool)await pool.query('CREATE SCHEMA IF NOT EXISTS amc_iaic_conversation')
-        const models=await centralModels(),{app,tools}=await composeApplication(pool,models,{taskPool})
+        const models=await centralModels(),{app,tools}=await composeApplication(pool,models,{taskPool,requestExecutorHandoff:start})
         if(start)app.start()
         else await app.runtime.drain({timeoutMs:0})
         return {pool,taskPool,lane,app,tools,modelRevision:Number(models.profiles[0].id.replace('central-',''))}
@@ -112,7 +112,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   // Wait before admitting planning work until this process owns the sole Core
   // executor. Otherwise the retiring executor can claim a new-version task
   // and pause it before its first model call. Same request keys remain reusable.
-  if((automaticDaily||planningRequest||body.kind==='conversation'&&body.topic==='brand_planning')&&!(await app.runtime.deploymentState()).ownsExecutor)throw nativeError('daily_executor_standby',503)
+  if((body.kind==='video_rewrite'||automaticDaily||planningRequest||body.kind==='conversation'&&body.topic==='brand_planning')&&!(await app.runtime.deploymentState()).ownsExecutor)throw nativeError('daily_executor_standby',503)
   if(autopilotRunId)await autopilotRun(userId,brandId,autopilotRunId)
   if(automaticDaily||body?.kind==='creative_discovery'&&body.proactive===true)throw nativeError('interactive_keyword_matching_only',409)
   if(automaticDaily&&!(body?.kind==='creative_discovery'&&body.poolIdeaId))throw nativeError('daily_pool_idea_required')

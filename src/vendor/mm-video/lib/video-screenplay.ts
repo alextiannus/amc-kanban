@@ -2,9 +2,9 @@
 import {materialPassages} from './video-material-bindings'
 export type ScriptTurn={speaker:string;text:string;direction?:string}
 export type ScriptScene={passageId:string;script:string;startSec?:number;endSec?:number;turns:ScriptTurn[];caption:string}
-const speech=/^(?:口播(?:文本|内容)?|旁白|配音|spoken\s*text|voiceover(?:\s*text)?|narration|narasi|dialog|suara(?:\s+latar)?|sulih\s+suara)$/i
-const metadata=/^(?:画面|动作|镜头|分镜|景别|运镜|机位|构图|灯光|主体|服装|道具|开场钩子|视频风格|视频结构|字幕|声音|音效|转场|叙事|连贯|标题|时长|地点|时间|场景|角色|人物|情绪|语气|素材|卖点|价格|地址|电话|备注|提示|音乐|背景音乐|旁白说明|visual|shot scale|camera movement|sound|transition|camera|caption|overlay|title|duration|scene|shot|setting|characters?|cast|emotion|music|notes?|teks|sarikata|gambar|visualisasi|adegan|babak|syot|narrative|continuity|subject|selling)/i
-const silent=/^(?:无|无口播|无旁白|无字幕|静音|不需要字幕|关闭|none|silent|off|no subtitles?|tiada|tanpa\s+(?:suara|narasi))$/i
+const speech=/^(?:口播(?:文本|内容)?|旁白|配音|speech|ucapan|pertuturan|spoken\s*text|voiceover(?:\s*text)?|narration|narasi|dialog|suara(?:\s+latar)?|sulih\s+suara)$/i
+const metadata=/^(?:文字|待拍|kamera|bunyi|action|aksi|tindakan|needed|kebutuhan|keperluan|画面|动作|镜头|分镜|景别|运镜|机位|构图|灯光|主体|服装|道具|开场钩子|视频风格|视频结构|字幕|声音|音效|转场|叙事|连贯|标题|时长|地点|时间|场景|角色|人物|情绪|语气|素材|卖点|价格|地址|电话|备注|提示|音乐|背景音乐|旁白说明|visual|shot scale|camera movement|sound|transition|camera|caption|overlay|title|duration|scene|shot|setting|characters?|cast|emotion|music|notes?|teks|sarikata|gambar|visualisasi|adegan|babak|syot|narrative|continuity|subject|selling)/i
+const silent=/^(?:[—–-]|无|无口播|无旁白|无字幕|静音|不需要字幕|关闭|none|silent|off|no subtitles?|tiada|tanpa\s+(?:suara|narasi))$/i
 export function scriptSpeechSeconds(text:string,language:string){
  if(!text.trim())return 0
  if(['en','id','ms'].includes(language))return text.trim().split(/\s+/).length/2.2

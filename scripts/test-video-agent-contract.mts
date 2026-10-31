@@ -1,5 +1,6 @@
+import {parseScreenplay} from '../src/vendor/mm-video/lib/video-screenplay'
 import assert from 'node:assert/strict'
-import {videoInput,validateVideoArtifact,serializeVideo,requireVideoSkill,videoDigest,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
+import {requestedVideoCraft,videoInput,validateVideoArtifact,serializeVideo,requireVideoSkill,videoDigest,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
 const intent:VideoRewriteIntent={kind:'video_rewrite',brandId:'brand-a',userId:'actor',goal:'15秒，无口播，连续同一锅',requestKey:'test-request',artifactPath:'work/test.json',script:'人工稿',language:'zh',durationSec:15,editorRevision:'v1',facts:{},factsDigest:videoDigest({}),noVoice:true,noOverlay:false,singleSegment:true}
 const good:any={kind:'video_rewrite',brandId:'brand-a',factsDigest:intent.factsDigest,editorRevision:'v1',language:'zh',durationSec:15,segments:[{id:'pot',start:0,end:15,visual:'同一锅食物',action:'保留人工动作',spokenText:'',audio:'拟拍环境声',camera:[{start:0,end:15,description:'稳定构图',stable:true}],overlays:[{start:12,end:15,text:'品牌'}],evidenceRefs:[],plannedNeeds:['拍摄真实锅物']}]}
 const issues=(change:(a:any)=>void,i=intent)=>{const a=structuredClone(good);change(a);return validateVideoArtifact(JSON.stringify(a),i).issues.map(x=>x.code)}
@@ -28,3 +29,12 @@ assert.equal(requireVideoSkill([read(),read('references/video-rewrite.md')]).len
 assert.equal(serializeVideo(good).split('\n\n').length,1)
 assert(serializeVideo(good).includes('保留人工动作'))
 console.log('PASS video contract: constraints, timing, stable overlay windows, speech estimate, bindings, duration/language override, limits, required read ordering and single-segment serialization')
+
+assert.deepEqual(requestedVideoCraft('只把品牌名称改成东北人餐厅'),[])
+assert.equal(requestedVideoCraft('使用导演、运镜、制作技能').length,3)
+assert.throws(()=>requireVideoSkill([read(),read('references/video-rewrite.md')],'使用导演技能'),/video-director/)
+assert.equal(requireVideoSkill([read(),read('references/video-rewrite.md'),read('references/video-director.md')],'使用导演技能').length,3)
+assert(issues(a=>a.segments[0].camera[0].description='固定机位缓慢拉远').includes('camera_stability_mismatch'))
+assert(!issues(a=>a.segments[0].camera[0].description='固定机位，不拉远').includes('camera_stability_mismatch'))
+for(const language of ['zh','en','id','ms'] as const){const artifact={...good,language};assert.equal(parseScreenplay(serializeVideo(artifact))[0].turns.length,0,'metadata must not become narration: '+language)}
+console.log('PASS named craft loading gates, stable-wording conflict, and four-language no-narration editor serialization')

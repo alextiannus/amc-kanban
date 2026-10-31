@@ -1,5 +1,5 @@
 import {videoReviewCapability,videoOutcome,videoReviewPath} from './video-review'
-import {VIDEO_SKILL,VIDEO_RESOURCE,videoArtifactContract,requireVideoSkill} from './video-rewrite'
+import {VIDEO_SKILL,VIDEO_RESOURCE,videoArtifactContract,requireVideoSkill,requestedVideoCraft} from './video-rewrite'
 import {verifyAutopilotReport} from './autopilot-report.mjs'
 import {brandKeywordsForUser} from './brand-keywords'
 import {nativeArtifactMaxBytes} from './contract'
@@ -65,7 +65,7 @@ type PlanningContext={skill:{id:string};workspace:Awaited<ReturnType<typeof read
 type TaskBinding={trusted_context:{reference:string}|null}
 type PublicTaskStore={get(actor:NativeActor,id:string):Promise<TaskBinding>}
 export type WorkspacePort={read(actor:NativeActor,reference:unknown):Promise<{content:string;reference:{path:string;revision:number;digest:string}}>}
-export async function composeApplication(pool:Pool,models:Pick<ApplicationOptions,'profiles'|'resolveSecret'|'modelFactory'|'tokenPolicies'>,options:{taskPool?:Pool;authorize?:typeof authorized;version?:string;skillRoot?:string;readContext?:(actor:NativeActor)=>Promise<unknown>;readContextRevision?:(actor:NativeActor)=>Promise<string>;readCreative?:typeof readCreativeRevisions;readLibrary?:typeof brandLibrary;readInsight?:typeof readPlanningInsight;readMarketingWorkspace?:typeof readMarketingWorkspace;readUiPages?:(actor:NativeActor)=>Promise<Record<string,unknown>>;autopilotAdapters?:typeof import('./autopilot').autopilotAdapters}={}){
+export async function composeApplication(pool:Pool,models:Pick<ApplicationOptions,'profiles'|'resolveSecret'|'modelFactory'|'tokenPolicies'>,options:{requestExecutorHandoff?:boolean;taskPool?:Pool;authorize?:typeof authorized;version?:string;skillRoot?:string;readContext?:(actor:NativeActor)=>Promise<unknown>;readContextRevision?:(actor:NativeActor)=>Promise<string>;readCreative?:typeof readCreativeRevisions;readLibrary?:typeof brandLibrary;readInsight?:typeof readPlanningInsight;readMarketingWorkspace?:typeof readMarketingWorkspace;readUiPages?:(actor:NativeActor)=>Promise<Record<string,unknown>>;autopilotAdapters?:typeof import('./autopilot').autopilotAdapters}={}){
   const authorize=options.authorize||authorized,readCreative=options.readCreative||readCreativeRevisions
   const version=options.version||await applicationVersion()
   let app:Application
@@ -105,7 +105,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
   }
   const contextRead=async(actor:NativeActor,taskId?:string,previousPlanningContext?:PlanningContext)=>{
     const intent=await getIntent(actor,taskId)
-    if(intent.kind==='video_rewrite'){const {facts,...input}=intent;return {intent:input,factsIndex:{sections:['brand','products'],products:((facts as any)?.productCatalog||[]).map((p:any)=>({id:p.id,name:p.name}))},requiredSkill:VIDEO_SKILL,requiredResource:VIDEO_RESOURCE,contextDigest:intent.factsDigest,artifactContract:videoArtifactContract,instructions:'Read requiredSkill then requiredResource. Read other craft resources only when needed. Produce a structured artifact preserving current manual edits. Write it, call amc.video_review, repair only reported defects at most twice. Finish with the exact current artifact receipt. Never claim media was created. Read amc.video_facts for relevant brand facts; product details only for chosen product IDs.'}}
+    if(intent.kind==='video_rewrite'){const {facts,...input}=intent;return {intent:input,factsIndex:{sections:['brand','products'],products:((facts as any)?.productCatalog||[]).map((p:any)=>({id:p.id,name:p.name}))},requiredSkill:VIDEO_SKILL,requiredResource:VIDEO_RESOURCE,requestedCraftResources:requestedVideoCraft(intent.goal),contextDigest:intent.factsDigest,artifactContract:videoArtifactContract,instructions:'Use exact calls assistant.skills.read({id:requiredSkill}) then assistant.skills.read({id:requiredSkill,resource:requiredResource}); do not shorten Skill IDs or set resource=SKILL.md. Read every requestedCraftResources entry after the workflow; read additional craft resources only when needed. Produce a structured artifact preserving current manual edits. Write it, call amc.video_review, repair only reported defects at most twice. Finish with the exact current artifact receipt. Never claim media was created. Read amc.video_facts for relevant brand facts; product details only for chosen product IDs.'}}
     const workingPreference=intent.kind==='conversation'?await readPreference(app,actor):undefined
     let previousTurn:unknown
     if(intent.kind==='conversation'&&intent.afterTaskId){
@@ -177,10 +177,18 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
       implementation:{kind:'function',execute:(_input,{actor,taskId})=>creativeRead(actor,taskId)},revalidate:async(_input,previous,{actor,taskId})=>{const intent=await getIntent(actor,taskId);if(intent.kind!=='creative')throw nativeError('creative_task_required',403);const current=await readCreative({id:actor.subjectId,type:'HUMAN'},intent.brandId,intent.month,intent.creativeId);return {...previous,stale:current.expectedRevision!==intent.expectedRevision,currentRevision:current.expectedRevision}}}),
     defineCapability({name:'amc.operations',description:'Read current accounts, recent draft samples and all draft status counts. This is not revenue or a claim of external delivery.',input:empty,output:{type:'object'},effect:'read',authorize:async (actor:NativeActor)=>await authorize(actor)&&await canReadOperations(actor),implementation:{kind:'function',execute:(_input,{actor})=>brandOperations(actor)},revalidate:(_input,_previous,{actor})=>brandOperations(actor)}),
   ]
-  app=await openApplication({pool,enablePlans:true,taskLifecycle:!options.skillRoot,...(!options.skillRoot?{skillCatalog:managedSkillCatalog(path.join(process.cwd(),'skills'), actor=>authorize(actor as NativeActor))}:{}),...(options.taskPool?{taskPool:options.taskPool}:{}),...models,...(models.modelFactory?{modelFactory:(configuration:Parameters<NonNullable<typeof models.modelFactory>>[0])=>{const provider=models.modelFactory!(configuration);return {next:(request:Parameters<typeof provider.next>[0])=>provider.next(prepareConversationCompletion(request))}}}:{}),skillRoot:options.skillRoot||path.join(process.cwd(),'skills'),version,authorize,
+  app=await openApplication({pool,requestExecutorHandoff:options.requestExecutorHandoff===true,enablePlans:true,taskLifecycle:!options.skillRoot,...(!options.skillRoot?{skillCatalog:managedSkillCatalog(path.join(process.cwd(),'skills'), actor=>authorize(actor as NativeActor))}:{}),...(options.taskPool?{taskPool:options.taskPool}:{}),...models,...(models.modelFactory?{modelFactory:(configuration:Parameters<NonNullable<typeof models.modelFactory>>[0])=>{const provider=models.modelFactory!(configuration);return {next:(request:Parameters<typeof provider.next>[0])=>provider.next(prepareConversationCompletion(request))}}}:{}),skillRoot:options.skillRoot||path.join(process.cwd(),'skills'),version,authorize,
     workspacePreflight:async(input:{path:string;content:string},context:{actor:NativeActor;taskId?:string})=>{
       if(!context.taskId)return {valid:true}
       const intent=await getIntent(context.actor,context.taskId)
+      if(intent.kind==='video_rewrite'){
+        try{
+          const history=await (app.tasks as any).history(context.actor,context.taskId)
+          requireVideoSkill(history.calls,intent.goal)
+          if(!history.calls.some((c:any)=>c.capability==='amc.video_facts'&&c.status==='succeeded'))throw nativeError('read_video_facts_first',409)
+          return {valid:true}
+        }catch{return {valid:false,feedback:'Required craft resources: '+JSON.stringify(requestedVideoCraft(intent.goal))+'. No write was dispatched. First call assistant.skills.read with {"id":"amc-creative/SKILL.md"}; then with {"id":"amc-creative/SKILL.md","resource":"references/video-rewrite.md"}; then amc.video_facts with {"section":"brand","productIds":[]}. Skill IDs include /SKILL.md; omit resource when reading the main file. Retry the same draft only after these reads succeed.'}}
+      }
       if(intent.kind!=='conversation'||intent.topic!=='brand_planning'||!intent.planningScope||!['marketing_plan','execution_checklist'].includes(intent.planningScope.stage)||input.path!==intent.artifactPath)return {valid:true}
       try{const report=conversationFrom(input.content,intent);if(intent.planningScope.stage==='execution_checklist'&&report.planningDraft)assertAmcExecutionChecklist(report.planningDraft.data);return {valid:true}}
       catch(error){return {valid:false,feedback:'Correct the final planning JSON before writing: '+(error instanceof Error?error.message:'invalid')+'. Root requires kind=conversation, brandId, content (short reply summary), contextDigest, planningProgress and planningDraft. annualCalendar exactly twelve rolling months beginning at scope.startMonth; monthlyPlans six rolling months with concise preparation for later campaigns; resources and measurement are strings. Execution checklist contains AMC social marketing work only: ideas, organized production, publishing, Monthly Insight Report review and one-time follow/Google review setup. No customer feedback collection, staff training, installation or fulfilment. Paid ads/visits require actual merchant-confirmed arrangements and budgets. informationToSupplement is empty. Preserve complete draft data.'}}
@@ -195,7 +203,7 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
       }
       if(intent.kind==='video_rewrite'){
         const history=await (app.tasks as any).history(actor,taskId)
-        requireVideoSkill(history.calls)
+        requireVideoSkill(history.calls,intent.goal)
         if(!history.calls.some((c:any)=>c.capability==='amc.video_facts'&&c.status==='succeeded'))throw nativeError('read_video_facts_first',409)
         if(input.expectedRevision<0||input.expectedRevision>=3)throw nativeError('video_repair_limit',409)
         if(input.expectedRevision>0){const review=JSON.parse((await (app.workspace as WorkspacePort).read(actor,{path:videoReviewPath(taskId,input.expectedRevision)})).content);if(review.status!=='repair_required')throw nativeError('video_candidate_frozen',409)}
