@@ -113,3 +113,12 @@ const storyIntent={...intent,goal:storyGoal};
 const storyRequest={billingContext:{capability:'agent.work'},messages:[{role:'user',content:JSON.stringify({events:[],calls:[{capability:'amc.context',status:'succeeded',result:{intent:storyIntent}},...storyReads]})}],tools:[{name:'assistant.skills.read'}]};
 assert.deepEqual(videoHostStep(storyRequest,storyIntent),{type:'call',name:'assistant.skills.read',input:{id:'amc-creative/SKILL.md',resource:'references/video-storyboard.md'}});
 console.log('PASS story craft actual-read gates, failed-read rejection, minimal edit routing and host progressive loading');
+
+const dialogue=structuredClone(good);dialogue.segments[0].spokenText='来报仇啊？嗯。';dialogue.segments[0].speechTurns=[{speaker:'朋友',text:'来报仇啊？'},{speaker:'男主',text:'嗯。'}];
+const dialogueIntent={...intent,noVoice:false};
+assert.equal(validateVideoArtifact(JSON.stringify(dialogue),dialogueIntent).issues.length,0);
+assert.deepEqual(parseScreenplay(serializeVideo(dialogue))[0].turns,[{speaker:'朋友',text:'来报仇啊？'},{speaker:'男主',text:'嗯。'}]);
+const missingReply=structuredClone(dialogue);missingReply.segments[0].spokenText='来报仇啊？';assert.throws(()=>validateVideoArtifact(JSON.stringify(missingReply),dialogueIntent),/transcript_mismatch/);
+for(const speaker of ['声音','朋友：坏','朋友\n男主']){const bad=structuredClone(dialogue);bad.segments[0].speechTurns[0].speaker=speaker;assert.throws(()=>validateVideoArtifact(JSON.stringify(bad),dialogueIntent),/speech_/);}
+assert(issues(a=>{a.segments[0].spokenText='嗯。';a.segments[0].speechTurns=[{speaker:'男主',text:'嗯。'}]}).includes('narration_forbidden'));
+console.log('PASS multi-speaker screenplay roundtrip preserves questions, replies and role separation; transcript mismatch and metadata labels rejected');

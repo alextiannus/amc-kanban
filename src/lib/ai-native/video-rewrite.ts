@@ -1,3 +1,4 @@
+import {parseScreenplay} from '../../vendor/mm-video/lib/video-screenplay'
 import {createHash} from 'node:crypto'
 import {stableJson} from '../brand-plan/creativeRevisionContract'
 
@@ -17,7 +18,7 @@ export function requestedVideoCraft(goal:string){return [
 export const videoDigest=(value:unknown)=>createHash('sha256').update(stableJson(value)).digest('hex')
 export type VideoRewriteIntent={kind:'video_rewrite';brandId:string;userId:string;goal:string;requestKey:string;artifactPath:string;script:string;language:'zh'|'en'|'id'|'ms';durationSec:number;editorRevision:string;facts:unknown;factsDigest:string;noVoice:boolean;noOverlay:boolean;singleSegment:boolean;predecessorTaskId?:string}
 export type VideoIssue={code:string;severity:'error'|'warning';location:string;message:string}
-export type VideoSegment={id:string;start:number;end:number;visual:string;action:string;spokenText:string;audio:string;camera:Array<{start:number;end:number;description:string;stable:boolean}>;overlays:Array<{start:number;end:number;text:string}>;evidenceRefs:string[];plannedNeeds:string[]}
+export type VideoSegment={id:string;start:number;end:number;visual:string;action:string;spokenText:string;speechTurns?:Array<{speaker:string;text:string}>;audio:string;camera:Array<{start:number;end:number;description:string;stable:boolean}>;overlays:Array<{start:number;end:number;text:string}>;evidenceRefs:string[];plannedNeeds:string[]}
 export type VideoArtifact={kind:'video_rewrite';brandId:string;editorRevision:string;factsDigest:string;language:VideoRewriteIntent['language'];durationSec:number;segments:VideoSegment[];literalEdit?:{from:string;to:string};script?:string}
 const fail=(code:string)=>Object.assign(new Error(code),{code,statusCode:400})
 export function videoInput(body:any){
@@ -46,7 +47,7 @@ export function videoContractFor(intent:VideoRewriteIntent){
  const patch=literalVideoEdit(intent)
  return patch?{kind:'video_rewrite',brandId:intent.brandId,editorRevision:intent.editorRevision,factsDigest:intent.factsDigest,language:intent.language,durationSec:intent.durationSec,literalEdit:patch,baseScriptDigest:videoDigest(intent.script),instructions:'Submit only these binding fields and literalEdit/baseScriptDigest; omit script, segments and this instructions field. The host applies the exact patch to the frozen baseline. Independent review still required.'}:{...videoArtifactContract,brandId:intent.brandId,editorRevision:intent.editorRevision,factsDigest:intent.factsDigest,language:intent.language,durationSec:intent.durationSec,segments:videoArtifactContract.segments.map(s=>({...s,end:intent.durationSec,camera:s.camera.map(c=>({...c,end:intent.durationSec}))}))}
 }
-export const videoArtifactContract={kind:'video_rewrite',brandId:'from intent',editorRevision:'from intent',factsDigest:'from intent',language:'from intent',durationSec:'from intent',segments:[{id:'segment-1',start:0,end:'durationSec',visual:'visible subject and setting',action:'performable action',spokenText:'empty when no narration',audio:'sound plan, distinguish proposed and observed',camera:[{start:0,end:'durationSec',description:'camera movement or hold',stable:true}],overlays:[{start:0,end:3,text:'optional factual overlay'}],evidenceRefs:['brand or merchant fact source'],plannedNeeds:['proposed footage, not claimed existing']} ]}
+export const videoArtifactContract={kind:'video_rewrite',brandId:'from intent',editorRevision:'from intent',factsDigest:'from intent',language:'from intent',durationSec:'from intent',segments:[{id:'segment-1',start:0,end:'durationSec',visual:'visible subject and setting',action:'performable action',spokenText:'all spoken words in order; concatenate speechTurns text, empty when silent',speechTurns:[{speaker:'stable character name, e.g. 男主 or 朋友; no role prefixes in text',text:'actual spoken words only; include EVERY question and reply, omit array when silent'}],audio:'sound plan, distinguish proposed and observed',camera:[{start:0,end:'durationSec',description:'camera movement or hold',stable:true}],overlays:[{start:0,end:3,text:'optional factual overlay'}],evidenceRefs:['brand or merchant fact source'],plannedNeeds:['proposed footage, not claimed existing']} ]}
 const str=(v:unknown,max=4000)=>typeof v==='string'&&v.length<=max
 const interval=(v:any,start:number,end:number)=>v&&Number.isFinite(v.start)&&Number.isFinite(v.end)&&v.start>=start&&v.end<=end&&v.end>v.start
 export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):{artifact:VideoArtifact;issues:VideoIssue[]}{
@@ -69,6 +70,15 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
  let end=0
  for(const s of a.segments){
   if(!s||!str(s.id,80)||!s.id||ids.has(s.id)||!interval(s,0,a.durationSec)||!['visual','action','spokenText','audio'].every(k=>str(s[k]))||!s.visual.trim()||!Array.isArray(s.camera)||s.camera.length>30||!Array.isArray(s.overlays)||s.overlays.length>30||!Array.isArray(s.evidenceRefs)||s.evidenceRefs.length>30||s.evidenceRefs.some((x:unknown)=>!str(x,500))||!Array.isArray(s.plannedNeeds)||s.plannedNeeds.length>30||s.plannedNeeds.some((x:unknown)=>!str(x,500)))throw fail('video_segment_invalid')
+  if(s.speechTurns!==undefined){
+   if(!Array.isArray(s.speechTurns)||s.speechTurns.length>20)throw fail('video_speech_turns_invalid')
+   for(const turn of s.speechTurns){
+    if(!turn||!str(turn.speaker,20)||!/^\p{L}[\p{L}\p{N} _·.-]*$/u.test(turn.speaker)||!str(turn.text)||!turn.text.trim())throw fail('video_speech_turns_invalid')
+    const parsed=parseScreenplay(`${turn.speaker}：${turn.text.replace(/\s*\n+\s*/g,' ')}`)[0]?.turns
+    if(parsed?.length!==1||parsed[0].speaker!==turn.speaker)throw fail('video_speech_speaker_invalid')
+   }
+   if(s.speechTurns.map((t:any)=>t.text).join('').replace(/\s/g,'')!==s.spokenText.replace(/\s/g,''))throw fail('video_speech_transcript_mismatch')
+  }
   ids.add(s.id)
   if(Math.abs(s.start-end)>0.01)issue('timeline_gap_or_overlap',s.id,'Segments must be continuous and non-overlapping.')
   end=s.end
@@ -97,7 +107,7 @@ export function serializeVideo(a:VideoArtifact){
  if(a.literalEdit&&typeof a.script==='string')return a.script
  const line=(s:string)=>s.replace(/\s*\n+\s*/g,' ')
  const labels={zh:['镜头','画面','动作','口播','字幕','声音','运镜','备注'],en:['Scene','Visual','Action','Speech','Overlay','Sound','Camera','Needed'],id:['Adegan','Visual','Aksi','Ucapan','Teks','Bunyi','Kamera','Kebutuhan'],ms:['Babak','Visual','Aksi','Pertuturan','Teks','Bunyi','Kamera','Keperluan']}[a.language]
- return a.segments.map((s,i)=>[`${labels[0]} ${i+1} · ${s.start}–${s.end}s`,`${labels[1]}：${s.visual}`,`${labels[2]}：${s.action}`,`${labels[3]}：${s.spokenText||(a.language==='zh'?'无':'none')}`,`${labels[4]}：${s.overlays.map(o=>`${o.start}–${o.end}s ${o.text}`).join('；')||(a.language==='zh'?'无':'none')}`,`${labels[5]}：${s.audio}`,`${labels[6]}：${s.camera.map(c=>`${c.start}–${c.end}s ${c.description}`).join('；')}`,...(s.plannedNeeds.length?[`${labels[7]}：${s.plannedNeeds.join('；')}`]:[])].map(line).join('\n')).join('\n\n')
+ return a.segments.map((s,i)=>[`${labels[0]} ${i+1} · ${s.start}–${s.end}s`,`${labels[1]}：${s.visual}`,`${labels[2]}：${s.action}`,...(s.speechTurns?.length?s.speechTurns.map(t=>`${t.speaker}：${t.text}`):[`${labels[3]}：${s.spokenText||(a.language==='zh'?'无':'none')}`]),`${labels[4]}：${s.overlays.map(o=>`${o.start}–${o.end}s ${o.text}`).join('；')||(a.language==='zh'?'无':'none')}`,`${labels[5]}：${s.audio}`,`${labels[6]}：${s.camera.map(c=>`${c.start}–${c.end}s ${c.description}`).join('；')}`,...(s.plannedNeeds.length?[`${labels[7]}：${s.plannedNeeds.join('；')}`]:[])].map(line).join('\n')).join('\n\n')
 }
 export function requireVideoSkill(calls:any[],goal=''){
  const main=calls.findIndex(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&!c.input?.resource)
