@@ -14,7 +14,7 @@ AI Insight、品牌访谈/品牌定位、品牌营销策略、执行清单均可
 
 ## 加载与能力边界
 
-- AMCMM 站内：先读 `amc.context`。若其中提供 `planningContext`，当前 Skill 正文、当前品牌的已存策划和最新品牌报告（Growth 或已保存管理报告）已一次加载，直接使用 `planningContext.skill`、`planningContext.workspace`、`planningContext.insight`，不要再逐项读取。旧宿主没有该字段时才通过 `assistant.skills.read` 加载本 Skill，并读取 `amc.marketing_workspace` 和 `amc.growth_insight`。已保存访谈、主张和年度计划属于同一工作区，不重复询问已有答案；历史方案不是本轮批准。资料由服务端按当前用户/品牌读取，不自行指定其他品牌 ID。
+- AMCMM 站内：先读 `amc.context`。通过 `assistant.skills.read` 加载本 Skill。若 `planningContext` 提供当前品牌已存策划及最新报告，直接复用 `planningContext.workspace`、`planningContext.insight`；该字段不再预载 Skill 正文。缺少相关资料字段时再读取 `amc.marketing_workspace` 和 `amc.growth_insight`。已保存访谈、主张和年度计划属于同一工作区，不重复询问已有答案；历史方案不是本轮批准。资料由服务端按当前用户/品牌读取，不自行指定其他品牌 ID。
 - 外部 User Assistant：安装本目录后，由宿主发现/加载 `SKILL.md`；使用用户已连接的 AMC Personal MCP（`https://amc-kanban.immedi.ai/api/mcp`）。先 `get_brand_config` 确认可访问品牌，再 `get_brand_marketing_plan` 读取已有调研、访谈、年度计划。多品牌不确定时让用户选择。读取实际工具 schema，不假设名称相同就支持同样参数。
 - 安装技能不会自动授予 AMC 权限或联网能力。没有 AMC 连接仍可访谈和起草，但必须说明品牌数据尚未连接；不要索要聊天明文密钥，也不把密钥放在技能、访谈或计划里。
 - 站内当前对话工具只读取已有 Growth 报告，不能自动新建网络调研。外部已连接 `generate_brand_research_report` 时，用户要求调研/刷新才可在其授权范围发起；沿用原任务回执跟进，不因暂未完成而重复提交。没有该工具时引导用户在 AI Insight 页面点击 Request an AI Insight Report；申请未完成时先进行不依赖缺失信息的访谈。

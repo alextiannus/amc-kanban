@@ -1,3 +1,4 @@
+import type {VideoRewriteIntent} from './video-rewrite'
 import {isUiPage,parseUiAction,type UiAction,type UiPage} from './ui-navigation'
 import {PLANNING_STAGES,planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
 import {checkPlanningBudget,type PlanningBudget} from './planning-budget'
@@ -16,7 +17,7 @@ export type DiscoveryIntent = {skuWorkflow?:true;planningRequest?:PlanningBindin
 export type AutopilotIntent = {kind:'autopilot';runId:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type ConversationIntent = {afterTaskId?:string;conversationId?:string;autoSavePlanning?:boolean;contextSessionId?:string;currentPage?:UiPage;planningDraftContext?:string;planningScope?:PlanningScope;kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type SkuIntent = SkuBinding & {kind:'sku_proposal'|'creative_adaptation';decisionDigest?:string;autopilotRunId?:string;requireMaterials?:boolean;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type NativeIntent = CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent | SkuIntent
+export type NativeIntent = VideoRewriteIntent | CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent | SkuIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
 export function digest(value:unknown){return createHash('sha256').update(JSON.stringify(value)).digest('hex')}
 // Bind a compact immutable reference; prose remains available through amc.context.
@@ -113,4 +114,4 @@ export function conversationInput(body:any){
 }
 
 /** Match the business artifact validator and execution policy; Runtime adds envelope headroom. */
-export function nativeArtifactMaxBytes(intent:NativeIntent){return intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'?2*1024*1024:intent.kind==='conversation'&&['marketing_plan','execution_checklist'].includes(intent.planningScope?.stage||'')?120000:32000}
+export function nativeArtifactMaxBytes(intent:NativeIntent){return intent.kind==='video_rewrite'?64000:intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'?2*1024*1024:intent.kind==='conversation'&&['marketing_plan','execution_checklist'].includes(intent.planningScope?.stage||'')?120000:32000}

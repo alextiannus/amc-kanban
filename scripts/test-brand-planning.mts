@@ -44,7 +44,7 @@ const model={next:async(request:any)=>{
   const find=(name:string)=>calls.findLast((c:any)=>c.capability===name)
   if(!find('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
   const ctx=find('amc.context').result
-  if(!ctx.planningContext&&!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
+  if(!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
   if(ctx.intent.topic==='brand_planning'&&!ctx.planningContext&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!ctx.planningContext&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}

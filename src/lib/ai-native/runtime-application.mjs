@@ -2,7 +2,20 @@ import {initializeLifecycle,settleTask,lifecycleDecision} from './task-lifecycle
 import {preflightResult} from '@immedi/iaic-core/capabilities/preflight.js';
 // Bounded application capacity for the canonical Skill plus report and three-source positioning.
 export const AMC_CONTEXT_MAX_BYTES=320000;
-export function createAmcContextAssembler(options){return new ContextAssembler({...options,maxBytes:AMC_CONTEXT_MAX_BYTES,overflow:'omit-old-results'});}
+class AmcContextAssembler extends ContextAssembler {
+ async revalidateHistory(input){
+  const history=await super.revalidateHistory(input),seen=new Map();
+  // Revalidate every historical access first. Keep the latest identical resource
+  // body once; never deduplicate effects or modify the durable call receipts.
+  const calls=history.calls.slice();
+  for(let i=calls.length-1;i>=0;i--){const call=calls[i];if(call.capability!=='assistant.skills.read'||call.status!=='succeeded'||typeof call.result?.text!=='string')continue;
+   const key=JSON.stringify([call.result.id,call.result.resource,call.result.skillVersion,call.result.version]);
+   if(seen.has(key)){const {text,...metadata}=call.result;calls[i]={...call,result:{...metadata,textOmitted:true,sameAsCall:seen.get(key)}};}else seen.set(key,call.id);
+  }
+  return {...history,calls};
+ }
+}
+export function createAmcContextAssembler(options){return new AmcContextAssembler({...options,maxBytes:AMC_CONTEXT_MAX_BYTES,overflow:'omit-old-results'});}
 
 // Application-owned composition of public Core modules with task-pool and workspace-write host ports.
 import {HostTaskContext} from '@immedi/iaic-core/context/host.js';

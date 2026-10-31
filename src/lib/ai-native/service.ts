@@ -1,3 +1,6 @@
+import {videoInput,videoDigest,serializeVideo,validateVideoArtifact} from './video-rewrite'
+import {videoReviewPath} from './video-review'
+import {readVideoRewriteFacts} from './facts'
 import {dailyGate,sweepLifecycle} from './task-lifecycle.mjs'
 import {NATIVE_RUNTIME_LIMITS} from './assistant-policy'
 import {AMC_CONTEXT_MAX_BYTES} from './runtime-application.mjs'
@@ -128,10 +131,21 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   const key=requestKey(body?.requestKey)
   if(typeof body.goal!=='string'||!body.goal.trim()||body.goal.length>6000)throw nativeError('invalid_ai_goal')
   const kind=body.kind
-  if(!['creative','brand_brief','creative_discovery','autopilot','conversation','sku_proposal','creative_adaptation'].includes(kind))throw nativeError('invalid_task_kind')
+  if(!['creative','brand_brief','creative_discovery','autopilot','conversation','sku_proposal','creative_adaptation','video_rewrite'].includes(kind))throw nativeError('invalid_task_kind')
   const common={brandId,userId,goal:body.goal.trim(),requestKey:key,artifactPath:`work/${digest([actor,key])}.json`}
   let intent:NativeIntent
-  if(kind==='sku_proposal'||kind==='creative_adaptation'){
+  if(kind==='video_rewrite'){
+    const fields=videoInput(body)
+    let old;try{old=await intentBy(pool,actor,'request_key',key)}catch(e){if((e as any).statusCode!==404)throw e}
+    if(old){
+      if(old.intent.kind!=='video_rewrite'||videoDigest({...old.intent,...common,...fields})!==videoDigest(old.intent))throw nativeError('request_key_reused',409)
+      intent=old.intent
+    }else{
+      const facts=await readVideoRewriteFacts(prisma,brandId)
+      if(!facts)throw nativeError('brand_not_found',404)
+      intent={...common,...fields,kind:'video_rewrite',facts,factsDigest:videoDigest(facts)}
+    }
+  }else if(kind==='sku_proposal'||kind==='creative_adaptation'){
     if(kind==='creative_adaptation'&&(typeof body.decisionDigest!=='string'||!/^[a-f0-9]{64}$/.test(body.decisionDigest)))throw nativeError('sku_confirmation_required',409)
     let existing
     try{existing=await intentBy(pool,actor,'request_key',key)}catch(error){if((error as any).statusCode!==404)throw error}
@@ -169,8 +183,8 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   let prior;try{prior=await intentBy(pool,actor,'request_key',key)}catch(e){if((e as any).statusCode!==404)throw e}
   const skuIntent=intent.kind==='sku_proposal'||intent.kind==='creative_adaptation'
   if(prior){
-    if(!skuIntent&&prior.intent.kind!=='brand_brief'&&prior.intent.kind!=='autopilot'&&prior.intent.kind!=='conversation'&&!prior.intent.requireMaterials&&'requireMaterials' in intent)delete intent.requireMaterials
-    if(skuIntent?!sameSkuIntent(prior.intent,intent):prior.digest!==digest(intent))throw nativeError('request_key_reused',409)
+    if(!skuIntent&&prior.intent.kind!=='brand_brief'&&prior.intent.kind!=='autopilot'&&prior.intent.kind!=='conversation'&&prior.intent.kind!=='video_rewrite'&&!prior.intent.requireMaterials&&'requireMaterials' in intent)delete intent.requireMaterials
+    if(skuIntent?!sameSkuIntent(prior.intent,intent):intent.kind==='video_rewrite'?videoDigest(prior.intent)!==videoDigest(intent):prior.digest!==digest(intent))throw nativeError('request_key_reused',409)
     const existing=prior.task_id?{id:prior.task_id}:await (app.tasks as PublicTaskIndex).findRequest(actor,'agent.work',key)
     if(existing){await intentForTask(pool,app,actor,existing.id);return publicTask(app,actor,existing.id)}
   }
@@ -187,10 +201,10 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   if((await runtimeConfig()).version!==modelRevision)throw nativeError('model_policy_changed_restart_required',503)
   // An admitted SKU request may not yet have reached Core. Resume it with the
   // same identity and stored digest instead of re-admitting its JSONB readback.
-  const row=skuIntent&&prior?prior:await admitIntent(pool,actor,intent,host.lane||'default',async(id,connection)=>(await connection.query(`SELECT status FROM ${host.lane==='conversation'?'amc_iaic_conversation':'amc_iaic'}.iaic_tasks WHERE id=$1 AND employee_id=$2 AND erp_user=$3`,[id,actor.scopeId,actor.subjectId])).rows[0]?.status||'missing')
+  const row=(skuIntent||intent.kind==='video_rewrite')&&prior?prior:await admitIntent(pool,actor,intent,host.lane||'default',async(id,connection)=>(await connection.query(`SELECT status FROM ${host.lane==='conversation'?'amc_iaic_conversation':'amc_iaic'}.iaic_tasks WHERE id=$1 AND employee_id=$2 AND erp_user=$3`,[id,actor.scopeId,actor.subjectId])).rows[0]?.status||'missing')
   if(row.request_key!==key){if(row.task_id)return publicTask(app,actor,row.task_id);throw nativeError('task_admission_pending_retry',503)}
   if((row.runtime_lane||'default')!==(host.lane||'default'))return createNativeTask(userId,brandId,body,automaticDaily,autopilotRunId,planningRequest)
-  const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':['conversation','sku_proposal','creative_adaptation'].includes(intent.kind)?'':'amc.operations')))},{actor,callId:key})
+  const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:tools.filter(t=>(!['amc.video_review','amc.video_facts'].includes(t)||intent.kind==='video_rewrite')&&(!['amc.growth_insight','amc.planning_budget','amc.marketing_workspace'].includes(t)||intent.kind==='conversation'&&intent.topic==='brand_planning')&&(!AUTOPILOT_TOOLS.includes(t)||intent.kind==='autopilot')&&(!['amc.creative','amc.operations','amc.library'].includes(t)||t===(intent.kind==='creative'?'amc.creative':intent.kind==='creative_discovery'?'amc.library':['conversation','sku_proposal','creative_adaptation','video_rewrite'].includes(intent.kind)?'':'amc.operations')))},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
   const task=await publicTask(app,actor,receipt.id)
   wakeConversationWorker(app)
@@ -306,7 +320,13 @@ async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof t
   let candidate=null,report=null,recommendations=null,artifact:ArtifactReference|null=null,skuAdoption=null
   if(task.status==='succeeded'&&task.result){
     artifact=task.result.artifacts.find(r=>r.path===row.intent.artifactPath)||null
-    if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else if(row.intent.kind==='brand_brief')report=briefFrom(content,row.intent);else if(row.intent.kind==='conversation')report=conversationFrom(content,row.intent);else report=qualityReview?.status==='needs_revision'?qualityReview.attempts.at(-1)!.adapted:JSON.parse(content)}
+    if(artifact){const content=(await (app.workspace as WorkspacePort).read(actor,artifact)).content;if(row.intent.kind==='creative')candidate=candidateFrom(content,row.intent);else if(row.intent.kind==='creative_discovery')recommendations=discoveryFrom(content,row.intent);else if(row.intent.kind==='brand_brief')report=briefFrom(content,row.intent);else if(row.intent.kind==='conversation')report=conversationFrom(content,row.intent);else if(row.intent.kind==='video_rewrite'){try{report=JSON.parse(content)}catch{report={rawDraft:content}}}else report=qualityReview?.status==='needs_revision'?qualityReview.attempts.at(-1)!.adapted:JSON.parse(content)}
+  }
+  if(row.intent.kind==='video_rewrite'&&artifact){
+    const review=JSON.parse((await (app.workspace as WorkspacePort).read(actor,{path:videoReviewPath(id,artifact.revision)})).content)
+    if(review.artifactDigest!==artifact.digest)throw nativeError('video_review_stale',409)
+    Object.assign(task,{qualityReview:review,...(review.status!=='passed'?{status:'needs_revision'}:{})})
+    if(review.status==='passed')report={...report,script:serializeVideo(validateVideoArtifact(JSON.stringify(report),row.intent).artifact),qualityReview:review,baseEditorRevision:row.intent.editorRevision,originalScriptUnchanged:true}
   }
   const sourceInsight=conversationInsight(history.calls)
   if(qualityReview)Object.assign(task,{runtimeStatus:task.status,qualityReview,...(qualityReview.status==='needs_revision'?{status:'needs_revision'}:{})})

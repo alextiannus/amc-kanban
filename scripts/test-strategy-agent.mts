@@ -30,6 +30,8 @@ const next=async(request:any)=>{
  const input=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=input.calls.filter((c:any)=>c.status==='succeeded'),find=(name:string)=>calls.findLast((c:any)=>c.capability===name)
  if(!find('amc.context'))return {type:'call',name:'amc.context',input:{},usage}
  const ctx=find('amc.context').result
+ assert.equal(ctx.planningContext?.skill?.content,undefined,'planning context does not preload skill body')
+ if(!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
  if(expectedPreference!==undefined)assert.equal(ctx.workingPreference.content,expectedPreference,'current explicit preference loaded on every task')
  if(!find('my_write_workspace')){
   const data=marketingPlanShape('2026-10');data.strategyFramework.summary=[ctx.intent.goal,...(ctx.intent.goal==='Focus on families'?Array.from({length:4},()=> '完整策略中文回归'.repeat(400)):[])]

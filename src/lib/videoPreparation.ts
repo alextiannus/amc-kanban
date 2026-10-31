@@ -1,3 +1,4 @@
+import {videoRewriteEnabled} from './ai-native/video-rewrite'
 import {creativeSourceScript} from './brand-plan/creativeSourceScript'
 import {prisma} from './prisma'
 import {authorizeBrainstorm} from './ai-native/brainstorm'
@@ -34,15 +35,36 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
  const originalScript=originalText(source)
  const instructions=body.action==='rewrite'?text(body.instructions):'',targetDurationSec=body.action==='rewrite'?body.targetDurationSec:undefined
  if(instructions.length>6000||(targetDurationSec!==undefined&&(!Number.isFinite(targetDurationSec)||targetDurationSec<=0||targetDurationSec>600)))throw nativeError('invalid_video_preparation',400)
- const input={action:body.action,originalOnly:body.originalOnly===true,language,script,sourceDigest:source?.sourceDigest||null,creativeId,userId,brandId,...(body.action==='rewrite'&&(body.instructions!==undefined||targetDurationSec!==undefined)?{instructions,targetDurationSec:targetDurationSec??null}:{})}
+ const input={...(body.editorRevision!==undefined?{editorRevision:body.editorRevision}:{}),action:body.action,originalOnly:body.originalOnly===true,language,script,sourceDigest:source?.sourceDigest||null,creativeId,userId,brandId,...(body.action==='rewrite'&&(body.instructions!==undefined||targetDurationSec!==undefined)?{instructions,targetDurationSec:targetDurationSec??null}:{})}
+ const agentRewrite=body.action==='rewrite'&&!body.originalOnly&&videoRewriteEnabled(brandId)
  const id='video_script_'+creativeDigest([userId,brandId,requestKey])
  const claimed=await prisma.$transaction(async (tx:any)=>{
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`
   const existing=await tx.brandMarketingSolution.findUnique({where:{id}})
   if(existing){if(creativeDigest(existing.input)!==creativeDigest(input))throw nativeError('video_script_request_conflict',409);return {existing}}
-  await tx.brandMarketingSolution.create({data:{id,brandId,kind:'VIDEO_SCRIPT_PREPARATION',period:requestKey,input,output:{},status:'GENERATING',createdById:userId}})
+  await tx.brandMarketingSolution.create({data:{id,brandId,kind:'VIDEO_SCRIPT_PREPARATION',period:requestKey,input,output:agentRewrite?{engine:'iaic-video-v1'}:{legacy:true},status:'GENERATING',createdById:userId}})
   return {existing:null}
  })
+ const reconcileAgent=async()=>{
+  const {createNativeTask,readNativeTask,controlNativeTask}=await import('./ai-native/service')
+  let taskId=(claimed.existing?.output as any)?.taskId
+  if(!taskId){
+   const task=await createNativeTask(userId,brandId,{kind:'video_rewrite',goal:instructions||'Adapt the current script to this brand, preserving unaffected edits.',script,language,targetDurationSec:targetDurationSec??15,editorRevision:typeof body.editorRevision==='string'?body.editorRevision:creativeDigest(script),requestKey:'vr-'+requestKey})
+   taskId=task.id
+   await prisma.brandMarketingSolution.update({where:{id},data:{output:{taskId,engine:'iaic-video-v1'}}})
+  }
+  if(body.cancel===true)await controlNativeTask(userId,brandId,taskId,{action:'cancel',requestKey:'cancel-'+requestKey})
+  const task=await readNativeTask(userId,brandId,taskId)
+  if(task.status==='succeeded'&&task.report?.script){
+   const output={...task.report,brandId,creativeId,taskId,status:'ready',usage:task.usage,sourceDigest:source?.sourceDigest||null}
+   await prisma.brandMarketingSolution.update({where:{id},data:{status:'READY',output}})
+   return output
+  }
+  if(['failed','cancelled','needs_revision'].includes(task.status))return {status:task.status,taskId,qualityReview:(task as any).qualityReview||null,originalScriptUnchanged:true}
+  return {status:'pending',taskId,taskStatus:task.status,originalScriptUnchanged:true}
+ }
+ if(claimed.existing?.status==='READY')return claimed.existing.output
+ if((claimed.existing?.output as any)?.engine==='iaic-video-v1'||agentRewrite&&!claimed.existing)return reconcileAgent()
  if(claimed.existing){if(claimed.existing.status==='READY')return claimed.existing.output;if(claimed.existing.status==='FAILED')throw nativeError('video_script_failed',422);throw nativeError('video_script_pending',409)}
  try{
   const originalOnly=body.originalOnly===true
