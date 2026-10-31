@@ -4,9 +4,12 @@ import {Prisma} from '@prisma/client'
 import {assertAmcExecutionChecklist,planningRevision,mergePlanningDraft,type PlanningDraft} from './planning-workspace-contract'
 /** Caller authenticates the original task owner and validates its persisted artifact. */
 export async function savePlanningDraft(userId:string,brandId:string,taskId:string,draft:PlanningDraft,provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:null}){
- const result=await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
+ const receiptId=`planning:${brandId}:${taskId}`
+ const existing=await prisma.auditLog.findFirst({where:{resourceId:receiptId,action:'PLANNING_DRAFT_ADOPTED',actorId:userId},select:{id:true}})
+ const result=existing?{saved:true,receiptId:existing.id,replayed:true}:await prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
+  await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '3000ms'")
+  await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '10000ms'")
   await tx.$queryRaw`SELECT id FROM "Brand" WHERE id=${brandId} FOR UPDATE`
-  const receiptId=`planning:${brandId}:${taskId}`
   const receipt=await tx.auditLog.findFirst({where:{resourceId:receiptId,action:'PLANNING_DRAFT_ADOPTED',actorId:userId},select:{id:true}})
   if(receipt)return {saved:true,receiptId:receipt.id,replayed:true}
   if(draft.scope.stage==='execution_checklist')assertAmcExecutionChecklist(draft.data)
@@ -27,7 +30,7 @@ export async function savePlanningDraft(userId:string,brandId:string,taskId:stri
   }
   const audit=await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'PLANNING_DRAFT_ADOPTED',resourceId:receiptId,resourceType:'BrandMarketingSolution',oldValue:draft.scope.stage==='marketing_plan'?current.marketingPlan||{}:['annual','quarter'].includes(draft.scope.stage)?current.annualPlan||{}:current.coCreation?.[draft.scope.stage]||{},newValue:draft.scope.stage==='marketing_plan'?next.marketingPlan:['annual','quarter'].includes(draft.scope.stage)?next.annualPlan:next.coCreation[draft.scope.stage],metadata:{brandId,taskId,scope:draft.scope}}})
   return {saved:true,receiptId:audit.id,replayed:false}
- })
+ },{maxWait:5000,timeout:30000})
  // Read committed history and current state separately from generation. A later
  // revision does not erase the original receipt or cause an old task to replay.
  const audit=await prisma.auditLog.findUnique({where:{id:result.receiptId}})

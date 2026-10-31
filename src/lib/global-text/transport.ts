@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 
 export type Connection = { id: string; provider: string; displayName: string; modelName: string; baseUrl: string | null; apiKey: string; timeoutMs?: number | null; reasoningEffort?: 'low'|'high'|'max' }
 export type Message = { role: string; content?: any; tool_calls?: any[]; tool_call_id?: string }
-export type TextRequest = { onStreamTools?:(calls:readonly any[])=>void; messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
+export type TextRequest = { onStreamText?:(text:string)=>void; onStreamTools?:(calls:readonly any[])=>void; messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
 export type TextUsage={input_tokens:number|null;output_tokens:number|null;input_tokens_details?:{cached_tokens:number|null};output_tokens_details?:{reasoning_tokens:number|null}}
 export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number; providerReference?:string; usage?:TextUsage; rawUsage?:unknown }
 
@@ -109,7 +109,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   const timeout = AbortSignal.timeout(textTimeoutMs(c.timeoutMs,input))
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
-  const data = protocol==='openai'&&input.task==='brand_planning'&&response.headers.get('content-type')?.includes('text/event-stream')?await readOpenAIStream(response,input.onStreamTools):await response.json()
+  const data = protocol==='openai'&&input.task==='brand_planning'&&response.headers.get('content-type')?.includes('text/event-stream')?await readOpenAIStream(response,input.onStreamTools,input.onStreamText):await response.json()
   logMarketingPlanResponse(c, input, body, response, data, started)
   if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw Object.assign(new TextOutputLimitError({
     finishReason:'length', maxTokens, reasoningEffort:body.reasoning_effort||'unspecified',

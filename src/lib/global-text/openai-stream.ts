@@ -1,7 +1,7 @@
 /** Aggregate OpenAI-compatible tool deltas without exposing intermediate output.
  * Only a complete stream may be returned for the normal validation and ledger.
  */
-export async function readOpenAIStream(response:Response,onTools?:(calls:readonly any[])=>void){
+export async function readOpenAIStream(response:Response,onTools?:(calls:readonly any[])=>void,onText?:(text:string)=>void){
  const reader=response.body?.getReader();if(!reader)throw Error('Text stream body missing')
  const decoder=new TextDecoder(),calls=new Map<number,any>()
  let buffer='',bytes=0,payload=0,id:string|undefined,model:string|undefined,content='',finish:string|null=null,usage:any,done=false
@@ -18,7 +18,7 @@ export async function readOpenAIStream(response:Response,onTools?:(calls:readonl
    if(choice.index!==0)throw Error('Text stream has unsupported choice')
    if(choice.finish_reason)finish=choice.finish_reason
    const delta=choice.delta||{}
-   if(typeof delta.content==='string'){content+=delta.content;payload+=Buffer.byteLength(delta.content)}
+   if(typeof delta.content==='string'){content+=delta.content;payload+=Buffer.byteLength(delta.content);onText?.(content)}
    for(const part of delta.tool_calls||[]){
     if(!Number.isInteger(part.index)||part.index<0||part.index>=64)throw Error('Text stream tool limit')
     const call=calls.get(part.index)||{id:'',type:'function',function:{name:'',arguments:''}}

@@ -26,3 +26,13 @@ try{
  await assert.rejects(()=>complete({id:'fixture',provider:'kopix',displayName:'Fixture',modelName:'glm-5.3',apiKey:'test-only'},{messages:[{role:'user',content:'plan'}],task:'brand_planning'}),(e:any)=>e.code==='MODEL_OUTPUT_LIMIT'&&e.usage.inputTokens===18)
 }finally{globalThis.fetch=original}
 console.log('PASS: fragmented Unicode/tool JSON, exact receipt and final usage, incomplete stream billing preservation, bounded full-planning stream and ordinary request isolation')
+
+const markdown='# 完整策略\n\n正文、"引号"和表格保持原样。\n'
+const previews:string[]=[]
+const textFrames=[part({content:markdown.slice(0,8)}),part({content:markdown.slice(8)}),part({},'stop'),chunk([],usage)]
+globalThis.fetch=async()=>response(textFrames)
+try{
+ const result=await complete({id:'fixture',provider:'kopix',displayName:'Fixture',modelName:'glm-5.3',apiKey:'test-only'},{messages:[{role:'user',content:'Full Markdown strategy'}],task:'brand_planning',toolChoice:'auto',onStreamText:t=>previews.push(t)})
+ assert.equal(result.text,markdown);assert.equal(previews.at(-1),markdown);assert.equal(result.message.tool_calls,undefined);assert.equal(result.usage?.input_tokens,18)
+}finally{globalThis.fetch=original}
+console.log('PASS: plain Markdown streams without JSON conversion, preserves source text, preview and final usage')

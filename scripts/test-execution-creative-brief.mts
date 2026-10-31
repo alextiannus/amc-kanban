@@ -5,3 +5,8 @@ const workspace={coCreation:{interview:{content:'家庭午晚餐'},principal_str
 const brief=executionCreativeBrief(facts,workspace,'2026-10')
 assert.equal(brief.positioning,'家庭午晚餐');assert.deepEqual(brief.sellingPoints,['现做与汤汁']);assert.equal(brief.principal,'推广家庭分享');assert.deepEqual(brief.monthlyCampaign.activities,['十月家庭分享活动']);assert.deepEqual(brief.products,['爆汁包'])
 console.log('PASS: execution matching uses current positioning, selling points, real products and the selected month campaign')
+const edited='# 新策略\n当前推广自助餐和上门服务，暂缓旧套餐。'
+const current=executionCreativeBrief(facts,{...workspace,marketingPlan:{...workspace.marketingPlan,content:edited,structuredDataStale:true,updatedAt:'now'}},'2026-11')
+assert.equal(current.strategyDocument,edited);assert.equal(current.strategyVersion,'now')
+assert.deepEqual(current.sellingPoints,[]);assert.equal(current.monthlyCampaign,null)
+console.log('PASS: current strategy document takes precedence over stale selling point and month arrays')

@@ -458,15 +458,23 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
 
 function planningProvenance(calls:readonly {capability:string;status:string;result?:unknown}[],draft:any){
  const source=(calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
- const skillContent=source?.skill?.content
- const provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
+ const actualSkill=calls.find(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded'&&(c as any).input?.id==='amc-marketing-expert/SKILL.md'&&!(c as any).input?.resource)?.result as any
+ const skillContent=actualSkill?.content||source?.skill?.content
+ const provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof actualSkill?.skillVersion==='string'?actualSkill.skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
  if(draft.scope.stage==='marketing_plan'){
   if(source?.creativeSearch||draft.data?.brandCreatives?.some((v:unknown)=>typeof v==='string'&&/cre_ins_[a-zA-Z0-9_-]+/.test(v)))throw nativeError('strategy_scope_changed',409)
   provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null
  }
  return provenance
 }
+const planningSavesInFlight=new Map<string,Promise<any>>()
 async function finalizePlanningResult(pool:Pool,userId:string,brandId:string,id:string,draft:any,calls:readonly {capability:string;status:string;result?:unknown}[]){
+ const key=JSON.stringify([userId,brandId,id]),pending=planningSavesInFlight.get(key)
+ if(pending)return pending
+ const work=finalizePlanningResultOnce(pool,userId,brandId,id,draft,calls).finally(()=>planningSavesInFlight.delete(key))
+ planningSavesInFlight.set(key,work);return work
+}
+async function finalizePlanningResultOnce(pool:Pool,userId:string,brandId:string,id:string,draft:any,calls:readonly {capability:string;status:string;result?:unknown}[]){
  try{
   // savePlanningDraft replays the original receipt before checking revisions.
   // It also re-reads committed history; persisted status is not authorization.
@@ -475,6 +483,7 @@ async function finalizePlanningResult(pool:Pool,userId:string,brandId:string,id:
   return result
  }catch(error){
   const e=error as {statusCode?:number;code?:string;message?:string}
+  console.warn('[amc-planning-save]',JSON.stringify({taskId:id,code:typeof e.code==='string'&&/^[a-zA-Z0-9_]{1,100}$/.test(e.code)?e.code:'unavailable',status:e.statusCode||null}))
   const result={state:e.statusCode===409?'conflict':'retry',verified:false,code:typeof e.code==='string'&&/^[a-z_]{1,100}$/.test(e.code)?e.code:e.statusCode===409?'planning_revision_conflict':'planning_save_unavailable'}
   if(e.statusCode===409)await pool.query('UPDATE amc_ai_requests SET planning_result=$1 WHERE task_id=$2 AND subject_id=$3',[JSON.stringify(result),id,userId])
   return result

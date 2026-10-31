@@ -43,5 +43,14 @@ try{
  const v2:any=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId:id}})).marketingSolution
  assert(v2.marketingPlan.content.includes('7. 店内运营与AMC活动'));assert.equal(Object.keys(v2.marketingPlan.strategySections).length,7)
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id,kind:'MARKETING_PLAN'}}),1)
+ const markdown='# 品牌策略\n\n原样保留 \"引号\" 和换行。\n'
+ const doc=validatePlanningDraft({scope:marketingScope,expectedRevision:planningRevision(v2),title:'原文策略',content:markdown},marketingScope)
+ const docReceipt=await savePlanningDraft(userId,id,'document',doc)
+ assert.equal(docReceipt.verified,true)
+ assert.equal((await savePlanningDraft(userId,id,'document',doc)).version,docReceipt.version)
+ const docSaved:any=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId:id}})).marketingSolution
+ assert.equal(docSaved.marketingPlan.content,markdown);assert.equal(docSaved.marketingPlan.documentFormat,'markdown')
+ assert.equal(docSaved.marketingPlan.strategySections,undefined)
+ assert.equal((await prisma.brandMarketingSolution.findFirstOrThrow({where:{brandId:id,kind:'MARKETING_PLAN'},orderBy:{version:'desc'}})).output.content,markdown)
  console.log('PASS: scoped drafts, exact months, unrelated quarters/calendar preservation, canonical hash, concurrent idempotency, stale draft rejection, version history, separate co-creation notes')
 }finally{await prisma.auditLog.deleteMany({where:{actorId:userId}});await prisma.brand.deleteMany({where:{id}});await prisma.$disconnect()}

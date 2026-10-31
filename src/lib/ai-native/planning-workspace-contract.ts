@@ -18,12 +18,12 @@ export function validatePlanningDraft(value:any,scope:PlanningScope):PlanningDra
  if(!value||scope.mode!=='draft'||JSON.stringify(planningScope(value.scope))!==JSON.stringify(planningScope(scope))||!/^[a-f0-9]{64}$/.test(value.expectedRevision))return fail('planning_draft_binding_mismatch')
  const str=(v:any,max=2500)=>typeof v==='string'&&!!v.trim()&&v.length<=max
  const strings=(v:any,max=16)=>Array.isArray(v)&&v.length<=max&&v.every(x=>str(x))
- if(!str(value.title,200)||!str(value.content,14000))return fail('invalid_planning_draft')
+ if(!str(value.title,200)||!str(value.content,scope.stage==='marketing_plan'?24000:14000))return fail('invalid_planning_draft')
  const data=value.data
  if(scope.stage==='execution_checklist'){
   validateExecutionChecklist(data)
  }else if(scope.stage==='marketing_plan'){
-  validateMarketingPlan(data,scope.startMonth)
+  if(data!==undefined)validateMarketingPlan(data,scope.startMonth)
  }else if(scope.stage==='annual'){
   if(!data||!str(data.goal)||!str(data.theme)||!strings(data.strategyPrinciples)||!strings(data.contentPillars)||!strings(data.metrics)||!Array.isArray(data.platformStrategy)||data.platformStrategy.length>12||data.platformStrategy.some((p:any)=>!p||!['platform','role','contentApproach','customerAction'].every(k=>str(p[k])))||Object.keys(data).some(k=>!['goal','theme','strategyPrinciples','contentPillars','metrics','platformStrategy'].includes(k)))return fail('invalid_annual_draft')
  }else if(scope.stage==='quarter'){
@@ -41,8 +41,8 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
   next.coCreation={...current.coCreation,execution_checklist:saved};return next
  }
  if(scope.stage==='marketing_plan'){
-  saved.content=marketingPlanMarkdown(draft.data,!/[\u4e00-\u9fff]/.test(draft.title+draft.content))
-  next.marketingPlan={...draft.data,content:saved.content,title:draft.title,planningStartMonth:scope.startMonth,taskId,status:'active',updatedAt:now,inputVersions:planningInputVersions(current)}
+  saved.content=draft.data===undefined?draft.content:marketingPlanMarkdown(draft.data,!/[\u4e00-\u9fff]/.test(draft.title+draft.content))
+  next.marketingPlan={...draft.data,...(draft.data===undefined?{documentFormat:'markdown'}:{}),content:saved.content,title:draft.title,planningStartMonth:scope.startMonth,taskId,status:'active',updatedAt:now,inputVersions:planningInputVersions(current)}
   next.coCreation={...current.coCreation,marketing_plan:saved};return next
  }
  if(!['annual','quarter'].includes(scope.stage)){next.coCreation={...current.coCreation,[scope.stage]:saved};return next}
@@ -68,8 +68,9 @@ export function mergePlanningDraft(current:any,draft:PlanningDraft,taskId:string
 }
 export function planningDraftContract(scope:PlanningScope){
  if(scope.mode!=='draft')return {}
- const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'每项只选一种通用行动：制定次月内容与发布计划（本月内提前完成）、组织本月内容制作（素材准备、精修剪辑）、安排本月内容发布、复盘本月Monthly Insight Report并确定下月调整、策划次月营销活动（计划）（每月含末月，在次月前排期）；独立活动用策划××活动（计划）；审核并入制作，禁忌在访谈确定；曝光执行仅商家确认安排及预算后列入',plannedTime:'计划日期或时段'}],informationToSupplement:[]}:scope.stage==='marketing_plan'?marketingPlanV2Shape(scope.startMonth):scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
- return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段方案标题',content:scope.stage==='marketing_plan'?'方案摘要、输入来源和关键待补充项；完整方案放入 data，宿主据 data 生成完整可编辑正文，不要重复输出整篇方案':scope.stage==='execution_checklist'?'简短说明清单范围和来源；所有行动完整放入 data.items，不重复整份清单':'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
+ if(scope.stage==='marketing_plan')return {documentOutput:{format:'markdown',instructions:'Return the complete strategy as plain Markdown. The host saves the exact document and supplies metadata. No JSON fields or fixed calendar arrays.',maxCharacters:24000}}
+ const data=scope.stage==='execution_checklist'?{items:[{id:'stable-task-id',month:scope.startMonth,action:'每项只选一种通用行动：制定次月内容与发布计划（本月内提前完成）、组织本月内容制作（素材准备、精修剪辑）、安排本月内容发布、复盘本月Monthly Insight Report并确定下月调整、策划次月营销活动（计划）（每月含末月，在次月前排期）；独立活动用策划××活动（计划）；审核并入制作，禁忌在访谈确定；曝光执行仅商家确认安排及预算后列入',plannedTime:'计划日期或时段'}],informationToSupplement:[]}:scope.stage==='annual'?{goal:'年度目标，未知基线注明待确认',theme:'年度主线',strategyPrinciples:['策略原则'],contentPillars:['内容支柱'],metrics:['指标、口径与复盘频率'],platformStrategy:[{platform:'真实订阅平台',role:'平台分工',contentApproach:'内容方式',customerAction:'用户行动'}]}:scope.stage==='quarter'?{strategy:'季度策略',focus:'季度重点',campaigns:['拟议活动'],contentThemes:['内容主题'],promotionPoints:[{name:'有依据的卖点',rationale:'选择依据',targetAudience:'目标客群',customerAction:'用户行动',platforms:['真实平台'],suggestedMonthlyPosts:2}],monthlyFocus:planningMonths(scope.startMonth,scope.quarter).map(month=>({month,focus:'本月重点',promotionPoints:['卖点']}))}:undefined
+ return {planningDraft:{scope,expectedRevision:'exact amc.context.planningContext.workspace.revision (or amc.marketing_workspace.revision on older hosts)',title:scope.stage==='quarter'?planningQuarterLabel(scope):'本阶段方案标题',content:scope.stage==='execution_checklist'?'简短说明清单范围和来源；所有行动完整放入 data.items，不重复整份清单':'本阶段完整策划文字，区分已确认资料、建议和未知；与 data 一致',...(data?{data}: {})}}
 }
 
 
