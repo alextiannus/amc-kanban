@@ -36,3 +36,10 @@ const previews=latestPreviewWriter(async text=>{written.push(text);if(written.le
 previews.push('first');for(let i=0;i<100;i++)previews.push('latest-'+i)
 release();await previews.flush();assert.deepEqual(written,['first','latest-99'])
 console.log('PASS: slow preview storage coalesces 100 updates into the latest write rather than delaying final completion')
+
+const discussion={...intent,planningScope:{...intent.planningScope,mode:'discuss'}}
+const selected=strategyDocumentBinding(request([{...context,result:{...context.result,intent:discussion}},skill,{capability:'amc.strategy_document',status:'succeeded',result:{format:'markdown'}}]),discussion)!
+assert(selected)
+assert.equal(conversationFrom(JSON.parse(strategyDocumentCall(text,selected,'my_write_workspace').function.arguments).content,discussion).planningDraft?.content,text)
+assert.equal(strategyDocumentBinding(request([context,skill,{capability:'amc.strategy_document',status:'failed',result:{format:'markdown'}}]),discussion),null)
+console.log('PASS: discussion stays unchanged until document mode is explicitly selected; full revisions use the same raw document path')
