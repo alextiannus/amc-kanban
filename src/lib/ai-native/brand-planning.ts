@@ -60,6 +60,7 @@ export function projectSavedMarketingPlan(value:any){
  const metadata=Object.fromEntries(['title','status','planningStartMonth','updatedAt','inputVersions','structuredDataStale'].filter(k=>value[k]!==undefined).map(k=>[k,value[k]]))
  const full=content.length<=24000?content:content.slice(0,24000)+' [excerpt]'
  if(value.structuredDataStale===true)return {report:{...metadata,content:full,sourceRule:'Use this complete edited content. Superseded generated arrays are intentionally omitted.'},partial:content.length>24000}
+ if(content.trim()&&content.length<=24000)return {report:{...metadata,content,sourceRule:'Complete saved strategy document; generated arrays duplicate this document and are omitted from model context only.'},partial:false}
  const structured=Object.fromEntries(['strategyDirection','brandCharacteristics','coreSellingPoints','swot','annualCalendar','monthlyPlans','inStoreActivities','brandCreatives','informationToSupplement'].filter(k=>value[k]!==undefined).map(k=>[k,value[k]]))
  if(JSON.stringify(structured).length>40000)return {report:{...metadata,content:full,sourceRule:'Use the saved document; oversized historical structured fields are omitted.'},partial:true}
  return {report:{...metadata,...structured,content:full},partial:content.length>24000}

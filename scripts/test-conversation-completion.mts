@@ -29,3 +29,14 @@ assert.equal(prepareConversationCompletion(make([write],[event]),{kind:'conversa
 const rejected=make([write],[event,{kind:'verification',data:{verified:false}}])
 assert.equal(prepareConversationCompletion(rejected,context.result.intent),rejected)
 console.log('PASS: trusted admission restores finish guidance when bounded history omits source results; failed verification still restores repair tools')
+
+const {conversationHostStep}=await import('../src/lib/ai-native/conversation-completion.ts')
+const intent={kind:'conversation',topic:'brand_planning',artifactPath:ref.path}
+const host=(calls:any[],events:any[])=>({...make(calls,events),billingContext:{capability:'agent.work',taskId:'same-task'},tools:[{name:'amc.context'}]})
+assert.deepEqual(conversationHostStep(host([],[]),intent),{type:'call',name:'amc.context',input:{}})
+assert.equal(conversationHostStep(host([{capability:'amc.context',status:'failed'}],[]),intent),null)
+assert.deepEqual(conversationHostStep(host([write],[event]),intent),{type:'finish',result:{summary:'Planning reply ready for verification',artifacts:[ref]}})
+for(const events of [[event,{kind:'verification',data:{verified:false}}],[event,{kind:'input'}],[event,{kind:'feedback'}]])assert.equal(conversationHostStep(host([write],events),intent),null)
+for(const invalid of [{...write,status:'unknown'},{...write,result:{reference:{...ref,revision:0}}},{...write,result:{reference:{...ref,path:'other-brand'}}}])assert.equal(conversationHostStep(host([invalid],[event]),intent),null)
+assert.equal(conversationHostStep(host([write],[event]),{...intent,topic:'general'}),null)
+console.log('PASS: planning mechanical context/finish skip inference, wrong scope/unknown writes/verification rejection cannot finish')

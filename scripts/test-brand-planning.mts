@@ -33,7 +33,7 @@ assert.equal(checkPlanningBudget({currency:'SGD',total:1.2,months:Array(12).fill
 assert.throws(()=>checkPlanningBudget({...budget,months:[1,2]}))
 assert.throws(()=>checkPlanningBudget({...budget,reserve:-1}))
 const id=randomUUID(),actor=actorFor(id,id),pool=nativePool()
-let insightReads=0,modelCalls=0,sourceRevision='one'
+let sessionReads=0,insightReads=0,modelCalls=0,sourceRevision='one'
 const contextSessionId=randomUUID()
 const facts={brand:{id,name:'Fixture brand'},productCatalog:[]}
 const usage={inputTokens:100,outputTokens:30}
@@ -81,8 +81,8 @@ try{
     const artifact=await app.workspace.read(actor,task.result.artifacts[0])
     const reply=conversationFrom(artifact.content,intent)
     assert(reply.content.length>5)
-    if(index===4)assert(task.events.some((e:any)=>e.kind==='verification'&&e.data.verified===false),'invalid metadata is rejected before repaired completion')
-    if(topic==='brand_planning'){assert(!task.calls.some((c:any)=>['assistant.skills.read','amc.marketing_workspace','amc.growth_insight'].includes(c.capability)),'bundled sources avoid separate model tool turns');assert.equal(reply.suggestedReplies,undefined,'useful replies need no forced choices')}
+    if(index===4)assert(task.events.some((e:any)=>e.kind==='verification'&&e.data.verified===false)||task.calls.some((c:any)=>c.capability==='my_write_workspace'&&c.status==='failed'),'invalid metadata is rejected before repaired completion')
+    if(topic==='brand_planning'){assert(!task.calls.some((c:any)=>['amc.marketing_workspace','amc.growth_insight'].includes(c.capability)),'bundled sources avoid separate source tool turns');assert(task.calls.some((c:any)=>c.capability==='assistant.skills.read'&&c.status==='succeeded'),'required Skill is actually read');assert.equal(reply.suggestedReplies,undefined,'useful replies need no forced choices')}
     if(topic==='general')assert.deepEqual(reply.uiAction,{page:'calendar',mode:'open',month:'2027-03'})
     if(topic==='brand_planning'){assert.deepEqual(reply.annualBudget,budget);assert.throws(()=>conversationFrom(JSON.stringify({...reply,annualBudget:{...budget,reserve:0}}),intent),/annual_budget_unbalanced/)}
     const ctx=task.calls.find((c:any)=>c.capability==='amc.context').result
@@ -91,9 +91,11 @@ try{
     assert(!ctx.uiCapabilities.pages.bd,'BD pages are absent without the current user role')
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
     assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
-    if(index===5||index===6)assert.equal(insightReads,5,'a new task and all revalidations reuse session context')
-    if(index===8)assert.equal(insightReads,7,'direction scope has its own current source bundle')
-    if(index===9)assert.equal(insightReads,8,'full strategy scope cannot reuse the narrow direction context')
+    if(index===5)sessionReads=insightReads
+    if(index===6)assert.equal(insightReads,sessionReads,'a new task and all revalidations reuse session context')
+    if(index===7)assert.equal(insightReads,sessionReads+1,'source revision invalidates the session cache once')
+    if(index===8)assert.equal(insightReads,sessionReads+2,'direction scope has its own current source bundle')
+    if(index===9)assert.equal(insightReads,sessionReads+3,'full strategy scope cannot reuse the narrow direction context')
     const before=modelCalls
     await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal(modelCalls,before)
@@ -101,7 +103,7 @@ try{
     await assert.rejects(()=>app.runtime.get(actorFor(id,'other-user'),receipt.id))
     assert.throws(()=>conversationFrom(artifact.content,{...intent,brandId:'other-brand'}))
   }
-  assert.equal(insightReads,8,'four legacy turns, one shared session load, one revision invalidation and two distinct planning scopes')
+  assert.equal(insightReads,sessionReads+3,'four legacy turns, one shared session load, one revision invalidation and two distinct planning scopes')
   await prisma.brand.create({data:{id,name:'Planning fixture',growthBrandKey:'fixture-growth',status:'ARCHIVED'}})
   await prisma.brandKnowledge.create({data:{brandId:id,brandClaim:{focus:'家庭聚餐'},marketingSolution:{annualPlan:{goal:'延续已保存目标',theme:'家庭',generatedAt:new Date().toISOString(),quarterlyFocus:[],metrics:[]}}}})
   await prisma.brandPlanInterview.create({data:{brandId:id,rawNotes:'访谈原始记录',answers:[{question:'目标',answer:'家庭聚餐'}]}})

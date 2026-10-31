@@ -20,6 +20,9 @@ export async function conversationSourceRevision(actor:NativeActor){
  * A transaction lock coalesces first loads across workers, not just this process.
  */
 export async function cachedConversationContext<T>(pool:Pool,key:string,revision:()=>Promise<string>,load:()=>Promise<T>,ttl:(value:T)=>number){
+  const currentRevision=await revision()
+  const hit=(await pool.query('SELECT payload FROM amc_conversation_context WHERE cache_key=$1 AND source_revision=$2 AND expires_at>clock_timestamp()',[key,currentRevision])).rows[0]
+  if(hit)return JSON.parse(hit.payload) as T
   const client=await pool.connect()
   try{
     await client.query('BEGIN')

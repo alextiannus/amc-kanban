@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
-import {planningScope,planningMonths,planningQuarterLabel,planningRevision,validatePlanningDraft,mergePlanningDraft} from '../src/lib/ai-native/planning-workspace-contract.ts'
+import {marketingPlanV2Shape,planningScope,planningMonths,planningQuarterLabel,planningRevision,validatePlanningDraft,mergePlanningDraft} from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {savePlanningDraft} from '../src/lib/ai-native/planning-workspace-save.ts'
 const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
 const scope=planningScope({stage:'quarter',quarter:2,startMonth:'2027-01',mode:'draft'}),id=randomUUID(),userId=randomUUID()
@@ -35,5 +35,13 @@ try{
  const after=await prisma.brandKnowledge.findUnique({where:{brandId:id}})
  assert.deepEqual((after!.marketingSolution as any).annualPlan,(saved!.marketingSolution as any).annualPlan)
  assert.equal((after!.marketingSolution as any).coCreation.focus.content,note.content)
+ const marketingScope=planningScope({stage:'marketing_plan',mode:'draft',startMonth:'2027-01'})
+ const marketing=validatePlanningDraft({scope:marketingScope,expectedRevision:planningRevision(after!.marketingSolution),title:'七章策略',content:'摘要',data:marketingPlanV2Shape('2027-01')},marketingScope)
+ const savedV2=await savePlanningDraft(userId,id,'seven-chapter',marketing)
+ const replayV2=await savePlanningDraft(userId,id,'seven-chapter',marketing)
+ assert.equal(savedV2.verified,true);assert.equal(replayV2.receiptId,savedV2.receiptId);assert.equal(replayV2.version,savedV2.version)
+ const v2:any=(await prisma.brandKnowledge.findUniqueOrThrow({where:{brandId:id}})).marketingSolution
+ assert(v2.marketingPlan.content.includes('7. 店内运营与AMC活动'));assert.equal(Object.keys(v2.marketingPlan.strategySections).length,7)
+ assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id,kind:'MARKETING_PLAN'}}),1)
  console.log('PASS: scoped drafts, exact months, unrelated quarters/calendar preservation, canonical hash, concurrent idempotency, stale draft rejection, version history, separate co-creation notes')
 }finally{await prisma.auditLog.deleteMany({where:{actorId:userId}});await prisma.brand.deleteMany({where:{id}});await prisma.$disconnect()}

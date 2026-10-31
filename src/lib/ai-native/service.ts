@@ -281,13 +281,13 @@ export async function nativeTaskHistory(app:Application,actor:NativeActor,id:str
 export async function readNativeTask(userId:string,brandId:string,id:string){
   const host=await taskHost(userId,brandId,id)
   const row=await intentForTask(host.pool,host.app,host.actor,id)
-  return row.intent.kind==='conversation'&&row.intent.conversationId?readConversationSnapshot(host,userId,brandId,id,row):readNativeTaskResult(host,userId,brandId,id,row)
+  return row.intent.kind==='conversation'?readConversationSnapshot(host,userId,brandId,id,row):readNativeTaskResult(host,userId,brandId,id,row)
 }
 export async function readNativeTaskStatus(userId:string,brandId:string,id:string){
   const host=await taskHost(userId,brandId,id)
   const row=await intentForTask(host.pool,host.app,host.actor,id)
   const active=await activeConversationStatus(host.app,host.actor,id,row.intent.kind)
-  return (active?{...active,preview:row.conversation_preview?{text:row.conversation_preview,verified:false}:null}:null)||(row.intent.kind==='conversation'&&row.intent.conversationId?readConversationSnapshot(host,userId,brandId,id,row):readNativeTaskResult(host,userId,brandId,id,row))
+  return (active?{...active,preview:row.conversation_preview?{text:row.conversation_preview,verified:false}:null}:null)||(row.intent.kind==='conversation'?readConversationSnapshot(host,userId,brandId,id,row):readNativeTaskResult(host,userId,brandId,id,row))
 }
 
 /** Completed conversation artifacts are immutable history. Revalidate ownership,
