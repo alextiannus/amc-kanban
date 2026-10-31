@@ -1,3 +1,4 @@
+import {readNativeTask} from '../src/lib/ai-native/service'
 import {prepareVideoScript} from '../src/lib/videoPreparation'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
@@ -97,6 +98,15 @@ try{
  for(let n=0;n<100;n++){const state=await composition.app.runtime.state(actor,started.taskId);if(['succeeded','failed','waiting'].includes(state.status))break;await new Promise(r=>setTimeout(r,30))}
  const output=await prepareVideoScript(id,id,body)
  assert.equal(output.status,'ready',JSON.stringify(output));assert.equal(output.taskId,started.taskId);assert.equal(output.baseEditorRevision,'adapter-v1');assert(output.script.includes('镜头 1'))
+ // Completed video display survives a context-version conflict, but not revoked authority.
+ const originalGet=composition.app.runtime.get.bind(composition.app.runtime)
+ try{
+  composition.app.runtime.get=async()=>{throw Object.assign(new Error('version conflict'),{statusCode:409})}
+  const historical=await readNativeTask(id,id,started.taskId)
+  assert.equal(historical.status,'succeeded');assert.equal(historical.report.script,output.script);assert.equal(historical.contextState,'stale')
+  composition.app.runtime.get=async()=>{throw Object.assign(new Error('denied'),{statusCode:403})}
+  await assert.rejects(()=>readNativeTask(id,id,started.taskId),/denied/)
+ }finally{composition.app.runtime.get=originalGet}
  const callsBefore=writerCalls+reviewCalls;assert.deepEqual(await prepareVideoScript(id,id,body),output);assert.equal(writerCalls+reviewCalls,callsBefore)
  await assert.rejects(()=>prepareVideoScript(id,id,{...body,script:'changed'}),/request_conflict/)
  reviewMode='unknown'

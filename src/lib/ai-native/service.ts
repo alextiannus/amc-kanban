@@ -314,7 +314,7 @@ async function readConversationSnapshot(host:Awaited<ReturnType<typeof taskHost>
 }
 
 async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
-  const view=await nativeTaskHistory(app,actor,id,row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'),history=view.history,task=projectTask(history)
+  const view=await nativeTaskHistory(app,actor,id,['sku_proposal','creative_adaptation','video_rewrite'].includes(row.intent.kind)),history=view.history,task=projectTask(history)
   // Read usage after the result snapshot: otherwise completion can race an earlier pending ledger read.
   const usage=await app.ledger.taskUsage(await app.scope(actor),id)
   const qualityReview=row.intent.kind==='creative_adaptation'?await readCreativeQualityReview({id:userId,type:'HUMAN'},brandId,id):null
