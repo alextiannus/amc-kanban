@@ -325,7 +325,7 @@ async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof t
   }
   if(row.intent.kind==='video_rewrite'&&artifact){
     const review=JSON.parse((await (app.workspace as WorkspacePort).read(actor,{path:videoReviewPath(id,artifact.revision)})).content)
-    if(review.artifactDigest!==artifact.digest)throw nativeError('video_review_stale',409)
+    if(review.artifactDigest!==artifact.digest||review.artifactRevision!==artifact.revision)throw nativeError('video_review_stale',409)
     Object.assign(task,{qualityReview:review,...(review.status!=='passed'?{status:'needs_revision'}:{})})
     if(review.status==='passed')report={...report,script:serializeVideo(validateVideoArtifact(JSON.stringify(report),row.intent).artifact),qualityReview:review,baseEditorRevision:row.intent.editorRevision,originalScriptUnchanged:true}
   }

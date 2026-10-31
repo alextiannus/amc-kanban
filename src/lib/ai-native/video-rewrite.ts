@@ -33,15 +33,15 @@ export function videoInput(body:any){
 export function literalVideoEdit(intent:Pick<VideoRewriteIntent,'goal'|'script'>){
  const g=intent.goal
  if(!/只|仅|only/i.test(g))return null
- const matches=[...g.matchAll(/[“"]([^”"\n]{1,160})[”"]\s*(?:改为|改成|替换为|to)\s*[“"]([^”"\n]{1,160})[”"]/g)]
- if(matches.length!==1)return null
- const [,from,to]=matches[0]
+ const match=g.match(/^(?:只|仅)(?:做一个小修改[：:]\s*)?(?:将|把)?(?:备注中的)?[“"]([^”"\n]{1,160})[”"]\s*(?:改为|改成|替换为)\s*[“"]([^”"\n]{1,160})[”"][。；;，,\s]*(?:(?:其余|其他)(?:所有)?(?:内容|文字)?(?:全部|逐字)?(?:保持)?不变[。\s]*)?$/)
+ if(!match)return null
+ const [,from,to]=match
  if(from===to||/[0-9\n]/.test(from+to)||intent.script.split(from).length!==2)return null
  return {from,to}
 }
 export function videoContractFor(intent:VideoRewriteIntent){
  const patch=literalVideoEdit(intent)
- return patch?{kind:'video_rewrite',brandId:intent.brandId,editorRevision:intent.editorRevision,factsDigest:intent.factsDigest,language:intent.language,durationSec:intent.durationSec,literalEdit:patch,script:'Copy the current script verbatim, replacing only the exact literalEdit.from occurrence with literalEdit.to. Preserve every other character. Omit segments. Independent review still required.'}:videoArtifactContract
+ return patch?{kind:'video_rewrite',brandId:intent.brandId,editorRevision:intent.editorRevision,factsDigest:intent.factsDigest,language:intent.language,durationSec:intent.durationSec,literalEdit:patch,baseScriptDigest:videoDigest(intent.script),instructions:'Submit only these binding fields and literalEdit/baseScriptDigest; omit script, segments and this instructions field. The host applies the exact patch to the frozen baseline. Independent review still required.'}:videoArtifactContract
 }
 export const videoArtifactContract={kind:'video_rewrite',brandId:'from intent',editorRevision:'from intent',factsDigest:'from intent',language:'from intent',durationSec:'from intent',segments:[{id:'segment-1',start:0,end:'durationSec',visual:'visible subject and setting',action:'performable action',spokenText:'empty when no narration',audio:'sound plan, distinguish proposed and observed',camera:[{start:0,end:'durationSec',description:'camera movement or hold',stable:true}],overlays:[{start:0,end:3,text:'optional factual overlay'}],evidenceRefs:['brand or merchant fact source'],plannedNeeds:['proposed footage, not claimed existing']} ]}
 const str=(v:unknown,max=4000)=>typeof v==='string'&&v.length<=max
@@ -53,8 +53,9 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
  if(a.language!==intent.language||a.durationSec!==intent.durationSec)throw fail('video_requirements_mismatch')
  const patch=literalVideoEdit(intent)
  if(patch){
-  if(a.literalEdit?.from!==patch.from||a.literalEdit?.to!==patch.to||a.script!==intent.script.replace(patch.from,patch.to)||a.segments!==undefined)throw fail('literal_edit_must_preserve_other_characters')
-  return {artifact:a,issues:[]}
+  const legacyExact=a.baseScriptDigest===undefined&&a.script===intent.script.replace(patch.from,patch.to)
+  if(a.literalEdit?.from!==patch.from||a.literalEdit?.to!==patch.to||(!legacyExact&&(a.baseScriptDigest!==videoDigest(intent.script)||a.script!==undefined))||a.segments!==undefined)throw fail('literal_edit_must_preserve_other_characters')
+  return {artifact:{...a,script:intent.script.replace(patch.from,patch.to)},issues:[]}
  }
  if(a.literalEdit!==undefined||a.script!==undefined)throw fail('unexpected_literal_edit')
  if(!Array.isArray(a.segments)||a.segments.length<1||a.segments.length>40)throw fail('video_requirements_mismatch')

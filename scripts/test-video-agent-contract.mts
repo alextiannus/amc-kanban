@@ -1,3 +1,4 @@
+import {videoOutcome} from '../src/lib/ai-native/video-review'
 import {prepareVideoCompletion} from '../src/lib/ai-native/video-completion'
 import {parseScreenplay} from '../src/vendor/mm-video/lib/video-screenplay'
 import assert from 'node:assert/strict'
@@ -47,9 +48,9 @@ assert.equal(requireVideoSkill([read(),read('references/video-rewrite.md'),read(
 assert(issues(a=>{a.segments=[{...a.segments[0],end:7.5,camera:[],overlays:[]},{...a.segments[0],id:'two',start:7.5,camera:[],overlays:[]}]}).includes('continuous_material_split'))
 
 const narrow={...intent,goal:'只将“浅色描边”改为“深色描边”，其他内容不变',script:'备注：白字加浅色描边。\n保留人工句。'}
-const patch={kind:'video_rewrite',brandId:narrow.brandId,editorRevision:narrow.editorRevision,factsDigest:narrow.factsDigest,language:narrow.language,durationSec:narrow.durationSec,literalEdit:literalVideoEdit(narrow),script:narrow.script.replace('浅色描边','深色描边')}
+const patch={kind:'video_rewrite',brandId:narrow.brandId,editorRevision:narrow.editorRevision,factsDigest:narrow.factsDigest,language:narrow.language,durationSec:narrow.durationSec,literalEdit:literalVideoEdit(narrow),baseScriptDigest:videoDigest(narrow.script)}
 assert.equal(serializeVideo(validateVideoArtifact(JSON.stringify(patch),narrow).artifact),'备注：白字加深色描边。\n保留人工句。')
-assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,script:patch.script+'改写'}),narrow),/preserve/)
+assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,script:'额外正文'}),narrow),/preserve/)
 assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,segments:good.segments}),narrow),/preserve/)
 assert.throws(()=>validateVideoArtifact(JSON.stringify(patch),intent),/unexpected_literal/)
 assert.equal(literalVideoEdit({...narrow,script:'浅色描边浅色描边'}),null)
@@ -65,3 +66,12 @@ assert(prepareVideoCompletion(req(completeData)).messages.at(-1).content.include
 for(const status of ['pending','repair_required']){const d=structuredClone(completeData);d.calls[2].result.status=status;assert.equal(prepareVideoCompletion(req(d)).tools.length,1)}
 {const d=structuredClone(completeData);d.calls[2].result.artifactDigest='b'.repeat(64);assert.equal(prepareVideoCompletion(req(d)).tools.length,1)}
 console.log('PASS terminal review receipt hint; pending, repair and stale review retain normal tools')
+
+for(const goal of ['只将“浅色描边”改为“深色描边”，并改为英文20秒','只将“浅色描边”改为“深色描边”，再删除最后一句'])assert.equal(literalVideoEdit({...narrow,goal}),null,'compound instructions must not be reduced to one patch')
+assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,baseScriptDigest:'wrong'}),narrow),/preserve/)
+
+assert.equal(serializeVideo(validateVideoArtifact(JSON.stringify({...patch,baseScriptDigest:undefined,script:narrow.script.replace('浅色描边','深色描边')}),narrow).artifact),narrow.script.replace('浅色描边','深色描边'),'exact legacy receipt remains readable after deployment')
+
+await assert.rejects(()=>videoOutcome({workspace:{read:async()=>({reference:{revision:2,digest:'same'}})}},{} as any,intent,'task',{reference:{revision:1,digest:'same'}},{calls:[read(),read('references/video-rewrite.md')]}),/video_artifact_stale/)
+await assert.rejects(()=>videoOutcome({workspace:{read:async(_a:any,r:any)=>r.path===intent.artifactPath?{reference:{revision:1,digest:'same'}}:{content:JSON.stringify({artifactDigest:'same',artifactRevision:2,status:'passed'})}}},{} as any,intent,'task',{reference:{revision:1,digest:'same'}},{calls:[read(),read('references/video-rewrite.md')]}),/video_review_stale/)
+console.log('PASS same-content different-revision artifacts cannot reuse a prior review')
