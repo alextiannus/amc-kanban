@@ -8,6 +8,9 @@ export const VIDEO_RESOURCE='references/video-rewrite.md'
 // Explicitly requested disciplines are required; other craft references remain agent-selected.
 export function requestedVideoCraft(goal:string){return [
  [/导演|director|叙事|narrative/i,'references/video-director.md'],
+ [/剧情|劇情|编剧|編劇|对白|對白|台词|臺詞|screenwrit|story[- ]led|dialogue/i,'references/video-screenwriting.md'],
+ [/剧情|劇情|分镜|分鏡|镜头衔接|鏡頭銜接|转场|轉場|storyboard|story[- ]led|shot.*(?:transition|continuity)/i,'references/video-storyboard.md'],
+ [/品牌口吻|品牌表达|品牌表達|营销口播|行銷口播|brand voice|marketing copy/i,'references/video-brand-voice.md'],
  [/运镜|camera|镜头运动/i,'references/video-camera.md'],
  [/制作|production|音效|audio|时长/i,'references/video-production.md'],
 ].filter(([pattern])=>(pattern as RegExp).test(goal)).map(([,resource])=>resource as string)}

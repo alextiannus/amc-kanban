@@ -98,3 +98,18 @@ hostCalls.push({id:'review',capability:'amc.video_review',input:{revision:1,dige
 assert.equal(videoHostStep(hostRequest(),narrow),null,'pending reviews cannot finish or replay')
 assert.equal(videoHostStep({...hostRequest(),billingContext:{capability:'amc.video_review'}},narrow),null,'review inference is never replaced by host steps')
 console.log('PASS host proposal boundaries: model Skill choice, failed read/pending no replay, exact host patch, independent reviewer')
+
+// Story craft must be executed, not merely advertised in a prompt.
+const storyGoal='继续已有剧情，改善镜头衔接';
+assert.deepEqual(requestedVideoCraft(storyGoal),['references/video-screenwriting.md','references/video-storyboard.md']);
+assert.deepEqual(requestedVideoCraft('只调整对白'),['references/video-screenwriting.md']);
+assert.deepEqual(requestedVideoCraft('只调整品牌口吻'),['references/video-brand-voice.md']);
+assert.deepEqual(requestedVideoCraft('只改一个错别字'),[]);
+const storyReads=[read(),read('references/video-rewrite.md'),read('references/video-screenwriting.md')];
+assert.throws(()=>requireVideoSkill(storyReads,storyGoal),/video-storyboard/);
+assert.throws(()=>requireVideoSkill([...storyReads,{...read('references/video-storyboard.md'),status:'failed'}],storyGoal),/video-storyboard/);
+assert.equal(requireVideoSkill([...storyReads,read('references/video-storyboard.md')],storyGoal).length,4);
+const storyIntent={...intent,goal:storyGoal};
+const storyRequest={billingContext:{capability:'agent.work'},messages:[{role:'user',content:JSON.stringify({events:[],calls:[{capability:'amc.context',status:'succeeded',result:{intent:storyIntent}},...storyReads]})}],tools:[{name:'assistant.skills.read'}]};
+assert.deepEqual(videoHostStep(storyRequest,storyIntent),{type:'call',name:'assistant.skills.read',input:{id:'amc-creative/SKILL.md',resource:'references/video-storyboard.md'}});
+console.log('PASS story craft actual-read gates, failed-read rejection, minimal edit routing and host progressive loading');

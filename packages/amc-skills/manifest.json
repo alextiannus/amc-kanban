@@ -84,7 +84,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-creative"
       },
-      "version": "sha256:d09276a03fa12b406d5332a0e7d8f6079f62a85b5f5b0b508cd45545a60ebd03",
+      "version": "sha256:6a23265beb84ed8a225e217afd668aa1091a36ffcf99d7da698ae81469d2f0b5",
       "description": "Edit a brand creative or prepare the confirmed SKU adaptation artifact."
     },
     {
@@ -524,6 +524,26 @@
       "source": "skills/amc-creative/references/video-production.md",
       "consumer": "kanban",
       "target": "skills/amc-creative/references/video-production.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-screenwriting.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-screenwriting.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-storyboard.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-storyboard.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-brand-voice.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-brand-voice.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-story-sources.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-story-sources.md"
     }
   ],
   "generatedResources": [
@@ -550,12 +570,16 @@
     "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json": "31204879c1538b0e9ed5862f689689f021560776b5069eef62817dadccacda65",
     "skills/amc-conversation/SKILL.md": "dc483eea2d5c3b4d4dfd625cdb697fa2adc243d212af2ae3ad1f5c29874039a6",
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-creative/SKILL.md": "e5ef35e5b401391a1486e86cd080b84b08d3c4c7f7a6c6ccee8f06ecbe28d3fe",
+    "skills/amc-creative/SKILL.md": "03fe097500c3bc22833cd3a953b88ae33e0e47d7332a3c70f971c2e60f8a906a",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
+    "skills/amc-creative/references/video-brand-voice.md": "f0f0e866c62e93872f7fd80ed1dd1fde6f59bf08ae0070d1f918674893d37d08",
     "skills/amc-creative/references/video-camera.md": "75508edf75c9b083c26cef238d84543ffa2314fdce14f6dbc0ec9a97020b4ce0",
     "skills/amc-creative/references/video-director.md": "b83182ce8eb5d2ec1ab44ad1a4f02b736ba0eb4232909c411a7fbbf5c7e8b262",
     "skills/amc-creative/references/video-production.md": "088433c2a7d411c2fc48cd9c8d29a4777561931dcb20333fd68d7adcc5327ae0",
-    "skills/amc-creative/references/video-rewrite.md": "38a854b0d7e46a31ea5c77b859e3b92f941ce7754250b34f83466143d2eeeb9d",
+    "skills/amc-creative/references/video-rewrite.md": "4917e4e70578f313e075823fa0c5515782945cc617563fa99f9ef68965e89a77",
+    "skills/amc-creative/references/video-screenwriting.md": "124a143de4d7d4fd52b66e9da8b26fa2088c123d1ae6ac8e1b55950f11178cff",
+    "skills/amc-creative/references/video-story-sources.md": "c79972ee43489afabf00b69012e667bb9f496a557627961d09047d3189f426a6",
+    "skills/amc-creative/references/video-storyboard.md": "0f91f8b287f5a4b1d820205f018dc032c7ba18809d4e275fc02ca494cf10bb25",
     "skills/amc-discovery/SKILL.md": "bbb16b1fe16a3d30820b2edead05d5640367477b2127cb5ebeb05d68cbb181ef",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",

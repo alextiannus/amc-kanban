@@ -87,7 +87,7 @@ try{
  await composition.app.close();composition=await composeApplication(pool,models,{...options,videoHostSteps:true})
  for(const literal of [false,true]){
   fastRequests=[];const beforeWriter=writerCalls,beforeReview=reviewCalls
-  const optimized={...(literal?literalIntent:intent),goal:literal?literalIntent.goal:'15秒，无口播，连续同一锅，使用导演、运镜、制作技能',requestKey:randomUUID(),artifactPath:`work/${randomUUID()}.json`}
+  const optimized={...(literal?literalIntent:intent),goal:literal?literalIntent.goal:'15秒，无口播，连续同一锅，使用导演、运镜、制作、剧情技能',requestKey:randomUUID(),artifactPath:`work/${randomUUID()}.json`}
   await admitIntent(pool,actor,optimized)
   const receipt=await composition.app.dispatcher.invoke('agent.work',{goal:optimized.goal,requiredArtifacts:[optimized.artifactPath],allowedTools:composition.tools},{actor,callId:optimized.requestKey})
   await intentForTask(pool,composition.app,actor,receipt.id);await composition.app.runtime.tick()
@@ -98,7 +98,7 @@ try{
   assert(!first.calls.some((c:any)=>c.capability==='assistant.skills.read'),'first paid request has no preloaded Skill body')
   assert(first.skills.every((s:any)=>!s.text&&!s.content),'first paid request only has Skill metadata')
   const reads=state.calls.filter((c:any)=>c.capability==='assistant.skills.read'&&c.status==='succeeded')
-  assert.equal(reads.length,literal?2:5,'only task-required resources loaded in order')
+  assert.equal(reads.length,literal?2:7,'only task-required resources loaded in order')
   const bill=await composition.app.ledger.taskUsage(await composition.app.scope(actor),receipt.id)
   assert.equal(bill.complete,true);assert.equal(Number(bill.platformUnits),(literal?2:3)*130,'host mechanical steps create no provider charges')
   assert(state.events.some((e:any)=>e.kind==='model_usage'&&e.data.usage?.source==='host-policy'&&e.data.usage.providerCalled===false),'local steps explicitly distinguished from provider usage')
