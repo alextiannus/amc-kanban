@@ -75,3 +75,9 @@ assert.equal(serializeVideo(validateVideoArtifact(JSON.stringify({...patch,baseS
 await assert.rejects(()=>videoOutcome({workspace:{read:async()=>({reference:{revision:2,digest:'same'}})}},{} as any,intent,'task',{reference:{revision:1,digest:'same'}},{calls:[read(),read('references/video-rewrite.md')]}),/video_artifact_stale/)
 await assert.rejects(()=>videoOutcome({workspace:{read:async(_a:any,r:any)=>r.path===intent.artifactPath?{reference:{revision:1,digest:'same'}}:{content:JSON.stringify({artifactDigest:'same',artifactRevision:2,status:'passed'})}}},{} as any,intent,'task',{reference:{revision:1,digest:'same'}},{calls:[read(),read('references/video-rewrite.md')]}),/video_review_stale/)
 console.log('PASS same-content different-revision artifacts cannot reuse a prior review')
+
+const dollarIntent={...narrow,goal:'只将“浅色描边”改为“$&”'}
+const dollarPatch={...patch,literalEdit:literalVideoEdit(dollarIntent)}
+assert.equal(serializeVideo(validateVideoArtifact(JSON.stringify(dollarPatch),dollarIntent).artifact),'备注：白字加$&。\n保留人工句。','replacement metacharacters are literal user text')
+const longIntent={...narrow,script:'浅色描边'+'字'.repeat(11996),goal:'只将“浅色描边”改为“非常长的深色描边”'}
+assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,literalEdit:literalVideoEdit(longIntent),baseScriptDigest:videoDigest(longIntent.script)}),longIntent),/too_long/)

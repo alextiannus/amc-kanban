@@ -53,9 +53,11 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
  if(a.language!==intent.language||a.durationSec!==intent.durationSec)throw fail('video_requirements_mismatch')
  const patch=literalVideoEdit(intent)
  if(patch){
-  const legacyExact=a.baseScriptDigest===undefined&&a.script===intent.script.replace(patch.from,patch.to)
+  const edited=intent.script.replace(patch.from,()=>patch.to)
+  if(edited.length>12000)throw fail('video_script_too_long')
+  const legacyExact=a.baseScriptDigest===undefined&&a.script===edited
   if(a.literalEdit?.from!==patch.from||a.literalEdit?.to!==patch.to||(!legacyExact&&(a.baseScriptDigest!==videoDigest(intent.script)||a.script!==undefined))||a.segments!==undefined)throw fail('literal_edit_must_preserve_other_characters')
-  return {artifact:{...a,script:intent.script.replace(patch.from,patch.to)},issues:[]}
+  return {artifact:{...a,script:edited},issues:[]}
  }
  if(a.literalEdit!==undefined||a.script!==undefined)throw fail('unexpected_literal_edit')
  if(!Array.isArray(a.segments)||a.segments.length<1||a.segments.length>40)throw fail('video_requirements_mismatch')
