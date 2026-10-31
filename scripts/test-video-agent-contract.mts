@@ -40,3 +40,5 @@ for(const language of ['zh','en','id','ms'] as const){const artifact={...good,la
 console.log('PASS named craft loading gates, stable-wording conflict, and four-language no-narration editor serialization')
 
 assert.equal(videoProgress('running',[{capability:'amc.video_review',status:'succeeded',result:{status:'repair_required'}}]),'repairing');assert.equal(videoProgress('waiting',[]),'paused');assert.equal(videoProgress('running',[{capability:'my_write_workspace',status:'succeeded'}]),'reviewing')
+
+assert.equal(requireVideoSkill([read(),read('references/video-rewrite.md'),read(),read('references/video-rewrite.md')]).length,2,'reviewer receives one copy of each exact resource version')

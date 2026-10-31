@@ -38,7 +38,8 @@ try{
  await initializeHost(pool);composition=await composeApplication(pool,models,options)
  await admitIntent(pool,actor,intent)
  const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools}
- const receipt=await composition.app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
+ const [receipt,concurrentReceipt]=await Promise.all([1,2].map(()=>composition.app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})))
+ assert.equal(receipt.id,concurrentReceipt.id,'concurrent admission uses one Core task')
  assert.equal((await composition.app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})).id,receipt.id)
  await intentForTask(pool,composition.app,actor,receipt.id)
  await composition.app.runtime.tick()
@@ -81,7 +82,8 @@ try{
  ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app:composition.app,tools:composition.tools,lane:'default',modelRevision:1})
  process.env.AMC_VIDEO_AGENT_BRANDS=id
  const body={action:'rewrite',script:'人工锅物脚本',instructions:intent.goal,language:'zh',targetDurationSec:15,editorRevision:'adapter-v1',requestKey:randomUUID()}
- const started=await prepareVideoScript(id,id,body)
+ const [started,concurrentStart]=await Promise.all([1,2].map(()=>prepareVideoScript(id,id,body)))
+ assert.equal(started.taskId,concurrentStart.taskId)
  assert(started.taskId)
  for(let n=0;n<100;n++){const state=await composition.app.runtime.state(actor,started.taskId);if(['succeeded','failed','waiting'].includes(state.status))break;await new Promise(r=>setTimeout(r,30))}
  const output=await prepareVideoScript(id,id,body)

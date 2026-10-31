@@ -75,7 +75,8 @@ export function requireVideoSkill(calls:any[],goal=''){
  const workflow=calls.findIndex(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&c.input?.resource===VIDEO_RESOURCE)
  if(main<0||workflow<=main)throw fail('read_video_skill_then_workflow_first')
  for(const resource of requestedVideoCraft(goal))if(!calls.some((c,i)=>i>workflow&&c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&c.input?.resource===resource))throw fail('read_requested_video_resource:'+resource)
- return calls.filter(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded').map(c=>({id:c.input.id,resource:c.input.resource??null,version:c.result?.version,skillVersion:c.result?.skillVersion}))
+ const traces=calls.filter(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded').map(c=>({id:c.input.id,resource:c.input.resource??null,version:c.result?.version,skillVersion:c.result?.skillVersion}))
+ return [...new Map(traces.map(trace=>[JSON.stringify(trace),trace])).values()]
 }
 
 export function videoProgress(status:string,calls:any[]){
