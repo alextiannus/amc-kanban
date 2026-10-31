@@ -23,9 +23,10 @@ export function videoInput(body:any){
  const explicit=String(body.goal).match(/(?:^|[^\d])(\d{1,3}(?:\.\d+)?)\s*(?:秒|seconds?\b|secs?\b)/i)
  if(explicit)duration=Number(explicit[1])
  if(!Number.isFinite(duration)||duration<=0||duration>600)throw fail('invalid_video_duration')
+ if(body.predecessorTaskId!==undefined&&(typeof body.predecessorTaskId!=='string'||!/^[-a-f0-9]{36}$/i.test(body.predecessorTaskId)))throw fail('invalid_video_predecessor')
  const goal=String(body.goal)
  const language=/改(?:为|成|用).*英文|用英文|in English/i.test(goal)?'en':/改(?:为|成|用).*中文|用中文|in Chinese/i.test(goal)?'zh':body.language
- return {script:body.script,language,durationSec:duration,editorRevision:body.editorRevision,noVoice:/无口播|不要口播|不加口播|no (?:voiceover|narration)|without (?:voiceover|narration)/i.test(goal),noOverlay:/无字幕|不要字幕|no (?:captions|subtitles|overlays)/i.test(goal),singleSegment:/单素材|连续同一|同一锅|single (?:segment|continuous)/i.test(goal)}
+ return {...(body.predecessorTaskId?{predecessorTaskId:body.predecessorTaskId}:{}),script:body.script,language,durationSec:duration,editorRevision:body.editorRevision,noVoice:/无口播|不要口播|不加口播|no (?:voiceover|narration)|without (?:voiceover|narration)/i.test(goal),noOverlay:/无字幕|不要字幕|no (?:captions|subtitles|overlays)/i.test(goal),singleSegment:/单素材|连续同一|同一锅|single (?:segment|continuous)/i.test(goal)}
 }
 export const videoArtifactContract={kind:'video_rewrite',brandId:'from intent',editorRevision:'from intent',factsDigest:'from intent',language:'from intent',durationSec:'from intent',segments:[{id:'segment-1',start:0,end:'durationSec',visual:'visible subject and setting',action:'performable action',spokenText:'empty when no narration',audio:'sound plan, distinguish proposed and observed',camera:[{start:0,end:'durationSec',description:'camera movement or hold',stable:true}],overlays:[{start:0,end:3,text:'optional factual overlay'}],evidenceRefs:['brand or merchant fact source'],plannedNeeds:['proposed footage, not claimed existing']} ]}
 const str=(v:unknown,max=4000)=>typeof v==='string'&&v.length<=max
@@ -75,4 +76,14 @@ export function requireVideoSkill(calls:any[],goal=''){
  if(main<0||workflow<=main)throw fail('read_video_skill_then_workflow_first')
  for(const resource of requestedVideoCraft(goal))if(!calls.some((c,i)=>i>workflow&&c.capability==='assistant.skills.read'&&c.status==='succeeded'&&c.input?.id===VIDEO_SKILL&&c.input?.resource===resource))throw fail('read_requested_video_resource:'+resource)
  return calls.filter(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded').map(c=>({id:c.input.id,resource:c.input.resource??null,version:c.result?.version,skillVersion:c.result?.skillVersion}))
+}
+
+export function videoProgress(status:string,calls:any[]){
+ if(status==='succeeded')return 'complete'
+ if(['waiting','paused','failed','cancelled'].includes(status))return 'paused'
+ if(status==='queued')return 'queued'
+ if(calls.some(c=>c.capability==='amc.video_review'&&c.status==='succeeded'&&c.result?.status==='repair_required'))return 'repairing'
+ if(calls.some(c=>c.capability==='my_write_workspace'&&c.status==='succeeded'))return 'reviewing'
+ if(calls.some(c=>c.capability==='amc.video_facts'&&c.status==='succeeded'))return 'writing'
+ return 'loading'
 }

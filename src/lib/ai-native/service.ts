@@ -1,4 +1,4 @@
-import {videoInput,videoDigest,serializeVideo,validateVideoArtifact} from './video-rewrite'
+import {videoInput,videoProgress,videoDigest,serializeVideo,validateVideoArtifact} from './video-rewrite'
 import {videoReviewPath} from './video-review'
 import {readVideoRewriteFacts} from './facts'
 import {dailyGate,sweepLifecycle} from './task-lifecycle.mjs'
@@ -136,6 +136,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   let intent:NativeIntent
   if(kind==='video_rewrite'){
     const fields=videoInput(body)
+    if(fields.predecessorTaskId){const predecessor=await intentForTask(pool,app,actor,fields.predecessorTaskId);if(predecessor.intent.kind!=='video_rewrite')throw nativeError('invalid_video_predecessor',409)}
     let old;try{old=await intentBy(pool,actor,'request_key',key)}catch(e){if((e as any).statusCode!==404)throw e}
     if(old){
       if(old.intent.kind!=='video_rewrite'||videoDigest({...old.intent,...common,...fields})!==videoDigest(old.intent))throw nativeError('request_key_reused',409)
@@ -346,7 +347,7 @@ async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof t
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
   const contextSnapshot=row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'?history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result||null:null
   const planningSave=row.intent.kind==='conversation'&&row.intent.autoSavePlanning&&task.status==='succeeded'&&report?.planningDraft?.scope.stage==='marketing_plan'?await finalizePlanningResult(pool,userId,brandId,id,report.planningDraft,history.calls):null
-  return {...task,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
+  return {...task,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='video_rewrite'?{progress:{stage:videoProgress(task.status,history.calls)}}:{}),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app,pool}=await taskHost(userId,brandId,id)

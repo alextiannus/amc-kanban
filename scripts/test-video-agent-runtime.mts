@@ -89,8 +89,10 @@ try{
  const callsBefore=writerCalls+reviewCalls;assert.deepEqual(await prepareVideoScript(id,id,body),output);assert.equal(writerCalls+reviewCalls,callsBefore)
  await assert.rejects(()=>prepareVideoScript(id,id,{...body,script:'changed'}),/request_conflict/)
  reviewMode='unknown'
- const interruptedBody={...body,requestKey:randomUUID()};const interrupted=await prepareVideoScript(id,id,interruptedBody)
+ const interruptedBody={...body,predecessorTaskId:started.taskId,requestKey:randomUUID()};const interrupted=await prepareVideoScript(id,id,interruptedBody)
  for(let n=0;n<200;n++){if((await composition.app.runtime.state(actor,interrupted.taskId)).status==='waiting')break;await new Promise(r=>setTimeout(r,30))}
+ assert.equal(((await intentForTask(pool,composition.app,actor,interrupted.taskId)).intent as any).predecessorTaskId,started.taskId)
+ await assert.rejects(()=>prepareVideoScript(id,id,{...body,requestKey:randomUUID(),predecessorTaskId:randomUUID()}),(e:any)=>e.statusCode===404)
  const paused=await prepareVideoScript(id,id,interruptedBody);assert.equal(paused.status,'paused');assert.equal(paused.waitingReason,'external_result');const paidBefore=writerCalls+reviewCalls;await prepareVideoScript(id,id,interruptedBody);assert.equal(writerCalls+reviewCalls,paidBefore,'paused polling never replays inference')
  process.env.AMC_VIDEO_AGENT_BRANDS=''
  assert.deepEqual(await prepareVideoScript(id,id,body),output,'rollback retains original receipt')

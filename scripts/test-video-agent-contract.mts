@@ -1,6 +1,6 @@
 import {parseScreenplay} from '../src/vendor/mm-video/lib/video-screenplay'
 import assert from 'node:assert/strict'
-import {requestedVideoCraft,videoInput,validateVideoArtifact,serializeVideo,requireVideoSkill,videoDigest,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
+import {videoProgress,requestedVideoCraft,videoInput,validateVideoArtifact,serializeVideo,requireVideoSkill,videoDigest,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
 const intent:VideoRewriteIntent={kind:'video_rewrite',brandId:'brand-a',userId:'actor',goal:'15秒，无口播，连续同一锅',requestKey:'test-request',artifactPath:'work/test.json',script:'人工稿',language:'zh',durationSec:15,editorRevision:'v1',facts:{},factsDigest:videoDigest({}),noVoice:true,noOverlay:false,singleSegment:true}
 const good:any={kind:'video_rewrite',brandId:'brand-a',factsDigest:intent.factsDigest,editorRevision:'v1',language:'zh',durationSec:15,segments:[{id:'pot',start:0,end:15,visual:'同一锅食物',action:'保留人工动作',spokenText:'',audio:'拟拍环境声',camera:[{start:0,end:15,description:'稳定构图',stable:true}],overlays:[{start:12,end:15,text:'品牌'}],evidenceRefs:[],plannedNeeds:['拍摄真实锅物']}]}
 const issues=(change:(a:any)=>void,i=intent)=>{const a=structuredClone(good);change(a);return validateVideoArtifact(JSON.stringify(a),i).issues.map(x=>x.code)}
@@ -38,3 +38,5 @@ assert(issues(a=>a.segments[0].camera[0].description='固定机位缓慢拉远')
 assert(!issues(a=>a.segments[0].camera[0].description='固定机位，不拉远').includes('camera_stability_mismatch'))
 for(const language of ['zh','en','id','ms'] as const){const artifact={...good,language};assert.equal(parseScreenplay(serializeVideo(artifact))[0].turns.length,0,'metadata must not become narration: '+language)}
 console.log('PASS named craft loading gates, stable-wording conflict, and four-language no-narration editor serialization')
+
+assert.equal(videoProgress('running',[{capability:'amc.video_review',status:'succeeded',result:{status:'repair_required'}}]),'repairing');assert.equal(videoProgress('waiting',[]),'paused');assert.equal(videoProgress('running',[{capability:'my_write_workspace',status:'succeeded'}]),'reviewing')
