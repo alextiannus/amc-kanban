@@ -1,3 +1,4 @@
+import {videoHostStep} from '../src/lib/ai-native/video-host-steps'
 import {videoOutcome} from '../src/lib/ai-native/video-review'
 import {prepareVideoCompletion} from '../src/lib/ai-native/video-completion'
 import {parseScreenplay} from '../src/vendor/mm-video/lib/video-screenplay'
@@ -81,3 +82,19 @@ const dollarPatch={...patch,literalEdit:literalVideoEdit(dollarIntent)}
 assert.equal(serializeVideo(validateVideoArtifact(JSON.stringify(dollarPatch),dollarIntent).artifact),'备注：白字加$&。\n保留人工句。','replacement metacharacters are literal user text')
 const longIntent={...narrow,script:'浅色描边'+'字'.repeat(11996),goal:'只将“浅色描边”改为“非常长的深色描边”'}
 assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,literalEdit:literalVideoEdit(longIntent),baseScriptDigest:videoDigest(longIntent.script)}),longIntent),/too_long/)
+
+const hostCalls:any[]=[{id:'ctx',capability:'amc.context',status:'succeeded',result:{intent:narrow}}]
+const hostRequest=()=>({billingContext:{capability:'agent.work'},messages:[{role:'user',content:JSON.stringify({calls:hostCalls,events:[]})}],tools:['amc.context','assistant.skills.read','amc.video_facts','my_write_workspace','amc.video_review'].map(name=>({name}))})
+assert.equal(videoHostStep(hostRequest(),narrow),null,'model must select the main Skill')
+hostCalls.push(read());assert.equal(videoHostStep(hostRequest(),narrow).input.resource,'references/video-rewrite.md')
+hostCalls.push({...read('references/video-rewrite.md'),status:'failed'});assert.equal(videoHostStep(hostRequest(),narrow),null,'failed reads are not automatically replayed')
+hostCalls.pop();hostCalls.push(read('references/video-rewrite.md'));assert.equal(videoHostStep(hostRequest(),narrow).name,'amc.video_facts')
+hostCalls.push({capability:'amc.video_facts',status:'succeeded',result:{brand:'fixture'}})
+const hostPatch=videoHostStep(hostRequest(),narrow);assert.equal(hostPatch.name,'my_write_workspace');assert.equal(JSON.parse(hostPatch.input.content).baseScriptDigest,videoDigest(narrow.script))
+assert.equal(serializeVideo(validateVideoArtifact(hostPatch.input.content,narrow).artifact),narrow.script.replace('浅色描边','深色描边'))
+hostCalls.push({id:'write',capability:'my_write_workspace',status:'succeeded',result:{reference:{path:narrow.artifactPath,revision:1,digest:'a'.repeat(64)}}})
+assert.equal(videoHostStep(hostRequest(),narrow).name,'amc.video_review')
+hostCalls.push({id:'review',capability:'amc.video_review',input:{revision:1,digest:'a'.repeat(64)},status:'succeeded',result:{status:'pending'}})
+assert.equal(videoHostStep(hostRequest(),narrow),null,'pending reviews cannot finish or replay')
+assert.equal(videoHostStep({...hostRequest(),billingContext:{capability:'amc.video_review'}},narrow),null,'review inference is never replaced by host steps')
+console.log('PASS host proposal boundaries: model Skill choice, failed read/pending no replay, exact host patch, independent reviewer')

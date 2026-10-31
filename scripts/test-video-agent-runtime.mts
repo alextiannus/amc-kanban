@@ -10,31 +10,31 @@ import {videoReviewPath} from '../src/lib/ai-native/video-review'
 import {prisma} from '../src/lib/prisma'
 const url=new URL(process.env.DATABASE_URL||'');assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
 const pool=nativePool(),id=randomUUID(),actor=actorFor(id,id)
-let allowed=true,composition:any,reviewCalls=0,writerCalls=0,reviewMode='pass',attemptedEarlyWrite=false
+let allowed=true,composition:any,reviewCalls=0,writerCalls=0,reviewMode='pass',attemptedEarlyWrite=false,fastMode=false,fastRequests:any[]=[]
 const usage={inputTokens:100,outputTokens:30}
 const intent:VideoRewriteIntent={kind:'video_rewrite',brandId:id,userId:id,goal:'15秒，无口播，连续同一锅，品牌收尾可读；使用导演技能',requestKey:randomUUID(),artifactPath:`work/${id}.json`,script:'Keep my hand-edited pot shot',language:'zh',durationSec:15,editorRevision:'editor-v1',facts:{brand:'Fixture restaurant'},factsDigest:videoDigest({brand:'Fixture restaurant'}),noVoice:true,noOverlay:false,singleSegment:true}
 const candidate=(bad:boolean,binding:any=intent)=>literalVideoEdit(binding)?({kind:binding.kind,brandId:binding.brandId,editorRevision:binding.editorRevision,factsDigest:binding.factsDigest,language:binding.language,durationSec:binding.durationSec,literalEdit:{...literalVideoEdit(binding),to:literalVideoEdit(binding)!.to+(bad?'UNREQUESTED':'')},baseScriptDigest:videoDigest(binding.script)}):({kind:intent.kind,brandId:id,editorRevision:binding.editorRevision,factsDigest:binding.factsDigest,language:'zh',durationSec:15,segments:[{id:'pot',start:0,end:15,visual:'同一锅食物',action:'热气自然升起',spokenText:'',audio:'拟采集现场环境声',camera:[{start:0,end:15,description:'保持镜头稳定',stable:true}],overlays:[{start:bad?14.5:12,end:15,text:'品牌'}],evidenceRefs:['brand'],plannedNeeds:['待拍同一锅连续镜头']}]})
 const model={next:async(request:any)=>{
  if(request.billingContext.capability==='amc.video_review'){reviewCalls++;assert(request.messages[0].content.includes('independent'));assert.equal(JSON.parse(request.messages[1].content).calls,undefined);return {type:'finish',result:{issues:reviewMode==='reject'?[{code:'unsupported_claim',severity:'error',location:'pot',message:'Claim lacks evidence'}]:[]},...(reviewMode==='unknown'?{}:{usage})}}
- writerCalls++
+ writerCalls++;if(fastMode)fastRequests.push(structuredClone(request))
  const data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user').content),calls=data.calls.filter((c:any)=>c.status==='succeeded')
  const call=(name:string,input:any)=>({type:'call',name,input,usage})
- if(!calls.some((c:any)=>c.capability==='tasks.plan.update'))return call('tasks.plan.update',{id:data.plan.taskId,expectedRevision:0,steps:[{id:'rewrite',description:'Rewrite and verify',status:'in_progress'}]})
+ if(!fastMode&&!calls.some((c:any)=>c.capability==='tasks.plan.update'))return call('tasks.plan.update',{id:data.plan.taskId,expectedRevision:0,steps:[{id:'rewrite',description:'Rewrite and verify',status:'in_progress'}]})
  if(!calls.some((c:any)=>c.capability==='amc.context'))return call('amc.context',{})
- if(!attemptedEarlyWrite){attemptedEarlyWrite=true;const binding=calls.find((c:any)=>c.capability==='amc.context').result.intent;return call('my_write_workspace',{path:binding.artifactPath,expectedRevision:0,mediaType:'application/json',content:JSON.stringify(candidate(false,binding))})}
+ if(!fastMode&&!attemptedEarlyWrite){attemptedEarlyWrite=true;const binding=calls.find((c:any)=>c.capability==='amc.context').result.intent;return call('my_write_workspace',{path:binding.artifactPath,expectedRevision:0,mediaType:'application/json',content:JSON.stringify(candidate(false,binding))})}
  if(!calls.some((c:any)=>c.capability==='assistant.skills.read'&&!c.input.resource))return call('assistant.skills.read',{id:'amc-creative/SKILL.md'})
  if(!calls.some((c:any)=>c.capability==='assistant.skills.read'&&c.input.resource))return call('assistant.skills.read',{id:'amc-creative/SKILL.md',resource:'references/video-rewrite.md'})
  const requested=calls.find((c:any)=>c.capability==='amc.context').result.requestedCraftResources||[];for(const resource of requested)if(!calls.some((c:any)=>c.capability==='assistant.skills.read'&&c.input.resource===resource))return call('assistant.skills.read',{id:'amc-creative/SKILL.md',resource})
  if(!calls.some((c:any)=>c.capability==='amc.video_facts'))return call('amc.video_facts',{section:'brand',productIds:[]})
  const activeIntent=calls.find((c:any)=>c.capability==='amc.context').result.intent
  const writes=calls.filter((c:any)=>c.capability==='my_write_workspace'),reviews=calls.filter((c:any)=>c.capability==='amc.video_review')
- if(!writes.length)return call('my_write_workspace',{path:activeIntent.artifactPath,expectedRevision:0,mediaType:'application/json',content:JSON.stringify(candidate(true,activeIntent))})
+ if(!writes.length)return call('my_write_workspace',{path:activeIntent.artifactPath,expectedRevision:0,mediaType:'application/json',content:JSON.stringify(candidate(!fastMode,activeIntent))})
  if(reviews.length<writes.length){const ref=writes.at(-1).result.reference;return call('amc.video_review',{revision:ref.revision,digest:ref.digest})}
  if(reviews.at(-1).result.status==='repair_required')return call('my_write_workspace',{path:activeIntent.artifactPath,expectedRevision:writes.at(-1).result.reference.revision,mediaType:'application/json',content:JSON.stringify(candidate(false,activeIntent))})
  return {type:'finish',result:{summary:'Reviewed',artifacts:[writes.at(-1).result.reference]},usage}
 }}
 const models={profiles:[{id:'fixture',provider:'openai' as const,model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'fixture',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}}
-const options={version:'video-test-v1',skillRoot:process.cwd()+'/skills',authorize:async(a:any)=>allowed&&a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId}
+const options={videoHostSteps:false,version:'video-test-v1',skillRoot:process.cwd()+'/skills',authorize:async(a:any)=>allowed&&a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId}
 try{
  await initializeHost(pool);composition=await composeApplication(pool,models,options)
  await admitIntent(pool,actor,intent)
@@ -62,7 +62,7 @@ try{
  await admitIntent(pool,actor,literalIntent)
  const literalTask=await composition.app.dispatcher.invoke('agent.work',{goal:literalIntent.goal,requiredArtifacts:[literalIntent.artifactPath],allowedTools:composition.tools},{actor,callId:literalIntent.requestKey})
  await intentForTask(pool,composition.app,actor,literalTask.id);await composition.app.runtime.tick()
- const literalState=await composition.app.runtime.get(actor,literalTask.id,{history:true});assert.equal(literalState.status,'succeeded')
+ const literalState=await composition.app.runtime.get(actor,literalTask.id,{history:true});assert.equal(literalState.status,'succeeded');const literalContext=literalState.calls.find((c:any)=>c.capability==='amc.context').result;assert.equal(literalContext.artifactContract.baseScriptDigest,videoDigest(literalIntent.script));assert.deepEqual(literalContext.artifactContract.literalEdit,literalVideoEdit(literalIntent));assert.equal(literalContext.artifactContract.segments,undefined)
  const literalArtifact=await composition.app.workspace.read(actor,literalState.result.artifacts[0]);assert.equal(serializeVideo(validateVideoArtifact(literalArtifact.content,literalIntent).artifact),literalIntent.script.replace('浅色描边','深色描边'))
  assert.equal(literalState.calls.filter((c:any)=>c.capability==='amc.video_review').length,2,'extra wording is rejected then repaired')
  for(const mode of ['reject','unknown']){
@@ -82,6 +82,31 @@ try{
    assert.equal(JSON.parse((await composition.app.workspace.read(actor,{path:videoReviewPath(nextTask.id,2)})).content).status,'pending')
   }
  }
+ // Optimized production composition uses the actual Core dispatcher and ledger.
+ reviewMode='pass';fastMode=true
+ await composition.app.close();composition=await composeApplication(pool,models,{...options,videoHostSteps:true})
+ for(const literal of [false,true]){
+  fastRequests=[];const beforeWriter=writerCalls,beforeReview=reviewCalls
+  const optimized={...(literal?literalIntent:intent),goal:literal?literalIntent.goal:'15秒，无口播，连续同一锅，使用导演、运镜、制作技能',requestKey:randomUUID(),artifactPath:`work/${randomUUID()}.json`}
+  await admitIntent(pool,actor,optimized)
+  const receipt=await composition.app.dispatcher.invoke('agent.work',{goal:optimized.goal,requiredArtifacts:[optimized.artifactPath],allowedTools:composition.tools},{actor,callId:optimized.requestKey})
+  await intentForTask(pool,composition.app,actor,receipt.id);await composition.app.runtime.tick()
+  const state=await composition.app.runtime.get(actor,receipt.id,{history:true});assert.equal(state.status,'succeeded',JSON.stringify(state.events.slice(-3)))
+  assert.equal(writerCalls-beforeWriter,literal?1:2,'only main-Skill choice and ordinary drafting need writer inference')
+  assert.equal(reviewCalls-beforeReview,1,'independent reviewer remains metered')
+  const first=JSON.parse(fastRequests[0].messages.findLast((m:any)=>m.role==='user').content)
+  assert(!first.calls.some((c:any)=>c.capability==='assistant.skills.read'),'first paid request has no preloaded Skill body')
+  assert(first.skills.every((s:any)=>!s.text&&!s.content),'first paid request only has Skill metadata')
+  const reads=state.calls.filter((c:any)=>c.capability==='assistant.skills.read'&&c.status==='succeeded')
+  assert.equal(reads.length,literal?2:5,'only task-required resources loaded in order')
+  const bill=await composition.app.ledger.taskUsage(await composition.app.scope(actor),receipt.id)
+  assert.equal(bill.complete,true);assert.equal(Number(bill.platformUnits),(literal?2:3)*130,'host mechanical steps create no provider charges')
+  assert(state.events.some((e:any)=>e.kind==='model_usage'&&e.data.usage?.source==='host-policy'&&e.data.usage.providerCalled===false),'local steps explicitly distinguished from provider usage')
+  const artifact=await composition.app.workspace.read(actor,state.result.artifacts[0]);const normalized=validateVideoArtifact(artifact.content,optimized).artifact
+  if(literal)assert.equal(serializeVideo(normalized),optimized.script.replace('浅色描边','深色描边'))
+ }
+ fastMode=false;await composition.app.close();composition=await composeApplication(pool,models,options)
+ console.log('PASS optimized actual Core: ordinary 3 paid calls, literal 2, ordered progressive reads, exact patch, independent review, no host-step charges')
  // Real legacy API adapter -> same Core task, without provider or media side effects.
  reviewMode='pass'
  await prisma.roleDefinition.upsert({where:{id:'AMC_PRINCIPAL'},create:{id:'AMC_PRINCIPAL',name:'Principal',normalizedName:'principal',builtIn:true},update:{enabled:true}})

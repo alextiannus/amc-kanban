@@ -84,7 +84,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-creative"
       },
-      "version": "sha256:d014ad44edd082532f13eb698b94ce47ac12bdfe436d957d96f368b1c1317f94",
+      "version": "sha256:d09276a03fa12b406d5332a0e7d8f6079f62a85b5f5b0b508cd45545a60ebd03",
       "description": "Edit a brand creative or prepare the confirmed SKU adaptation artifact."
     },
     {
@@ -555,7 +555,7 @@
     "skills/amc-creative/references/video-camera.md": "75508edf75c9b083c26cef238d84543ffa2314fdce14f6dbc0ec9a97020b4ce0",
     "skills/amc-creative/references/video-director.md": "b83182ce8eb5d2ec1ab44ad1a4f02b736ba0eb4232909c411a7fbbf5c7e8b262",
     "skills/amc-creative/references/video-production.md": "088433c2a7d411c2fc48cd9c8d29a4777561931dcb20333fd68d7adcc5327ae0",
-    "skills/amc-creative/references/video-rewrite.md": "bffc4654c02bd57246cc1d1f9e9f61a1c5097a19fce9c938f09c9f6fdce58fb3",
+    "skills/amc-creative/references/video-rewrite.md": "38a854b0d7e46a31ea5c77b859e3b92f941ce7754250b34f83466143d2eeeb9d",
     "skills/amc-discovery/SKILL.md": "bbb16b1fe16a3d30820b2edead05d5640367477b2127cb5ebeb05d68cbb181ef",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",

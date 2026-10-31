@@ -12,6 +12,18 @@ class AmcContextAssembler extends ContextAssembler {
    const key=JSON.stringify([call.result.id,call.result.resource,call.result.skillVersion,call.result.version]);
    if(seen.has(key)){const {text,...metadata}=call.result;calls[i]={...call,result:{...metadata,textOmitted:true,sameAsCall:seen.get(key)}};}else seen.set(key,call.id);
   }
+  if(calls.some(c=>c.capability==='amc.context'&&c.status==='succeeded'&&c.result?.intent?.kind==='video_rewrite')){
+   const latest=calls.findLast(c=>c.capability==='my_write_workspace'&&c.status==='succeeded');
+   for(let i=0;i<calls.length;i++){
+    const c=calls[i];
+    if(c.capability==='my_write_workspace'&&c!==latest&&typeof c.input?.content==='string'){
+     const {content,...input}=c.input;calls[i]={...c,input:{...input,contentOmitted:true},inputProjected:true};
+    }
+    if(c.capability==='my_read_workspace'&&c.status==='succeeded'&&latest&&c.result?.reference?.digest===latest.result?.reference?.digest&&c.result?.reference?.revision===latest.result?.reference?.revision){
+     const {content,...result}=c.result;calls[i]={...c,result:{...result,contentOmitted:true,sameAsCall:latest.id}};
+    }
+   }
+  }
   return {...history,calls};
  }
 }
@@ -27,12 +39,13 @@ import {
 } from '@immedi/iaic-core';
 
 // This is application-owned composition. Each imported Core module remains independently replaceable.
-export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles,resolveSecret,modelFactory,userModels=null,routing=null,tokenPolicies,authorize,verifyOutcome,version,runtimeLimits={},taskCursorKey=null,toolCallLimits,enablePlans=false,scheduling=null,eventWork=null,executionPolicy=null,mandates=null,extraCapabilities=[],releaseBinding=null,hostContext=null,workspaceWrite=null,workspacePreflight=null,skillCatalog=null,taskLifecycle=false,requestExecutorHandoff=false}){
+export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles,resolveSecret,modelFactory,userModels=null,routing=null,tokenPolicies,authorize,verifyOutcome,version,runtimeLimits={},taskCursorKey=null,toolCallLimits,enablePlans=false,scheduling=null,eventWork=null,executionPolicy=null,mandates=null,extraCapabilities=[],releaseBinding=null,hostContext=null,workspaceWrite=null,workspacePreflight=null,hostAction=null,skillCatalog=null,taskLifecycle=false,requestExecutorHandoff=false}){
  if(releaseBinding!==null&&(!releaseBinding||releaseBinding.implementationRevision!==version))throw new Error('Release binding must match the explicit application version');
  if(!Array.isArray(extraCapabilities))throw new Error('extraCapabilities must be an array of host-defined Capabilities');
  if(mandates!==null&&(typeof mandates?.authorizeGrant!=='function'||typeof mandates?.sourceFor!=='function'))throw new Error('Mandates require trusted authorizeGrant and sourceFor ports');
  if(eventWork!==null&&(!scheduling||typeof eventWork?.sourceFor!=='function'||typeof eventWork?.buildTask!=='function'))throw new Error('Event work requires scheduling identity restoration, sourceFor and buildTask ports');
  if(scheduling!==null&&(!scheduling||typeof scheduling.restoreActor!=='function'||(scheduling.isEnabled!==undefined&&typeof scheduling.isEnabled!=='function')))throw new Error('Scheduling requires a trusted restoreActor port and optional isEnabled function');
+ if(hostAction!==null&&typeof hostAction!=='function')throw new Error('hostAction must be a trusted proposal function');
  if(typeof enablePlans!=='boolean')throw new Error('enablePlans must be a boolean');
  if(!runtimeLimits||Object.getPrototypeOf(runtimeLimits)!==Object.prototype||Object.entries(runtimeLimits).some(([k,v])=>!['maxTurns','maxCalls','maxBatchCalls','maxOutputBytes','modelTimeoutMs','taskTimeoutMs'].includes(k)||!Number.isSafeInteger(v)||v<1))throw new Error('Supply positive integer Runtime limits only');
  if(typeof authorize!=='function'||typeof verifyOutcome!=='function')throw new Error('Supply current application authorization and independent outcome verification');
@@ -91,7 +104,18 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
    return task;
   }
  }
- runtime=new LifecycleRuntime({...runtimeLimits,store:tasks,dispatcher,mandates:assistantMandates,model:{name:'host-model-resolver'},resolveModel:request=>(modelRouting||models).resolve(request),context:createAmcContextAssembler({skillRoot,skillCatalog:skills,planProvider:plans?({actor,task})=>plans.read(actor,{id:task.id}):null,overflow:'omit-old-results',sessionProvider:({actor,task})=>task.input.session?sessions.context(actor,task.input.session):null}),version,agentIdentity,trustedContext:hostContexts});
+ runtime=new LifecycleRuntime({...runtimeLimits,store:tasks,dispatcher,mandates:assistantMandates,model:{name:'host-model-resolver'},resolveModel:async binding=>{
+  const model=await (modelRouting||models).resolve(binding);
+  if(!hostAction)return model;
+  return {...model,next:async request=>{
+   request.signal?.throwIfAborted();
+   const action=await hostAction(request,{actor:binding.actor});
+   if(!action)return model.next(request);
+   request.signal?.throwIfAborted();
+   // No provider reservation or fabricated provider receipt for a local step.
+   return {...action,usage:{inputTokens:0,outputTokens:0,providerCalled:false,source:'host-policy'}};
+  }};
+ },context:createAmcContextAssembler({skillRoot,skillCatalog:skills,planProvider:plans?({actor,task})=>plans.read(actor,{id:task.id}):null,overflow:'omit-old-results',sessionProvider:({actor,task})=>task.input.session?sessions.context(actor,task.input.session):null}),version,agentIdentity,trustedContext:hostContexts});
  dispatcher.tasks=runtime;
  try{await runtime.initialize({requestHandoff:requestExecutorHandoff});}catch(error){await runtime.stop();throw error;}
  const entry={capabilities:dispatcher.capabilities,invoke:(name,input,context)=>name==='agent.work'?startSessionTask({sessions,actor:context.actor,input,startTask:()=>dispatcher.invoke(name,input,context)}):dispatcher.invoke(name,input,context)};
