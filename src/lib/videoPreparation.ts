@@ -69,7 +69,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
   if(typeof resultLanguage!=='string'||!Object.hasOwn(languages,resultLanguage)||(brandRewrite&&(!Number.isFinite(parsed.durationSec)||parsed.durationSec<=0||parsed.durationSec>600)))throw Error('invalid_script_response')
   const translatedText=originalOnly?parsed.originalScript:parsed.script
   if((resultLanguage==='zh'&&!/[\u3400-\u9fff]/.test(translatedText))||(resultLanguage!=='zh'&&/[\u3400-\u9fff]{4,}/.test(translatedText)))throw Error('script_language_mismatch')
-  const output={brandId,creativeId,language:resultLanguage,...(brandRewrite&&parsed.durationSec!==undefined?{durationSec:parsed.durationSec}:{}),script:parsed.script,...(rewriteSkill?{originalScriptUnchanged:true,rewriteSkill:{id:rewriteSkill.id,resource:rewriteSkill.resource,version:rewriteSkill.version}}:{originalScript:parsed.originalScript}),sourceDigest:source?.sourceDigest||null}
+  const output={brandId,creativeId,language:resultLanguage,...(brandRewrite&&parsed.durationSec!==undefined?{durationSec:parsed.durationSec}:{}),script:parsed.script,...(rewriteSkill?{originalScriptUnchanged:true,rewriteSkill:{id:rewriteSkill.id,resource:rewriteSkill.resource,version:rewriteSkill.version,modules:rewriteSkill.modules}}:{originalScript:parsed.originalScript}),sourceDigest:source?.sourceDigest||null}
   await prisma.brandMarketingSolution.update({where:{id},data:{status:'READY',output,llmProvider:result.provider,llmModel:result.modelName}})
   return output
  }catch(error){await prisma.brandMarketingSolution.update({where:{id},data:{status:'FAILED',llmError:'video_script_failed'}});throw nativeError('video_script_failed',422)}

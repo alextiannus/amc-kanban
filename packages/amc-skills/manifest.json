@@ -84,7 +84,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-creative"
       },
-      "version": "sha256:7c86b6cf26660e6fd69b22bcdca0cc92075df3da431efd0248a31e10f8683298",
+      "version": "sha256:fa6faa29468a6b37994993660a19e63d82aed8ca170f91deb604b10a1fae0a1a",
       "description": "Edit a brand creative or prepare the confirmed SKU adaptation artifact."
     },
     {
@@ -509,6 +509,21 @@
       "source": "skills/amc-creative/references/video-rewrite.md",
       "consumer": "kanban",
       "target": "skills/amc-creative/references/video-rewrite.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-director.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-director.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-camera.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-camera.md"
+    },
+    {
+      "source": "skills/amc-creative/references/video-production.md",
+      "consumer": "kanban",
+      "target": "skills/amc-creative/references/video-production.md"
     }
   ],
   "generatedResources": [
@@ -535,9 +550,12 @@
     "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json": "31204879c1538b0e9ed5862f689689f021560776b5069eef62817dadccacda65",
     "skills/amc-conversation/SKILL.md": "dc483eea2d5c3b4d4dfd625cdb697fa2adc243d212af2ae3ad1f5c29874039a6",
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-creative/SKILL.md": "a32d40018411865b5571e8a7b4222bc200211ebedb099984442745b0d239a86d",
+    "skills/amc-creative/SKILL.md": "1933cbbbc7f2a576086a272bd067a542ee93e1d4c0910faccaa1f8a1009488c0",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-creative/references/video-rewrite.md": "bd5dcc6352ea1924aeca168227d56db33998f1dc570f6293664acafaa75cfc01",
+    "skills/amc-creative/references/video-camera.md": "75508edf75c9b083c26cef238d84543ffa2314fdce14f6dbc0ec9a97020b4ce0",
+    "skills/amc-creative/references/video-director.md": "b83182ce8eb5d2ec1ab44ad1a4f02b736ba0eb4232909c411a7fbbf5c7e8b262",
+    "skills/amc-creative/references/video-production.md": "088433c2a7d411c2fc48cd9c8d29a4777561931dcb20333fd68d7adcc5327ae0",
+    "skills/amc-creative/references/video-rewrite.md": "68c6b45efb2603fa118e00e46694f5a981ac80edf12f3fd7296566bc9b509dbf",
     "skills/amc-discovery/SKILL.md": "bbb16b1fe16a3d30820b2edead05d5640367477b2127cb5ebeb05d68cbb181ef",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",

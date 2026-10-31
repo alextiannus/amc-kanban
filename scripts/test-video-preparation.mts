@@ -30,6 +30,7 @@ assert.equal((await variants.videoPlatformVersion('u','b',{action:'variantPlan',
 assert.equal(variants.languageForMarket('SG'),'en');assert.equal(variants.languageForMarket('MY'),'ms');assert.equal(variants.languageForMarket('unknown'),null)
 console.log('PASS actual script/variant services: authorization, source separation, translation receipt reuse, concurrent single admission, owned parent/child recovery, platform market language; no media provider calls')
 
+assert(!lastPrompt.includes('Director: brand-led visual storytelling'),'translation excludes craft modules')
 const context=await preparation.prepareVideoScript('u','b',{action:'context',creativeId:'idea'});assert(context.originalScript.includes('画面：鱼的特写'));assert(!context.originalScript.includes('#美食'));
 
 assert.equal(factsReads,0,'context and translation must not load full brand facts')
@@ -56,6 +57,9 @@ const rewriteReceipt=await preparation.prepareVideoScript('u','b',rewriteBody)
 assert.equal(rewriteReceipt.originalScript,undefined,'rewrite model cannot overwrite restore source')
 assert.equal(rewriteReceipt.originalScriptUnchanged,true)
 assert.equal(rewriteReceipt.rewriteSkill.version,loadedSkill.version)
+assert.equal(loadedSkill.modules.length,4)
+assert.deepEqual(rewriteReceipt.rewriteSkill.modules,loadedSkill.modules)
+for(const module of loadedSkill.modules){assert.match(module.version,/^sha256:[a-f0-9]{64}$/);assert(lastPrompt.includes(readFileSync('skills/amc-creative/'+module.resource,'utf8')))}
 assert(!lastPrompt.includes('Preserve shot order, timing, visual subjects, facts, names and prices'))
 await preparation.prepareVideoScript('u','b',rewriteBody);assert.equal(factsReads,1,'completed rewrite must not reload facts')
 assert.equal(modelCalls,beforeEmpty+1)
