@@ -15,7 +15,7 @@ export const videoDigest=(value:unknown)=>createHash('sha256').update(stableJson
 export type VideoRewriteIntent={kind:'video_rewrite';brandId:string;userId:string;goal:string;requestKey:string;artifactPath:string;script:string;language:'zh'|'en'|'id'|'ms';durationSec:number;editorRevision:string;facts:unknown;factsDigest:string;noVoice:boolean;noOverlay:boolean;singleSegment:boolean;predecessorTaskId?:string}
 export type VideoIssue={code:string;severity:'error'|'warning';location:string;message:string}
 export type VideoSegment={id:string;start:number;end:number;visual:string;action:string;spokenText:string;audio:string;camera:Array<{start:number;end:number;description:string;stable:boolean}>;overlays:Array<{start:number;end:number;text:string}>;evidenceRefs:string[];plannedNeeds:string[]}
-export type VideoArtifact={kind:'video_rewrite';brandId:string;editorRevision:string;factsDigest:string;language:VideoRewriteIntent['language'];durationSec:number;segments:VideoSegment[]}
+export type VideoArtifact={kind:'video_rewrite';brandId:string;editorRevision:string;factsDigest:string;language:VideoRewriteIntent['language'];durationSec:number;segments:VideoSegment[];literalEdit?:{from:string;to:string};script?:string}
 const fail=(code:string)=>Object.assign(new Error(code),{code,statusCode:400})
 export function videoInput(body:any){
  if(typeof body.script!=='string'||!body.script.trim()||body.script.length>12000||!['zh','en','id','ms'].includes(body.language)||typeof body.editorRevision!=='string'||!/^[-\w]{1,100}$/.test(body.editorRevision))throw fail('invalid_video_input')
@@ -28,6 +28,21 @@ export function videoInput(body:any){
  const language=/改(?:为|成|用).*英文|用英文|in English/i.test(goal)?'en':/改(?:为|成|用).*中文|用中文|in Chinese/i.test(goal)?'zh':body.language
  return {...(body.predecessorTaskId?{predecessorTaskId:body.predecessorTaskId}:{}),script:body.script,language,durationSec:duration,editorRevision:body.editorRevision,noVoice:/无口播|不要口播|不加口播|no (?:voiceover|narration)|without (?:voiceover|narration)/i.test(goal),noOverlay:/无字幕|不要字幕|no (?:captions|subtitles|overlays)/i.test(goal),singleSegment:/单素材|连续同一|同一锅|single (?:segment|continuous)/i.test(goal)}
 }
+// A narrow, explicit one-occurrence wording change has an exact preservation contract.
+// Ambiguous, multi-change or numeric/timeline edits continue through normal drafting.
+export function literalVideoEdit(intent:Pick<VideoRewriteIntent,'goal'|'script'>){
+ const g=intent.goal
+ if(!/只|仅|only/i.test(g))return null
+ const matches=[...g.matchAll(/[“"]([^”"\n]{1,160})[”"]\s*(?:改为|改成|替换为|to)\s*[“"]([^”"\n]{1,160})[”"]/g)]
+ if(matches.length!==1)return null
+ const [,from,to]=matches[0]
+ if(from===to||/[0-9\n]/.test(from+to)||intent.script.split(from).length!==2)return null
+ return {from,to}
+}
+export function videoContractFor(intent:VideoRewriteIntent){
+ const patch=literalVideoEdit(intent)
+ return patch?{kind:'video_rewrite',brandId:intent.brandId,editorRevision:intent.editorRevision,factsDigest:intent.factsDigest,language:intent.language,durationSec:intent.durationSec,literalEdit:patch,script:'Copy the current script verbatim, replacing only the exact literalEdit.from occurrence with literalEdit.to. Preserve every other character. Omit segments. Independent review still required.'}:videoArtifactContract
+}
 export const videoArtifactContract={kind:'video_rewrite',brandId:'from intent',editorRevision:'from intent',factsDigest:'from intent',language:'from intent',durationSec:'from intent',segments:[{id:'segment-1',start:0,end:'durationSec',visual:'visible subject and setting',action:'performable action',spokenText:'empty when no narration',audio:'sound plan, distinguish proposed and observed',camera:[{start:0,end:'durationSec',description:'camera movement or hold',stable:true}],overlays:[{start:0,end:3,text:'optional factual overlay'}],evidenceRefs:['brand or merchant fact source'],plannedNeeds:['proposed footage, not claimed existing']} ]}
 const str=(v:unknown,max=4000)=>typeof v==='string'&&v.length<=max
 const interval=(v:any,start:number,end:number)=>v&&Number.isFinite(v.start)&&Number.isFinite(v.end)&&v.start>=start&&v.end<=end&&v.end>v.start
@@ -35,7 +50,14 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
  if(Buffer.byteLength(content)>64000)throw fail('video_artifact_too_large')
  const a=JSON.parse(content)
  if(a?.kind!=='video_rewrite'||a.brandId!==intent.brandId||a.editorRevision!==intent.editorRevision||a.factsDigest!==intent.factsDigest)throw fail('video_binding_mismatch')
- if(a.language!==intent.language||a.durationSec!==intent.durationSec||!Array.isArray(a.segments)||a.segments.length<1||a.segments.length>40)throw fail('video_requirements_mismatch')
+ if(a.language!==intent.language||a.durationSec!==intent.durationSec)throw fail('video_requirements_mismatch')
+ const patch=literalVideoEdit(intent)
+ if(patch){
+  if(a.literalEdit?.from!==patch.from||a.literalEdit?.to!==patch.to||a.script!==intent.script.replace(patch.from,patch.to)||a.segments!==undefined)throw fail('literal_edit_must_preserve_other_characters')
+  return {artifact:a,issues:[]}
+ }
+ if(a.literalEdit!==undefined||a.script!==undefined)throw fail('unexpected_literal_edit')
+ if(!Array.isArray(a.segments)||a.segments.length<1||a.segments.length>40)throw fail('video_requirements_mismatch')
  const issues:VideoIssue[]=[],ids=new Set<string>()
  const issue=(code:string,location:string,message:string,severity:'error'|'warning'='error')=>issues.push({code,location,message,severity})
  let end=0
@@ -66,6 +88,7 @@ export function validateVideoArtifact(content:string,intent:VideoRewriteIntent):
  return {artifact,issues}
 }
 export function serializeVideo(a:VideoArtifact){
+ if(a.literalEdit&&typeof a.script==='string')return a.script
  const line=(s:string)=>s.replace(/\s*\n+\s*/g,' ')
  const labels={zh:['镜头','画面','动作','口播','字幕','声音','运镜','备注'],en:['Scene','Visual','Action','Speech','Overlay','Sound','Camera','Needed'],id:['Adegan','Visual','Aksi','Ucapan','Teks','Bunyi','Kamera','Kebutuhan'],ms:['Babak','Visual','Aksi','Pertuturan','Teks','Bunyi','Kamera','Keperluan']}[a.language]
  return a.segments.map((s,i)=>[`${labels[0]} ${i+1} · ${s.start}–${s.end}s`,`${labels[1]}：${s.visual}`,`${labels[2]}：${s.action}`,`${labels[3]}：${s.spokenText||(a.language==='zh'?'无':'none')}`,`${labels[4]}：${s.overlays.map(o=>`${o.start}–${o.end}s ${o.text}`).join('；')||(a.language==='zh'?'无':'none')}`,`${labels[5]}：${s.audio}`,`${labels[6]}：${s.camera.map(c=>`${c.start}–${c.end}s ${c.description}`).join('；')}`,...(s.plannedNeeds.length?[`${labels[7]}：${s.plannedNeeds.join('；')}`]:[])].map(line).join('\n')).join('\n\n')

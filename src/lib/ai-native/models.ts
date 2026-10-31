@@ -1,3 +1,4 @@
+import {prepareVideoCompletion} from './video-completion'
 import {buildContextManifest} from './context-manifest'
 import {planningPreview} from './planning-preview'
 import {prepareConversationCompletion} from './conversation-completion'
@@ -72,7 +73,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
        const rows=await prisma.$queryRawUnsafe(`SELECT intent FROM amc_iaic.amc_ai_requests WHERE task_id=$1::uuid AND intent->>'kind'='conversation' AND intent->>'topic'='brand_planning'`,taskId) as Array<{intent:any}>
        intent=rows[0]?.intent;full=!!fullPlanningScope(intent?.planningScope)
       }
-      return (full?provider(true,intent.planningScope,intent,taskId):provider(false,undefined,undefined,taskId,request.billingContext?.capability==='amc.video_review')).next(prepareConversationCompletion(request,intent))
+      return (full?provider(true,intent.planningScope,intent,taskId):provider(false,undefined,undefined,taskId,request.billingContext?.capability==='amc.video_review')).next(prepareVideoCompletion(prepareConversationCompletion(request,intent)))
      }})
     },
   }

@@ -1,6 +1,7 @@
+import {prepareVideoCompletion} from '../src/lib/ai-native/video-completion'
 import {parseScreenplay} from '../src/vendor/mm-video/lib/video-screenplay'
 import assert from 'node:assert/strict'
-import {videoProgress,requestedVideoCraft,videoInput,validateVideoArtifact,serializeVideo,requireVideoSkill,videoDigest,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
+import {literalVideoEdit,videoContractFor,videoProgress,requestedVideoCraft,videoInput,validateVideoArtifact,serializeVideo,requireVideoSkill,videoDigest,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
 const intent:VideoRewriteIntent={kind:'video_rewrite',brandId:'brand-a',userId:'actor',goal:'15秒，无口播，连续同一锅',requestKey:'test-request',artifactPath:'work/test.json',script:'人工稿',language:'zh',durationSec:15,editorRevision:'v1',facts:{},factsDigest:videoDigest({}),noVoice:true,noOverlay:false,singleSegment:true}
 const good:any={kind:'video_rewrite',brandId:'brand-a',factsDigest:intent.factsDigest,editorRevision:'v1',language:'zh',durationSec:15,segments:[{id:'pot',start:0,end:15,visual:'同一锅食物',action:'保留人工动作',spokenText:'',audio:'拟拍环境声',camera:[{start:0,end:15,description:'稳定构图',stable:true}],overlays:[{start:12,end:15,text:'品牌'}],evidenceRefs:[],plannedNeeds:['拍摄真实锅物']}]}
 const issues=(change:(a:any)=>void,i=intent)=>{const a=structuredClone(good);change(a);return validateVideoArtifact(JSON.stringify(a),i).issues.map(x=>x.code)}
@@ -42,3 +43,25 @@ console.log('PASS named craft loading gates, stable-wording conflict, and four-l
 assert.equal(videoProgress('running',[{capability:'amc.video_review',status:'succeeded',result:{status:'repair_required'}}]),'repairing');assert.equal(videoProgress('waiting',[]),'paused');assert.equal(videoProgress('running',[{capability:'my_write_workspace',status:'succeeded'}]),'reviewing')
 
 assert.equal(requireVideoSkill([read(),read('references/video-rewrite.md'),read(),read('references/video-rewrite.md')]).length,2,'reviewer receives one copy of each exact resource version')
+
+assert(issues(a=>{a.segments=[{...a.segments[0],end:7.5,camera:[],overlays:[]},{...a.segments[0],id:'two',start:7.5,camera:[],overlays:[]}]}).includes('continuous_material_split'))
+
+const narrow={...intent,goal:'只将“浅色描边”改为“深色描边”，其他内容不变',script:'备注：白字加浅色描边。\n保留人工句。'}
+const patch={kind:'video_rewrite',brandId:narrow.brandId,editorRevision:narrow.editorRevision,factsDigest:narrow.factsDigest,language:narrow.language,durationSec:narrow.durationSec,literalEdit:literalVideoEdit(narrow),script:narrow.script.replace('浅色描边','深色描边')}
+assert.equal(serializeVideo(validateVideoArtifact(JSON.stringify(patch),narrow).artifact),'备注：白字加深色描边。\n保留人工句。')
+assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,script:patch.script+'改写'}),narrow),/preserve/)
+assert.throws(()=>validateVideoArtifact(JSON.stringify({...patch,segments:good.segments}),narrow),/preserve/)
+assert.throws(()=>validateVideoArtifact(JSON.stringify(patch),intent),/unexpected_literal/)
+assert.equal(literalVideoEdit({...narrow,script:'浅色描边浅色描边'}),null)
+assert.equal(literalVideoEdit({...narrow,goal:'只将“15秒”改为“20秒”'}),null)
+assert('literalEdit' in videoContractFor(narrow))
+console.log('PASS literal wording patch preserves every other character and rejects ambiguous or forged patches')
+
+const ref={path:'work/test',revision:2,digest:'a'.repeat(64)}
+const completeData={calls:[{capability:'amc.context',status:'succeeded',result:{intent:{kind:'video_rewrite',artifactPath:ref.path}}},{capability:'my_write_workspace',status:'succeeded',result:{reference:ref}},{id:'review',capability:'amc.video_review',status:'succeeded',result:{status:'passed',artifactRevision:2,artifactDigest:ref.digest}}],events:[{kind:'call_settled',data:{callId:'review'}}]}
+const req=(d:any)=>({messages:[{role:'user',content:JSON.stringify(d)}],tools:[{name:'write'}]})
+assert.equal(prepareVideoCompletion(req(completeData)).tools.length,0)
+assert(prepareVideoCompletion(req(completeData)).messages.at(-1).content.includes(ref.digest))
+for(const status of ['pending','repair_required']){const d=structuredClone(completeData);d.calls[2].result.status=status;assert.equal(prepareVideoCompletion(req(d)).tools.length,1)}
+{const d=structuredClone(completeData);d.calls[2].result.artifactDigest='b'.repeat(64);assert.equal(prepareVideoCompletion(req(d)).tools.length,1)}
+console.log('PASS terminal review receipt hint; pending, repair and stale review retain normal tools')

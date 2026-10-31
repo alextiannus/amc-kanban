@@ -4,7 +4,7 @@ import {randomUUID} from 'node:crypto'
 import {composeApplication} from '../src/lib/ai-native/application'
 import {nativePool,initializeHost,admitIntent,intentForTask} from '../src/lib/ai-native/store'
 import {actorFor} from '../src/lib/ai-native/contract'
-import {videoDigest,validateVideoArtifact,serializeVideo,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
+import {literalVideoEdit,videoDigest,validateVideoArtifact,serializeVideo,type VideoRewriteIntent} from '../src/lib/ai-native/video-rewrite'
 import {videoReviewPath} from '../src/lib/ai-native/video-review'
 import {prisma} from '../src/lib/prisma'
 const url=new URL(process.env.DATABASE_URL||'');assert(['localhost','127.0.0.1'].includes(url.hostname)&&url.pathname.startsWith('/amc_lineage_test_'))
@@ -12,7 +12,7 @@ const pool=nativePool(),id=randomUUID(),actor=actorFor(id,id)
 let allowed=true,composition:any,reviewCalls=0,writerCalls=0,reviewMode='pass',attemptedEarlyWrite=false
 const usage={inputTokens:100,outputTokens:30}
 const intent:VideoRewriteIntent={kind:'video_rewrite',brandId:id,userId:id,goal:'15秒，无口播，连续同一锅，品牌收尾可读；使用导演技能',requestKey:randomUUID(),artifactPath:`work/${id}.json`,script:'Keep my hand-edited pot shot',language:'zh',durationSec:15,editorRevision:'editor-v1',facts:{brand:'Fixture restaurant'},factsDigest:videoDigest({brand:'Fixture restaurant'}),noVoice:true,noOverlay:false,singleSegment:true}
-const candidate=(bad:boolean,binding:any=intent)=>({kind:intent.kind,brandId:id,editorRevision:binding.editorRevision,factsDigest:binding.factsDigest,language:'zh',durationSec:15,segments:[{id:'pot',start:0,end:15,visual:'同一锅食物',action:'热气自然升起',spokenText:'',audio:'拟采集现场环境声',camera:[{start:0,end:15,description:'保持镜头稳定',stable:true}],overlays:[{start:bad?14.5:12,end:15,text:'品牌'}],evidenceRefs:['brand'],plannedNeeds:['待拍同一锅连续镜头']}]})
+const candidate=(bad:boolean,binding:any=intent)=>literalVideoEdit(binding)?({kind:binding.kind,brandId:binding.brandId,editorRevision:binding.editorRevision,factsDigest:binding.factsDigest,language:binding.language,durationSec:binding.durationSec,literalEdit:literalVideoEdit(binding),script:binding.script.replace(literalVideoEdit(binding)!.from,literalVideoEdit(binding)!.to)+(bad?'UNREQUESTED':'')}):({kind:intent.kind,brandId:id,editorRevision:binding.editorRevision,factsDigest:binding.factsDigest,language:'zh',durationSec:15,segments:[{id:'pot',start:0,end:15,visual:'同一锅食物',action:'热气自然升起',spokenText:'',audio:'拟采集现场环境声',camera:[{start:0,end:15,description:'保持镜头稳定',stable:true}],overlays:[{start:bad?14.5:12,end:15,text:'品牌'}],evidenceRefs:['brand'],plannedNeeds:['待拍同一锅连续镜头']}]})
 const model={next:async(request:any)=>{
  if(request.billingContext.capability==='amc.video_review'){reviewCalls++;assert(request.messages[0].content.includes('independent'));assert.equal(JSON.parse(request.messages[1].content).calls,undefined);return {type:'finish',result:{issues:reviewMode==='reject'?[{code:'unsupported_claim',severity:'error',location:'pot',message:'Claim lacks evidence'}]:[]},...(reviewMode==='unknown'?{}:{usage})}}
  writerCalls++
@@ -52,9 +52,18 @@ try{
  const artifact=await composition.app.workspace.read(actor,task.result.artifacts[0]);assert.equal(validateVideoArtifact(artifact.content,intent).issues.length,0);assert(serializeVideo(JSON.parse(artifact.content)).includes('镜头 1'))
  const bill=await composition.app.ledger.taskUsage(await composition.app.scope(actor),receipt.id);assert.equal(bill.complete,true);assert.equal(Number(bill.platformUnits),(writerCalls+reviewCalls)*130,'independent reviewer is accounted in same task')
  await assert.rejects(()=>composition.app.dispatcher.invoke('amc.video_review',{revision:1,digest:reviews[0].result.artifactDigest},{actor,taskId:receipt.id,callId:randomUUID()}))
+ await assert.rejects(()=>composition.app.runtime.get(actorFor('other-brand',id),receipt.id))
+ assert(!composition.tools.some((name:string)=>/skills\.(?:install|create|update|uninstall)/.test(name)))
  allowed=false;await assert.rejects(()=>composition.app.runtime.get(actor,receipt.id));allowed=true
  await composition.app.close();composition=await composeApplication(pool,models,options)
  assert.equal((await composition.app.runtime.get(actor,receipt.id)).status,'succeeded');assert.equal(JSON.parse((await composition.app.workspace.read(actor,{path:videoReviewPath(receipt.id,2)})).content).status,'passed');assert.equal(reviewCalls,1)
+ const literalIntent={...intent,goal:'只将“浅色描边”改为“深色描边”，其他不变',script:'备注：浅色描边。\n保留原句',requestKey:randomUUID(),artifactPath:`work/${randomUUID()}.json`}
+ await admitIntent(pool,actor,literalIntent)
+ const literalTask=await composition.app.dispatcher.invoke('agent.work',{goal:literalIntent.goal,requiredArtifacts:[literalIntent.artifactPath],allowedTools:composition.tools},{actor,callId:literalIntent.requestKey})
+ await intentForTask(pool,composition.app,actor,literalTask.id);await composition.app.runtime.tick()
+ const literalState=await composition.app.runtime.get(actor,literalTask.id,{history:true});assert.equal(literalState.status,'succeeded')
+ const literalArtifact=await composition.app.workspace.read(actor,literalState.result.artifacts[0]);assert.equal(serializeVideo(JSON.parse(literalArtifact.content)),literalIntent.script.replace('浅色描边','深色描边'))
+ assert.equal(literalState.calls.filter((c:any)=>c.capability==='amc.video_review').length,2,'extra wording is rejected then repaired')
  for(const mode of ['reject','unknown']){
   reviewMode=mode
   const nextIntent={...intent,requestKey:randomUUID(),artifactPath:`work/${randomUUID()}.json`}
