@@ -36,7 +36,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
  const instructions=body.action==='rewrite'?text(body.instructions):'',targetDurationSec=body.action==='rewrite'?body.targetDurationSec:undefined
  if(instructions.length>6000||(targetDurationSec!==undefined&&(!Number.isFinite(targetDurationSec)||targetDurationSec<=0||targetDurationSec>600)))throw nativeError('invalid_video_preparation',400)
  const input={...(body.editorRevision!==undefined?{editorRevision:body.editorRevision}:{}),action:body.action,originalOnly:body.originalOnly===true,language,script,sourceDigest:source?.sourceDigest||null,creativeId,userId,brandId,...(body.action==='rewrite'&&(body.instructions!==undefined||targetDurationSec!==undefined)?{instructions,targetDurationSec:targetDurationSec??null}:{})}
- const agentRewrite=body.action==='rewrite'&&!body.originalOnly&&videoRewriteEnabled(brandId)
+ const agentRewrite=body.action==='rewrite'&&!body.originalOnly&&typeof body.editorRevision==='string'&&videoRewriteEnabled(brandId)
  const id='video_script_'+creativeDigest([userId,brandId,requestKey])
  const claimed=await prisma.$transaction(async (tx:any)=>{
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`
