@@ -26,6 +26,10 @@ export function conversationHostStep(request:any,intent:{kind:string;topic?:stri
  if(!data.calls.length&&!data.events.some((e:any)=>['verification','feedback','input'].includes(e.kind))&&request.tools.some((t:any)=>t.name==='amc.context'))return {type:'call',name:'amc.context',input:{}}
  const last=data.events.at(-1)
  if(last?.kind!=='call_settled')return null
+ // The planning entry has one mandatory Skill, fixed by the host contract.
+ // Reading it remains an audited Core call; failed reads return to the model.
+ const context=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='amc.context'&&c.status==='succeeded')
+ if(context?.result?.requiredSkill==='amc-marketing-expert/SKILL.md'&&!data.calls.some((c:any)=>c.capability==='assistant.skills.read')&&request.tools.some((t:any)=>t.name==='assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:'amc-marketing-expert/SKILL.md'}}
  const write=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='my_write_workspace'&&c.status==='succeeded')
  const ref=write?.result?.reference
  if(ref?.path!==intent.artifactPath||!Number.isInteger(ref.revision)||ref.revision<1||typeof ref.digest!=='string'||!/^[a-f0-9]{64}$/.test(ref.digest))return null

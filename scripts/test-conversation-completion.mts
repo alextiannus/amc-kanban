@@ -40,3 +40,16 @@ for(const events of [[event,{kind:'verification',data:{verified:false}}],[event,
 for(const invalid of [{...write,status:'unknown'},{...write,result:{reference:{...ref,revision:0}}},{...write,result:{reference:{...ref,path:'other-brand'}}}])assert.equal(conversationHostStep(host([invalid],[event]),intent),null)
 assert.equal(conversationHostStep(host([write],[event]),{...intent,topic:'general'}),null)
 console.log('PASS: planning mechanical context/finish skip inference, wrong scope/unknown writes/verification rejection cannot finish')
+
+const skillContext={...context,result:{...context.result,requiredSkill:'amc-marketing-expert/SKILL.md'}}
+const contextEvent={kind:'call_settled',data:{callId:context.id}}
+const skillRequest={...host([skillContext],[contextEvent]),tools:[{name:'assistant.skills.read'}]}
+assert.deepEqual(conversationHostStep(skillRequest,intent),{type:'call',name:'assistant.skills.read',input:{id:'amc-marketing-expert/SKILL.md'}})
+for(const changed of [
+ {...skillRequest,tools:[]},
+ host([{...skillContext,status:'failed'}],[contextEvent]),
+ {...skillRequest,messages:make([skillContext,{capability:'assistant.skills.read',status:'failed'}],[contextEvent]).messages},
+ {...skillRequest,messages:make([skillContext],[contextEvent,{kind:'input'}]).messages},
+ {...skillRequest,messages:make([{...skillContext,result:{requiredSkill:'arbitrary'}}],[contextEvent]).messages}
+])assert.equal(conversationHostStep(changed,intent),null)
+console.log('PASS: mandatory planning Skill uses authorized host read; failed reads, new input, unknown Skill and missing tools return to model')
