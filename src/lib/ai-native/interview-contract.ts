@@ -16,6 +16,7 @@ export function confirmsInterview(goal:string){
 /** Recover ONLY the complete, ordered standard body verbatim from a persisted reply.
  * No inference, source lookup, or reconstruction from a user-supplied transcript. */
 export function visibleInterviewDraft(content:string):InterviewDraft|undefined{
+ if(/品牌访谈标准模板|模板规则/.test(content))return undefined
  const labels=['品牌','定位','经营目标','目标顾客','选择理由与阻碍','竞争与差异','产品与服务','表达要求','待补充']
  const pattern=/^\s*(?:[-*]\s+|\d+[.、]\s*)?(?:#{1,4}\s*)?(?:\*\*)?(品牌|定位|经营目标|目标顾客|选择理由与阻碍|竞争与差异|产品与服务|表达要求|待补充)(?:\*\*)?[：:](?:\*\*)?\s*/gm
  const matches=[...content.matchAll(pattern)]
