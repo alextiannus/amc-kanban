@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import {
   postfastListInboxConversations,
   postfastListInboxItems,
+  POSTFAST_INBOX_PAGE_SIZE,
   type PostFastInboxItem,
 } from '@/lib/integrations/postfast'
 
@@ -22,7 +23,15 @@ function stableJson(value: unknown): string {
   return JSON.stringify(value)
 }
 
-function inboxItemData(conversationId: string, item: PostFastInboxItem) {
+export function inboxItemData(conversationId: string, item: PostFastInboxItem, conversation: Record<string, unknown> = {}) {
+  // Capabilities are conversation-scoped; never override explicit item denials.
+  const raw = item.raw as Record<string, unknown>
+  const inbound = item.direction === 'INBOUND' || (!item.direction && item.canReply)
+  const canReply = inbound && item.state !== 'DELETED'
+    && raw.canReply !== false
+    && (typeof conversation.canReply === 'boolean' ? conversation.canReply : item.canReply)
+  const limit = (value: unknown, fallback: number | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
   return {
     conversationId,
     providerId: item.id,
@@ -31,18 +40,18 @@ function inboxItemData(conversationId: string, item: PostFastInboxItem) {
     direction: item.direction,
     state: item.state,
     unread: item.unread,
-    canReply: item.canReply,
+    canReply,
     canPrivateReply: item.canPrivateReply,
-    maxReplyLength: item.maxReplyLength,
-    maxPrivateReplyLengthBytes: item.maxPrivateReplyLengthBytes,
+    maxReplyLength: limit(conversation.maxReplyLength, item.maxReplyLength),
+    maxPrivateReplyLengthBytes: limit(conversation.maxPrivateReplyLengthBytes, item.maxPrivateReplyLengthBytes),
     replyWindowEndsAt: asDate(item.replyWindowEndsAt),
     raw: item.raw as Prisma.InputJsonValue,
   }
 }
 
 export async function syncPostfastInbox(brandId: string, apiKey: string) {
-  const pageLimit = 100
-  const maxPages = 10
+  const pageLimit = POSTFAST_INBOX_PAGE_SIZE
+  const maxPages = 20
   const conversations = [] as Awaited<ReturnType<typeof postfastListInboxConversations>>['conversations']
   for (let page = 0; page < maxPages; page += 1) {
     const remote = await postfastListInboxConversations(apiKey, { limit: pageLimit, page })
@@ -108,7 +117,7 @@ export async function syncPostfastInbox(brandId: string, apiKey: string) {
     for (const item of items.filter((entry) => entry.id)) {
       await prisma.postfastInboxItem.upsert({
         where: { conversationId_providerId: { conversationId: stored.id, providerId: item.id } },
-        create: inboxItemData(stored.id, item), update: inboxItemData(stored.id, item),
+        create: inboxItemData(stored.id, item, conversation.raw), update: inboxItemData(stored.id, item, conversation.raw),
       })
       syncedItems += 1
     }

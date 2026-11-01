@@ -1697,7 +1697,7 @@ function postfastInboxItem(value: JsonRecord): PostFastInboxItem {
   return {
     id: asString(value.id) || asString(value.itemId) || asString(value.commentId),
     conversationId: asString(value.conversationId) || undefined,
-    authorName: asString(value.authorName) || asString(value.senderName) || undefined,
+    authorName: asString(value.authorName) || asString(value.authorUsername) || asString(value.senderName) || undefined,
     body: asString(value.body) || asString(value.text) || asString(value.message) || undefined,
     direction: asString(value.direction) || undefined,
     state: asString(value.state) || asString(value.moderationState) || undefined,
@@ -1711,6 +1711,13 @@ function postfastInboxItem(value: JsonRecord): PostFastInboxItem {
   }
 }
 
+export const POSTFAST_INBOX_PAGE_SIZE = 50
+function inboxQuery(options: { limit?: number; page?: number }) {
+  const limit = Number.isFinite(options.limit) ? Math.min(POSTFAST_INBOX_PAGE_SIZE, Math.max(1, Math.floor(options.limit!))) : 20
+  const page = Number.isFinite(options.page) ? Math.max(0, Math.floor(options.page!)) : 0
+  return new URLSearchParams({ limit: String(limit), page: String(page) })
+}
+
 export async function postfastListInboxConversations(apiKey: string, options: { limit?: number; page?: number } = {}): Promise<{
   success: boolean
   conversations: PostFastInboxConversation[]
@@ -1718,9 +1725,7 @@ export async function postfastListInboxConversations(apiKey: string, options: { 
   hasNextPage?: boolean
   error?: string
 }> {
-  const query = new URLSearchParams()
-  if (options.limit) query.set('limit', String(options.limit))
-  if (options.page !== undefined) query.set('page', String(options.page))
+  const query = inboxQuery(options)
   const r = await pfFetch(apiKey, `/social-inbox/conversations${query.size ? `?${query}` : ''}`)
   if (!r.ok) return { success: false, conversations: [] as PostFastInboxConversation[], error: r.error }
   return { success: true, conversations: inboxCollection(r.data, 'conversations').map(postfastInboxConversation), ...inboxPagination(r.data) }
@@ -1733,9 +1738,7 @@ export async function postfastListInboxItems(apiKey: string, conversationId: str
   hasNextPage?: boolean
   error?: string
 }> {
-  const query = new URLSearchParams()
-  if (options.limit) query.set('limit', String(options.limit))
-  if (options.page !== undefined) query.set('page', String(options.page))
+  const query = inboxQuery(options)
   const r = await pfFetch(apiKey, `/social-inbox/conversations/${encodeURIComponent(conversationId)}/items${query.size ? `?${query}` : ''}`)
   if (!r.ok) return { success: false, items: [] as PostFastInboxItem[], error: r.error }
   return { success: true, items: inboxCollection(r.data, 'items').map(postfastInboxItem), ...inboxPagination(r.data) }

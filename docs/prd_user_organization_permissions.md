@@ -987,3 +987,8 @@ Admin 专属 GET/PATCH /api/admin/brands/{id}/principal 支持品牌团队内的
 品牌脚本版本保存（`POST /api/brands/:id/content-creatives/:creativeId/revisions`）和既有 AI 修改采用（`POST /api/brands/:id/ai/tasks/:taskId/adopt`）属于发布内容编辑，要求 `draft.update`，不要求 `brand.update`。品牌资料修改和其他 AI 任务入口保留既有权限。路由检查和脚本服务写入检查使用当前角色策略；UI 保存能力使用同一判断，不能以任意品牌 WRITE 权限代替。每次操作仍校验品牌范围，另存绑定真实操作者；他人保管稿禁止覆盖。
 
 Assistant 本次发布与实模验收证据见 [2026-10-19 发布记录](assistant-release-2026-10-19.md)。生产应用版本与文档提交分别记录。
+
+
+## MCP 组合动作权限（2026-11-01，本地实现待验收）
+
+execute_brand_action 先检查 action_item.resolve，再按 actionType 检查 review.reply（reply_review/domestic_reply_review）或 content.publish（publish_post）；拥有待办处理权限不自动获得回复/发布权限。所有别名沿用各自业务权限及当前品牌 WRITE 检查。Instagram/TikTok/Facebook/Threads 评论写入只走已有 Social Inbox 的人类确认、持久会话归属、平台能力及幂等回执，不经旧 review/Extension Bridge 绕行。Google/Yelp 与国内平台既有授权规则保持。

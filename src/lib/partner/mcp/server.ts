@@ -1,6 +1,7 @@
 import { resolveDraftAccount, resolveDraftPlatformAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
 import { lockBrandSync } from '@/lib/socialAccountLocks'
 import { MCP_PERMISSIONS } from '@/lib/role-permissions/mcp'
+import { legacyMcpInboxWrite, mcpActionPermission, SOCIAL_INBOX_REQUIRED } from '@/lib/reviewChannelPolicy'
 import { allows } from '@/lib/role-permissions/store'
 import { principalFromUser } from '@/lib/auth-v2/types'
 import { enqueueUploadedImage } from '@/lib/asset-analysis/service'
@@ -287,6 +288,9 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         const current = principalFromUser(user, authenticated.source, authenticated.credentialId)
         const permission = MCP_PERMISSIONS[name]
         if (permission && !await allows(current, permission)) throw new Error('Permission denied: '+permission)
+        const actionPermission = mcpActionPermission(name, input[0] || {})
+        if (actionPermission && !await allows(current, actionPermission)) throw new Error('Permission denied: '+actionPermission)
+        if (legacyMcpInboxWrite(name, input[0] || {})) throw new Error(SOCIAL_INBOX_REQUIRED)
         return await callback(...input)
       } catch(error) { return {content:[{type:'text',text:error instanceof Error ? error.message : 'Permission unavailable'}],isError:true} }
     }

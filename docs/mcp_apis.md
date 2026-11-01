@@ -381,6 +381,8 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
 
 ## 8. Customer Reviews & Care
 
+Instagram/TikTok/Facebook/Threads replies must use the human-confirmed Social Inbox flow. Legacy review tools and their aliases reject these platforms before dispatch, including Extension Bridge. Google/Yelp and domestic review rules remain unchanged.
+
 ### `board_reply_review`
 *   **Description**: Reply to a review through board backend using stored brand config.
 *   **Arguments**:
@@ -433,7 +435,7 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
     *   `platform` (string, optional)
 
 ### `execute_brand_action`
-*   **Description**: Execute a unified marketing or customer care action for a brand (replies, posts, notifications).
+*   **Description**: Execute a unified marketing or customer care action for a brand. Requires action_item.resolve plus review.reply for reply actions or content.publish for publish_post, and current brand WRITE access. Social Inbox platforms must use the human-confirmed inbox flow; legacy reply actions cannot dispatch them.
 *   **Arguments**:
     *   `brandId` (string, required)
     *   `actionType` (enum: `['reply_review', 'domestic_reply_review', 'publish_post']`, required)

@@ -116,7 +116,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-kanban"
       },
-      "version": "sha256:1237b10298316ee60f513337185042fa6a1ddcdc219027ad0ebb9280b1833eb0",
+      "version": "sha256:0dd73452ce4286ba8fb70e9a014e7312236abb7eccad67071208f3dc94d3cd95",
       "description": "Use authorized AMC Personal MCP tools to read brand operations and perform user-authorized merchant work."
     },
     {
@@ -582,7 +582,7 @@
     "skills/amc-creative/references/video-storyboard.md": "0f91f8b287f5a4b1d820205f018dc032c7ba18809d4e275fc02ca494cf10bb25",
     "skills/amc-discovery/SKILL.md": "bbb16b1fe16a3d30820b2edead05d5640367477b2127cb5ebeb05d68cbb181ef",
     "skills/amc-discovery/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
-    "skills/amc-kanban/SKILL.md": "0397737c66d25c079b1e310e240ff82d7f3eb5270485de0ddaaaf9a75155355d",
+    "skills/amc-kanban/SKILL.md": "9c9b2db102c8d14f43857dcd2d34492f778511e3488d3b7296d51f66a495eb25",
     "skills/amc-kanban/references/kanban-openapi.yaml": "1ab3963e32b0b4aaae62a2ced01f6c893d7b034706a814fd089d6a7eff4bc946",
     "skills/amc-knowledge/SKILL.md": "5fd6bf73335ce9c2a1c5b2fbee607e74899504c65fa9137bf67d014700e7dafc",
     "skills/amc-knowledge/references/agent-data-collection-guide.md": "21f8839d9158762eecc11d21028f2e8e3cabe5fd42880f549b8f68e584bb2214",

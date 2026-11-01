@@ -28,7 +28,8 @@ description: "Use authorized AMC Personal MCP tools to read brand operations and
 2. 根据当前用户已授权的任务、品牌上下文和最新数据创建或更新业务资源；执行任务需要时核对套餐资源，营销策略不读 Subscription 或固定平台发布次数。
 3. 使用 `board_save_draft` 保存草稿并绑定 `accountId`。
 4. 使用 `board_get_schedule_recommendation` 获取推荐时间，再用 `board_submit_draft` 提交。
-5. 使用 `get_brand_reviews` 和 `board_reply_review` 处理允许自动回复的评论。
+5. 使用 `get_brand_reviews` 读取评价；Google/Yelp 和国内平台回复遵循现有授权规则。Instagram、TikTok、Facebook、Threads 评论必须交给 Social Inbox 人类确认入口，不使用 `board_reply_review`、其别名或 `execute_brand_action` 经旧接口/Extension Bridge 代发。回复建议不是已发送回执。
+6. `execute_brand_action` 除待办处理权限外，回复还需 `review.reply`，发布还需 `content.publish`；不得把 ActionItem 权限视为对外动作授权。
 6. 需要人工审核、补素材或决策时使用 `post_action_item` 创建 ActionItem。
 7. 发布成功后保存真实平台 URL；失败时记录原因并创建可执行的 ActionItem。
 8. 每次写操作以 Personal MCP 所属用户作为 actor 进入统一工作日志。

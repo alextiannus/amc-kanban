@@ -8,6 +8,15 @@ const server = createServer(async (request, response) => {
   for await (const chunk of request) raw += chunk
   requests.push({ method: request.method, url: request.url, body: raw ? JSON.parse(raw) : undefined, headers: request.headers })
   response.setHeader('Content-Type', 'application/json')
+  if (request.url?.startsWith('/social-inbox/conversations')) {
+    const url = new URL(request.url, 'http://localhost')
+    const limit = Number(url.searchParams.get('limit'))
+    if (limit < 1 || limit > 50) {
+      response.statusCode = 400
+      response.end(JSON.stringify({ message: 'limit must be between 1 and 50' }))
+      return
+    }
+  }
   if (request.url?.startsWith('/social-inbox/conversations?')) {
     response.end(JSON.stringify({ conversations: [{ id: 'conversation-1', platform: 'INSTAGRAM', unreadCount: 1, needsAttention: true }], totalCount: 1, pageInfo: { hasNextPage: false } }))
   } else if (request.url?.startsWith('/social-inbox/conversations/conversation-1/items')) {
@@ -65,6 +74,13 @@ const invalidState = await client.postfastSetInboxItemState({ apiKey: 'test-key'
 assert.equal(invalidState.success, false)
 assert.equal(invalidState.status, 400)
 assert.equal(requests.length, requestCountBeforeInvalidState)
+for (const options of [{limit:100,page:0},{limit:0,page:-1},{limit:NaN,page:NaN},{limit:50,page:1}]) {
+  assert.equal((await client.postfastListInboxConversations('test-key',options)).success,true)
+  assert.equal((await client.postfastListInboxItems('test-key','conversation-1',options)).success,true)
+}
+const queries = requests.filter(r=>r.url?.startsWith('/social-inbox/conversations')).map(r=>new URL(r.url!,'http://localhost'))
+assert(queries.every(q=>Number(q.searchParams.get('limit'))<=50 && Number(q.searchParams.get('page'))>=0))
+assert(queries.some(q=>q.searchParams.get('page')==='1'))
 assert.equal(requests.filter((request) => request.method === 'POST' || request.method === 'PATCH').every((request) => Boolean(request.headers['idempotency-key'])), true)
 await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 console.log('PostFast inbox client tests passed')

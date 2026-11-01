@@ -9,7 +9,8 @@ import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastReplyReview } from '@/lib/integrations/postfast'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
+import { requiresSocialInbox, SOCIAL_INBOX_REQUIRED } from '@/lib/reviewChannelPolicy'
 import { fetchGoogleGBPReviews, fetchGoogleReviews, getGoogleAccessToken, replyGoogleGBPReview } from '@/lib/integrations/google'
 
 type Params = { params: Promise<{ id: string }> }
@@ -164,8 +165,14 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'Brand not found' }, { status: 404 })
   }
 
+  if (!await canSessionWriteBrandProject(brandId, userId, userType)) {
+    return NextResponse.json({ error: 'Unauthorized brand write access' }, { status: 403 })
+  }
   const body: ReplyRequest = await request.json()
   const { reviewId, platform, replyText } = body
+  if (requiresSocialInbox(platform)) {
+    return NextResponse.json({ error: SOCIAL_INBOX_REQUIRED }, { status: 409 })
+  }
 
   if (!reviewId || !replyText) {
     return NextResponse.json(

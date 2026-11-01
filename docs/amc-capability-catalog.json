@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "asOf": "2026-11-01",
+  "scope": "source-backed inventory; no live availability promise",
+  "status": "P0 catalog; runtime authorization remains authoritative",
+  "features": [
+    {
+      "id": "ai-insight",
+      "name": "AI Insight",
+      "skills": [
+        "brand-intelligence-intake",
+        "amc-knowledge",
+        "amc-marketing-expert"
+      ],
+      "assets": [
+        "BrandKnowledge",
+        "BrandPlanInterview"
+      ],
+      "sources": [
+        "src/lib/brand-plan/researchRequests.ts",
+        "src/lib/ai-native/application.ts",
+        "src/lib/partner/mcp/server.ts"
+      ],
+      "page": "已有报告/访谈页面，生产新研究覆盖待实测",
+      "assistant": "已保存资料查询已验证；新研究受任务类型与宿主工具限制",
+      "mcp": "generate_brand_research_report/get_brand_marketing_plan/save_brand_merchant_interview 已注册",
+      "permission": "brand.read/brand.update + 当前品牌范围",
+      "receipt": "研究requestKey/jobId、报告来源与版本",
+      "gap": "生产来源新鲜度、完整报告有效率"
+    },
+    {
+      "id": "brand-planning",
+      "name": "品牌策划",
+      "skills": [
+        "amc-marketing-expert",
+        "amc-brand-planning"
+      ],
+      "assets": [
+        "BrandKnowledge"
+      ],
+      "sources": [
+        "src/lib/brand-plan/service.ts",
+        "src/lib/ai-native/application.ts",
+        "src/lib/partner/mcp/server.ts"
+      ],
+      "page": "定位/策略/执行清单工作区",
+      "assistant": "品牌策划对话与版本工作区已有历史验收",
+      "mcp": "generate_brand_marketing_plan/run_brand_planning_workflow 等已注册",
+      "permission": "brand.read/brand.update + 当前品牌范围",
+      "receipt": "正式工作区revision与来源版本",
+      "gap": "跨品牌缺资料/来源变化验收与质量指标"
+    },
+    {
+      "id": "social-content",
+      "name": "社交媒体内容制作",
+      "skills": [
+        "amc-creative",
+        "amc-discovery",
+        "amc-content-copywriting",
+        "facebook-copywriting",
+        "instagram-copywriting",
+        "tiktok-copywriting",
+        "xiaohongshu-copywriting",
+        "google-business-copywriting"
+      ],
+      "assets": [
+        "MediaAsset",
+        "AssetVideoSegment",
+        "ContentDraft"
+      ],
+      "sources": [
+        "src/lib/ai-native/application.ts",
+        "src/lib/asset-analysis/service.ts",
+        "src/lib/partner/mcp/server.ts"
+      ],
+      "page": "创意/素材/制作已存在；不同制作模式独立验收",
+      "assistant": "脚本改写按品牌灰度；不将导航视作制作完成",
+      "mcp": "discover_brand_creatives/create_ai_creative_task/board_list_assets 等已注册；全制作链覆盖待核",
+      "permission": "asset.* / draft.* 与任务权限、品牌范围",
+      "receipt": "来源修订、脚本版本、素材绑定、制作任务与成片",
+      "gap": "素材分析覆盖、自动匹配质量、缺口补画面验收"
+    },
+    {
+      "id": "schedule-publish",
+      "name": "智能排期发布",
+      "skills": [
+        "amc-kanban"
+      ],
+      "assets": [
+        "ContentDraft",
+        "SocialAccount"
+      ],
+      "sources": [
+        "src/lib/schedulingRecommendation.ts",
+        "src/lib/draftSubmission.ts",
+        "src/lib/partner/mcp/server.ts"
+      ],
+      "page": "日历/草稿/发布及改期",
+      "assistant": "amc.operations为只读；导航不提交发布，通用写入闭环待核",
+      "mcp": "board_get_schedule_recommendation/board_submit_draft/board_publish_content 已注册",
+      "permission": "content.schedule/draft.submit/content.publish + 当前品牌账号",
+      "receipt": "草稿状态、远端postId、幂等键和发布回执",
+      "gap": "独立排期方法、真实账号健康、对话完整执行与效果反馈"
+    },
+    {
+      "id": "comment-monitoring",
+      "name": "评论监控",
+      "skills": [
+        "amc-kanban"
+      ],
+      "assets": [
+        "PostfastInboxConversation",
+        "PostfastInboxItem",
+        "ActionItem"
+      ],
+      "sources": [
+        "src/lib/postfastInbox.ts",
+        "src/lib/partner/mcp/server.ts",
+        "src/app/api/brands/[id]/social-inbox/[conversationId]/reply/route.ts",
+        "src/app/api/cron/postfast-sync-all/route.ts"
+      ],
+      "page": "Social Inbox 人类确认入口已实现，生产覆盖待核",
+      "assistant": "评论分类/回复建议/反馈归纳完整Skill与闭环待补",
+      "mcp": "Google等reviews读写已注册；Social Inbox平台不得经legacy回复代发",
+      "permission": "review.read/review.reply；Inbox人类确认、品牌WRITE、平台能力",
+      "receipt": "持久会话/item、幂等写回执、审计与待办状态",
+      "gap": "同步实际部署/时效、完整分类与反馈回流；各渠道授权分开"
+    }
+  ]
+}

@@ -461,7 +461,7 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
     *   大视频任务从 OBS 以流式请求体直接写入 PostFast 签名地址，不得把完整文件载入 Node.js 内存，也不得压缩、转码或替换原始文件。任务保存上传后的 PostFast storage key，重试时复用已完成的传输。
     *   大视频任务状态统一为 `QUEUED -> TRANSFERRING -> CREATING_POST -> SUCCEEDED / FAILED / RESULT_UNKNOWN`。上传前的暂时性错误可重试；创建帖子请求结果不确定时必须先对账，禁止盲目重发和制造重复帖子。
 *   **AI 自动化处理：** 
-    *   **图片分析与推荐归类（代码已实现，待部署）：** 新上传图片经 Kanban → amc-content → CN-gateway 使用 `doubao-seed-2.1-pro` (model switch implemented locally; deployment and live acceptance pending) 分析；Kanban 仅保留启用开关，复用已有 Content 服务连接，网关连接统一由 Content 管理，历史素材支持选中分析及全库未分析补全。优先采用品牌行业资料，逐图保存内容类型、说明及标签，汇总为推荐文件夹；用户可改名、选择已有目录、调整图片或跳过，确认后才移动素材。分析与实际目录独立，保留人工标签及发布状态。详细流程、接口和验收见 [素材库图片分析](asset-image-analysis.md)。
+    *   **图片/视频分析与归类（实现核对，生产启用覆盖见盘点）：** 上传或手动选中的媒体持久入队，识别说明、标签、主体、画质和文字，视频保存片段索引。按品牌行业映射标准目录；仅未被人工修改且仍未归类的素材自动入标准目录，其他素材保留原目录，另可人工确认归类。保留人工说明/标签及发布状态。模型通过中央目录和任务配置绑定调用，生产配置与识别质量独立验收。见 [素材分析](asset-image-analysis.md)。
     *   **图片信息入口：** 图片左上角常驻半透明 `ⓘ` 按钮，悬停显示说明，点击打开可编辑详情（移动端底部面板）；多选框位于右上角，分析中显示转圈，失败显示橙色提醒和重试入口。
     *   **分类目录管理：** 产品、环境、活动及自建分类支持新增、改名、删除，普通默认分类仅初始化一次。删除目录将素材移回根目录，改名同步素材归属，不移动原文件；根目录、封面图、视频原片、AI视频等功能目录保留保护。
     *   **Designer AI 智能对话修改：** 老板可以在素材洞察面板中直接与 Designer AI 对话，输入自然语言修改指令（如“裁剪为 1:1”、“添加水印”、“黑白滤镜”、“调亮”等）。Designer AI 会自动识别意图并对图片进行精细调整，并且**默认将修改后的图片保存为新素材，不会覆盖原始图片**，确保老板的原始素材安全。
@@ -509,7 +509,9 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
 - PostFast 是已连接社媒账号的发布、账号状态、评论收件箱和平台指标来源；所有数据以 `brandId` 隔离，并沿用既有 Capability + Crew 授权。
 - 发布账号匹配排除 `ARCHIVED` 品牌；归档数据仅保留历史，不参与按 PostFast 配置查找当前品牌。指定品牌时不得回退到同配置的其他品牌；未指定品牌且仍有多个非归档品牌时继续拒绝歧义匹配。大视频后台建帖和重试必须使用任务自身的 `brandId`，兼容缺少品牌字段的旧任务快照。（本地修复，待部署。）
 - 账号同步保存 `connectionStatus`、`disabledReason`、`inboxCapable` 和品牌内唯一的 PostFast 账号 ID。连接失效只暂停对应渠道的发布，不删除既有草稿或排期；仅已持久化且属于当前品牌的 PostFast 账号 ID 可用于门店、粉丝历史和 TikTok 音乐查询。
+- Social Inbox 分页修复（2026-11-01，实施验收中）：会话与条目每页最多50条，page从0开始，按hasNextPage续取；客户端约束参数，后台页大小与终止判断一致。会话级canReply/长度限制映射到其INBOUND条目，显式条目拒绝不得被覆盖；私信仍以条目canPrivateReply为准。实际账号重连、上游新评论覆盖及同步时效独立验收，不把修复400称作已有所有历史评论。
 - Social Inbox 覆盖 Instagram、TikTok、Facebook 和 Threads 评论。会话必须通过其 PostFast `socialMediaId` 关联到持久化的品牌账号，禁止按平台猜测账号。系统只把未读或需处置会话转化为 `ActionItem`，并在已同步的会话不再未读或需处置时统一关闭对应待办；回复建议可由 AI 生成，但对外发送、Instagram 私信回复、隐藏、取消隐藏和删除均须人类确认。删除属于不可逆操作，界面必须二次确认。
+- 评论入口一致性（2026-11-01，本地修复待验收）：Instagram、TikTok、Facebook、Threads 的对外评论统一走 Social Inbox 人类确认入口；旧 MCP review 别名、execute_brand_action 的两种回复动作和旧品牌 reviews POST 不得经 Extension Bridge 或旧 review 接口绕开此要求。Google/Yelp 与国内平台保留原业务规则，不将 Social Inbox 的规则扩展为所有评论均需新审批。execute_brand_action 除 action_item.resolve 外，回复必须具备 review.reply，发布必须具备 content.publish；主体和品牌写权限继续实时校验。
 - 评论操作必须使用 PostFast 返回的 `canReply`、`canPrivateReply`、`maxReplyLength`、`maxPrivateReplyLengthBytes` 和窗口状态，禁止用 AMC 平台硬编码绕过能力限制。会话和评论 ID 必须先在当前品牌持久化，禁止透传任意提供方 ID；成功的人类回复和审核动作必须审计。回复重试必须携带稳定的幂等键，未完成保留在短租约后才可安全重试。
 - 草稿可保存并发布首条评论、Instagram 地理位置、AI 内容标签、Reel 是否上主页网格及 Trial Reel 策略。位置标签只允许 Instagram 单媒体 `TIMELINE`、`REEL` 或 `STORY`，不允许轮播；AI 标签仅在明确选择时提交。
 - TikTok 仅在图片轮播时允许选择 PostFast 返回的商业音乐，`tiktokMusicSoundId` 与自动加音乐互斥。Google Business 支持 `STANDARD`、`EVENT`、`OFFER` 以及 CTA、活动日期、优惠码和条款；所有字段在提交前按 PostFast 的组合规则校验。
