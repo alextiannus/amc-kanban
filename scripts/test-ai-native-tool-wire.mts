@@ -44,3 +44,23 @@ const wrong=structuredClone(missing);wrong.function.arguments=JSON.stringify({..
 const retained=JSON.parse(JSON.parse(nativeWireCall(wrong,result,workspaceTools,true,bound).function.arguments).content)
 assert.equal(retained.brandId,'other-brand');assert.equal(retained.kind,'wrong');assert.equal(retained.content,'existing','do not overwrite wrong supplied values; normal verifier must reject them')
 console.log('PASS: fill only missing trusted envelope metadata; preserve generated data, source digest and supplied mismatches for rejection')
+
+// Production regression: ordinary discussion wrote a valid answer 17 times without kind.
+const {conversationFrom}=await import('../src/lib/ai-native/contract.ts')
+const discussion:any={kind:'conversation',topic:'brand_planning',brandId:'case-brand',artifactPath:'work/test.json',goal:'AMC的商家访谈现在有什么内容？',history:[]}
+const plain={brandId:discussion.brandId,contextDigest:'a'.repeat(64),content:'当前没有保存的原始访谈。',planningProgress:{stage:'interview',summary:'读取现有资料'}}
+assert.throws(()=>conversationFrom(JSON.stringify(plain),discussion),/reply_kind_must_be_conversation/)
+const reply=JSON.parse(nativeWireCall(write(JSON.stringify(plain)),result,workspaceTools,false,discussion).function.arguments).content
+assert.equal(conversationFrom(reply,discussion).content,plain.content)
+for(const topic of ['general','brand_planning']){
+ const intent={...discussion,topic},document={content:'Existing reply',contextDigest:'b'.repeat(64)}
+ const value=JSON.parse(nativeWireCall(write(JSON.stringify(document)),result,workspaceTools,false,intent).function.arguments).content
+ assert.equal(conversationFrom(value,intent).kind,'conversation')
+ for(const patch of [{brandId:'another-brand'},{kind:'wrong'},{contextDigest:'invalid'}]){
+  const invalid=JSON.parse(nativeWireCall(write(JSON.stringify({...document,...patch})),result,workspaceTools,false,intent).function.arguments).content
+  assert.throws(()=>conversationFrom(invalid,intent))
+ }
+}
+const differentPath={...discussion,artifactPath:'work/other.json'}
+assert.deepEqual(nativeWireCall(write(JSON.stringify(plain)),result,workspaceTools,false,differentPath),write(JSON.stringify(plain)))
+console.log('PASS: production missing-kind regression completes; wrong brands/types/digests still rejected; unrelated paths unchanged')

@@ -21,6 +21,15 @@ export function nativeWireCall(call:any,result:Completion,tools:any[]=[],structu
   // Identify the workspace writer from the trusted advertised schema, including aliases.
   const properties=tools.find(tool=>tool.name===call.function.name)?.parameters?.properties
   if(properties?.path&&properties?.content&&properties?.expectedRevision&&args.mediaType==='application/json'){
+   // Fixed envelope metadata belongs to the admitted task, including ordinary replies.
+   // Explicit mismatches and all evidence/business content remain untouched.
+   if(binding?.kind==='conversation'&&args.path===binding.artifactPath){
+    const document=typeof args.content==='string'?JSON.parse(args.content):args.content
+    if(document&&typeof document==='object'&&!Array.isArray(document)){
+     const bound={...document,...(document.kind===undefined?{kind:'conversation'}:{}),...(document.brandId===undefined?{brandId:binding.brandId}:{})}
+     args={...args,content:typeof args.content==='string'?JSON.stringify(bound):bound}
+    }
+   }
    if(structuredWorkspace){
     let document=typeof args.content==='string'?JSON.parse(args.content):args.content
     // Fill only transport metadata from the trusted admission or the generated

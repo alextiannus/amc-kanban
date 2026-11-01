@@ -73,7 +73,11 @@ export function briefFrom(content:string,intent:BriefIntent){
 export function conversationFrom(content:string,intent:ConversationIntent){
   if(Buffer.byteLength(content)>nativeArtifactMaxBytes(intent))throw nativeError('reply_too_large')
   const value=JSON.parse(content)
-  if(value.kind!=='conversation'||value.brandId!==intent.brandId||typeof value.content!=='string'||!value.content.trim()||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_evidence_invalid')
+  if(!value||typeof value!=='object'||Array.isArray(value))throw nativeError('reply_object_required')
+  if(value.kind!=='conversation')throw nativeError('reply_kind_must_be_conversation')
+  if(value.brandId!==intent.brandId)throw nativeError('reply_brand_id_mismatch')
+  if(typeof value.content!=='string'||!value.content.trim())throw nativeError('reply_content_required')
+  if(typeof value.contextDigest!=='string'||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_context_digest_invalid')
   if(intent.planningScope&&(intent.planningScope.mode==='draft'||value.planningDraft!==undefined))value.planningDraft=validatePlanningDraft(value.planningDraft,{...intent.planningScope,mode:'draft'})
   else if(value.planningDraft!==undefined)throw nativeError('unexpected_planning_draft')
   if(value.planningDraft&&intent.planningScope?.stage==='quarter'){
@@ -108,7 +112,7 @@ export function conversationInput(body:any){
   if(body.topic!==undefined&&!['general','brand_planning'].includes(body.topic))throw nativeError('invalid_conversation_topic')
   if(body.planningDraftContext!==undefined&&(typeof body.planningDraftContext!=='string'||body.planningDraftContext.length>32000||!body.planningScope))throw nativeError('invalid_planning_draft_context')
   const scope=body.planningScope===undefined?undefined:planningScope(body.planningScope)
-  const topic=scope||body.topic==='brand_planning'||/AMC\s*营销专家|宣传重心|年度(?:推广|营销|行銷)计划|品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
+  const topic=scope||body.topic==='brand_planning'||/商家访谈|商家訪談|merchant interview/i.test(body.goal)||/AMC\s*营销专家|宣传重心|年度(?:推广|营销|行銷)计划|品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
   if(history.reduce((length:number,turn:{content:string})=>length+turn.content.length,0)>60000)throw nativeError('conversation_history_too_large',413)
   return {...(body.afterTaskId?{afterTaskId:body.afterTaskId}:{}),...(body.conversationId?{conversationId:body.conversationId}:{}),...(body.autoSavePlanning===true&&scope?.stage==='marketing_plan'?{autoSavePlanning:true}:{}),...(body.contextSessionId?{contextSessionId:body.contextSessionId}:{}),...(body.currentPage?{currentPage:body.currentPage}:{}),...(scope?{planningScope:scope}:{}),...(body.planningDraftContext!==undefined?{planningDraftContext:body.planningDraftContext}:{}),history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'afterTaskId'|'conversationId'|'autoSavePlanning'|'contextSessionId'|'history'|'topic'|'planningScope'|'planningDraftContext'|'currentPage'>
 }
