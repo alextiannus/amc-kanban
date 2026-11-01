@@ -1,6 +1,10 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
 
+## Runy Seedance 2.5 integration (implemented locally; deployment pending)
+
+The unified model editor offers a Runy Seedance 2.5 preset for existing cn_gateway connections. It creates a selectable immutable catalog entry for doubao-seedance-2-5 without changing published defaults or draft routing. The confirmed limits are 30 images, 4-30 seconds per generation, 10 reference videos of 2-30 seconds each and 30 seconds combined, with native audio. Runy credentials remain gateway-only and pricing must be configured from actual Runy rates. Gateway model-specific capabilities drive Content preflight, segmentation and MM reference limits; MM retains three reference videos, a 180-second project limit and a reserved continuation image slot (29 user images). Existing 2.0 routes and submitted jobs retain their original limits and bindings. Activation requires an explicit validated policy publication after gateway and Content deployment.
+
 ## Stable Audio music integration (implemented locally; deployment pending)
 
 The unified model catalog supports the stability protocol at https://api.stability.ai with model stable-audio-3, music/audio_output capabilities, 600000 ms timeout and zero submission retries. Credentials use encrypted ModelConnection versions in /admin. Choosing Stability as the music default also replaces MiniMax music task exceptions in the same draft; validated publication activates it. Existing MiniMax speech and historical music remain compatible. Content persists async generation IDs and secret-free original profiles, resumes query-only retrieval after restarts, measures MP3 duration and checkpoints paid bytes before OBS upload. Ambiguous submission outcomes require operator reconciliation.

@@ -4,6 +4,8 @@ Status: code implementation and local validation. Production migration, import, 
 
 ## Contract
 
+Runy Seedance 2.5 (implemented locally; deployment pending): the cn_gateway model editor provides a preset for doubao-seedance-2-5 on an existing encrypted connection. Saving adds an immutable selectable model without changing defaults or task exceptions. Limits confirmed for this integration are 30 images, 4-30 seconds, 10 reference videos with a combined 30-second budget, and native audio. Pricing is not copied from Ark. The gateway advertises per-model capabilities; Content validates the selected entry and uses its limits for MM and segmentation. Deploy the gateway and Content before selecting and publishing this model. Runy provider keys remain gateway-only.
+
 Merchant document extraction (implemented locally, not deployed): Growth discovers merchant menu images and PDFs from confirmed Places/website/search sources. The authenticated Kanban internal merchant-document API binds an immutable published model policy and delegates extraction to Content. Text-bearing PDF pages use the unified text model; scanned pages use the unified image model after bounded rendering and OBS upload. Results retain source URL, page, currency, confidence and policy version and enter Growth as review candidates, never automatically confirmed facts. Standard/deep budgets are 10/20 document pages. Provider-unknown submissions are queried rather than replayed. No Growth supplier key or independent model selection is introduced.
 
 
