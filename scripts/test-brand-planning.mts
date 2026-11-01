@@ -78,7 +78,7 @@ try{
   }
   for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning'] as const).entries()){
     if(index===7)sourceRevision='two'
-    const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3||index===8||index===9)?{planningScope:{stage:index===8?'direction' as const:index===9?'marketing_plan' as const:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
+    const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3||index===8||index===9)?{planningScope:{stage:index===8?'direction' as const:index===9?'marketing_plan' as const:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':`请继续讨论第 ${index} 轮`,artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
     await admitIntent(pool,actor,intent)
     await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
     const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot')&&(topic==='brand_planning'||t!=='amc.growth_insight'))}
@@ -107,6 +107,7 @@ try{
     assert.equal(!!ctx.planningContext,topic==='brand_planning','general chat never loads planning sources')
     assert(!ctx.uiCapabilities.pages.bd,'BD pages are absent without the current user role')
     assert.equal(ctx.intent.history[0].content,intent.history[0].content)
+    assert.equal(ctx.intent.goal,intent.goal,'shared source cache must not reuse a previous user goal')
     assert.equal(ctx.requiredSkill,topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md')
     if(index===5)sessionReads=insightReads
     if(index===6)assert.equal(insightReads,sessionReads,'a new task and all revalidations reuse session context')
