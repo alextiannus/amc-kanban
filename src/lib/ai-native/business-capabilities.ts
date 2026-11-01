@@ -16,7 +16,7 @@ export async function durableBusinessWrite(actor:NativeActor,taskId:string,tool:
  },{maxWait:5000,timeout:10000})
  if(reservation.old)return reservation.old
  try{
-  const result=await execute(actor,tool,args),receipt={state:result.isError?'failed':'returned',verified:!result.isError,tool,result,instructions:'This is the original tool result. Check its business status: accepted/running is not completed, and saved draft is not published.'}
+  const result=await execute(actor,tool,args),receipt={state:result.isError?'failed':result.outcomeUnknown?'unknown':'returned',verified:!result.isError&&!result.outcomeUnknown,tool,result,instructions:'This is the original tool result. Check its business status: accepted/running is not completed, and saved draft is not published.'}
   await prisma.auditLog.update({where:{id:reservation.id},data:{newValue:receipt}})
   return receipt
  }catch{return {state:'unknown',verified:false,tool,instructions:'Outcome uncertain; original action retained. Read the original resource before any new attempt. Do not claim success or automatically repeat.'}}

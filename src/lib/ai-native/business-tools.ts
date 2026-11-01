@@ -1,3 +1,4 @@
+import {projectBusinessResult} from './business-projection'
 import {Client} from '@modelcontextprotocol/sdk/client/index.js'
 import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js'
 import {createAmcMcpServer} from '../partner/mcp/server'
@@ -56,6 +57,6 @@ export async function callBusinessTool(actor:NativeActor,name:string,args:Record
  return withClient(actor,async(client,p)=>{
   if(!await allows(p,MCP_PERMISSIONS[name])||name==='board_save_draft'&&!await allows(p,args.draftId?'draft.update':'draft.create'))throw nativeError('business_action_denied',403)
   const result=await client.callTool({name,arguments:businessArguments(actor,args)})
-  return JSON.parse(JSON.stringify(result))
+  return projectBusinessResult(name,JSON.parse(JSON.stringify(result)))
  })
 }
