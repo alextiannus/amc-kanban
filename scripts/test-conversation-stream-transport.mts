@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import {complete} from '../src/lib/global-text/transport.ts'
+import {nativeWireTools} from '../src/lib/ai-native/tool-wire.ts'
 import {planningPreview} from '../src/lib/ai-native/planning-preview.ts'
+const writer={name:'writer',description:'Write',parameters:{type:'object',properties:{content:{type:'string'},expectedRevision:{type:'integer'},path:{type:'string'}},required:['content','expectedRevision','path']}}
+const ordered=nativeWireTools([writer],true,undefined,{kind:'conversation',brandId:'brand',artifactPath:'work/reply.json'} as any)[0]
+assert.deepEqual(Object.keys(ordered.parameters.properties).slice(0,2),['path','content'])
+assert.deepEqual(Object.keys(ordered.parameters.properties.content.properties).slice(0,3),['kind','brandId','content'])
+assert.deepEqual(ordered.parameters.required,writer.parameters.required)
 const connection={id:'fixture',provider:'kopix',displayName:'Fixture',modelName:'glm-5.3',apiKey:'test-only'}
 const original=globalThis.fetch,encoder=new TextEncoder()
 const frame=(value:any)=>encoder.encode('data: '+JSON.stringify(value)+'\n\n')
