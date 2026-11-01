@@ -48,7 +48,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
       let lastPreviewAt=0,lastPreview=''
       const preview=latestPreviewWriter(async text=>{await prisma.$executeRawUnsafe("UPDATE amc_iaic.amc_ai_requests SET conversation_preview=$1 WHERE task_id=$2::uuid AND subject_id=$3 AND intent->>'brandId'=$4",text,taskId,binding.userId,binding.brandId)})
-      const observe=full&&!documentBinding&&binding?.conversationId&&taskId?(calls:readonly any[])=>{
+      const observe=binding?.kind==='conversation'&&!documentBinding&&taskId?(calls:readonly any[])=>{
         if(Date.now()-lastPreviewAt<700)return
         for(const call of calls){
           const shape=wire.tools.find((t:any)=>t.name===call.function?.name)?.parameters?.properties

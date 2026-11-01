@@ -1,3 +1,4 @@
+import {interviewReceipt} from './interview-capabilities'
 import {wakeConversationRuntime} from './conversation-worker.mjs'
 import type {Application} from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type {NativeActor} from './contract'
@@ -6,15 +7,17 @@ export async function activeConversationStatus(app:Pick<Application,'runtime'|'t
  if(kind!=='conversation')return null
  const state=await app.runtime.state(actor,id)
  if(!['queued','running'].includes(state.status))return null
+ let interviewSave=null
  let stage=state.status==='queued'?'queued':'working'
- const store=app.tasks as {operationReceipts?:(actor:NativeActor,id:string)=>Promise<Array<{capability:string;status:string}>>}
+ const store=app.tasks as {history:(actor:NativeActor,id:string)=>Promise<{calls:any[]}>;operationReceipts?:(actor:NativeActor,id:string)=>Promise<Array<{capability:string;status:string}>>}
  if(state.status==='running'&&store?.operationReceipts){
   const receipts=await store.operationReceipts(actor,id)
   const done=new Set(receipts.filter(r=>r.status==='succeeded').map(r=>r.capability))
+  if(done.has('amc.interview.save'))interviewSave=interviewReceipt((await store.history(actor,id)).calls)
   if(done.has('my_write_workspace'))stage='finalizing'
   else if(done.has('amc.context'))stage='reply'
  }
- return {id:state.id,kind:'conversation',status:state.status,waitingReason:state.waiting_reason,goal:state.input.goal,version:state.version,updatedAt:state.updated_at,progress:{stage}}
+ return {id:state.id,kind:'conversation',status:state.status,waitingReason:state.waiting_reason,goal:state.input.goal,version:state.version,updatedAt:state.updated_at,progress:{stage},...(interviewSave?{interviewSave}:{})}
 }
 /** Wake the existing fenced executor; tick coalesces with any in-flight tick. */
 export function wakeConversationWorker(app:Pick<Application,'runtime'>,drainQueue=true){

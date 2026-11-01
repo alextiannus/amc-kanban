@@ -68,3 +68,19 @@ assert.equal(conversationHostStep(host([context,{...savedInterview,result:{verif
 console.log('PASS interview save refreshes verification sources only after verified write')
 
 assert.deepEqual(conversationHostStep(host([context,{...savedInterview,capability:'amc.business.write'}],[saveEvent]),intent),{type:'call',name:'amc.context',input:{}})
+
+const confirmation={...generalIntent,goal:'确认这份整理内容，保存为访谈记录',afterTaskId:'previous'}
+const skill={id:'skill',capability:'assistant.skills.read',status:'succeeded',input:{id:'amc-conversation/SKILL.md'}}
+const cr=(calls:any[],id:string,tools:string[])=>({...host(calls,[{kind:'call_settled',data:{callId:id}}]),tools:tools.map(name=>({name}))})
+assert.equal(conversationHostStep(cr([skill],'skill',['amc.interview.read']),confirmation).name,'amc.interview.read')
+const read={id:'read',capability:'amc.interview.read',status:'succeeded',result:{revision:'a'.repeat(64)}}
+assert.deepEqual(conversationHostStep(cr([skill,read],'read',['amc.interview.save']),confirmation),{type:'call',name:'amc.interview.save',input:{mode:'confirm_previous',expectedRevision:'a'.repeat(64)}})
+for(const goal of ['不要保存','确认但修改定位','确认第一条','确认这份整理内容，保存为访谈记录？'])assert.equal(conversationHostStep(cr([skill,read],'read',['amc.interview.save']),{...confirmation,goal}),null)
+assert.equal(conversationHostStep(cr([skill,read,{capability:'amc.interview.save',status:'failed'}],'read',['amc.interview.save']),confirmation),null)
+assert.equal(conversationHostStep(cr([skill,read],'read',[]),confirmation),null)
+console.log('PASS exact confirmation fixed steps, ambiguity/negation/partial confirmation rejection and no retry of failed save')
+const rejectedConfirmation=make([{...context,result:{intent:{kind:'conversation'}}},{capability:'amc.interview.save',status:'failed',error:{message:'explicit_interview_confirmation_required'}}],[])
+rejectedConfirmation.tools=[{name:'amc.interview.save'},{name:'my_write_workspace'}]
+const blocked=prepareConversationCompletion(rejectedConfirmation)
+assert.deepEqual(blocked.tools,[{name:'my_write_workspace'}]);assert(blocked.messages.at(-1).content.includes('nothing was saved'))
+console.log('PASS deterministic confirmation rejection removes repeated save while preserving reply tool')

@@ -47,7 +47,7 @@ try{
  const conflict:any=await invoke('amc.interview.save',{...input,expectedRevision:snapshot.revision},randomUUID());assert.equal(conflict.state,'conflict');assert.equal(conflict.verified,false)
  // Confirm only the actual previous artifact, not client-supplied answers/history.
  previous={status:'succeeded',report:{interviewDraft:{answers:[{question:'渠道',answer:'只做自然内容'}]}}}
- intent={...intent,goal:'确认以上访谈',afterTaskId:proposal};snapshot=await read()
+ intent={...intent,goal:'确认这份整理内容，保存为访谈记录',afterTaskId:proposal};snapshot=await read()
  const confirmed:any=await invoke('amc.interview.save',{mode:'confirm_previous',expectedRevision:snapshot.revision},randomUUID());assert.equal(confirmed.source,'user_confirmed_draft')
  assert((await read()).interview.rawNotes.includes('只做自然内容'))
  intent.goal='确认，但是渠道改为投流';await assert.rejects(()=>invoke('amc.interview.save',{mode:'confirm_previous',expectedRevision:snapshot.revision}),/explicit_interview_confirmation_required/)

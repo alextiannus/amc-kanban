@@ -1,3 +1,4 @@
+import {confirmsInterview} from './interview-contract'
 /** A written reply should go through the existing verifier before any more editing.
  * This narrows only the next model request, not Runtime permissions or completion checks.
  * Feedback or a new user input restores the normal tools so a rejected reply can be fixed.
@@ -9,6 +10,8 @@ export function prepareConversationCompletion<T extends {messages:any[];tools:an
   const context=data.calls.find((c:any)=>c.capability==='amc.context'&&c.status==='succeeded')?.result
   const intent=trustedIntent||context?.intent
   if(intent?.kind!=='conversation')return request
+  const rejectedConfirmation=data.calls.some((c:any)=>c.capability==='amc.interview.save'&&c.status==='failed'&&/explicit_interview_confirmation_required|previous_interview_draft_required/.test(JSON.stringify(c.error||'')))
+  if(rejectedConfirmation)request={...request,tools:request.tools.filter((t:any)=>t.name!=='amc.interview.save'),messages:[...request.messages,{role:'system',content:'Interview confirmation was rejected by the host. Do not retry this save in this turn. Explain that nothing was saved and ask for a clear confirmation or present the missing interview draft. Finish with an honest reply; never claim the failed write succeeded.'}]}
   const lastEvent=data.events.at(-1)
   if(lastEvent?.kind!=='call_settled')return request
   const write=data.calls.find((c:any)=>c.id===lastEvent.data?.callId&&c.capability==='my_write_workspace'&&c.status==='succeeded')
@@ -18,7 +21,7 @@ export function prepareConversationCompletion<T extends {messages:any[];tools:an
 }
 
 /** Mechanical steps only; Core still authorizes calls and verifies finish. */
-export function conversationHostStep(request:any,intent:{kind:string;topic?:string;artifactPath:string;requestKey?:string}):any|null{
+export function conversationHostStep(request:any,intent:{kind:string;topic?:string;artifactPath:string;requestKey?:string;goal?:string;afterTaskId?:string}):any|null{
  if(request.billingContext?.capability!=='agent.work'||intent.kind!=='conversation')return null
  let data:any
  try{data=JSON.parse(request.messages.findLast((m:any)=>m.role==='user')?.content)}catch{return null}
@@ -31,6 +34,14 @@ export function conversationHostStep(request:any,intent:{kind:string;topic?:stri
  const context=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='amc.context'&&c.status==='succeeded')
  const required=intent.topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md'
  if(context?.result?.requiredSkill===required&&!data.calls.some((c:any)=>c.capability==='assistant.skills.read')&&request.tools.some((t:any)=>t.name==='assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:required}}
+ // Fixed confirmation steps remain Core capabilities: their preflight loads the
+ // actual preceding draft, checks current access/revision, and rejects ambiguity.
+ const confirmation=intent.afterTaskId&&intent.goal&&confirmsInterview(intent.goal)
+ if(confirmation){
+  const lastCall=data.calls.find((c:any)=>c.id===last.data?.callId&&c.status==='succeeded')
+  if(lastCall?.capability==='assistant.skills.read'&&lastCall.input?.id===required&&!data.calls.some((c:any)=>c.capability==='amc.interview.read')&&request.tools.some((t:any)=>t.name==='amc.interview.read'))return {type:'call',name:'amc.interview.read',input:{}}
+  if(lastCall?.capability==='amc.interview.read'&&/^[a-f0-9]{64}$/.test(lastCall.result?.revision||'')&&!data.calls.some((c:any)=>c.capability==='amc.interview.save')&&request.tools.some((t:any)=>t.name==='amc.interview.save'))return {type:'call',name:'amc.interview.save',input:{mode:'confirm_previous',expectedRevision:lastCall.result.revision}}
+ }
  const savedInterview=data.calls.find((c:any)=>c.id===last.data?.callId&&['amc.interview.save','amc.business.write'].includes(c.capability)&&c.status==='succeeded'&&c.result?.verified===true)
  if(savedInterview&&request.tools.some((t:any)=>t.name==='amc.context'))return {type:'call',name:'amc.context',input:{}}
  const write=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='my_write_workspace'&&c.status==='succeeded')
