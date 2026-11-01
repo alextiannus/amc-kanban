@@ -7,7 +7,7 @@ export const favoriteId=(user:string,brand:string,source:string)=>'favorite_'+di
 export async function writeFavorite(tx:any,userId:string,brandId:string,candidate:any,saved:boolean,expectedVersion?:number){
  const sourceId=candidate.idea.sourceId,id=favoriteId(userId,brandId,sourceId)
  const old=await tx.brandMarketingSolution.findUnique({where:{id}})
- if(old&&old.status===(saved?'SAVED':'REMOVED'))return {id,sourceId,saved,version:old.version}
+ if(old&&old.status===(saved?'SAVED':'REMOVED')&&(!saved||!candidate.idea.workspace||JSON.stringify((old.output as any)?.idea?.workspace)===JSON.stringify(candidate.idea.workspace)))return {id,sourceId,saved,version:old.version}
  if(expectedVersion!==undefined&&(old?.version||0)!==expectedVersion)throw nativeError('favorite_changed',409)
  const data={status:saved?'SAVED':'REMOVED',input:{sourceId},output:candidate,version:(old?.version||0)+1}
  await tx.brandMarketingSolution.upsert({where:{id},create:{id,brandId,kind:'CREATIVE_FAVORITE',period:sourceId,createdById:userId,generationMode:'HUMAN_CHOICE',...data},update:data})

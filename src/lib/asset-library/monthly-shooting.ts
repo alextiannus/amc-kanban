@@ -19,8 +19,9 @@ export async function prepareMonthlyShooting(userId:string,brandId:string,body:a
  const doc=await merchantWorkspace(userId,brandId,{action:'read',id:body.workspaceId})
  if(doc.revision!==body.revision)throw nativeError('workspace_revision_changed',409)
  if(!doc.draft.creativeId)throw nativeError('creative_source_required',400)
- const candidate=(await favoriteCandidates(userId,brandId,{creativeId:doc.draft.creativeId}))[0]
- if(!candidate)throw nativeError('brainstorm_source_not_found',404)
+ const sourceCandidate=(await favoriteCandidates(userId,brandId,{creativeId:doc.draft.creativeId}))[0]
+ if(!sourceCandidate)throw nativeError('brainstorm_source_not_found',404)
+ const candidate={...sourceCandidate,idea:{...sourceCandidate.idea,workspace:{id:body.workspaceId,creativeId:doc.draft.creativeId,revision:body.revision,...doc.draft.sourceLineage}}}
  const brand=await prisma.brand.findUnique({where:{id:brandId},select:{timezone:true,knowledge:{select:{menuItems:true}}}})
  const items=shootingNeeds(doc.draft,skuFacts(brand?.knowledge?.menuItems))
  return prisma.$transaction(async(tx:any)=>{

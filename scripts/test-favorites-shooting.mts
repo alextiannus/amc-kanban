@@ -34,7 +34,7 @@ try{
  await assert.rejects(()=>prepareMonthlyShooting(other,brand,{workspaceId:'shoot-draft',revision:1}),/not_found/)
  await assert.rejects(()=>prepareMonthlyShooting(owner,foreign,{workspaceId:'shoot-draft',revision:1}),/not_found/)
  await assert.rejects(()=>prepare(2),/revision_changed/)
- const result=await prepare();assert.equal(result.count,2);assert.equal(result.month,monthAt(new Date(),'Asia/Singapore'));assert.equal((await listCreativeFavorites(owner,brand,true)).items.length,1)
+ const result=await prepare();assert.equal(result.count,2);assert.equal(((await prisma.brandMarketingSolution.findUnique({where:{id:result.favorite.id}}))!.output as any).idea.workspace.id,'shoot-draft');assert.equal(result.month,monthAt(new Date(),'Asia/Singapore'));assert.equal((await listCreativeFavorites(owner,brand,true)).items.length,1)
  const repeats=await Promise.all([prepare(),prepare(),prepare()]);assert(repeats.every(r=>r.replayed));assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:brand,kind:'SHOOTING_REQUEST'}}),1)
  let plan=await listMonthlyShooting(owner,brand),month=plan.months.find(m=>m.month===result.month)!
  assert.equal(month.items.length,2);assert.equal(month.items[0].mediaType,'image')
