@@ -1,3 +1,4 @@
+import {completeFavoriteForVideo} from './creative-favorites'
 import type { Prisma } from '@prisma/client'
 import { canSessionAccessBrandProject } from './brandAccess'
 import { prisma } from './prisma'
@@ -23,7 +24,7 @@ export async function saveVideoJob(actor: VideoJobActor, body: any) {
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'video-job:' + id}))::text`
     const existing = await tx.videoProductionJob.findUnique({
       where: { id },
-      select: { id: true, brandId: true, createdBy: true, historyDeletedAt: true, plan: true, creativeId: true, idea: true, assetIds: true, mediaUrls: true },
+      select: { id: true, brandId: true, createdBy: true, historyDeletedAt: true, status:true, finalVideoUrl:true, plan: true, creativeId: true, idea: true, assetIds: true, mediaUrls: true },
     })
     if (existing && (existing.historyDeletedAt || existing.brandId !== brandId || !existing.createdBy || existing.createdBy !== actor.id)) throw failure('Not found', 404)
     await requireActorPermission(actor.id, 'content.video-making.create', brandId)
@@ -78,9 +79,11 @@ export async function saveVideoJob(actor: VideoJobActor, body: any) {
 
     const create = { id, brandId, ...mutableVideoJob(body), createdBy: actor.id }
     const update = mutableVideoJob(body)
-    return existing
-      ? tx.videoProductionJob.update({ where: { id }, data: update })
-      : tx.videoProductionJob.create({ data: create })
+    const saved=existing
+      ? await tx.videoProductionJob.update({ where: { id }, data: update })
+      : await tx.videoProductionJob.create({ data: create })
+    if(!existing||!['completed','complete'].includes(existing.status)||existing.finalVideoUrl!==saved.finalVideoUrl)await completeFavoriteForVideo(tx,saved)
+    return saved
   })
 }
 

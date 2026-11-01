@@ -103,6 +103,7 @@ const prisma: any = {
 }
 
 const persistence = compile('src/lib/videoJobPersistence.ts', {
+  './creative-favorites':{completeFavoriteForVideo:async()=>{}},
   '@prisma/client': {},
   './brandAccess': { canSessionAccessBrandProject: async (brand: string) => brandAccess && brand === 'brand' },
   './prisma': { prisma },

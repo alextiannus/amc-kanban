@@ -1,3 +1,4 @@
+import {queryCalendarRead} from '../brand-plan/calendarProjection'
 import {storeBrainstormSources,storedBrainstormSource} from './brainstorm-storage'
 import {browseFeedSql,browsePoolSql} from './browse-source'
 import {readBrowseKnowledge} from './browse-knowledge'
@@ -226,7 +227,7 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
   resolved=(await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchCreativeSourceEvidence)).raw
  }else{
   const saved=await feed(db,brandId)
-  const source=await storedBrainstormSource(db,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId))||(await poolSources(db,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
+  const source=await storedBrainstormSource(db,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId))||(await poolSources(db,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source||await favoriteStoredSource(db,brandId,userId,body.sourceId)
   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
   const current={inspirationCreativeId:body.sourceId,nativeSourceSnapshot:{source}}
   resolved=(await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchCreativeSourceEvidence)).raw
@@ -255,6 +256,7 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
    const saved=await feed(tx,brandId)
    source=await storedBrainstormSource(tx,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===body.sourceId))
    if(!source)source=(await poolSources(tx,brandId)).find((r:any)=>r.source_id===body.sourceId&&(!body.poolIdeaId||r.id===body.poolIdeaId))?.source
+   if(!source)source=await favoriteStoredSource(tx,brandId,userId,body.sourceId)
    if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
    sourceId=body.sourceId
    const current={inspirationCreativeId:sourceId,nativeSourceSnapshot:{source}}
@@ -296,7 +298,7 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
 export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null,thumbnail=false){
  await authorizeBrainstorm(userId,brandId,false,db)
  const [saved,choices]=await Promise.all([feed(db,brandId,true),decisions(db,brandId,[sourceId])])
- const source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)||(await poolSources(db,brandId,true)).find((row:any)=>row.source_id===sourceId)?.source
+ const source=saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId)||(await poolSources(db,brandId,true)).find((row:any)=>row.source_id===sourceId)?.source||await favoriteStoredSource(db,brandId,userId,sourceId)
  if(!source||!eligibleBrainstormSource(source)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
  const raw=await fetchCreativeSourceEvidence(sourceId,'media')
  if(raw.creativeId!==sourceId||raw.sourceRevision!==source.sourceRevision||raw.sourceDigest!==source.sourceDigest)throw nativeError('creative_source_changed',409)
@@ -396,4 +398,30 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
   await tx.brandMarketingSolution.create({data:{...receiptWhere,version:1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId},output}})
   return output
  })
+}
+
+// Favorite snapshots are scoped to their owner, survive feed replacement, and remain source-pinned.
+export async function favoriteStoredSource(db:any,brandId:string,userId:string,sourceId:string){
+ const row=await db.brandMarketingSolution.findFirst({where:{brandId,createdById:userId,kind:'CREATIVE_FAVORITE',period:sourceId,status:'SAVED'}})
+ const current=row?.output?.current;return current?.nativeSourceSnapshot?.source||current?.source||null
+}
+export async function favoriteCandidates(userId:string,brandId:string,body?:{creativeId?:string;sourceId?:string},db:any=prisma){
+ await authorizeBrainstorm(userId,brandId,false,db)
+ // The browse projection intentionally strips selected scripts. Favorites need the full
+ // matching item, not the whole marketing workspace or a lossy revision digest.
+ const entries:Array<{month:string;item:any}>=db.$queryRawUnsafe?await queryCalendarRead(db,`
+  with calendar as materialized (select coalesce("marketingSolution"->'publishingCalendar',"brandPlan"->'publishingCalendar') as value from "BrandKnowledge" where "brandId"=$1)
+  select m.key as month,i as item from calendar c
+  cross join lateral jsonb_each(case when jsonb_typeof(c.value->'months')='object' then c.value->'months' else '{}'::jsonb end) m
+  cross join lateral jsonb_array_elements(case when jsonb_typeof(m.value)='array' then m.value else '[]'::jsonb end) i
+  where ($2<>'' and i->>'id'=$2) or ($2='' and $3<>'' and coalesce(nullif(i->>'inspirationCreativeId',''),nullif(i->'source'->>'inspirationCreativeId',''),i->'nativeSourceSnapshot'->'source'->>'inspirationCreativeId')=$3)
+   or ($2='' and $3='' and (i->'creativeBrowserSelection'->>'by'=$4 or i->'brainstorm'->>'likedBy'=$4))
+ `,brandId,body?.creativeId||'',body?.sourceId||'',userId):(await browserState(db,brandId)).entries
+ const found=body?.creativeId?entries.filter(({item})=>item.id===body.creativeId):body?.sourceId?entries.filter(({item})=>creativeSourceId(item)===body.sourceId):entries.filter(({item})=>!item.replicationCopy&&creativeIsSelected(item)&&(item.creativeBrowserSelection?.by===userId||item.brainstorm?.likedBy===userId))
+ const result=found.map(({item,month})=>{const sourceId=creativeSourceId(item),source=item.nativeSourceSnapshot?.source||item.source;return {current:item,idea:{...projectBrainstormSource({...source,inspirationCreativeId:sourceId},brandId,null),sourceId,title:item.title,savedCreativeId:item.id,expectedRevision:creativeDigest(item),month,editingScript:item.planning||undefined}}}).filter(r=>r.idea.sourceId)
+ if(result.length||!body)return result
+ const saved=await feed(db,brandId)
+ const source=await storedBrainstormSource(db,brandId,saved?.output?.sources?.find((v:any)=>v.inspirationCreativeId===body.sourceId))||(await poolSources(db,brandId)).find((v:any)=>v.source_id===body.sourceId)?.source||await favoriteStoredSource(db,brandId,userId,body.sourceId||'')
+ if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
+ return [{current:{inspirationCreativeId:source.inspirationCreativeId,nativeSourceSnapshot:{source}},idea:projectBrainstormSource(source,brandId,null)}]
 }

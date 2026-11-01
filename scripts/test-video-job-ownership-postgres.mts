@@ -59,6 +59,7 @@ const db = {
   }),
 }
 const persistence = compile('src/lib/videoJobPersistence.ts', {
+  './creative-favorites':{completeFavoriteForVideo:async()=>{}},
   '@prisma/client': {},
   './brandAccess': { canSessionAccessBrandProject: async () => true },
   './prisma': { prisma: db },

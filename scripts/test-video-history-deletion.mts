@@ -40,6 +40,7 @@ await schema.ensureVideoHistorySchema(); await schema.ensureVideoHistorySchema()
 const role = { requireActorPermission: async () => { if (!allowed) throw Object.assign(Error('Denied'), { status: 404 }) } }
 const deletion = compile('src/lib/videoJobDeletion.ts', { './prisma': { prisma }, './videoJobAccess': access, './role-permissions/delegation': role })
 const persistence = compile('src/lib/videoJobPersistence.ts', {
+  './creative-favorites':{completeFavoriteForVideo:async()=>{}},
   './prisma': { prisma }, './brandAccess': { canSessionAccessBrandProject: async () => allowed }, './user-management/brandAccess': { canUserAccessBrand: async () => allowed },
   './role-permissions/delegation': role, './videoLineage': {}, './videoReceipt': {},
 })
