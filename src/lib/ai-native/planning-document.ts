@@ -5,7 +5,7 @@ const reject=(code:string,statusCode=400)=>{throw Object.assign(Error(code),{sta
 /** Latest saved document is usable immediately. Legacy confirm requests remain compatible. */
 export async function savePlanningDocument(brandId:string,userId:string,input:any){
  if(input?.stage==='execution_checklist'&&input.action==='toggle')return toggleExecutionTask(brandId,userId,input)
- if(!['interview','direction','marketing_plan','principal_strategy'].includes(input.stage)||!['save','confirm'].includes(input.action)||typeof input.content!=='string'||!input.content.trim()||input.content.length>24000||!/^[a-f0-9]{64}$/.test(input.expectedRevision||''))return reject('invalid_planning_document')
+ if(!['brand_information','interview','direction','marketing_plan','principal_strategy'].includes(input.stage)||!['save','confirm'].includes(input.action)||typeof input.content!=='string'||!input.content.trim()||input.content.length>24000||!/^[a-f0-9]{64}$/.test(input.expectedRevision||''))return reject('invalid_planning_document')
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
   await tx.$executeRawUnsafe("SET LOCAL lock_timeout = '3000ms'")
   await tx.$executeRawUnsafe("SET LOCAL statement_timeout = '10000ms'")

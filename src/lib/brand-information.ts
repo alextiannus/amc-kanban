@@ -1,20 +1,24 @@
+import {brandInformationText} from './brand-information-document'
 import type {Prisma} from '@prisma/client'
 import {createHash} from 'node:crypto'
 import {prisma} from './prisma'
 export const BRAND_INFORMATION_FIELDS=['name','description','location','address','phone','website','industry'] as const
 export const brandInformationSelect={id:true,name:true,description:true,location:true,address:true,phone:true,website:true,industry:true} as const
-export function brandInformationRevision(value:any){return createHash('sha256').update(JSON.stringify(BRAND_INFORMATION_FIELDS.map(key=>value?.[key]??null))).digest('hex')}
+export function brandInformationRevision(value:any){return createHash('sha256').update(JSON.stringify([...BRAND_INFORMATION_FIELDS.map(key=>value?.[key]??null),value?.knowledge?.marketingSolution?.coCreation?.brand_information?.content??null])).digest('hex')}
 const excerpt=(value:unknown,limit:number)=>{const content=typeof value==='string'?value:JSON.stringify(value??'');return {content:content.length>limit?content.slice(0,Math.floor(limit*.7))+'\n[excerpt]\n'+content.slice(-Math.floor(limit*.3)):content,partial:content.length>limit}}
 export function projectBrandInformation(brand:any,interview?:any,report?:any){
+ const stored=brand?.knowledge?.marketingSolution?.coCreation?.brand_information?.content
+ if(typeof stored==='string')return {id:brand.id,name:brand.name,content:stored,revision:brandInformationRevision(brand)}
  const knowledge=brand?.knowledge||{},profile=Object.fromEntries(['id',...BRAND_INFORMATION_FIELDS].map(key=>[key,brand?.[key]??null]))
  const notes=interview?.rawNotes||interview?.summary||interview?.answers
  const research=report?.report||report||knowledge.researchReport
  const summary=research?.summary||research?.structuredReport?.executive_summary||research?.reportMarkdown
- return {...profile,revision:brandInformationRevision(brand),market:knowledge.market||brand?.location||null,district:knowledge.district||null,businessHours:knowledge.businessHours||null,stores:knowledge.stores||[],menuItems:knowledge.menuItems||[],restrictions:knowledge.negPrompts||[],...(notes?{merchantInformation:{source:'brand_interview',...excerpt(notes,7000),status:'Merchant statements; preserve scope and unconfirmed qualifiers'}}:{}),...(summary?{researchInformation:{source:'AI Insight Report',version:research.reportVersionId||report?.sourceVersion||research.snapshotId||null,...excerpt(summary,4000),status:'Research observations, not independently verified merchant facts; conflicts remain explicit'}}:{}),usage:'Current unified Brand Information. Report and interview enrich it; neither is required. Use this and the user conversation to plan; trace original evidence only when needed.'}
+ const information={...profile,revision:brandInformationRevision(brand),market:knowledge.market||brand?.location||null,district:knowledge.district||null,businessHours:knowledge.businessHours||null,stores:knowledge.stores||[],menuItems:knowledge.menuItems||[],restrictions:knowledge.negPrompts||[],...(notes?{merchantInformation:{source:'brand_interview',...excerpt(notes,7000),status:'Merchant statements; preserve scope and unconfirmed qualifiers'}}:{}),...(summary?{researchInformation:{source:'AI Insight Report',version:research.reportVersionId||report?.sourceVersion||research.snapshotId||null,...excerpt(summary,4000),status:'Research observations, not independently verified merchant facts; conflicts remain explicit'}}:{}),usage:'Current unified Brand Information. Report and interview enrich it; neither is required. Use this and the user conversation to plan; trace original evidence only when needed.'}
+ return {id:brand?.id,name:brand?.name,content:brandInformationText(information),revision:brandInformationRevision(brand)}
 }
 export async function readBrandInformation(brandId:string){
  const [brand,interview,report]=await Promise.all([
-  prisma.brand.findUnique({where:{id:brandId},select:{...brandInformationSelect,knowledge:{select:{market:true,district:true,businessHours:true,stores:true,menuItems:true,negPrompts:true,researchReport:true}}}}),
+  prisma.brand.findUnique({where:{id:brandId},select:{...brandInformationSelect,knowledge:{select:{marketingSolution:true,market:true,district:true,businessHours:true,stores:true,menuItems:true,negPrompts:true,researchReport:true}}}}),
   prisma.brandPlanInterview.findFirst({where:{brandId},orderBy:{completedAt:'desc'},select:{rawNotes:true,summary:true,answers:true}}),
   prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId},orderBy:{generatedAt:'desc'},select:{report:true,sourceVersion:true}}),
  ])
@@ -22,14 +26,19 @@ export async function readBrandInformation(brandId:string){
 }
 export async function updateBrandInformation(brandId:string,userId:string,patch:Record<string,string>,expectedRevision:string){
  const keys=Object.keys(patch)
- if(!keys.length||keys.some(key=>!BRAND_INFORMATION_FIELDS.includes(key as any)||typeof patch[key]!=='string'||patch[key].length>12000)||('name' in patch&&!patch.name.trim()))throw Error('invalid_brand_information_patch')
+ if(!keys.length||keys.some(key=>!(key==='content'||BRAND_INFORMATION_FIELDS.includes(key as any))||typeof patch[key]!=='string'||patch[key].length>(key==='content'?24000:12000))||('name' in patch&&!patch.name.trim()))throw Error('invalid_brand_information_patch')
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
   await tx.$queryRaw`SELECT id FROM "Brand" WHERE id=${brandId} FOR UPDATE`
-  const before=await tx.brand.findUnique({where:{id:brandId},select:brandInformationSelect})
+  const before=await tx.brand.findUnique({where:{id:brandId},select:{...brandInformationSelect,knowledge:{select:{marketingSolution:true}}}})
   if(!before)throw Error('brand_not_found')
   if(brandInformationRevision(before)!==expectedRevision)throw Error('brand_information_changed_read_again')
-  const updated=await tx.brand.update({where:{id:brandId},data:Object.fromEntries(keys.map(key=>[key,patch[key].trim()||null])),select:brandInformationSelect})
-  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'BRAND_INFORMATION_UPDATED',resourceType:'Brand',resourceId:brandId,oldValue:before,newValue:updated,metadata:{source:'ai_conversation',fields:keys}}})
-  return {saved:true,verified:true,brandInformation:updated,revision:brandInformationRevision(updated)}
+  const updated=await tx.brand.update({where:{id:brandId},data:Object.fromEntries(keys.filter(key=>key!=='content').map(key=>[key,patch[key].trim()||null])),select:brandInformationSelect})
+  let current=(before.knowledge?.marketingSolution||{}) as any
+  if('content' in patch){
+   current={...current,coCreation:{...current.coCreation,brand_information:{...current.coCreation?.brand_information,content:patch.content.trim(),updatedAt:new Date().toISOString(),updatedBy:userId,status:'active'}}}
+   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,marketingSolution:current},update:{marketingSolution:current}})
+  }
+  await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'BRAND_INFORMATION_UPDATED',resourceType:'Brand',resourceId:brandId,oldValue:{...Object.fromEntries(BRAND_INFORMATION_FIELDS.map(key=>[key,before[key]])),document:(before.knowledge?.marketingSolution as any)?.coCreation?.brand_information||null},newValue:{...updated,...('content' in patch?{content:patch.content.trim()}: {})},metadata:{source:'ai_conversation',fields:keys}}})
+  return {saved:true,verified:true,brandInformation:updated,revision:brandInformationRevision({...updated,knowledge:{marketingSolution:current}})}
  })
 }

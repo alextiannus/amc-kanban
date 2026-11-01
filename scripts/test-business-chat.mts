@@ -31,7 +31,7 @@ try{
  let workspace:any={}
  const uiSaved=await savePlanningDocument(brand,user,{stage:'interview',action:'save',content:'UI interview facts',expectedRevision:planningRevision(workspace),expectedInterviewId:null,requestKey:'ui-interview'})
  const interview=await readConversationInterview(brand);assert.equal(interview.interview?.rawNotes,'UI interview facts')
- const enriched=JSON.parse((await callBusinessTool(actor,'get_brand_information',{})).content[0].text);assert.equal(enriched.merchantInformation.content,'UI interview facts')
+ const enriched=JSON.parse((await callBusinessTool(actor,'get_brand_information',{})).content[0].text);assert(enriched.content.includes('UI interview facts'))
  await saveConversationInterview({brandId:brand,userId:user,taskId:randomUUID(),expectedRevision:interview.revision,answers:[{question:'Audience?',answer:'Local diners'}]})
  await assert.rejects(()=>savePlanningDocument(brand,user,{stage:'interview',action:'save',content:'Stale UI',expectedRevision:uiSaved.revision,expectedInterviewId:interview.interview?.id,requestKey:'stale'}),/interview_revision_conflict/)
  assert((await readConversationInterview(brand)).interview?.rawNotes.includes('Local diners'))
