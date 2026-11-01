@@ -64,7 +64,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  const started=performance.now()
  const {canDecide}=await authorizeBrainstorm(userId,brandId,false,db)
  const authorizedAt=performance.now()
- const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId,true),browserState(db,brandId,true),poolSources(db,brandId,true),separateKeywords?Promise.resolve(null):db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})])
+ const [saved,{entries,disliked,selected},pool,facts]=await Promise.all([feed(db,brandId,true),browserState(db,brandId,true),poolSources(db,brandId,true),separateKeywords?Promise.resolve(null):db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}})])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource).filter((s:any)=>relevantDefaultBrainstormSource(s,saved?.input?.matchKeywords||'')),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id)])
  const byId=new Map(choices.map((d:any)=>[d.period,d])),seen=new Set<string>()
  const currentSourceIds=new Set(sources.map((s:any)=>s.inspirationCreativeId))
@@ -131,7 +131,7 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
  const previous=await feed(db,brandId),previousKeywords=previous?.input?.matchKeywords||''
  if(editing&&expected!==previousKeywords)throw nativeError('brainstorm_keywords_changed',409)
  const keywords=requested??previousKeywords
- const rawFacts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}})
+ const rawFacts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}})
  const facts=rawFacts?{...rawFacts,productCatalog:skuFacts(rawFacts.knowledge?.menuItems)}:null
  if(!facts)throw nativeError('brand_context_unavailable',404)
  const currentKeywords=await fetchBrandKeywords({action:'read',brandId,context:brainstormTagContext(facts,'')})
@@ -352,7 +352,7 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
  const period=digest([userId,body.requestKey,body.tagId||'']),receiptWhere={brandId,kind:'BRAINSTORM_MORE',period}
  const replay=await db.brandMarketingSolution.findFirst({where:receiptWhere,orderBy:{version:'desc'}})
  if(replay)return replay.output
- const [previous,rawFacts,state,pool,choices]=await Promise.all([feed(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true,productAssumptions:true,promotionFocus:true}}}}),browserState(db,brandId,true),poolSources(db,brandId,true),db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},distinct:['period'],select:{period:true}})])
+ const [previous,rawFacts,state,pool,choices]=await Promise.all([feed(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}}),browserState(db,brandId,true),poolSources(db,brandId,true),db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},distinct:['period'],select:{period:true}})])
  if(!rawFacts)throw nativeError('brand_context_unavailable',404)
  const facts={...rawFacts,productCatalog:skuFacts(rawFacts.knowledge?.menuItems)}
  const keywords=previous?.input?.matchKeywords||'',context=brainstormTagContext(facts,keywords)

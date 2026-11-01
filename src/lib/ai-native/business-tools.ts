@@ -11,6 +11,8 @@ import {brandFor,nativeError,type NativeActor} from './contract'
 
 // Only audited, credential-free entry points. No arbitrary MCP proxy or API keys.
 export const BUSINESS_TOOLS={
+ get_brand_information:{group:'research',effect:'read'},
+ update_brand_information:{group:'research',effect:'write'},
  get_brand_marketing_plan:{group:'research',effect:'read'},
  generate_brand_research_report:{group:'research',effect:'write'},
  board_list_topics:{group:'research',effect:'read'},board_get_topic:{group:'research',effect:'read'},board_save_topic:{group:'research',effect:'write'},

@@ -30,7 +30,7 @@ export async function changePreference(app:Application,actor:NativeActor,body:an
 export function brandWorkingDefaults(facts:any){
   const knowledge=facts?.knowledge||{}
   const text=(value:unknown):string=>typeof value==='string'?value.trim():Array.isArray(value)?value.filter(v=>typeof v==='string').join('；'):''
-  const fields:[string,unknown][]=[['品牌 / Brand',facts?.name],['行业 / Industry',facts?.industry],['品牌语气 / Tone',knowledge.brandTone],['目标受众 / Audience',knowledge.audienceAssumptions],['产品 / Products',knowledge.productAssumptions],['市场 / Market',knowledge.market||facts?.location],['内容限制 / Content restrictions',knowledge.negPrompts]]
+  const fields:[string,unknown][]=[['品牌 / Brand',facts?.name],['行业 / Industry',facts?.industry],['市场 / Market',knowledge.market||facts?.location],['内容限制 / Content restrictions',knowledge.negPrompts]]
   const content=fields.map(([label,value])=>{const v=text(value);return v?`${label}：${v.slice(0,450)}`:''}).filter(Boolean).join('\n')
   return {brandId:facts?.id,brandName:text(facts?.name),content}
 }

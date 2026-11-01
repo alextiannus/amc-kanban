@@ -153,10 +153,10 @@ try{
   await prisma.brandPlanInterview.create({data:{brandId:id,rawNotes:'访谈原始记录',answers:[{question:'目标',answer:'家庭聚餐'}]}})
   await prisma.brandKnowledge.update({where:{brandId:id},data:{brandPlan:{coCreation:{focus:'legacy focus'}},researchReport:{}}})
   const narrow=await getBrandPlanningContext(id),full=await getBrandPlan(id)
-  for(const key of ['marketingSolution','marketingSolutionRevision','brandClaim','merchantInterview'])assert.deepEqual((narrow as any)[key],(full as any)[key],'narrow query preserves '+key)
+  for(const key of ['marketingSolution','marketingSolutionRevision','merchantInterview'])assert.deepEqual((narrow as any)[key],(full as any)[key],'narrow query preserves '+key)
   const savedWorkspace=await readMarketingWorkspace(actor)
   assert.equal((savedWorkspace.workspace as any).annualPlan.goal,'延续已保存目标')
-  assert.equal((savedWorkspace.workspace as any).brandClaim.focus,'家庭聚餐')
+  assert.equal((savedWorkspace.workspace as any).brandClaim,undefined,'Retired proposition is not duplicated into AI context')
   assert.equal((await readMarketingWorkspace(actorFor('missing-brand',id))).status,'missing')
   const originalFetch=globalThis.fetch
   const paths:string[]=[]

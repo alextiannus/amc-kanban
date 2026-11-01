@@ -57,7 +57,8 @@ try{
  if(process.env.STRATEGY_TEST_LEGACY_OUTPUT_CAP==='1')(chat.app.runtime as any).maxOutputBytes=32000
  ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app:bg.app,tools:bg.tools,lane:'default',modelRevision:1})
  ;(globalThis as any).amcConversationHost=Promise.resolve({pool,taskPool,app:chat.app,tools:chat.tools,lane:'conversation',modelRevision:1})
- const firstBody=body('Focus on families'),first=await createNativeTask(id,id,firstBody)
+ const firstBody=body('Focus on families')
+ const first=await createNativeTask(id,id,firstBody)
  const firstState=await finish(first.id);assert.equal(firstState.status,'succeeded',JSON.stringify({reason:firstState.waiting_reason,calls:(await (chat.app.tasks as any).history(actor,first.id)).calls.slice(-1).map((c:any)=>({capability:c.capability,status:c.status,error:c.error}))}))
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id}}),0,'generation is distinct from committed strategy')
  const originalDocument=await readNativeTaskDocument(id,id,first.id)

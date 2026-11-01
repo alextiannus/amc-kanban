@@ -132,7 +132,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-marketing-expert"
       },
-      "version": "sha256:2ca441695b48ababaaaf16be4da6dbc8fab756709a62f1db1b5b4125a822ddbb",
+      "version": "sha256:c24e0ade016c7f30eac492484fdae1c946ad2279848272255e65943b424efefb",
       "description": "AMC品牌策略讨论、生成、优化与评审的优先技能。以访谈和线上证据判断定位、客群客源、竞争、获客转化、AMC工作、社媒Content及店内活动；不替代投放或发布授权。"
     },
     {
@@ -595,7 +595,7 @@
     "skills/amc-knowledge/references/file-schemas.md": "6ac342d1d48c897dbb22ff3a15d53a69b574960a30a45c7795c5cd2254818102",
     "skills/amc-knowledge/references/intake-workflow.md": "19d83ff83da008b395cff96a5e13fd08db1f8b8c363da22487aba752e04ac82b",
     "skills/amc-knowledge/references/service-plan-scoping.md": "0190b1cdc46c5a12325a9876d64ae025ab546c8a2b055d5fc3cb403b28e1227f",
-    "skills/amc-marketing-expert/SKILL.md": "eb196bb40b99af7923a4596347cbe777f77b7593e79b26f02fa4c1a2f38a6d61",
+    "skills/amc-marketing-expert/SKILL.md": "494e99a968420bd6d6d976a220151718a32d6fe275a2817b6db4ed02fb6f1f64",
     "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
     "skills/amc-marketing-expert/references/brand-interview.md": "f8ee4a39b00858408f9e1d884af61725ce8e58f52e759a999fbc10c0087d1a73",
     "skills/amc-marketing-expert/references/overseas-platform-strategy.md": "fb9fc12c24f19691cfb0bda1fd82595dcd3a2c6e3bd9ce811dbfef75da64ea6a",

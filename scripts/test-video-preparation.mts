@@ -79,7 +79,7 @@ let factsQuery:any
 const factsService=load('src/lib/ai-native/facts.ts',{'../brand-plan/creativeVisibility':{},'../sku-library/service.ts':{skuIsNew:()=>false}})
 const narrowFacts=await factsService.readVideoRewriteFacts({brand:{findUnique:async(query:any)=>{factsQuery=query;return {name:'Merchant',description:'Small storefront',knowledge:{promotionFocus:'Member offer valid through 2030',brandImage:'Open kitchen',menuItems:[{id:'dish',name:'Signature dish'}]}}}}},'b')
 assert.equal(factsQuery.where.id,'b')
-assert.equal(factsQuery.select.knowledge.select.marketingSolution,undefined)
+assert.equal(factsQuery.select.knowledge.select.marketingSolution,true,'Rewrite uses the current saved strategy')
 assert.equal(factsQuery.select.knowledge.select.researchReport,undefined)
 assert.equal(narrowFacts.productCatalog[0].name,'Signature dish')
 assert.equal(narrowFacts.knowledge.brandImage,'Open kitchen')

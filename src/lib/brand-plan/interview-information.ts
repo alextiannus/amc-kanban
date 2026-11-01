@@ -17,7 +17,7 @@ export async function readInterviewInformationSources(brandId:string,language='z
  const input=interviewInput((context.marketingSolution as any).coCreation?.interview)
  const attachments=await prisma.mediaAsset.findMany({where:{brandId,id:{in:input.attachmentIds}},orderBy:{id:'asc'},select:{id:true,filename:true,aiCaption:true,imageAnalysis:true,textDetection:true,technicalMetadata:true}})
  const skillVersion=createHash('sha256').update(skill).digest('hex'),month=new Date().toISOString().slice(0,7)
- const sourceHashes={brand:planningRevision({profile:context.brandInformation,claim:context.brandClaim}),report:planningRevision(insight.report),interview:planningRevision({latest:context.merchantInterview,input,attachments})}
+ const sourceHashes={brand:planningRevision({profile:context.brandInformation}),report:planningRevision(insight.report),interview:planningRevision({latest:context.merchantInterview,input,attachments})}
  const previous=(context.marketingSolution as any).coCreation?.interview?.provenance?.sourceHashes||{}
  const changedSources=Object.keys(sourceHashes).filter(key=>previous[key]!==sourceHashes[key as keyof typeof sourceHashes])
  // Only these three inputs invalidate positioning. Skill, language, month, strategy and subscription do not.

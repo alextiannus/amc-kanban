@@ -20,17 +20,17 @@ export function creativePortfolioFromMarketingSolution(value:unknown){
 
 // Application facts only: integration credentials and unrelated drafts are never projected.
 export async function readBrandFacts(db:any,brandId:string){
-  const facts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{brandTone:true,negPrompts:true,audienceAssumptions:true,productAssumptions:true,menuItems:true,businessHours:true,brandVoice:true,market:true,brandImage:true,promotionFocus:true,researchReport:true,marketingSolution:true}}}})
+  const facts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{negPrompts:true,menuItems:true,businessHours:true,market:true,researchReport:true,marketingSolution:true}}}})
   if(!facts)return null
   const rawKnowledge=facts.knowledge
   const creativePortfolio=creativePortfolioFromMarketingSolution(rawKnowledge?.marketingSolution),dislikedSourceIds=[...(db.brandMarketingSolution?.findMany?await readDislikedCreativeSources(db,brandId,rawKnowledge?.marketingSolution):dislikedCreativeSources(rawKnowledge?.marketingSolution))]
   if(rawKnowledge){
-    const strategy=rawKnowledge.marketingSolution?.autopilotStrategy
+    const strategy=savedStrategyContext(rawKnowledge.marketingSolution)
     const report=rawKnowledge.researchReport
     const {marketingSolution,researchReport,...rest}=rawKnowledge
-    facts.knowledge={...rest,...(strategy?{contentStrategy:{title:strategy.title,content:String(strategy.content||'').slice(0,5000),source:'AI proposal, not verified merchant facts'}}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.reportMarkdown||report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
+    facts.knowledge={...rest,...(strategy?{contentStrategy:strategy}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.reportMarkdown||report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
   }
-  return {...facts,...(dislikedSourceIds.length?{dislikedSourceIds}:{}),productCatalog:skuFacts(facts.knowledge?.menuItems),creativePortfolio,knowledge:facts.knowledge||{brandTone:null,negPrompts:[],audienceAssumptions:null,productAssumptions:null,menuItems:null,businessHours:null,brandVoice:null,market:null,brandImage:null,promotionFocus:null}}
+  return {...facts,...(dislikedSourceIds.length?{dislikedSourceIds}:{}),productCatalog:skuFacts(facts.knowledge?.menuItems),creativePortfolio,knowledge:facts.knowledge||{negPrompts:[],menuItems:null,businessHours:null,market:null}}
 }
 
 // Do not use the SKU editor's random ID fallback or inferred currency for evidence.
@@ -77,8 +77,17 @@ export function skuReferenceFeedback(value:{skuIds?:unknown;planning?:string;pat
 
 // Only merchant fields relevant to rewriting; no creative portfolio or research queries.
 export async function readVideoRewriteFacts(db:any,brandId:string){
- const brand=await db.brand.findUnique({where:{id:brandId},select:{name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{brandTone:true,negPrompts:true,menuItems:true,businessHours:true,brandVoice:true,market:true,brandImage:true,promotionFocus:true}}}})
+ const brand=await db.brand.findUnique({where:{id:brandId},select:{name:true,description:true,industry:true,location:true,timezone:true,knowledge:{select:{negPrompts:true,menuItems:true,businessHours:true,market:true,marketingSolution:true}}}})
  if(!brand)return null
- const {menuItems,...knowledge}=brand.knowledge||{}
- return {...brand,knowledge,productCatalog:skuFacts(menuItems)}
+ const {menuItems,marketingSolution,...knowledge}=brand.knowledge||{}
+ const strategy=savedStrategyContext(marketingSolution)
+ return {...brand,knowledge:{...knowledge,...(strategy?{contentStrategy:strategy}:{})},productCatalog:skuFacts(menuItems)}
+}
+
+// One current strategy excerpt, never a second Brand Proposition or old autopilot draft.
+export function savedStrategyContext(solution:any){
+ const content=String(solution?.coCreation?.marketing_plan?.content||solution?.marketingPlan?.content||'').trim()
+ if(!content)return null
+ const partial=content.length>6000
+ return {content:partial?content.slice(0,3500)+'\n[excerpt]\n'+content.slice(-2500):content,partial,source:'Current saved marketing strategy; decisions and recommendations, not independent product facts. Read the planning workspace when the full strategy is needed.'}
 }

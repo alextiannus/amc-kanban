@@ -21,6 +21,13 @@ export async function savePlanningDocument(brandId:string,userId:string,input:an
   if(attachmentIds.length>20||attachmentIds.some((v:unknown)=>typeof v!=='string'))return reject('invalid_attachments')
   const assets=await tx.mediaAsset.findMany({where:{brandId,id:{in:attachmentIds}},select:{id:true}})
   if(new Set(attachmentIds).size!==assets.length)return reject('attachment_not_found',404)
+  let interviewClaim:any
+  if(key==='interview'){
+   const previous=await tx.brandPlanInterview.findFirst({where:{brandId},orderBy:[{completedAt:'desc'},{id:'desc'}]})
+   if(Object.hasOwn(input,'expectedInterviewId')&&(previous?.id||null)!==input.expectedInterviewId)return reject('interview_revision_conflict',409)
+   const interview=await tx.brandPlanInterview.create({data:{brandId,rawNotes:input.content,answers:previous?.answers??[],summary:input.content}})
+   interviewClaim={source:'principal_interview',interviewId:interview.id,updatedAt:interview.completedAt.toISOString(),rawNotes:interview.rawNotes,summary:interview.summary,answers:interview.answers}
+  }
   const sameContent=old?.content===input.content
   const document={...old,title:old?.title||(key==='interview'?'品牌定位':key==='principal_strategy'?'主理人策略输入':key==='direction'?'营销方向与卖点':'品牌营销策划'),content:input.content,attachmentIds,status:'active',updatedAt:now,updatedBy:userId,lastRequestKey:typeof input.requestKey==='string'?input.requestKey:null,...(key==='direction'?{inputVersions:{interview:planningRevision(current.coCreation?.interview||null)}}:{}),confirmedAt:input.action==='confirm'?now:null,confirmedBy:input.action==='confirm'?userId:null}
   const next={...current,coCreation:{...current.coCreation,[key]:document}}
@@ -30,7 +37,7 @@ export async function savePlanningDocument(brandId:string,userId:string,input:an
    const prior=await tx.brandMarketingSolution.findFirst({where:{brandId,kind:'MARKETING_PLAN',period},orderBy:{version:'desc'},select:{version:true}})
    await tx.brandMarketingSolution.create({data:{brandId,kind:'MARKETING_PLAN',period,status:'ACTIVE',version:(prior?.version||0)+1,input:{...next.marketingPlan.provenance,inputVersions:next.marketingPlan.inputVersions},output:next.marketingPlan,generationMode:'HUMAN_EDITED',createdById:userId}})
   }
-  await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,marketingSolution:next},update:{marketingSolution:next}})
+  await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,marketingSolution:next,...(interviewClaim?{brandClaim:interviewClaim}:{})},update:{marketingSolution:next,...(interviewClaim?{brandClaim:interviewClaim}:{})}})
   await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:input.action==='confirm'?'PLANNING_DOCUMENT_CONFIRMED':'PLANNING_DOCUMENT_SAVED',resourceType:'BrandMarketingSolution',resourceId:brandId,oldValue:old||{},newValue:document,metadata:{stage:key,expectedRevision:input.expectedRevision}}})
   return {revision:planningRevision(next),document}
  },{maxWait:5000,timeout:30000})

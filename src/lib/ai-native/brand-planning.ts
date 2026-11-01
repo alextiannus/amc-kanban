@@ -1,3 +1,4 @@
+import {strategyInterviewVersion} from '../brand-plan/strategy-sources'
 import {insightDownloads} from '../brand-plan/report-download'
 import {interviewInput} from '../brand-plan/interview-information'
 import type {InsightReport} from '../brand-plan/insight-report'
@@ -80,7 +81,8 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   const brandId=brandFor(actor)
   const workspace=await getBrandPlanningContext(brandId)
   if(!workspace)return {brandId,status:'missing' as const,revision:planningRevision({}),workspace:null}
-  const sections={executionChecklist:(workspace.marketingSolution as any).executionChecklist||null,brandInformation:workspace.brandInformation,coCreation:record(workspace.marketingSolution).coCreation||null,merchantInterview:workspace.merchantInterview,brandClaim:workspace.brandClaim||null,annualPlan:workspace.marketingSolution.annualPlan||null,marketingPlan:(workspace.marketingSolution as any).marketingPlan||null}
+  const sections:any={executionChecklist:(workspace.marketingSolution as any).executionChecklist||null,brandInformation:workspace.brandInformation,coCreation:currentPlanningDocuments(record(workspace.marketingSolution)),merchantInterview:workspace.merchantInterview,annualPlan:workspace.marketingSolution.annualPlan||null,marketingPlan:(workspace.marketingSolution as any).marketingPlan||null}
+  if(scope?.stage==='marketing_plan'||scope?.stage==='execution_checklist'){delete sections.merchantInterview;if(sections.coCreation)delete sections.coCreation.interview}
   // Per-section budgets keep long interviews from hiding existing quarterly plans.
   const attachments=await prisma.mediaAsset.findMany({where:{brandId,id:{in:(record(record(workspace.marketingSolution).coCreation).interview?.attachmentIds||[]).slice(0,20)}},select:{id:true,filename:true,aiCaption:true,imageAnalysis:true,textDetection:true,technicalMetadata:true}})
   sections.coCreation=sections.coCreation?{...sections.coCreation,attachmentEvidence:attachments}:null
@@ -93,10 +95,10 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
  }
  if(scope?.stage==='interview'){
   const document=(workspace.marketingSolution as any).coCreation?.interview
-  ;(sections as any).positioningInputs={brandInformation:workspace.brandInformation,latestInterview:workspace.merchantInterview,latestSupplement:interviewInput(document),currentPositioning:document?{content:document.content,status:document.status,source:'previous positioning; derived, not a new interview'}:null,brandClaim:workspace.brandClaim,attachments}
+  ;(sections as any).positioningInputs={brandInformation:workspace.brandInformation,latestInterview:workspace.merchantInterview,latestSupplement:interviewInput(document),currentPositioning:document?{content:document.content,status:document.status,source:'previous positioning; derived, not a new interview'}:null,attachments}
  }
  const projected=Object.fromEntries(Object.entries(sections).map(([key,value])=>[key,key==='annualPlan'?projectSavedAnnualPlan(value):key==='positioningInputs'?projectPositioningInputs(value):key==='marketingInputs'?projectMarketingInputs(value):key==='executionChecklist'?projectSavedExecutionChecklist(value):key==='marketingPlan'?projectSavedMarketingPlan(value):projectPlanningReport(value,key==='coCreation'?14000:5000)]))
-  return {brandId,status:'available' as const,confirmationState:planningReviewState(workspace.marketingSolution),documentLifecycle:'latest_saved_version_is_executable; user edits are optimizations; no document approval required; external spending/publishing needs actual authorization',revision:workspace.marketingSolutionRevision,retrievedAt:new Date().toISOString(),partial:Object.values(projected).some(v=>v.partial),workspace:Object.fromEntries(Object.entries(projected).map(([key,value])=>[key,value.report]))}
+  return {brandId,status:'available' as const,sourceVersions:{interview:strategyInterviewVersion(workspace)},confirmationState:planningReviewState(workspace.marketingSolution),documentLifecycle:'latest_saved_version_is_executable; user edits are optimizations; no document approval required; external spending/publishing needs actual authorization',revision:workspace.marketingSolutionRevision,retrievedAt:new Date().toISOString(),partial:Object.values(projected).some(v=>v.partial),workspace:Object.fromEntries(Object.entries(projected).map(([key,value])=>[key,value.report]))}
 }
 
 /** Preserve full positioning and principal input, and exact calendar dates and platform roles. */
@@ -104,7 +106,8 @@ export function projectMarketingInputs(value:any){
  if(!value)return {report:null,partial:false}
  const events=Array.isArray(value.marketCalendar?.events)?value.marketCalendar.events:[]
  const compactEvents=events.slice(0,80).map((event:any)=>Object.fromEntries(['id','date','name','type','market','source','source_url','sourceUrl','status','verificationStatus','campaign_fit'].filter(key=>event[key]!==undefined).map(key=>[key,event[key]])))
- return {report:{...value,executionScope:{source:'Lark SOP代运营动作要求和责任分配 + merchant-defined AMC scope',monthlyWork:['制定次月内容与发布计划','组织本月内容制作（素材准备、精修剪辑）','安排本月内容发布','复盘本月Monthly Insight Report并确定下月调整','策划次月营销活动（计划）'],taskWording:'Use generic recurring titles; month is the group. Every month, including the last listed month, must plan both next month marketing activities AND next month content/publishing before that next month begins; next-month content planning incorporates creative themes, platform content directions and publishing schedule, replacing the separate current-month ideas task to avoid duplication; reuse advance campaign plans without duplicate detailed planning. Holiday planning still begins at least two calendar months ahead. Review is part of production, never standalone. Expression taboos belong to interview and are updated only when changed. Campaign title: 策划××活动（计划）, a planning deliverable, not event execution.',measurement:'Report-backed online reviews and order conversions; never invent unavailable metrics.',paidExposure:'Strategy may propose influencer visits and paid ads. Execution tasks require traceable merchant confirmation of BOTH the arrangement and its budget in the actual saved inputs; no approval is inferred from this policy.',preparation:{id:'amc-follow-review-setup',action:'安排店内关注与Google评论贴纸制作、摆放及扫码验证',rule:'Mandatory subscription preparation: coordinate follow/Google review sticker design, production/printing, merchant placement and on-site QR verification. Sales arranges/co-ordinates; merchant supports placement. One time; carry until human completion. Existing links or downloaded images do not prove placement/scan completion.'}},marketCalendar:{...value.marketCalendar,events:compactEvents}},partial:events.length>80}
+ const {brandPositioning,...uniqueInputs}=value
+ return {report:{...uniqueInputs,executionScope:{source:'Lark SOP代运营动作要求和责任分配 + merchant-defined AMC scope',monthlyWork:['制定次月内容与发布计划','组织本月内容制作（素材准备、精修剪辑）','安排本月内容发布','复盘本月Monthly Insight Report并确定下月调整','策划次月营销活动（计划）'],taskWording:'Use generic recurring titles; month is the group. Every month, including the last listed month, must plan both next month marketing activities AND next month content/publishing before that next month begins; next-month content planning incorporates creative themes, platform content directions and publishing schedule, replacing the separate current-month ideas task to avoid duplication; reuse advance campaign plans without duplicate detailed planning. Holiday planning still begins at least two calendar months ahead. Review is part of production, never standalone. Expression taboos belong to interview and are updated only when changed. Campaign title: 策划××活动（计划）, a planning deliverable, not event execution.',measurement:'Report-backed online reviews and order conversions; never invent unavailable metrics.',paidExposure:'Strategy may propose influencer visits and paid ads. Execution tasks require traceable merchant confirmation of BOTH the arrangement and its budget in the actual saved inputs; no approval is inferred from this policy.',preparation:{id:'amc-follow-review-setup',action:'安排店内关注与Google评论贴纸制作、摆放及扫码验证',rule:'Mandatory subscription preparation: coordinate follow/Google review sticker design, production/printing, merchant placement and on-site QR verification. Sales arranges/co-ordinates; merchant supports placement. One time; carry until human completion. Existing links or downloaded images do not prove placement/scan completion.'}},marketCalendar:{...value.marketCalendar,events:compactEvents}},partial:events.length>80}
 }
 
 export function withoutStrategyQuotas(value:any):any{
@@ -123,4 +126,10 @@ export function projectPositioningInputs(value:any){
   return item
  }
  return {report:visit(value),partial}
+}
+
+// Retired direction/proposition copies must not compete with the saved strategy.
+export function currentPlanningDocuments(solution:any){
+ const {direction,focus,selling_points,marketing_plan,...documents}=solution.coCreation||{}
+ return {...documents,...(!solution.marketingPlan?.content&&marketing_plan?{marketing_plan}:{})}
 }

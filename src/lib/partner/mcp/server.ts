@@ -1,3 +1,4 @@
+import {readBrandInformation,updateBrandInformation} from '@/lib/brand-information'
 import { resolveDraftAccount, resolveDraftPlatformAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
 import { lockBrandSync } from '@/lib/socialAccountLocks'
 import { MCP_PERMISSIONS } from '@/lib/role-permissions/mcp'
@@ -403,6 +404,18 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       return { content: [{ type: 'text' as const, text: JSON.stringify(links.map((l: any) => l.crew.brand), null, 2) }] }
     }
   )
+
+  registerTool('get_brand_information','Read current unified Brand Information, enriched by optional interview and Insight evidence; no credentials.',{brandId:z.string()},async({brandId})=>{
+    const agent=await resolveAgent()
+    if(!agent||!await requireActiveBrandLink(brandId,agent.id,'READ'))return {content:[{type:'text' as const,text:'Brand access denied'}],isError:true}
+    return {content:[{type:'text' as const,text:JSON.stringify(await readBrandInformation(brandId))}]}
+  })
+  registerTool('update_brand_information','Update brand information from the user conversation. Read current information first; change only explicitly requested fields, preserve other facts. Uses the same fields as Profile UI. No integration or credential settings.',{brandId:z.string(),expectedRevision:z.string(),patch:z.object({name:z.string().optional(),description:z.string().optional(),location:z.string().optional(),address:z.string().optional(),phone:z.string().optional(),website:z.string().optional(),industry:z.string().optional()}).strict()},async({brandId,expectedRevision,patch})=>{
+    const agent=await resolveAgent()
+    if(!agent||!await requireActiveBrandLink(brandId,agent.id,'WRITE'))return {content:[{type:'text' as const,text:'Brand access denied'}],isError:true}
+    try{return {content:[{type:'text' as const,text:JSON.stringify(await updateBrandInformation(brandId,agent.id,patch as Record<string,string>,expectedRevision))}]}}
+    catch(error){return {content:[{type:'text' as const,text:error instanceof Error?error.message:'brand_information_save_failed'}],isError:true}}
+  })
 
   // ── get_brand_profile_markdown ─────────────────────────────────────────
   registerTool(

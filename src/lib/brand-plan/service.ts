@@ -1,3 +1,4 @@
+import {projectBrandInformation} from '../brand-information'
 import {planningReviewState,planningRevision} from '../ai-native/planning-workspace-contract'
 import { startResearchRequest, synchronizeResearchRequest } from './researchRequests'
 import { v5ResearchReport, type ResearchRequest } from '../growthResearchV5'
@@ -356,11 +357,12 @@ export async function loadBrandPlanBrand(brandId: string) {
 export async function getBrandPlanningContext(brandId: string) {
   const brand=await prisma.brand.findUnique({where:{id:brandId},select:{
     id:true,name:true,description:true,industry:true,location:true,address:true,phone:true,website:true,
-    knowledge:{select:{market:true,district:true,businessHours:true,stores:true,menuItems:true,brandTone:true,brandPlan:true,marketingSolution:true,researchReport:true,brandClaim:true}},
+    knowledge:{select:{market:true,district:true,businessHours:true,stores:true,menuItems:true,negPrompts:true,brandPlan:true,marketingSolution:true,researchReport:true}},
+    growthResearchSnapshots:{select:{report:true,sourceVersion:true},orderBy:{generatedAt:'desc'},take:1},
     brandPlanInterviews:{select:{id:true,rawNotes:true,answers:true,summary:true,completedAt:true},orderBy:{completedAt:'desc'},take:1},
   }})
   if(!brand)return null
-  return {brandInformation:{id:brand.id,name:brand.name,description:brand.description,industry:brand.industry,location:brand.location,address:brand.address,phone:brand.phone,website:brand.website,market:brand.knowledge?.market,district:brand.knowledge?.district,businessHours:brand.knowledge?.businessHours,stores:brand.knowledge?.stores,menuItems:brand.knowledge?.menuItems,brandTone:brand.knowledge?.brandTone},marketingSolution:readMarketingSolutionWorkspace(brand),marketingSolutionRevision:planningRevision(brand.knowledge?.marketingSolution),brandClaim:brand.knowledge?.brandClaim||null,merchantInterview:serializeMerchantInterview(brand.brandPlanInterviews[0])}
+  return {brandInformation:projectBrandInformation(brand,brand.brandPlanInterviews[0],brand.growthResearchSnapshots[0]),marketingSolution:readMarketingSolutionWorkspace(brand),marketingSolutionRevision:planningRevision(brand.knowledge?.marketingSolution),merchantInterview:serializeMerchantInterview(brand.brandPlanInterviews[0])}
 }
 
 export async function getBrandPlan(brandId: string) {

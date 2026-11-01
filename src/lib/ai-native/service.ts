@@ -467,6 +467,7 @@ function planningProvenance(calls:readonly {capability:string;status:string;resu
  const provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof actualSkill?.skillVersion==='string'?actualSkill.skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
  if(draft.scope.stage==='marketing_plan'){
   if(source?.creativeSearch||draft.data?.brandCreatives?.some((v:unknown)=>typeof v==='string'&&/cre_ins_[a-zA-Z0-9_-]+/.test(v)))throw nativeError('strategy_scope_changed',409)
+  if(source?.workspace?.sourceVersions?.interview)provenance.sourceVersions={interview:source.workspace.sourceVersions.interview,report:source?.insight?.reportVersionId||null}
   provenance.strategyInputs=source?.workspace?.workspace?.marketingInputs||null
  }
  return provenance
