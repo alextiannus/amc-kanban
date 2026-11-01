@@ -46,15 +46,17 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
      const provider=(full:boolean,scope?:PlanningScope,binding?:any,taskId?:string,review=false,documentBinding?:ReturnType<typeof strategyDocumentBinding>)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
-      let lastPreviewAt=0,lastPreview=''
+      let lastPreviewAt=0,lastPreview='',firstDeltaMs:number|null=null,firstPreviewMs:number|null=null
       const preview=latestPreviewWriter(async text=>{await prisma.$executeRawUnsafe("UPDATE amc_iaic.amc_ai_requests SET conversation_preview=$1 WHERE task_id=$2::uuid AND subject_id=$3 AND intent->>'brandId'=$4",text,taskId,binding.userId,binding.brandId)})
       const observe=binding?.kind==='conversation'&&!documentBinding&&taskId?(calls:readonly any[])=>{
+        firstDeltaMs??=Date.now()-started
         if(Date.now()-lastPreviewAt<700)return
         for(const call of calls){
           const shape=wire.tools.find((t:any)=>t.name===call.function?.name)?.parameters?.properties
           if(!shape?.path||!shape?.content||!shape?.expectedRevision)continue
           const text=planningPreview(call.function.arguments,binding.artifactPath,binding.brandId)
           if(!text||text===lastPreview)continue
+          firstPreviewMs??=Date.now()-started
           lastPreview=text;lastPreviewAt=Date.now()
           preview.push(text.slice(0,24000))
         }
@@ -74,6 +76,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
         if(result)Object.assign(error as object,{usage:{inputTokens:result.usage?.input_tokens??null,outputTokens:result.usage?.output_tokens??null,cachedInputTokens:result.usage?.input_tokens_details?.cached_tokens??null,reasoningOutputTokens:result.usage?.output_tokens_details?.reasoning_tokens??null},usageEvidence:{rawUsage:result.rawUsage,providerReference:result.providerReference},providerCompleted:true})
         throw error
       }finally{
+        if(observe)console.info('[amc-conversation-timing]',JSON.stringify({taskId,firstDeltaMs,firstPreviewMs,modelTotalMs:Date.now()-started,completed:!!result}))
         await preview.flush()
         await recordExecution({source:'mm',executor:'kanban',task:'ai_native',version,modelId:model.id,connectionId:model.connectionId,targetModel:model.definition.modelName,responseModel:result?.responseModel||undefined,status:result?'success':'failed',latencyMs:Date.now()-started})
       }
