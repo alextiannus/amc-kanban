@@ -1,3 +1,4 @@
+import {interviewDocumentBody} from './brand-interview-document'
 import {brandInformationText} from './brand-information-document'
 import type {Prisma} from '@prisma/client'
 import {createHash} from 'node:crypto'
@@ -10,7 +11,8 @@ export function projectBrandInformation(brand:any,interview?:any,report?:any){
  const stored=brand?.knowledge?.marketingSolution?.coCreation?.brand_information?.content
  if(typeof stored==='string')return {id:brand.id,name:brand.name,content:stored,revision:brandInformationRevision(brand)}
  const knowledge=brand?.knowledge||{},profile=Object.fromEntries(['id',...BRAND_INFORMATION_FIELDS].map(key=>[key,brand?.[key]??null]))
- const notes=interview?.rawNotes||interview?.summary||interview?.answers
+ const raw=interview?.rawNotes||interview?.summary||interview?.answers
+ const notes=typeof raw==='string'?interviewDocumentBody(raw):raw
  const research=report?.report||report||knowledge.researchReport
  const summary=research?.summary||research?.structuredReport?.executive_summary||research?.reportMarkdown
  const information={...profile,revision:brandInformationRevision(brand),market:knowledge.market||brand?.location||null,district:knowledge.district||null,businessHours:knowledge.businessHours||null,stores:knowledge.stores||[],menuItems:knowledge.menuItems||[],restrictions:knowledge.negPrompts||[],...(notes?{merchantInformation:{source:'brand_interview',...excerpt(notes,7000),status:'Merchant statements; preserve scope and unconfirmed qualifiers'}}:{}),...(summary?{researchInformation:{source:'AI Insight Report',version:research.reportVersionId||report?.sourceVersion||research.snapshotId||null,...excerpt(summary,4000),status:'Research observations, not independently verified merchant facts; conflicts remain explicit'}}:{}),usage:'Current unified Brand Information. Report and interview enrich it; neither is required. Use this and the user conversation to plan; trace original evidence only when needed.'}
