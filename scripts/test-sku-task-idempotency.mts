@@ -1,3 +1,4 @@
+import * as taskTools from '../src/lib/ai-native/task-tools.ts'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {execFileSync} from 'node:child_process'
@@ -56,6 +57,7 @@ const app:any={
 }
 ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:[],modelRevision:1})
 const service=compile('src/lib/ai-native/service.ts',{
+  './task-tools':taskTools,
   './conversation-status':{wakeConversationWorker:()=>{}},
   '../brand-plan/creativeVisibility':{creativeIsSelected:()=>true},
   './contract':contract,'./store':store,'./autopilot-capabilities':{AUTOPILOT_TOOLS:[]},

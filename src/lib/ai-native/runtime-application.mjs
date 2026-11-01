@@ -1,3 +1,4 @@
+import {wakeConversationRuntime} from './conversation-worker.mjs';
 import {initializeLifecycle,settleTask,lifecycleDecision} from './task-lifecycle.mjs';
 import {preflightResult} from '@immedi/iaic-core/capabilities/preflight.js';
 // Bounded application capacity for the canonical Skill plus report and three-source positioning.
@@ -119,5 +120,5 @@ export async function openApplication({pool,taskPool=pool,skillRoot,job,profiles
  dispatcher.tasks=runtime;
  try{await runtime.initialize({requestHandoff:requestExecutorHandoff});}catch(error){await runtime.stop();throw error;}
  const entry={capabilities:dispatcher.capabilities,invoke:(name,input,context)=>name==='agent.work'?startSessionTask({sessions,actor:context.actor,input,startTask:()=>dispatcher.invoke(name,input,context)}):dispatcher.invoke(name,input,context)};
- return {dispatcher:entry,hostContext:hostContexts,mandates:assistantMandates,runtime,tasks,taskListing,plans,deferred,events,eventSubscriptions,eventTasks,registry,memory,workspace,skills,knowledge,knowledgeStore,sessions,models,modelRouting,ledger,scope,start:()=>{deferred?.start(60000);runtime.start(30000);void runtime.tick().catch(()=>console.warn("[amc-ai] initial executor check deferred"));},close:async()=>{await deferred?.stop();await runtime.stop();}};
+ return {dispatcher:entry,hostContext:hostContexts,mandates:assistantMandates,runtime,tasks,taskListing,plans,deferred,events,eventSubscriptions,eventTasks,registry,memory,workspace,skills,knowledge,knowledgeStore,sessions,models,modelRouting,ledger,scope,start:()=>{deferred?.start(60000);runtime.start(taskPool===pool?30000:1000);if(taskPool!==pool)wakeConversationRuntime(runtime);else void runtime.tick().catch(()=>console.warn("[amc-ai] initial executor check deferred"));},close:async()=>{await deferred?.stop();await runtime.stop();}};
 }

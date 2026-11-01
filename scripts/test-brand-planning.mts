@@ -1,3 +1,4 @@
+import {wakeConversationRuntime} from '../src/lib/ai-native/conversation-worker.mjs'
 import {activeConversationStatus,wakeConversationWorker} from '../src/lib/ai-native/conversation-status.ts'
 import {getBrandPlan,getBrandPlanningContext} from '../src/lib/brand-plan/service.ts'
 import {planningRevision,planningDraftContract} from '../src/lib/ai-native/planning-workspace-contract.ts'
@@ -59,6 +60,22 @@ try{
   await initializeHost(pool)
   const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContextRevision:async()=>sourceRevision,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'available',revision:'0'.repeat(64),workspace:{coCreation:{interview:{status:'confirmed',content:'Confirmed interview'},direction:{status:'confirmed',content:'Confirmed direction',inputVersions:{interview:planningRevision({status:'confirmed',content:'Confirmed interview'})}}}}}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
+  // Two real persisted requests must finish from one wake, without manual ticks.
+  const queued=[]
+  for(const name of ['queue-first','queue-next']){
+    const intent:ConversationIntent={kind:'conversation',topic:'general',history:[],brandId:id,userId:id,goal:name,artifactPath:`work/${name}.json`,requestKey:`${name}-${id}`}
+    await admitIntent(pool,actor,intent)
+    const receipt=await app.dispatcher.invoke('agent.work',{goal:name,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools},{actor,callId:intent.requestKey})
+    await intentForTask(pool,app,actor,receipt.id);queued.push(receipt.id)
+  }
+  const inFlight=app.runtime.tick()
+  await wakeConversationRuntime(app.runtime)
+  await inFlight
+  for(const taskId of queued){
+    const task=await app.runtime.get(actor,taskId,{history:true})
+    assert.equal(task.status,'succeeded','one busy wake drains the persisted queue')
+    assert.equal(task.calls.filter((c:any)=>c.capability==='my_write_workspace'&&c.status==='succeeded').length,1,'no duplicate reply write')
+  }
   for(const [index,topic] of (['brand_planning','general','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning','brand_planning'] as const).entries()){
     if(index===7)sourceRevision='two'
     const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3||index===8||index===9)?{planningScope:{stage:index===8?'direction' as const:index===9?'marketing_plan' as const:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':'请继续讨论',artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}

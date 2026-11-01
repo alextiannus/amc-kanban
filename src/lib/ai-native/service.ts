@@ -209,7 +209,7 @@ export async function createNativeTask(userId:string,brandId:string,body:any,aut
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:allowedTaskTools(tools,intent,AUTOPILOT_TOOLS)},{actor,callId:key})
   await pool.query('UPDATE amc_ai_requests SET task_id=$1 WHERE id=$2 AND (task_id IS NULL OR task_id=$1)',[receipt.id,row.id])
   const task=await publicTask(app,actor,receipt.id)
-  wakeConversationWorker(app)
+  wakeConversationWorker(app,host.lane==='conversation')
   return task
 }
 async function publicTask(app:Application,actor:NativeActor,id:string){
@@ -351,7 +351,7 @@ async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof t
   return {...task,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='video_rewrite'?{progress:{stage:videoProgress(task.status,history.calls)}}:{}),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
-  const {actor,app,pool}=await taskHost(userId,brandId,id)
+  const {actor,app,pool,lane}=await taskHost(userId,brandId,id)
   if(!['cancel','resume','provide_input','control_result'].includes(body?.action))throw nativeError('invalid_task_action')
   const key=requestKey(body.requestKey)
   if(['resume','provide_input'].includes(body.action)){
@@ -361,7 +361,7 @@ export async function controlNativeTask(userId:string,brandId:string,id:string,b
   if(['resume','provide_input'].includes(body.action))assertUsageSettled(await app.ledger.taskUsage(await app.scope(actor),id))
   const input={id,...(body.action==='provide_input'?{input:body.input}:{}),...(body.action==='control_result'?{requestKey:key}:{})}
   const receipt=await app.dispatcher.invoke(`tasks.${body.action}`,input,{actor,callId:key})
-  if(['resume','provide_input'].includes(body.action))wakeConversationWorker(app)
+  if(['resume','provide_input'].includes(body.action))wakeConversationWorker(app,lane==='conversation')
   return {receipt,task:await app.runtime.state(actor,id).then(t=>({id:t.id,status:t.status,waitingReason:t.waiting_reason}))}
 }
 export async function adoptNativeCandidate(userId:string,brandId:string,id:string,body:any,autopilotRunId?:string){

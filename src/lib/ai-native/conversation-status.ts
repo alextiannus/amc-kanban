@@ -1,3 +1,4 @@
+import {wakeConversationRuntime} from './conversation-worker.mjs'
 import type {Application} from '@immedi/iaic-core/developer/templates/agent/app.mjs'
 import type {NativeActor} from './contract'
 /** Authorized, receipt-only progress. Does not revalidate facts or expose tool inputs/results. */
@@ -16,6 +17,7 @@ export async function activeConversationStatus(app:Pick<Application,'runtime'|'t
  return {id:state.id,kind:'conversation',status:state.status,waitingReason:state.waiting_reason,goal:state.input.goal,version:state.version,updatedAt:state.updated_at,progress:{stage}}
 }
 /** Wake the existing fenced executor; tick coalesces with any in-flight tick. */
-export function wakeConversationWorker(app:Pick<Application,'runtime'>){
- void app.runtime.tick().catch(error=>console.error('[amc-ai] worker wake failed',error instanceof Error?error.name:'unknown'))
+export function wakeConversationWorker(app:Pick<Application,'runtime'>,drainQueue=true){
+ if(drainQueue)wakeConversationRuntime(app.runtime)
+ else void app.runtime.tick().catch(error=>console.error('[amc-ai] worker wake failed',error instanceof Error?error.name:'unknown'))
 }
