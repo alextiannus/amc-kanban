@@ -1,3 +1,5 @@
+import * as taskTools from '../src/lib/ai-native/task-tools.ts'
+import * as videoReview from '../src/lib/ai-native/video-review.ts'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
@@ -22,6 +24,7 @@ const rows=new Map<string,any>(),taskId='11111111-1111-4111-8111-111111111111'
 const pool={query:async()=>({rows:[]})},app={runtime:{state:async()=>({id:taskId,status:'queued',input:{goal:'SKU'},version:1,updated_at:'now'})},dispatcher:{invoke:async(_name:string,input:any)=>{dispatches++;allowedTools=input.allowedTools;return {id:taskId}}}}
 ;(globalThis as any).amcNativeHost=Promise.resolve({pool,app,tools:['amc.context','amc.creative','amc.library','amc.operations','my_write_workspace'],modelRevision:1})
 const service=compile('src/lib/ai-native/service.ts',{
+  './task-tools':taskTools,
   './conversation-status':{wakeConversationWorker:()=>{}},
   '../brand-plan/creativeVisibility':{creativeIsSelected:()=>true},
   '../brand-plan/creativeFidelity':fidelity,
@@ -72,6 +75,7 @@ const libraryModule=compile('src/lib/ai-native/library.ts',{'./contract':contrac
 let configured:any,artifactContent=''
 const application=compile('src/lib/ai-native/application.ts',{
   '../brand-plan/creativeFidelity':fidelity,'../brand-plan/creativeRevisions':{prepareCreativeQualityReview:async()=>quality},
+  './video-review':videoReview,
   './runtime-application.mjs':{openApplication:async(config:any)=>{configured=config;return {workspace:{read:async()=>({content:artifactContent})}}}},
   './contract':contract,'./store':{intentBy:async()=>({intent:lastIntent,task_id:taskId})},'./library':libraryModule,'./sku-workflow':workflow,
   './autopilot-capabilities':{AUTOPILOT_TOOLS:[],autopilotCapabilities:()=>[]},
