@@ -18,5 +18,5 @@ export function conversationDocumentBinding(request:any,intent:ConversationInten
 export function conversationDocumentCall(text:unknown,binding:NonNullable<ReturnType<typeof conversationDocumentBinding>>,writer:string){
  if(!writer||typeof writer!=='string')throw Error('conversation_document_writer_unavailable')
  if(typeof text!=='string'||!text.trim()||text.length>24000)throw Error('conversation_document_empty_or_too_long')
- return {function:{name:writer,arguments:JSON.stringify({path:binding.intent.artifactPath,expectedRevision:binding.revision,mediaType:'application/json',content:JSON.stringify({kind:'conversation',brandId:binding.intent.brandId,contextDigest:binding.digest,content:text})})}}
+ return {function:{name:writer,arguments:JSON.stringify({path:binding.intent.artifactPath,expectedRevision:binding.revision,mediaType:'application/json',content:JSON.stringify({kind:'conversation',brandId:binding.intent.brandId,contextDigest:binding.digest,content:text,...(binding.intent.topic==='brand_planning'?{planningProgress:{stage:'direction',summary:text.trim().slice(0,500)}}:{})})})}}
 }

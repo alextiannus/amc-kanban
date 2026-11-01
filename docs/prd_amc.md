@@ -141,7 +141,7 @@ SKU 任务同键重试按规范化请求及固定的目录、来源、人工决�
 
 ## 对话非模型等待优化（既有独立队列已上线；本轮进度与历史改进待发布）
 
-普通对话正文优先采用文本流：在宿主已读取可信上下文与必需Skill、且当前允许写回复时，模型可直接生成Markdown；宿主绑定真实brandId、artifactPath、contextDigest与工作区版本，原文提交原有校验。业务工具继续可用，真实业务完成仍以回执为准。标准九字段访谈稿沿用正文恢复机制，带uiAction或非标准访谈草案等结构化元数据时保留workspace工具；具有planningScope的策划流程不切换此通道。
+普通对话正文优先采用文本流：在宿主已读取可信上下文与必需Skill、且当前允许写回复时，模型可直接生成Markdown；宿主绑定真实brandId、artifactPath、contextDigest与工作区版本，原文提交原有校验。普通品牌讨论的必需planningProgress由宿主以direction阶段和正文摘录补齐，避免因缺展示摘要触发重复生成；不推断业务完成或保存状态。业务工具继续可用，真实业务完成仍以回执为准。标准九字段访谈稿沿用正文恢复机制，带uiAction或非标准访谈草案等结构化元数据时保留workspace工具；具有planningScope的策划流程不切换此通道。
 
 普通对话流式输出约定：workspace 工具先输出 path，正文对象先输出 kind、brandId、content，其他元数据随后输出；schema 与工具说明采用同一顺序，避免已生成正文被末尾绑定字段阻塞。最终完整校验仍保留。
 

@@ -20,6 +20,7 @@ const normalized=nativeWireCalls([call],{} as any,[writer],true,intent)
 const args=JSON.parse(normalized[0].function.arguments)
 assert.equal(args.path,intent.artifactPath);assert.equal(args.expectedRevision,0)
 const artifact=conversationFrom(args.content,intent)
+assert.deepEqual(artifact.planningProgress,{stage:'direction',summary:text.trim().slice(0,500)},'brand planning verifier requires continuity metadata even without a draft scope');
 assert.equal(artifact.content,text);assert.equal(artifact.contextDigest,'a'.repeat(64));assert(artifact.interviewDraft)
 const rewritten=conversationDocumentBinding(request({calls:[...data.calls,{capability:'my_write_workspace',status:'succeeded',result:{reference:{path:intent.artifactPath,revision:3}}}]}),intent)!
 assert.equal(JSON.parse(conversationDocumentCall('修正回复',rewritten,'writer').function.arguments).expectedRevision,3)
