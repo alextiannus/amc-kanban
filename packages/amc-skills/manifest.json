@@ -68,7 +68,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-conversation"
       },
-      "version": "sha256:edaf43368b5d67ea462ee3738787c98b077df53b1a33eb7f5d7c74f14746f24e",
+      "version": "sha256:279e7cb6b35a004c50ad66d28608db661217a15b7390a596f3b9366745d9ddfb",
       "description": "Respond to a user’s general text conversation with their brand-scoped User AI Assistant."
     },
     {
@@ -132,7 +132,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-marketing-expert"
       },
-      "version": "sha256:539a644b2b880876ef37e8ac282cbb641d223b1082071c4d0310460c0ed4b189",
+      "version": "sha256:dc899318a681bb553192a4a624c62a49a7c491e3a66cbe37dbf36ce795b584e9",
       "description": "AMC品牌策略讨论、生成、优化与评审的优先技能。以访谈和线上证据判断定位、客群客源、竞争、获客转化、AMC工作、社媒Content及店内活动；不替代投放或发布授权。"
     },
     {
@@ -573,7 +573,7 @@
     "skills/amc-content-copywriting/references/platform-skills/instagram_skills.json": "07e845c626c3808db8afece28b39bbbd42a2f316e61e887ece05662aaead4731",
     "skills/amc-content-copywriting/references/platform-skills/tiktok_skills.json": "046e090104bc5583cedf5b9c5bf1e082cf465c7d7e8da70df0037b1859854e49",
     "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json": "31204879c1538b0e9ed5862f689689f021560776b5069eef62817dadccacda65",
-    "skills/amc-conversation/SKILL.md": "9ba7f471da0087d379ead2005c43d7ab2e3ec56b6c847bb1c3aeb5a461ac4a7e",
+    "skills/amc-conversation/SKILL.md": "40d0b0be0331a9efc06570ddb8b6d13a1aa69c18b7d3585015a82f06b07acbee",
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-creative/SKILL.md": "03fe097500c3bc22833cd3a953b88ae33e0e47d7332a3c70f971c2e60f8a906a",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
@@ -595,9 +595,9 @@
     "skills/amc-knowledge/references/file-schemas.md": "6ac342d1d48c897dbb22ff3a15d53a69b574960a30a45c7795c5cd2254818102",
     "skills/amc-knowledge/references/intake-workflow.md": "19d83ff83da008b395cff96a5e13fd08db1f8b8c363da22487aba752e04ac82b",
     "skills/amc-knowledge/references/service-plan-scoping.md": "0190b1cdc46c5a12325a9876d64ae025ab546c8a2b055d5fc3cb403b28e1227f",
-    "skills/amc-marketing-expert/SKILL.md": "a251416d492889a43bc055355d97f64948e5780a4f9b1f7174817e67be4ee1b0",
+    "skills/amc-marketing-expert/SKILL.md": "39f27751d7188cfe84bb4df76e41706d91c42d1e0f714a1374cf9463dd534c80",
     "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
-    "skills/amc-marketing-expert/references/brand-interview.md": "861547bb3fdb0b193b948a06901bec0659010c9990765a29b7e5066058850d3f",
+    "skills/amc-marketing-expert/references/brand-interview.md": "f8ee4a39b00858408f9e1d884af61725ce8e58f52e759a999fbc10c0087d1a73",
     "skills/amc-marketing-expert/references/overseas-platform-strategy.md": "fb9fc12c24f19691cfb0bda1fd82595dcd3a2c6e3bd9ce811dbfef75da64ea6a",
     "skills/brand-intelligence-intake/SKILL.md": "aea6f0010f18cc49d576382a1d85ff94e4362cda6298bb4b6fb0fb69cf4fa2ce",
     "skills/brand-intelligence-intake/agents/openai.yaml": "e21863b50a0d25e0fa895efaf7900c2752d8e942989f4960e976698ca4eb0d8a",

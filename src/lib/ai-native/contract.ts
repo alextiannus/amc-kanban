@@ -1,4 +1,4 @@
-import {interviewAnswers,type InterviewDraft} from './interview-contract'
+import {visibleInterviewDraft,interviewAnswers,type InterviewDraft} from './interview-contract'
 import type {VideoRewriteIntent} from './video-rewrite'
 import {isUiPage,parseUiAction,type UiAction,type UiPage} from './ui-navigation'
 import {PLANNING_STAGES,planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
@@ -93,6 +93,7 @@ export function conversationFrom(content:string,intent:ConversationIntent){
     if(intent.topic!=='brand_planning'||!p||Array.isArray(p)||typeof p!=='object'||Object.keys(p).some(k=>!['stage','summary'].includes(k))||!PLANNING_STAGES.includes(p.stage)||typeof p.summary!=='string'||!p.summary.trim()||p.summary.length>500)throw nativeError('invalid_planning_progress')
     if(intent.planningScope&&p.stage!==intent.planningScope.stage)throw nativeError('planning_progress_scope_mismatch')
   }
+  if(value.interviewDraft===undefined){const draft=visibleInterviewDraft(value.content);if(draft)value.interviewDraft=draft}
   if(value.interviewDraft!==undefined){if(!value.interviewDraft||Object.keys(value.interviewDraft).some(k=>k!=='answers'))throw nativeError('invalid_interview_draft');value.interviewDraft={answers:interviewAnswers(value.interviewDraft.answers)};if(value.interviewDraft.answers.some((a:{answer:string})=>!value.content.includes(a.answer)))throw nativeError('interview_draft_must_be_visible')}
   if(value.uiAction!==undefined)value.uiAction=parseUiAction(value.uiAction)
   if(value.suggestedReplies!==undefined){

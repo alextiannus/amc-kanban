@@ -10,8 +10,8 @@ export function prepareConversationCompletion<T extends {messages:any[];tools:an
   const context=data.calls.find((c:any)=>c.capability==='amc.context'&&c.status==='succeeded')?.result
   const intent=trustedIntent||context?.intent
   if(intent?.kind!=='conversation')return request
-  const rejectedConfirmation=data.calls.some((c:any)=>c.capability==='amc.interview.save'&&c.status==='failed'&&/explicit_interview_confirmation_required|previous_interview_draft_required/.test(JSON.stringify(c.error||'')))
-  if(rejectedConfirmation)request={...request,tools:request.tools.filter((t:any)=>t.name!=='amc.interview.save'),messages:[...request.messages,{role:'system',content:'Interview confirmation was rejected by the host. Do not retry this save in this turn. Explain that nothing was saved and ask for a clear confirmation or present the missing interview draft. Finish with an honest reply; never claim the failed write succeeded.'}]}
+  const rejectedConfirmation=data.calls.some((c:any)=>c.capability==='amc.interview.save'&&c.status==='failed'&&/explicit_interview_confirmation_required|previous_interview_draft_required|interview_confirmation_requires_revision/.test(JSON.stringify(c.error||'')))
+  if(rejectedConfirmation)request={...request,tools:request.tools.filter((t:any)=>t.name!=='amc.interview.save'),messages:[...request.messages,{role:'system',content:'Interview confirmation was rejected by the host. Do not retry this save in this turn. Explain that nothing was saved. If the user already explicitly confirmed, acknowledge that authorization: missing draft or mismatched version is a system linkage issue, never ask them to repeat confirmation or use a magic phrase. Present a corrected draft only if its content needs to change. Finish with an honest reply; never claim the failed write succeeded.'}]}
   const lastEvent=data.events.at(-1)
   if(lastEvent?.kind!=='call_settled')return request
   const write=data.calls.find((c:any)=>c.id===lastEvent.data?.callId&&c.capability==='my_write_workspace'&&c.status==='succeeded')
