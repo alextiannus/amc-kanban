@@ -11,5 +11,6 @@ try{
  run('createdb',['-h','127.0.0.1','-p',String(port),'amc_lineage_test_conversation']);
  const env={...process.env,DATABASE_URL:`postgresql://${userInfo().username}@127.0.0.1:${port}/amc_lineage_test_conversation`};
  execFileSync(process.execPath,['node_modules/prisma/build/index.js','db','push','--skip-generate'],{stdio:'inherit',timeout:60000,env});
+ execFileSync(process.execPath,['--import','tsx','scripts/test-conversation-assets.mts'],{stdio:'inherit',timeout:60000,env});
  execFileSync(process.execPath,['--import','tsx','scripts/test-brand-planning.mts'],{stdio:'inherit',timeout:180000,env});
 }finally{if(started)run('pg_ctl',['-D',dir,'-m','immediate','-w','stop'])}
