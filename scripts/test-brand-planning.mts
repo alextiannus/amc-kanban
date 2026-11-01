@@ -114,7 +114,7 @@ try{
     if(index===6)assert.equal(insightReads,sessionReads,'a new task and all revalidations reuse session context')
     if(index===7)assert.equal(insightReads,sessionReads+1,'source revision invalidates the session cache once')
     if(index===8)assert.equal(insightReads,sessionReads+2,'direction scope has its own current source bundle')
-    if(index===9)assert.equal(insightReads,sessionReads+3,'full strategy scope cannot reuse the narrow direction context')
+    if(index===9)assert.equal(insightReads,sessionReads+2,'strategy uses unified Brand Information without a duplicate Growth read')
     const before=modelCalls
     await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal(modelCalls,before)
@@ -122,7 +122,7 @@ try{
     await assert.rejects(()=>app.runtime.get(actorFor(id,'other-user'),receipt.id))
     assert.throws(()=>conversationFrom(artifact.content,{...intent,brandId:'other-brand'}))
   }
-  assert.equal(insightReads,sessionReads+3,'four legacy turns, one shared session load, one revision invalidation and two distinct planning scopes')
+  assert.equal(insightReads,sessionReads+2,'strategy source bundle omits redundant Growth reads')
   // Query and planning turns sharing a session must not share different source bundles.
   for(const goal of ['AMC的商家访谈现在有什么内容？','repair content shape','repeat invalid reply']){
     const before=insightReads,intent:any={kind:'conversation',topic:'brand_planning',history:[],brandId:id,userId:id,goal,contextSessionId,artifactPath:'work/query-'+randomUUID()+'.json',requestKey:randomUUID()}
