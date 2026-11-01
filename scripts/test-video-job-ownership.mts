@@ -77,7 +77,7 @@ const matches = (row: Job, where: Record<string, unknown>) =>
 
 const videoProductionJob = {
   findFirst: async ({ where }: any) => rows.find(row => matches(row, where)) ?? null,
-  findUnique: async ({ where }: any) => rows.find(row => row.id === where.id) ?? null,
+  findUnique: async ({ where }: any) => structuredClone(rows.find(row => row.id === where.id) ?? null),
   create: async ({ data }: any) => {
     writes += 1
     const created = { ...job(data.id, data.brandId, data.createdBy), ...structuredClone(data) }
@@ -102,8 +102,9 @@ const prisma: any = {
   $transaction: async (fn: (client: any) => unknown) => fn(tx),
 }
 
+const completionTransitions:string[]=[]
 const persistence = compile('src/lib/videoJobPersistence.ts', {
-  './creative-favorites':{completeFavoriteForVideo:async()=>{}},
+  './creative-favorites':{completeFavoriteForVideo:async(_tx:any,row:any)=>{if(row.status==='completed'&&row.finalVideoUrl)completionTransitions.push(row.id)}},
   '@prisma/client': {},
   './brandAccess': { canSessionAccessBrandProject: async (brand: string) => brandAccess && brand === 'brand' },
   './prisma': { prisma },
@@ -159,6 +160,14 @@ const assertPublicShape = (value: unknown): void => {
     assertPublicShape(nested)
   }
 }
+
+await post('completion-fixture','brand',{status:'generating'})
+await post('completion-fixture','brand',{status:'failed'})
+assert.equal(completionTransitions.length,0)
+await post('completion-fixture','brand',{status:'completed',finalVideoUrl:'https://fixture.invalid/final.mp4'})
+assert.deepEqual(completionTransitions,['completion-fixture'])
+await post('completion-fixture','brand',{status:'completed',finalVideoUrl:'https://fixture.invalid/final.mp4'})
+assert.equal(completionTransitions.length,1,'repeated completed polls must not remove a later re-favorite')
 
 const owned = await get('owned')
 assert.equal(owned.status, 200)
