@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { Prisma } from '@prisma/client'
 import { CreativeRevisionError } from '../src/lib/brand-plan/creativeRevisionContract.ts'
-import { planningRevision } from '../src/lib/ai-native/planning-workspace-contract.ts'
+import { planningRevision,planningReviewState } from '../src/lib/ai-native/planning-workspace-contract.ts'
 
 // Exercise the real action and serializer without connecting to an application DB.
 const report = { generatedAt: '2026-10-14T01:00:00.000Z', sourceSystem: 'amc-growth',
@@ -56,8 +56,9 @@ new Function('require', 'module', 'exports', ts.transpileModule(
   if (key === '@/lib/prisma') return { prisma: db }
   if (key === '@prisma/client') return { Prisma }
   if (key === './creativeRevisionContract') return { CreativeRevisionError }
+  if (key === './researchRequests') return {synchronizeResearchRequest:async()=>false}
   if (key === './creativeRevisions') return { protectTrackedCreativeChanges: async () => {} }
-  if (key === '../ai-native/planning-workspace-contract') return { planningRevision }
+  if (key === '../ai-native/planning-workspace-contract') return { planningRevision,planningReviewState }
   if (key === 'crypto') return { createHash: () => { throw new Error('unexpected hashing') } }
   return {}
 }, mod, mod.exports)
@@ -100,7 +101,7 @@ reset()
 await assert.rejects(() => save({ rawNotes: ' ' }), (error: any) => error.code === 'merchant_interview_required')
 assert.equal(interviews.length, 0)
 reset(false)
-await assert.rejects(save, (error: any) => error.code === 'growth_research_report_required')
-assert.equal(interviews.length, 0)
+await save()
+assert.equal(interviews.length, 1, 'Merchant statements can be saved without a Growth report')
 
 console.log('Merchant interview save, readback, plan preservation and rollback tests passed.')

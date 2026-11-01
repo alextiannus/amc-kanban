@@ -1,3 +1,4 @@
+import {interviewAnswers,type InterviewDraft} from './interview-contract'
 import type {VideoRewriteIntent} from './video-rewrite'
 import {isUiPage,parseUiAction,type UiAction,type UiPage} from './ui-navigation'
 import {PLANNING_STAGES,planningScope,validatePlanningDraft,type PlanningScope,type PlanningDraft} from './planning-workspace-contract'
@@ -92,6 +93,7 @@ export function conversationFrom(content:string,intent:ConversationIntent){
     if(intent.topic!=='brand_planning'||!p||Array.isArray(p)||typeof p!=='object'||Object.keys(p).some(k=>!['stage','summary'].includes(k))||!PLANNING_STAGES.includes(p.stage)||typeof p.summary!=='string'||!p.summary.trim()||p.summary.length>500)throw nativeError('invalid_planning_progress')
     if(intent.planningScope&&p.stage!==intent.planningScope.stage)throw nativeError('planning_progress_scope_mismatch')
   }
+  if(value.interviewDraft!==undefined){if(!value.interviewDraft||Object.keys(value.interviewDraft).some(k=>k!=='answers'))throw nativeError('invalid_interview_draft');value.interviewDraft={answers:interviewAnswers(value.interviewDraft.answers)};if(value.interviewDraft.answers.some((a:{answer:string})=>!value.content.includes(a.answer)))throw nativeError('interview_draft_must_be_visible')}
   if(value.uiAction!==undefined)value.uiAction=parseUiAction(value.uiAction)
   if(value.suggestedReplies!==undefined){
     if(!Array.isArray(value.suggestedReplies)||value.suggestedReplies.some((s:unknown)=>typeof s!=='string'||!s.trim()||s.length>200))throw nativeError('invalid_suggested_replies')
@@ -99,7 +101,7 @@ export function conversationFrom(content:string,intent:ConversationIntent){
     value.suggestedReplies=[...new Set((value.suggestedReplies as string[]).map(s=>s.trim()))].slice(0,3)
   }
   if(value.annualBudget&&!checkPlanningBudget(value.annualBudget).balanced)throw nativeError('annual_budget_unbalanced')
-  return value as {planningProgress?:{stage:PlanningScope['stage'];summary:string};uiAction?:UiAction;suggestedReplies?:string[];planningDraft?:PlanningDraft;annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
+  return value as {interviewDraft?:InterviewDraft;planningProgress?:{stage:PlanningScope['stage'];summary:string};uiAction?:UiAction;suggestedReplies?:string[];planningDraft?:PlanningDraft;annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
 }
 export function conversationInput(body:any){
   if(body.afterTaskId!==undefined&&(typeof body.afterTaskId!=='string'||!/^[0-9a-f-]{36}$/i.test(body.afterTaskId)))throw nativeError('invalid_previous_task')

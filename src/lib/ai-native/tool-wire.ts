@@ -1,3 +1,4 @@
+import {interviewAnswersSchema} from './interview-contract'
 import type {ConversationIntent} from './contract'
 import {planningArtifactSchema} from './planning-artifact-schema'
 import type {PlanningScope} from './planning-workspace-contract'
@@ -13,6 +14,7 @@ export function conversationArtifactSchema(intent:ConversationIntent){
   contextDigest:{type:'string',pattern:'^[a-f0-9]{64}$',description:'Copy the exact amc.context.contextDigest.'},
   title:{...text,maxLength:200},
   ...(intent.topic==='brand_planning'?{planningProgress:{type:'object',additionalProperties:false,required:['stage','summary'],properties:{stage:{type:'string',...(intent.planningScope?{const:intent.planningScope.stage}:{enum:['insight','interview','direction','marketing_plan','execution_checklist','focus','selling_points','annual','quarter']})},summary:{...text,maxLength:500}}},planningDraft:{type:'object',description:'Only when explicitly requested. Copy optionalPlanningDraftContract / artifactContract exactly.',additionalProperties:true},annualBudget:{type:'object',description:'Only for an explicit budget, validated with amc.planning_budget.',additionalProperties:true}}:{}),
+  interviewDraft:{type:'object',additionalProperties:false,required:['answers'],properties:{answers:interviewAnswersSchema},description:'Optional UNSAVED interview summary/proposal for explicit confirmation. Also show these exact answers in visible content. Never claims a save.'},
   suggestedReplies:{type:'array',maxItems:3,items:{...text,maxLength:200}},
   uiAction:{type:'object',additionalProperties:false,required:['page','mode'],properties:{page:{...text,description:'An exact authorized key from amc.context.uiCapabilities.pages.'},mode:{type:'string',enum:['open','suggest']},month:{type:'string',pattern:'^[0-9]{4}-[0-9]{2}$'}}}
  }}

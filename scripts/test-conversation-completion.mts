@@ -60,3 +60,9 @@ const generalSkill={...skillContext,result:{requiredSkill:'amc-conversation/SKIL
 assert.deepEqual(conversationHostStep({...skillRequest,messages:make([generalSkill],[contextEvent]).messages},generalIntent),{type:'call',name:'assistant.skills.read',input:{id:'amc-conversation/SKILL.md'}})
 assert.equal(conversationHostStep(skillRequest,generalIntent),null,'cannot choose planning skill for general conversation')
 console.log('PASS general conversations get fixed context/skill reads and receipt submission without widening tool permissions')
+
+const savedInterview={id:'saved-interview',capability:'amc.interview.save',status:'succeeded',result:{verified:true}}
+const saveEvent={kind:'call_settled',data:{callId:savedInterview.id}}
+assert.deepEqual(conversationHostStep(host([context,savedInterview],[saveEvent]),intent),{type:'call',name:'amc.context',input:{}})
+assert.equal(conversationHostStep(host([context,{...savedInterview,result:{verified:false}}],[saveEvent]),intent),null)
+console.log('PASS interview save refreshes verification sources only after verified write')

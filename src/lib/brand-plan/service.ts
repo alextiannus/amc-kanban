@@ -414,9 +414,6 @@ export async function runBrandPlanAction(input: {
     if (!started) throw new BrandPlanError('brand_not_found', 404)
     return { ok: true, action: input.action, ...started }
   } else if (input.action === 'save_merchant_interview') {
-    if (!isGrowthResearchReport(current.researchReport)) {
-      throw new BrandPlanError('growth_research_report_required', 409)
-    }
     const report = current.researchReport
     latestInterview = await saveMerchantInterview(brand.id, input.body, report)
     // An interview changes the claim, not the plan. Rewriting the workspace here
@@ -1031,7 +1028,7 @@ export async function saveResearchReport(
 async function saveMerchantInterview(
   brandId: string,
   body: Record<string, unknown> | undefined,
-  report: NonNullable<BrandPlanWorkspaceData['researchReport']>
+  report: BrandPlanWorkspaceData['researchReport']
 ): Promise<BrandPlanMerchantInterview> {
   const rawNotes = text(body?.rawNotes)
   const answers = arrayValue(body?.answers)
@@ -1050,7 +1047,7 @@ async function saveMerchantInterview(
         brandId,
         rawNotes: rawNotes || answers.map((item) => `${item.question}\n${item.answer}`).join('\n\n'),
         answers: answers.length ? answers as Prisma.InputJsonValue : undefined,
-        summary: text(body?.summary) || `已记录品牌主张访谈，后续营销方案会结合 ${report.missingQuestions.length || 0} 个待确认点。`,
+        summary: text(body?.summary) || `已记录品牌主张访谈，后续营销方案会结合 ${report?.missingQuestions?.length || 0} 个待确认点。`,
       },
       select: {
         id: true,

@@ -74,6 +74,7 @@ revoked=false;currentRevision='a'.repeat(64)
 const libraryModule=compile('src/lib/ai-native/library.ts',{'./contract':contract,'../brand-plan/creativeRevisionContract':await import('../src/lib/brand-plan/creativeRevisionContract.ts')})
 let configured:any,artifactContent=''
 const application=compile('src/lib/ai-native/application.ts',{
+  './interview-capabilities':{interviewCapabilities:()=>[]},
   '../brand-plan/creativeFidelity':fidelity,'../brand-plan/creativeRevisions':{prepareCreativeQualityReview:async()=>quality},
   './video-review':videoReview,
   './runtime-application.mjs':{openApplication:async(config:any)=>{configured=config;return {workspace:{read:async()=>({content:artifactContent})}}}},

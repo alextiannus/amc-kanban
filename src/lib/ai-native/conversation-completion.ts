@@ -31,6 +31,8 @@ export function conversationHostStep(request:any,intent:{kind:string;topic?:stri
  const context=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='amc.context'&&c.status==='succeeded')
  const required=intent.topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md'
  if(context?.result?.requiredSkill===required&&!data.calls.some((c:any)=>c.capability==='assistant.skills.read')&&request.tools.some((t:any)=>t.name==='assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:required}}
+ const savedInterview=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='amc.interview.save'&&c.status==='succeeded'&&c.result?.verified===true)
+ if(savedInterview&&request.tools.some((t:any)=>t.name==='amc.context'))return {type:'call',name:'amc.context',input:{}}
  const write=data.calls.find((c:any)=>c.id===last.data?.callId&&c.capability==='my_write_workspace'&&c.status==='succeeded')
  const ref=write?.result?.reference
  if(ref?.path!==intent.artifactPath||!Number.isInteger(ref.revision)||ref.revision<1||typeof ref.digest!=='string'||!/^[a-f0-9]{64}$/.test(ref.digest))return null
