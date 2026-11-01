@@ -69,7 +69,7 @@ try{
  for(const goal of ['对','确认以上访谈','confirm and save','确认保存','确认，按这份 v0.2 保存','按上面的 v0.2 草案确认保存','确认保存上一条草案'])assert(confirmsInterview(goal))
  for(const goal of ['不对','确认第一项','对，但预算不同','Do not save','确认，按这份 v0.2 保存？','确认，按这份 v0.2 保存，但预算改成十万','确认第一项并保存','不确认保存'])assert(!confirmsInterview(goal))
  const reply={kind:'conversation',brandId:brand,content:'Visible answer',contextDigest:'a'.repeat(64),interviewDraft:{answers:[{question:'Q',answer:'Hidden answer'}]}}
- assert.throws(()=>conversationFrom(JSON.stringify(reply),{...intent,brandId:brand}),/interview_draft_must_be_visible/)
+ assert.equal(conversationFrom(JSON.stringify(reply),{...intent,brandId:brand}).interviewDraft,undefined,'hidden draft is discarded while prose remains readable')
  assert.deepEqual(allowedTaskTools(['amc.interview.read','amc.interview.save'],{kind:'video_rewrite'} as any,[]),[])
  console.log('PASS real PostgreSQL chat interview: no-report save/readback, exact full user evidence, preservation, replay, concurrent conflict, authorized prior draft confirmation, negatives, cross-brand/permission denial and visible proposal')
 }finally{await prisma.auditLog.deleteMany({where:{actorId:actor.subjectId,metadata:{path:['brandId'],equals:brand}}});await prisma.brand.deleteMany({where:{id:{in:[brand,other]}}});await prisma.$disconnect()}

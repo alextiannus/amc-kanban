@@ -1,3 +1,4 @@
+import {insightDownloads} from '../brand-plan/report-download'
 import {interviewInput} from '../brand-plan/interview-information'
 import type {InsightReport} from '../brand-plan/insight-report'
 import {readAvailableInsight} from '../brand-plan/insight-service'
@@ -40,7 +41,7 @@ export function projectInsightSections(report:InsightReport|null){
 export async function readPlanningInsight(actor:NativeActor){
   const brandId=brandFor(actor)
   const latest=await readAvailableInsight(brandId)
-  return {source:latest.report?.source||'AMC Growth',brandId,retrievedAt:new Date().toISOString(),status:latest.status,liveStatus:latest.liveStatus,reportVersionId:latest.report?.id||null,generatedAt:latest.report?.completedAt||null,...projectInsightSections(latest.report)}
+  return {downloads:insightDownloads(brandId,latest.report),source:latest.report?.source||'AMC Growth',brandId,retrievedAt:new Date().toISOString(),status:latest.status,liveStatus:latest.liveStatus,reportVersionId:latest.report?.id||null,generatedAt:latest.report?.completedAt||null,...projectInsightSections(latest.report)}
 }
 
 /** Reserve space for every quarter: overview metadata must not crowd out 12 monthly focuses. */

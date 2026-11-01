@@ -1,4 +1,5 @@
 import {createApiKeyToken,hashApiKeyToken} from '../src/lib/auth-v2/api-key.ts'
+import {GET as documentGET} from '../src/app/api/brands/[id]/ai/tasks/[taskId]/document/route.ts'
 import {GET as runtimeGET} from '../src/app/api/brands/[id]/ai/runtime/route.ts'
 import {GET as inspectionGET} from '../src/app/api/brands/[id]/ai/tasks/[taskId]/inspection/route.ts'
 import {POST as tasksPOST} from '../src/app/api/brands/[id]/ai/tasks/route.ts'
@@ -16,7 +17,7 @@ import {actorFor,conversationInput,nativeArtifactMaxBytes} from '../src/lib/ai-n
 import {marketingPlanShape,planningRevision} from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {savePlanningDocument} from '../src/lib/ai-native/planning-document.ts'
 import {savePlanningDraft} from '../src/lib/ai-native/planning-workspace-save.ts'
-import {createNativeTask,readNativeTaskStatus,readNativeTask,nativeConversations,strategyVersions,finalizePlanningTasks,controlNativeTask,inspectNativeTask,nativeAssistantRuntime,listNativeTasks} from '../src/lib/ai-native/service.ts'
+import {readNativeTaskDocument,createNativeTask,readNativeTaskStatus,readNativeTask,nativeConversations,strategyVersions,finalizePlanningTasks,controlNativeTask,inspectNativeTask,nativeAssistantRuntime,listNativeTasks} from '../src/lib/ai-native/service.ts'
 import {activeConversationStatus} from '../src/lib/ai-native/conversation-status.ts'
 assert.equal(nativeArtifactMaxBytes({kind:'conversation',planningScope:{stage:'marketing_plan'}} as any),120000)
 assert.equal(nativeArtifactMaxBytes({kind:'conversation'} as any),32000)
@@ -59,6 +60,11 @@ try{
  const firstBody=body('Focus on families'),first=await createNativeTask(id,id,firstBody)
  const firstState=await finish(first.id);assert.equal(firstState.status,'succeeded',JSON.stringify({reason:firstState.waiting_reason,calls:(await (chat.app.tasks as any).history(actor,first.id)).calls.slice(-1).map((c:any)=>({capability:c.capability,status:c.status,error:c.error}))}))
  assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id}}),0,'generation is distinct from committed strategy')
+ const originalDocument=await readNativeTaskDocument(id,id,first.id)
+ assert(originalDocument.content.includes('Focus on families'))
+ assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id}}),0,'download must not auto-save')
+ await assert.rejects(()=>readNativeTaskDocument(randomUUID(),id,first.id))
+ await assert.rejects(()=>readNativeTaskDocument(id,'other',first.id))
  await finalizePlanningTasks() // No browser result polling.
  const saved=await readNativeTask(id,id,first.id)
  assert(saved.planningSave?.verified,JSON.stringify(saved.planningSave));assert.equal(saved.planningSave.version,1)
@@ -70,6 +76,7 @@ try{
  const third=await createNativeTask(id,id,body('Keep the positioning; change channels only',{afterTaskId:second.id}))
  release();await chat.app.runtime.tick();assert.equal((await finish(second.id)).status,'succeeded');await chat.app.runtime.tick();assert.equal((await finish(third.id)).status,'succeeded')
  await finalizePlanningTasks();assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:id}}),3)
+ assert.equal((await readNativeTaskDocument(id,id,first.id)).content,originalDocument.content,'download stays bound to original task after newer strategies')
  const old=await readNativeTask(id,id,first.id);assert.equal(old.planningSave.current,false);assert.equal(old.planningSave.version,1)
  const history=await nativeConversations(id,id,session);assert.equal(history.items.length,3);assert(history.items[0].task.report.content.includes('Focus on families'))
  assert.equal((await nativeConversations(id,id)).items[0].id,session)
@@ -120,6 +127,9 @@ try{
  assert.equal((await inspectionGET(req(token),taskParams)).status,200)
  assert.equal((await inspectionGET(req(otherToken),taskParams)).status,404)
  assert.equal((await runtimeGET(req(token),{params:Promise.resolve({id:randomUUID()})})).status,403)
+ assert.equal((await documentGET(req(),taskParams)).status,401)
+ const fileResponse=await documentGET(req(token),taskParams);assert.equal(fileResponse.status,200);assert.equal(await fileResponse.text(),originalDocument.content)
+ assert.equal((await documentGET(req(otherToken),taskParams)).status,404)
  const beforeRouteCalls=modelCalls
  assert.equal((await tasksPOST(req(token,{method:'POST',headers:{'sec-fetch-site':'cross-site'},body:JSON.stringify(firstBody)}),params)).status,403)
  const replayResponse=await tasksPOST(req(token,{method:'POST',body:JSON.stringify(firstBody)}),params)
@@ -129,7 +139,7 @@ try{
  assert.equal((await runtimeGET(req(token),params)).status,401)
  console.log('PASS: real route/auth/database integration: anonymous and revoked credentials, no-store, owner and brand isolation, cross-site write rejection, original task replay without model calls')
  const originalSkill=await readAgentSkill(USER_AI,'amc-marketing-expert/SKILL.md')
- await assert.rejects(()=>changeAgentSkill({agentId:USER_AI,skillId:originalSkill.id,action:'save',content:originalSkill.content+'custom change',expectedVersion:originalSkill.version},id),(e:any)=>e.statusCode===400)
+ await assert.rejects(()=>changeAgentSkill({agentId:USER_AI,skillId:originalSkill.id,action:'save',content:originalSkill.content+'x'.repeat(60001),expectedVersion:originalSkill.version},id),(e:any)=>e.statusCode===400)
  const removed=await changeAgentSkill({agentId:USER_AI,skillId:originalSkill.id,action:'uninstall',expectedVersion:originalSkill.version},id)
  const callsBefore=modelCalls
  await assert.rejects(()=>createNativeTask(id,id,body('Missing required skill')),(e:any)=>e.code==='required_skill_not_installed')

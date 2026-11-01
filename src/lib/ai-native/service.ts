@@ -1,3 +1,4 @@
+import {conversationFiles,planningDocument} from './chat-files'
 import {businessReceipts} from './business-receipt'
 import {interviewReceipt} from './interview-capabilities'
 import {allowedTaskTools} from './task-tools'
@@ -313,7 +314,7 @@ async function readConversationSnapshot(host:Awaited<ReturnType<typeof taskHost>
  }
  const usage=await app.ledger.taskUsage(await app.scope(actor),id)
  const source=conversationInsight(history.calls)
- return {id,version:state.version,inputRequest:null,candidate:null,artifact:null,month:undefined,creativeId:undefined,status:state.status,waitingReason:state.waiting_reason,kind:'conversation',goal:row.intent.goal,updatedAt:state.updated_at,report,planningSave,usage,historyUnavailable:null,businessReceipts:businessReceipts(history.calls),interviewSave:interviewReceipt(history.calls),progress:conversationProgress(state.status,history.calls),planningRecovery:planningWriteRecovery(row.intent,state.status,state.waiting_reason||undefined,history.calls),insight:source?{status:source.status,reportVersionId:source.reportVersionId,partial:source.partial,generatedAt:source.generatedAt}:null}
+ return {files:state.status==='succeeded'?conversationFiles(brandId,id,row.intent.goal,report,source):[],id,version:state.version,inputRequest:null,candidate:null,artifact:null,month:undefined,creativeId:undefined,status:state.status,waitingReason:state.waiting_reason,kind:'conversation',goal:row.intent.goal,updatedAt:state.updated_at,report,planningSave,usage,historyUnavailable:null,businessReceipts:businessReceipts(history.calls),interviewSave:interviewReceipt(history.calls),progress:conversationProgress(state.status,history.calls),planningRecovery:planningWriteRecovery(row.intent,state.status,state.waiting_reason||undefined,history.calls),insight:source?{status:source.status,reportVersionId:source.reportVersionId,partial:source.partial,generatedAt:source.generatedAt}:null}
 }
 
 async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof taskHost>>,userId:string,brandId:string,id:string,row:Awaited<ReturnType<typeof intentForTask>>){
@@ -350,7 +351,7 @@ async function readNativeTaskResult({actor,app,pool}:Awaited<ReturnType<typeof t
   const library=history.calls.slice().reverse().find(c=>c.capability==='amc.library'&&c.status==='succeeded')?.result as LibrarySnapshot|undefined
   const contextSnapshot=row.intent.kind==='sku_proposal'||row.intent.kind==='creative_adaptation'?history.calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result||null:null
   const planningSave=row.intent.kind==='conversation'&&row.intent.autoSavePlanning&&task.status==='succeeded'&&report?.planningDraft?.scope.stage==='marketing_plan'?await finalizePlanningResult(pool,userId,brandId,id,report.planningDraft,history.calls):null
-  return {...task,businessReceipts:row.intent.kind==='conversation'?businessReceipts(history.calls):[],interviewSave:row.intent.kind==='conversation'?interviewReceipt(history.calls):null,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='video_rewrite'?{progress:{stage:videoProgress(task.status,history.calls)}}:{}),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
+  return {...task,files:task.status==='succeeded'&&row.intent.kind==='conversation'?conversationFiles(brandId,id,row.intent.goal,report,sourceInsight):[],businessReceipts:row.intent.kind==='conversation'?businessReceipts(history.calls):[],interviewSave:row.intent.kind==='conversation'?interviewReceipt(history.calls):null,planningSave,planningRecovery:planningWriteRecovery(row.intent,task.status,task.waitingReason||undefined,history.calls),...(row.intent.kind==='video_rewrite'?{progress:{stage:videoProgress(task.status,history.calls)}}:{}),...(row.intent.kind==='conversation'?{progress:conversationProgress(task.status,history.calls,!!view.historyUnavailable)}:{}),insight,automaticDaily:row.intent.kind==='creative_discovery'&&row.intent.automaticDaily===true,historyUnavailable:view.historyUnavailable,contextState:view.contextState,contextSnapshot,kind:row.intent.kind,autopilotRunId:'autopilotRunId' in row.intent?row.intent.autopilotRunId:null,candidate,report,recommendations,adoptions,adoption,library:library?{retrievedAt:library.retrievedAt,sources:library.sources}:null,artifact,usage,currentOperations,original:sourceCall?.current||null,...(['creative','sku_proposal','creative_adaptation'].includes(row.intent.kind)&&'creativeId' in row.intent?{creativeId:row.intent.creativeId,month:row.intent.month,adaptToBrand:row.intent.kind==='creative'&&row.intent.adaptToBrand===true}:{})}
 }
 export async function controlNativeTask(userId:string,brandId:string,id:string,body:any){
   const {actor,app,pool,lane}=await taskHost(userId,brandId,id)
@@ -556,4 +557,20 @@ export async function inspectNativeTask(userId:string,brandId:string,id:string){
  const history=await (app.tasks as any).history(actor,id)
  const usage=await app.ledger.taskUsage(await app.scope(actor),id)
  return {id,status:state.status,allowedTools:Array.isArray(raw.input?.allowedTools)?raw.input.allowedTools.filter((name:unknown)=>typeof name==='string'):[],...inspectAssistantHistory(history.calls,raw.result?.artifacts||[],row.intent.artifactPath),usage:inspectAssistantUsage(usage),usagePolicy:USAGE_POLICY}
+}
+
+/** Download is a read of this immutable task artifact, never a save/finalize operation. */
+export async function readNativeTaskDocument(userId:string,brandId:string,id:string){
+ const {app,actor,pool}=await taskHost(userId,brandId,id)
+ const row=await intentForTask(pool,app,actor,id)
+ if(row.intent.kind!=='conversation')throw nativeError('document_unavailable',404)
+ const state=await app.runtime.state(actor,id)
+ if(state.status!=='succeeded')throw nativeError('document_not_ready',409)
+ const raw=await (app.tasks as any).get(actor,id)
+ const ref=raw.result?.artifacts?.find((a:ArtifactReference)=>a.path===row.intent.artifactPath)
+ if(!ref)throw nativeError('document_unavailable',404)
+ const report=conversationFrom((await (app.workspace as WorkspacePort).read(actor,ref)).content,row.intent)
+ const document=planningDocument(report)
+ if(!document)throw nativeError('document_unavailable',404)
+ return document
 }

@@ -81,21 +81,21 @@ export function conversationFrom(content:string,intent:ConversationIntent){
   if(typeof value.contextDigest!=='string'||!/^[a-f0-9]{64}$/.test(value.contextDigest))throw nativeError('reply_context_digest_invalid')
   if(intent.planningScope&&(intent.planningScope.mode==='draft'||value.planningDraft!==undefined))value.planningDraft=validatePlanningDraft(value.planningDraft,{...intent.planningScope,mode:'draft'})
   else if(value.planningDraft!==undefined)throw nativeError('unexpected_planning_draft')
-  if(value.planningDraft&&intent.planningScope?.stage==='quarter'){
-    for(const content of [value.content,value.planningDraft.content]){
-      const label=String(content).split('\n')[0].match(/年度第([1-4一二三四])季/)
-      const ordinal=label?(Number(label[1])||'一二三四'.indexOf(label[1])+1):null
-      if(ordinal&&ordinal!==intent.planningScope.quarter!+1)throw nativeError(`planning_reply_requires_annual_quarter_${intent.planningScope.quarter!+1}`)
-    }
-  }
   // Display metadata is optional: malformed decoration must not reject prose.
   if(value.planningProgress!==undefined){
     const p=value.planningProgress
     if(intent.topic==='brand_planning'&&p&&!Array.isArray(p)&&typeof p==='object'&&PLANNING_STAGES.includes(p.stage)&&typeof p.summary==='string'&&p.summary.trim()&&(!intent.planningScope||p.stage===intent.planningScope.stage))value.planningProgress={stage:p.stage,summary:p.summary.trim().slice(0,500)}
     else delete value.planningProgress
   }
+  // Optional draft decoration must not discard a readable answer. Never retain hidden answers.
+  if(value.interviewDraft!==undefined){
+    try{
+      const answers=interviewAnswers(value.interviewDraft?.answers)
+      if(answers.some((a:{answer:string})=>!value.content.includes(a.answer)))throw Error('hidden_draft')
+      value.interviewDraft={answers}
+    }catch{delete value.interviewDraft}
+  }
   if(value.interviewDraft===undefined){const draft=visibleInterviewDraft(value.content);if(draft)value.interviewDraft=draft}
-  if(value.interviewDraft!==undefined){if(!value.interviewDraft||Object.keys(value.interviewDraft).some(k=>k!=='answers'))throw nativeError('invalid_interview_draft');value.interviewDraft={answers:interviewAnswers(value.interviewDraft.answers)};if(value.interviewDraft.answers.some((a:{answer:string})=>!value.content.includes(a.answer)))throw nativeError('interview_draft_must_be_visible')}
   if(value.uiAction!==undefined){
     try{const {page,mode,month}=value.uiAction||{};value.uiAction=parseUiAction({page,mode,...(month!==undefined?{month}:{})})}catch{delete value.uiAction}
   }

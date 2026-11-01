@@ -1,3 +1,4 @@
+import {insightDownloads} from '@/lib/brand-plan/report-download'
 import {allowedRoleWriteOrigin} from '@/lib/role-permissions/request-origin'
 import {NextResponse} from 'next/server'
 import {resolveSessionOrApiKey} from '@/lib/user-management/auth'
@@ -20,7 +21,7 @@ async function handle(request:Request,context:Context,write:boolean){
   let refreshUnavailable=false
   if(canWrite)try{await reconcileInsight(id)}catch{refreshUnavailable=true}
   const latest=await readAvailableInsight(id)
-  return NextResponse.json({...latest,refreshUnavailable:refreshUnavailable||latest.liveStatus==='unavailable'},{headers:{'Cache-Control':'no-store'}})
+  return NextResponse.json({...latest,downloads:insightDownloads(id,latest.report),refreshUnavailable:refreshUnavailable||latest.liveStatus==='unavailable'},{headers:{'Cache-Control':'no-store'}})
  }catch(e){return NextResponse.json({error:(e as Error).message},{status:(e as any).statusCode||503})}
 }
 export const GET=(r:Request,c:Context)=>handle(r,c,false)
