@@ -132,7 +132,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-marketing-expert"
       },
-      "version": "sha256:77b6a32f5ea171171a71293fbd696778e787dc9d49de9af6e3869405725100a4",
+      "version": "sha256:aa157595d5ba4510f8ae5e973443823a8ac936106dd5491bae32e415ad3ba11a",
       "description": "AMC品牌策略讨论、生成、优化与评审的优先技能。以访谈和线上证据判断定位、客群客源、竞争、获客转化、AMC工作、社媒Content及店内活动；不替代投放或发布授权。"
     },
     {
@@ -544,6 +544,11 @@
       "source": "skills/amc-creative/references/video-story-sources.md",
       "consumer": "kanban",
       "target": "skills/amc-creative/references/video-story-sources.md"
+    },
+    {
+      "source": "skills/amc-marketing-expert/references/brand-interview.md",
+      "consumer": "kanban",
+      "target": "skills/amc-marketing-expert/references/brand-interview.md"
     }
   ],
   "generatedResources": [
@@ -590,8 +595,9 @@
     "skills/amc-knowledge/references/file-schemas.md": "6ac342d1d48c897dbb22ff3a15d53a69b574960a30a45c7795c5cd2254818102",
     "skills/amc-knowledge/references/intake-workflow.md": "19d83ff83da008b395cff96a5e13fd08db1f8b8c363da22487aba752e04ac82b",
     "skills/amc-knowledge/references/service-plan-scoping.md": "0190b1cdc46c5a12325a9876d64ae025ab546c8a2b055d5fc3cb403b28e1227f",
-    "skills/amc-marketing-expert/SKILL.md": "9652d7b364207c0c4d7641622455dac1d8afaf46f69e060ff4111ce44e0ca030",
+    "skills/amc-marketing-expert/SKILL.md": "cb8a40a3e322bb4c601c991fed7dfde1e8f3baf4c11405ea26176ab85c260aed",
     "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
+    "skills/amc-marketing-expert/references/brand-interview.md": "4f20bad2eea2be39589320fb32056c5cf746fa8dabd1c88256dbd36503295c59",
     "skills/amc-marketing-expert/references/overseas-platform-strategy.md": "fb9fc12c24f19691cfb0bda1fd82595dcd3a2c6e3bd9ce811dbfef75da64ea6a",
     "skills/brand-intelligence-intake/SKILL.md": "aea6f0010f18cc49d576382a1d85ff94e4362cda6298bb4b6fb0fb69cf4fa2ce",
     "skills/brand-intelligence-intake/agents/openai.yaml": "e21863b50a0d25e0fa895efaf7900c2752d8e942989f4960e976698ca4eb0d8a",
