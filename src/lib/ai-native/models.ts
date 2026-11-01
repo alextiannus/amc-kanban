@@ -1,3 +1,4 @@
+import {conversationDocumentBinding,conversationDocumentCall,CONVERSATION_DOCUMENT_INSTRUCTIONS} from './conversation-document'
 import {conversationTurnMessages} from './conversation-turn'
 import {latestPreviewWriter} from './latest-preview'
 import {strategyDocumentBinding,strategyDocumentCall,strategyDocumentTools,STRATEGY_DOCUMENT_INSTRUCTIONS} from './strategy-document'
@@ -43,7 +44,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
     },
     tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:MODEL_INVOCATION_ALLOWANCE,price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
     modelFactory:configuration=>{
-     const provider=(full:boolean,scope?:PlanningScope,binding?:any,taskId?:string,review=false,documentBinding?:ReturnType<typeof strategyDocumentBinding>)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
+     const provider=(full:boolean,scope?:PlanningScope,binding?:any,taskId?:string,review=false,documentBinding?:ReturnType<typeof strategyDocumentBinding>,conversationDocument?:ReturnType<typeof conversationDocumentBinding>)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})
       const model=selectModel(config,'mm','ai_native','text'),wire=JSON.parse(String(options.body)),started=Date.now()
       let lastPreviewAt=0,lastPreview='',firstDeltaMs:number|null=null,firstPreviewMs:number|null=null
@@ -61,7 +62,9 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
           preview.push(text.slice(0,24000))
         }
       }:undefined
-      const observeText=documentBinding&&taskId?(text:string)=>{
+      const observeText=(documentBinding||conversationDocument)&&taskId?(text:string)=>{
+        firstDeltaMs??=Date.now()-started
+        if(text.trim())firstPreviewMs??=Date.now()-started
         if(Date.now()-lastPreviewAt<700||text===lastPreview)return
         lastPreviewAt=Date.now();lastPreview=text
         preview.push(text.slice(0,24000))
@@ -70,8 +73,8 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       const transportTools=(documentBinding?strategyDocumentTools(wire.tools):review?wire.tools.filter((t:any)=>t.name!=='iaic_wait'):nativeWireTools(wire.tools,full||binding?.kind==='conversation',scope,binding)).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}}))
       console.info('[amc-context-manifest]',JSON.stringify({taskId:taskId||null,policyVersion:version,modelId:model.id,manifest:buildContextManifest(wire.input,transportTools)}))
       let result;try{
-        result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:documentBinding?[...wire.input,{role:'system',content:STRATEGY_DOCUMENT_INSTRUCTIONS}]:wire.input,tools:transportTools,toolChoice:documentBinding?'auto':'required',maxTokens:nativeOutputTokens(full,model.definition.maxTokensByTask),signal:options.signal||undefined,task:full?'brand_planning':'ai_native',...(observe?{onStreamTools:observe}:{}),...(observeText?{onStreamText:observeText}:{}),...(full?{timeoutMs:PLANNING_TEXT_TIMEOUT_MS}:{})})
-        return new Response(JSON.stringify({id:result.providerReference,provider_usage:result.rawUsage,usage:result.usage,status:'completed',output:nativeWireCalls(documentBinding&&!result.message?.tool_calls?.length?[strategyDocumentCall(result.text,documentBinding,wire.tools.find((t:any)=>t.parameters?.properties?.path&&t.parameters?.properties?.content&&t.parameters?.properties?.expectedRevision)?.name)]:result.message?.tool_calls,result,wire.tools,documentBinding?false:full||binding?.kind==='conversation',binding).map((t:any)=>({type:'function_call',name:t.function.name,arguments:t.function.arguments}))}))
+        result=await complete({id:model.id,provider:model.protocol,displayName:model.definition.name,modelName:model.definition.modelName,baseUrl:model.baseUrl,apiKey:config.secrets![model.secretRef],timeoutMs:model.definition.timeoutMs,reasoningEffort:model.definition.reasoningEffort},{messages:documentBinding?[...wire.input,{role:'system',content:STRATEGY_DOCUMENT_INSTRUCTIONS}]:conversationDocument?[...wire.input,{role:'system',content:CONVERSATION_DOCUMENT_INSTRUCTIONS}]:wire.input,tools:transportTools,toolChoice:documentBinding||conversationDocument?'auto':'required',maxTokens:nativeOutputTokens(full,model.definition.maxTokensByTask),signal:options.signal||undefined,task:full?'brand_planning':'ai_native',...(observe?{onStreamTools:observe}:{}),...(observeText?{onStreamText:observeText}:{}),...(full?{timeoutMs:PLANNING_TEXT_TIMEOUT_MS}:{})})
+        return new Response(JSON.stringify({id:result.providerReference,provider_usage:result.rawUsage,usage:result.usage,status:'completed',output:nativeWireCalls(documentBinding&&!result.message?.tool_calls?.length?[strategyDocumentCall(result.text,documentBinding,wire.tools.find((t:any)=>t.parameters?.properties?.path&&t.parameters?.properties?.content&&t.parameters?.properties?.expectedRevision)?.name)]:conversationDocument&&!result.message?.tool_calls?.length?[conversationDocumentCall(result.text,conversationDocument,wire.tools.find((t:any)=>t.parameters?.properties?.path&&t.parameters?.properties?.content&&t.parameters?.properties?.expectedRevision)?.name)]:result.message?.tool_calls,result,wire.tools,documentBinding?false:full||binding?.kind==='conversation',binding).map((t:any)=>({type:'function_call',name:t.function.name,arguments:t.function.arguments}))}))
       }catch(error){
         if(result)Object.assign(error as object,{usage:{inputTokens:result.usage?.input_tokens??null,outputTokens:result.usage?.output_tokens??null,cachedInputTokens:result.usage?.input_tokens_details?.cached_tokens??null,reasoningOutputTokens:result.usage?.output_tokens_details?.reasoning_tokens??null},usageEvidence:{rawUsage:result.rawUsage,providerReference:result.providerReference},providerCompleted:true})
         throw error
@@ -89,7 +92,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
        const rows=await prisma.$queryRawUnsafe(`SELECT intent FROM amc_iaic.amc_ai_requests WHERE task_id=$1::uuid AND intent->>'kind'='conversation'`,taskId) as Array<{intent:any}>
        intent=rows[0]?.intent;full=!!fullPlanningScope(intent?.planningScope)
       }
-      return (full?provider(true,intent.planningScope,intent,taskId,false,strategyDocumentBinding(request,intent)):provider(false,undefined,intent,taskId,request.billingContext?.capability==='amc.video_review')).next(prepareVideoCompletion(prepareConversationCompletion(request,intent)))
+      return (full?provider(true,intent.planningScope,intent,taskId,false,strategyDocumentBinding(request,intent)):provider(false,undefined,intent,taskId,request.billingContext?.capability==='amc.video_review',undefined,conversationDocumentBinding(request,intent))).next(prepareVideoCompletion(prepareConversationCompletion(request,intent)))
      }})
     },
   }
