@@ -25,7 +25,7 @@ const omitted=make([{...context,result:null,resultOmitted:true},write],[event])
 const scoped=prepareConversationCompletion(omitted,context.result.intent)
 assert.deepEqual(scoped.tools,[])
 assert(scoped.messages.at(-1)?.content.includes(JSON.stringify(ref)))
-assert.equal(prepareConversationCompletion(make([write],[event]),{kind:'conversation',topic:'general',artifactPath:ref.path}).tools.length,1)
+assert.equal(prepareConversationCompletion(make([write],[event]),{kind:'conversation',topic:'general',artifactPath:ref.path}).tools.length,0)
 const rejected=make([write],[event,{kind:'verification',data:{verified:false}}])
 assert.equal(prepareConversationCompletion(rejected,context.result.intent),rejected)
 console.log('PASS: trusted admission restores finish guidance when bounded history omits source results; failed verification still restores repair tools')
@@ -35,10 +35,10 @@ const intent={kind:'conversation',topic:'brand_planning',artifactPath:ref.path}
 const host=(calls:any[],events:any[])=>({...make(calls,events),billingContext:{capability:'agent.work',taskId:'same-task'},tools:[{name:'amc.context'}]})
 assert.deepEqual(conversationHostStep(host([],[]),intent),{type:'call',name:'amc.context',input:{}})
 assert.equal(conversationHostStep(host([{capability:'amc.context',status:'failed'}],[]),intent),null)
-assert.deepEqual(conversationHostStep(host([write],[event]),intent),{type:'finish',result:{summary:'Planning reply ready for verification',artifacts:[ref]}})
+assert.deepEqual(conversationHostStep(host([write],[event]),intent),{type:'finish',result:{summary:'Conversation reply ready for verification',artifacts:[ref]}})
 for(const events of [[event,{kind:'verification',data:{verified:false}}],[event,{kind:'input'}],[event,{kind:'feedback'}]])assert.equal(conversationHostStep(host([write],events),intent),null)
 for(const invalid of [{...write,status:'unknown'},{...write,result:{reference:{...ref,revision:0}}},{...write,result:{reference:{...ref,path:'other-brand'}}}])assert.equal(conversationHostStep(host([invalid],[event]),intent),null)
-assert.equal(conversationHostStep(host([write],[event]),{...intent,topic:'general'}),null)
+assert.equal(conversationHostStep(host([write],[event]),{...intent,topic:'general'}).type,'finish')
 console.log('PASS: planning mechanical context/finish skip inference, wrong scope/unknown writes/verification rejection cannot finish')
 
 const skillContext={...context,result:{...context.result,requiredSkill:'amc-marketing-expert/SKILL.md'}}
@@ -53,3 +53,10 @@ for(const changed of [
  {...skillRequest,messages:make([{...skillContext,result:{requiredSkill:'arbitrary'}}],[contextEvent]).messages}
 ])assert.equal(conversationHostStep(changed,intent),null)
 console.log('PASS: mandatory planning Skill uses authorized host read; failed reads, new input, unknown Skill and missing tools return to model')
+
+const generalIntent={...intent,topic:'general'}
+assert.equal(conversationHostStep(host([],[]),generalIntent).name,'amc.context')
+const generalSkill={...skillContext,result:{requiredSkill:'amc-conversation/SKILL.md'}}
+assert.deepEqual(conversationHostStep({...skillRequest,messages:make([generalSkill],[contextEvent]).messages},generalIntent),{type:'call',name:'assistant.skills.read',input:{id:'amc-conversation/SKILL.md'}})
+assert.equal(conversationHostStep(skillRequest,generalIntent),null,'cannot choose planning skill for general conversation')
+console.log('PASS general conversations get fixed context/skill reads and receipt submission without widening tool permissions')

@@ -200,6 +200,11 @@ export async function composeApplication(pool:Pool,models:Pick<ApplicationOption
           return {valid:true}
         }catch{return {valid:false,feedback:'Required craft resources: '+JSON.stringify(requestedVideoCraft(intent.goal))+'. No write was dispatched. First call assistant.skills.read with {"id":"amc-creative/SKILL.md"}; then with {"id":"amc-creative/SKILL.md","resource":"references/video-rewrite.md"}; then amc.video_facts with {"section":"brand","productIds":[]}. Skill IDs include /SKILL.md; omit resource when reading the main file. Retry the same draft only after these reads succeed.'}}
       }
+      if(intent.kind==='conversation'){
+        const history=await (app.tasks as any).history(context.actor,context.taskId)
+        const required=intent.topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md'
+        if(!history.calls.some((c:any)=>c.status==='succeeded'&&c.capability==='assistant.skills.read'&&c.input.id===required&&!c.input.resource))return {valid:false,feedback:'No write was dispatched. First read the required Skill using assistant.skills.read with '+JSON.stringify({id:required})+', then submit the reply again.'}
+      }
       if(intent.kind!=='conversation'||intent.topic!=='brand_planning'||!intent.planningScope||!['marketing_plan','execution_checklist'].includes(intent.planningScope.stage)||input.path!==intent.artifactPath)return {valid:true}
       try{const report=conversationFrom(input.content,intent);if(intent.planningScope.stage==='execution_checklist'&&report.planningDraft)assertAmcExecutionChecklist(report.planningDraft.data);return {valid:true}}
       catch(error){return {valid:false,feedback:'Correct the planning artifact before writing: '+(error instanceof Error?error.message:'invalid')+'. Copy scope and expectedRevision exactly from the trusted contract. Root requires kind=conversation, brandId, content (short summary), contextDigest, planningProgress and planningDraft. '+(intent.planningScope?.stage==='marketing_plan'?'The full strategy is plain Markdown in planningDraft.content; data is omitted for new document output. Metadata is host-owned.':'Execution checklist contains AMC work only, requires informationToSupplement=[] and never declares human completion. Paid ads/visits require actual arrangements and budgets.')+' Preserve complete draft data.'}}
