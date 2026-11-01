@@ -1,9 +1,11 @@
+import {ContextAssembler} from '@immedi/iaic-core'
+import {CapabilityDispatcher} from '@immedi/iaic-core/capabilities/index.js'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
 import {actorFor} from '../src/lib/ai-native/contract.ts'
 import {businessArguments,businessTool,listBusinessTools,callBusinessTool,businessAllowed} from '../src/lib/ai-native/business-tools.ts'
-import {durableBusinessWrite} from '../src/lib/ai-native/business-capabilities.ts'
+import {durableBusinessWrite,businessCapabilities} from '../src/lib/ai-native/business-capabilities.ts'
 import {allowedTaskTools} from '../src/lib/ai-native/task-tools.ts'
 const url=new URL(process.env.DATABASE_URL!);assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
 const id=randomUUID(),brand='business-'+id,user='user-'+id,actor=actorFor(brand,user)
@@ -36,7 +38,16 @@ try{
  const read=await callBusinessTool(actor,'board_get_draft',{draftId});assert.equal(read.isError,undefined)
  assert.equal(JSON.parse(read.content[0].text).draft.caption,'真实用户提供的草稿')
  assert.deepEqual(allowedTaskTools(['amc.business.catalog','amc.business.read','amc.business.write'],{kind:'video_rewrite'} as any,[]),[])
+ const caps=businessCapabilities(async()=>({kind:'conversation',brandId:brand} as any),async()=>true)
+ const dispatcher=new CapabilityDispatcher({capabilities:caps,validateActor:()=>true}),context=new ContextAssembler({skillRoot:'.'})
+ const history={calls:[{id:'saved-call',task_id:task,capability:'amc.business.write',status:'succeeded',input:{tool:'board_update_asset',arguments:args},result:saved}],events:[]}
+ const before=await prisma.auditLog.count({where:{actorId:user}})
+ const assemble=()=>context.assemble({actor,dispatcher,history,task:{input:{goal:'Organize asset'}},capability:{implementation:{instructions:'Continue',skills:[]}}} as any)
+ assert.deepEqual(JSON.parse((await assemble()).at(-1)!.content).calls[0].result,saved)
+ assert.equal(await prisma.auditLog.count({where:{actorId:user}}),before,'continuation never reexecutes a business write')
+ console.log('PASS actual Core context continues after business save with original receipt and no duplicate effect')
  await prisma.user.update({where:{id:user},data:{status:'SUSPENDED'}})
+ await assert.rejects(assemble,/no longer authorized/)
  assert.equal(await businessAllowed(actor,'board_save_draft',{}),false)
  await assert.rejects(()=>listBusinessTools(actor),/denied/)
  console.log('PASS actual in-process MCP business tools: exact catalog, host brand, draft save/readback, asset edit, no publish/delete/credential tools, durable replay/concurrency/unknown outcome and revoked identity')

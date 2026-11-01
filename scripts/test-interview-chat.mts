@@ -1,3 +1,4 @@
+import {ContextAssembler} from '@immedi/iaic-core'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {CapabilityDispatcher} from '@immedi/iaic-core/capabilities/index.js'
@@ -24,6 +25,15 @@ try{
  await assert.rejects(()=>invoke('amc.interview.save',{...input,answers:[{question:'客户范围',answer:'面向儿童'}]}),/copy_entire_current_user_message/,'substring cannot drop a negation')
  revoked=true;await assert.rejects(()=>invoke('amc.interview.save',input),/denied/);revoked=false
  const saved:any=await invoke('amc.interview.save',input);assert.equal(saved.verified,true)
+ const context=new ContextAssembler({skillRoot:'.'})
+ const history={calls:[{id:'saved-call',task_id:task,capability:'amc.interview.save',status:'succeeded',input,result:saved}],events:[]}
+ const assemble=()=>context.assemble({actor,dispatcher,history,task:{input:{goal:intent.goal}},capability:{implementation:{instructions:'Continue the current task',skills:[]}}} as any)
+ const broken={capabilities:new Map(caps.map(c=>[c.name,{...c,revalidate:undefined}]))}
+ await assert.rejects(()=>context.revalidateHistory({actor,dispatcher:broken,history} as any),/Historical result has no permission revalidator/)
+ const nextMessages=await assemble();assert(JSON.parse(nextMessages.at(-1)!.content).calls[0].result.verified)
+ assert.equal(await prisma.brandPlanInterview.count({where:{brandId:brand}}),1,'context assembly must not save again')
+ revoked=true;await assert.rejects(assemble,/no longer authorized/);revoked=false
+ console.log('PASS actual Core context continues after interview save, preserves original receipt, rejects revoked access, never replays write; missing revalidator reproduces production failure')
  const replay:any=await invoke('amc.interview.save',input);assert.equal(replay.interviewId,saved.interviewId)
  assert.equal(await prisma.brandPlanInterview.count({where:{brandId:brand}}),1)
  assert.equal((await read()).interview.rawNotes,'客户范围\n'+intent.goal)

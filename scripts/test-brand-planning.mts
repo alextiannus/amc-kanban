@@ -60,6 +60,7 @@ try{
   await initializeHost(pool)
   const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'planning-test-v1',authorize:async(a:any)=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContextRevision:async()=>sourceRevision,readContext:async()=>facts,readMarketingWorkspace:async()=>({brandId:id,status:'available',revision:'0'.repeat(64),workspace:{coCreation:{interview:{status:'confirmed',content:'Confirmed interview'},direction:{status:'confirmed',content:'Confirmed direction',inputVersions:{interview:planningRevision({status:'confirmed',content:'Confirmed interview'})}}}}}),readInsight:async()=>{insightReads++;return {source:'AMC Growth',brandId:id,retrievedAt:new Date().toISOString(),status:'missing',report:null}}})
   app=composition.app
+  for(const name of composition.tools){const capability=app.dispatcher.capabilities.get(name);assert.equal(typeof capability?.revalidate,'function',`Model tool ${name} must support authorized history continuation`)}
   // Two real persisted requests must finish from one wake, without manual ticks.
   const queued=[]
   for(const name of ['queue-first','queue-next']){
