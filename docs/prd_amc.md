@@ -509,9 +509,9 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
 - PostFast 是已连接社媒账号的发布、账号状态、评论收件箱和平台指标来源；所有数据以 `brandId` 隔离，并沿用既有 Capability + Crew 授权。
 - 发布账号匹配排除 `ARCHIVED` 品牌；归档数据仅保留历史，不参与按 PostFast 配置查找当前品牌。指定品牌时不得回退到同配置的其他品牌；未指定品牌且仍有多个非归档品牌时继续拒绝歧义匹配。大视频后台建帖和重试必须使用任务自身的 `brandId`，兼容缺少品牌字段的旧任务快照。（本地修复，待部署。）
 - 账号同步保存 `connectionStatus`、`disabledReason`、`inboxCapable` 和品牌内唯一的 PostFast 账号 ID。连接失效只暂停对应渠道的发布，不删除既有草稿或排期；仅已持久化且属于当前品牌的 PostFast 账号 ID 可用于门店、粉丝历史和 TikTok 音乐查询。
-- Social Inbox 分页修复（2026-11-01，实施验收中）：会话与条目每页最多50条，page从0开始，按hasNextPage续取；客户端约束参数，后台页大小与终止判断一致。会话级canReply/长度限制映射到其INBOUND条目，显式条目拒绝不得被覆盖；私信仍以条目canPrivateReply为准。实际账号重连、上游新评论覆盖及同步时效独立验收，不把修复400称作已有所有历史评论。
+- Social Inbox 分页修复（2026-11-01，4cc4b233已上线）：会话与条目每页最多50条，page从0开始，按hasNextPage续取；客户端约束参数，后台页大小与终止判断一致。会话级canReply/长度限制映射到其INBOUND条目，显式条目拒绝不得被覆盖；私信仍以条目canPrivateReply为准。实际账号重连、上游新评论覆盖及同步时效独立验收，不把修复400称作已有所有历史评论。
 - Social Inbox 覆盖 Instagram、TikTok、Facebook 和 Threads 评论。会话必须通过其 PostFast `socialMediaId` 关联到持久化的品牌账号，禁止按平台猜测账号。系统只把未读或需处置会话转化为 `ActionItem`，并在已同步的会话不再未读或需处置时统一关闭对应待办；回复建议可由 AI 生成，但对外发送、Instagram 私信回复、隐藏、取消隐藏和删除均须人类确认。删除属于不可逆操作，界面必须二次确认。
-- 评论入口一致性（2026-11-01，本地修复待验收）：Instagram、TikTok、Facebook、Threads 的对外评论统一走 Social Inbox 人类确认入口；旧 MCP review 别名、execute_brand_action 的两种回复动作和旧品牌 reviews POST 不得经 Extension Bridge 或旧 review 接口绕开此要求。Google/Yelp 与国内平台保留原业务规则，不将 Social Inbox 的规则扩展为所有评论均需新审批。execute_brand_action 除 action_item.resolve 外，回复必须具备 review.reply，发布必须具备 content.publish；主体和品牌写权限继续实时校验。
+- 评论入口一致性（2026-11-01，4cc4b233已上线、模拟回归通过）：Instagram、TikTok、Facebook、Threads 的对外评论统一走 Social Inbox 人类确认入口；旧 MCP review 别名、execute_brand_action 的两种回复动作和旧品牌 reviews POST 不得经 Extension Bridge 或旧 review 接口绕开此要求。Google/Yelp 与国内平台保留原业务规则，不将 Social Inbox 的规则扩展为所有评论均需新审批。execute_brand_action 除 action_item.resolve 外，回复必须具备 review.reply，发布必须具备 content.publish；主体和品牌写权限继续实时校验。
 - 评论操作必须使用 PostFast 返回的 `canReply`、`canPrivateReply`、`maxReplyLength`、`maxPrivateReplyLengthBytes` 和窗口状态，禁止用 AMC 平台硬编码绕过能力限制。会话和评论 ID 必须先在当前品牌持久化，禁止透传任意提供方 ID；成功的人类回复和审核动作必须审计。回复重试必须携带稳定的幂等键，未完成保留在短租约后才可安全重试。
 - 草稿可保存并发布首条评论、Instagram 地理位置、AI 内容标签、Reel 是否上主页网格及 Trial Reel 策略。位置标签只允许 Instagram 单媒体 `TIMELINE`、`REEL` 或 `STORY`，不允许轮播；AI 标签仅在明确选择时提交。
 - TikTok 仅在图片轮播时允许选择 PostFast 返回的商业音乐，`tiktokMusicSoundId` 与自动加音乐互斥。Google Business 支持 `STANDARD`、`EVENT`、`OFFER` 以及 CTA、活动日期、优惠码和条款；所有字段在提交前按 PostFast 的组合规则校验。
