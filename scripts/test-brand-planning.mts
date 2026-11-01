@@ -50,7 +50,7 @@ const model={next:async(request:any)=>{
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
   const rejected=data.events?.at(-1)?.kind==='verification'&&data.events.at(-1).data.verified===false
   if(rejected)assert(request.tools.some((t:any)=>t.name==='my_write_workspace'),'verification rejection restores repair tools')
-  if(!find('my_write_workspace')||rejected)return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:find('my_write_workspace')?.result.reference.revision||0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.intent.goal==='repeat invalid reply'?'not-a-digest':ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget,...(ctx.intent.goal==='check rejection'&&!rejected?{}:{planningProgress:{stage:ctx.intent.planningScope?.stage||'interview',summary:'家庭客群是用户目标；预算为测试假设。'}})}:{}),...(ctx.intent.planningScope?{planningDraft:{...(ctx.intent.planningScope.stage==='marketing_plan'?{scope:ctx.intent.planningScope,title:'品牌策略',content:'# 品牌策略\n正文包含品牌定位、客群与具体推广建议。'}:planningDraftContract(ctx.intent.planningScope).planningDraft),expectedRevision:'0'.repeat(64)}}:{}),...(ctx.intent.topic==='general'?{uiAction:{page:'calendar',mode:'open',month:'2027-03'}}:{}),content:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
+  if(!find('my_write_workspace')||rejected)return {type:'call',name:'my_write_workspace',input:{path:ctx.intent.artifactPath,mediaType:'application/json',expectedRevision:find('my_write_workspace')?.result.reference.revision||0,content:JSON.stringify({kind:'conversation',brandId:id,contextDigest:ctx.intent.goal==='repeat invalid reply'?'not-a-digest':ctx.contextDigest,...(ctx.intent.topic==='brand_planning'?{annualBudget:budget,...(ctx.intent.goal==='check rejection'&&!rejected?{}:{planningProgress:{stage:ctx.intent.planningScope?.stage||'interview',summary:'家庭客群是用户目标；预算为测试假设。'}})}:{}),...(ctx.intent.planningScope?{planningDraft:{...(ctx.intent.planningScope.stage==='marketing_plan'?{scope:ctx.intent.planningScope,title:'品牌策略',content:'# 品牌策略\n正文包含品牌定位、客群与具体推广建议。'}:planningDraftContract(ctx.intent.planningScope).planningDraft),expectedRevision:'0'.repeat(64)}}:{}),...(ctx.intent.topic==='general'?{uiAction:{page:'calendar',mode:'open',month:'2027-03'}}:{}),content:ctx.intent.goal==='repair content shape'&&!rejected?{reply:'Nested content must be rejected'}:ctx.intent.topic==='brand_planning'?'暂无报告。你希望先提升哪些客户的到店意愿？':'Hello from your assistant.'})},usage}
   if(ctx.intent.topic==='brand_planning')assert.equal(request.tools.length,0,'written planning reply must submit to verifier before rewriting')
   return {type:'finish',result:{summary:'Reply ready',artifacts:[find('my_write_workspace').result.reference]},usage}
 }}
@@ -105,7 +105,7 @@ try{
   }
   assert.equal(insightReads,sessionReads+3,'four legacy turns, one shared session load, one revision invalidation and two distinct planning scopes')
   // Query and planning turns sharing a session must not share different source bundles.
-  for(const goal of ['AMC的商家访谈现在有什么内容？','repeat invalid reply']){
+  for(const goal of ['AMC的商家访谈现在有什么内容？','repair content shape','repeat invalid reply']){
     const before=insightReads,intent:any={kind:'conversation',topic:'brand_planning',history:[],brandId:id,userId:id,goal,contextSessionId,artifactPath:'work/query-'+randomUUID()+'.json',requestKey:randomUUID()}
     await admitIntent(pool,actor,intent)
     const receipt=await app.dispatcher.invoke('agent.work',{goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools},{actor,callId:intent.requestKey})
@@ -116,6 +116,10 @@ try{
       assert(!['queued','running','succeeded'].includes(task.status),task.status)
       assert.equal(task.events.filter((e:any)=>e.kind==='verification'&&e.data.verified===false).length,3)
       assert.equal(task.calls.filter((c:any)=>c.capability==='my_write_workspace').length,3,'no fourth speculative rewrite')
+    }else if(goal==='repair content shape'){
+      assert.equal(task.status,'succeeded',JSON.stringify(task))
+      const failures=task.events.filter((e:any)=>e.kind==='verification'&&e.data.verified===false)
+      assert.equal(failures.length,1);assert(failures[0].data.feedback.includes('Root content must be a nonempty STRING'))
     }else{
       assert.equal(task.status,'succeeded',JSON.stringify(task))
       assert.equal(insightReads,before,'existing interview query does not load Growth')

@@ -64,3 +64,29 @@ for(const topic of ['general','brand_planning']){
 const differentPath={...discussion,artifactPath:'work/other.json'}
 assert.deepEqual(nativeWireCall(write(JSON.stringify(plain)),result,workspaceTools,false,differentPath),write(JSON.stringify(plain)))
 console.log('PASS: production missing-kind regression completes; wrong brands/types/digests still rejected; unrelated paths unchanged')
+
+// Core's workspace writer makes mediaType optional (defaults to text/plain).
+// The trusted conversation artifact contract is JSON regardless of that hint.
+for(const mediaType of [undefined,'text/plain','text/markdown','application/json']){
+ const input={path:discussion.artifactPath,expectedRevision:0,content:JSON.stringify(plain),...(mediaType?{mediaType}:{})}
+ const call={function:{name:'cap_7',arguments:JSON.stringify(input)}}
+ const received=JSON.parse(nativeWireCall(call,result,workspaceTools,false,discussion).function.arguments)
+ assert.equal(conversationFrom(received.content,discussion).content,plain.content)
+ assert.equal(received.mediaType,mediaType,'MIME hint is not an authority or evidence field')
+}
+console.log('PASS: trusted reply metadata binding is independent of optional workspace MIME hint')
+
+const {default:Ajv}=await import('ajv')
+const {conversationArtifactSchema}=await import('../src/lib/ai-native/tool-wire.ts')
+const validate=new Ajv({strict:false}).compile(conversationArtifactSchema(discussion))
+const typed={...plain,kind:'conversation'}
+assert(validate(typed),JSON.stringify(validate.errors))
+assert(!validate({...typed,content:undefined}),'production first candidate omitted content')
+assert(!validate({...typed,content:{reply:plain.content,planningProgress:plain.planningProgress}}),'production repair nested reply fields inside content')
+assert(!validate({...typed,uiAction:{page:'brand_story',mode:'suggest',note:'unknown field'}}))
+assert(validate({...typed,uiAction:{page:'brand_story',mode:'suggest'}}))
+const advertised=nativeWireTools(workspaceTools,true,undefined,discussion)
+assert.deepEqual(advertised[0].parameters.properties.content,conversationArtifactSchema(discussion))
+const typedWrite={function:{name:'cap_7',arguments:JSON.stringify({path:discussion.artifactPath,expectedRevision:0,content:typed})}}
+assert.equal(conversationFrom(JSON.parse(nativeWireCall(typedWrite,result,workspaceTools,true,discussion).function.arguments).content,discussion).content,plain.content)
+console.log('PASS: ordinary conversation schema rejects both production malformed shapes and guides root content/uiAction; object transport completes')
