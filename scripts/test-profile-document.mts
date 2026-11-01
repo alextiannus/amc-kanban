@@ -1,3 +1,4 @@
+import {readProfileWorkspace} from '../src/lib/profile-workspace-read'
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
@@ -39,11 +40,22 @@ try{
  bodies.brand_information=updated
  assert.equal((await readProfileDocument(id,'interview'))?.content,bodies.interview)
  assert.equal((await readProfileDocument(id,'marketing_plan'))?.content,bodies.marketing_plan)
+ const workspaceBefore=(await prisma.brandKnowledge.findUnique({where:{brandId:id}}))!.marketingSolution as any
+ for(const current of [{},{marketingPlan:null}]){
+  await prisma.brandKnowledge.update({where:{brandId:id},data:{brandPlan:{marketingPlan:{content:'LEGACY_STRATEGY'},coCreation:{brand_information:{content:'LEGACY_INFO'}}},marketingSolution:current}})
+  const full=await readProfileDocuments(id),lean=await readProfileOverview(id)
+  for(const section of ['brand_information','interview','marketing_plan'])assert.equal(lean?.documents[section].content,full?.[section].content,'legacy and explicit null overlay parity')
+ }
+ await prisma.brandKnowledge.update({where:{brandId:id},data:{brandPlan:{},marketingSolution:workspaceBefore}})
+ await prisma.brandKnowledge.update({where:{brandId:id},data:{marketingSolution:{...workspaceBefore,history:{payload:'x'.repeat(16_000_000)},coCreation:{...workspaceBefore.coCreation,unrelated:{content:'SECRET_HISTORY'}}}}})
+ const projected=await readProfileWorkspace(id)
+ assert(Buffer.byteLength(JSON.stringify(projected))<10000,'DB projection must exclude 16MB history')
+ assert(!JSON.stringify(projected).includes('SECRET_HISTORY'))
  const beforeRead=await prisma.brandKnowledge.findUnique({where:{brandId:id}})
  const all=await readProfileDocuments(id);assert.equal(all?.interview.content,bodies.interview);assert.equal(all?.marketing_plan.content,bodies.marketing_plan);assert.equal(all?.brand_information.content,updated)
  assert.deepEqual(await prisma.brandKnowledge.findUnique({where:{brandId:id}}),beforeRead,'document read must not write or regenerate')
  const originalFetch=globalThis.fetch;let providerReads=0
- try{globalThis.fetch=async()=>{providerReads++;throw Error('external_read_forbidden')};const savedInsight=await readAvailableInsight(id,{savedOnly:true});assert.equal(savedInsight.liveStatus,'not_checked');const overview=await readProfileOverview(id);assert.equal(overview?.documents.interview.content,bodies.interview);assert.equal(overview?.documents.marketing_plan.content,bodies.marketing_plan);assert.equal(overview?.brand.id,id);assert(!JSON.stringify(overview?.brand).includes('loginPassword'));assert.equal(providerReads,0)}finally{globalThis.fetch=originalFetch}
+ try{globalThis.fetch=async()=>{providerReads++;throw Error('external_read_forbidden')};const savedInsight=await readAvailableInsight(id,{savedOnly:true});assert.equal(savedInsight.liveStatus,'not_checked');const overview=await readProfileOverview(id);assert.equal(overview?.documents.brand_information.content,bodies.brand_information);assert(!('revision' in overview!.documents.interview));assert.equal(overview?.documents.interview.content,bodies.interview);assert.equal(overview?.documents.marketing_plan.content,bodies.marketing_plan);assert.equal(overview?.brand.id,id);assert(!JSON.stringify(overview?.brand).includes('loginPassword'));assert.equal(providerReads,0)}finally{globalThis.fetch=originalFetch}
  assert.deepEqual(await prisma.brandKnowledge.findUnique({where:{brandId:id}}),beforeRead,'saved report read must not rewrite content')
  await initializeHost(pool)
  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'profile-document-test',authorize:async a=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>{throw Error('must not read full brand context')},readMarketingWorkspace:async()=>{throw Error('must not read full workspace')},readInsight:async()=>{throw Error('must not fetch report')}})

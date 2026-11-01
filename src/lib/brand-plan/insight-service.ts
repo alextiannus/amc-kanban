@@ -17,9 +17,11 @@ async function mutateRequest(brandId:string,change:(request:RequestState|null)=>
 }
 export async function readInsight(brandId:string){
  const [knowledge,snapshots,management]=await Promise.all([
-  prisma.brandKnowledge.findUnique({where:{brandId}}),
-  prisma.brandGrowthResearchSnapshot.findMany({where:{brandId},orderBy:{generatedAt:'desc'},take:50}),
-  prisma.brandMarketingSolution.findMany({where:{brandId,kind:'MANAGEMENT_REPORT',status:{in:['COMPLETED','PUBLISHED','CONFIRMED']}},orderBy:{generatedAt:'desc'},take:50}),
+  prisma.$queryRaw<Array<{researchReport:any;marketingSolution:any}>>`
+   SELECT "researchReport", jsonb_build_object('researchReport',"marketingSolution"->'researchReport','insightRequest',"marketingSolution"->'insightRequest') AS "marketingSolution"
+   FROM "BrandKnowledge" WHERE "brandId"=${brandId}`.then((rows:Array<{researchReport:any;marketingSolution:any}>)=>rows[0]||null),
+  prisma.brandGrowthResearchSnapshot.findMany({where:{brandId},orderBy:{generatedAt:'desc'},take:50,select:{id:true,report:true}}),
+  prisma.brandMarketingSolution.findMany({where:{brandId,kind:'MANAGEMENT_REPORT',status:{in:['COMPLETED','PUBLISHED','CONFIRMED']}},orderBy:{generatedAt:'desc'},take:50,select:{id:true,output:true,status:true,generatedAt:true}}),
  ])
  const w=(knowledge?.marketingSolution||{}) as any
  const report=latestInsightReport([
