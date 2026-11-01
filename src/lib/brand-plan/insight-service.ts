@@ -79,8 +79,9 @@ export async function reconcileInsight(brandId:string,adapters={readJob:async(id
 }
 
 /** Shared by the report canvas and User AI so both use the same latest artifact. */
-export async function readAvailableInsight(brandId:string){
+export async function readAvailableInsight(brandId:string,options:{savedOnly?:boolean}={}){
  const saved=await readInsight(brandId)
+ if(options.savedOnly)return {...saved,report:withInsightPdfUrl(brandId,saved.report),status:saved.report?'cached':'missing',liveStatus:'not_checked'}
  const [brand,snapshot]=await Promise.all([
   prisma.brand.findUnique({where:{id:brandId},select:{growthBrandKey:true}}),
   prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'},select:{report:true}}),

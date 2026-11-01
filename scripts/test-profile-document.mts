@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
-import {readProfileDocument} from '../src/lib/profile-document.ts'
+import {readProfileDocument,readProfileDocuments} from '../src/lib/profile-document.ts'
+import {readAvailableInsight} from '../src/lib/brand-plan/insight-service.ts'
 import {readBrandInformation,updateBrandInformation} from '../src/lib/brand-information.ts'
 import {savePlanningDocument} from '../src/lib/ai-native/planning-document.ts'
 import {composeApplication} from '../src/lib/ai-native/application.ts'
@@ -37,6 +38,12 @@ try{
  bodies.brand_information=updated
  assert.equal((await readProfileDocument(id,'interview'))?.content,bodies.interview)
  assert.equal((await readProfileDocument(id,'marketing_plan'))?.content,bodies.marketing_plan)
+ const beforeRead=await prisma.brandKnowledge.findUnique({where:{brandId:id}})
+ const all=await readProfileDocuments(id);assert.equal(all?.interview.content,bodies.interview);assert.equal(all?.marketing_plan.content,bodies.marketing_plan);assert.equal(all?.brand_information.content,updated)
+ assert.deepEqual(await prisma.brandKnowledge.findUnique({where:{brandId:id}}),beforeRead,'document read must not write or regenerate')
+ const originalFetch=globalThis.fetch;let providerReads=0
+ try{globalThis.fetch=async()=>{providerReads++;throw Error('external_read_forbidden')};const savedInsight=await readAvailableInsight(id,{savedOnly:true});assert.equal(savedInsight.liveStatus,'not_checked');assert.equal(providerReads,0)}finally{globalThis.fetch=originalFetch}
+ assert.deepEqual(await prisma.brandKnowledge.findUnique({where:{brandId:id}}),beforeRead,'saved report read must not rewrite content')
  await initializeHost(pool)
  const composition=await composeApplication(pool,{profiles:[{id:'fixture',provider:'openai',model:'fixture',credentialRef:'fixture'}],resolveSecret:()=> 'test-only',modelFactory:()=>model,tokenPolicies:{fixture:{maximum:1000,price:{revision:'test',input:1,cachedInput:1,output:1}}}},{version:'profile-document-test',authorize:async a=>a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,readContext:async()=>{throw Error('must not read full brand context')},readMarketingWorkspace:async()=>{throw Error('must not read full workspace')},readInsight:async()=>{throw Error('must not fetch report')}})
  app=composition.app

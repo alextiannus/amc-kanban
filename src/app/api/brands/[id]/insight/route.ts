@@ -19,8 +19,9 @@ async function handle(request:Request,context:Context,write:boolean){
    await requestInsight(id,auth.user.id,undefined,{refresh:input.refresh===true,previousRequestId:input.previousRequestId??null,sourceRevision:input.sourceRevision})}
   // Polling only reads provider state and materializes completed artifacts; never starts a report.
   let refreshUnavailable=false
-  if(canWrite)try{await reconcileInsight(id)}catch{refreshUnavailable=true}
-  const latest=await readAvailableInsight(id)
+  const savedOnly=!write&&new URL(request.url).searchParams.get('saved')==='1'
+  if(canWrite&&!savedOnly)try{await reconcileInsight(id)}catch{refreshUnavailable=true}
+  const latest=await readAvailableInsight(id,{savedOnly})
   return NextResponse.json({...latest,downloads:insightDownloads(id,latest.report),refreshUnavailable:refreshUnavailable||latest.liveStatus==='unavailable'},{headers:{'Cache-Control':'no-store'}})
  }catch(e){return NextResponse.json({error:(e as Error).message},{status:(e as any).statusCode||503})}
 }
