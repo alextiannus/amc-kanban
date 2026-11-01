@@ -1,3 +1,4 @@
+import {allowedTaskTools} from '../src/lib/ai-native/task-tools'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
@@ -40,3 +41,6 @@ assert.equal((await get()).status,401);assert.equal(reads,0)
 auth={user:{id:'owner',type:'HUMAN'}};assert.equal((await get()).status,404);assert.equal(reads,0)
 allowed=true;assert.equal(await (await get()).text(),report.content);assert.equal((await get('old')).status,409)
 console.log('PASS plain prose, hidden metadata discard, business validation retained, real versioned documents and route authorization')
+
+assert.deepEqual(allowedTaskTools(['amc.growth_insight'],{kind:'conversation',topic:'general'} as any,[]),['amc.growth_insight'])
+assert.deepEqual(allowedTaskTools(['amc.growth_insight'],{kind:'creative'} as any,[]),[])

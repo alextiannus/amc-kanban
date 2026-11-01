@@ -47,7 +47,7 @@ const model={next:async(request:any)=>{
   const ctx=find('amc.context').result
   if(!find('assistant.skills.read'))return {type:'call',name:'assistant.skills.read',input:{id:ctx.requiredSkill},usage}
   if(ctx.intent.topic==='brand_planning'&&!ctx.planningContext&&!find('amc.marketing_workspace'))return {type:'call',name:'amc.marketing_workspace',input:{},usage}
-  if(ctx.intent.topic==='brand_planning'&&!ctx.planningContext&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
+  if(!ctx.planningContext&&!find('amc.growth_insight'))return {type:'call',name:'amc.growth_insight',input:{},usage}
   if(ctx.intent.topic==='brand_planning'&&!find('amc.planning_budget'))return {type:'call',name:'amc.planning_budget',input:budget,usage}
   const rejected=data.events?.at(-1)?.kind==='verification'&&data.events.at(-1).data.verified===false
   if(rejected)assert(request.tools.some((t:any)=>t.name==='my_write_workspace'),'verification rejection restores repair tools')
@@ -82,7 +82,7 @@ try{
     const intent:ConversationIntent={...(index>=5?{contextSessionId}:{}),kind:'conversation',topic,...((index===2||index===3||index===8||index===9)?{planningScope:{stage:index===8?'direction' as const:index===9?'marketing_plan' as const:index===2?'annual' as const:'quarter' as const,mode:'draft' as const,startMonth:'2027-01',...(index===3?{quarter:2}:{})}}:{}),history:[{role:'user',content:`我们的目标是吸引家庭顾客，第 ${index} 轮`}],brandId:id,userId:id,goal:index===4?'check rejection':`请继续讨论第 ${index} 轮`,artifactPath:`work/${topic}-${index}.json`,requestKey:`test-${topic}-${index}-${id}`}
     await admitIntent(pool,actor,intent)
     await assert.rejects(()=>admitIntent(pool,actor,{...intent,goal:'changed'}),/request_key_reused/)
-    const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot')&&(topic==='brand_planning'||t!=='amc.growth_insight'))}
+    const input={goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools.filter(t=>!t.startsWith('amc.autopilot'))}
     const receipt=await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})
     assert.equal((await app.dispatcher.invoke('agent.work',input,{actor,callId:intent.requestKey})).id,receipt.id)
     await intentForTask(pool,app,actor,receipt.id)

@@ -2,7 +2,7 @@ import {insightDownloads,type ChatFile} from '../brand-plan/report-download'
 import {marketingPlanMarkdown} from './planning-workspace-contract'
 /** URLs come from authorized source artifacts, never model-provided download metadata. */
 export function conversationFiles(brandId:string,taskId:string,goal:string,report:any,source:any):ChatFile[]{
- const files=/报告|调研|research|report|insight/i.test(goal)||report?.planningDraft?.scope?.stage==='insight'?insightDownloads(brandId,source?.report||null):[]
+ const files=/报告|调研|research|report|insight/i.test(goal)||report?.content?.includes(`/api/brands/${encodeURIComponent(brandId)}/insight/`)||report?.planningDraft?.scope?.stage==='insight'?insightDownloads(brandId,source?.report||null):[]
  if(report?.planningDraft?.content?.trim())files.push({id:`planning-${taskId}`,title:report.planningDraft.title,kind:'planning',format:'markdown',url:`/api/brands/${encodeURIComponent(brandId)}/ai/tasks/${encodeURIComponent(taskId)}/document`})
  return files
 }
