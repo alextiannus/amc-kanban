@@ -99,7 +99,7 @@ try{
     const artifact=await app.workspace.read(actor,task.result.artifacts[0])
     const reply=conversationFrom(artifact.content,intent)
     assert(reply.content.length>5)
-    if(index===4)assert(task.events.some((e:any)=>e.kind==='verification'&&e.data.verified===false)||task.calls.some((c:any)=>c.capability==='my_write_workspace'&&c.status==='failed'),'invalid metadata is rejected before repaired completion')
+    if(index===4){assert.equal(reply.planningProgress,undefined);assert(!task.events.some((e:any)=>e.kind==='verification'&&e.data.verified===false),'no summary cannot trigger another model turn');assert.equal(task.calls.filter((c:any)=>c.capability==='my_write_workspace').length,1,'plain reply writes only once')}
     if(topic==='brand_planning'){assert(!task.calls.some((c:any)=>['amc.marketing_workspace','amc.growth_insight'].includes(c.capability)),'bundled sources avoid separate source tool turns');assert(task.calls.some((c:any)=>c.capability==='assistant.skills.read'&&c.status==='succeeded'),'required Skill is actually read');assert.equal(reply.suggestedReplies,undefined,'useful replies need no forced choices')}
     if(topic==='general')assert.deepEqual(reply.uiAction,{page:'calendar',mode:'open',month:'2027-03'})
     if(topic==='brand_planning'){assert.deepEqual(reply.annualBudget,budget);assert.throws(()=>conversationFrom(JSON.stringify({...reply,annualBudget:{...budget,reserve:0}}),intent),/annual_budget_unbalanced/)}

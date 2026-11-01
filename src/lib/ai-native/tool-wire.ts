@@ -8,7 +8,7 @@ const workspaceWriter=(tool:any)=>{const p=tool?.parameters?.properties;return !
 /** The inner reply is typed as an object too: content is prose, never a nested envelope. */
 export function conversationArtifactSchema(intent:ConversationIntent){
  const text={type:'string',minLength:1}
- return {type:'object',additionalProperties:false,required:['kind','brandId','content','contextDigest',...(intent.topic==='brand_planning'?['planningProgress']:[])],properties:{
+ return {type:'object',additionalProperties:false,required:['kind','brandId','content','contextDigest'],properties:{
   kind:{type:'string',const:'conversation'},brandId:{type:'string',const:intent.brandId},
   content:{...text,description:'The complete user-visible reply in Markdown as ONE STRING. Do not nest reply, planningProgress, suggestedReplies or uiAction here. These are root-level siblings.'},
   contextDigest:{type:'string',pattern:'^[a-f0-9]{64}$',description:'Copy the exact amc.context.contextDigest.'},
@@ -50,7 +50,7 @@ export function nativeWireCall(call:any,result:Completion,tools:any[]=[],structu
     // Fill only transport metadata from the trusted admission or the generated
     // summary. Never alter strategy data, source digests, scope or revisions.
     if(binding?.kind==='conversation'&&binding.topic==='brand_planning'&&args.path===binding.artifactPath&&document&&typeof document==='object'&&!Array.isArray(document)&&document.planningDraft){
-     document={...document,...(document.kind===undefined?{kind:'conversation'}:{}),...(document.brandId===undefined?{brandId:binding.brandId}:{}),...(document.content===undefined&&typeof document.planningDraft.content==='string'?{content:document.planningDraft.content}:{}),...(document.planningProgress===undefined&&binding.planningScope?{planningProgress:{stage:binding.planningScope.stage,summary:String(document.planningDraft.content||'Draft prepared').slice(0,500)}}:{})}
+     document={...document,...(document.kind===undefined?{kind:'conversation'}:{}),...(document.brandId===undefined?{brandId:binding.brandId}:{}),...(document.content===undefined&&typeof document.planningDraft.content==='string'?{content:document.planningDraft.content}:{})}
     }
     if(document&&typeof document==='object'&&!Array.isArray(document))args={...args,content:JSON.stringify(document)}
    }
