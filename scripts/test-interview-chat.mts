@@ -3,7 +3,7 @@ import {randomUUID} from 'node:crypto'
 import {CapabilityDispatcher} from '@immedi/iaic-core/capabilities/index.js'
 import {prisma} from '../src/lib/prisma.ts'
 import {actorFor,conversationFrom} from '../src/lib/ai-native/contract.ts'
-import {interviewCapabilities} from '../src/lib/ai-native/interview-capabilities.ts'
+import {interviewCapabilities,interviewReceipt} from '../src/lib/ai-native/interview-capabilities.ts'
 import {readConversationInterview,saveConversationInterview} from '../src/lib/ai-native/interview-store.ts'
 import {confirmsInterview} from '../src/lib/ai-native/interview-contract.ts'
 import {allowedTaskTools} from '../src/lib/ai-native/task-tools.ts'
@@ -51,3 +51,5 @@ try{
  assert.deepEqual(allowedTaskTools(['amc.interview.read','amc.interview.save'],{kind:'video_rewrite'} as any,[]),[])
  console.log('PASS real PostgreSQL chat interview: no-report save/readback, exact full user evidence, preservation, replay, concurrent conflict, authorized prior draft confirmation, negatives, cross-brand/permission denial and visible proposal')
 }finally{await prisma.auditLog.deleteMany({where:{actorId:actor.subjectId,metadata:{path:['brandId'],equals:brand}}});await prisma.brand.deleteMany({where:{id:{in:[brand,other]}}});await prisma.$disconnect()}
+
+assert.equal(interviewReceipt([{capability:'amc.interview.save',status:'succeeded',result:{state:'saved',verified:true,interviewId:'retained'}},{capability:'amc.interview.save',status:'succeeded',result:{state:'conflict',verified:false}}]).interviewId,'retained','later conflict cannot hide a committed save')

@@ -29,4 +29,4 @@ export function interviewCapabilities(getIntent:(actor:NativeActor,id?:string)=>
   try{return await saveConversationInterview({brandId:brandFor(actor as NativeActor),userId:(actor as NativeActor).subjectId,taskId:taskId!,sourceTaskId:data.sourceTaskId,expectedRevision:input.expectedRevision,answers:data.answers})}catch(e){if((e as any).statusCode===409)return {state:'conflict',verified:false,code:(e as any).code,instructions:'Not saved. Read the current interview and discuss the conflict; do not overwrite or claim completion.'};throw e}
  }}})]
 }
-export function interviewReceipt(calls:readonly any[]){return calls.findLast(c=>c.capability==='amc.interview.save'&&c.status==='succeeded')?.result||null}
+export function interviewReceipt(calls:readonly any[]){const saves=calls.filter(c=>c.capability==='amc.interview.save'&&c.status==='succeeded');return saves.findLast(c=>c.result?.state==='saved'&&c.result?.verified===true)?.result||saves.at(-1)?.result||null}
