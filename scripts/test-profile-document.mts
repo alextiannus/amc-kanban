@@ -62,7 +62,7 @@ try{
  app=composition.app
  for(const section of ['brand_information','interview','marketing_plan'] as const){
   assert.equal(conversationInput({profileSection:section}).profileSection,section)
-  const intent:ConversationIntent={kind:'conversation',topic:'brand_planning',profileSection:section,history:[],brandId:id,userId:id,goal:'只调整当前正文',artifactPath:`work/${section}.json`,requestKey:randomUUID()}
+  const intent:ConversationIntent={kind:'conversation',topic:section==='brand_information'?'general':'brand_planning',...(section==='brand_information'?{}:{planningScope:{stage:section,mode:'discuss',startMonth:'2026-11'}}),profileSection:section,history:[],brandId:id,userId:id,goal:'只调整当前正文',artifactPath:`work/${section}.json`,requestKey:randomUUID()}
   await admitIntent(pool,actor,intent)
   const receipt=await app.dispatcher.invoke('agent.work',{goal:intent.goal,requiredArtifacts:[intent.artifactPath],allowedTools:composition.tools},{actor,callId:intent.requestKey})
   await intentForTask(pool,app,actor,receipt.id)
