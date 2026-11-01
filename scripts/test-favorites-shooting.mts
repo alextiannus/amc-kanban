@@ -35,6 +35,10 @@ try{
  await assert.rejects(()=>prepareMonthlyShooting(owner,foreign,{workspaceId:'shoot-draft',revision:1}),/not_found/)
  await assert.rejects(()=>prepare(2),/revision_changed/)
  const result=await prepare();assert.equal(result.count,2);assert.equal(((await prisma.brandMarketingSolution.findUnique({where:{id:result.favorite.id}}))!.output as any).idea.workspace.id,'shoot-draft');assert.equal(result.month,monthAt(new Date(),'Asia/Singapore'));assert.equal((await listCreativeFavorites(owner,brand,true)).items.length,1)
+ const favoriteVersion=result.favorite.version
+ const same=await prepare();assert.equal(same.favorite.version,favoriteVersion,'retry must not increment favorite version after JSONB key reordering')
+ await setCreativeFavorite(owner,brand,{sourceId,saved:false,expectedVersion:favoriteVersion})
+ const resaved=await prepare();assert.equal((await listCreativeFavorites(owner,brand,true)).items.length,1,'prepare retry re-saves an explicitly removed favorite');assert(resaved.favorite.version>favoriteVersion)
  const repeats=await Promise.all([prepare(),prepare(),prepare()]);assert(repeats.every(r=>r.replayed));assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:brand,kind:'SHOOTING_REQUEST'}}),1)
  let plan=await listMonthlyShooting(owner,brand),month=plan.months.find(m=>m.month===result.month)!
  assert.equal(month.items.length,2);assert.equal(month.items[0].mediaType,'image')
@@ -52,6 +56,16 @@ try{
  const asset=await prisma.mediaAsset.create({data:{brandId:brand,url:'https://fixture.invalid/reference.jpg',mimeType:'image/jpeg'}})
  await merchantWorkspace(owner,brand,{action:'save',id:'complete-materials',expectedRevision:0,draft:{...draft,assets:[{id:asset.id,selected:true}],bindings:{'passage-1':[asset.id],'passage-2':[asset.id]}}})
  const beforeRequests=await prisma.brandMarketingSolution.count({where:{brandId:brand,kind:'SHOOTING_REQUEST'}});const ready=await prepare(1,'complete-materials');assert.equal(ready.count,0);assert.equal(ready.favorite.saved,true);assert.equal(await prisma.brandMarketingSolution.count({where:{brandId:brand,kind:'SHOOTING_REQUEST'}}),beforeRequests,'no empty shooting request when all materials exist')
+ // Updating an open request to fully bound materials removes stale pending needs,
+ // while preserving photographed history even when the script changes.
+ const pendingMonth=(await listMonthlyShooting(owner,brand)).months.find(m=>m.month===next.month)!
+ const captured=pendingMonth.items[0]
+ await updateMonthlyShooting(owner,brand,{action:'check',id:captured.requestId,version:captured.requestVersion,itemId:captured.id,done:true})
+ await merchantWorkspace(owner,brand,{action:'save',id:'next-shoot',expectedRevision:1,draft:{...draft,versions:{zh:{script:script+'\n动作：新动作',originalScript:script}},assets:[{id:asset.id,selected:true}],bindings:{'passage-1':[asset.id],'passage-2':[asset.id]}}})
+ const reconciled=await prepare(2,'next-shoot');assert.equal(reconciled.count,0)
+ const remaining=(await listMonthlyShooting(owner,brand)).months.find(m=>m.month===next.month)!.items
+ assert.equal(remaining.length,1,'fully bound update removes outstanding requests');assert.equal(remaining[0].id,captured.id);assert.equal(remaining[0].done,true,'captured history remains')
+ assert((await prepare(2,'next-shoot')).replayed,'zero-missing-material updates also have retry receipts')
  const job={id:'job-fixture',brandId:brand,createdBy:owner,status:'failed',finalVideoUrl:null,plan:{_mmVideoJob:{editor:{creativeRevisionId:'rev1',sourceReference:{inspirationCreativeId:sourceId}}}}}
  await completeFavoriteForVideo(prisma,job);assert.equal((await listCreativeFavorites(owner,brand,true)).items.length,1)
  await completeFavoriteForVideo(prisma,{...job,status:'completed',finalVideoUrl:'https://fixture.invalid/final.mp4',createdBy:other});assert.equal((await listCreativeFavorites(owner,brand,true)).items.length,1,'another user cannot remove owner favorite')

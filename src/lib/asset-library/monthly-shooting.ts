@@ -27,19 +27,21 @@ export async function prepareMonthlyShooting(userId:string,brandId:string,body:a
  return prisma.$transaction(async(tx:any)=>{
   await brandLock(tx,brandId);await authorizeBrainstorm(userId,brandId,true,tx)
   const receiptId='shoot_receipt_'+shotHash([userId,brandId,body.workspaceId,body.revision]),receipt=await tx.brandMarketingSolution.findUnique({where:{id:receiptId}})
-  if(receipt)return {...receipt.output,replayed:true}
-  if(!items.length){
-   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'favorites:'+brandId+':'+userId}))::text`
-   return {month:null,count:0,favorite:await writeFavorite(tx,userId,brandId,candidate,true)}
-  }
-  const months=await tx.brandMarketingSolution.findMany({where:{brandId,kind:MONTH}}),month=nextShootingMonth(months,monthAt(new Date(),brand?.timezone||'Asia/Singapore')),monthId='shoot_month_'+shotHash([brandId,month])
-  await tx.brandMarketingSolution.upsert({where:{id:monthId},create:{id:monthId,brandId,kind:MONTH,period:month,status:'OPEN',generationMode:'HUMAN_REQUEST',createdById:userId,input:{},output:{}},update:{version:{increment:1}}})
-  const id='shoot_request_'+shotHash([userId,brandId,body.workspaceId,month]),previous=await tx.brandMarketingSolution.findUnique({where:{id}}),done=new Set((previous?.output?.items||[]).filter((i:any)=>i.done).map((i:any)=>i.id))
-  const output={items:items.map(item=>({...item,done:done.has(item.id)})),workspaceId:body.workspaceId,revision:body.revision,creativeId:doc.draft.creativeId,sourceId:candidate.idea.sourceId,title:doc.draft.title}
-  await tx.brandMarketingSolution.upsert({where:{id},create:{id,brandId,kind:REQUEST,period:month,status:'ACTIVE',generationMode:'HUMAN_REQUEST',createdById:userId,input:{},output},update:{output,version:{increment:1}}})
+  // A replay deduplicates shooting work, not the user's explicit save action.
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${'favorites:'+brandId+':'+userId}))::text`
   const favorite=await writeFavorite(tx,userId,brandId,candidate,true)
-  const result={month,requestId:id,count:items.length,favorite}
+  if(receipt)return {...receipt.output,favorite,replayed:true}
+  const months=await tx.brandMarketingSolution.findMany({where:{brandId,kind:MONTH}}),month=nextShootingMonth(months,monthAt(new Date(),brand?.timezone||'Asia/Singapore')),monthId='shoot_month_'+shotHash([brandId,month])
+  const id='shoot_request_'+shotHash([userId,brandId,body.workspaceId,month]),previous=await tx.brandMarketingSolution.findUnique({where:{id}})
+  const captured=(previous?.output?.items||[]).filter((i:any)=>i.done),done=new Set(captured.map((i:any)=>i.id)),currentIds=new Set(items.map(i=>i.id))
+  // Replace outstanding needs, retaining photographed records as history.
+  const merged=[...items.map(item=>({...item,done:done.has(item.id)})),...captured.filter((i:any)=>!currentIds.has(i.id))]
+  if(items.length||previous){
+   await tx.brandMarketingSolution.upsert({where:{id:monthId},create:{id:monthId,brandId,kind:MONTH,period:month,status:'OPEN',generationMode:'HUMAN_REQUEST',createdById:userId,input:{},output:{}},update:{version:{increment:1}}})
+   const output={items:merged,workspaceId:body.workspaceId,revision:body.revision,creativeId:doc.draft.creativeId,sourceId:candidate.idea.sourceId,title:doc.draft.title}
+   await tx.brandMarketingSolution.upsert({where:{id},create:{id,brandId,kind:REQUEST,period:month,status:'ACTIVE',generationMode:'HUMAN_REQUEST',createdById:userId,input:{},output},update:{output,version:{increment:1}}})
+  }
+  const result={month:items.length||previous?month:null,...(items.length||previous?{requestId:id}:{}),count:items.length,favorite}
   await tx.brandMarketingSolution.create({data:{id:receiptId,brandId,kind:'SHOOTING_RECEIPT',period:month,status:'SAVED',generationMode:'HUMAN_REQUEST',createdById:userId,input:{workspaceId:body.workspaceId,revision:body.revision},output:result}})
   return result
  })
