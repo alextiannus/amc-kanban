@@ -68,7 +68,7 @@
         "repository": "amc-kanban",
         "path": "skills/amc-conversation"
       },
-      "version": "sha256:73aa9a10831abc4308842f6f567514682470d1a65f6b967564147adb7eb65e02",
+      "version": "sha256:edaf43368b5d67ea462ee3738787c98b077df53b1a33eb7f5d7c74f14746f24e",
       "description": "Respond to a user’s general text conversation with their brand-scoped User AI Assistant."
     },
     {
@@ -568,7 +568,7 @@
     "skills/amc-content-copywriting/references/platform-skills/instagram_skills.json": "07e845c626c3808db8afece28b39bbbd42a2f316e61e887ece05662aaead4731",
     "skills/amc-content-copywriting/references/platform-skills/tiktok_skills.json": "046e090104bc5583cedf5b9c5bf1e082cf465c7d7e8da70df0037b1859854e49",
     "skills/amc-content-copywriting/references/platform-skills/xiaohongshu_skills.json": "31204879c1538b0e9ed5862f689689f021560776b5069eef62817dadccacda65",
-    "skills/amc-conversation/SKILL.md": "f02f5059353529c99d1794905dc8f683a2b9fbaaf526363b965cbf20cc5d64b0",
+    "skills/amc-conversation/SKILL.md": "9ba7f471da0087d379ead2005c43d7ab2e3ec56b6c847bb1c3aeb5a461ac4a7e",
     "skills/amc-conversation/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",
     "skills/amc-creative/SKILL.md": "03fe097500c3bc22833cd3a953b88ae33e0e47d7332a3c70f971c2e60f8a906a",
     "skills/amc-creative/agents/openai.yaml": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94",

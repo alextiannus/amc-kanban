@@ -1,3 +1,4 @@
+import {conversationTurnMessages} from './conversation-turn'
 import {latestPreviewWriter} from './latest-preview'
 import {strategyDocumentBinding,strategyDocumentCall,strategyDocumentTools,STRATEGY_DOCUMENT_INSTRUCTIONS} from './strategy-document'
 import {prepareVideoCompletion} from './video-completion'
@@ -63,6 +64,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
         lastPreviewAt=Date.now();lastPreview=text
         preview.push(text.slice(0,24000))
       }:undefined
+      wire.input=conversationTurnMessages(wire.input,binding)
       const transportTools=(documentBinding?strategyDocumentTools(wire.tools):review?wire.tools.filter((t:any)=>t.name!=='iaic_wait'):nativeWireTools(wire.tools,full||binding?.kind==='conversation',scope,binding)).map((t:any)=>({type:'function',function:{name:t.name,description:t.description,parameters:t.parameters}}))
       console.info('[amc-context-manifest]',JSON.stringify({taskId:taskId||null,policyVersion:version,modelId:model.id,manifest:buildContextManifest(wire.input,transportTools)}))
       let result;try{

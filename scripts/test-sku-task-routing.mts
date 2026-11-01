@@ -75,6 +75,7 @@ const libraryModule=compile('src/lib/ai-native/library.ts',{'./contract':contrac
 let configured:any,artifactContent=''
 const application=compile('src/lib/ai-native/application.ts',{
   './interview-capabilities':{interviewCapabilities:()=>[]},
+  './business-capabilities':{BUSINESS_CAPABILITIES:[],businessCapabilities:()=>[]},
   '../brand-plan/creativeFidelity':fidelity,'../brand-plan/creativeRevisions':{prepareCreativeQualityReview:async()=>quality},
   './video-review':videoReview,
   './runtime-application.mjs':{openApplication:async(config:any)=>{configured=config;return {workspace:{read:async()=>({content:artifactContent})}}}},

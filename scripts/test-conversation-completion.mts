@@ -66,3 +66,5 @@ const saveEvent={kind:'call_settled',data:{callId:savedInterview.id}}
 assert.deepEqual(conversationHostStep(host([context,savedInterview],[saveEvent]),intent),{type:'call',name:'amc.context',input:{}})
 assert.equal(conversationHostStep(host([context,{...savedInterview,result:{verified:false}}],[saveEvent]),intent),null)
 console.log('PASS interview save refreshes verification sources only after verified write')
+
+assert.deepEqual(conversationHostStep(host([context,{...savedInterview,capability:'amc.business.write'}],[saveEvent]),intent),{type:'call',name:'amc.context',input:{}})
