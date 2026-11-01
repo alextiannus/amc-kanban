@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { User as UserIcon, Settings, LogOut } from 'lucide-react'
+import { User as UserIcon, Settings, LogOut, Bot } from 'lucide-react'
 import { resolveRoles, type BoardView } from '@/lib/permissions'
 import { useI18n } from '@/lib/i18n'
 
@@ -118,6 +118,8 @@ export default function UserMenu({
             >
               <Settings size={15} /> {t('设置中心', 'Settings')}
             </button>
+
+            <button onClick={() => { setOpen(false); router.push('/profile/ai') }} className="flex min-h-11 items-center gap-3 px-3 py-2 w-full text-left text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl"><Bot size={15}/>{t('配置 AI', 'Configure AI')}</button>
 
             <div className="h-px bg-slate-100 dark:bg-slate-800 my-1" />
 

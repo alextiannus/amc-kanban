@@ -94,7 +94,7 @@ export default function PermissionsPanel({
                     <span>AI 分身连接方式:</span>{' '}
                     {(p.apiKeys || []).filter(key => !key.revokedAt).length > 0 ? (
                       <span className="text-indigo-650 dark:text-indigo-400 font-bold">
-                        使用账号管理中的用户 API Key 连接 AMC，并继承该用户权限。
+                        用户在个人 Profile 的「配置 AI」中管理连接 Token，助手继承该用户权限。
                       </span>
                     ) : (
                       <span className="text-slate-400">暂无 AI Key。请到账号管理中生成 Key。</span>

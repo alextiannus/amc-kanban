@@ -168,6 +168,7 @@ export default function ProfilePage() {
         </div>
         
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button onClick={() => router.push('/profile/ai')} className="min-h-11 rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-blue-700 dark:text-blue-300">配置 AI · 我的 Token</button>
           {canAccessConnectGuide && (
             <button
               onClick={() => router.push('/connect')}

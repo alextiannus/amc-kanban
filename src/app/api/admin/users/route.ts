@@ -65,7 +65,6 @@ export async function GET() {
           select: {
             id: true,
             name: true,
-            token: true,
             prefix: true,
             createdAt: true,
             lastUsedAt: true,

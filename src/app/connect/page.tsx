@@ -464,7 +464,7 @@ export default function ConnectPage() {
         <section className="mb-8 rounded-2xl border border-indigo-400/20 bg-indigo-500/10 p-6">
           <h2 className="text-2xl font-semibold">Before You Start</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-200">
-            <li>Generate a Personal API Key from your AMC dashboard.</li>
+            <li>Open Profile → Configure AI to manage your personal AI tokens. Existing tokens remain valid.</li>
             <li>Use only your own Personal API Key, and never paste it into public documents or logs.</li>
             <li>The AI client can operate only brands and actions already allowed for your user account.</li>
           </ol>

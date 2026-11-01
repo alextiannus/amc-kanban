@@ -992,3 +992,7 @@ Assistant 本次发布与实模验收证据见 [2026-10-19 发布记录](assista
 ## MCP 组合动作权限（2026-11-01，本地实现待验收）
 
 execute_brand_action 先检查 action_item.resolve，再按 actionType 检查 review.reply（reply_review/domestic_reply_review）或 content.publish（publish_post）；拥有待办处理权限不自动获得回复/发布权限。所有别名沿用各自业务权限及当前品牌 WRITE 检查。Instagram/TikTok/Facebook/Threads 评论写入只走已有 Social Inbox 的人类确认、持久会话归属、平台能力及幂等回执，不经旧 review/Extension Bridge 绕行。Google/Yelp 与国内平台既有授权规则保持。
+
+## Profile 中的个人 AI Token 管理（2026-11-01）
+个人 AI 连接凭据统一从用户 Profile 菜单的「配置 AI」进入；Kanban 与 MM 使用同一 UserApiKey 数据。页面提供当前用户 Token 的名称、掩码、创建/最近使用时间、有效状态、创建与明确确认撤销；创建仅展示一次完整值。页面说明固定 MCP 地址及当前 Token 连接方式，不宣称尚未实现的 OAuth。后台账号管理移除用户 Key 创建、查看全文、复制和撤销页面功能，旧接口兼容保留；其他页面指向个人配置入口。模型供应商、PostFast、Google 等集成凭据不属于个人 AI Token。
+此次变更不执行数据库迁移、不删除、改写或轮换已有 Key，不改变认证兼容逻辑、所属用户及现有权限。个人管理接口仅接受有效用户会话，服务端固定本人范围，写操作校验可信来源；列表不返回 Token 或 Hash，新建仅存 Hash，撤销仅修改用户明确选择的本人 Key。页面加载不产生写入，失败不伪装空列表，不自动重试创建。实施及发布状态以共享台账为准。

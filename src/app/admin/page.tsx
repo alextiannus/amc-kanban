@@ -670,18 +670,15 @@ function AdminPageInner() {
           <CopyField label="注册邮箱" value={data.email} fieldKey="modal_email" />
           <CopyField label="临时初始密码 (7 天有效期)" value={data.temporaryPassword} fieldKey="modal_pw" />
           <CopyField label="系统邀请登录链接" value={data.invitationLink} fieldKey="modal_link" />
-          {data.apiKey && (
-            <CopyField label="智能体委任 API 密钥 (Initial API Key)" value={data.apiKey} fieldKey="modal_apikey" />
-          )}
+
         </div>
         <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-955/20 border border-amber-200 dark:border-amber-900 text-[10px] leading-relaxed text-amber-800 dark:text-amber-300">
-          ⚠️ 临时密码与 API 密钥只会展示一次，请务必在关闭弹窗前完成复制。
+          请保存账户邀请信息。个人 AI Token 由用户在 Profile 的「配置 AI」中管理。
         </div>
         <div className="flex justify-between items-center gap-3 pt-2">
           <button
             onClick={() => {
               let copyStr = `邮箱: ${data.email}\n临时密码: ${data.temporaryPassword}\n邀请链接: ${data.invitationLink}`
-              if (data.apiKey) copyStr += `\nAPI Key: ${data.apiKey}`
               copyText(copyStr, 'all')
             }}
             className="px-4 py-2 text-xs border border-slate-200 dark:border-gray-700 text-slate-700 dark:text-gray-300 rounded-xl hover:bg-slate-105 dark:hover:bg-gray-800 transition-all flex items-center gap-1.5 cursor-pointer bg-white dark:bg-slate-900"

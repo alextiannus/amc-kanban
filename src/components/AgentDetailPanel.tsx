@@ -19,7 +19,7 @@ export default function AgentDetailPanel({ agent }: { agent: AgentDetailPanelAge
         <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block mb-2">🔑 凭证管理</span>
         <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
           Agent API Key 只在创建或轮换时显示一次；系统不会在详情页读取或展示已保存的密钥。
-          如需重新配置外部 Agent，请使用「生成 / 重置 API Key」流程。
+          请在个人 Profile 的「配置 AI」中管理连接 Token，已有 Key 无需重置。
         </p>
       </div>
 
