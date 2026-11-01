@@ -1,3 +1,6 @@
+import {originalVideoRequest,originalVideoBrief} from './originalVideoBrief'
+import {fetchBrandKeywords} from './promotion-strategy/clients'
+import {brainstormTagContext} from './ai-native/brainstorm-match'
 import {videoRewriteEnabled} from './ai-native/video-rewrite'
 import {creativeSourceScript} from './brand-plan/creativeSourceScript'
 import {prisma} from './prisma'
@@ -13,8 +16,31 @@ import {nativeError} from './ai-native/contract'
 const languages:Record<string,string>={zh:'Simplified Chinese',en:'English',id:'Bahasa Indonesia',ms:'Bahasa Melayu'}
 const text=(v:unknown)=>typeof v==='string'?v.trim():''
 const originalText=creativeSourceScript
-export async function prepareVideoScript(userId:string,brandId:string,body:any){
+export async function prepareVideoScript(userId:string,brandId:string,body:any,originalCreation=false){
  await authorizeBrainstorm(userId,brandId,true)
+ if(body?.action==='create_revision'){
+  if(typeof body.rootRequestKey!=='string'||!/^[-\w]{12,100}$/.test(body.rootRequestKey))throw nativeError('invalid_original_video_request',400)
+  const root=await prisma.brandMarketingSolution.findUnique({where:{id:'video_original_'+creativeDigest([userId,brandId,body.rootRequestKey])}})
+  if(!root||root.createdById!==userId||root.brandId!==brandId)throw nativeError('original_video_not_found',404)
+  if(typeof body.instructions!=='string'||body.instructions.length>3100)throw nativeError('invalid_original_video_request',400)
+  const directions=JSON.stringify((root.output as any).creationDirections||['品牌推广'])
+  return prepareVideoScript(userId,brandId,{action:'rewrite',script:body.script,language:body.language,editorRevision:body.editorRevision,requestKey:body.requestKey,targetDurationSec:body.targetDurationSec,predecessorTaskId:body.predecessorTaskId,
+   instructions:'继续当前原创剧本。使用编剧、分镜和品牌表达技能；以当前编辑稿为唯一基线，保留未要求改变的内容。初始创作方向仅供上下文：'+directions+'\n本轮商家要求（优先）：'+body.instructions},true)
+ }
+ if(body?.action==='create'){
+  const input=originalVideoRequest(body),id='video_original_'+creativeDigest([userId,brandId,input.requestKey])
+  let saved=await prisma.brandMarketingSolution.findUnique({where:{id}})
+  if(!saved){
+   const facts=await readVideoRewriteFacts(prisma,brandId)
+   if(!facts)throw nativeError('brand_not_found',404)
+   const keywords=input.tagIds.length?await fetchBrandKeywords({action:'read',brandId,context:brainstormTagContext({...facts,id:brandId},'')}):{tags:[]}
+   const normalized=originalVideoBrief(input,keywords.tags||[])
+   saved=await prisma.brandMarketingSolution.upsert({where:{id},create:{id,brandId,kind:'VIDEO_ORIGINAL_BRIEF',period:input.requestKey,input,output:normalized,status:'READY',createdById:userId},update:{}})
+  }
+  if(saved.createdById!==userId||saved.brandId!==brandId||creativeDigest(saved.input)!==creativeDigest(input))throw nativeError('video_script_request_conflict',409)
+  return prepareVideoScript(userId,brandId,saved.output,true)
+ }
+
  if(body&&['variants','variantPlan','claimVariant','completeVariant'].includes(body.action))return videoPlatformVersion(userId,brandId,body)
  if(!body||!['context','translate','rewrite'].includes(body.action))throw nativeError('invalid_video_preparation',400)
  const creativeId=text(body.creativeId)
@@ -36,7 +62,7 @@ export async function prepareVideoScript(userId:string,brandId:string,body:any){
  const instructions=body.action==='rewrite'?text(body.instructions):'',targetDurationSec=body.action==='rewrite'?body.targetDurationSec:undefined
  if(instructions.length>6000||(targetDurationSec!==undefined&&(!Number.isFinite(targetDurationSec)||targetDurationSec<=0||targetDurationSec>600)))throw nativeError('invalid_video_preparation',400)
  const input={...(body.predecessorTaskId!==undefined?{predecessorTaskId:body.predecessorTaskId}:{}),...(body.editorRevision!==undefined?{editorRevision:body.editorRevision}:{}),action:body.action,originalOnly:body.originalOnly===true,language,script,sourceDigest:source?.sourceDigest||null,creativeId,userId,brandId,...(body.action==='rewrite'&&(body.instructions!==undefined||targetDurationSec!==undefined)?{instructions,targetDurationSec:targetDurationSec??null}:{})}
- const agentRewrite=body.action==='rewrite'&&!body.originalOnly&&typeof body.editorRevision==='string'&&videoRewriteEnabled(brandId)
+ const agentRewrite=body.action==='rewrite'&&!body.originalOnly&&typeof body.editorRevision==='string'&&(originalCreation||videoRewriteEnabled(brandId))
  const id='video_script_'+creativeDigest([userId,brandId,requestKey])
  const claimed=await prisma.$transaction(async (tx:any)=>{
   await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))::text`
