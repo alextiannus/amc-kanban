@@ -14,8 +14,9 @@ export function interviewCapabilities(getIntent:(actor:NativeActor,id?:string)=>
   if(input.mode==='confirm_previous'){
    // The assistant resolves natural-language authorization from conversation context.
    // Exact confirmation wording is NOT a write permission or API requirement.
-   if(!intent.afterTaskId||input.answers!==undefined)throw nativeError('previous_interview_draft_required',422)
+   if(!intent.afterTaskId)throw nativeError('previous_interview_draft_required',422)
    if(/不要保存|不用保存|先不保存|暂不保存|不确认|不保存|只讨论|只查看|do not save|don.t save|without saving|[？?]|(?:但|不过|但是).*(?:改|调整|不同)|确认第[一二三四五六七八九十\d]|只确认/i.test(intent.goal))throw nativeError('interview_confirmation_requires_revision',422)
+   // Ignore any model-supplied answers in this mode; only the persisted visible draft is authoritative.
    const readPrevious=adapters.readPrevious||(await import('./service')).readNativeTask
    const previous=await readPrevious(actor.subjectId,intent.brandId,intent.afterTaskId)
    const draft=previous.report?.interviewDraft||visibleInterviewDraft(previous.report?.content||'')
