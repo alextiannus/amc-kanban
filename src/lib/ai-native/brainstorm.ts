@@ -275,7 +275,7 @@ export async function copyBrainstorm(userId:string,brandId:string,body:any,db:an
   if(original){item.derivedFromCreativeId=original.id;item.copiedFrom={creativeId:original.id,contentHash:creativeDigest(original)}}
   await tx.brandKnowledge.update({where:{brandId},select:{id:true},data:{marketingSolution:{...workspace,publishingCalendar:{...workspace.publishingCalendar,months:{...months,[month]:[...(months[month]||[]),item]}}}}})
   const revision=await tx.brandMarketingSolution.create({data:{brandId,kind:CREATIVE_REVISION_KIND,period:revisionPeriod(month,creativeId),version:1,status:'DRAFT',generationMode:'HUMAN_COPY',createdById:userId,input:{creativeId,month,brand:{id:brandId},actor:{id:userId,name:user.nickname||userId,type:'HUMAN'},principals:[],origin:'human',source:revisionSource(item,null,at)},output:item}})
-  const output={creativeId,month,revisionId:revision.id,current:item}
+  const output={creativeId,month,revisionId:revision.id,current:item,preparationContext:{brandId,creativeId,originalScript:creativeSourceScript(canonical),sourceDigest:canonical.sourceDigest,originalVideoUrl:canonical.originalVideoUrl||null}}
   await tx.brandMarketingSolution.create({data:{brandId,kind:'BRAINSTORM_COPY',period:creativeId,version:1,status:'SAVED',generationMode:'HUMAN_COPY',createdById:userId,input:{requestDigest},output}})
   await tx.auditLog.create({data:{actorId:userId,actorType:'HUMAN',action:'CREATIVE_REPLICATION_COPIED',resourceType:'BrandCreative',resourceId:creativeId,metadata:{brandId,sourceId,sourceCreativeId:original?.id||null}}})
   return {ok:true,replayed:false,...output}

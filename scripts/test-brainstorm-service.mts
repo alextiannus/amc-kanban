@@ -153,6 +153,7 @@ assert.equal(copied[0].creativeId,copied[1].creativeId);assert.equal(copied.filt
 const firstCopy=knowledge.marketingSolution.publishingCalendar.months[copied[0].month].find((i:any)=>i.id===copied[0].creativeId)
 assert(firstCopy.planning.includes('镜头 1 · 0–2s'));assert(firstCopy.planning.includes('餐厅全景'));assert(!firstCopy.planning.includes('#重庆美食'));assert(copied[0].revisionId);assert.equal(rows.find(r=>r.id===copied[0].revisionId).output.planning,firstCopy.planning);firstCopy.planning='User script stays intact';firstCopy.schedule={draftId:'original-schedule'};firstCopy.brandDismissal={decision:'dislike'};firstCopy.status='archived'
 const originalCopy=structuredClone(firstCopy),choiceCount=rows.filter(r=>r.kind===contract.BRAINSTORM_DECISION).length
+assert.equal(copied[0].preparationContext.creativeId,copied[0].creativeId);assert.equal(copied[0].preparationContext.brandId,'brand');assert(copied[0].preparationContext.originalScript.includes('镜头'));
 const nextCopy=await api.copyBrainstorm('user','brand',{action:'copy',creativeId:firstCopy.id,requestKey:'copy-request-00000002'},db)
 assert.notEqual(nextCopy.creativeId,firstCopy.id)
 const nextItem=knowledge.marketingSolution.publishingCalendar.months[nextCopy.month].find((i:any)=>i.id===nextCopy.creativeId)
@@ -258,7 +259,7 @@ assert.deepEqual(await api.loadMoreBrainstorm("user","brand",batchRequest,db,bat
 await assert.rejects(api.loadMoreBrainstorm("user","brand",{...batchRequest,requestKey:"batch-request-000002"},db,async()=>({creativeCandidates:[],contentLibraryGaps:[{status:503}]})),(e:any)=>e.code==="content_library_unavailable")
 console.log("PASS partial failure retains validated batch, scoped tag, replay, and failed searches never exhaust")
 
-const brandRead=db.brand.findUnique;db.brand.findUnique=async(args:any)=>{assert.deepEqual(Object.keys(args.select.knowledge.select).sort(),["menuItems","productAssumptions","promotionFocus"]);return brandRead(args)}
+const brandRead=db.brand.findUnique;db.brand.findUnique=async(args:any)=>{assert.deepEqual(Object.keys(args.select.knowledge.select).sort(),["menuItems"]);return brandRead(args)}
 await api.refreshBrainstorm("user","brand",{action:"refresh",force:true},db,async()=>({contentMatchRequestId:"lean",creativeCandidates:[],contentLibraryGaps:[]}));db.brand.findUnique=brandRead
 console.log("PASS refresh reads only matching facts, never research or whole brand workspace")
 
