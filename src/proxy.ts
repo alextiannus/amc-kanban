@@ -37,7 +37,7 @@ export default async function proxy(request: NextRequest) {
   // Subscription operations do not execute AI and must survive text-policy outages.
   const brandOperations = pathname === '/api/brand-operations' || /^\/api\/brand-operations\/[^/]+\/principal$/.test(pathname)
   // Fault reporting and release probes must work even when the model registry is unavailable.
-  const savedProfileRead = request.method === 'GET' && /^\/api\/brands\/[^/]+\/profile-overview$/.test(pathname)
+  const savedProfileRead = request.method === 'GET' && (/^\/api\/brands\/[^/]+\/profile-overview$/.test(pathname) || pathname === '/api/notifications') || pathname === '/api/notifications/push'
   const engineeringNonModel = pathname === '/api/health/version' || /^\/api\/brands\/[^/]+\/ai\/bug-reports(?:\/[^/]+)?$/.test(pathname)
   const permission = publicGameConfig || contentIdentity ? null : kanbanRoutePermission(pathname, request.method)
   if (permission) {

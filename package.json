@@ -141,6 +141,7 @@
     "@prisma/client": "^6.19.3",
     "@tailwindcss/typography": "^0.5.19",
     "@types/nodemailer": "^8.0.1",
+    "@types/web-push": "^3.6.4",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^11.18.2",
     "jose": "^6.2.3",
@@ -163,6 +164,7 @@
     "stripe": "^22.2.0",
     "tsx": "^4.23.12",
     "undici": "^8.7.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {

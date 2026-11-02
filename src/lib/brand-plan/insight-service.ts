@@ -5,7 +5,7 @@ import {prisma} from '../prisma'
 import {buildGrowthResearchReport,loadBrandPlanBrand,saveResearchReport} from './service'
 import {insightReport,latestInsightReport,growthInsightReport} from './insight-report'
 
-type RequestState={id:string;status:'submitting'|'processing'|'review_required'|'completed'|'failed';createdAt:string;sourceRevision?:string;jobId?:string;updatedAt?:string}
+type RequestState={id:string;userId?:string;status:'submitting'|'processing'|'review_required'|'completed'|'failed';createdAt:string;sourceRevision?:string;jobId?:string;updatedAt?:string}
 async function mutateRequest(brandId:string,change:(request:RequestState|null)=>RequestState|null){
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
   await tx.$queryRaw`SELECT id FROM "Brand" WHERE id=${brandId} FOR UPDATE`
@@ -39,7 +39,7 @@ export async function requestInsight(brandId:string,userId:string,adapters={load
   if(old&&['submitting','processing','review_required'].includes(old.status))return old
   if(options.refresh&&options.previousRequestId!==(old?.id||null)){if(old)return old;throw Object.assign(Error('insight_request_changed'),{statusCode:409})}
   if(!options.refresh&&old&&old.status!=='failed')return old
-  return {id:randomUUID(),status:'submitting',createdAt:new Date().toISOString(),...(sources?{sourceRevision:sources.revision}:{})}
+  return {id:randomUUID(),userId,status:'submitting',createdAt:new Date().toISOString(),...(sources?{sourceRevision:sources.revision}:{})}
  }))!
  if(request.status!=='submitting')return request
  const brand=await adapters.loadBrand(brandId)
