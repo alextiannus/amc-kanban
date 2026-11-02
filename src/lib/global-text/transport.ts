@@ -5,6 +5,7 @@ export type Message = { role: string; content?: any; tool_calls?: any[]; tool_ca
 export type TextRequest = { messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
 export type TextUsage={input_tokens:number|null;output_tokens:number|null;input_tokens_details?:{cached_tokens:number|null};output_tokens_details?:{reasoning_tokens:number|null}}
 export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number; providerReference?:string; usage?:TextUsage; rawUsage?:unknown }
+export const MAX_TEXT_REQUEST_TIMEOUT_MS = 110000
 
 export class TextOutputLimitError extends Error {
   constructor(readonly diagnostics: {
@@ -103,7 +104,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
       generationConfig:{maxOutputTokens:maxTokens,...(input.temperature!==undefined?{temperature:input.temperature}:{})},
       ...(input.tools?.length?{tools:[{functionDeclarations:input.tools.map(t=>t.function)}],...(typeof input.toolChoice==='object'?{toolConfig:{functionCallingConfig:{mode:'ANY',allowedFunctionNames:[input.toolChoice.function.name]}}}:{})}:{}) }
   }
-  const timeout = AbortSignal.timeout(Math.max(1,Math.min(110000, c.timeoutMs || 110000,input.timeoutMs||110000)))
+  const timeout = AbortSignal.timeout(Math.max(1,Math.min(MAX_TEXT_REQUEST_TIMEOUT_MS, c.timeoutMs || MAX_TEXT_REQUEST_TIMEOUT_MS,input.timeoutMs||MAX_TEXT_REQUEST_TIMEOUT_MS)))
   const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
   if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
   const data = await response.json()
