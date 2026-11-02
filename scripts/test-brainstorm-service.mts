@@ -1,3 +1,4 @@
+import * as browseContext from '../src/lib/ai-native/brainstorm-context.ts'
 import * as usage from '../src/lib/ai-native/brainstorm-usage.ts'
 import * as brainstormStorage from '../src/lib/ai-native/brainstorm-storage.ts'
 import * as browseSource from '../src/lib/ai-native/browse-source.ts'
@@ -33,7 +34,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'./brainstorm-context':browseContext,'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
@@ -386,3 +387,35 @@ assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_shanshen_only'])
 assert(rows.some(r=>r.kind===contract.BRAINSTORM_DECISION&&r.period==='cre_food_deferred'&&r.input.decision==='defer'))
 assert(rows.some(r=>r.kind===contract.BRAINSTORM_FEED&&r.input.matchKeywords==='Food'))
 console.log('PASS keyword changes preserve deferred history without displaying unrelated old matches')
+
+// Request-scoped searches never become a brand's default query or another tab's list.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}};evidenceRevision='r1';evidenceTimeline=[]
+rows.push({id:'brand-default',brandId:'brand',kind:'BRAINSTORM_FEED',period:'sources',version:1,createdAt:new Date(),input:{matchKeywords:'',keywordPolicy:brainstormMatch.BRAINSTORM_KEYWORD_POLICY,brandKeywordRevision:1},output:{sources:[source('cre_default',91)]}})
+rows.push({id:'legacy-search',brandId:'brand',kind:'BRAINSTORM_FEED',period:'sources',version:178,createdAt:new Date(),input:{matchKeywords:'闪身步'},output:{sources:[source('cre_legacy_search',91)]}})
+const sessionA='11111111-1111-4111-8111-111111111111',sessionB='22222222-2222-4222-8222-222222222222'
+const browse=(session:string|null,run:()=>Promise<any>,user='user')=>browseContext.withBrainstormBrowse(user,'brand',session,run)
+const defaultsBefore=JSON.stringify(rows)
+listing=await browse(null,()=>api.listBrainstorm('user','brand',db))
+assert.equal(listing.matchKeywords,'');assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_default']);assert.equal(JSON.stringify(rows),defaultsBefore)
+const found=await browse(sessionA,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'闪身步',expectedKeywords:''},db,async()=>({contentMatchRequestId:'session-a',creativeCandidates:[source('cre_session_a',91)],contentLibraryGaps:[]})))
+assert.equal(found.matchKeywords,'闪身步');assert(found.items[0].videoUrl.includes('browseSessionId='+sessionA));assert(found.items[0].thumbnailUrl.includes('browseSessionId='+sessionA))
+assert.equal((await browse(null,()=>api.listBrainstorm('user','brand',db))).matchKeywords,'')
+assert.deepEqual((await browse(sessionB,()=>api.listBrainstorm('user','brand',db))).items.map((i:any)=>i.sourceId),['cre_default'])
+assert.deepEqual((await browse(sessionA,()=>api.listBrainstorm('other-user','brand',db),'other-user')).items.map((i:any)=>i.sourceId),['cre_default'])
+await browse(sessionB,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'Food',expectedKeywords:''},db,async()=>({contentMatchRequestId:'session-b',creativeCandidates:[source('cre_session_b',91)],contentLibraryGaps:[]})))
+assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).matchKeywords,'闪身步')
+await browse(sessionA,()=>api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'session-more-000001'},db,async(input:any)=>{assert.equal(input.brandTagContext.keywords,'闪身步');assert(input.excludeCreativeIds.includes('cre_session_a'));assert(!input.excludeCreativeIds.includes('cre_session_b'));return {contentMatchRequestId:'session-a-more',creativeCandidates:[source('cre_session_a_more',91)],contentLibraryGaps:[]}}))
+assert.equal((await browse(sessionB,()=>api.listBrainstorm('user','brand',db))).items.length,1)
+assert.equal((await browse(sessionA,()=>api.brainstormVideo('user','brand','cre_session_a',undefined,db))).status,200)
+await assert.rejects(browse(sessionB,()=>api.brainstormVideo('user','brand','cre_session_a',undefined,db)),(e:any)=>e.code==='brainstorm_source_not_found')
+assert.equal((await browse(sessionA,()=>api.favoriteCandidates('user','brand',{sourceId:'cre_session_a'},db)))[0].idea.sourceId,'cre_session_a')
+const scopedCopy=await browse(sessionA,()=>api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_session_a',requestKey:'session-copy-000001'},db));assert(scopedCopy.creativeId)
+assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).items[0].brandUsage.status,'replicated')
+await assert.rejects(browse(sessionB,()=>api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_session_a',requestKey:'session-copy-000002'},db)),(e:any)=>e.code==='brainstorm_source_not_found')
+await browse(null,()=>api.refreshBrainstorm('user','brand',{action:'refresh',force:true,keywords:'',expectedKeywords:''},db,async(input:any)=>{assert.equal(input.brandTagContext.keywords,'');return {contentMatchRequestId:'default-reset',creativeCandidates:[source('cre_default_updated',91)],contentLibraryGaps:[]}}))
+const latestDefault=rows.filter(r=>r.kind==='BRAINSTORM_FEED'&&r.period==='sources').at(-1)
+assert.equal(latestDefault.version,179);assert.equal(latestDefault.input.matchKeywords,'');assert.equal(rows.find(r=>r.id==='legacy-search').input.matchKeywords,'闪身步')
+assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).matchKeywords,'闪身步')
+await assert.rejects(browse(null,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'must-not-persist',expectedKeywords:''},db)),(e:any)=>e.code==='brainstorm_search_session_required')
+assert.throws(()=>browseContext.withBrainstormBrowse('user','brand','invalid',()=>null),(e:any)=>e.code==='invalid_browse_session')
+console.log('PASS transient searches: blank default, immutable legacy history, tab/user isolation, scoped pagination/media/favorites/copies, usage and monotonic default revision')

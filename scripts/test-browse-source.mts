@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import {PGlite} from '@electric-sql/pglite'
-import {browseFeedSql,browsePoolSql} from '../src/lib/ai-native/browse-source.ts'
+import {brainstormFeedReadSql,browseFeedSql,browsePoolSql} from '../src/lib/ai-native/browse-source.ts'
 import {projectBrainstormSource,eligibleBrainstormSource} from '../src/lib/ai-native/brainstorm-contract.ts'
 const db=new PGlite()
 try{
@@ -15,5 +15,11 @@ try{
   assert(JSON.stringify(source).length<2000)
  }
  assert.equal((await db.query(browseFeedSql,['other'])).rows.length,0);assert.equal((await db.query(browsePoolSql,['other'])).rows.length,0)
+ await db.query(`insert into "BrandMarketingSolution"("brandId",kind,period,version,input,output) values('brand','BRAINSTORM_FEED','sources',2,'{"matchKeywords":"old search"}',$1)`,[{sources:[]}])
+ assert.equal((await db.query(brainstormFeedReadSql(true,true),['brand','sources'])).rows[0].version,1)
+ assert.equal((await db.query(brainstormFeedReadSql(false,true),['brand','sources'])).rows[0].version,1)
+ await db.query(`insert into "BrandMarketingSolution"("brandId",kind,period,version,input,output) values('brand','BRAINSTORM_FEED','browse:user:session',1,'{"matchKeywords":"search"}',$1)`,[{sources:[raw]}])
+ assert.equal((await db.query(brainstormFeedReadSql(true),['brand','browse:user:session'])).rows[0].input.matchKeywords,'search')
+ assert.equal((await db.query(brainstormFeedReadSql(true),['brand','browse:other:session'])).rows.length,0)
  console.log('PASS feed/pool SQL projection: source pins, list metadata and recommendation parity, brand isolation, small payload')
 }finally{await db.close()}
