@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const notifications=found.filter(n=>!n.brandId||allowed.get(n.brandId))
     await notePushPresence(context.user.id)
     const preferences=(await prisma.$queryRawUnsafe('SELECT muted,quiet,timezone FROM amc_push_preferences WHERE user_id=$1',context.user.id) as any[])[0]
-    return NextResponse.json({ ok: true, notifications,preferences:preferences?{muted:preferences.muted,quietActive:quietNow(preferences)}:{muted:false,quietActive:false} },{headers:{'Cache-Control':'no-store'}})
+    return NextResponse.json({ ok: true, notifications,preferences:preferences?{muted:preferences.muted,quietActive:quietNow(preferences)}:{muted:false,quietActive:quietNow({quiet:true,timezone:'Asia/Singapore'})} },{headers:{'Cache-Control':'no-store'}})
   } catch (error: any) {
     console.error('[API Notifications] Failed to fetch notifications:', error)
     return NextResponse.json(

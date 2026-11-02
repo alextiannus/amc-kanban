@@ -94,7 +94,7 @@ export async function startBackgroundNoticeWorker(){
  if(globalWorker.amcBackgroundNoticeWorker)return
  await ensureBackgroundNoticeSchema();await ensurePushSchema();globalWorker.amcBackgroundNoticeWorker=true
  let busy=false,stopped=false
- const run=async()=>{if(busy||stopped)return;busy=true;try{await processBackgroundNotices();await deliverPushNotices()}catch{console.warn('[background-notice] scan deferred')}finally{busy=false}}
+ const run=async()=>{if(busy||stopped)return;busy=true;try{try{await processBackgroundNotices()}catch{console.warn('[background-notice] scan deferred')}try{await deliverPushNotices()}catch{console.warn('[background-notice] delivery deferred')}}finally{busy=false}}
  const timer=setInterval(()=>void run(),30000);timer.unref();void run()
  process.once('SIGTERM',()=>{stopped=true;clearInterval(timer)})
 }
