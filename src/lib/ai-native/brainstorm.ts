@@ -1,7 +1,9 @@
 import {queryCalendarRead} from '../brand-plan/calendarProjection'
 import {storeBrainstormSources,storedBrainstormSource} from './brainstorm-storage'
-import {browseFeedSql,browsePoolSql} from './browse-source'
+import {brainstormFeedReadSql,browsePoolSql} from './browse-source'
 import {readBrowseKnowledge} from './browse-knowledge'
+import {brainstormBrowseContext,brainstormFeedPeriod,browseMediaItems} from './brainstorm-context'
+import {activeBrowseCreative,withBrainstormUsage,brainstormWorkspaceSql} from './brainstorm-usage'
 import {brainstormMatchRequest,brainstormTagContext,BRAINSTORM_KEYWORD_POLICY} from './brainstorm-match'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
 import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
@@ -41,11 +43,25 @@ function matchKeywords(value:unknown):string{
  if(typeof value!=='string'||value.length>300)throw nativeError('invalid_match_keywords',400)
  return value.trim().replace(/\s+/g,' ')
 }
-async function feed(db:any,brandId:string,compact=false){if(compact&&db.$queryRawUnsafe)return (await db.$queryRawUnsafe(browseFeedSql,brandId))[0]||null;return db.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_FEED,period:'sources'},orderBy:{version:'desc'}})}
+async function feed(db:any,brandId:string,compact=false){
+ const context=brainstormBrowseContext(brandId)
+ const read=async(period:string,defaultOnly=false)=>{
+  if(db.$queryRawUnsafe){
+   return (await db.$queryRawUnsafe(brainstormFeedReadSql(compact,defaultOnly),brandId,period))[0]||null
+  }
+  const where={brandId,kind:BRAINSTORM_FEED,period}
+  if(!defaultOnly)return db.brandMarketingSolution.findFirst({where,orderBy:{version:'desc'}})
+  // Non-SQL adapters used by contract tests retain the same default-only semantics.
+  return (await db.brandMarketingSolution.findMany({where,orderBy:{version:'desc'}})).find((row:any)=>!row.input?.matchKeywords)||null
+ }
+ if(context?.sessionId){const own=await read(brainstormFeedPeriod(brandId));if(own)return own;const base=await read('sources',true);return base?{...base,browseSessionFallback:true}:null}
+ return read('sources',!!context)
+}
 async function decisions(db:any,brandId:string,ids:string[]){
  if(!ids.length)return []
  return db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION,period:{in:ids}},orderBy:{version:'desc'},distinct:['period']})
 }
+async function nextFeedVersion(db:any,brandId:string){const latest=await db.brandMarketingSolution.findFirst({where:{brandId,kind:BRAINSTORM_FEED,period:brainstormFeedPeriod(brandId)},orderBy:{version:'desc'},select:{version:true}});return (latest?.version||0)+1}
 // Inbox, library recommendations and returned calendar records share this feed.
 async function poolSources(db:any,brandId:string,compact=false){
  if(!db.$queryRaw)return []
@@ -76,14 +92,16 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
   // Legacy adapted calendar ideas are not new keyword matches. Preserve their records,
   // but require a current matched source before returning them to discovery.
   if(saved?.input?.keywordPolicy?.startsWith('fixed-keywords-')&&!currentSourceIds.has(sourceId))continue
-  if(creativeIsSelected(item)||item.brandDismissal?.decision==='dislike'||disliked.has(sourceId)||selected.has(sourceId)||['archived','deleted','归档','已删除'].includes(item.status))continue
+  // Matched originals own discovery evidence. Copies only contribute usage metadata.
+  if(currentSourceIds.has(sourceId)||seen.has(sourceId)||creativeIsSelected(item)||!activeBrowseCreative(item)||disliked.has(sourceId))continue
   const source=item.nativeSourceSnapshot?.source||item.source||{},projected=projectBrainstormSource({...source,inspirationCreativeId:sourceId},brandId,null)
   candidates.push({current:item,idea:{...projected,title:projected.title||item.title||'内容创意',sourceDigest:/^[a-f0-9]{64}$/.test(source.sourceDigest||item.source?.sourceDigest||'')?(source.sourceDigest||item.source.sourceDigest):null,matchScore:typeof source.matchScore==='number'&&Number.isFinite(source.matchScore)?source.matchScore:null,savedCreativeId:item.id,poolIdeaId:pool.find((row:any)=>row.source_id===sourceId)?.id,expectedRevision:creativeDigest(item),month,decision:item.creativeBrowserDecision?.decision||null,decisionVersion:0,videoUrl:(source.sourceVideo?.videoUrl||item.source?.originalVideoUrl)?`/api/brands/${encodeURIComponent(brandId)}/content-creatives/${encodeURIComponent(item.id)}/source/media`:null}})
   seen.add(sourceId)
  }
  for(const candidate of [...sources.map((source:any)=>({source})),...pool.map((row:any)=>({source:row.source,poolIdeaId:row.id}))]){
   const {source}=candidate,id=source?.inspirationCreativeId,choice:any=byId.get(id)
-  if(!eligibleBrainstormSource(source)||!relevantDefaultBrainstormSource(source,saved?.input?.matchKeywords||'')||seen.has(id)||selected.has(id)||disliked.has(id)||['like','dislike'].includes(choice?.input?.decision))continue
+  if(saved?.input?.keywordPolicy?.startsWith('fixed-keywords-')&&!currentSourceIds.has(id))continue
+  if(!eligibleBrainstormSource(source)||!relevantDefaultBrainstormSource(source,saved?.input?.matchKeywords||'')||seen.has(id)||disliked.has(id)||choice?.input?.decision==='dislike')continue
   seen.add(id);candidates.push({current:{source},idea:{...projectBrainstormSource(source,brandId,choice),...('poolIdeaId' in candidate?{poolIdeaId:candidate.poolIdeaId}:{})}})
  }
  const ranks=new Map<string,number>(sources.map((s:any,i:number)=>[s.inspirationCreativeId,i]))
@@ -100,7 +118,8 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  items.sort((a,b)=>(ranks.get(a.sourceId)??Infinity)-(ranks.get(b.sourceId)??Infinity))
  const tagResult=browse.brandTags
  console.info('[brainstorm-timing]',JSON.stringify({brandId,authorizationMs:Math.round(authorizedAt-started),dataMs:Math.round(dataAt-authorizedAt),contentMs:Math.round(performance.now()-dataAt),totalMs:Math.round(performance.now()-started),candidates:candidates.length,requested:requested.length,firstScreen,items:items.length}))
- return {ok:true,brandId,canDecide,hasMore,...(nextCursor?{nextCursor}:{}),matchKeywords:saved?.input?.matchKeywords||'',brandKeywordRevision:(tagResult as any)?.revision,keywordsChanged:!!(tagResult as any)?.revision&&saved?.input?.brandKeywordRevision!==(tagResult as any).revision,matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,needsRefresh:!saved||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items}
+ const matchingRulesChanged=!!saved&&saved.input?.keywordPolicy!==BRAINSTORM_KEYWORD_POLICY
+ return {ok:true,brandId,canDecide,hasMore,...(nextCursor?{nextCursor}:{}),matchKeywords:saved?.input?.matchKeywords||'',brandKeywordRevision:(tagResult as any)?.revision,keywordsChanged:!!(tagResult as any)?.revision&&saved?.input?.brandKeywordRevision!==(tagResult as any).revision,matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,matchingRulesChanged,needsRefresh:!saved||matchingRulesChanged||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items:browseMediaItems(withBrainstormUsage(items,entries,choices),brandId)}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
@@ -132,15 +151,15 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
  const previous=await feed(db,brandId),previousKeywords=previous?.input?.matchKeywords||''
  if(editing&&expected!==previousKeywords)throw nativeError('brainstorm_keywords_changed',409)
  const keywords=requested??previousKeywords
+ if(brainstormBrowseContext(brandId)&&!brainstormBrowseContext(brandId)?.sessionId&&keywords)throw nativeError('brainstorm_search_session_required',400)
  const rawFacts=await db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}})
  const facts=rawFacts?{...rawFacts,productCatalog:skuFacts(rawFacts.knowledge?.menuItems)}:null
  if(!facts)throw nativeError('brand_context_unavailable',404)
  const currentKeywords=await fetchBrandKeywords({action:'read',brandId,context:brainstormTagContext(facts,'')})
  if(previous&&previous.input?.brandKeywordRevision===currentKeywords.revision&&previous.input?.keywordPolicy===BRAINSTORM_KEYWORD_POLICY&&keywords===previousKeywords&&!body.force&&Date.now()-new Date(previous.createdAt).getTime()<30*60000)return listBrainstorm(userId,brandId,db)
 
- const excluded=await db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},orderBy:{createdAt:'desc'},distinct:['period'],take:72,select:{period:true}})
- const {selected,disliked}=await browserState(db,brandId,true)
- const excludedSourceIds=[...new Set([...excluded.map((d:any)=>d.period),...selected,...disliked])]
+ const {disliked}=await browserState(db,brandId,true)
+ const excludedSourceIds=[...disliked]
  const response=await match(brainstormMatchRequest({...facts,id:brandId},keywords,`brainstorm-${brandId}-${digest([facts.name,facts.description,keywords,Date.now()]).slice(0,16)}`,excludedSourceIds))
  if(!Array.isArray(response.creativeCandidates)||typeof response.contentMatchRequestId!=='string')throw nativeError('content_library_unavailable',503)
  if((response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400)&&!response.creativeCandidates?.length)throw nativeError('content_library_unavailable',503)
@@ -150,14 +169,15 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
   await tx.brandKnowledge.upsert({where:{brandId},create:{brandId,negPrompts:[]},update:{},select:{id:true}})
   await tx.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
   const latest=await feed(tx,brandId)
-  if(latest?.id!==previous?.id||latest?.version!==previous?.version){if(editing)throw nativeError('brainstorm_keywords_changed',409);return}
+  if(!(latest?.browseSessionFallback&&previous?.browseSessionFallback)&&(latest?.id!==previous?.id||latest?.version!==previous?.version)){if(editing)throw nativeError('brainstorm_keywords_changed',409);return}
   // Decisions and refreshes share the same brand lock. Re-read deferred choices
   // after acquiring it so a concurrent defer cannot be lost by this refresh.
   const previousSources=latest?.output?.sources||[],previousChoices=await decisions(tx,brandId,previousSources.map((s:any)=>s.inspirationCreativeId))
   const deferredIds=new Set(previousChoices.filter((d:any)=>d.input?.decision==='defer').map((d:any)=>d.period))
-  const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId)).map(compactBrainstormSource)
+  const sameMatchingContext=keywords===previousKeywords&&latest?.input?.keywordPolicy===BRAINSTORM_KEYWORD_POLICY&&latest?.input?.brandKeywordRevision===currentKeywords.revision
+  const retained=sameMatchingContext?previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId)).map(compactBrainstormSource):[]
   const seen=new Set<string>(),sources=[...incoming,...retained].filter((s:any)=>eligibleBrainstormSource(s)&&!seen.has(s.inspirationCreativeId)&&!!seen.add(s.inspirationCreativeId))
-  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:(response.brandTags as any)?.revision??currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:response.brandTags?.tags?.map((t:any)=>t.label)||[],matchingTagDefinitions:response.brandTags?.tags||[],keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}})
+  await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:brainstormFeedPeriod(brandId),version:await nextFeedVersion(tx,brandId),status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:(response.brandTags as any)?.revision??currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:response.brandTags?.tags?.map((t:any)=>t.label)||[],matchingTagDefinitions:response.brandTags?.tags||[],keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}})
  })
  return listBrainstorm(userId,brandId,db)
 }
@@ -175,7 +195,7 @@ export async function decideBrainstorm(userId:string,brandId:string,body:any,db:
    }
    return {ok:true,replayed:true,...previous.output,version:previous.version}
   }
-  if(['like','dislike'].includes(previous?.input?.decision)||(previous?.version||0)!==input.expectedVersion)throw nativeError('brainstorm_decision_changed',409)
+  if(previous?.input?.decision==='dislike'||previous?.input?.decision==='like'&&input.decision!=='dislike'||(previous?.version||0)!==input.expectedVersion)throw nativeError('brainstorm_decision_changed',409)
   const saved=await feed(tx,brandId),pool=input.poolIdeaId?(await poolSources(tx,brandId)).find((row:any)=>row.id===input.poolIdeaId&&row.source_id===input.sourceId):null,source=input.poolIdeaId?pool?.source:await storedBrainstormSource(tx,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===input.sourceId))
   if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
   if(source.sourceDigest!==input.sourceDigest)throw nativeError('creative_source_changed',409)
@@ -351,15 +371,19 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
  if(!body||Object.keys(body).some(k=>!['action','requestKey','tagId'].includes(k))||! /^[a-zA-Z0-9_-]{16,100}$/.test(body.requestKey||''))throw nativeError('invalid_brainstorm_request',400)
  if(body.tagId!==undefined&&(typeof body.tagId!=='string'||body.tagId.length>160))throw nativeError('invalid_brainstorm_request',400)
  await authorizeBrainstorm(userId,brandId,true,db)
- const period=digest([userId,body.requestKey,body.tagId||'']),receiptWhere={brandId,kind:'BRAINSTORM_MORE',period}
+ const period=digest([userId,body.requestKey,body.tagId||'',...(brainstormBrowseContext(brandId)?[brainstormFeedPeriod(brandId)]:[])]),receiptWhere={brandId,kind:'BRAINSTORM_MORE',period}
  const replay=await db.brandMarketingSolution.findFirst({where:receiptWhere,orderBy:{version:'desc'}})
- if(replay)return replay.output
- const [previous,rawFacts,state,pool,choices]=await Promise.all([feed(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}}),browserState(db,brandId,true),poolSources(db,brandId,true),db.brandMarketingSolution.findMany({where:{brandId,kind:BRAINSTORM_DECISION},distinct:['period'],select:{period:true}})])
+ if(replay){
+  const state=await browserState(db,brandId,true),choices=await decisions(db,brandId,(replay.output?.items||[]).map((i:any)=>i.sourceId))
+  if((replay.output?.items||[]).some((i:any)=>state.disliked.has(i.sourceId)))throw nativeError('brainstorm_round_changed',409)
+  return {...replay.output,items:browseMediaItems(withBrainstormUsage(replay.output.items,state.entries,choices),brandId)}
+ }
+ const [previous,rawFacts,state,pool]=await Promise.all([feed(db,brandId),db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}}),browserState(db,brandId,true),poolSources(db,brandId,true)])
  if(!rawFacts)throw nativeError('brand_context_unavailable',404)
  const facts={...rawFacts,productCatalog:skuFacts(rawFacts.knowledge?.menuItems)}
  const keywords=previous?.input?.matchKeywords||'',context=brainstormTagContext(facts,keywords)
  const currentKeywords=await fetchBrandKeywords({action:'read',brandId,context})
- const excluded=[...new Set<string>([...(previous?.output?.sources||[]).map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id),...state.entries.map(({item}:any)=>creativeSourceId(item)),...state.selected,...state.disliked,...choices.map((d:any)=>d.period)].filter(Boolean))]
+ const excluded=[...new Set<string>([...(previous?.output?.sources||[]).map((s:any)=>s.inspirationCreativeId),...(!previous?.input?.keywordPolicy?.startsWith('fixed-keywords-')?pool.map((p:any)=>p.source_id):[]),...state.disliked].filter(Boolean))]
  if(excluded.length>2000)throw nativeError('brainstorm_history_limit',409)
  const response=await match({...brainstormMatchRequest(facts,keywords,`more-${period}`,excluded),requestedCandidateCount:4,...(body.tagId?{matchingTagId:body.tagId}:{})})
  if(!Array.isArray(response.creativeCandidates)||(!response.creativeCandidates.length&&(response.contentLibraryGaps||[]).some((g:any)=>Number(g.status)>=400)))throw nativeError('content_library_unavailable',503)
@@ -389,15 +413,35 @@ export async function loadMoreBrainstorm(userId:string,brandId:string,body:any,d
   if(source){
    const sources=[...(latest?.output?.sources||[]).map(compactBrainstormSource),...incoming]
    const now=await browserState(tx,brandId,true),decision=await decisions(tx,brandId,incoming.map(s=>s.inspirationCreativeId))
-   if(incoming.some(s=>now.selected.has(s.inspirationCreativeId)||now.disliked.has(s.inspirationCreativeId))||decision.some((d:any)=>['like','dislike'].includes(d.input?.decision)))throw nativeError('brainstorm_round_changed',409)
-   const data={version:(latest?.version||0)+1,input:{...latest?.input,matchKeywords:keywords,brandKeywordRevision:currentKeywords.revision,keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}
-   if(latest?.output?.storagePolicy==='references-v1')await tx.brandMarketingSolution.update({where:{id:latest.id},data})
-   else await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,...data}})
+   if(incoming.some(s=>now.disliked.has(s.inspirationCreativeId))||decision.some((d:any)=>d.input?.decision==='dislike'))throw nativeError('brainstorm_round_changed',409)
+   items=browseMediaItems(withBrainstormUsage(items,now.entries,decision),brandId)
+   const data={version:await nextFeedVersion(tx,brandId),input:{...latest?.input,matchKeywords:keywords,brandKeywordRevision:currentKeywords.revision,keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}
+   if(latest?.output?.storagePolicy==='references-v1'&&!latest.browseSessionFallback)await tx.brandMarketingSolution.update({where:{id:latest.id},data})
+   else await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:brainstormFeedPeriod(brandId),status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,...data}})
   }
   const output={ok:true,brandId,items,exhausted:!source}
   await tx.brandMarketingSolution.create({data:{...receiptWhere,version:1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId},output}})
   return output
  })
+}
+
+/** Revalidate a continuation target on click. This GET never creates a copy or workspace. */
+export async function continueBrainstorm(userId:string,brandId:string,creativeId:unknown,sourceId:unknown,db:any=prisma){
+ if(typeof creativeId!=='string'||!creativeId.trim()||creativeId.length>200||typeof sourceId!=='string'||!/^cre_[a-zA-Z0-9_-]+$/.test(sourceId))throw nativeError('invalid_brainstorm_request',400)
+ await authorizeBrainstorm(userId,brandId,false,db)
+ const [{entries,disliked},choices]=await Promise.all([browserState(db,brandId,true),decisions(db,brandId,[sourceId])])
+ const matches=entries.filter(({item})=>item.id===creativeId&&creativeSourceId(item)===sourceId&&activeBrowseCreative(item)&&(creativeIsSelected(item)||item.replicationCopy))
+ if(matches.length!==1||disliked.has(sourceId)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_continuation_unavailable',404)
+ const {month,item}=matches[0]
+ let workspace:any=null
+ if(db.$queryRawUnsafe){
+  const [tables]=await db.$queryRawUnsafe("select to_regclass('amc_iaic.iaic_workspace_heads')::text as heads,to_regclass('amc_iaic.iaic_workspace_versions')::text as versions")
+  if(tables?.heads&&tables?.versions){
+   const [row]=await db.$queryRawUnsafe(brainstormWorkspaceSql,JSON.stringify(['amc-mm','documents',brandId]),JSON.stringify(['user',userId]),creativeId)
+   if(row&&/^[a-zA-Z0-9_-]{1,128}$/.test(row.id))workspace={...row,creativeId}
+  }
+ }
+ return {ok:true,brandId,sourceId,creative:{creativeId,month,title:item.title||'',updatedAt:item.updatedAt||item.createdAt||''},workspace}
 }
 
 // Favorite snapshots are scoped to their owner, survive feed replacement, and remain source-pinned.

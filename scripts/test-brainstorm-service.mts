@@ -1,3 +1,5 @@
+import * as browseContext from '../src/lib/ai-native/brainstorm-context.ts'
+import * as usage from '../src/lib/ai-native/brainstorm-usage.ts'
 import * as brainstormStorage from '../src/lib/ai-native/brainstorm-storage.ts'
 import * as browseSource from '../src/lib/ai-native/browse-source.ts'
 import * as browseKnowledge from '../src/lib/ai-native/browse-knowledge.ts'
@@ -32,7 +34,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'./brainstorm-context':browseContext,'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
@@ -60,8 +62,8 @@ const choose=(sourceId:string,decision:string,expectedVersion=0)=>api.decideBrai
 const both=await Promise.all([choose('cre_like','like'),choose('cre_like','like')]);assert(both.some((r:any)=>r.replayed));const liked=both[0]
 const items:any[]=Object.values(knowledge.marketingSolution.publishingCalendar.months).flat();assert.equal(items.length,1);assert.equal(items[0].planning,'');assert.equal(items[0].date,null);assert.equal(items[0].schedule,null);assert.equal(taskCalls,0);assert.equal(knowledge.marketingSolution.annual.keep,'existing')
 await choose('cre_no','dislike');await choose('cre_later','defer')
-listing=await api.listBrainstorm('user','brand',db);assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_later'])
-listing=await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,match);assert(!listing.items.some((i:any)=>['cre_no','cre_like'].includes(i.sourceId)));assert(listing.items.some((i:any)=>i.sourceId==='cre_later'))
+listing=await api.listBrainstorm('user','brand',db);assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_like','cre_later']);assert.equal(listing.items[0].brandUsage.status,'selected')
+listing=await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,match);assert(!listing.items.some((i:any)=>i.sourceId==='cre_no'));assert(listing.items.some((i:any)=>i.sourceId==='cre_like'&&i.brandUsage.status==='selected'));assert(listing.items.some((i:any)=>i.sourceId==='cre_later'))
 await assert.rejects(choose('cre_no','like',1),(e:any)=>e.code==='brainstorm_decision_changed')
 // Roll back a failed audit before enrolling the new creative.
 const beforeFailure=structuredClone({rows,knowledge,audits});failAudit=true
@@ -192,8 +194,8 @@ console.log('PASS explicit original-video replication ignores legacy brand templ
 knowledge.marketingSolution.publishingCalendar.months['2026-10']=[{id:'saved-calendar-only',source:source('cre_calendar_only',90),creativeBrowserSelection:{policy:visibility.CREATIVE_SELECTION_POLICY,reason:'like'}}]
 let matcherExclusions:string[]=[]
 await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async(input:any)=>{matcherExclusions=input.excludeCreativeIds;assert.equal(input.market,undefined,'reference-video sources are not restricted to the brand location');return {contentMatchRequestId:'calendar-exclusion',creativeCandidates:[],contentLibraryGaps:[]}})
-assert(matcherExclusions.includes('cre_calendar_only'),'already selected calendar sources must be excluded before matching, otherwise every refresh can return an empty visible feed')
-console.log('PASS calendar-only selections excluded before matching')
+assert(!matcherExclusions.includes('cre_calendar_only'),'selected calendar sources must remain eligible for matching')
+console.log('PASS calendar-only selections remain eligible for matching')
 
 // First screen resolves only the leading eight candidates. Full reads remain exhaustive.
 db.$queryRaw=async()=>[]
@@ -244,10 +246,10 @@ console.log('PASS bounded cursor pages, no duplicate sources, no brand facts/tag
 // Saved calendar revisions may share a source; cursors address the exact card.
 rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{'2026-10':Array.from({length:10},(_,i)=>({id:'saved-'+i,title:'Saved '+i,source:source('cre_shared',90)}))}}}}
 const calendarFirst=await api.listBrainstorm('user','brand',db,true,undefined,true)
-assert.equal(calendarFirst.nextCursor,'saved:saved-7')
+assert.equal(calendarFirst.nextCursor,undefined);assert.equal(calendarFirst.items.length,1)
 const calendarNext=await api.listBrainstorm('user','brand',db,true,calendarFirst.nextCursor,true)
-assert.equal(calendarNext.items.length,2);assert.equal(calendarNext.hasMore,false)
-console.log('PASS saved cards sharing a source retain exact cursor identity')
+assert.equal(calendarNext.items.length,1);assert.equal(calendarNext.hasMore,false)
+console.log('PASS saved cards sharing a source deduplicate before pagination')
 
 rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}}
 let batchCalls=0
@@ -330,3 +332,90 @@ const oldCalendar=JSON.stringify(knowledge)
 assert.deepEqual((await api.listBrainstorm('user','brand',db,true)).items.map((i:any)=>i.sourceId),['cre_relevant_shoe'])
 assert.equal(JSON.stringify(knowledge),oldCalendar,'old calendar script/history is retained without becoming a new match')
 console.log('PASS legacy unselected calendar cannot bypass current keyword scope')
+
+// Selected/replicated originals remain discoverable without reusing edited scripts.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{'2026-11':[]}}}};evidenceRevision='r1';evidenceTimeline=[{startSec:0,endSec:4,visualDescription:'Authoritative original scene'}]
+const selectedRecord={id:'selected-one',title:'Selected version',source:source('cre_usage',91),creativeBrowserSelection:{policy:'creative-browser-v2',reason:'like'},planning:'User edited script',updatedAt:'2026-11-01T01:00:00Z'}
+const copyRecord={...selectedRecord,id:'copy-one',title:'Copied version',replicationCopy:{at:'2026-11-02T01:00:00Z'},updatedAt:'2026-11-02T01:00:00Z'}
+knowledge.marketingSolution.publishingCalendar.months['2026-11']=[selectedRecord,copyRecord,{...copyRecord,id:'copy-archived',status:'archived'},{...copyRecord,id:'copy-deleted',status:'deleted'}]
+const usageBefore=JSON.stringify(knowledge)
+listing=await api.refreshBrainstorm('user','brand',{action:'refresh',force:true,keywords:'闪身步',expectedKeywords:''},db,async(input:any)=>{
+ assert(!input.excludeCreativeIds.includes('cre_usage'));return {contentMatchRequestId:'usage',creativeCandidates:[source('cre_usage',91)],contentLibraryGaps:[]}
+})
+assert.equal(listing.items.length,1);assert.equal(listing.items[0].savedCreativeId,undefined)
+assert.equal(listing.items[0].brandUsage.status,'replicated');assert.deepEqual(listing.items[0].brandUsage.creatives.map((c:any)=>c.creativeId),['copy-one','selected-one'])
+assert(listing.items[0].originalScript.includes('Authoritative original scene'));assert(!listing.items[0].originalScript.includes('User edited'))
+assert.equal(JSON.stringify(knowledge),usageBefore)
+const rowsBeforeContinue=JSON.stringify(rows),auditBeforeContinue=JSON.stringify(audits)
+let continuedExisting=await api.continueBrainstorm('user','brand','copy-one','cre_usage',db)
+assert.equal(continuedExisting.creative.creativeId,'copy-one');assert.equal(continuedExisting.workspace,null)
+assert.equal(JSON.stringify(rows),rowsBeforeContinue);assert.equal(JSON.stringify(audits),auditBeforeContinue);assert.equal(JSON.stringify(knowledge),usageBefore)
+write=false;assert.equal((await api.continueBrainstorm('user','brand','copy-one','cre_usage',db)).creative.creativeId,'copy-one');assert.equal((await api.listBrainstorm('user','brand',db)).items[0].brandUsage.status,'replicated');write=true
+for(const [creativeId,sourceId] of [['copy-archived','cre_usage'],['copy-deleted','cre_usage'],['copy-one','cre_foreign'],['missing','cre_usage']])await assert.rejects(api.continueBrainstorm('user','brand',creativeId,sourceId,db),(e:any)=>e.code==='brainstorm_continuation_unavailable')
+access=false;await assert.rejects(api.continueBrainstorm('user','brand','copy-one','cre_usage',db),(e:any)=>e.code==='brainstorm_access_denied');access=true
+// A new copy is idempotent and the original records remain unchanged.
+const again=await api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_usage',requestKey:'usage-again-000001',scriptMode:'original'},db)
+assert.equal((await api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_usage',requestKey:'usage-again-000001',scriptMode:'original'},db)).creativeId,again.creativeId)
+listing=await api.listBrainstorm('user','brand',db);assert.equal(listing.items.length,1);assert.equal(listing.items[0].brandUsage.count,3)
+assert.equal(selectedRecord.planning,'User edited script');assert.equal(copyRecord.planning,'User edited script')
+// Existing calendar sources not returned in this round may be found by scrolling.
+knowledge.marketingSolution.publishingCalendar.months['2026-11'].push({...copyRecord,id:'copy-later',source:source('cre_later_usage',91)})
+const nextUsage=await api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'usage-more-0000001',tagId:'tag_food'},db,async(input:any)=>{assert(!input.excludeCreativeIds.includes('cre_later_usage'));assert(input.excludeCreativeIds.includes('cre_usage'));return {contentMatchRequestId:'usage-more',creativeCandidates:[source('cre_later_usage',91)],contentLibraryGaps:[]}})
+assert.equal(nextUsage.items[0].brandUsage.status,'replicated')
+assert.equal((await api.listBrainstorm('user','brand',db,true)).items.length,2)
+// Status on an idempotent load-more replay is recomputed, not frozen in a receipt.
+knowledge.marketingSolution.publishingCalendar.months['2026-11'].find((i:any)=>i.id==='copy-later').status='deleted'
+assert.equal((await api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'usage-more-0000001',tagId:'tag_food'},db)).items[0].brandUsage,undefined)
+// Refreshing current originals never repins an edited copy to the new version.
+evidenceRevision='r2';evidenceTimeline=[{startSec:0,endSec:4,visualDescription:'Updated original scene'}]
+listing=await api.refreshBrainstorm('user','brand',{action:'refresh',force:true},db,async()=>({contentMatchRequestId:'usage-new-source',creativeCandidates:[{...source('cre_usage',91),sourceRevision:'r2'}],contentLibraryGaps:[]}))
+assert.equal(listing.items[0].brandUsage.status,'replicated');assert(listing.items[0].originalScript.includes('Updated original scene'))
+assert.equal(copyRecord.source.sourceRevision,'r1');assert.equal(copyRecord.planning,'User edited script')
+assert.equal((await api.continueBrainstorm('user','brand','copy-one','cre_usage',db)).creative.creativeId,'copy-one')
+await choose('cre_usage','dislike')
+assert(!(await api.listBrainstorm('user','brand',db)).items.some((i:any)=>i.sourceId==='cre_usage'))
+await assert.rejects(api.continueBrainstorm('user','brand','copy-one','cre_usage',db),(e:any)=>e.code==='brainstorm_continuation_unavailable')
+assert.deepEqual(usage.brainstormUsage([{month:'2026-11',item:copyRecord}], 'cre_unknown',{input:{decision:'like'}}),{status:'selected',count:0,creatives:[]})
+console.log('PASS selected/replicated discovery, source dedup, current original evidence, live statuses, continuing without writes, repeat-copy idempotency, dislikes, read-only and access isolation')
+
+// A deferred source stays in history, but cannot leak into a different keyword search.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}};evidenceRevision='r1';evidenceTimeline=[]
+await api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'Food',expectedKeywords:''},db,async()=>({contentMatchRequestId:'food-round',creativeCandidates:[source('cre_food_deferred',91)],contentLibraryGaps:[]}))
+await choose('cre_food_deferred','defer')
+listing=await api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'闪身步',expectedKeywords:'Food'},db,async()=>({contentMatchRequestId:'step-round',creativeCandidates:[source('cre_shanshen_only',91)],contentLibraryGaps:[]}))
+assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_shanshen_only'])
+assert(rows.some(r=>r.kind===contract.BRAINSTORM_DECISION&&r.period==='cre_food_deferred'&&r.input.decision==='defer'))
+assert(rows.some(r=>r.kind===contract.BRAINSTORM_FEED&&r.input.matchKeywords==='Food'))
+console.log('PASS keyword changes preserve deferred history without displaying unrelated old matches')
+
+// Request-scoped searches never become a brand's default query or another tab's list.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}};evidenceRevision='r1';evidenceTimeline=[]
+rows.push({id:'brand-default',brandId:'brand',kind:'BRAINSTORM_FEED',period:'sources',version:1,createdAt:new Date(),input:{matchKeywords:'',keywordPolicy:brainstormMatch.BRAINSTORM_KEYWORD_POLICY,brandKeywordRevision:1},output:{sources:[source('cre_default',91)]}})
+rows.push({id:'legacy-search',brandId:'brand',kind:'BRAINSTORM_FEED',period:'sources',version:178,createdAt:new Date(),input:{matchKeywords:'闪身步'},output:{sources:[source('cre_legacy_search',91)]}})
+const sessionA='11111111-1111-4111-8111-111111111111',sessionB='22222222-2222-4222-8222-222222222222'
+const browse=(session:string|null,run:()=>Promise<any>,user='user')=>browseContext.withBrainstormBrowse(user,'brand',session,run)
+const defaultsBefore=JSON.stringify(rows)
+listing=await browse(null,()=>api.listBrainstorm('user','brand',db))
+assert.equal(listing.matchKeywords,'');assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_default']);assert.equal(JSON.stringify(rows),defaultsBefore)
+const found=await browse(sessionA,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'闪身步',expectedKeywords:''},db,async()=>({contentMatchRequestId:'session-a',creativeCandidates:[source('cre_session_a',91)],contentLibraryGaps:[]})))
+assert.equal(found.matchKeywords,'闪身步');assert(found.items[0].videoUrl.includes('browseSessionId='+sessionA));assert(found.items[0].thumbnailUrl.includes('browseSessionId='+sessionA))
+assert.equal((await browse(null,()=>api.listBrainstorm('user','brand',db))).matchKeywords,'')
+assert.deepEqual((await browse(sessionB,()=>api.listBrainstorm('user','brand',db))).items.map((i:any)=>i.sourceId),['cre_default'])
+assert.deepEqual((await browse(sessionA,()=>api.listBrainstorm('other-user','brand',db),'other-user')).items.map((i:any)=>i.sourceId),['cre_default'])
+await browse(sessionB,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'Food',expectedKeywords:''},db,async()=>({contentMatchRequestId:'session-b',creativeCandidates:[source('cre_session_b',91)],contentLibraryGaps:[]})))
+assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).matchKeywords,'闪身步')
+await browse(sessionA,()=>api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'session-more-000001'},db,async(input:any)=>{assert.equal(input.brandTagContext.keywords,'闪身步');assert(input.excludeCreativeIds.includes('cre_session_a'));assert(!input.excludeCreativeIds.includes('cre_session_b'));return {contentMatchRequestId:'session-a-more',creativeCandidates:[source('cre_session_a_more',91)],contentLibraryGaps:[]}}))
+assert.equal((await browse(sessionB,()=>api.listBrainstorm('user','brand',db))).items.length,1)
+assert.equal((await browse(sessionA,()=>api.brainstormVideo('user','brand','cre_session_a',undefined,db))).status,200)
+await assert.rejects(browse(sessionB,()=>api.brainstormVideo('user','brand','cre_session_a',undefined,db)),(e:any)=>e.code==='brainstorm_source_not_found')
+assert.equal((await browse(sessionA,()=>api.favoriteCandidates('user','brand',{sourceId:'cre_session_a'},db)))[0].idea.sourceId,'cre_session_a')
+const scopedCopy=await browse(sessionA,()=>api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_session_a',requestKey:'session-copy-000001'},db));assert(scopedCopy.creativeId)
+assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).items[0].brandUsage.status,'replicated')
+await assert.rejects(browse(sessionB,()=>api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_session_a',requestKey:'session-copy-000002'},db)),(e:any)=>e.code==='brainstorm_source_not_found')
+await browse(null,()=>api.refreshBrainstorm('user','brand',{action:'refresh',force:true,keywords:'',expectedKeywords:''},db,async(input:any)=>{assert.equal(input.brandTagContext.keywords,'');return {contentMatchRequestId:'default-reset',creativeCandidates:[source('cre_default_updated',91)],contentLibraryGaps:[]}}))
+const latestDefault=rows.filter(r=>r.kind==='BRAINSTORM_FEED'&&r.period==='sources').at(-1)
+assert.equal(latestDefault.version,179);assert.equal(latestDefault.input.matchKeywords,'');assert.equal(rows.find(r=>r.id==='legacy-search').input.matchKeywords,'闪身步')
+assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).matchKeywords,'闪身步')
+await assert.rejects(browse(null,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'must-not-persist',expectedKeywords:''},db)),(e:any)=>e.code==='brainstorm_search_session_required')
+assert.throws(()=>browseContext.withBrainstormBrowse('user','brand','invalid',()=>null),(e:any)=>e.code==='invalid_browse_session')
+console.log('PASS transient searches: blank default, immutable legacy history, tab/user isolation, scoped pagination/media/favorites/copies, usage and monotonic default revision')

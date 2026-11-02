@@ -9,11 +9,11 @@ with workspace as materialized (
  from workspace w cross join lateral jsonb_each(case when jsonb_typeof(w.value->'months')='object' then w.value->'months' else '{}'::jsonb end) m
 ), projected as materialized (
  select month,coalesce(jsonb_agg(case when
-   (i->'brandDismissal'->>'decision'='dislike') or
+   (i->'brandDismissal'->>'decision'='dislike') or i->'replicationCopy' is not null or
    (i->'creativeBrowserSelection'->>'policy'='creative-browser-v2' and i->'creativeBrowserSelection'->>'reason'='like') or
    i->>'status' in ('archived','deleted','归档','已删除') or
    coalesce(nullif(i->>'inspirationCreativeId',''),nullif(i->'source'->>'inspirationCreativeId',''),nullif(i->'nativeSourceSnapshot'->'source'->>'inspirationCreativeId',''),'') !~ '^cre_[a-zA-Z0-9_-]+$'
- then jsonb_build_object('id',i->'id','status',i->'status','brandDismissal',i->'brandDismissal','creativeBrowserSelection',i->'creativeBrowserSelection',
+ then jsonb_build_object('id',i->'id','title',i->'title','createdAt',i->'createdAt','updatedAt',i->'updatedAt','replicationCopy',case when i->'replicationCopy' is not null then jsonb_build_object('at',i->'replicationCopy'->'at') end,'status',i->'status','brandDismissal',i->'brandDismissal','creativeBrowserSelection',i->'creativeBrowserSelection',
   'inspirationCreativeId',i->'inspirationCreativeId','source',jsonb_build_object('inspirationCreativeId',i->'source'->'inspirationCreativeId'),
   'nativeSourceSnapshot',jsonb_build_object('source',jsonb_build_object('inspirationCreativeId',i->'nativeSourceSnapshot'->'source'->'inspirationCreativeId')))
  else i end order by ord) filter(where i is not null),'[]'::jsonb) as items

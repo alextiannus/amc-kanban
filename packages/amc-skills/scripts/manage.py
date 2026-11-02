@@ -38,11 +38,11 @@ def read_manifest(root=ROOT):
 
 def skill_files(root=ROOT):
     files = {}
-    for path in sorted((root / 'skills').rglob('*')):
+    for path in sorted((root / 'skills').rglob('*'), key=lambda p: p.relative_to(root).as_posix()):
         if path.is_symlink():
             raise ValueError('Symlink is not distributable: ' + str(path))
         if path.is_file():
-            files[str(path.relative_to(root))] = path.read_bytes()
+            files[path.relative_to(root).as_posix()] = path.read_bytes()
     return files
 
 
@@ -171,6 +171,7 @@ def archive_bytes(files):
     with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
         for relative, body in sorted(files.items()):
             item = zipfile.ZipInfo(relative, (2026, 10, 18, 0, 0, 0))
+            item.create_system = 3
             item.compress_type = zipfile.ZIP_DEFLATED
             item.external_attr = 0o644 << 16
             archive.writestr(item, body)
@@ -179,12 +180,12 @@ def archive_bytes(files):
 
 def artifacts(root=ROOT):
     # Include package instructions and installer so the whole ZIP remains independently usable.
-    files = {str(p.relative_to(root)): p.read_bytes() for folder in ['skills', 'scripts']
+    files = {p.relative_to(root).as_posix(): p.read_bytes() for folder in ['skills', 'scripts']
              for p in (root / folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts}
     for name in ['README.md', 'manifest.json', 'package.json']:
         files[name] = (root / name).read_bytes()
     full = archive_bytes({'amc-skills/' + name: body for name, body in files.items()})
-    marketing = archive_bytes({'amc-marketing-expert/' + str(p.relative_to(root / 'skills/amc-marketing-expert')): p.read_bytes()
+    marketing = archive_bytes({'amc-marketing-expert/' + p.relative_to(root / 'skills/amc-marketing-expert').as_posix(): p.read_bytes()
                                for p in sorted((root / 'skills/amc-marketing-expert').rglob('*')) if p.is_file()})
     return {'amc-skills.zip': full, 'amc-marketing-expert.zip': marketing}
 
@@ -233,7 +234,7 @@ def main():
             text = (ROOT / entry['path'] / 'SKILL.md').read_text()
             description = re.search(r'^description: (.+)$', text.split('\n---\n', 1)[0], re.M).group(1)
             entry['description'] = json.loads(description) if description.startswith('"') else description
-        (ROOT / 'manifest.json').write_text(json.dumps(m, ensure_ascii=False, indent=2) + '\n')
+        (ROOT / 'manifest.json').write_text(json.dumps(m, ensure_ascii=False, indent=2) + '\n', encoding='utf-8', newline='\n')
     m = validate()
     if args.command == 'list':
         for entry in m['skills']:

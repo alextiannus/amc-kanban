@@ -5,3 +5,8 @@ export function browseSourceSql(source:string){
 }
 export const browseFeedSql=`select input,"createdAt",version,jsonb_build_object('sources',coalesce((select jsonb_agg(${browseSourceSql('s')} order by ord) from jsonb_array_elements(case when jsonb_typeof(output->'sources')='array' then output->'sources' else '[]'::jsonb end) with ordinality a(s,ord)),'[]'::jsonb)) as output from "BrandMarketingSolution" where "brandId"=$1 and kind='BRAINSTORM_FEED' and period='sources' order by version desc limit 1`
 export const browsePoolSql=`SELECT id,source_id,${browseSourceSql('source')} as source,match_id FROM amc_iaic.brand_ideas AS ideas WHERE brand_id=$1 AND (replaced_at IS NULL OR selected_at IS NOT NULL OR EXISTS (SELECT 1 FROM "BrandMarketingSolution" AS choice WHERE choice."brandId"=$1 AND choice.kind='BRAINSTORM_DECISION' AND choice.period=ideas.source_id AND choice.input->>'decision'='defer')) ORDER BY created_at DESC,id`
+export function brainstormFeedReadSql(compact:boolean,defaultOnly=false){
+ let sql=compact?browseFeedSql.replace("period='sources'",'period=$2'):`select * from "BrandMarketingSolution" where "brandId"=$1 and kind='BRAINSTORM_FEED' and period=$2 order by version desc limit 1`
+ if(defaultOnly)sql=sql.replace(' order by version'," and coalesce(input->>'matchKeywords','')='' order by version")
+ return sql
+}

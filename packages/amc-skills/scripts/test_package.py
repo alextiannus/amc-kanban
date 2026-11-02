@@ -16,6 +16,17 @@ class PackageTests(unittest.TestCase):
     def test_integrity(self):
         manifest = m.validate()
         self.assertGreaterEqual(len(manifest['skills']), 16)
+        for name in manifest['files']:
+            self.assertNotIn('\\', name)
+        for entry in manifest['skills']:
+            self.assertTrue(any(name.startswith(entry['path'] + '/') for name in manifest['files']))
+
+    def test_portable_archive_paths(self):
+        for body in m.artifacts().values():
+            with zipfile.ZipFile(io.BytesIO(body)) as archive:
+                self.assertTrue(archive.namelist())
+                self.assertTrue(all('\\' not in name for name in archive.namelist()))
+                self.assertTrue(all(item.create_system == 3 for item in archive.infolist()))
 
     def test_install_external_and_dependencies_without_overwrite(self):
         manifest = m.validate()

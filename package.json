@@ -126,7 +126,8 @@
     "social-accounts:repair:dry-run": "node --import tsx scripts/repair-social-account-placeholders.mts --dry-run",
     "social-accounts:repair": "node --import tsx scripts/repair-social-account-placeholders.mts --apply",
     "test:social-account-placeholder-concurrency": "node --import tsx scripts/test-social-account-placeholder-concurrency.mts",
-    "test:review-channel-policy": "node --import tsx scripts/test-review-channel-policy.mts"
+    "test:review-channel-policy": "node --import tsx scripts/test-review-channel-policy.mts",
+    "test:creative-usage": "tsx scripts/test-brainstorm-service.mts && tsx scripts/test-brainstorm-usage-sql.mts && tsx scripts/test-brainstorm-route.mts && tsx scripts/test-browse-knowledge.mts && tsx scripts/test-browse-source.mts"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",
