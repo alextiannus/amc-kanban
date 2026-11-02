@@ -85,16 +85,14 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    return readAutopilot(userId,brandId,runId,'profile')
   }
   if(action==='research_start'){
-   if(evidence.researchSnapshotId||evidence.researchJobId)return readAutopilot(userId,brandId,runId,'research')
+   if(evidence.researchSnapshotId||evidence.researchJobId||evidence.researchReview?.mode==='limited')return readAutopilot(userId,brandId,runId,'research')
    if(evidence.researchStarted)throw nativeError('research_result_unknown')
-   const existing=await prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth',generatedAt:{gte:new Date(Date.now()-7*86400000)}},orderBy:{generatedAt:'desc'}})
+   // Scheduled planning only reads saved research. Age or missing reports never authorize collection.
+   const existing=await prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'}})
    if(existing){evidence.researchSnapshotId=existing.id;await progress(pool,run,'research',evidence);return {ready:true,snapshotId:existing.id}}
-   evidence.researchStarted=true;await progress(pool,run,'research',evidence)
-   const brand=await loadBrandPlanBrand(brandId);if(!brand)throw nativeError('brand_not_found',404)
-   try{
-    const report=await buildGrowthResearchReport(brand,{requestKey:`autopilot-${run.id}`,maxWaitMs:0,onCreated:async id=>{evidence.researchJobId=id;await progress(pool,run,'research',evidence)}})
-    await gate();const saved=await saveResearchReport(brandId,report);evidence.researchSnapshotId=saved.snapshotId;await progress(pool,run,'research',evidence)
-   }catch(error){if((error as any).code!=='growth_research_still_running'&&(error as Error).message!=='growth_research_still_running')throw error}
+   evidence.researchReview={mode:'limited',reason:'automatic_research_disabled',policy:'saved-research-only-v1',fullReportAvailable:false,
+    note:'No saved Growth report is available. Automatic research creation is disabled. Use only confirmed brand facts and explicitly record missing research; new collection requires a user-initiated manual research request.'}
+   await progress(pool,run,'research',evidence)
    return readAutopilot(userId,brandId,runId,'research')
   }
   if(action==='research_review'){

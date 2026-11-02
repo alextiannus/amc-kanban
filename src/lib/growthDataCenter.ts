@@ -350,6 +350,10 @@ export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBr
   googleReviewUrl?: string | null
   accounts?: Array<{ platformId: string; profileUrl?: string | null; handle?: string | null; displayName?: string | null; followerCount?: number | null; ratingScore?: number | null }>
 }, merchantContext: Record<string, unknown>, options: { jobId?: string; requestKey?: string; sourceRevision?:string; onCreated?: (jobId:string)=>Promise<void>; maxWaitMs?: number } = {}) {
+  // Scheduled autopilot may reconcile an original job, never create one.
+  if (!options.jobId && options.requestKey?.startsWith('autopilot-')) {
+    throw new GrowthDataCenterError(409, 'autopilot_research_creation_disabled')
+  }
   const owner = brand.owners?.find((item) => item.role === 'owner' && item.user?.email)?.user
     || brand.owners?.find((item) => item.user?.email)?.user
   const contactEmail = owner?.email || process.env.AMC_GROWTH_REPORT_EMAIL || 'contact@immedi.ai'
