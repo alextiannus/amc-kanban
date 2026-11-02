@@ -59,13 +59,14 @@ try{
  assert.equal(await prisma.notification.count({where:{userId:id,type:'BACKGROUND_FAILED',status:'DISMISSED'}}),1)
 
  // Real source query for both AI runtime lanes; short conversation is silent.
- await prisma.$executeRawUnsafe(`CREATE TABLE amc_ai_requests(task_id uuid,scope_id text,subject_id text,runtime_lane text,intent jsonb,created_at timestamptz DEFAULT now(),planning_result jsonb)`)
+ await prisma.$executeRawUnsafe(`CREATE SCHEMA amc_iaic`)
+ await prisma.$executeRawUnsafe(`CREATE TABLE amc_iaic.amc_ai_requests(task_id uuid,scope_id text,subject_id text,runtime_lane text,intent jsonb,created_at timestamptz DEFAULT now(),planning_result jsonb)`)
  for(const [lane,schema] of [['default','amc_iaic'],['conversation','amc_iaic_conversation']]){
-  await prisma.$executeRawUnsafe(`CREATE SCHEMA ${schema}`)
+  await prisma.$executeRawUnsafe(`CREATE SCHEMA IF NOT EXISTS ${schema}`)
   await prisma.$executeRawUnsafe(`CREATE TABLE ${schema}.iaic_tasks(id uuid,erp_user text,employee_id text,status text,waiting_reason text,updated_at timestamptz DEFAULT now(),result jsonb)`)
   for(const state of ['failed','waiting','succeeded']){
    const tid=randomUUID()
-   await prisma.$executeRawUnsafe(`INSERT INTO amc_ai_requests(task_id,scope_id,subject_id,runtime_lane,intent) VALUES($1::uuid,$2,$3,$4,$5::jsonb)`,tid,brand,id,lane,JSON.stringify({brandId:brand,kind:'conversation',conversationId:'original-conversation'}))
+   await prisma.$executeRawUnsafe(`INSERT INTO amc_iaic.amc_ai_requests(task_id,scope_id,subject_id,runtime_lane,intent) VALUES($1::uuid,$2,$3,$4,$5::jsonb)`,tid,brand,id,lane,JSON.stringify({brandId:brand,kind:'conversation',conversationId:'original-conversation'}))
    await prisma.$executeRawUnsafe(`INSERT INTO ${schema}.iaic_tasks(id,erp_user,employee_id,status,waiting_reason,result) VALUES($1::uuid,$2,$3,$4,$5,'{}')`,tid,id,brand,state,state==='waiting'?'input':null)
   }
  }
