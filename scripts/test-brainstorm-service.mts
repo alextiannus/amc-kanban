@@ -376,3 +376,13 @@ assert(!(await api.listBrainstorm('user','brand',db)).items.some((i:any)=>i.sour
 await assert.rejects(api.continueBrainstorm('user','brand','copy-one','cre_usage',db),(e:any)=>e.code==='brainstorm_continuation_unavailable')
 assert.deepEqual(usage.brainstormUsage([{month:'2026-11',item:copyRecord}], 'cre_unknown',{input:{decision:'like'}}),{status:'selected',count:0,creatives:[]})
 console.log('PASS selected/replicated discovery, source dedup, current original evidence, live statuses, continuing without writes, repeat-copy idempotency, dislikes, read-only and access isolation')
+
+// A deferred source stays in history, but cannot leak into a different keyword search.
+rows=[];knowledge={marketingSolution:{publishingCalendar:{months:{}}}};evidenceRevision='r1';evidenceTimeline=[]
+await api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'Food',expectedKeywords:''},db,async()=>({contentMatchRequestId:'food-round',creativeCandidates:[source('cre_food_deferred',91)],contentLibraryGaps:[]}))
+await choose('cre_food_deferred','defer')
+listing=await api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'闪身步',expectedKeywords:'Food'},db,async()=>({contentMatchRequestId:'step-round',creativeCandidates:[source('cre_shanshen_only',91)],contentLibraryGaps:[]}))
+assert.deepEqual(listing.items.map((i:any)=>i.sourceId),['cre_shanshen_only'])
+assert(rows.some(r=>r.kind===contract.BRAINSTORM_DECISION&&r.period==='cre_food_deferred'&&r.input.decision==='defer'))
+assert(rows.some(r=>r.kind===contract.BRAINSTORM_FEED&&r.input.matchKeywords==='Food'))
+console.log('PASS keyword changes preserve deferred history without displaying unrelated old matches')

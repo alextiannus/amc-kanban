@@ -158,7 +158,8 @@ export async function refreshBrainstorm(userId:string,brandId:string,body:any,db
   // after acquiring it so a concurrent defer cannot be lost by this refresh.
   const previousSources=latest?.output?.sources||[],previousChoices=await decisions(tx,brandId,previousSources.map((s:any)=>s.inspirationCreativeId))
   const deferredIds=new Set(previousChoices.filter((d:any)=>d.input?.decision==='defer').map((d:any)=>d.period))
-  const retained=previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId)).map(compactBrainstormSource)
+  const sameMatchingContext=keywords===previousKeywords&&latest?.input?.keywordPolicy===BRAINSTORM_KEYWORD_POLICY&&latest?.input?.brandKeywordRevision===currentKeywords.revision
+  const retained=sameMatchingContext?previousSources.filter((s:any)=>deferredIds.has(s.inspirationCreativeId)).map(compactBrainstormSource):[]
   const seen=new Set<string>(),sources=[...incoming,...retained].filter((s:any)=>eligibleBrainstormSource(s)&&!seen.has(s.inspirationCreativeId)&&!!seen.add(s.inspirationCreativeId))
   await tx.brandMarketingSolution.create({data:{brandId,kind:BRAINSTORM_FEED,period:'sources',version:(latest?.version||0)+1,status:'READY',generationMode:'SOURCE_MATCH',createdById:userId,input:{brandKeywordRevision:(response.brandTags as any)?.revision??currentKeywords.revision,contentMatchRequestId:response.contentMatchRequestId,matchKeywords:keywords,matchingTags:response.brandTags?.tags?.map((t:any)=>t.label)||[],matchingTagDefinitions:response.brandTags?.tags||[],keywordPolicy:BRAINSTORM_KEYWORD_POLICY},output:{sources:await storeBrainstormSources(tx,brandId,userId,sources),storagePolicy:'references-v1'}}})
  })
