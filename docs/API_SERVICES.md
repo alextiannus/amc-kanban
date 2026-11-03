@@ -1,5 +1,9 @@
 # AI Marketing Crew API Services
 
+## 发布日历日期备注
+
+`GET /api/brands/:id/calendar-notes?month=YYYY-MM` 和 `PUT /api/brands/:id/calendar-notes/:date` 提供品牌共享日期备注，沿用品牌读写权限并校验并发版本。完整输入、响应、错误及上线顺序见 [calendar-notes.md](calendar-notes.md)。本地实现，待部署验收。
+
 版本日期：2026-07-04
 
 ## 1. 服务总览
@@ -609,7 +613,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **307** 个 API 路径、**447** 个 HTTP 方法组合。
+共 **328** 个 API 路径、**478** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -655,6 +659,7 @@ Permanent QR contract:
 | DELETE, PATCH | `/api/admin/users/{id}` |
 | GET | `/api/admin/users/{id}/access-overview` |
 | POST | `/api/agent-assignment/resolve` |
+| GET, POST | `/api/agent-skills` |
 | PATCH | `/api/agent/accounts` |
 | PATCH, POST | `/api/agent/action-items` |
 | GET | `/api/agent/admin/brands` |
@@ -698,11 +703,16 @@ Permanent QR contract:
 | GET | `/api/brands/{id}/ai/brainstorm/{sourceId}/media` |
 | POST | `/api/brands/{id}/ai/bug-reports` |
 | GET | `/api/brands/{id}/ai/bug-reports/{reportId}` |
+| GET | `/api/brands/{id}/ai/conversations` |
 | GET, POST | `/api/brands/{id}/ai/ideas` |
 | GET, POST | `/api/brands/{id}/ai/preference` |
+| GET | `/api/brands/{id}/ai/runtime` |
+| GET | `/api/brands/{id}/ai/strategy-versions` |
 | GET, POST | `/api/brands/{id}/ai/tasks` |
 | GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
 | POST | `/api/brands/{id}/ai/tasks/{taskId}/adopt` |
+| GET | `/api/brands/{id}/ai/tasks/{taskId}/document` |
+| GET | `/api/brands/{id}/ai/tasks/{taskId}/inspection` |
 | POST | `/api/brands/{id}/ai/tasks/{taskId}/planning` |
 | GET | `/api/brands/{id}/amc-credit` |
 | GET | `/api/brands/{id}/analytics` |
@@ -717,10 +727,13 @@ Permanent QR contract:
 | GET, OPTIONS | `/api/brands/{id}/assets/{assetId}/stream` |
 | POST | `/api/brands/{id}/assets/confirm-upload` |
 | GET | `/api/brands/{id}/assets/presign-upload` |
+| POST | `/api/brands/{id}/assets/thumbnails` |
 | GET, POST | `/api/brands/{id}/assets/upload` |
 | POST | `/api/brands/{id}/assets/video-draft` |
 | GET, POST | `/api/brands/{id}/brand-plan` |
 | GET, POST | `/api/brands/{id}/brand-story-sync` |
+| GET | `/api/brands/{id}/calendar-notes` |
+| PUT | `/api/brands/{id}/calendar-notes/{date}` |
 | GET | `/api/brands/{id}/companion/context` |
 | GET, POST | `/api/brands/{id}/companion/history` |
 | GET | `/api/brands/{id}/companion/sessions` |
@@ -737,6 +750,7 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/copywriter/bulk-generate` |
 | POST | `/api/brands/{id}/copywriter/voice-chat` |
 | POST | `/api/brands/{id}/copywriter/voice-stream` |
+| GET, POST | `/api/brands/{id}/creative-favorites` |
 | POST | `/api/brands/{id}/documents` |
 | POST | `/api/brands/{id}/documents/{docId}/sync` |
 | GET, POST | `/api/brands/{id}/drafts` |
@@ -756,9 +770,11 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/identity/{field}/sync` |
 | GET, POST | `/api/brands/{id}/inbox-state` |
 | GET, POST | `/api/brands/{id}/insight` |
+| GET | `/api/brands/{id}/insight/document` |
 | GET | `/api/brands/{id}/insight/pdf` |
 | GET, PUT | `/api/brands/{id}/insight/sources` |
 | GET, POST | `/api/brands/{id}/interview-information` |
+| GET, POST | `/api/brands/{id}/keywords` |
 | GET, PATCH | `/api/brands/{id}/knowledge` |
 | POST | `/api/brands/{id}/logo` |
 | POST | `/api/brands/{id}/marketing-plan/generate` |
@@ -774,11 +790,14 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/posts` |
 | GET, POST | `/api/brands/{id}/posts/publish` |
 | GET, PATCH | `/api/brands/{id}/profile` |
+| GET | `/api/brands/{id}/profile-document` |
+| GET | `/api/brands/{id}/profile-overview` |
 | GET, POST | `/api/brands/{id}/promotion-strategy` |
 | GET | `/api/brands/{id}/research-report` |
 | GET, POST | `/api/brands/{id}/reviews` |
 | POST | `/api/brands/{id}/scheduling/recommend` |
 | GET, PATCH | `/api/brands/{id}/settings` |
+| GET, POST | `/api/brands/{id}/shooting-plan` |
 | GET, PATCH | `/api/brands/{id}/sku-library` |
 | GET | `/api/brands/{id}/social-inbox` |
 | GET | `/api/brands/{id}/social-inbox/{conversationId}` |
@@ -799,6 +818,7 @@ Permanent QR contract:
 | GET, POST | `/api/brands/{id}/voices` |
 | DELETE, PATCH | `/api/brands/{id}/voices/{voiceProfileId}` |
 | POST | `/api/brands/{id}/voices/{voiceProfileId}/preview` |
+| GET, POST | `/api/brands/{id}/workspace` |
 | GET | `/api/client-config` |
 | POST | `/api/content/access-identity` |
 | POST | `/api/content/copy-scripts/recommend` |
@@ -868,6 +888,8 @@ Permanent QR contract:
 | POST | `/api/internal/content/video-jobs` |
 | POST | `/api/internal/content/video-lineage` |
 | GET, POST | `/api/internal/global-text` |
+| GET | `/api/internal/growth/merchants` |
+| GET | `/api/internal/growth/merchants/{brandId}` |
 | POST | `/api/internal/llm-generate` |
 | POST | `/api/internal/menu-service` |
 | GET, POST | `/api/internal/merchant-documents` |
@@ -899,7 +921,9 @@ Permanent QR contract:
 | POST | `/api/mm/tts-proxy` |
 | GET, POST | `/api/notifications` |
 | PATCH | `/api/notifications/{id}` |
+| GET, POST | `/api/notifications/push` |
 | GET, PATCH | `/api/profile` |
+| DELETE, GET, POST | `/api/profile/ai-tokens` |
 | GET, POST | `/api/profile/organization-members` |
 | GET | `/api/profile/principal-dashboard` |
 | POST | `/api/promo/validate` |
@@ -922,6 +946,7 @@ Permanent QR contract:
 | POST | `/api/tasks/{id}/retry-publish` |
 | PATCH | `/api/tasks/{id}/status` |
 | DELETE | `/api/tasks/unassigned` |
+| GET, PATCH, POST | `/api/video-editor/{operation}` |
 <!-- API_ROUTE_INVENTORY:END -->
 
 ### SKU 新品字段（本地已实现，待发布）

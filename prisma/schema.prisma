@@ -468,11 +468,27 @@ model Brand {
   postfastDeliveryJobs        PostfastDeliveryJob[]
   videoShootBatches           VideoShootBatch[]
   videoProductionJobs         VideoProductionJob[]
+  calendarNotes               CalendarNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+model CalendarNote {
+  id        String   @id @default(cuid())
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  date      String   @db.VarChar(10)
+  body      String   @default("")
+  version   Int      @default(1)
+  createdBy String
+  updatedBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, date])
 }
 
 model BrandIdentityPendingChange {
