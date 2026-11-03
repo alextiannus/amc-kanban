@@ -1,5 +1,13 @@
 # AMC-MM 品牌主端产品需求文档 (PRD)
 
+## 发布日历日期备注（2026-11-03；本地实现，隔离测试通过，待迁移及部署）
+
+日历支持每个品牌、每个日期一份共享自由文字备注，用于提前记录拍摄计划与运营主题；未来和没有发布内容的日期均可填写。最多 2,000 个 Unicode 字符，保留换行，不设置月度策划、负责人、AI 联动或任务转换。选中日期后在日历下方显示备注卡片，支持编辑、保存、取消和确认清空，展示完整正文及最后更新时间；有正文的日期显示独立图标，不计入发布数量或筛选结果。
+
+按现有品牌读写权限共享。MM 经品牌 API 代理读取 Kanban 独立 CalendarNote 表，不绑定创意、草稿或营销方案，重新生成或清理内容日历不影响备注。清空保留版本，日期使用 YYYY-MM-DD 字符串。GET /api/brands/:id/calendar-notes?month=YYYY-MM 返回 notes、canEdit；PUT /api/brands/:id/calendar-notes/:date 提交 body、expectedVersion（首次为 null），返回 note。冲突返回 409，必须重新读取并核对，保留用户输入且不自动覆盖。
+
+切换日期、月份、品牌或通过返回及菜单离开日历前，未保存修改须选择保存并继续、放弃或继续编辑；失败保留输入，保存成功才继续。关闭与刷新使用浏览器原生提示。按品牌和月份隔离异步请求，兼容手机、桌面及中英文。迁移、部署及真实账号保存回读验收尚未执行；完整接口及发布顺序见 Kanban docs/calendar-notes.md。
+
 
 ## Stable Audio background music (implemented locally; deployment pending)
 

@@ -1,5 +1,9 @@
 # AI Marketing Crew API Services
 
+## 发布日历日期备注
+
+`GET /api/brands/:id/calendar-notes?month=YYYY-MM` 和 `PUT /api/brands/:id/calendar-notes/:date` 提供品牌共享日期备注，沿用品牌读写权限并校验并发版本。完整输入、响应、错误及上线顺序见 [calendar-notes.md](calendar-notes.md)。本地实现，待部署验收。
+
 版本日期：2026-07-04
 
 ## 1. 服务总览
@@ -599,7 +603,7 @@ Permanent QR contract:
 <!-- API_ROUTE_INVENTORY:START -->
 ## 8. 完整 Route Handler 清单（自动生成）
 
-共 **276** 个 API 路径、**398** 个 HTTP 方法组合。
+共 **290** 个 API 路径、**418** 个 HTTP 方法组合。
 
 > 此段由 `npm run docs:api` 从 `src/app/api/**/route.ts` 生成，请勿手工编辑。
 
@@ -629,6 +633,7 @@ Permanent QR contract:
 | GET | `/api/admin/model-tasks` |
 | GET, POST | `/api/admin/models` |
 | POST | `/api/admin/permissions` |
+| GET, POST | `/api/admin/platform-ai` |
 | GET, PATCH, POST | `/api/admin/postfast-keys` |
 | GET, POST | `/api/admin/prompt-templates` |
 | DELETE, PATCH | `/api/admin/prompt-templates/{id}` |
@@ -682,15 +687,21 @@ Permanent QR contract:
 | PATCH | `/api/brands/{id}/actions/{aid}/reject` |
 | DELETE, GET, POST | `/api/brands/{id}/agents` |
 | GET, POST | `/api/brands/{id}/ai/autopilot` |
+| POST | `/api/brands/{id}/ai/bug-reports` |
+| GET | `/api/brands/{id}/ai/bug-reports/{reportId}` |
 | GET | `/api/brands/{id}/ai/ideas` |
 | GET, POST | `/api/brands/{id}/ai/preference` |
 | GET, POST | `/api/brands/{id}/ai/tasks` |
 | GET, POST | `/api/brands/{id}/ai/tasks/{taskId}` |
 | POST | `/api/brands/{id}/ai/tasks/{taskId}/adopt` |
+| POST | `/api/brands/{id}/ai/tasks/{taskId}/planning` |
 | GET | `/api/brands/{id}/amc-credit` |
 | GET | `/api/brands/{id}/analytics` |
 | GET, POST | `/api/brands/{id}/apify-sync` |
 | GET, PATCH, POST | `/api/brands/{id}/asset-analysis` |
+| GET, POST | `/api/brands/{id}/asset-collections` |
+| DELETE, GET | `/api/brands/{id}/asset-collections/{collectionId}` |
+| DELETE, POST | `/api/brands/{id}/asset-collections/{collectionId}/items` |
 | GET, PATCH, POST | `/api/brands/{id}/assets` |
 | DELETE, PATCH | `/api/brands/{id}/assets/{assetId}` |
 | POST | `/api/brands/{id}/assets/{assetId}/design` |
@@ -701,12 +712,16 @@ Permanent QR contract:
 | POST | `/api/brands/{id}/assets/video-draft` |
 | GET, POST | `/api/brands/{id}/brand-plan` |
 | GET, POST | `/api/brands/{id}/brand-story-sync` |
+| GET | `/api/brands/{id}/calendar-notes` |
+| PUT | `/api/brands/{id}/calendar-notes/{date}` |
 | GET | `/api/brands/{id}/companion/context` |
 | GET, POST | `/api/brands/{id}/companion/history` |
 | GET | `/api/brands/{id}/companion/sessions` |
 | POST | `/api/brands/{id}/content-calendar/generate` |
 | GET | `/api/brands/{id}/content-creatives` |
 | GET, POST | `/api/brands/{id}/content-creatives/{creativeId}/revisions` |
+| GET | `/api/brands/{id}/content-creatives/feedback` |
+| GET, POST | `/api/brands/{id}/content-creatives/matching` |
 | POST | `/api/brands/{id}/copywriter-log` |
 | POST | `/api/brands/{id}/copywriter/bulk-generate` |
 | POST | `/api/brands/{id}/copywriter/voice-chat` |
@@ -799,6 +814,7 @@ Permanent QR contract:
 | GET | `/api/game/status` |
 | POST | `/api/game/tasks` |
 | POST | `/api/game/tasks/override` |
+| GET | `/api/health/version` |
 | GET, POST | `/api/inbox-state` |
 | GET | `/api/integrations/amc-growth/sso/start` |
 | GET | `/api/integrations/extension/download` |
@@ -831,6 +847,7 @@ Permanent QR contract:
 | GET, POST | `/api/internal/global-text` |
 | POST | `/api/internal/llm-generate` |
 | POST | `/api/internal/menu-service` |
+| GET, POST | `/api/internal/merchant-documents` |
 | GET, POST | `/api/internal/model-operations` |
 | GET, POST | `/api/internal/model-runtime` |
 | POST | `/api/internal/video-generate` |
@@ -848,6 +865,7 @@ Permanent QR contract:
 | GET | `/api/meta/avatar-guide` |
 | GET | `/api/meta/openapi` |
 | GET | `/api/meta/skills/amc-integrations` |
+| GET | `/api/meta/skills/amc-marketing-expert` |
 | GET | `/api/meta/sop` |
 | GET, PATCH, POST | `/api/mm/bd/leads` |
 | POST | `/api/mm/bd/onboard` |
