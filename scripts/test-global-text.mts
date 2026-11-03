@@ -98,6 +98,14 @@ try{
  await complete(c,{task:'marketing_plan',messages:[{role:'user',content:'plan'}],maxTokens:MARKETING_PLAN_OUTPUT_TOKENS})
  assert.equal(requests.at(-1).body.max_tokens,8192)
  assert.equal(requests.at(-1).body.reasoning_effort,'low','marketing plans conserve the output budget for JSON')
+ for (const task of ['growth_report_analysis', 'growth_report_analysis_json_repair']) {
+   await complete(c,{task,messages:[{role:'user',content:'report'}],maxTokens:8192})
+   assert.equal(requests.at(-1).body.reasoning_effort,'low')
+   await complete({...c,reasoningEffort:'max'},{task,messages:[{role:'user',content:'report'}]})
+   assert.equal(requests.at(-1).body.reasoning_effort,'max')
+   await complete({...c,modelName:'other-model'},{task,messages:[{role:'user',content:'report'}]})
+   assert.equal(requests.at(-1).body.reasoning_effort,undefined)
+ }
  await complete(c,{task:'marketing_plan',messages:[{role:'user',content:'repair JSON'}],maxTokens:MARKETING_PLAN_REPAIR_TOKENS})
  assert.equal(requests.at(-1).body.max_tokens,4096)
  assert.equal(requests.at(-1).body.reasoning_effort,'low')
@@ -171,6 +179,44 @@ try{
    assert.match(data.diagnostics.requestId,/^[a-f0-9-]{36}$/)
    assert.equal(JSON.parse(diagnosticLogs[0]).requestId,data.diagnostics.requestId)
    assert.doesNotMatch(JSON.stringify([data,diagnosticLogs]),/partial-secret|private-reasoning|private-prompt|test-only/)
+   const internal=await import('../src/app/api/internal/llm-generate/route.ts')
+   const invoke=(taskTag:string,maxTokens=8192)=>withTextScope(()=>internal.POST(new Request('http://localhost/api/internal/llm-generate',{
+     method:'POST',headers:{'x-content-service-token':'test-service-token'},
+     body:JSON.stringify({taskTag,maxTokens,prompt:'private-prompt',responseFormat:'json',maxAttempts:1,deadlineMs:60000,attemptTimeoutMs:60000}),
+   })),binding)
+   assert.equal((await internal.POST(new Request('http://localhost/api/internal/llm-generate',{method:'POST',body:'{}'}))).status,401)
+   let calls=0
+   globalThis.fetch=async(_url,init)=>{
+     calls++
+     const sent=JSON.parse(String(init?.body));requests.push({body:sent})
+     return Response.json({choices:[{finish_reason:'stop',message:{content:'{"ok":true}'}}]})
+   }
+   for(const task of ['growth_report_analysis','growth_report_analysis_json_repair','copywriting']) {
+     assert.equal((await invoke(task,20000)).status,200)
+     assert.equal(requests.at(-1).body.max_tokens,task==='copywriting'?4000:8192)
+     assert.equal(requests.at(-1).body.reasoning_effort,'low')
+   }
+   globalThis.fetch=async()=>{
+     calls++
+     return Response.json({id:'as-1ncr3p1h8f',usage:{completion_tokens:4000,completion_tokens_details:{reasoning_tokens:3998}},
+       choices:[{finish_reason:'length',message:{content:'12345',reasoning_content:'private-reasoning'}}]})
+   }
+   const before=calls, failedReport=await invoke('growth_report_analysis',4000), reportError=await failedReport.json()
+   assert.equal(calls,before+1,'truncated reports must never retry')
+   assert.equal(failedReport.status,502);assert.equal(reportError.code,'MODEL_OUTPUT_LIMIT')
+   assert.equal(reportError.diagnostics.completionTokens,4000);assert.equal(reportError.diagnostics.reasoningTokens,3998)
+   assert.equal(reportError.diagnostics.contentChars,5);assert.equal(reportError.diagnostics.maxTokens,4000)
+   assert.equal(reportError.diagnostics.providerReference,'as-1ncr3p1h8f')
+   assert.match(reportError.diagnostics.requestId,/^[a-f0-9-]{36}$/)
+   const log=JSON.parse(diagnosticLogs.at(-1)!)
+   assert.equal(log.event,'internal_llm_failed');assert.equal(log.diagnostics.requestId,reportError.diagnostics.requestId)
+   assert.doesNotMatch(JSON.stringify([reportError,log]),/private-prompt|private-reasoning|12345|test-only/)
+   globalThis.fetch=async()=>{throw new DOMException('private-prompt','TimeoutError')}
+   const timeout=await invoke('growth_report_analysis');assert.equal(timeout.status,502)
+   assert.equal((await timeout.json()).timedOut,true)
+   globalThis.fetch=async()=>{throw new Error('private-prompt private-reasoning')}
+   const rejected=await invoke('growth_report_analysis');assert.equal(rejected.status,502)
+   assert.doesNotMatch(JSON.stringify(await rejected.json()),/private-prompt|private-reasoning/)
    globalThis.fetch=async()=>Response.json({usage:{completion_tokens:'secret',completion_tokens_details:{reasoning_tokens:-1}},choices:[{finish_reason:'length',message:{}}]})
    await assert.rejects(()=>complete(c,{messages:[{role:'user',content:'test'}]}),(error:any)=>error.diagnostics.completionTokens===null&&error.diagnostics.reasoningTokens===null&&error.diagnostics.reasoningEffort==='unspecified')
  }finally{

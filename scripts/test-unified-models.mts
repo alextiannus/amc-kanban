@@ -16,6 +16,8 @@ process.env.MODEL_CONFIG_ENCRYPTION_KEY='ab'.repeat(32)
 const pg=new PGlite()
 await pg.exec(readFileSync(new URL('../prisma/migrations/20260916090000_unified_models/migration.sql',import.meta.url),'utf8'))
 await pg.exec(readFileSync(new URL('../prisma/migrations/20260916180000_model_management_draft/migration.sql',import.meta.url),'utf8'))
+// The execution logger uses the column introduced by the delegated-media migration.
+await pg.exec('ALTER TABLE "ModelExecutionLog" ADD COLUMN executor TEXT')
 const query=async(sql:string,...values:any[]) => (await pg.query(sql,values)).rows
 const exec=async(sql:string,...values:any[]) => (await pg.query(sql,values)).affectedRows
 const db:any={$queryRawUnsafe:query,$executeRawUnsafe:exec,auditLog:{create:async()=>({})}}
@@ -37,7 +39,8 @@ try{
  assert.equal((await runtimeConfig()).active,false)
  const oldJob=await runtimeConfig({jobId:'before-cutover'});assert.equal(oldJob.version,null)
  const c1=await createConnection({name:'Supplier A',protocol:'openai',baseUrl:'https://a.example/v1',secret:'fixture-key'},'admin')
- const text={name:'Text',modelName:'glm-5.3',capabilities:['text'],inputCapabilities:['text_input','structured_json'],timeoutMs:1000,maxRetries:0} as any
+ const text={name:'Text',modelName:'glm-5.3',capabilities:['text'],inputCapabilities:['text_input','structured_json'],timeoutMs:1000,maxRetries:0,
+   reasoningEffort:'high',maxTokensByTask:{growth_report_analysis:4096,text:3000}} as any
  const m1=await createModel({connectionId:c1.id,definition:text},'admin')
  await assert.rejects(()=>createModel({connectionId:c1.id,definition:{...text,reasoningEffort:'invalid'} as any},'admin'),/Invalid reasoning effort/)
  const reasoned=await createModel({connectionId:c1.id,definition:{...text,reasoningEffort:'low'}},'admin')
@@ -45,6 +48,18 @@ try{
  const image=await createModel({connectionId:c1.id,definition:{...text,name:'Vision',modelName:'vision',capabilities:['image_understanding'],inputCapabilities:['image_input','structured_json']}},'admin')
  const selection={defaults:{text:m1.id,image_understanding:image.id},exceptions:{'content:asset_image_analysis':image.id}}
  const first=await publish(selection,null,await validation(selection),'admin')
+ const {currentBinding,executeBound}=await import('../src/lib/global-text/policy.ts')
+ const originalFetch=globalThis.fetch
+ try {
+   let sent:any
+   globalThis.fetch=async(_url,init)=>{sent=JSON.parse(String(init?.body));return Response.json({choices:[{message:{content:'{"ok":true}'}}]})}
+   const binding=await currentBinding('kanban')
+   await executeBound(binding,{task:'growth_report_analysis',maxTokens:8192,messages:[{role:'user',content:'fixture'}]})
+   assert.equal(sent.max_tokens,4096,'published task cap wins over report budget')
+   assert.equal(sent.reasoning_effort,'high','published explicit reasoning wins over low default')
+   await executeBound(binding,{task:'growth_report_analysis_json_repair',maxTokens:8192,messages:[{role:'user',content:'fixture'}]})
+   assert.equal(sent.max_tokens,3000,'published text cap also remains authoritative')
+ } finally {globalThis.fetch=originalFetch}
  const pinned=await runtimeConfig({jobId:'running',secrets:true})
  assert.equal(selectModel(pinned,'mm','arbitrary-legacy-task','text').id,m1.id)
  assert.equal(selectModel(pinned,'content','asset_image_analysis','image_understanding').id,image.id)

@@ -2132,6 +2132,8 @@ Release sequence: Content delegation deployment, Kanban Prisma migration and con
 
 ## AMC Growth 调研运营后台与单点登录（当前方案）
 
+调研报告输出额度修复（本地实现及验证完成，待发布和生产验收）：Growth 固定模板报告请求 8192 输出 tokens；Kanban 内部接口仅对 `growth_report_analysis`、`growth_report_analysis_json_repair` 放宽至 8192，其他任务维持 4000 上限，中央更低额度仍优先。GLM-5.3 报告任务默认低推理强度，中央显式设置优先。截断返回 HTTP 502 与 `MODEL_OUTPUT_LIMIT`；Growth 映射为 `report_analysis_output_limit`，保留来源、冻结快照和历史报告。内部日志和管理接口仅保存白名单诊断，公开接口仅返回安全错误码和提示。不新增自动重试，现有超时与报告校验保持不变。先发布 Kanban 再发布 Growth，生产重新生成由用户触发。
+
 `amc-growth` 的内部 Dashboard 是品牌调研运营中心，不向品牌客户或官网访客开放。官网继续只提交公开 intake 并显示受理编号；任务、证据、初级报告、高级报告、人工复核和 Provider 状态由内部后台管理。
 
 - Dashboard 使用 React SPA，中文为主，包含总览、调研任务、报告库、人工复核、数据源和知识库。
