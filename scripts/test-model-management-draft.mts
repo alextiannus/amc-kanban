@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
+import { RUNY_SEEDANCE_25_PRESET } from '../src/components/admin/modelPresets.ts'
 
 process.env.MODEL_CONFIG_ENCRYPTION_KEY='ab'.repeat(32)
 process.env.AMC_CONTENT_SERVICE_URL='https://content.fixture'
@@ -110,6 +111,16 @@ try{
   const published=(publishAttempts.find(r=>r.status==='fulfilled') as PromiseFulfilledResult<any>).value
   const pinned=await runtimeConfig({jobId:'running',secrets:true})
   assert.equal(pinned.version,published.result.version)
+  const gateway=await (await import('../src/lib/model-management/registry.ts')).createConnection({name:'Existing CN Gateway',protocol:'cn_gateway',baseUrl:'http://gateway.fixture',secret:'gateway-fixture'},'admin')
+  const beforePreset=await readDraft(),publishedBefore=await runtimeConfig()
+  const added=await saveModelVersion({connectionId:gateway.id,definition:RUNY_SEEDANCE_25_PRESET},beforePreset.revision,'admin')
+  const afterPreset=await readDraft(),catalog=await overview()
+  assert(catalog.models.some((m:any)=>m.id===added.result.id&&m.definition.modelName==='doubao-seedance-2-5'))
+  assert.equal(catalog.connections.filter((c:any)=>c.id===gateway.id).length,1)
+  assert.deepEqual(afterPreset.configuration,beforePreset.configuration,'adding Runy 2.5 does not select it in the draft')
+  assert.equal((await runtimeConfig()).version,publishedBefore.version,'adding Runy 2.5 does not publish a policy')
+  assert.equal((await runtimeConfig({jobId:'running'})).version,pinned.version)
+  await assert.rejects(()=>saveModelVersion({connectionId:gateway.id,definition:RUNY_SEEDANCE_25_PRESET},beforePreset.revision,'other'),/Draft changed/)
   assert.equal((await runtimeConfig({source:'content',jobId:'historic-job'})).active,false)
   draft=await readDraft()
   const rotated=await saveModelVersion({previousModelId:edit.result.id,connection:{name:'Rotated',protocol:'kopix',baseUrl:'https://provider.fixture/v1',secret:'rotated-fixture',previousId:originalText.connectionId},definition:originalText.definition},draft.revision,'admin')

@@ -7,6 +7,7 @@ export type Message = { role: string; content?: any; tool_calls?: any[]; tool_ca
 export type TextRequest = { onStreamText?:(text:string)=>void; onStreamTools?:(calls:readonly any[])=>void; messages: Message[]; maxTokens?: number; temperature?: number; tools?: any[]; toolChoice?: any; signal?: AbortSignal; task?: string; source?: string; timeoutMs?:number }
 export type TextUsage={input_tokens:number|null;output_tokens:number|null;input_tokens_details?:{cached_tokens:number|null};output_tokens_details?:{reasoning_tokens:number|null}}
 export type Completion = { text: string | null; message: Message; provider: string; modelName: string; responseModel: string | null; latencyMs: number; providerReference?:string; usage?:TextUsage; rawUsage?:unknown }
+export const MAX_TEXT_REQUEST_TIMEOUT_MS = 110000
 
 export class TextOutputLimitError extends Error {
   constructor(readonly diagnostics: {

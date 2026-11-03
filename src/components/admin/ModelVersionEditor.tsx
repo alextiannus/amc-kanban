@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { modelCapabilityLabels } from './modelManagementView'
+import { RUNY_SEEDANCE_25_PRESET } from './modelPresets'
 
 const field='w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm'
 const protocols=['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance']
@@ -16,6 +17,12 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
   const [parameters,setParameters]=useState(JSON.stringify({temperature:d?.temperature,jsonMode:d?.jsonMode,maxTokensByTask:d?.maxTokensByTask||{},reasoningEffort:d?.reasoningEffort,videoConstraints:d?.videoConstraints,costMetadata:d?.costMetadata},null,2))
   const [localError,setLocalError]=useState('')
   const dialog=useRef<HTMLDialogElement>(null)
+  const selectedProtocol=mode==='reuse'?connections.find(c=>c.id===connectionId)?.protocol:connection.protocol
+  function applyRunyPreset(){
+    const preset=RUNY_SEEDANCE_25_PRESET
+    setName(preset.name);setModelName(preset.modelName);setEnabled(true);setCapabilities([...preset.capabilities]);setInputs(preset.inputCapabilities.join(', '));setTimeoutValue(preset.timeoutMs);setRetries(preset.maxRetries)
+    setParameters(JSON.stringify({videoConstraints:preset.videoConstraints},null,2));setLocalError('')
+  }
   function chooseProtocol(protocol:string){
     setConnection({...connection,protocol,...(protocol==='stability'?{baseUrl:'https://api.stability.ai',name:'Stability AI'}:{})})
     if(protocol==='stability'){
@@ -37,6 +44,7 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
       <p className="text-xs text-slate-500">保存为新版本，只更新草稿。历史任务和当前生效配置保持原版本。</p>
       {(localError||error)&&<p role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{localError||error}</p>}
       <fieldset disabled={busy} className="space-y-4">
+        {selectedProtocol==='cn_gateway'&&!model&&<div className="space-y-2"><button type="button" onClick={applyRunyPreset} className="rounded-xl border border-blue-300 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">使用 Runy Seedance 2.5 预设</button><p className="text-xs text-slate-500">复用当前网关连接。保存后可在模型目录选择，发布后生效；费率需按 Runy 实际价格填写。</p></div>}
         <label className="block text-sm">供应商连接<select aria-label="连接操作" className={field} value={mode} onChange={e=>setMode(e.target.value)}>{connections.length>0&&<option value="reuse">复用已有连接</option>}<option value="new">新增连接</option>{oldConnection&&<option value="edit">修改当前连接 / 更换密钥</option>}</select></label>
         {mode==='reuse'?<label className="block text-sm">选择连接<select className={field} value={connectionId} onChange={e=>setConnectionId(e.target.value)}>{connections.map(c=><option value={c.id} key={c.id}>{c.name} · {c.protocol} · {c.id.slice(0,8)}</option>)}</select><span className="text-xs text-slate-500">密钥已保存，无需重复填写。</span></label>:<div className="grid md:grid-cols-2 gap-3">
           <label className="text-sm">供应商名称<input required className={field} value={connection.name} onChange={e=>setConnection({...connection,name:e.target.value})} placeholder="例如 Kopix"/></label>
