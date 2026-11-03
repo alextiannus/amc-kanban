@@ -1,4 +1,5 @@
 import {strategyChanges} from './strategy-receipt'
+import {calendarPlanningRevision,readCalendarNotesPage,type CalendarContext} from '../calendarNoteContext'
 import {prisma} from '../prisma'
 import {Prisma} from '@prisma/client'
 import {assertAmcExecutionChecklist,planningRevision,mergePlanningDraft,type PlanningDraft} from './planning-workspace-contract'
@@ -12,6 +13,12 @@ export async function savePlanningDraft(userId:string,brandId:string,taskId:stri
   await tx.$queryRaw`SELECT id FROM "Brand" WHERE id=${brandId} FOR UPDATE`
   const receipt=await tx.auditLog.findFirst({where:{resourceId:receiptId,action:'PLANNING_DRAFT_ADOPTED',actorId:userId},select:{id:true}})
   if(receipt)return {saved:true,receiptId:receipt.id,replayed:true}
+  const calendar=provenance.calendarPlanning as {revision:string;context?:CalendarContext;requestedMonth?:string;pageRevisions?:Record<string,string>}|undefined
+  if(calendar && (calendar.revision==='calendar_notes_unavailable' || await calendarPlanningRevision(tx as any,brandId,calendar.context,undefined,calendar.requestedMonth)!==calendar.revision))throw Object.assign(new Error('calendar_notes_changed'),{code:'calendar_notes_changed',statusCode:409})
+  for(const [month,revision] of Object.entries(calendar?.pageRevisions||{})){
+   const current=await readCalendarNotesPage(tx as any,brandId,{month})
+   if(current.status!=='available'||current.revision!==revision)throw Object.assign(new Error('calendar_notes_changed'),{code:'calendar_notes_changed',statusCode:409})
+  }
   if(draft.scope.stage==='execution_checklist')assertAmcExecutionChecklist(draft.data)
   const knowledge=await tx.brandKnowledge.findUnique({where:{brandId}})
   const current=(knowledge?.marketingSolution||{}) as Record<string,any>

@@ -481,6 +481,7 @@ model CalendarNote {
   brandId   String
   brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
   date      String   @db.VarChar(10)
+  title     String   @default("")
   body      String   @default("")
   version   Int      @default(1)
   createdBy String

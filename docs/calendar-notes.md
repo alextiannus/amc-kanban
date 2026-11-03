@@ -1,35 +1,51 @@
-# 发布日历日期备注 API
+# 发布日历备注、标题与文字助理
 
-状态：2026-11-03 本地实现；尚未执行生产迁移、部署或真实账号验收。
+状态（2026-11-03）：本地已实现，尚未执行生产迁移、部署及真实账号连续对话验收。提交与推送状态以 Git 为准。
 
-本地验证：两仓库类型检查、日期备注接口/客户端测试、现有 calendar-drafts 测试、MM 日历预加载回归及 320/390/768/1440 像素真实 Calendar 组件浏览器测试通过。浏览器使用隔离 API 数据，覆盖共享与只读、保存及清空、文字上限、日期/月份/品牌切换保护、保存失败、版本冲突及延迟响应隔离，不代表真实数据库或生产验收。Prisma schema 校验及 Client 生成通过，数据库迁移未执行（本机 Docker 引擎不可用）。
+## 日期记录与接口
 
-已知验证限制：MM 没有 ESLint 配置，无法运行该仓库 lint。既有 calendar-refresh-editor 脚本的源码结束定位、calendar-creative-revisions-ui 的 View full idea 和 calendar-replication-navigation 的 View idea 定位与当前既有实现不匹配，回归未通过；未改动这些旧脚本。新增日期备注测试及两仓库 calendar-drafts 回归通过。
+MM 沿用品牌 API 代理，Kanban 负责存储和品牌 READ / WRITE 授权。只读成员可查看，写权限成员可修改。未登录 401，无权限 404，响应均为 `Cache-Control: no-store`。
 
-## 访问与数据
-
-MM 沿用 `/api/brands/[id]/[...subpath]` 代理。Kanban 使用现有会话/API key 身份与品牌 READ / WRITE 检查，读权限可查看，写权限可新增、修改及清空。所有响应 `Cache-Control: no-store`。未登录 401、无对应权限 404，不暴露其他品牌内容。
-
-`CalendarNote` 使用 `(brandId,date)` 唯一索引。日期是严格公历 `YYYY-MM-DD`（0001–9999），不是 UTC 时间戳。`body` 最多 2,000 个 Unicode 码点，保留空格和换行，CRLF/CR 规范为 LF；全空白规范为空字符串，禁止 NUL。记录 `id,brandId,date,body,version,createdBy,updatedBy,createdAt,updatedAt`。创建版本为 1，每次更新及清空递增。空正文记录仍返回客户端用于后续版本校验，但不显示日历图标。
-
-## 接口
+每天每品牌一条 `CalendarNote`，唯一键 `(brandId,date)`。字段为 `id,brandId,date,title,body,version,createdBy,updatedBy,createdAt,updatedAt`。日期为有效公历 `YYYY-MM-DD`（0001–9999），不转换成 UTC 时间点。标题默认空字符串、单行、最多 40 个 Unicode 码点，去除首尾空白并拒绝控制字符。正文最多 2,000 个 Unicode 码点，保留换行及空格，CRLF/CR 规范为 LF，禁止 NUL。
 
 | 方法与路径 | 输入 | 成功响应 |
 | --- | --- | --- |
-| GET `/api/brands/:id/calendar-notes?month=YYYY-MM` | 必填合法月份 | `{ok:true,notes:CalendarNote[],canEdit:boolean}`，按日期升序 |
-| PUT `/api/brands/:id/calendar-notes/:date` | JSON `{body:string,expectedVersion:number\|null}` | `{ok:true,note:CalendarNote}` |
+| GET `/api/brands/:id/calendar-notes?month=YYYY-MM` | 必填有效月份 | `{ok:true,notes:CalendarNote[],canEdit:boolean}`，按日期排序，含已清空的版本记录 |
+| PUT `/api/brands/:id/calendar-notes/:date` | `{title:string,body:string,expectedVersion:number\|null}` | `{ok:true,note:CalendarNote}` |
 
-首次保存 `expectedVersion:null`；已有记录必须提交读取到的正整数版本。服务端在事务中创建，或按品牌、日期、版本条件更新并回读；唯一键冲突与版本过期均返回 409 `{error:"calendar_note_conflict"}`。空正文清空但不删除记录，不提供删除接口。并发失败保留输入，不自动重发；用户主动重新读取，比较最新正文后再修改保存。
+首次保存 `expectedVersion:null`；更新提交读取到的正整数版本。标题和正文原子保存，共用递增版本。唯一键冲突或旧版本返回 409 `calendar_note_conflict`，禁止静默覆盖。旧客户端省略 `title` 时，普通正文更新保留已有标题；清空正文仍清除标题及正文。新客户端显式提交两项。只写标题、正文空白返回 400 `calendar_note_body_required`；两项为空表示清空，保留记录与递增版本。日期、正文、版本非法返回 `invalid_calendar_note`，标题非法返回 `invalid_calendar_note_title`，月份非法返回 `invalid_calendar_month`；存储异常返回 500 `calendar_notes_failed`。
 
-非法月、日期、JSON、正文或版本返回 400 `invalid_calendar_month` / `invalid_calendar_note`。后端异常返回 500 `calendar_notes_failed`。客户端加载错误提供重试，保存错误保留输入。备注和内容日历查询独立，单方失败不阻断另一方。
+## 日历界面
 
-## 界面与保护
+所有日期格统一加高，数字下方用浅色单行标题条展示备注，溢出省略。无标题时显示正文第一行非空文字，不改写保存值。点击整个日期格查看完整标题、正文、最后更新时间。今天、选中日期、发布排期标记保持原有含义；备注不计入发布数量，不受发布状态筛选影响。
 
-选中任意日期后在日历下方显示备注卡片。日期单元格以独立图标表示有备注，可与发布排期标记共存。自由文字按文本渲染。切换日期、月份或品牌，以及返回/菜单离开日历前，未保存输入提供保存并继续、放弃、继续编辑；保存失败不执行切换。关闭或刷新使用 beforeunload。旧请求结果不得覆盖切换后的日期。
+编辑卡片含可选标题、多行正文、字数提示、编辑、保存、取消及确认清空。正文不能为空，删除使用明确的清空操作。标题或正文修改均纳入日期、月份、品牌及离开日历的未保存保护；保存失败和冲突保留两项输入。冲突后主动重新读取并核对最新内容，不自动重发。刷新/关闭沿用 `beforeunload`；异步请求按品牌、月份和日期隔离，旧响应不得覆盖新页面。
 
-## 上线与回退
+## 文字助理上下文
 
-1. 审核并通过现有数据库发布流程执行 `prisma/migrations/20261103090000_calendar_notes/migration.sql`；仅新增表、索引和外键，不回填或修改现有内容数据。
-2. 生成 Prisma Client，部署 Kanban；验证已授权 GET/PUT、只读及跨品牌拒绝、并发 409。
-3. 部署 MM，以真实账号在下个月空白日期保存，刷新及另一授权账号读取，验证修改、清空、换月和网络失败保护。
-4. 回退 MM 界面及 Kanban 接口时保留表和数据，不执行 DROP。实现、推送、部署和生产验收分别记录，不以本地测试代替上线证明。
+备注保存不创建 AI 请求、不改写已有任务。下一轮通用助理或品牌策划对话均从日历数据库读取最新日期、标题、正文和版本。MM 对话请求可选 `calendarContext:{month:"YYYY-MM",date?:"YYYY-MM-DD"}`；日期必须属于月份，拒绝额外键。品牌范围来自服务端授权身份。
+
+`amc.context.calendarPlanning` 包含 `status,timezone,months,selectedDate,revision,monthRevisions,total,notes,index,completeMonths,unreadMonths,truncated,instructions`。默认读取品牌时区本月、下月、当前查看月份；正式策划的 `planningScope.startMonth` 也加入范围。旧客户端使用服务端默认。`notes` 是完整正文，`index` 仅是日期、展示标题和版本摘要。默认日历投影限制在 8,000 个 Unicode 字符（按 JSON 序列化后计），优先放入所选日期，显式标注未读月份，不能把标题摘要当成正文。
+
+只读工具 `amc.calendar_notes({month,afterDate?})` 按日期分页，每页最多 8 条完整备注，返回 `status,month,afterDate,revision,notes,nextAfterDate`。从不传 `afterDate` 开始，沿 `nextAfterDate` 读取至 `null`。只允许 conversation，沿用助理现有身份授权；工具输入不接受品牌 ID。正式策划遇到未读月份，完成校验要求取得当前版本全部分页；其他月份可按需读取。读取失败返回 `unavailable`，与可用但没有备注严格区分。
+
+当前明确用户请求优先于备注，最新备注优先于旧 AI 建议。备注只适用于写明的日期和文字范围，不成为长期品牌事实或执行授权。与策略、排期、任务冲突时说明差异并由用户决定，不自动修改。相关回复须说明采用的日期和标题。已清空内容不得从旧对话恢复；读取不可用时明确说明限制，不声称查过或没有备注。
+
+缓存版本含清空记录的版本及修改时间、品牌、时区和月份范围。标题、正文、清空和跨成员修改都会使旧上下文失效；Core 在实际模型输入组装时重新读取。回复校验重新检查默认范围及已按需读取月份。正式策划保存事务持有 Brand 行锁，与备注保存互斥并再次校验版本；变化返回 409 `calendar_notes_changed`，不会保存旧计划。`applicationVersion` 纳入日历模块；上下文 manifest schema v2 记录日历来源状态、版本及内容指纹，不记录私人正文。元数据缓存保留现有 30 分钟 TTL，日历正文每次访问取最新值。
+
+## 本地验证与边界
+
+- 两仓库 TypeScript 检查、接口和客户端测试、现有日历回归。
+- 真实 Calendar 组件的隔离 API 浏览器测试覆盖 320 / 390 / 768 / 1440 像素、共享只读、标题、首行回退、字数限制、标题单独修改保护、冲突保留输入、确认清空、网络失败、跨年、品牌与旧响应隔离及中英文。
+- 上下文测试覆盖品牌时区月份、闰日、8,000 字符限制、分页及过期分页拒绝、标题/清空失效、读取不可用、通用与 Profile 策划同源、实际 Core 模型输入组装、版本指纹隐私及策划保存前事务校验。均使用隔离数据，不产生真实 AI 请求。
+- 原始建表与标题扩展 SQL 在隔离 PGlite PostgreSQL 中验证，历史正文、日期、版本保留；不是生产迁移证明。
+
+真实模型回复中的日期引用、重新登录和跨真实账号读取仍需生产验收；本地组装测试不代表真实模型行为。既有 MM 的 calendar-refresh-editor、calendar-creative-revisions-ui、calendar-replication-navigation 脚本有与既有界面不符的旧定位，不能用作本轮通过证据；MM 未配置 ESLint。
+扩展回归中，`test-sku-context-loading.mts` 在本次修改前的 service 代码上也复现相同的 allowedTools 空数组断言失败，本次未改动 SKU 流程。Kanban 现有 calendar-drafts npm 命令在本机 Node 22 的 strip-only 模式不支持参数属性，改用 `npx tsx scripts/test-calendar-drafts.mts` 验证通过；MM 对等源码测试已统一 CRLF/LF 后通过。
+
+## 发布顺序与回退
+
+1. 通过数据库发布流程确认原 `20261103090000_calendar_notes` 已应用；新库依顺序应用原迁移，再应用新增的 `20261103100000_calendar_note_titles/migration.sql`。不要改写原迁移或对已有字段重复执行 SQL。
+2. 生成 Prisma Client，再部署 Kanban `main`；先验证标题 GET/PUT、旧客户端保留标题及清空、权限和并发 409。
+3. 再部署 MM `main`；真实账号保存下月备注，在原对话连续询问策划，检查实际模型输入及回复；修改、清空、其他成员修改后再次询问，核对版本、日期和方向。
+4. 回退 MM / Kanban 时保留表、标题列及记录，不执行 DROP。代码推送、生产迁移、部署和生产验收分别记录。

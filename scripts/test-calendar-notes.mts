@@ -19,7 +19,7 @@ const repository: CalendarNoteDatabase['calendarNote'] = {
   async updateMany({ where, data }) {
     const note = records.get(`${where.brandId}:${where.date}`)
     if (!note || note.version !== where.version) return { count: 0 }
-    records.set(`${where.brandId}:${where.date}`, { ...note, body: data.body, updatedBy: data.updatedBy, version: note.version + data.version.increment, updatedAt: new Date() })
+    records.set(`${where.brandId}:${where.date}`, { ...note, ...(data.title !== undefined ? { title: data.title } : {}), body: data.body, updatedBy: data.updatedBy, version: note.version + data.version.increment, updatedAt: new Date() })
     writes++; return { count: 1 }
   },
   async findUniqueOrThrow({ where }) { const note = records.get(`${where.brandId_date.brandId}:${where.brandId_date.date}`); assert(note); return copy(note) },
@@ -34,7 +34,7 @@ const handlers = calendarNotesHandlers({
   canRead: async brand => brand === 'brand-a' && !!actor,
   canWrite: async brand => brand === 'brand-a' && actor?.id === 'writer',
 })
-const put = (date: string, body: unknown, expectedVersion: unknown, brand = 'brand-a') => handlers.PUT(new Request('http://local/api', { method: 'PUT', body: JSON.stringify({ body, expectedVersion, updatedBy: 'forged' }) }), brand, date)
+const put = (date: string, body: unknown, expectedVersion: unknown, brand = 'brand-a', title?: unknown) => handlers.PUT(new Request('http://local/api', { method: 'PUT', body: JSON.stringify({ body, expectedVersion, ...(title !== undefined ? { title } : {}), updatedBy: 'forged' }) }), brand, date)
 const get = (month = '2026-12', brand = 'brand-a') => handlers.GET(new Request(`http://local/api?month=${month}`), brand)
 
 for (const date of ['2026-12-31', '2027-01-01', '2028-02-29', '2000-02-29', '0001-01-01']) assert(validCalendarDate(date), date)
@@ -86,4 +86,22 @@ actor = { id: 'reader', type: 'HUMAN' }
 assert.equal((await (await get()).json()).notes[0].body, '🎥'.repeat(2000), 'shared notes survive a different authorized actor')
 assert.equal((await (await get('2027-01')).json()).notes[0].body, 'new year')
 assert.deepEqual((await (await get('2028-02')).json()).notes, [])
+actor = { id: 'writer', type: 'HUMAN' }
+assert.equal((await put('2026-12-05', 'shoot lunch', null, 'brand-a', '🎥'.repeat(41))).status, 400)
+assert.equal((await put('2026-12-05', 'shoot lunch', null, 'brand-a', 'bad\ntitle')).status, 400)
+for(const separator of ['\u0085','\u2028','\u2029'])assert.equal((await put('2026-12-05', 'shoot lunch', null, 'brand-a', `bad${separator}title`)).status, 400)
+assert.equal((await put('2026-12-05', '', null, 'brand-a', 'Title without body')).status, 400)
+let titled = (await (await put('2026-12-05', 'shoot lunch', null, 'brand-a', '🎥'.repeat(40))).json()).note
+assert.equal(titled.title, '🎥'.repeat(40))
+titled = (await (await put('2026-12-05', 'legacy body update', 1)).json()).note
+assert.equal(titled.title, '🎥'.repeat(40), 'legacy body-only updates preserve titles')
+const titleRace = await Promise.all([put('2026-12-05', 'body A', 2, 'brand-a', 'title A'), put('2026-12-05', 'body B', 2, 'brand-a', 'title B')])
+assert.deepEqual(titleRace.map(r => r.status).sort(), [200, 409])
+titled = (await titleRace.find(r => r.status === 200)!.json()).note
+assert.equal(titled.title.slice(-1), titled.body.slice(-1), 'title and body are atomic')
+titled = (await (await put('2026-12-05', 'legacy clear', 3, 'brand-a', '')).json()).note
+assert.equal(titled.title, '', 'new clients may explicitly remove a title')
+titled = (await (await put('2026-12-05', 'with heading', 4, 'brand-a', 'Heading')).json()).note
+titled = (await (await put('2026-12-05', '', 5)).json()).note
+assert.equal(titled.title, ''); assert.equal(titled.body, ''); assert.equal(titled.version, 6)
 console.log('PASS calendar note dates, Unicode limits, ACL, shared reads, month isolation, concurrent creates/updates and clear versions (isolated repository)')

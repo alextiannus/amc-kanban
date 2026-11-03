@@ -1,5 +1,10 @@
 当前创意入口（2026-10-16，本地已实现，未部署）：来源候选先进入无日期内容创意列表，选择只打开完整原稿/视频/时间线。AI 建议 2–4 个真实 SKU（单项目录例外），用户调整并确认后才生成逐镜适配候选与素材要求，采用才更新当前稿。空目录经人工确认后生成普通品牌内容，不能冒充爆款复刻。原稿、候选、人工版本与真实操作者可追溯，消息仅展示实际保存状态；新来源面板、SKU 流程与版本界面以 creative-lineage.md 为准，旧版生产记录不证明本轮已上线。
 
+## Calendar note context (2026-11-03)
+
+Conversation `calendarContext` carries the viewed month/date without granting brand access. General and Profile planning use live `amc.context.calendarPlanning`; `amc.calendar_notes` provides full monthly pages of at most eight notes. Cached source revisions and runtime application versions include title/body/clear changes; formal saves recheck revisions under the Brand lock. Context manifests v2 log source fingerprints without private bodies. Details, validation boundaries and migration-first release: [calendar-notes.md](calendar-notes.md). Locally implemented and verified; production release and actual-model acceptance pending.
+
+
 ## `/BUG` 与 Platform AI 工程维护（2026-10-15，已上线并完成真实修复验收）
 
 文字对话识别 `/BUG`（大小写无关，可附描述），独立持久上报并返回编号，原聊天继续。报告绑定真实用户、品牌、页面、会话及有界近期对话；稳定请求键保证重试复用原报告，所有读取重新验证身份和品牌权限。报告内容属于不可信排查线索，不能选择工程身份、仓库、凭据或发布政策。

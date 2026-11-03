@@ -1,4 +1,5 @@
 export const CALENDAR_NOTE_LIMIT = 2000
+export const CALENDAR_NOTE_TITLE_LIMIT = 40
 
 export class CalendarNoteError extends Error {
   constructor(public code: string, public status: number) { super(code) }
@@ -8,6 +9,7 @@ export type CalendarNote = {
   id: string
   brandId: string
   date: string
+  title: string
   body: string
   version: number
   createdBy: string
@@ -19,13 +21,13 @@ export type CalendarNote = {
 type NoteKey = { brandId_date: { brandId: string; date: string } }
 type NoteRepository = {
   findMany(args: { where: { brandId: string; date: { startsWith: string } }; orderBy: { date: 'asc' } }): Promise<CalendarNote[]>
-  create(args: { data: { brandId: string; date: string; body: string; createdBy: string; updatedBy: string } }): Promise<CalendarNote>
-  updateMany(args: { where: { brandId: string; date: string; version: number }; data: { body: string; updatedBy: string; version: { increment: number } } }): Promise<{ count: number }>
+  create(args: { data: { brandId: string; date: string; title: string; body: string; createdBy: string; updatedBy: string } }): Promise<CalendarNote>
+  updateMany(args: { where: { brandId: string; date: string; version: number }; data: { title?: string; body: string; updatedBy: string; version: { increment: number } } }): Promise<{ count: number }>
   findUniqueOrThrow(args: { where: NoteKey }): Promise<CalendarNote>
 }
 export type CalendarNoteDatabase = {
   calendarNote: NoteRepository
-  $transaction<T>(fn: (tx: { calendarNote: NoteRepository }) => Promise<T>): Promise<T>
+  $transaction<T>(fn: (tx: { calendarNote: NoteRepository; $queryRaw?: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown> }) => Promise<T>): Promise<T>
 }
 
 export function validCalendarMonth(value: unknown): value is string {
@@ -41,25 +43,31 @@ export function validCalendarDate(value: unknown): value is string {
 
 export function parseCalendarNoteInput(date: unknown, value: unknown) {
   if (!validCalendarDate(date) || !value || typeof value !== 'object' || Array.isArray(value)) throw new CalendarNoteError('invalid_calendar_note', 400)
-  const { body, expectedVersion } = value as Record<string, unknown>
+  const { body, expectedVersion, title } = value as Record<string, unknown>
   if (typeof body !== 'string' || body.includes('\u0000') || Array.from(body).length > CALENDAR_NOTE_LIMIT
     || !(expectedVersion === null || typeof expectedVersion === 'number' && Number.isSafeInteger(expectedVersion) && expectedVersion >= 1)) {
     throw new CalendarNoteError('invalid_calendar_note', 400)
   }
   const normalized = body.replace(/\r\n?/g, '\n')
-  return { date, body: normalized.trim() ? normalized : '', expectedVersion: expectedVersion as number | null }
+  if (title !== undefined && (typeof title !== 'string' || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(title) || Array.from(title.trim()).length > CALENDAR_NOTE_TITLE_LIMIT)) throw new CalendarNoteError('invalid_calendar_note_title', 400)
+  const normalizedTitle = typeof title === 'string' ? title.trim() : undefined
+  if (!normalized.trim() && normalizedTitle) throw new CalendarNoteError('calendar_note_body_required', 400)
+  // Omitted legacy titles preserve existing headings; legacy clear still clears everything.
+  return { date, body: normalized.trim() ? normalized : '', title: normalized.trim() ? normalizedTitle : '', expectedVersion: expectedVersion as number | null }
 }
 
 export async function saveCalendarNote(db: CalendarNoteDatabase, input: ReturnType<typeof parseCalendarNoteInput> & { brandId: string; actorId: string }) {
-  const { brandId, date, body, expectedVersion, actorId } = input
+  const { brandId, date, body, title, expectedVersion, actorId } = input
   try {
     return await db.$transaction(async tx => {
+      // Share the brand lock with planning saves so their final source check is atomic.
+      if (tx.$queryRaw) await tx.$queryRaw`SELECT "id" FROM "Brand" WHERE "id"=${brandId} FOR UPDATE`
       if (expectedVersion === null) {
-        return tx.calendarNote.create({ data: { brandId, date, body, createdBy: actorId, updatedBy: actorId } })
+        return tx.calendarNote.create({ data: { brandId, date, title: title ?? '', body, createdBy: actorId, updatedBy: actorId } })
       }
       const updated = await tx.calendarNote.updateMany({
         where: { brandId, date, version: expectedVersion },
-        data: { body, updatedBy: actorId, version: { increment: 1 } },
+        data: { ...(title !== undefined ? { title } : {}), body, updatedBy: actorId, version: { increment: 1 } },
       })
       if (updated.count !== 1) throw new CalendarNoteError('calendar_note_conflict', 409)
       return tx.calendarNote.findUniqueOrThrow({ where: { brandId_date: { brandId, date } } })

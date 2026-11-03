@@ -18,6 +18,7 @@ const version = (value: unknown) => typeof value === 'string' && /^[a-f0-9]{64}$
 export function buildContextManifest(messages: readonly unknown[], tools: readonly unknown[]) {
   const skillResources: Array<{ origin: 'history_read'|'review_input'; messageIndex: number; callId: string | null; id: string | null; resource: string | null; version: string | null; skillVersion: string | null; included: boolean; content: ReturnType<typeof fingerprint> | null }> = []
   const directories: Array<{ messageIndex: number; entries: number; containsBody: boolean }> = []
+  const calendarSources: Array<{ messageIndex: number; callId: string | null; status: string | null; revision: string | null; content: ReturnType<typeof fingerprint> }> = []
   let preloadedPlanningSkills = 0
   for (const [messageIndex, raw] of messages.entries()) {
     const message = object(raw)
@@ -34,14 +35,16 @@ export function buildContextManifest(messages: readonly unknown[], tools: readon
         skillResources.push({ origin:'history_read', messageIndex, callId: identifier(call.id), id: identifier(input?.id), resource: identifier(input?.resource), version: version(result?.version), skillVersion: version(result?.skillVersion), included, content: included ? fingerprint(result!.text) : null })
       }
       if (typeof object(object(result?.planningContext)?.skill)?.content === 'string') preloadedPlanningSkills++
+      const calendar = call?.capability === 'amc.context' ? object(result?.calendarPlanning) : call?.capability === 'amc.calendar_notes' ? result : null
+      if (calendar) calendarSources.push({ messageIndex, callId: identifier(call?.id), status: identifier(calendar.status), revision: version(calendar.revision), content: fingerprint(calendar) })
     }
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     tokenEstimateMethod: 'serialized_utf8_bytes_divided_by_4_not_provider_usage',
     messages: messages.map((message, index) => ({ index, ...fingerprint(message) })),
     tools: tools.map((tool, index) => ({ index, ...fingerprint(tool) })),
     input: fingerprint({ messages, tools }),
-    directories, skillResources, preloadedPlanningSkills,
+    directories, skillResources, preloadedPlanningSkills, calendarSources,
   }
 }

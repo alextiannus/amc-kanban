@@ -1,18 +1,20 @@
 import type {Pool} from 'pg'
 import {prisma} from '../prisma'
 import {brandFor,digest,nativeError,type NativeActor} from './contract'
+import {calendarPlanningRevision,type CalendarContext} from '../calendarNoteContext'
 
 /** Only revision metadata crosses this boundary, never the large source documents. */
-export async function conversationSourceRevision(actor:NativeActor){
+export async function conversationSourceRevision(actor:NativeActor,calendarContext?:CalendarContext,requestedMonth?:string){
   const brandId=brandFor(actor)
-  const [brand,interview,growth,attachments]=await Promise.all([
+  const [brand,interview,growth,attachments,calendarRevision]=await Promise.all([
     prisma.brand.findUnique({where:{id:brandId},select:{updatedAt:true,knowledge:{select:{updatedAt:true}}}}),
     prisma.brandPlanInterview.findFirst({where:{brandId},orderBy:{completedAt:'desc'},select:{id:true,updatedAt:true}}),
     prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'},select:{id:true,updatedAt:true}}),
     prisma.mediaAsset.findFirst({where:{brandId,technicalMetadata:{path:['planningAttachment'],equals:true}},orderBy:{updatedAt:'desc'},select:{id:true,updatedAt:true}}),
+    calendarPlanningRevision(prisma,brandId,calendarContext,undefined,requestedMonth),
   ])
   if(!brand)throw nativeError('brand_context_unavailable',404)
-  return digest([brand,interview,growth,attachments])
+  return digest([brand,interview,growth,attachments,calendarRevision])
 }
 
 /** Actor authorization is performed by the caller on every access, including hits.

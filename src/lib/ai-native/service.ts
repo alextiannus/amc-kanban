@@ -19,6 +19,7 @@ import {laneCursors,nextLaneCursor} from './runtime-routing'
 import {activeConversationStatus,wakeConversationWorker} from './conversation-status'
 import {conversationProgress,conversationInsight,planningWriteRecovery} from './conversation-progress'
 import {savePlanningDraft} from './planning-workspace-save'
+import {calendarPageRevisions} from '../calendarNoteContext'
 import {assertUsageSettled} from './model-guards'
 import {AUTOPILOT_TOOLS} from './autopilot-capabilities'
 import {autopilotRun} from './autopilot'
@@ -461,10 +462,12 @@ export async function adoptNativePlanningDraft(userId:string,brandId:string,task
 }
 
 function planningProvenance(calls:readonly {capability:string;status:string;result?:unknown}[],draft:any){
- const source=(calls.find(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any)?.planningContext
+ const context=calls.findLast(c=>c.capability==='amc.context'&&c.status==='succeeded')?.result as any
+ const source=context?.planningContext
  const actualSkill=calls.find(c=>c.capability==='assistant.skills.read'&&c.status==='succeeded'&&(c as any).input?.id==='amc-marketing-expert/SKILL.md'&&!(c as any).input?.resource)?.result as any
  const skillContent=actualSkill?.content||source?.skill?.content
  const provenance:Record<string,any>={skill:'amc-marketing-expert',skillVersion:typeof actualSkill?.skillVersion==='string'?actualSkill.skillVersion:typeof skillContent==='string'?createHash('sha256').update(skillContent).digest('hex'):null,reportId:source?.insight?.reportVersionId||null,reportGeneratedAt:source?.insight?.generatedAt||null,workspaceRevision:draft.expectedRevision}
+ if(context?.calendarPlanning)provenance.calendarPlanning={revision:context.calendarPlanning.revision,context:context.intent?.calendarContext,requestedMonth:context.intent?.planningScope?.startMonth,pageRevisions:calendarPageRevisions(calls)}
  if(draft.scope.stage==='marketing_plan'){
   if(source?.creativeSearch||draft.data?.brandCreatives?.some((v:unknown)=>typeof v==='string'&&/cre_ins_[a-zA-Z0-9_-]+/.test(v)))throw nativeError('strategy_scope_changed',409)
   if(source?.workspace?.sourceVersions?.interview)provenance.sourceVersions={interview:source.workspace.sourceVersions.interview,report:source?.insight?.reportVersionId||null}

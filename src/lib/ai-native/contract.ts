@@ -1,3 +1,4 @@
+import {parseCalendarContext} from '../calendarNoteContext'
 import {visibleInterviewDraft,interviewAnswers,type InterviewDraft} from './interview-contract'
 import type {VideoRewriteIntent} from './video-rewrite'
 import {isUiPage,parseUiAction,type UiAction,type UiPage} from './ui-navigation'
@@ -16,7 +17,7 @@ export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifac
 export type PlanningBinding={id:string;month:string;platform:string;excludeCreativeIds:string[]}
 export type DiscoveryIntent = {skuWorkflow?:true;planningRequest?:PlanningBinding;kind:'creative_discovery';requireMaterials?:boolean;poolIdeaId?:string;automaticDaily?:boolean;recoveryOfTaskId?:string;recoveryVersion?:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type AutopilotIntent = {kind:'autopilot';runId:string;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
-export type ConversationIntent = {profileSection?:'brand_information'|'interview'|'marketing_plan';afterTaskId?:string;conversationId?:string;autoSavePlanning?:boolean;contextSessionId?:string;currentPage?:UiPage;planningDraftContext?:string;planningScope?:PlanningScope;kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
+export type ConversationIntent = {calendarContext?:import('../calendarNoteContext').CalendarContext;profileSection?:'brand_information'|'interview'|'marketing_plan';afterTaskId?:string;conversationId?:string;autoSavePlanning?:boolean;contextSessionId?:string;currentPage?:UiPage;planningDraftContext?:string;planningScope?:PlanningScope;kind:'conversation';topic:'general'|'brand_planning';history:Array<{role:'user'|'assistant';content:string}>;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type SkuIntent = SkuBinding & {kind:'sku_proposal'|'creative_adaptation';decisionDigest?:string;autopilotRunId?:string;requireMaterials?:boolean;brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}
 export type NativeIntent = VideoRewriteIntent | CreativeIntent | BriefIntent | DiscoveryIntent | AutopilotIntent | ConversationIntent | SkuIntent
 export function nativeError(code:string,statusCode=400) { return Object.assign(new Error(code),{code,statusCode}) }
@@ -107,6 +108,8 @@ export function conversationFrom(content:string,intent:ConversationIntent){
   return value as {interviewDraft?:InterviewDraft;planningProgress?:{stage:PlanningScope['stage'];summary:string};uiAction?:UiAction;suggestedReplies?:string[];planningDraft?:PlanningDraft;annualBudget?:PlanningBudget;kind:'conversation';brandId:string;content:string;contextDigest:string;title?:string}
 }
 export function conversationInput(body:any){
+  let calendarContext:import('../calendarNoteContext').CalendarContext|undefined
+  try{calendarContext=parseCalendarContext(body.calendarContext)}catch{throw nativeError('invalid_calendar_context')}
   if(body.afterTaskId!==undefined&&(typeof body.afterTaskId!=='string'||!/^[0-9a-f-]{36}$/i.test(body.afterTaskId)))throw nativeError('invalid_previous_task')
   if(body.conversationId!==undefined&&(typeof body.conversationId!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.conversationId)))throw nativeError('invalid_conversation_id')
   if(body.autoSavePlanning!==undefined&&typeof body.autoSavePlanning!=='boolean')throw nativeError('invalid_auto_save')
@@ -120,7 +123,7 @@ export function conversationInput(body:any){
   const scope=body.planningScope===undefined?undefined:planningScope(body.planningScope)
   const topic=scope||body.topic==='brand_planning'||/商家访谈|商家訪談|merchant interview/i.test(body.goal)||/AMC\s*营销专家|宣传重心|年度(?:推广|营销|行銷)计划|品牌(?:策划|规划|定位|访谈|营销|洞察)|卖点|营销(?:策划|方案|计划|策略)|推广(?:方案|计划|活动)|brand (?:planning|strategy|positioning|interview)|marketing (?:plan|strategy)|selling points|campaign plan|insight report/i.test(body.goal)?'brand_planning':'general'
   if(history.reduce((length:number,turn:{content:string})=>length+turn.content.length,0)>60000)throw nativeError('conversation_history_too_large',413)
-  return {...(body.profileSection?{profileSection:body.profileSection}:{}),...(body.afterTaskId?{afterTaskId:body.afterTaskId}:{}),...(body.conversationId?{conversationId:body.conversationId}:{}),...(body.autoSavePlanning===true&&scope?.stage==='marketing_plan'?{autoSavePlanning:true}:{}),...(body.contextSessionId?{contextSessionId:body.contextSessionId}:{}),...(body.currentPage?{currentPage:body.currentPage}:{}),...(scope?{planningScope:scope}:{}),...(body.planningDraftContext!==undefined?{planningDraftContext:body.planningDraftContext}:{}),history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'profileSection'|'afterTaskId'|'conversationId'|'autoSavePlanning'|'contextSessionId'|'history'|'topic'|'planningScope'|'planningDraftContext'|'currentPage'>
+  return {...(calendarContext?{calendarContext}:{}),...(body.profileSection?{profileSection:body.profileSection}:{}),...(body.afterTaskId?{afterTaskId:body.afterTaskId}:{}),...(body.conversationId?{conversationId:body.conversationId}:{}),...(body.autoSavePlanning===true&&scope?.stage==='marketing_plan'?{autoSavePlanning:true}:{}),...(body.contextSessionId?{contextSessionId:body.contextSessionId}:{}),...(body.currentPage?{currentPage:body.currentPage}:{}),...(scope?{planningScope:scope}:{}),...(body.planningDraftContext!==undefined?{planningDraftContext:body.planningDraftContext}:{}),history:history.map(({role,content}:ConversationIntent['history'][number])=>({role,content})),topic} as Pick<ConversationIntent,'calendarContext'|'profileSection'|'afterTaskId'|'conversationId'|'autoSavePlanning'|'contextSessionId'|'history'|'topic'|'planningScope'|'planningDraftContext'|'currentPage'>
 }
 
 /** Match the business artifact validator and execution policy; Runtime adds envelope headroom. */

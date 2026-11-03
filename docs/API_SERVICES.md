@@ -2,7 +2,7 @@
 
 ## 发布日历日期备注
 
-`GET /api/brands/:id/calendar-notes?month=YYYY-MM` 和 `PUT /api/brands/:id/calendar-notes/:date` 提供品牌共享日期备注，沿用品牌读写权限并校验并发版本。完整输入、响应、错误及上线顺序见 [calendar-notes.md](calendar-notes.md)。本地实现，待部署验收。
+`GET /api/brands/:id/calendar-notes?month=YYYY-MM` / `PUT /api/brands/:id/calendar-notes/:date` now include optional title and atomic title/body versions. Conversation requests accept optional `calendarContext`; `amc.context.calendarPlanning` and read-only paginated `amc.calendar_notes` share current database notes. Compatibility, errors, context limits and migration/deployment order: [calendar-notes.md](calendar-notes.md). Implemented and locally verified; production migration, deployment and real-account acceptance pending.
 
 版本日期：2026-07-04
 

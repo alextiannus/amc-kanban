@@ -27,6 +27,7 @@
     "test:draft-asset-pagination": "node --experimental-strip-types scripts/test-draft-asset-pagination.mts",
     "test:calendar-drafts": "node --experimental-strip-types scripts/test-calendar-drafts.mts",
     "test:calendar-notes": "tsx scripts/test-calendar-notes.mts",
+    "test:calendar-note-context": "tsx scripts/test-calendar-note-context.mts",
     "test:content-engine-integration": "node --experimental-strip-types scripts/test-content-engine-integration.mts",
     "test:postfast-integration": "node --experimental-strip-types scripts/test-postfast-integration.mts",
     "test:social-account-unbinding": "node --experimental-strip-types scripts/test-social-account-unbinding.mts",
