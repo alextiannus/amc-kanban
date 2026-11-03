@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs'
 import ts from 'typescript'
 import * as calendar from '../src/lib/calendarNoteContext.ts'
 import * as contract from '../src/lib/ai-native/contract.ts'
+import * as planningContract from '../src/lib/ai-native/planning-workspace-contract.ts'
 import {createAmcContextAssembler} from '../src/lib/ai-native/runtime-application.mjs'
 import {buildContextManifest} from '../src/lib/ai-native/context-manifest.ts'
 
@@ -49,6 +50,11 @@ do{
 }while(afterDate)
 assert.equal(calls.length,3);assert.equal(calendar.calendarCoverageFeedback(context,calls),null)
 assert.match(calendar.calendarCoverageFeedback(context,calls.slice(1))!,/Read complete/)
+const defaultContext=calendar.projectCalendarPlanning('brand-a','Asia/Singapore',['2026-12'],[])
+assert.match(calendar.calendarCoverageFeedback(defaultContext,calls.slice(0,1))!,/2027-01/,'on-demand months must not bypass full-body pagination for formal plans')
+assert.equal(calendar.calendarCoverageFeedback(defaultContext,calls),null)
+const unavailableCall={capability:'amc.calendar_notes',status:'succeeded',result:{status:'unavailable',month:'2027-01',afterDate:null,revision:null,notes:[],nextAfterDate:null}}
+assert.match(calendar.calendarCoverageFeedback(defaultContext,[...calls,unavailableCall])!,/unavailable/,'a later failed on-demand read cannot be hidden by old successful pages')
 rows[19]={...rows[19],body:'changed by another member',version:2}
 const updated=await calendar.readCalendarPlanning(db,'brand-a',hint,now)
 assert.match(calendar.calendarCoverageFeedback(updated,calls)!,/Read complete/,'stale page receipts cannot establish current coverage')
@@ -72,6 +78,7 @@ let intent:any={kind:'conversation',topic:'general',brandId:'brand-a',userId:'hu
 const actor=contract.actorFor('brand-a','human'),taskId='task-calendar'
 const application=compile('src/lib/ai-native/application.ts',{
   '../calendarNoteContext':calendar,'./contract':contract,'node:crypto':await import('node:crypto'),'node:path':await import('node:path'),
+  './planning-workspace-contract':planningContract,
   '../prisma':{prisma:db},'./store':{intentBy:async()=>({intent,task_id:taskId})},'../profile-document':{readProfileDocument:async()=>({content:'Saved brand strategy',revision:'workspace-one',startMonth:'2027-01'})},
   './runtime-application.mjs':{openApplication:async(config:any)=>{configured=config;return {tasks:{get:async()=>({trusted_context:{reference:'request'}})},workspace:{read:async()=>({content:artifact})}}}},
   '@immedi/iaic-core/capabilities/index.js':{defineCapability:(v:any)=>v},
@@ -103,11 +110,28 @@ const manifest=buildContextManifest(assembled,[])
 assert.equal(manifest.calendarSources[0].revision,fresh.calendarPlanning.revision)
 assert(!JSON.stringify(manifest).includes('晚餐优先'),'runtime manifests log fingerprints, not private note text')
 artifact=JSON.stringify({kind:'conversation',brandId:'brand-a',content:'Discussion',contextDigest:initial.contextDigest})
-const verify=(readResult:any)=>configured.verifyOutcome({}, {artifacts:[{path:intent.artifactPath}]},{actor,history:{calls:[{capability:'amc.context',status:'succeeded',result:readResult},{capability:'assistant.skills.read',status:'succeeded',input:{id:'amc-conversation/SKILL.md'}}]}})
+const verify=(readResult:any,extraCalls:any[]=[])=>configured.verifyOutcome({}, {artifacts:[{path:intent.artifactPath}]},{actor,history:{calls:[{capability:'amc.context',status:'succeeded',result:readResult},{capability:'assistant.skills.read',status:'succeeded',input:{id:intent.topic==='brand_planning'?'amc-marketing-expert/SKILL.md':'amc-conversation/SKILL.md'}},...extraCalls]}})
 const staleOutcome=await verify(initial)
 assert.equal(staleOutcome.verified,false);assert.match(staleOutcome.feedback,/Calendar notes changed/)
 const page=await pageTool.implementation.execute({month:'2027-01'},{actor,taskId})
 assert.equal(page.notes[0].title,'最新主推方向')
+const generalIntent=intent
+intent={...intent,topic:'brand_planning',planningScope:{stage:'marketing_plan',mode:'discuss',startMonth:'2027-01'}}
+rows.push(...Array.from({length:9},(_,i)=>note(`2028-02-${String(i+1).padStart(2,'0')}`,'Future direction','Future month constraint')))
+const formalContext=await read()
+artifact=JSON.stringify({kind:'conversation',brandId:'brand-a',content:'Formal strategy discussion',contextDigest:formalContext.contextDigest})
+const formalCalls:any[]=[{capability:'amc.strategy_document',status:'succeeded',result:{format:'markdown'}}]
+const futureFirst=await pageTool.implementation.execute({month:'2028-02'},{actor,taskId})
+formalCalls.push({capability:'amc.calendar_notes',status:'succeeded',result:futureFirst})
+const incomplete=await verify(formalContext,formalCalls)
+assert.equal(incomplete.verified,false);assert.match(incomplete.feedback,/Read complete.*2028-02/)
+formalCalls.push({capability:'amc.calendar_notes',status:'succeeded',result:await pageTool.implementation.execute({month:'2028-02',afterDate:futureFirst.nextAfterDate},{actor,taskId})})
+assert.equal((await verify(formalContext,formalCalls)).verified,true,'real verifier accepts complete current on-demand pages')
+formalCalls.push({...unavailableCall,result:{...unavailableCall.result,month:'2028-02'}})
+const unavailableFormal=await verify(formalContext,formalCalls)
+assert.equal(unavailableFormal.verified,false);assert.match(unavailableFormal.feedback,/2028-02.*unavailable/)
+intent=generalIntent
+rows=rows.filter(row=>!row.date.startsWith('2028-02'))
 intent={...intent,topic:'brand_planning',profileSection:'marketing_plan'}
 const profile=await read()
 assert.equal(profile.calendarPlanning.revision,fresh.calendarPlanning.revision,'Profile and general conversations use the same note source')
