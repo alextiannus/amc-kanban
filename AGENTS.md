@@ -69,6 +69,8 @@ Canonical files:
 <!-- BEGIN:amc-prd-version-history -->
 ## Mandatory AMC PRD version history
 
+Windows workspace exception (explicit user instruction, 2026-11-03): in `E:\AMC` and its repositories/worktrees, ignore the Mac shared-ledger requirements in this section. Do not block work, request the ledger, or require migration of those external files. Continue updating repository PRDs and interface docs, preserving Git history and distinguishing implementation, push, deployment and production acceptance. The requirements below remain scoped to colleagues using the referenced Mac workspace.
+
 Before working, read `/Users/immedi/Documents/ChatGPT/AMC/AGENTS.md` and the shared ledger `/Users/immedi/Documents/ChatGPT/AMC/VERSION_HISTORY.md`.
 Every PRD addition, edit (including wording), deletion, rename, or rollback MUST append a record to that shared ledger in the same delivery. This includes product requirements recorded under other filenames. Keep PRD bodies consistent with the current design; history does not replace updating superseded requirements.
 Record a unique ID, timestamp/timezone, author, request source, repository/file/section, before/after changes, reason, impact, implementation/deployment status, and actual validation. Reference commits/PRs only if they exist. Preserve previous entries and concurrent edits; corrections require a new entry. Verify that every changed PRD is covered and report the history ID in the final response. Unlogged PRD work is incomplete.
