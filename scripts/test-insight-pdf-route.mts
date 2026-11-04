@@ -10,6 +10,7 @@ new Function('require','module','exports',code)((name:string)=>{
  if(name.includes('user-management/auth'))return {resolveSessionOrApiKey:async()=>authenticated?{user:{id:'owner',type:'HUMAN',role:'OWNER'}}:null}
  if(name.includes('brandAccess'))return {canSessionAccessBrandProject:async()=>allowed}
  if(name.includes('insight-service'))return {readAvailableInsight:async()=>{if(readFailure)throw Error();return {report}}}
+ if(name.includes('report-presentation'))return {presentReportPdf:async(bytes:Uint8Array)=>bytes}
  if(name.includes('growthDataCenter'))return {readGrowthReportArtifact:async(path:string)=>{assert.equal(path,report.pdfPath);if(pdfFailure)throw Error();return {body:new TextEncoder().encode(pdfBody).buffer}}}
  throw Error('Unexpected import '+name)
 },module,module.exports)

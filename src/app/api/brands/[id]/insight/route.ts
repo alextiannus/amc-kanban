@@ -21,7 +21,8 @@ async function handle(request:Request,context:Context,write:boolean){
   let refreshUnavailable=false
   const savedOnly=!write&&new URL(request.url).searchParams.get('saved')==='1'
   if(canWrite&&!savedOnly)try{await reconcileInsight(id)}catch{refreshUnavailable=true}
-  const latest=await readAvailableInsight(id,{savedOnly})
+  const query=new URL(request.url).searchParams
+  const latest=await readAvailableInsight(id,{savedOnly,language:query.get('language')||'zh',version:query.get('version')||undefined})
   return NextResponse.json({...latest,downloads:insightDownloads(id,latest.report),refreshUnavailable:refreshUnavailable||latest.liveStatus==='unavailable'},{headers:{'Cache-Control':'no-store'}})
  }catch(e){return NextResponse.json({error:(e as Error).message},{status:(e as any).statusCode||503})}
 }

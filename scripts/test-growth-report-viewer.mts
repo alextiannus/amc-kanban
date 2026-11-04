@@ -116,8 +116,8 @@ assert(
 
 const researchReportRoute = readFileSync(new URL('../src/app/dashboard/brands/[id]/research-report/route.ts', import.meta.url), 'utf8')
 assert(
-  researchReportRoute.includes('new URL(growthReportHref, publicKanbanOrigin(request))'),
-  'server-side report redirect must never use the Render internal request origin'
+  researchReportRoute.includes('readAvailableInsight(id,') && !researchReportRoute.includes('Response.redirect'),
+  'report preview must render the authorized canonical version without an internal-origin redirect'
 )
 
 console.log('Growth report viewer link tests passed.')

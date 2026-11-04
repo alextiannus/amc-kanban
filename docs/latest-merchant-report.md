@@ -1,0 +1,11 @@
+# Merchant report reads
+
+Implementation target, 2026-11-04; deployment pending. Growth is the source of saved merchant research. All Insight, Profile, full report preview, PDF and Markdown entrypoints resolve the explicitly bound merchant through the same service. Monthly/management reports are not mixed into this selection. Prefer the requested language, then an available language; order by successful save time and numeric version ID. Older templates remain readable.
+
+GET /api/brands/:id/insight?language=zh|en[&version=:id] returns the saved report with id, completedAt, language, templateId/templateRevision/templateHash, content, sourceRefs and download links. The existing saved=1 option is an explicit cached read; report panels perform a live read. On upstream failure, existing local snapshots remain visible with liveStatus=unavailable, never described as confirmed-latest. A successful no-report response is not replaced by stale local data.
+
+PDF and Markdown require the opened version. Existing /research-report and /dashboard/brands/:id/research-report use the same resolver. GET /api/brands/:id/insight/source?report_version_id=:id&source=:source&version=:frozenVersion serves an escaped frozen-source page after brand authorization and report membership validation. PDF source destinations are adapted in a response copy; saved report/PDF/template files remain immutable. MM requests use the MM presentation origin for links.
+
+Growth reads use service-token-only /v1/internal/reports/:brandKey/latest and /v1/internal/report-versions/:id, not admin-session endpoints. User credentials are never forwarded to arbitrary origins. No read endpoint starts a model call, translation or collection. An explicit update is separate from reading. New versions are offered without replacing an open report. No schema migration.
+
+Historical report keys are resolved through recorded snapshot keys and the exact Kanban brand ID stored in trusted service-created research jobs. The service sends the authorized x-amc-brand-id header; when no local Growth key exists it uses /v1/internal/reports/kanban-brands/:id/latest. No name-based matching is performed. Historical structured JSON downloads remain available when that saved version contains them.

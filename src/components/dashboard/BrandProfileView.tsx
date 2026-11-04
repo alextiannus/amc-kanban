@@ -117,6 +117,7 @@ type BrandPlanWorkspaceData = {
     pdfDownloadUrl?: string
     reportVersionId?: string
     reportTemplateVersion?: string
+    templateRevision?: string
     viewerUrl?: string
     markdownDownloadPath?: string
     jsonDownloadPath?: string
@@ -741,8 +742,11 @@ function BrandProfileContent({
   const [profileLoading, setProfileLoading] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMarkdown, setProfileMarkdown] = useState('')
+  const [latestMerchant,setLatestMerchant]=useState<any>(null)
+  const openedMerchant=useRef<BrandPlanWorkspaceData['researchReport']|null>(null)
   const [brandPlanData, setBrandPlanData] = useState<BrandPlanWorkspaceData>({})
   const researchRequest = brandPlanData.researchRequest
+  useEffect(()=>{const ctrl=new AbortController();const load=()=>{if(!document.hidden)void fetch('/api/brands/'+encodeURIComponent(brandId)+'/insight',{cache:'no-store',signal:ctrl.signal}).then(r=>r.ok?r.json():null).then(value=>{if(!ctrl.signal.aborted)setLatestMerchant(value||{liveStatus:'unavailable'})}).catch(()=>{if(!ctrl.signal.aborted)setLatestMerchant((old:any)=>({...old,liveStatus:'unavailable'}))})};setLatestMerchant(null);load();const timer=setInterval(load,15000);return()=>{ctrl.abort();clearInterval(timer)}},[brandId])
   const researchActive = Boolean(researchRequest && !['completed', 'failed', 'cancelled', 'superseded'].includes(researchRequest.status))
   const researchStatusLabel = ({ starting: '正在启动调研', collecting: '正在采集资料', generating: '正在整理报告', needs_confirmation: '需要确认资料', failed: '调研未完成，请重试' } as Record<string, string>)[researchRequest?.status || ''] || ''
   const [publishingScheduleDraft, setPublishingScheduleDraft] = useState<PublishingScheduleDraft>({})
@@ -1531,9 +1535,12 @@ ${storeLines}
     const value = identityField(field)?.value
     return Array.isArray(value) ? value : fallback
   }
-  const report = brandPlanData.researchReport
-  const researchTitle = `商家调研报告 ${(report?.reportTemplateVersion || 'v5').toUpperCase()}`
-  const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report`
+  const availableReport:BrandPlanWorkspaceData['researchReport'] = latestMerchant?.report ? {summary:latestMerchant.report.title||'',dataSources:['AMC Growth'],brandImage:'',marketingStatus:'',marketAnalysis:'',competitors:[],issues:[],growthPoints:[],missingQuestions:[],...brandPlanData.researchReport,reportMarkdown:latestMerchant.report.content,reportTemplateVersion:'v5',templateRevision:latestMerchant.report.templateRevision,reportVersionId:latestMerchant.report.id,generatedAt:latestMerchant.report.completedAt,pdfDownloadPath:latestMerchant.report.pdfPath} : latestMerchant?.liveStatus==='available' ? undefined : brandPlanData.researchReport
+  if(!showResearchReport)openedMerchant.current=null
+  else if(!openedMerchant.current)openedMerchant.current=availableReport
+  const report=showResearchReport?openedMerchant.current:availableReport
+  const researchTitle = `商家调研报告 ${(report?.templateRevision || report?.reportTemplateVersion || '').toUpperCase()}`
+  const growthResearchReportHref = `/dashboard/brands/${encodeURIComponent(brandId)}/research-report${report?.reportVersionId?'?version='+encodeURIComponent(report.reportVersionId):''}`
   const growthReportMarkdown = report?.reportMarkdown || report?.reportContent || ''
   const interview = merchantInterview
   const annualPlan = brandPlanData.annualPlan
@@ -1580,12 +1587,14 @@ ${storeLines}
           <button type="button" onClick={() => setShowResearchReport(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 space-y-5 overflow-y-auto p-5 text-sm">
+          {latestMerchant?.liveStatus==='unavailable'&&<p role="status">暂未确认是否为最新，已保留已有报告。</p>}
+          {latestMerchant?.report&&report?.reportVersionId!==latestMerchant.report.id&&<a className="underline" href={growthResearchReportHref.split('?')[0]} target="_blank" rel="noreferrer">有新报告，点击查看</a>}
           {report?.reportTemplateVersion === 'v5' ? (
             <>
               <div className="flex flex-wrap gap-3 text-xs text-teal-700">
                 <a href={growthResearchReportHref} target="_blank" rel="noreferrer">打开完整报告</a>
-                <a href={`${growthResearchDownloadHref}?format=markdown`}>下载 Markdown</a>
-                {(report.pdfDownloadPath || report.pdfReportPath) && <a href={`${growthResearchDownloadHref}?format=pdf`}>下载 PDF</a>}
+                <a href={`${growthResearchDownloadHref}?version=${encodeURIComponent(report?.reportVersionId||'')}&format=markdown`}>下载 Markdown</a>
+                {(report.pdfDownloadPath || report.pdfReportPath) && <a href={`${growthResearchDownloadHref}?version=${encodeURIComponent(report?.reportVersionId||'')}&format=pdf`}>下载 PDF</a>}
               </div>
               <article className="prose prose-slate max-w-none break-words dark:prose-invert [&_table]:block [&_table]:overflow-x-auto">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{growthReportMarkdown}</ReactMarkdown>
@@ -1604,11 +1613,11 @@ ${storeLines}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {(report.pdfDownloadPath || report.pdfReportPath) ? (
-                  <a href={`${growthResearchDownloadHref}?format=pdf`} className="inline-flex rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-black text-white">下载 PDF</a>
+                  <a href={`${growthResearchDownloadHref}?version=${encodeURIComponent(report?.reportVersionId||'')}&format=pdf`} className="inline-flex rounded-lg bg-blue-600 px-3 py-1.5 text-[11px] font-black text-white">下载 PDF</a>
                 ) : null}
-                <a href={`${growthResearchDownloadHref}?format=markdown`} className="inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-black text-blue-700">下载 Markdown</a>
+                <a href={`${growthResearchDownloadHref}?version=${encodeURIComponent(report?.reportVersionId||'')}&format=markdown`} className="inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-black text-blue-700">下载 Markdown</a>
                 {report.structuredReport ? (
-                  <a href={`${growthResearchDownloadHref}?format=json`} className="inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-black text-blue-700">下载 JSON</a>
+                  <a href={`${growthResearchDownloadHref}?version=${encodeURIComponent(report?.reportVersionId||'')}&format=json`} className="inline-flex rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-[11px] font-black text-blue-700">下载 JSON</a>
                 ) : null}
               </div>
             </section>
@@ -1966,16 +1975,16 @@ ${storeLines}
               role="button"
               tabIndex={0}
               onClick={(event) => {
-                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) openAiContentEditor({ target: 'research_report', title: '编辑商家调研报告 V5', value: report })
+                if (!shouldIgnoreEditableSurfaceClick(event.target) && report) setShowResearchReport(true)
               }}
               onKeyDown={(event) => {
                 if ((event.key === 'Enter' || event.key === ' ') && report) {
                   event.preventDefault()
-                  openAiContentEditor({ target: 'research_report', title: '编辑商家调研报告 V5', value: report })
+                  setShowResearchReport(true)
                 }
               }}
               className="flex cursor-pointer items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition hover:border-blue-200 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800"
-              title={report ? '点击编辑商家调研报告 V5' : '尚未生成商家调研报告 V5'}
+              title={report ? '点击查看商家调研报告' : '尚未生成商家调研报告'}
             >
               <FileText className="h-4 w-4 shrink-0 text-blue-500" />
               <div className="min-w-0 flex-1">

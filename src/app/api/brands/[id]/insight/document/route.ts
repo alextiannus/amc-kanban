@@ -9,6 +9,6 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
  if(!auth)return Response.json({error:'Unauthorized'},{status:401})
  const {id}=await params
  if(!await canSessionAccessBrandProject(id,auth.user.id,auth.user.type,auth.user.role))return Response.json({error:'Not found'},{status:404})
- try{return insightDocument((await readAvailableInsight(id)).report,new URL(request.url).searchParams.get('version'))}
+ try{const query=new URL(request.url).searchParams;return insightDocument((await readAvailableInsight(id,{version:query.get('version')||undefined})).report,query.get('version'))}
  catch{return Response.json({error:'report_read_failed'},{status:502})}
 }

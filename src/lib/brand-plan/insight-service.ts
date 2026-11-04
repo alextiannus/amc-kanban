@@ -4,6 +4,7 @@ import {createHash,randomUUID} from 'node:crypto'
 import {prisma} from '../prisma'
 import {buildGrowthResearchReport,loadBrandPlanBrand,saveResearchReport} from './service'
 import {insightReport,latestInsightReport,growthInsightReport} from './insight-report'
+import {presentInsight} from './report-presentation'
 
 type RequestState={id:string;userId?:string;status:'submitting'|'processing'|'review_required'|'completed'|'failed';createdAt:string;sourceRevision?:string;jobId?:string;updatedAt?:string}
 async function mutateRequest(brandId:string,change:(request:RequestState|null)=>RequestState|null){
@@ -15,7 +16,7 @@ async function mutateRequest(brandId:string,change:(request:RequestState|null)=>
   return request
  })
 }
-export async function readInsight(brandId:string){
+export async function readInsight(brandId:string,language='zh'){
  const [knowledge,snapshots,management]=await Promise.all([
   prisma.$queryRaw<Array<{researchReport:any;marketingSolution:any}>>`
    SELECT "researchReport", jsonb_build_object('researchReport',"marketingSolution"->'researchReport','insightRequest',"marketingSolution"->'insightRequest') AS "marketingSolution"
@@ -28,7 +29,7 @@ export async function readInsight(brandId:string){
   insightReport('workspace-research','research',w.researchReport),insightReport('baseline-research','research',knowledge?.researchReport),
   ...snapshots.map((s:any)=>insightReport(s.id,(s.report as any)?.reportType==='management'?'management':'research',s.report)),
   ...management.map((s:any)=>insightReport(s.id,'management',{...(s.output as any),status:s.status,generatedAt:s.generatedAt.toISOString()})),
- ])
+ ].filter(report=>report?.type==='research'),language)
  return {report,request:(w.insightRequest||null) as RequestState|null}
 }
 /** Stable provider key survives lost responses. Never interpret transport failures as provider rejection. */
@@ -81,32 +82,35 @@ export async function reconcileInsight(brandId:string,adapters={readJob:async(id
 }
 
 /** Shared by the report canvas and User AI so both use the same latest artifact. */
-export async function readAvailableInsight(brandId:string,options:{savedOnly?:boolean}={}){
- const saved=await readInsight(brandId)
- if(options.savedOnly)return {...saved,report:withInsightPdfUrl(brandId,saved.report),status:saved.report?'cached':'missing',liveStatus:'not_checked'}
+export async function readAvailableInsight(brandId:string,options:{savedOnly?:boolean;language?:string;version?:string}={}){
+ const language=options.language==='en'?'en':'zh',saved=await readInsight(brandId,language)
  const [brand,snapshot]=await Promise.all([
   prisma.brand.findUnique({where:{id:brandId},select:{growthBrandKey:true}}),
   prisma.brandGrowthResearchSnapshot.findFirst({where:{brandId,source:'amc-growth'},orderBy:{generatedAt:'desc'},select:{report:true}}),
  ])
- const keys=[brand?.growthBrandKey,(snapshot?.report as any)?.growthBrandKey].filter((v):v is string=>typeof v==='string'&&!!v.trim())
- const fallback=(liveStatus:string)=>({...saved,report:withInsightPdfUrl(brandId,saved.report),status:saved.report?'cached':liveStatus,liveStatus})
- if(!keys.length)return fallback('not_linked')
+ const keys=[...new Set([brand?.growthBrandKey,(snapshot?.report as any)?.growthBrandKey].filter((key):key is string=>typeof key==='string'&&!!key.trim()).map(key=>key.trim()))]
+ const cached=saved.report&&(!saved.report.growthBrandKey||keys.includes(saved.report.growthBrandKey))&&(!options.version||saved.report.id===options.version)?saved.report:null
+ const fallback=(liveStatus:string)=>({...saved,report:cached?presentInsight(cached,brandId):null,status:cached?'cached':liveStatus,liveStatus})
+ if(options.savedOnly)return fallback('not_checked')
+ if(!keys.length&&!brand)return fallback('not_linked')
  try{
   const {findLatestGrowthInsightVersion}=await import('../growthDataCenter')
-  const value=await findLatestGrowthInsightVersion(keys)
-  if(!value)return fallback('missing')
+  const value=await findLatestGrowthInsightVersion(keys,{...options,brandId})
+  if(!value)return {...saved,report:null,status:'missing',liveStatus:'available'}
   const live=growthInsightReport(value)
-  if(!live)throw Error('growth_report_content_missing')
-  const snapshotId='insight-'+createHash('sha256').update(`${brandId}:${live.id}`).digest('hex').slice(0,40)
-  const cached={growthBrandKey:keys[0],reportType:live.type,supplementQuestions:live.supplementQuestions||[],reportVersionId:live.id,title:live.title,reportMarkdown:live.content,pdfPath:live.pdfPath||null,generatedAt:live.completedAt,periodEnd:live.periodEnd}
-  const dataHash=createHash('sha256').update(JSON.stringify(cached)).digest('hex')
-  const previous=await prisma.brandGrowthResearchSnapshot.findUnique({where:{id:snapshotId},select:{dataHash:true}})
-  if(previous?.dataHash!==dataHash)await prisma.brandGrowthResearchSnapshot.upsert({where:{id:snapshotId},create:{id:snapshotId,brandId,source:'amc-growth',sourceVersion:live.id,dataHash,report:cached,generatedAt:new Date(live.completedAt||0)},update:{report:cached,dataHash}})
-  const report=latestInsightReport(saved.report?.id===live.id?[live]:[saved.report,live])
-  return {...saved,report:withInsightPdfUrl(brandId,report),status:report?.id===live?.id?'available':'cached',liveStatus:'available'}
- }catch{return fallback('unavailable')}
-}
-
-function withInsightPdfUrl(brandId:string,report:Awaited<ReturnType<typeof readInsight>>['report']){
- return report?{...report,...(report.pdfPath?{pdfUrl:`/api/brands/${encodeURIComponent(brandId)}/insight/pdf?version=${encodeURIComponent(report.id)}`}:{})}:null
+  if(!live||live.type!=='research')throw Error('growth_report_content_missing')
+  if(!options.version){
+   try{
+   const snapshotId='insight-'+createHash('sha256').update(brandId+':'+live.id).digest('hex').slice(0,40)
+   const record={...live,growthBrandKey:value.brand_key,reportType:'research',reportVersionId:live.id,reportMarkdown:live.content,pdfPath:live.pdfPath||null,generatedAt:live.completedAt}
+   const dataHash=createHash('sha256').update(JSON.stringify(record)).digest('hex')
+   const previous=await prisma.brandGrowthResearchSnapshot.findUnique({where:{id:snapshotId},select:{dataHash:true}})
+   if(previous?.dataHash!==dataHash)await prisma.brandGrowthResearchSnapshot.upsert({where:{id:snapshotId},create:{id:snapshotId,brandId,source:'amc-growth',sourceVersion:live.id,dataHash,report:record,generatedAt:new Date(live.completedAt||0)},update:{report:record,dataHash}})
+   }catch{console.warn('merchant_report_cache_failed',{brandId,reportVersionId:live.id})}
+  }
+  return {...saved,report:presentInsight(live,brandId),status:'available',liveStatus:'available'}
+ }catch(error){
+  if([403,404,410].includes(Number((error as any).status)))return {...saved,report:null,status:'missing',liveStatus:'available'}
+  return fallback('unavailable')
+ }
 }

@@ -318,29 +318,38 @@ export async function findLatestGrowthResearchReportReference(input: {
   return selectLatestGrowthResearchReportVersionReference(versions)
 }
 
-/** Brand-bound latest report, including advanced and monthly reports; no V3 initial-only filter. */
-export async function findLatestGrowthInsightVersion(keys:string[]){
- const items:GrowthReportVersionCandidate[]=[]
- for(const key of [...new Set(keys)]){
-  const response=await growthRequest(`/v1/admin/reports/${encodeURIComponent(key)}/versions`,{method:'GET'})
-  if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_report_versions_failed')
-  const payload=await response.json()
-  items.push(...(payload.items||[]))
+/** Read saved research only; pinned reads never fall forward to the latest version. */
+export async function findLatestGrowthInsightVersion(keys:string[],options:{language?:string;version?:string;brandId?:string}={}){
+ keys=[...new Set(keys.map(key=>key.trim()).filter(Boolean))]
+ if(!keys.length&&!options.brandId)return null
+ const language=options.language==='en'?'en':'zh',reports:any[]=[]
+ if(options.version&&!/^\d+$/.test(options.version))throw new GrowthDataCenterError(404,'report_not_found')
+ for(const key of options.version?['']:(keys.length?keys:[''])){
+  const path=options.version?`/v1/internal/report-versions/${options.version}`:key?`/v1/internal/reports/${encodeURIComponent(key)}/latest?language=${language}`:`/v1/internal/reports/kanban-brands/${encodeURIComponent(options.brandId!)}/latest?language=${language}`
+  const response=await growthRequest(path,{method:'GET',headers:options.brandId?{'x-amc-brand-id':options.brandId}:{}})
+  if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_report_version_failed')
+  const report=(await response.json()).report
+  if(!report)continue
+  if((!keys.includes(report.brand_key)&&(!options.brandId||report.kanban_brand_id!==options.brandId))||!/^\d+$/.test(String(report.report_version_id))||options.version&&String(report.report_version_id)!==options.version)throw new GrowthDataCenterError(404,'growth_report_version_mismatch')
+  if(!['initial','advanced'].includes(report.tier)||/management|monthly/i.test(report.result?.report_type||'')||!report.report_content?.trim())continue
+  reports.push(report)
  }
- const valid=items.filter(v=>/^\d+$/.test(String(v.report_version_id||'')))
- valid.sort((a,b)=>(Date.parse(b.created_at||'')||0)-(Date.parse(a.created_at||'')||0)||Number(b.report_version_id)-Number(a.report_version_id))
- const ref=valid[0]
- if(!ref)return null
- const response=await growthRequest(`/v1/admin/report-versions/${ref.report_version_id}`,{method:'GET'})
- if(!response.ok)throw new GrowthDataCenterError(response.status,'growth_report_version_failed')
- const payload=await response.json(),report=payload.report
- if(!report||String(report.report_version_id)!==String(ref.report_version_id)||(report.brand_key&&!keys.includes(report.brand_key)))throw Error('growth_report_version_mismatch')
+ reports.sort((a,b)=>Number(b.language===language)-Number(a.language===language)||(Date.parse(b.created_at)||0)-(Date.parse(a.created_at)||0)||(BigInt(a.report_version_id)>BigInt(b.report_version_id)?-1:1))
+ const report=reports[0]
+ if(!report)return null
  const result=report.result||{}
  const normalizePdf=(value:unknown)=>{
   if(typeof value!=='string')return ''
   try{const url=new URL(value.replace(/^generated\/public\//,'/public/'),growthBaseUrl());return url.origin===new URL(growthBaseUrl()).origin?url.pathname:''}catch{return ''}
  }
- return {...report,result,pdf_download_path:normalizePdf(report.pdf_download_path||report.pdf_download_url||report.pdf_report_path||result.pdf_download_path||result.pdf_download_url||result.pdf_report_path),created_at:report.created_at||ref.created_at}
+ return {...report,result,pdf_download_path:normalizePdf(report.pdf_download_path||report.pdf_download_url||report.pdf_report_path||result.pdf_download_path||result.pdf_download_url||result.pdf_report_path)}
+}
+
+export async function readGrowthReportSource(reportVersion:string,source:string,version:string){
+ if(!/^\d+$/.test(reportVersion)||!/^\w{32}$/.test(source)||!/^\w{64}$/.test(version))throw new GrowthDataCenterError(404,'report_source_not_found')
+ const response=await growthRequest(`/v1/internal/report-versions/${reportVersion}/sources/${source}?version=${version}`,{method:'GET'})
+ if(!response.ok)throw new GrowthDataCenterError(response.status,'report_source_unavailable')
+ return (await response.json()).source
 }
 
 export async function generateGrowthResearchReportForBrand(brand: GrowthLinkedBrand & {
