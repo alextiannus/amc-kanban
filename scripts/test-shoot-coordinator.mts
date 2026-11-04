@@ -12,13 +12,13 @@ console.log('PASS coverage, incompatible scene/motion/media/product, duplicates 
 const {readFileSync}=await import('node:fs')
 const ts=(await import('typescript')).default
 const {createRequire}=await import('node:module'),require=createRequire(import.meta.url)
-let allowed=true,mode='ok',calls=0
+let writable=true,failCache=false,allowed=true,mode='ok',calls=0
 const cache=new Map<string,any>()
 const versions=[{id:'R',version:2,output:{items:[...shots,{...base,id:'done',done:true,requirement:'SECRET_DONE'}]}}]
 const deps:any={
- '../ai-native/brainstorm':{authorizeBrainstorm:async()=>{if(!allowed)throw Error('denied')}},
+ '../ai-native/brainstorm':{authorizeBrainstorm:async(_:string,__:string,write:boolean)=>{if(!allowed||write&&!writable)throw Error('denied')}},
  '../ai-native/contract':{digest:JSON.stringify,nativeError:(msg:string)=>Error(msg)},
- '../prisma':{prisma:{brandMarketingSolution:{findUnique:async({where}:any)=>cache.get(where.id),upsert:async({create}:any)=>cache.set(create.id,create),findMany:async({where}:any)=>{assert.equal(where.brandId,'brand');assert.deepEqual(where.id.in,['R']);assert.equal(where.period,'2026-11');return versions}}}},
+ '../prisma':{prisma:{brandMarketingSolution:{findUnique:async({where}:any)=>cache.get(where.id),upsert:async({create}:any)=>{if(failCache)throw Error('store unavailable');cache.set(create.id,create)},findMany:async({where}:any)=>{assert.equal(where.brandId,'brand');assert.deepEqual(where.id.in,['R']);assert.equal(where.period,'2026-11');return versions}}}},
  './shoot-coordinator-contract':{validateCoverage},
  '../llmRouter':{callLLM:async(_:string,prompt:string)=>{calls++;assert(prompt.includes('name: amc-shoot-coordinator'));assert(prompt.includes('从揭盖前开始'));assert(!prompt.includes('SECRET_DONE'));if(mode==='unavailable')throw Error('offline');return {text:JSON.stringify({groups:mode==='ok'?[group]:[]})}}}
 }
@@ -26,11 +26,13 @@ const mod={exports:{} as any}
 new Function('require','module','exports',ts.transpileModule(readFileSync('src/lib/asset-library/shoot-coordinator.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)((id:string)=>deps[id]||require(id),mod,mod.exports)
 const run=()=>mod.exports.coordinateShoot('user','brand',{month:'2026-11',ids:['R'],language:'zh'})
 const [a,b]=await Promise.all([run(),run()]);assert.equal(a.skill,'amc-shoot-coordinator');assert.deepEqual(a,b);assert.equal(calls,1)
-versions[0].version++;const again=await run();assert.equal(calls,1);assert.equal(again.groups[0].cuts[0].version,3)
-versions[0].output.items[0]={...versions[0].output.items[0],requirement:'更改画面'}
+writable=false;versions[0].version++;const again=await run();assert.equal(calls,1);assert.equal(again.groups[0].cuts[0].version,3)
+versions[0].output.items[0]={...versions[0].output.items[0],requirement:'更改画面\n运镜：固定'}
+assert.equal((await run()).mode,'rules');assert.equal(calls,1);writable=true
 mode='invalid';assert.equal((await run()).mode,'rules')
 mode='unavailable';assert.equal((await run()).mode,'rules')
-allowed=false;await assert.rejects(run,/denied/);assert.equal(calls,3)
+failCache=true;mode='ok';assert.equal((await run()).mode,'coordinated');assert.equal(calls,4)
+allowed=false;await assert.rejects(run,/denied/);assert.equal(calls,4)
 console.log('PASS real Skill file dispatched only on generation; selected pending inputs, one concurrent model call, incomplete/provider failure fallbacks and authorization')
 const scheduled:Array<()=>Promise<void>>=[],runs:any[]=[]
 let saved:any={month:'2026-11',count:2,requestId:'R'}
