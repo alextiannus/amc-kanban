@@ -1,4 +1,4 @@
-/** All Kanban entry points use the native copy of the maintained MM video editor. No credentials or user text in URLs. */
+/** Native Kanban editor entry points. The sidebar video-production route opens Content separately. No credentials or user text in native editor URLs. */
 export type VideoEditorEntryParams = Record<string, string | string[] | undefined>
 const contextKeys = ['brandId', 'assetIds', 'videoDraft', 'videoCreativeId', 'videoRevision', 'videoMonth', 'videoOrigin', 'videoView'] as const
 export function unifiedVideoEditorUrl(params: VideoEditorEntryParams = {}): string {

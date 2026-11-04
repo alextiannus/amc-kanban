@@ -3,19 +3,37 @@ import {build} from 'esbuild'
 import {mkdtemp,rm} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import path from 'node:path'
+import {pathToFileURL} from 'node:url'
 const temp=await mkdtemp(path.join(tmpdir(),'video-entry-'))
+const previousContentUrl=process.env.AMC_CONTENT_SERVICE_URL
+process.env.AMC_CONTENT_SERVICE_URL='https://amc-content.immedi.ai/'
 try{
  for(const route of ['dashboard/video','admin/video-production','content-entry']){
   const file=path.join(temp,route.replaceAll('/','-')+'.mjs')
   await build({entryPoints:[route==='content-entry'?'src/lib/role-permissions/content-entry.tsx':`src/app/${route}/page.tsx`],bundle:true,platform:'node',format:'esm',outfile:file,jsx:'automatic',plugins:[{name:'entry-fixture',setup(b){
-   b.onResolve({filter:/^(next\/|@\/lib\/auth-v2|@\/components\/video-editor\/VideoEditor|@\/lib\/role-permissions\/store|react\/jsx-runtime|\.\.\/auth-v2\/index$|\.\/store$|\.\/token$)/},args=>({path:args.path,namespace:'fixture'}))
-   b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='next/navigation'?`export const redirect=url=>{throw {redirect:url}}`:args.path.includes('VideoEditor')?`export default function VideoEditor(){}`:args.path==='next/link'?`export default ()=>null`:args.path==='react/jsx-runtime'?`export const jsx=(tag,props)=>({tag,props});export const jsxs=jsx;`:args.path==='./token'?`export const labSecret=()=>{throw Error('Video entry must not depend on Content secret')};export const signAccessIdentity=()=>{throw Error('Video entry must not issue Content token')};`:args.path.includes('auth-v2')?`export const authenticateCurrentSession=async()=>globalThis.principal;export const canAccessBrandScope=async()=>globalThis.brandAllowed;`:`export const allows=async()=>globalThis.permissionAllowed;`,loader:'js'}))
+   b.onResolve({filter:/^(next\/|@\/lib\/auth-v2|@\/components\/video-editor\/VideoEditor|@\/lib\/role-permissions\/(store|token)|react\/jsx-runtime|\.\.\/auth-v2\/index$|\.\/store$|\.\/token$)/},args=>({path:args.path,namespace:'fixture'}))
+   b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:args.path==='next/navigation'?`export const redirect=url=>{throw {redirect:url}}`:args.path.includes('VideoEditor')?`export default function VideoEditor(){}`:args.path==='next/link'?`export default ()=>null`:args.path==='react/jsx-runtime'?`export const jsx=(tag,props)=>({tag,props});export const jsxs=jsx;`:args.path==='@/lib/role-permissions/token'?`export const labSecret=()=>globalThis.contentConfigured;export const signAccessIdentity=(principal,brandId)=>{globalThis.signedIdentity={principal,brandId};return 'signed-test-identity'};`:args.path==='./token'?`export const labSecret=()=>{throw Error('Video entry must not depend on Content secret')};export const signAccessIdentity=()=>{throw Error('Video entry must not issue Content token')};`:args.path.includes('auth-v2')?`export const authenticateCurrentSession=async()=>globalThis.principal;export const canAccessBrandScope=async()=>globalThis.brandAllowed;`:`export const allows=async()=>globalThis.permissionAllowed;`,loader:'js'}))
   }}]})
-  const mod=await import(file);const Page=mod.default
+  const mod=await import(pathToFileURL(file).href);const Page=mod.default
+  globalThis.contentConfigured=true
   globalThis.principal={userId:'tester',globalRoles:['ADMIN']};globalThis.brandAllowed=true;globalThis.permissionAllowed=true
   const invoke=async params=>{try{return route==='content-entry'?await mod.contentEntry(params.module||'video-making','/admin/unused',params.brandId,true,params):await Page({searchParams:Promise.resolve(params)})}catch(e){return e}}
   const result=await invoke({brandId:'brand-1',assetIds:'asset-a,asset-b',videoDraft:'prep-1',videoCreativeId:'copy-1',videoRevision:'rev-1',videoMonth:'2026-10',videoOrigin:'job-1',token:'secret',returnUrl:'https://untrusted.invalid',script:'untrusted'})
   if(route==='dashboard/video'){assert.equal(result.props.brandId,'brand-1');assert.equal(result.props.actorId,'tester');globalThis.principal=null;assert.equal((await invoke({brandId:'brand-1'})).redirect,'/');console.log('PASS native Kanban editor');continue}
+  if(route==='admin/video-production'){
+   const u=new URL(result.redirect)
+   assert.equal(u.origin,'https://amc-content.immedi.ai');assert.equal(u.pathname,'/admin/video-making')
+   assert.deepEqual([...u.searchParams],[['brandId','brand-1']]);assert.equal(u.hash,'#labToken=signed-test-identity')
+   assert.equal(globalThis.signedIdentity.principal.userId,'tester');assert.equal(globalThis.signedIdentity.brandId,'brand-1')
+   const noBrand=new URL((await invoke({})).redirect);assert.equal(noBrand.search,'');assert.equal(globalThis.signedIdentity.brandId,undefined)
+   const encoded=new URL((await invoke({brandId:[' brand & one ','ignored']})).redirect);assert.equal(encoded.searchParams.get('brandId'),'brand & one')
+   globalThis.brandAllowed=false;assert(!(await invoke({brandId:'brand-1'})).redirect);globalThis.brandAllowed=true
+   globalThis.permissionAllowed=false;assert(!(await invoke({brandId:'brand-1'})).redirect);globalThis.permissionAllowed=true
+   globalThis.contentConfigured=false;assert(!(await invoke({brandId:'brand-1'})).redirect);globalThis.contentConfigured=true
+   delete process.env.AMC_CONTENT_SERVICE_URL;assert(!(await invoke({brandId:'brand-1'})).redirect);process.env.AMC_CONTENT_SERVICE_URL='https://amc-content.immedi.ai/'
+   globalThis.principal=null;assert.equal((await invoke({})).redirect,'/')
+   console.log('PASS sidebar Content video-making redirect, signed identity, brand encoding and access/configuration checks');continue
+  }
   const u=new URL(result.redirect,'https://kanban.immedi.ai');assert.equal(u.pathname,'/dashboard/video');assert.equal(u.searchParams.get('videoEditor'),'1');assert.equal(u.searchParams.get('brandId'),'brand-1');assert(!u.searchParams.has('script'));assert(!u.searchParams.has('returnUrl'))
   for(const [key,value] of Object.entries({assetIds:'asset-a,asset-b',videoDraft:'prep-1',videoCreativeId:'copy-1',videoRevision:'rev-1',videoMonth:'2026-10',videoOrigin:'job-1'}))assert.equal(u.searchParams.get(key),value)
   assert(!u.searchParams.has('token'));assert.equal(u.hash,'')
@@ -23,4 +41,4 @@ try{
   if(!route.startsWith('dashboard')){globalThis.brandAllowed=false;assert(!(await invoke({brandId:'brand-1'})).redirect);globalThis.brandAllowed=true;globalThis.permissionAllowed=false;assert(!(await invoke({brandId:'brand-1'})).redirect);globalThis.principal=null;assert.equal((await invoke({})).redirect,'/')}
   console.log('PASS',route,'canonical editor, context allowlist and applicable access checks')
  }
-}finally{await rm(temp,{recursive:true,force:true})}
+}finally{if(previousContentUrl===undefined)delete process.env.AMC_CONTENT_SERVICE_URL;else process.env.AMC_CONTENT_SERVICE_URL=previousContentUrl;await rm(temp,{recursive:true,force:true})}
