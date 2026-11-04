@@ -978,6 +978,6 @@ AMCMM工作台设定：GET/POST `/api/brands/:id/ai/preference` 保留Core个人
 
 
 AMCMM 脚本适配当前入口（本地已实现，未部署）：既有 `kind=creative, adaptToBrand=true, creativeId, month` 兼容入口同样受 SKU 两阶段流程约束；选择来源本身不生成已适配脚本。服务端读取固定创意版本、真实来源与已确认 SKU 决策，采用时保留 AI artifact 和人工差异，首次保存键阻止重复落版，切换品牌隔离旧脚本。2026-09-30 的一阶段适配上线验收仅属于历史实现，不能替代本轮二阶段契约和发布验证。
-# Merchant report reading contract (2026-11-04, implementation target)
+# Merchant report reading contract (2026-11-04, deployed 8b9afc6d)
 
 See [latest-merchant-report.md](latest-merchant-report.md) for the unified authorized latest/pinned report, PDF, Markdown and frozen-source APIs. Viewing performs no model calls. Deployment status is recorded in that document.
