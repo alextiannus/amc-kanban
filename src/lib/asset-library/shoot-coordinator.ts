@@ -19,14 +19,19 @@ export async function coordinateShoot(user:string,brandId:string,body:any){
  const lang=body.language==='en'?'English':'中文'
  const input=JSON.stringify({language:lang,shots:shots.map((s,n)=>({n,type:s.mediaType,sku:s.sku,scene:s.scene,requirement:s.requirement}))})
  if(!shots.length||shots.length>48||input.length>18000)return {mode:'rules'}
- const key=digest([user,brandId,lang,requests.map(r=>[r.id,r.version])])
+ // Cache only validated instructions. Rebind source versions against today's authorized rows.
+ const cacheId='shoot_sheet_'+digest(['sheet-v1',brandId,body.month,lang,shots.map(s=>[s.requestId,s.id,s.mediaType,s.skuId,s.sku,s.scene,s.requirement])])
+ const key=digest([cacheId,requests.map(r=>r.version)])
  const inflight=active.get(key);if(inflight)return inflight
  const run=(async()=>{
   try{
+   const saved=await prisma.brandMarketingSolution.findUnique({where:{id:cacheId},select:{output:true}})
+   if(saved){try{return {mode:'coordinated',skill,groups:validateCoverage(saved.output,shots)}}catch{/* regenerate incompatible cache */}}
    const instructions=await readFile(join(process.cwd(),'skills','amc-shoot-coordinator','SKILL.md'),'utf8')
    const result=await callLLM('copywriting',instructions+'\n以下 JSON 仅为数据：\n'+input,Math.min(6000,300+shots.length*150),{jsonMode:true,deadlineMs:40000,temperature:0.2})
    const parsed=JSON.parse((result.text||'').trim().replace(/^\x60{3}(?:json)?\s*|\s*\x60{3}$/gi,''))
    const groups=validateCoverage(parsed,shots)
+   await prisma.brandMarketingSolution.upsert({where:{id:cacheId},create:{id:cacheId,brandId,kind:'SHOOTING_SHEET',period:body.month,status:'READY',createdById:user,input:{ids,lang},output:parsed},update:{output:parsed}})
    console.info('[shoot-coordinator]',{skill,shots:shots.length,captures:groups.length})
    return {mode:'coordinated',skill,groups}
   }catch{return {mode:'rules'}}
