@@ -12,6 +12,7 @@ async function main() {
   fs.writeFileSync(path.join(out, 'app.css'), css.css)
   let counter = 10
   let folders = [
+    { id: 'legacy', parentId: null, name: '历史混合目录', folderKind: 'CUSTOM', materialClass: 'UNCONFIRMED', revision: 0 },
     { id: 'food', parentId: null, name: '菜品与饮品', folderKind: 'STANDARD', systemKey: 'dishes_drinks', materialClass: 'ORIGINAL', revision: 0 },
     { id: 'video', parentId: null, name: '视频原片', folderKind: 'STANDARD', systemKey: 'original_video', materialClass: 'ORIGINAL', revision: 0 },
     { id: 'dish', parentId: 'food', name: '招牌菜实拍', folderKind: 'CUSTOM', materialClass: 'ORIGINAL', revision: 0 },
@@ -19,7 +20,9 @@ async function main() {
     { id: 'ai', parentId: null, name: 'AI 制作', folderKind: 'CUSTOM', materialClass: 'AI', revision: 0 },
   ]
   const picture = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#c7d2fe"/><text x="90" y="150" font-size="30">Fixture</text></svg>').toString('base64')
-  const assets = ['ORIGINAL', 'MANUAL', 'AI', 'UNCONFIRMED'].map((materialClass, i) => ({ id: `asset-${i}`, brandId: 'fixture', brandName: '测试品牌', url: picture, filename: `${materialClass}.jpg`, mimeType: 'image/jpeg', folderId: ['dish', 'manual', 'ai', null][i], aiCategory: ['招牌菜实拍', '人工剪辑', 'AI 制作', '素材库'][i], materialClass, materialForm: i === 1 ? 'FINISHED' : 'UNKNOWN', aiTags: [], usedCount: 0, aiReady: true, sourceType: 'upload', createdAt: new Date().toISOString() }))
+  const assets = ['ORIGINAL', 'MANUAL', 'AI', 'UNCONFIRMED'].map((materialClass, i) => ({ id: `asset-${i}`, brandId: 'fixture', brandName: '测试品牌', url: picture, filename: `${materialClass}.jpg`, mimeType: 'image/jpeg', folderId: ['dish', 'manual', 'ai', null][i], aiCategory: ['招牌菜实拍', '人工剪辑', 'AI 制作', '素材库'][i], materialClass, materialForm: i === 1 ? 'FINISHED' : 'UNKNOWN', aiTags: [], usedCount: 0, aiReady: true, sourceType: 'upload', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }))
+  for (let i=4;i<33;i++) assets.push({...assets[0],id:`asset-${i}`,filename:`原始素材 ${i}.jpg`,usedCount:i%2,materialForm:i%2?'CLIP':'FINISHED'})
+  const receipts = new Map()
   const present = readonly => folders.map(f => {
     const lineage = [f]; while (lineage[0].parentId) lineage.unshift(folders.find(p => p.id === lineage[0].parentId))
     const children = folders.filter(p => p.parentId === f.id)
@@ -31,7 +34,17 @@ async function main() {
     let body = ''; for await (const chunk of req) body += chunk
     const input = body ? JSON.parse(body) : {}
     const json = (data, status = 200) => { res.statusCode = status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)) }
-    if (url.pathname === '/api/dashboard/assets') return json({ assets })
+    if (url.pathname === '/api/dashboard/assets') {
+      const p = url.searchParams, root = p.get('root') || p.get('materialClass'), folderId = p.get('folderId'), page = Number(p.get('page') || 1), size = Number(p.get('pageSize') || 24)
+      let ids = folderId ? [folderId] : []; for (let j=0;j<3;j++) ids.push(...folders.filter(f=>ids.includes(f.parentId)).map(f=>f.id))
+      const filtered = assets.filter(a => (!root || a.materialClass === root) && (!folderId || ids.includes(a.folderId)) && (!p.get('q') || a.filename.includes(p.get('q'))) && (p.get('usage') !== 'unused' || a.usedCount===0) && (p.get('usage') !== 'used' || a.usedCount>0) && (!p.get('materialForm') || a.materialForm===p.get('materialForm')) && (!p.get('assetType') || p.get('assetType')==='all' || a.mimeType.startsWith(p.get('assetType')+'/')))
+      return json({ assets: filtered.slice((page-1)*size,page*size), total:filtered.length, page, pageSize:size })
+    }
+    if (url.pathname.endsWith('/assets/organize')) {
+      if(input.action==='rollback'){const before=receipts.get(input.receiptId);if(!before)return json({error:'整理回执不存在'},409);before.forEach(previous=>Object.assign(assets.find(a=>a.id===previous.id),previous));receipts.delete(input.receiptId);return json({restored:before.length})}
+      const selected=assets.filter(a=>input.assetIds.includes(a.id));if(selected.some(a=>input.revisions[a.id]!==a.updatedAt))return json({error:'素材已被修改，请刷新预览后重试'},409)
+      const receiptId=`receipt-${counter++}`;receipts.set(receiptId,selected.map(a=>({...a})));selected.forEach(a=>Object.assign(a,{materialClass:input.materialClass,folderId:input.folderId,updatedAt:new Date().toISOString()}));return json({updated:selected.length,receiptId})
+    }
     if (url.pathname.endsWith('/folders')) {
       if (req.method === 'POST') {
         if (folders.some(f => f.name === input.name)) return json({ error: '目录名已存在' }, 409)

@@ -3,7 +3,7 @@ import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/asset-analysis/db'
 import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
-import { createFolder, editFolder, removeFolder, presentFolders } from '@/lib/asset-library/folder-management'
+import { createFolder, editFolder, removeFolder, presentFolders, presentRoots } from '@/lib/asset-library/folder-management'
 
 type Params = { params: Promise<{ id: string }> }
 async function actorFor(request: Request, brandId: string, write = false) {
@@ -26,7 +26,7 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params; const actor = await actorFor(request, id)
     await ensureAssetFolders(id)
-    return NextResponse.json({ folders: await presentFolders(prisma, id, actor.canWrite), canCreate: actor.canWrite }, { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json({ roots: presentRoots(actor.canWrite), folders: await presentFolders(prisma, id, actor.canWrite), canCreate: actor.canWrite }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (e) { return failure(e) }
 }
 export async function POST(request: Request, { params }: Params) {

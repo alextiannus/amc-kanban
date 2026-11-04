@@ -55,7 +55,7 @@ async function main() {
       },
       update: async q => (await updateMany(q))[0], updateMany: async q => ({ count: (await updateMany(q)).length }),
       delete: async ({ where }) => { const values = []; await pg.query(`DELETE FROM "${table}" WHERE ${whereSQL(where, values)}`, values) },
-      groupBy: async () => (await pg.query('SELECT "folderId", "aiCategory", count(*)::int AS n FROM "MediaAsset" WHERE "brandId"=\'brand\' GROUP BY "folderId","aiCategory"')).rows.map(r => ({ ...r, _count: { _all: r.n } })),
+      groupBy: async () => (await pg.query('SELECT "folderId", "aiCategory", "materialClass", count(*)::int AS n FROM "MediaAsset" WHERE "brandId"=\'brand\' GROUP BY "folderId","aiCategory","materialClass"')).rows.map(r => ({ ...r, _count: { _all: r.n } })),
     }
   }
   db.$queryRaw = async (strings, ...values) => (await pg.query(strings.map((s, i) => s + (i < values.length ? `$${i + 1}` : '')).join(''), values)).rows
@@ -65,7 +65,7 @@ async function main() {
   const templates = compile('src/lib/asset-library/templates.ts', {})
   const analysisPolicy = compile('src/lib/asset-analysis/policy.ts', { '../asset-library/templates.ts': templates })
   const folders = compile('src/lib/asset-analysis/folders.ts', { '@/lib/asset-analysis/db': { prisma: db }, '../asset-library/templates.ts': templates })
-  const management = compile('src/lib/asset-library/folder-management.ts', { './material-policy.ts': policy, '../asset-analysis/folders': folders, '../asset-analysis/policy': analysisPolicy })
+  const management = compile('src/lib/asset-library/folder-management.ts', { './material-policy.ts': policy, '../asset-analysis/folders': folders, '../asset-analysis/policy': analysisPolicy, './roots': compile('src/lib/asset-library/roots.ts', {}) })
   const filing = compile('src/lib/asset-library/filing.ts', { './material-policy.ts': policy, '../asset-analysis/folders': folders })
   const actor = { id: 'writer', type: 'HUMAN' }
   await Promise.all([folders.ensureAssetFolders('brand'), folders.ensureAssetFolders('brand')])
@@ -128,6 +128,35 @@ async function main() {
   await management.removeFolder(db, 'brand', actor, { folderId: aiDefault.id, revision: 0 })
   await folders.ensureAssetFolders('brand')
   assert.equal(await db.brandFolder.findUnique({ where: { id: aiDefault.id } }), null)
+  // Fixed navigation roots are immutable and do not count as business depth.
+  assert.equal(management.presentRoots(true).length, 3)
+  assert(management.presentRoots(true).every(r => r.canCreateChild && !r.canRename && !r.canMove && !r.canDelete))
+  assert(management.presentRoots(false).every(r => !r.canCreateChild))
+  const originalTopic = await management.createFolder(db, 'brand', actor, { name: '新实拍主题', materialClass: 'ORIGINAL' })
+  assert.equal(originalTopic.materialClass, 'ORIGINAL')
+  const organize = compile('src/lib/asset-library/organize.ts', { '@prisma/client': { Prisma: { DbNull: null } }, '../asset-analysis/folders': folders, './filing': filing, './material-policy': policy })
+  const currentAsset = await db.mediaAsset.findUnique({ where: { id: original.id } })
+  await assert.rejects(filing.updateAssetFiling(db, 'brand', actor, [original.id], { materialClass: 'ORIGINAL', revisions: { [original.id]: 'old' }, confirmMaterialClassChange: true }), /预览/)
+  const receipt = {}
+  const [organized] = await filing.updateAssetFiling(db, 'brand', actor, [original.id], { folderId: originalTopic.id, materialClass: 'ORIGINAL', revisions: { [original.id]: currentAsset.updatedAt.toISOString() }, confirmMaterialClassChange: true }, receipt)
+  assert(receipt.id)
+  assert.equal(organized.url, original.url)
+  await organize.rollbackOrganization(db, 'brand', actor, receipt.id)
+  const restored = await db.mediaAsset.findUnique({ where: { id: original.id } })
+  assert.equal(restored.folderId, currentAsset.folderId); assert.equal(restored.materialClass, currentAsset.materialClass)
+  await assert.rejects(organize.rollbackOrganization(db, 'brand', actor, receipt.id), /修改/)
+  await assert.rejects(organize.rollbackOrganization(db, 'other', actor, receipt.id), /回执/)
+  await filing.createClassifiedAsset(db, 'brand', { materialClass: 'ORIGINAL', folderId: originalTopic.id }, { brandId: 'brand', url: 'https://fixture/counted-original', mimeType: 'image/jpeg' })
+  await db.mediaAsset.create({ data: { brandId: 'brand', url: 'https://fixture/legacy-pending', folderId: originalTopic.id, aiCategory: originalTopic.name, materialClass: 'UNCONFIRMED', materialForm: 'UNKNOWN' } })
+  const countsForTopic = (await management.presentFolders(db, 'brand', true)).find(f => f.id === originalTopic.id)
+  assert.equal(countsForTopic.assetCount, 2, 'Deletion considers all assets regardless of class')
+  assert.equal(countsForTopic.subtreeAssetCount, 1, 'Navigation counts only the root class')
+  assert.equal(countsForTopic.pendingAssetCount, 1, 'Pending history is counted separately')
+  const listing = compile('src/lib/asset-library/list-query.ts', { './material-policy': policy })
+  const q = listing.assetListQuery(new URLSearchParams('root=ORIGINAL&page=2&pageSize=24&usage=unused&assetType=video&since=7&materialForm=CLIP'), ['brand'], [])
+  assert.equal(q.page, 2); assert.equal(q.where.materialClass, 'ORIGINAL'); assert.equal(q.where.usedCount, 0); assert.equal(q.where.mimeType.startsWith, 'video/'); assert.equal(q.where.materialForm, 'CLIP')
+  assert.throws(() => listing.assetListQuery(new URLSearchParams('page=-1'), ['brand'], []))
+  assert.throws(() => listing.assetListQuery(new URLSearchParams('folderId=foreign'), ['brand'], []), /目录/)
   // Execute the actual route with current permission grants, including revoked keys.
   let write = false, read = true, session = { user: actor }, validKey = true
   const route = compile('src/app/api/brands/[id]/folders/route.ts', {

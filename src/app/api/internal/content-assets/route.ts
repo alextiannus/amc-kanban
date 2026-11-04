@@ -7,6 +7,8 @@ import { getHuaweiObsConfig, getHuaweiObsPresignedPutUrl, makeBrandAssetKey, mak
 import { assertUploadMedia, inspectMediaUrl, MediaValidationError, mediaValidationResponse, mediaValidationStatus, type MediaTechnicalMetadata } from '@/lib/mediaValidation'
 import { prisma } from '@/lib/prisma'
 import { prepareAssetThumbnails, publicThumbnail, thumbnailWorkerAction } from '@/lib/assetThumbnails'
+import { presentFolders, presentRoots } from '@/lib/asset-library/folder-management'
+import { subtreeIds } from '@/lib/asset-library/material-policy'
 
 export const maxDuration = 30
 
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
     catch (error: any) { if ([404,422,503].includes(error?.status)) return NextResponse.json({error:error.message},{status:error.status}); throw error }
   }
   if (body.action === 'list') return listAssets(brandId, body, new URL(request.url).origin)
+  if (body.action === 'listFolders') return NextResponse.json({ roots: presentRoots(false), folders: await presentFolders(prisma, brandId, false) })
   if (body.action !== 'listShootBatches' && !await canSessionWriteBrandProject(brandId, actorId, actorType)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (body.action === 'createShootBatch') return createShootBatch(brandId, actorId, body)
   if (body.action === 'updateShootBatch') return updateShootBatch(brandId, body)
@@ -89,6 +92,12 @@ async function listAssets(brandId: string, body: any, requestOrigin: string) {
   const filters: Prisma.MediaAssetWhereInput[] = [mediaKind === 'all'
     ? { OR: [{ mimeType: { startsWith: 'image/' } }, { mimeType: { startsWith: 'video/' } }] }
     : { mimeType: { startsWith: `${mediaKind}/` } }]
+  if (body.folderId) {
+    const folders = await prisma.brandFolder.findMany({ where: { brandId } })
+    if (!folders.some((f: { id: string }) => f.id === body.folderId)) return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+    const ids = subtreeIds(body.folderId, folders)
+    filters.push({ OR: [{ folderId: { in: ids } }, { folderId: null, aiCategory: { in: folders.filter((f: { id: string }) => ids.includes(f.id)).map((f: { name: string }) => f.name) } }] })
+  }
   if (query) filters.push({ OR: [
     { filename: { contains: query, mode: 'insensitive' } },
     { originalFilename: { contains: query, mode: 'insensitive' } },

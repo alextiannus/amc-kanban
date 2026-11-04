@@ -4,11 +4,13 @@
 
 Kanban adds optional encrypted protocol `baidu_qianfan_seedance` and S2.0, S2.0-Fast, S2.0-Mini and S2.5 catalog entries. Content executes V2 Fire submissions, queries, OBS mirroring and segmentation. Saving does not change defaults or exceptions. First release supports 720p MP4, ordinary image/video references and native audio output; portrait certification, asset://, audio references, explicit frame roles, editing, extension, search and callbacks remain unavailable. S2.0 family: 4-15 seconds, 9 images, 3 videos totaling at most 15 seconds. S2.5: 4-30 seconds, 30 images, 10 videos totaling at most 30 seconds. MM retains its three-video product limit and reserved continuation image slot. V2 retains the system prompt limit rather than V1's 2500-character provider restriction. Unknown submissions never retry/fallback; existing jobs keep pinned policies. Usage is retained in media metadata; estimates are unknown unless configured. Deploy Content before Kanban and verify real account access and generated media separately. See docs/unified-model-management.md.
 
-## 素材目录管理升级（2026-11-04，本地实现与专项验证完成，待部署及真实品牌验收）
+## 素材目录与用途说明（2026-11-04，本地实现，未部署）
 
-现有管理文件夹窗口升级为可搜索目录树和内嵌表单。标准一级可改显示名称，固定标识不变，不可删除或移动；主理人及原品牌写权限成员可管理授权目录。自建目录最多三级，仅删除空目录。标准区存原始素材，自定义区存人工加工及 AI 制作；素材类别独立于上传渠道。默认自动匹配只使用 ORIGINAL，人工选择可使用 MANUAL、AI，历史不明为 UNCONFIRMED。片段/成片独立标记。改名移动保持素材 ID 及引用。 标准归类按固定标识判断，同类别重复保存保留现有目录；已完成上传的分类失败重试复用原回执，不重复上传。归档与历史迁移须锁定素材行后核对版本，防止覆盖并发写入。完整约定见 [目录管理与类别](asset-folder-management.md)。
+素材库统一原始素材、AI制作成果、人工加工三个固定一级导航，服务端提供类别映射与权限；原目录及引用保留，未知历史素材从独立待整理工作台预览确认。取消标准/自定义并列与重复类别筛选，默认原始素材、全部使用状态，筛选集中管理且列表服务端分页。每个一级入口的圆圈感叹号支持悬停、聚焦和手机点击说明用途。完整交互、接口和验收见 [素材库目录规范](asset-folder-management.md)。
+
 
 商家报告读取统一规则（2026-11-04，三端已部署，线上 SHA 已核对）：Growth 为已保存商家调研报告的统一来源。Insight、报告预览和下载按已绑定商家读取当前语言下最新成功版本，无对应语言时展示已有语言；经营月报独立分类。模板过旧不阻止查看。打开页面或轮询不生成、不重采；更新由用户主动触发。正文、PDF 和来源固定同一版本，有新版本时提示切换。Growth 不可用时保留缓存并标明暂未确认是否最新。MM 通过同一授权接口读取，旧 researchReport 副本仅用于故障回退。
+
 
 ## 发布日历备注标题与文字助理同步（2026-11-03；本地已实现并验证，待生产发布）
 

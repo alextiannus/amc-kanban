@@ -44,7 +44,9 @@ import {
   Sparkles
 } from 'lucide-react'
 import { type ManagedFolder } from './AssetFolderManager'
-import { subtreeIds } from '@/lib/asset-library/material-policy'
+import { MATERIAL_ROOTS, type MaterialRoot } from '@/lib/asset-library/roots'
+import MaterialDirectoryPicker from './MaterialDirectoryPicker'
+import MaterialCleanup from './MaterialCleanup'
 import AssetAnalysisTools, { AssetInfoButton } from './AssetAnalysisTools'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
@@ -229,9 +231,22 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const { t, language } = useI18n()
   const [infoAssetId, setInfoAssetId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState('all')
-  const [viewFilter, setViewFilter] = useState<'all' | 'recent' | 'unused' | 'high_perf' | 'ai_pending' | 'images' | 'videos' | 'scheduled'>('unused')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [usage, setUsage] = useState('all'), [mediaKind, setMediaKind] = useState('all'), [since, setSince] = useState('all'), [formFilter, setFormFilter] = useState('')
+  const [page, setPage] = useState(1), [total, setTotal] = useState(0), [pageIds, setPageIds] = useState<string[]>([])
+  const [roots, setRoots] = useState<readonly MaterialRoot[]>(MATERIAL_ROOTS)
+  const [rootId, setRootId] = useState('ORIGINAL')
+  const requestVersion = useRef(0)
+  const selectedRef = useRef<string[]>([])
+  const resetFilters = () => { setUsage('all'); setMediaKind('all'); setSince('all'); setFormFilter(''); setPage(1) }
+  const chooseDirectory = (root: string, folder: string) => {
+    if (root !== rootId) { setSelected([]); setPendingFiling(null); setAssets([]); setPageIds([]); setSearch(''); resetFilters(); setSelectedCreativeId(''); setSelectedCollectionId('') }
+    setRootId(root); setSelectedFolder(folder); setUploadClass(root); setPage(1)
+    setTargetFolder(folderRecords.find(f => f.id === folder)?.name || '素材库')
+  }
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<string[]>([])
+  selectedRef.current = selected
   const [isBatchSelectMode, setIsBatchSelectMode] = useState(false)
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
 
@@ -258,7 +273,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   useEffect(() => { if (uploadDialogOpen) uploadDialog.current?.showModal(); return () => uploadDialog.current?.close() }, [uploadDialogOpen])
   const [uploadClass, setUploadClass] = useState('ORIGINAL')
   const [uploadForm, setUploadForm] = useState('UNKNOWN')
-  const [materialFilter, setMaterialFilter] = useState('all')
   const [canManageFolders, setCanManageFolders] = useState(false)
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [calendarCreatives, setCalendarCreatives] = useState<CalendarCreativeOption[]>([])
@@ -269,7 +283,15 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '已使用'])
   const [folderRecords, setFolderRecords] = useState<ManagedFolder[]>([])
-  const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('folderId') || new URLSearchParams(window.location.search).get('folder') || 'all' : 'all')
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('folderId') || new URLSearchParams(window.location.search).get('folder') || '' : '')
+  const listingContext = useRef('')
+  listingContext.current = JSON.stringify([brandId, rootId, selectedFolder, page, search, usage, mediaKind, since, formFilter])
+  const previousBrand = useRef(brandId)
+  useEffect(() => {
+    if (previousBrand.current === brandId) return
+    previousBrand.current = brandId; requestVersion.current++
+    setAssets([]); setPageIds([]); setTotal(0); setSelected([]); setSelectedFolder(''); setRootId('ORIGINAL'); setUploadClass('ORIGINAL'); setSearch(''); setUsage('all'); setMediaKind('all'); setSince('all'); setFormFilter(''); setPage(1); setSelectedCreativeId(''); setSelectedCollectionId(''); setFolderRecords([])
+  }, [brandId])
   const [collapsedShootBatches, setCollapsedShootBatches] = useState<Set<string>>(() => new Set())
 
   const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
@@ -422,8 +444,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         setFolderRecords(data.folders || [])
         setCanManageFolders(data.canCreate === true)
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        setFolders(['素材库', '已使用', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
-        setSelectedFolder(current => ['all', '素材库', '已使用'].includes(current) ? current : data.folders.find((f: ManagedFolder) => f.id === current || f.name === current || (current === 'AI视频' && f.systemKey === 'processed_ai'))?.id || 'all')
+        setFolders(['素材库', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
+        if (data.roots?.length) setRoots(data.roots)
+        setSelectedFolder(current => { const f = data.folders.find((f: ManagedFolder) => f.id === current || f.name === current || (current === 'AI视频' && f.systemKey === 'processed_ai')); if (f && f.materialClass !== 'UNCONFIRMED') { setRootId(f.materialClass); setUploadClass(f.materialClass); return f.id } return '' })
       }
     } catch (err) {
       console.error('Failed to load folders:', err)
@@ -572,22 +595,31 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const loadAssets = useCallback(async (background = false) => {
+    const context = JSON.stringify([brandId, rootId, selectedFolder, page, search, usage, mediaKind, since, formFilter])
+    if (listingContext.current !== context) return
     const requestedBrand = brandId
-    const current = () => assetBrand.current === requestedBrand
+    const version = ++requestVersion.current
+    const current = () => assetBrand.current === requestedBrand && requestVersion.current === version && listingContext.current === context
     Promise.resolve().then(() => {
-      if (current() && !background) setLoading(true)
+      if (current() && !background) { setLoading(true); setPageIds([]) }
     })
     setError(null)
     try {
       const query = new URLSearchParams()
       if (brandId) query.set('brandId', brandId)
+      query.set('page', String(page)); query.set('pageSize', '24'); query.set('root', rootId)
+      if (selectedFolder) query.set('folderId', selectedFolder)
+      query.set('q', search); query.set('usage', usage); query.set('assetType', mediaKind); query.set('since', since)
+      if (formFilter) query.set('materialForm', formFilter)
       const url = query.toString() ? `/api/dashboard/assets?${query.toString()}` : '/api/dashboard/assets'
       const res = await fetch(url)
       if (!res.ok) throw new Error('load failed')
       const data = await res.json()
       if (current()) {
         const loadedAssets = data.assets || []
-        setAssets(loadedAssets)
+        setPageIds(loadedAssets.map((a: DashboardAsset) => a.id)); setTotal(data.total ?? loadedAssets.length)
+        if (data.total !== undefined && page > Math.max(1, Math.ceil(data.total / 24))) setPage(Math.max(1, Math.ceil(data.total / 24)))
+        setAssets(prior => [...prior.filter(a => selectedRef.current.includes(a.id) && !loadedAssets.some((next: DashboardAsset) => next.id === a.id)), ...loadedAssets])
         // Auto-select first asset for Single AI Insight
         if (loadedAssets.length > 0) {
           setActiveAssetId(prev => {
@@ -604,15 +636,15 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     } finally {
       if (current() && !background) setLoading(false)
     }
-  }, [brandId, loadFolders])
+  }, [brandId, loadFolders, rootId, selectedFolder, page, search, usage, mediaKind, since, formFilter])
 
   useEffect(() => {
     let cancelled = false
     const timer = setTimeout(() => {
       void loadAssets(cancelled)
-    }, 0)
+    }, 200)
     return () => {
-      cancelled = true
+      cancelled = true; requestVersion.current++
       clearTimeout(timer)
     }
   }, [loadAssets])
@@ -1253,64 +1285,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     }
   }
 
-  // Filter logic
-  const filtered = assets.filter(a => {
-    if (materialFilter !== 'all' && (a.materialClass || 'UNCONFIRMED') !== materialFilter) return false
-    // Folder filter
-    const folderMatch = selectedFolder === 'all'
-      ? true
-      : selectedFolder === '素材库'
-        ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw')
-        : subtreeIds(selectedFolder, folderRecords).includes(a.folderId || folderRecords.find(f => f.name === a.aiCategory)?.id || '')
-    if (!folderMatch) return false
-    // 1. Sidebar views filter
-    if (viewFilter === 'recent') {
-      const sevenDaysAgo = new Date()
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-      if (new Date(a.createdAt) < sevenDaysAgo) return false
-    } else if (viewFilter === 'unused') {
-      if (a.usedCount > 0) return false
-    } else if (viewFilter === 'high_perf') {
-      if (a.usedCount <= 2) return false
-    } else if (viewFilter === 'ai_pending') {
-      if (a.aiReady) return false
-    } else if (viewFilter === 'images') {
-      if (!isImageAsset(a)) return false
-    } else if (viewFilter === 'videos') {
-      if (!isVideoAsset(a)) return false
-    } else if (viewFilter === 'scheduled') {
-      if (!a.aiTags.includes('草稿排期') && !a.aiTags.includes('排期发布')) return false
-    }
-
-    // 2. Category tag filter
-    const catMatch = activeCategory === 'all' || toCategory(a) === activeCategory
-
-    // 3. Search query
-    const query = search.trim().toLowerCase()
-    const label = [a.aiCaption, a.filename, a.originalFilename, a.shootBatchName, a.videoProjectId, a.captureDate, a.uploadedBy].filter(Boolean).join(' ').toLowerCase()
-    const brandNameLower = a.brandName.toLowerCase()
-    const tags = a.aiTags.some(t => t.toLowerCase().includes(query))
-    const searchMatch = !query || label.includes(query) || brandNameLower.includes(query) || tags
-    return catMatch && searchMatch
-  })
-
-  const displayedAssets = folderRecords.find(f => f.id === selectedFolder)?.systemKey === 'original_video'
-    ? [...filtered].sort((left, right) => String(right.shootBatchName || '').localeCompare(String(left.shootBatchName || '')) || new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
-    : filtered
-
-  // Dynamic badge counts
-  const countAll = assets.length
-  const countRecent = assets.filter(a => {
-    const sevenDaysAgo = new Date()
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
-    return new Date(a.createdAt) >= sevenDaysAgo
-  }).length
-  const countUnused = assets.filter(a => a.usedCount === 0).length
-  const countHighPerf = assets.filter(a => a.usedCount > 2).length
-  const countAiPending = assets.filter(a => !a.aiReady).length
-  const countImages = assets.filter(isImageAsset).length
-  const countVideos = assets.filter(isVideoAsset).length
-  const countScheduled = assets.filter(a => a.aiTags.includes('草稿排期') || a.aiTags.includes('排期发布')).length
+  // Page membership comes from the server; cached selections may belong to earlier pages.
+  const filtered = assets.filter(a => pageIds.includes(a.id))
+  const displayedAssets = filtered
 
   const activeAsset = assets.find(a => a.id === activeAssetId) || filtered[0] || assets[0]
 
@@ -1678,92 +1655,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
         {uploadDialogOpen && <dialog ref={uploadDialog} onCancel={e => { e.preventDefault(); setUploadDialogOpen(false) }} aria-label={t('上传素材', 'Upload materials')} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white">
           <h2 className="mb-4 font-semibold">{t('上传素材', 'Upload materials')}</h2><div className="space-y-4">
-          <label className="flex items-center gap-1 text-xs">{t('上传类别', 'Upload class')}<select aria-label={t('上传素材类别', 'Upload material class')} value={uploadClass} onChange={e => { setUploadClass(e.target.value); setTargetFolder('素材库') }} className="rounded-lg border bg-transparent p-1.5"><option value="ORIGINAL">{t('原始素材', 'Original')}</option><option value="MANUAL">{t('人工加工', 'Human edited')}</option><option value="AI">{t('AI 制作', 'AI created')}</option><option value="UNCONFIRMED">{t('待确认', 'Unconfirmed')}</option></select></label>
-          <select aria-label={t('上传片段或成片', 'Upload clip or finished')} value={uploadForm} onChange={e => setUploadForm(e.target.value)} className="rounded-lg border bg-transparent p-1.5 text-xs"><option value="UNKNOWN">{t('未标记形态', 'Unspecified form')}</option><option value="CLIP">{t('片段', 'Clip')}</option><option value="FINISHED">{t('成片', 'Finished')}</option></select>
-          <p className="text-sm text-slate-500">{t('请确认类别，再选择文件。素材会归档到对应类别目录。', 'Confirm the class, then choose files. Materials are filed in the matching category.')}</p><div className="flex gap-2"><button type="button" onClick={() => { fileInputRef.current?.click(); setUploadDialogOpen(false) }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('选择文件', 'Choose files')}</button><button type="button" onClick={() => setUploadDialogOpen(false)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div></div>
-        </dialog>}
-        {pendingFiling && <dialog ref={filingDialog} onCancel={e => { e.preventDefault(); setPendingFiling(null) }} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white" aria-label={t('确认素材类别调整', 'Confirm material class change')}>
-          <h2 className="font-semibold">{t('确认素材类别调整', 'Confirm material class change')}</h2><p className="my-3 text-sm">{t(`将 ${pendingFiling.ids.length} 份素材移到目标目录，并调整为${({ ORIGINAL: '原始素材', MANUAL: '人工加工', AI: 'AI 制作', UNCONFIRMED: '待确认' } as Record<string,string>)[pendingFiling.targetClass]}。`, `Move ${pendingFiling.ids.length} assets and change their material class to ${pendingFiling.targetClass}.`)}</p>
-          {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}<div className="flex gap-2"><button type="button" disabled={filingBusy} onClick={() => void saveFiling(pendingFiling.ids, pendingFiling.body, true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('确认调整', 'Confirm change')}</button><button type="button" disabled={filingBusy} onClick={() => setPendingFiling(null)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div>
-        </dialog>}
-        {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
-        <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 flex flex-wrap items-center gap-2">
-
-          {/* Back button — shown when embedded in amc-mm */}
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition-all shrink-0 -ml-1"
-              title="返回"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          )}
-
-          {/* hidden file input */}
-          <input
-            type="file"
-            ref={fileInputRef}
-            multiple
-            accept="image/*,video/*"
-            className="hidden"
-            onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
-          />
-
-          {/* 资产视图 dropdown */}
-          <div className="relative shrink-0">
-            <select
-              value={viewFilter}
-              onChange={e => setViewFilter(e.target.value as typeof viewFilter)}
-              className="appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none cursor-pointer hover:border-indigo-400 transition-all"
-            >
-              <option value="unused">未使用 ({countUnused})</option>
-              <option value="all">全部 ({countAll})</option>
-              <option value="recent">最近 ({countRecent})</option>
-              <option value="high_perf">高表现 ({countHighPerf})</option>
-              <option value="scheduled">草稿排期 ({countScheduled})</option>
-              <option value="images">图片 ({countImages})</option>
-              <option value="videos">视频 ({countVideos})</option>
-            </select>
-            <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
-          </div>
-
-          {/* 文件夹 dropdown */}
-          <div className="relative shrink-0">
-            <select
-              aria-label={t('素材目录', 'Material folder')}
-              value={selectedFolder}
-              onChange={e => {
-                const val = e.target.value
-                setSelectedFolder(val)
-                const record = folderRecords.find(f => f.id === val)
-                setTargetFolder(record?.name || '素材库')
-                if (record) setUploadClass(record.materialClass)
-              }}
-              className="appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none cursor-pointer hover:border-indigo-400 transition-all"
-            >
-              <option value="all">📁 全部文件夹</option>
-              <optgroup label="素材视图">
-                <option value="素材库">📁 素材库</option>
-                <option value="已使用">📁 已使用</option>
-              </optgroup>
-              <optgroup label="标准目录">
-                {folderRecords.filter(folder => folder.section === 'STANDARD').map(folder => (
-                  <option key={folder.id} value={folder.id}>📁 {folder.path}</option>
-                ))}
-              </optgroup>
-              {folderRecords.some(folder => folder.section !== 'STANDARD') && (
-                <optgroup label="自定义目录">
-                  {folderRecords.filter(folder => folder.section !== 'STANDARD').map(folder => (
-                    <option key={folder.id} value={folder.id}>📁 {folder.path}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 rotate-90" />
-          </div>
-
-          <div className="relative min-w-[220px] shrink-0">
+          <p className="text-sm">上传到：{roots.find(r => r.id === rootId)?.name}{selectedFolder ? ` / ${folderRecords.find(f => f.id === selectedFolder)?.path || ''}` : ''}</p>
+          <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm">高级选项：关联创意和脚本素材集</summary><div className="mt-3 space-y-3">          <div className="relative min-w-[220px] shrink-0">
             <select
               value={selectedCreativeId}
               onChange={e => setSelectedCreativeId(e.target.value)}
@@ -1779,47 +1672,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             </select>
             <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-amber-500 rotate-90" />
           </div>
-
-          <select aria-label={t('素材类别筛选', 'Filter material class')} value={materialFilter} onChange={e => setMaterialFilter(e.target.value)} className="rounded-lg border bg-transparent px-2 py-1.5 text-xs"><option value="all">{t('全部类别', 'All classes')}</option><option value="ORIGINAL">{t('原始素材', 'Original')}</option><option value="MANUAL">{t('人工加工', 'Human edited')}</option><option value="AI">{t('AI 制作', 'AI created')}</option><option value="UNCONFIRMED">{t('待确认', 'Unconfirmed')}</option></select>
-          {/* Search */}
-          <div className="flex-1 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all min-w-0">
-            <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="搜索..."
-              className="flex-1 bg-transparent border-none outline-none text-xs text-slate-700 dark:text-slate-200 placeholder-slate-400 min-w-0"
-            />
-            {search && (
-              <button onClick={() => setSearch('')}>
-                <X className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" />
-              </button>
-            )}
-          </div>
-
-          {/* Upload button */}
-          <button
-            onClick={() => setUploadDialogOpen(true)}
-            aria-label={t('上传素材', 'Upload materials')}
-            disabled={uploading}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white rounded-lg bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all disabled:opacity-60 shrink-0"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
-          </button>
-
-          <AssetAnalysisTools brandId={brandId} selected={selected} infoAsset={assets.find(a => a.id === infoAssetId) || null} closeInfo={() => setInfoAssetId(null)} onChanged={loadAssets} folderCreateToken={folderCreateToken} onFoldersChanged={handleFoldersChanged} />
-          {/* New folder button */}
-          <button
-            onClick={handleCreateFolder}
-            disabled={!canManageFolders}
-            title="新建文件夹"
-            className="flex items-center p-1.5 text-xs font-bold text-slate-500 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 transition-all shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
 
         <div className="shrink-0 border-b border-slate-200/60 bg-indigo-50/70 px-3 py-2 dark:border-slate-800 dark:bg-indigo-950/20">
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -1877,6 +1729,80 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             )}
           </div>
         </div>
+
+</div></details>
+          <select aria-label={t('上传片段或成片', 'Upload clip or finished')} value={uploadForm} onChange={e => setUploadForm(e.target.value)} className="rounded-lg border bg-transparent p-1.5 text-xs"><option value="UNKNOWN">{t('未标记形态', 'Unspecified form')}</option><option value="CLIP">{t('片段', 'Clip')}</option><option value="FINISHED">{t('成片', 'Finished')}</option></select>
+          <p className="text-sm text-slate-500">{t('请确认类别，再选择文件。素材会归档到对应类别目录。', 'Confirm the class, then choose files. Materials are filed in the matching category.')}</p><div className="flex gap-2"><button type="button" onClick={() => { fileInputRef.current?.click(); setUploadDialogOpen(false) }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('选择文件', 'Choose files')}</button><button type="button" onClick={() => setUploadDialogOpen(false)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div></div>
+        </dialog>}
+        {pendingFiling && <dialog ref={filingDialog} onCancel={e => { e.preventDefault(); setPendingFiling(null) }} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white" aria-label={t('确认素材类别调整', 'Confirm material class change')}>
+          <h2 className="font-semibold">{t('确认素材类别调整', 'Confirm material class change')}</h2><p className="my-3 text-sm">{t(`将 ${pendingFiling.ids.length} 份素材移到目标目录，并调整为${({ ORIGINAL: '原始素材', MANUAL: '人工加工', AI: 'AI 制作', UNCONFIRMED: '待确认' } as Record<string,string>)[pendingFiling.targetClass]}。`, `Move ${pendingFiling.ids.length} assets and change their material class to ${pendingFiling.targetClass}.`)}</p>
+          {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}<div className="flex gap-2"><button type="button" disabled={filingBusy} onClick={() => void saveFiling(pendingFiling.ids, pendingFiling.body, true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('确认调整', 'Confirm change')}</button><button type="button" disabled={filingBusy} onClick={() => setPendingFiling(null)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div>
+        </dialog>}
+        {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
+        <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-30 flex flex-wrap items-center gap-2">
+
+          {/* Back button — shown when embedded in amc-mm */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100 active:scale-95 transition-all shrink-0 -ml-1"
+              title="返回"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* hidden file input */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            multiple
+            accept="image/*,video/*"
+            className="hidden"
+            onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
+          />
+
+          <MaterialDirectoryPicker roots={roots} folders={folderRecords} rootId={rootId} folderId={selectedFolder} onChange={chooseDirectory} />
+          <button type="button" aria-expanded={filterOpen} onClick={() => setFilterOpen(v => !v)} className="rounded-lg border px-3 py-2 text-xs">筛选{[usage !== 'all', mediaKind !== 'all', since !== 'all', !!formFilter].filter(Boolean).length || ''}</button>
+          <MaterialCleanup key={brandId} brandId={brandId} canWrite={canManageFolders} folders={folderRecords} onChanged={() => loadAssets(true)} />
+          {/* Search */}
+          <div className="flex-1 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all min-w-[140px]">
+            <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              placeholder="搜索..."
+              className="flex-1 bg-transparent border-none outline-none text-xs text-slate-700 dark:text-slate-200 placeholder-slate-400 min-w-0"
+            />
+            {search && (
+              <button onClick={() => setSearch('')}>
+                <X className="w-3.5 h-3.5 text-slate-400 hover:text-slate-600" />
+              </button>
+            )}
+          </div>
+
+          {/* Upload button */}
+          <button
+            onClick={() => setUploadDialogOpen(true)}
+            aria-label={t('上传素材', 'Upload materials')}
+            disabled={uploading}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white rounded-lg bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all disabled:opacity-60 shrink-0"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
+          </button>
+
+          <AssetAnalysisTools brandId={brandId} selected={selected} infoAsset={assets.find(a => a.id === infoAssetId) || null} closeInfo={() => setInfoAssetId(null)} onChanged={loadAssets} folderCreateToken={folderCreateToken} onFoldersChanged={handleFoldersChanged} />
+        </div>
+
+        {filterOpen && <div className="flex flex-wrap items-center gap-3 border-b p-3 text-xs">
+          <label>媒体类型 <select value={mediaKind} onChange={e => { setMediaKind(e.target.value); setPage(1) }} className="rounded border bg-transparent p-2"><option value="all">全部</option><option value="image">图片</option><option value="video">视频</option></select></label>
+          <label>使用情况 <select value={usage} onChange={e => { setUsage(e.target.value); setPage(1) }} className="rounded border bg-transparent p-2"><option value="all">全部</option><option value="unused">未使用</option><option value="used">已有使用记录</option></select></label>
+          <label>上传时间 <select value={since} onChange={e => { setSince(e.target.value); setPage(1) }} className="rounded border bg-transparent p-2"><option value="all">全部</option><option value="7">最近7天</option><option value="30">最近30天</option></select></label>
+          <label>素材形态 <select value={formFilter} onChange={e => { setFormFilter(e.target.value); setPage(1) }} className="rounded border bg-transparent p-2"><option value="">全部</option><option value="CLIP">片段</option><option value="FINISHED">成片</option><option value="UNKNOWN">未标记</option></select></label>
+        </div>}
+        <div className="flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs text-slate-500"><span>共 {total} 项</span>{usage !== 'all' && <span className="rounded bg-indigo-50 px-2 py-1">{usage === 'used' ? '已有使用记录' : '未使用'}</span>}{mediaKind !== 'all' && <span className="rounded bg-indigo-50 px-2 py-1">{mediaKind === 'image' ? '图片' : '视频'}</span>}{since !== 'all' && <span>最近{since}天</span>}{formFilter && <span>{formFilter === 'CLIP' ? '片段' : formFilter === 'FINISHED' ? '成片' : '未标记'}</span>}{(usage !== 'all' || mediaKind !== 'all' || since !== 'all' || formFilter || search) && <button onClick={() => { resetFilters(); setSearch('') }} className="text-indigo-600">清除筛选</button>}<div className="ml-auto flex items-center gap-2"><button type="button" aria-label="上一页" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)} className="rounded border px-2 py-1 disabled:opacity-40">上一页</button><span>{page} / {Math.max(1, Math.ceil(total / 24))}</span><button type="button" aria-label="下一页" disabled={page * 24 >= total || loading} onClick={() => setPage(p => p + 1)} className="rounded border px-2 py-1 disabled:opacity-40">下一页</button></div></div>
 
         {/* Scrollable grid wrapper */}
         <div 
@@ -2022,11 +1948,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                         )}
                       </div>
 
-                      {/* Brand Label */}
-                      <div className="absolute bottom-2 left-2 bg-slate-900/75 text-white text-[9px] font-black px-1.5 py-0.5 rounded backdrop-blur-sm truncate max-w-[85%]">
-                        {asset.brandName}
-                      </div>
-
                       {/* Bottom-Right: Preview button */}
                       <button
                         onClick={(e) => {
@@ -2057,7 +1978,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 <div className="max-w-xs mx-auto">
                   <ImageIcon className="w-12 h-12 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
                   <p className="text-sm font-bold text-slate-500 dark:text-slate-400">没有找到匹配的素材</p>
-                  <p className="text-xs text-slate-400 mt-1">试试清除搜索词、切换左侧视图或文件夹分类</p>
+                  <p className="text-xs text-slate-400 mt-1">试试清除筛选、搜索词或切换目录</p>
                 </div>
               )}
             </div>

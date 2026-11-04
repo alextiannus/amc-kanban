@@ -1,42 +1,36 @@
-# 素材目录管理与类别
+# 素材库：三个固定目录与整理流程
 
-状态：2026-11-04 本地已实现并通过目录数据库、界面与选材隔离验证；未推送、未部署，真实品牌验收待执行。
+状态：2026-11-04 本地实现；专项验证见下，未部署、未执行生产历史整理。
 
 ## 当前产品约定
 
-保留素材库「管理文件夹」入口，窗口展示可搜索、可展开的目录树。标准目录存原始素材；自定义目录存加工素材，首次提供人工剪辑、AI 制作。主理人及原有品牌写权限成员可管理授权品牌，查看权限不授予写操作。标准一级可改显示名，systemKey 固定，不可移动、删除。自建目录可新建、改名、移动、删除空目录；最多三级，品牌内名称唯一。新建、改名、移动、删除确认均使用内嵌表单。旁边 + 打开同一新建表单。手机端使用底部抽屉。
+素材库只有三个固定一级入口：原始素材（ORIGINAL）、AI制作成果（AI）、人工加工（MANUAL）。一级入口由服务端提供，为映射类别的导航，不创建物理文件夹、不占三级业务目录额度，不允许改名、移动或删除。原有目录 ID、父子关系、素材 ID、文件、脚本素材集及草稿引用保留。原标准主题目录显示在原始素材下，允许改显示名，systemKey 固定。历史未知或混合目录通过待整理工作台处理，不按目录名猜测类别。
 
-素材类别独立于上传渠道 sourceType、目录名称和片段/成片形态。materialClass 为 ORIGINAL、MANUAL、AI、UNCONFIRMED；materialForm 为 UNKNOWN、CLIP、FINISHED。标准目录及其子目录限定 ORIGINAL；自定义顶层限定 MANUAL 或 AI，子目录继承。上传展示类别；已知 AI 生成入口强制 AI，并在服务端保存 materialProvenance.origin=AI_GENERATION，不用存储渠道代替来源。用户提交字段不授予该可信标记；人工误标可确认纠正，已知生成产物不可降为原始或人工加工。跨类别移动需确认，不得通过改名改变类别。人工归档与分类不被 AI 分析覆盖。
+每个一级入口旁放中性的圆圈感叹号：桌面悬停、键盘聚焦、手机点击显示用途，操作图标不选择目录。导航与管理窗口共用文案：原始素材“存放实拍原图、原视频，供视频创作默认选材使用。”；AI制作成果“存放 AI 生成的图片、视频片段和完整成片。”；人工加工“存放外部人工剪辑、修图、设计后上传的图片、海报或视频。”。Escape、点外部关闭。
 
-自动匹配只查询 ORIGINAL，并沿用质量、权利、相关度及品牌范围；不足提示补充，不自动放宽。人工选择可使用加工素材，已选历史引用不因分类变化失效。改名/移动保持素材 ID、文件及素材集引用。历史无法证明来源的素材默认为 UNCONFIRMED，不凭上传渠道、文件名或现有目录推断为原始。
+主页面无常驻侧栏，保留一个目录选择入口和搜索、筛选、上传、管理文件夹。默认原始素材且使用情况为全部；图片/视频、使用情况、上传时间、片段/成片收进筛选，展示已选条件及清除。移除高表现（使用次数不等于效果）、已使用伪目录、重复类别下拉。切换一级入口清除搜索、子目录、临时筛选与已选项，换品牌清除上下文。创意及脚本素材集关联收进可折叠的上传高级选项，素材集只保存引用。
 
-## API
+目录继承一级类别；业务目录最多三级，品牌内名称唯一，同类移动禁止环及跨品牌，标准主题目录不可移动删除，自建目录仅空目录可删除。表单失败保留输入；服务端权限、revision 与事务品牌锁继续生效。固定入口下允许新建业务目录。
 
-- GET /api/brands/:id/folders：平铺树记录 parentId、materialClass、revision、assetCount、subtreeAssetCount、depth、path 和 canCreateChild/canRename/canMove/canDelete；顶层 canCreate。
-- POST 同路径：name、parentId（可空）、materialClass（新客户端顶层显式选择 MANUAL/AI；旧客户端省略时默认 MANUAL）；子目录继承类别。标准一级由模板生成。
-- PATCH 同路径：folderId、revision、name 和/或 parentId。移动要求同类别，禁止环与超过三级；标准一级只改名。revision 必填，过期返回 409。
-- DELETE 同路径：folderId、revision 查询参数；只删除无素材且无子目录的自建目录。旧 name 定位保留兼容，但仍需 revision，且遵循相同权限与删除规则。
-- 素材列表增加 materialClass、folderId、includeDescendants；保留 folder 和 sourceGroup 的原含义。人工选择器使用 materialClass；默认自动匹配由服务端限定 ORIGINAL。
-- 上传及素材 PATCH 接收 materialClass、materialForm、folderId；显式 folderId 优先，其次 folder（包括选择根目录），最后兼容 aiCategory，不能让旧创意分类覆盖已选择的目录。跨类别调整要求 confirmMaterialClassChange=true，分类/归档留审计。已知 AI 来源不可改为 ORIGINAL/MANUAL。
+素材类别独立于 sourceType、目录名称和片段/成片形态。materialClass 为 ORIGINAL、MANUAL、AI、UNCONFIRMED，materialForm 为 UNKNOWN、CLIP、FINISHED。可信 AI 生成来源强制 AI，客户端不能伪造服务端来源证据。分析不可覆盖人工分类和归档。自动选材只使用已确认原始且满足既有质量、相关度、权利与可用性条件的素材，不足提示补充，不自动扩大范围。人工选材可明确切换三个入口。
 
-写操作在事务内锁定品牌目录空间、校验当前版本和品牌写权限，冲突不覆盖输入。目录改名同步兼容 aiCategory，但 folderId 为真相。 标准归类按固定标识判断，同类别重复保存保留现有目录；已完成上传的分类失败重试复用原回执，不重复上传。归档与历史迁移须锁定素材行后核对版本，防止覆盖并发写入。读取不把旧素材自动归为原始。
+待归类、需要检查、不建议使用是整理/可用状态，保留内部 systemKey 兼容，不作为内容主题目录。待整理不是第四个一级目录。工作台支持查看历史素材及可靠来源证据、选择部分素材、预览目标目录与分类变化，明确确认后提交。未知证据保留待整理，混合目录按实际选中素材拆分；不得批量把旧自定义目录当 AI。应用须校验预览版本并保留前值审计，回滚使用历史整理脚本回执流程，不搬动或删除媒体对象。
 
-## 数据整理与发布
+## 接口
 
-先部署新增默认字段的兼容 migration，再部署 Kanban API，随后 MM、Content 和页面。历史整理脚本默认只读预览，显式 apply 前核对清单；保存每条前值，CAS 更新防止覆盖并发编辑，支持按报告回滚。不删除、移动 OBS 对象。先在测试品牌验证，未完成真实品牌试用不得称生产验收。
+GET /api/brands/:id/folders 保留 folders/canCreate 并新增 roots（固定 id、materialClass、name、description、canCreateChild、禁止改名移动删除）；实体目录提供类别匹配数量及独立 pendingAssetCount（删除权限按全部素材计算）。实体目录仍使用 folderId。
+POST folders：name、parentId、materialClass；三个固定入口下新建通过 materialClass 指定类别，子目录继承。PATCH/DELETE 继续要求 revision。旧客户端未传类别仍默认 MANUAL。
+GET /api/dashboard/assets 支持 root/materialClass、folderId 及后代、q、assetType、usage、since、materialForm、page/pageSize，返回精确 total/page/pageSize；默认兼容旧无分页请求。分页固定稳定排序，筛选总数不使用本地缓存估算。已选素材在当前一级入口跨页保留，动作从选中缓存解析完整对象。
+素材列表的旧 sourceGroup、folder 参数及已有链接保持兼容。MM 与 Content 使用相同 ORIGINAL/AI/MANUAL 映射。素材 PATCH 的 revisions 可指定每条预览版本，任一冲突整体拒绝；confirmMaterialClassChange=true 明确确认类别变化。归档修改留 before/after 审计。
 
-验收包含权限、树深度/环/重名、改名后初始化、空目录删除、并发冲突、失败保留表单、手机端、AI 不覆盖人工归档和默认选材排除加工/待确认。固定人工标注样本比较正确数及耗时，合成测试不能代替真实运营效果。
+## 验证与发布
 
-## 本地验证与发布交接
+本轮覆盖：固定入口、权限、目录树与三级、批量整理版本冲突、AI 保护、查询分页与数量、跨页选择、切换清理、工具提示桌面/键盘/手机、失败保留输入、引用 ID 保持。先测试品牌试用，再进行真实样本正确数与耗时比较；合成夹具不等于实际选材效果。
 
-- Kanban/MM/Content 类型检查通过；新增目录服务在嵌入式 PostgreSQL 执行真实新增 migration 与事务，覆盖权限、品牌隔离、改名后初始化、环/深度、非空删除、版本冲突、分类确认、AI 保护和引用 ID 保持。
-- 真实组件 Chromium：管理窗口在 1440px 桌面、390px 手机通过新建、改名、移动、空目录删除、搜索、重复名及冲突保留输入，主页面 + 使用同一表单。MM 既有选材回归通过 320/390/768/1440px。
-- Content 固定四类标注夹具：旧规则候选 4 份中仅 1 份为原始；新规则仅选中该 1 份原始。CPU 耗时只作本地合成指标，不等同真实运营用时或语义相关度。实际样本和主理人操作计时待测试品牌验收。
-- REST 与 MCP board_upload_asset/board_update_asset 共用归档服务；board_list_assets 支持 folderId、materialClass。Designer、VideoDirector、AI 视频、成片保存均显式标记 AI；上传渠道不替代类别。新生成媒体生产存云端，开发本地媒体通过授权动态路由读取。
-- 未配置独立本地 PostgreSQL DATABASE_URL，完整 VideoProductionJob 入库集成套件未执行；本次嵌入式事务覆盖不能替代该套件或生产存储联调。
+沿用 additive migration 20261104090000_material_folder_management，不新增破坏性迁移。先数据库兼容列，再 Kanban API/页面，随后 MM/Content。历史脚本 npm run materials:classify -- --help，默认只读预览，明确 apply 前核对 digest，回执保留前值与 CAS 版本，rollback 再次验证版本和目录。工作台 POST /api/brands/:id/assets/organize 使用 action=apply、assetIds、revisions、materialClass、folderId 和明确确认，返回 receiptId；action=rollback+receiptId 从服务端审计回执恢复前值，要求当前操作者、品牌写权限和逐条当前版本一致，目录删除或后续改动则拒绝。不能盲目重复提交。生产迁移、真实品牌历史整理及部署不在本地验证范围内。
 
-发布顺序：先执行 `20261104090000_material_folder_management` migration，再部署 Kanban（API/页面/MCP），随后部署 Content 和 MM；逐端核对提交和类别响应，不能只看健康检查。发布前保留数据库备份。
+## 本轮本地验证结果
 
-历史整理使用 `npm run materials:classify -- --help` 查看预览/apply/rollback 参数。先按单一测试品牌预览并核对 digest；只有明确生成入口或人工 labels 作为类别证据，其余待确认。apply 的前值和结果写入审计及独占创建的 receipt；CAS 检查阻止覆盖并发编辑。回滚使用同一 receipt 并再次校验当前版本；原目录已删除时停止，不误恢复位置。数据库事务成功而本地 receipt 写入失败时，从 MATERIAL_CLASSIFICATION_APPLY 审计恢复回执后操作，不重复盲目 apply。
+Kanban、MM、Content 类型检查通过；目录真实 SQL 事务套件与分析保护套件通过，覆盖固定入口权限、业务目录、逐条版本冲突、整理撤销、品牌隔离、AI 来源保护及分类数量。Kanban 1440/390px 浏览器检查通过：用途悬停/聚焦/点击、筛选清理、24 条分页和跨页选择、管理表单失败保留、整理预览/应用/撤销。MM 320/390/768/1440px 既有上传/重试/预览/选择回归通过。Content 新目录导航与手机说明专项通过，自动选材隔离测试通过。
 
-应用回滚保留新增列、目录与审计，不执行破坏性 down migration；分类数据若需恢复，单独按已核对 receipt 回滚。生产迁移、真实品牌历史整理、物理手机和真实 OBS 验收均未在本次执行。
+Content 原有完整浏览器套件在双弹窗的预览选择按钮处报 element is inert；用改动前 HEAD 的 material-picker.js 在同一夹具复现相同超时，因此该完整套件不计为通过，也不把本轮专项通过当作完整预览流程验收。生产部署、真实品牌历史归类和运营选材准确率/耗时试用未执行。

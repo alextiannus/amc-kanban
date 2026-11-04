@@ -26,7 +26,9 @@ export async function GET(request: Request, { params }: Params) {
   const query = (url.searchParams.get('q') || '').trim()
   const queryTokens = [...new Set(query.split(/[\s,，。.!！?？:：;；/\\|_-]+/).map(item => item.trim()).filter(item => item.length > 1))].slice(0, 8)
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 100))
+  const unavailable = await prisma.brandFolder.findMany({ where: { brandId, systemKey: 'not_recommended' } })
   const filters: any[] = [{ materialClass: 'ORIGINAL' }, { sourceType: { notIn: ['generated_video', 'ai_video', 'basic_video_reference'] } }, { OR: [{ rightsStatus: null }, { rightsStatus: { not: 'restricted' } }] }]
+  if (unavailable.length) filters.push({ NOT: { OR: [{ folderId: { in: unavailable.map(f => f.id) } }, { folderId: null, aiCategory: { in: unavailable.map(f => f.name) } }] } })
   if (queryTokens.length) filters.push({ OR: queryTokens.flatMap(token => [
     { searchText: { contains: token, mode: 'insensitive' as const } },
     { aiCaption: { contains: token, mode: 'insensitive' as const } },

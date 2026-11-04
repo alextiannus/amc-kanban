@@ -63,7 +63,7 @@ export function validateFolderMove(folder: FolderNode, parentId: string | null, 
   const parent = parentId ? folders.find(f => f.id === parentId) : null
   if (parentId && !parent) throw Object.assign(new Error('父目录不存在'), { status: 404 })
   if (parent && parent.materialClass !== folder.materialClass) throw Object.assign(new Error('目录只能移到同类别目录下'), { status: 409 })
-  if (!parent && !['MANUAL', 'AI'].includes(folder.materialClass)) throw Object.assign(new Error('原始素材子目录须位于标准目录下'), { status: 409 })
+  if (!parent && !['ORIGINAL', 'MANUAL', 'AI'].includes(folder.materialClass)) throw Object.assign(new Error('请先整理目录类别'), { status: 409 })
   const baseDepth = parent ? folderPath(parent, folders).length : 0
   const oldDepth = folderPath(folder, folders).length
   const height = Math.max(...folders.filter(f => descendants.includes(f.id)).map(f => folderPath(f, folders).length - oldDepth + 1))

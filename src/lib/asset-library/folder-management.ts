@@ -2,6 +2,11 @@ import type { PrismaClient, Prisma } from '@prisma/client'
 import { folderPath, subtreeIds, validateFolderMove, materialClass } from './material-policy.ts'
 import { lockFolderSpace } from '../asset-analysis/folders'
 import { folderName } from '../asset-analysis/policy'
+import { MATERIAL_ROOTS } from './roots'
+
+export function presentRoots(canWrite: boolean) {
+  return MATERIAL_ROOTS.map(root => ({ ...root, canCreateChild: canWrite, canRename: false, canMove: false, canDelete: false }))
+}
 
 type Actor = { id: string; type: string }
 type FolderInput = { name?: unknown; folderId?: unknown; parentId?: unknown; revision?: unknown; materialClass?: unknown }
@@ -17,14 +22,15 @@ async function audit(tx: Prisma.TransactionClient, brandId: string, actor: Actor
 }
 export async function presentFolders(db: PrismaClient, brandId: string, canWrite: boolean) {
   const folders = await db.brandFolder.findMany({ where: { brandId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
-  const counts = await db.mediaAsset.groupBy({ by: ['folderId', 'aiCategory'], where: { brandId }, _count: { _all: true } })
-  const count = (id: string, name: string) => counts.filter(c => c.folderId === id || (!c.folderId && c.aiCategory === name)).reduce((s, c) => s + c._count._all, 0)
+  const counts = await db.mediaAsset.groupBy({ by: ['folderId', 'aiCategory', 'materialClass'], where: { brandId }, _count: { _all: true } })
+  const count = (id: string, name: string, category?: string) => counts.filter(c => (!category || c.materialClass === category) && (c.folderId === id || (!c.folderId && c.aiCategory === name))).reduce((s, c) => s + c._count._all, 0)
   return folders.map(folder => {
     const path = folderPath(folder, folders); const ids = subtreeIds(folder.id, folders)
     const assetCount = count(folder.id, folder.name)
     const hasChildren = folders.some(f => f.parentId === folder.id)
     return { ...folder, depth: path.length, path: path.map(f => f.name).join(' / '), section: path[0].folderKind === 'STANDARD' ? 'STANDARD' : 'CUSTOM', assetCount,
-      subtreeAssetCount: folders.filter(f => ids.includes(f.id)).reduce((s, f) => s + count(f.id, f.name), 0),
+      subtreeAssetCount: folders.filter(f => ids.includes(f.id)).reduce((s, f) => s + count(f.id, f.name, folder.materialClass), 0),
+      pendingAssetCount: folders.filter(f => ids.includes(f.id)).reduce((s, f) => s + count(f.id, f.name, 'UNCONFIRMED'), 0),
       canCreateChild: canWrite && path.length < 3 && folder.materialClass !== 'UNCONFIRMED', canRename: canWrite,
       canMove: canWrite && folder.folderKind !== 'STANDARD' && folder.materialClass !== 'UNCONFIRMED', canDelete: canWrite && folder.folderKind !== 'STANDARD' && !assetCount && !hasChildren }
   })
@@ -37,7 +43,7 @@ export async function createFolder(db: PrismaClient, brandId: string, actor: Act
     if (body.parentId && !parent) throw fail('父目录不存在', 404)
     if (parent && folderPath(parent, folders).length >= 3) throw fail('目录最多三级')
     const category = parent ? materialClass(parent.materialClass) : materialClass(body.materialClass ?? 'MANUAL')
-    if (!parent && !['MANUAL', 'AI'].includes(category)) throw fail('请选择人工加工或 AI 制作', 400)
+    if (!parent && !['ORIGINAL', 'MANUAL', 'AI'].includes(category)) throw fail('请选择三个素材目录之一', 400)
     if (category === 'UNCONFIRMED') throw fail('请先整理父目录类别')
     const folder = await tx.brandFolder.create({ data: { brandId, parentId: parent?.id, name, materialClass: category, folderKind: 'CUSTOM' } })
     if (parent) await tx.brandFolder.update({ where: { id: parent.id }, data: { revision: { increment: 1 } } })

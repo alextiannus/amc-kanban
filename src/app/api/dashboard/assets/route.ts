@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { publicThumbnail } from '@/lib/assetThumbnails'
+import { assetListQuery } from '@/lib/asset-library/list-query'
 
 async function getAccessibleBrandIds(userId: string, userType: string, role: string) {
   if (userType === 'AI_AGENT') {
@@ -103,21 +104,27 @@ export async function GET(request: Request) {
 
   if (scopedBrandIds.length === 0) return NextResponse.json({ assets: [] })
 
-  const [brands, assets] = await Promise.all([
+  const folders = await prisma.brandFolder.findMany({ where: { brandId: { in: scopedBrandIds } } })
+  let query: ReturnType<typeof assetListQuery>
+  try { query = assetListQuery(url.searchParams, scopedBrandIds, folders) }
+  catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: (e as { status?: number }).status || 400 }) }
+  const [brands, assets, total] = await prisma.$transaction([
     prisma.brand.findMany({
       where: { id: { in: scopedBrandIds } },
       select: { id: true, name: true },
     }),
     prisma.mediaAsset.findMany({
-      where: { brandId: { in: scopedBrandIds } },
+      where: query.where,
       include: {
         brand: { select: { id: true, name: true } },
         analysisItems: { orderBy: { createdAt: 'desc' }, take: 1, select: { status: true, error: true, batchId: true } },
       },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: query.paginated ? query.pageSize : 200,
+      ...(query.paginated ? { skip: (query.page - 1) * query.pageSize } : {}),
     }),
-  ])
+    prisma.mediaAsset.count({ where: query.where }),
+  ], { isolationLevel: 'RepeatableRead' })
 
   const brandMap = new Map(brands.map((brand: any) => [brand.id, brand.name]))
   const payload = assets.map((asset: any) => ({
@@ -152,5 +159,5 @@ export async function GET(request: Request) {
     createdAt: asset.createdAt.toISOString(), updatedAt: asset.updatedAt.toISOString(),
   }))
 
-  return NextResponse.json({ assets: payload })
+  return NextResponse.json({ assets: payload, total, page: query.page, pageSize: query.pageSize }, { headers: { 'Cache-Control': 'private, no-store' } })
 }

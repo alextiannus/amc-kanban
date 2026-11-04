@@ -43,7 +43,7 @@ export async function createClassifiedAsset(db: Db, brandId: string, body: Recor
     return tx.mediaAsset.create({ data: { ...data, ...(generated ? { technicalMetadata: { ...priorMetadata, materialProvenance: { origin: 'AI_GENERATION' } } } : {}), brandId, materialClass: category, materialForm: materialForm(body.materialForm ?? 'UNKNOWN'), folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } })
   }, { timeout: 30_000 })
 }
-export async function updateAssetFiling(db: Db, brandId: string, actor: { id: string; type: string }, assetIds: string[], body: Record<string, unknown>) {
+export async function updateAssetFiling(db: Db, brandId: string, actor: { id: string; type: string }, assetIds: string[], body: Record<string, unknown>, receipt?: { id?: string }) {
   if (!Array.isArray(assetIds) || !assetIds.length || assetIds.length > 500 || assetIds.some(id => typeof id !== 'string') || new Set(assetIds).size !== assetIds.length) throw fail('请选择有效素材', 400)
   return db.$transaction(async tx => {
     await ensureFoldersInTransaction(tx, brandId)
@@ -54,6 +54,9 @@ export async function updateAssetFiling(db: Db, brandId: string, actor: { id: st
     const wantsFiling = requested || body.materialClass !== undefined
     const updates = []
     for (const asset of assets) {
+      if (body.revisions !== undefined) {
+        if (!body.revisions || typeof body.revisions !== 'object' || Array.isArray(body.revisions) || (body.revisions as Record<string, unknown>)[asset.id] !== asset.updatedAt.toISOString()) throw fail('素材已被修改，请刷新预览后重试')
+      }
       if (body.revision !== undefined && body.revision !== asset.updatedAt.toISOString()) throw fail('素材已被修改，请刷新后重试')
       let category = body.materialClass !== undefined ? materialClass(body.materialClass) : asset.materialClass
       let folder = null
@@ -83,10 +86,10 @@ export async function updateAssetFiling(db: Db, brandId: string, actor: { id: st
       } })
       updates.push(updated)
     }
-    if (wantsFiling || body.materialForm !== undefined) await tx.auditLog.create({ data: { actorId: actor.id, actorType: actor.type, action: 'ASSET_FILING_UPDATED', resourceType: 'MediaAsset', resourceId: brandId, metadata: {
-      brandId, before: assets.map(a => ({ id: a.id, folderId: a.folderId, aiCategory: a.aiCategory, materialClass: a.materialClass, materialForm: a.materialForm })),
-      after: updates.map(a => ({ id: a.id, folderId: a.folderId, aiCategory: a.aiCategory, materialClass: a.materialClass, materialForm: a.materialForm })),
-    } } })
+    if (wantsFiling || body.materialForm !== undefined) { const log = await tx.auditLog.create({ data: { actorId: actor.id, actorType: actor.type, action: 'ASSET_FILING_UPDATED', resourceType: 'MediaAsset', resourceId: brandId, metadata: {
+      brandId, before: assets.map(a => ({ id: a.id, folderId: a.folderId, aiCategory: a.aiCategory, materialClass: a.materialClass, materialForm: a.materialForm, manualOverrides: a.manualOverrides, updatedAt: a.updatedAt.toISOString() })),
+      after: updates.map(a => ({ id: a.id, folderId: a.folderId, aiCategory: a.aiCategory, materialClass: a.materialClass, materialForm: a.materialForm, updatedAt: a.updatedAt.toISOString() })),
+    } } }); if (receipt) receipt.id = log.id }
     return updates
   }, { timeout: 30_000 })
 }

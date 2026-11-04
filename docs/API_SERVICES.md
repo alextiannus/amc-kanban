@@ -4,7 +4,7 @@
 
 No new AMC public endpoint. Existing /api/admin/models manages encrypted baidu_qianfan_seedance connections and immutable catalog entries; draft/validation/publication and internal delegated-media interfaces remain authoritative. Content calls POST /v2/mm/fire/generations/tasks (top-level id) and GET /v2/mm/fire/generations/tasks/{id} (succeeded/content.video_url). Read-only credential preflight creates no generation tasks. See [unified models](unified-model-management.md).
 
-素材目录树及分类接口（2026-11-04，本地实现，待部署）：[目录管理与类别](asset-folder-management.md)。目录以 ID 为主，标准一级允许改名，写权限由服务端校验，PATCH/DELETE 使用 revision；新增素材类别过滤与跨类别调整确认。
+素材目录树及分类接口（2026-11-04，本地实现，待部署）：[目录管理与类别](asset-folder-management.md)。目录以 ID 为主，固定一级导航不可修改，标准主题目录允许改名，写权限由服务端校验，PATCH/DELETE 使用 revision；新增素材类别过滤与跨类别调整确认。
 
 ## 发布日历日期备注
 
