@@ -1,5 +1,9 @@
 # AMC-MM 品牌主端产品需求文档 (PRD)
 
+## Baidu Qianfan Seedance V2 (implemented locally; not deployed or provider-accepted)
+
+Kanban adds optional encrypted protocol `baidu_qianfan_seedance` and S2.0, S2.0-Fast, S2.0-Mini and S2.5 catalog entries. Content executes V2 Fire submissions, queries, OBS mirroring and segmentation. Saving does not change defaults or exceptions. First release supports 720p MP4, ordinary image/video references and native audio output; portrait certification, asset://, audio references, explicit frame roles, editing, extension, search and callbacks remain unavailable. S2.0 family: 4-15 seconds, 9 images, 3 videos totaling at most 15 seconds. S2.5: 4-30 seconds, 30 images, 10 videos totaling at most 30 seconds. MM retains its three-video product limit and reserved continuation image slot. V2 retains the system prompt limit rather than V1's 2500-character provider restriction. Unknown submissions never retry/fallback; existing jobs keep pinned policies. Usage is retained in media metadata; estimates are unknown unless configured. Deploy Content before Kanban and verify real account access and generated media separately. See docs/unified-model-management.md.
+
 ## 发布日历备注标题与文字助理同步（2026-11-03；本地已实现并验证，待生产发布）
 
 每个品牌每天一份共享备注，标题可选、单行最多 40 个 Unicode 字符，正文必填且最多 2,000 个 Unicode 字符。月视图在日期下方显示浅色标题条，使用独立的 8px 字号和 10px 行高，避免被页面统一小字体规则放大；日期格统一高 104px，标题最多显示五行，超出省略；未填标题时使用正文首个非空行作显示标题，不改写存储。点击日期在下方查看完整标题、正文及更新时间，保留发布标记、权限、并发版本及未保存保护。清空同时移除标题和正文，保留版本记录。

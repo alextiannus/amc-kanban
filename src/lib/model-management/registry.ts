@@ -40,8 +40,9 @@ export function validateConnection(input:{name:string;protocol:string;baseUrl:st
   if(input.protocol==='kopix')parseKopixCredential(input.secret || '')
   if(!input.name?.trim()||!input.secret?.trim())throw new Error('Connection name and credential are required')
   input={...input,baseUrl:input.baseUrl?.trim()}
-  if(!['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance'].includes(input.protocol))throw new Error('Unsupported model protocol')
+  if(!['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance','baidu_qianfan_seedance'].includes(input.protocol))throw new Error('Unsupported model protocol')
   const url=new URL(input.baseUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Invalid provider URL')
+  if(input.protocol==='baidu_qianfan_seedance'&&(url.protocol!=='https:'||url.pathname!=='/'||url.search||url.hash))throw new Error('Qianfan V2 requires an HTTPS origin without a path, query or fragment')
   // The deployed CN Gateway uses signed timestamp/nonce/HMAC requests over HTTP.
   // Keep this compatibility specific to its executor, never to a vendor name.
   if(process.env.NODE_ENV==='production'&&url.protocol!=='https:'&&input.protocol!=='cn_gateway')throw new Error('Production model connections require HTTPS')

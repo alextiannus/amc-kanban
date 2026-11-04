@@ -1,10 +1,11 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { modelCapabilityLabels } from './modelManagementView'
-import { RUNY_SEEDANCE_25_PRESET } from './modelPresets'
+import { RUNY_SEEDANCE_25_PRESET, QIANFAN_SEEDANCE_V2_PRESETS } from './modelPresets'
+import type { ModelDefinition } from '../../lib/model-management/types'
 
 const field='w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2.5 text-sm'
-const protocols=['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance']
+const protocols=['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance','baidu_qianfan_seedance']
 export default function ModelVersionEditor({model,connections,busy,error,onClose,onSave}:{model:any;connections:any[];busy:boolean;error:string;onClose:()=>void;onSave:(model:any)=>Promise<boolean>}){
   const d=model?.definition,oldConnection=connections.find(c=>c.id===model?.connectionId)
   const [mode,setMode]=useState(connections.length?'reuse':'new')
@@ -18,13 +19,17 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
   const [localError,setLocalError]=useState('')
   const dialog=useRef<HTMLDialogElement>(null)
   const selectedProtocol=mode==='reuse'?connections.find(c=>c.id===connectionId)?.protocol:connection.protocol
-  function applyRunyPreset(){
-    const preset=RUNY_SEEDANCE_25_PRESET
+  function applyPreset(preset:ModelDefinition){
     setName(preset.name);setModelName(preset.modelName);setEnabled(true);setCapabilities([...preset.capabilities]);setInputs(preset.inputCapabilities.join(', '));setTimeoutValue(preset.timeoutMs);setRetries(preset.maxRetries)
     setParameters(JSON.stringify({videoConstraints:preset.videoConstraints},null,2));setLocalError('')
   }
+  function applyRunyPreset(){applyPreset(RUNY_SEEDANCE_25_PRESET)}
   function chooseProtocol(protocol:string){
     setConnection({...connection,protocol,...(protocol==='stability'?{baseUrl:'https://api.stability.ai',name:'Stability AI'}:{})})
+    if(protocol==='baidu_qianfan_seedance'){
+      setConnection({...connection,protocol,baseUrl:'https://qianfan.baidubce.com',name:'百度千帆 Seedance V2'})
+      applyPreset(QIANFAN_SEEDANCE_V2_PRESETS[0])
+    }
     if(protocol==='stability'){
       setName('Stable Audio 3');setModelName('stable-audio-3');setCapabilities(['music']);setInputs('audio_output');setTimeoutValue(600000);setRetries(0);setParameters('{}')
     }
@@ -44,6 +49,11 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
       <p className="text-xs text-slate-500">保存为新版本，只更新草稿。历史任务和当前生效配置保持原版本。</p>
       {(localError||error)&&<p role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{localError||error}</p>}
       <fieldset disabled={busy} className="space-y-4">
+        {selectedProtocol==='baidu_qianfan_seedance'&&<div className="space-y-2">
+          <p className="text-sm font-bold">百度千帆 Seedance V2</p>
+          <div className="flex flex-wrap gap-2">{QIANFAN_SEEDANCE_V2_PRESETS.map(preset=><button key={preset.modelName} type="button" onClick={()=>applyPreset(preset)} className="rounded-xl border border-blue-300 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">{preset.modelName} 预设</button>)}</div>
+          <p className="text-xs text-slate-500">四个型号可复用同一连接。首期支持 720p 和普通图片、视频参考；真人参考需认证，暂不开放。保存仅更新目录及草稿，验证并发布后才生效。未配置费率时费用未知。</p>
+        </div>}
         {selectedProtocol==='cn_gateway'&&!model&&<div className="space-y-2"><button type="button" onClick={applyRunyPreset} className="rounded-xl border border-blue-300 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">使用 Runy Seedance 2.5 预设</button><p className="text-xs text-slate-500">复用当前网关连接。保存后可在模型目录选择，发布后生效；费率需按 Runy 实际价格填写。</p></div>}
         <label className="block text-sm">供应商连接<select aria-label="连接操作" className={field} value={mode} onChange={e=>setMode(e.target.value)}>{connections.length>0&&<option value="reuse">复用已有连接</option>}<option value="new">新增连接</option>{oldConnection&&<option value="edit">修改当前连接 / 更换密钥</option>}</select></label>
         {mode==='reuse'?<label className="block text-sm">选择连接<select className={field} value={connectionId} onChange={e=>setConnectionId(e.target.value)}>{connections.map(c=><option value={c.id} key={c.id}>{c.name} · {c.protocol} · {c.id.slice(0,8)}</option>)}</select><span className="text-xs text-slate-500">密钥已保存，无需重复填写。</span></label>:<div className="grid md:grid-cols-2 gap-3">

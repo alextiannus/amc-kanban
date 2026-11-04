@@ -1,7 +1,7 @@
 // Mirrored in Kanban; contract version is checked before media publication.
 export const EXECUTION_CONTRACT_VERSION = 1
 const vision=['google','openai','custom_shim','kopix','deepseek','minimax']
-const video=['cn_gateway','seedance','volcengine','kopix','baidu_seedance','fal','kieai']
+const video=['cn_gateway','seedance','volcengine','kopix','baidu_seedance','baidu_qianfan_seedance','fal','kieai']
 export const MEDIA_RULES:Record<string,{capability:string;protocols:string[];inputs:string[];gatewayTask?:string}>={
  image_understanding:{capability:'image_understanding',protocols:[...vision,'cn_gateway'],inputs:['image_input'],gatewayTask:'asset_image_analysis'},
  merchant_document_extraction:{capability:'image_understanding',protocols:[...vision,'cn_gateway'],inputs:['image_input','structured_json'],gatewayTask:'asset_image_analysis'},

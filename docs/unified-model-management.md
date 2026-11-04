@@ -1,5 +1,9 @@
 # Unified model management
 
+## Baidu Qianfan Seedance V2 (implemented locally; not deployed or provider-accepted)
+
+Add optional protocol `baidu_qianfan_seedance` with encrypted connection origin `https://qianfan.baidubce.com` and four selectable presets (S2.0, S2.0-Fast, S2.0-Mini, S2.5). Saving changes only the catalog/draft. Content executes V2 Fire requests; old `baidu_seedance` remains VOD. First release supports 720p MP4 with ordinary image/video references and native audio output, not portrait certification, asset://, reference audio, explicit first/last frames, edit/extend or search. S2.0 family: 4–15 seconds, 9 images, 3 videos totaling at most 15 seconds. S2.5: 4–30 seconds, 30 images, 10 videos totaling at most 30 seconds. No V1 2500-character provider limit is assumed. No automatic submission retry/fallback; historical jobs retain their route snapshots. Deploy Content before Kanban; keep current selections unchanged until explicitly validated and published. Usage is retained in generated-media metadata; pricing is unknown unless configured. No schema migration or CN Gateway change is required.
+
 Status: code implementation and local validation. Production migration, import, activation and business acceptance are separate release steps.
 
 ## Contract

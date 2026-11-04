@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
-import { RUNY_SEEDANCE_25_PRESET } from '../src/components/admin/modelPresets.ts'
+import { RUNY_SEEDANCE_25_PRESET, QIANFAN_SEEDANCE_V2_PRESETS } from '../src/components/admin/modelPresets.ts'
 
 process.env.MODEL_CONFIG_ENCRYPTION_KEY='ab'.repeat(32)
 process.env.AMC_CONTENT_SERVICE_URL='https://content.fixture'
@@ -121,6 +121,27 @@ try{
   assert.equal((await runtimeConfig()).version,publishedBefore.version,'adding Runy 2.5 does not publish a policy')
   assert.equal((await runtimeConfig({jobId:'running'})).version,pinned.version)
   await assert.rejects(()=>saveModelVersion({connectionId:gateway.id,definition:RUNY_SEEDANCE_25_PRESET},beforePreset.revision,'other'),/Draft changed/)
+  const qianfanConnection=await (await import('../src/lib/model-management/registry.ts')).createConnection({name:'Qianfan V2',protocol:'baidu_qianfan_seedance',baseUrl:'https://qianfan.baidubce.com',secret:'qianfan-fixture'},'admin')
+  for(const baseUrl of ['http://qianfan.baidubce.com','https://qianfan.baidubce.com/v2','https://qianfan.baidubce.com?key=bad']){
+    await assert.rejects((await import('../src/lib/model-management/registry.ts')).createConnection({name:'Qianfan V2',protocol:'baidu_qianfan_seedance',baseUrl,secret:'qianfan-fixture'},'admin'),/HTTPS origin/)
+  }
+  const beforeQianfan=await readDraft(),qianfanPolicy=await runtimeConfig()
+  assert.deepEqual(QIANFAN_SEEDANCE_V2_PRESETS.map(p=>p.modelName),['S2.0','S2.0-Fast','S2.0-Mini','S2.5'])
+  for(const preset of QIANFAN_SEEDANCE_V2_PRESETS){
+    const saved=await saveModelVersion({connectionId:qianfanConnection.id,definition:preset},(await readDraft()).revision,'admin')
+    const item=(await overview()).models.find((m:any)=>m.id===saved.result.id)
+    assert.equal(item.connectionId,qianfanConnection.id)
+    assert.equal(item.definition.maxRetries,0)
+    assert.deepEqual(item.definition.videoConstraints.resolutions,['720p'])
+    assert.equal(item.definition.videoConstraints.maxDurationSec,preset.modelName==='S2.5'?30:15)
+    assert.equal(item.definition.videoConstraints.maxImages,preset.modelName==='S2.5'?30:9)
+    assert.equal(item.definition.videoConstraints.maxVideos,preset.modelName==='S2.5'?10:3)
+    assert(!item.definition.inputCapabilities.includes('reference_audio'))
+  }
+  assert.deepEqual((await readDraft()).configuration,beforeQianfan.configuration,'Qianfan presets remain optional in draft')
+  assert.equal((await runtimeConfig()).version,qianfanPolicy.version,'Qianfan presets do not publish')
+  assert.equal((await runtimeConfig({jobId:'running'})).version,pinned.version)
+  assert(!JSON.stringify(await overview()).includes('qianfan-fixture'),'Qianfan credential remains masked')
   assert.equal((await runtimeConfig({source:'content',jobId:'historic-job'})).active,false)
   draft=await readDraft()
   const rotated=await saveModelVersion({previousModelId:edit.result.id,connection:{name:'Rotated',protocol:'kopix',baseUrl:'https://provider.fixture/v1',secret:'rotated-fixture',previousId:originalText.connectionId},definition:originalText.definition},draft.revision,'admin')

@@ -1,5 +1,9 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+## Baidu Qianfan Seedance V2 (implemented locally; not deployed or provider-accepted)
+
+Kanban adds optional encrypted protocol `baidu_qianfan_seedance` and S2.0, S2.0-Fast, S2.0-Mini and S2.5 catalog entries. Content executes V2 Fire submissions, queries, OBS mirroring and segmentation. Saving does not change defaults or exceptions. First release supports 720p MP4, ordinary image/video references and native audio output; portrait certification, asset://, audio references, explicit frame roles, editing, extension, search and callbacks remain unavailable. S2.0 family: 4-15 seconds, 9 images, 3 videos totaling at most 15 seconds. S2.5: 4-30 seconds, 30 images, 10 videos totaling at most 30 seconds. MM retains its three-video product limit and reserved continuation image slot. V2 retains the system prompt limit rather than V1's 2500-character provider restriction. Unknown submissions never retry/fallback; existing jobs keep pinned policies. Usage is retained in media metadata; estimates are unknown unless configured. Deploy Content before Kanban and verify real account access and generated media separately. See docs/unified-model-management.md.
+
 ## 素材目录管理升级（2026-11-04，本地实现与专项验证完成，待部署及真实品牌验收）
 
 现有管理文件夹窗口升级为可搜索目录树和内嵌表单。标准一级可改显示名称，固定标识不变，不可删除或移动；主理人及原品牌写权限成员可管理授权目录。自建目录最多三级，仅删除空目录。标准区存原始素材，自定义区存人工加工及 AI 制作；素材类别独立于上传渠道。默认自动匹配只使用 ORIGINAL，人工选择可使用 MANUAL、AI，历史不明为 UNCONFIRMED。片段/成片独立标记。改名移动保持素材 ID 及引用。 标准归类按固定标识判断，同类别重复保存保留现有目录；已完成上传的分类失败重试复用原回执，不重复上传。归档与历史迁移须锁定素材行后核对版本，防止覆盖并发写入。完整约定见 [目录管理与类别](asset-folder-management.md)。
