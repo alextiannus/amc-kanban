@@ -1,3 +1,4 @@
+import { createClassifiedAsset } from './asset-library/filing'
 import { selectedExecution, withModels, recordExecution } from '@/lib/model-management/runtime'
 import { delegateMedia, queryDelegatedMedia, delegatedVideoResult } from '@/lib/model-management/delegatedMedia'
 import { runtimeConfig } from '@/lib/model-management/registry'
@@ -628,8 +629,7 @@ async function persistGeneratedVideoAsset(input: {
     select: { id: true, url: true, mimeType: true, filename: true },
   })
   if (existing) return existing
-  return prisma.mediaAsset.create({
-    data: {
+  return createClassifiedAsset(prisma, input.brandId, { materialClass: 'AI', materialForm: input.sourceType.endsWith('final') ? 'FINISHED' : 'CLIP' }, {
       brandId: input.brandId,
       url: input.url,
       filename: input.url.split('/').pop()?.split('?')[0] || 'ai-video.mp4',
@@ -641,8 +641,6 @@ async function persistGeneratedVideoAsset(input: {
       aiCaption: input.caption,
       sourceType: input.sourceType,
       uploadedBy: input.actorId,
-    },
-    select: { id: true, url: true, mimeType: true, filename: true },
   })
 }
 

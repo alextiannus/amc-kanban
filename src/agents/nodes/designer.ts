@@ -1,3 +1,5 @@
+import { createClassifiedAsset } from '../../lib/asset-library/filing'
+import { storeGeneratedMedia } from '../../lib/generatedMediaStorage'
 import fs from "fs";
 import path from "path";
 import sharp from "sharp";
@@ -34,8 +36,7 @@ async function saveAsset({
     console.log(`[Designer Node] Uploading to Huawei OBS with key: ${key}`);
     const uploadResult = await uploadHuaweiObsObject({ key, body: buffer, contentType: mimeType });
     if (uploadResult.ok) {
-      const newAsset = await prisma.mediaAsset.create({
-        data: {
+      const newAsset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI' }, {
           brandId,
           url: uploadResult.url,
           filename,
@@ -46,7 +47,6 @@ async function saveAsset({
           aiReady: true,
           aiCategory,
           sourceType: "huawei_obs"
-        }
       });
       console.log(`[Designer Node] Registered Huawei OBS asset in DB: ${newAsset.id}`);
       return uploadResult.url;
@@ -66,8 +66,7 @@ async function saveAsset({
       const uploadResult = await postfastUploadFile(slot.uploadUrl, buffer, mimeType);
       if (uploadResult.success) {
         const storageKey = slot.storageKey || slot.fileToken || filename;
-        const newAsset = await prisma.mediaAsset.create({
-          data: {
+        const newAsset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI' }, {
             brandId,
             url: storageKey,
             filename,
@@ -78,7 +77,6 @@ async function saveAsset({
             aiReady: true,
             aiCategory,
             sourceType: "postfast"
-          }
         });
         console.log(`[Designer Node] Registered PostFast asset in DB: ${newAsset.id}`);
         return `/api/integrations/postfast/file/${brandId}/${storageKey}`;
@@ -90,18 +88,8 @@ async function saveAsset({
     }
   }
 
-  // Local fallback
-  console.log(`[Designer Node] Falling back to local storage for filename: ${filename}`);
-  const uploadDir = path.join(process.cwd(), "public", "uploads", folder);
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-  }
-  const outputPath = path.join(uploadDir, filename);
-  fs.writeFileSync(outputPath, buffer);
-
-  const publicUrl = `/uploads/${folder}/${filename}`;
-  const newAsset = await prisma.mediaAsset.create({
-    data: {
+  const publicUrl = await storeGeneratedMedia(brandId, filename, buffer, mimeType)
+  const newAsset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI' }, {
       brandId,
       url: publicUrl,
       filename,
@@ -112,7 +100,6 @@ async function saveAsset({
       aiReady: true,
       aiCategory,
       sourceType: sourceTypeFallback
-    }
   });
   console.log(`[Designer Node] Registered local asset in DB: ${newAsset.id}`);
   return publicUrl;

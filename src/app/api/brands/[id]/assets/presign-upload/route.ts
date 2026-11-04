@@ -1,3 +1,4 @@
+import { canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -104,6 +105,8 @@ export async function GET(request: Request, { params }: Params) {
   } else {
     console.log(`[presign] admin fast-path, skipped DB access check`)
   }
+
+  if (!await canSessionWriteBrandProject(brandId, userId, userType)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const url = new URL(request.url)
   const filename = url.searchParams.get('filename')

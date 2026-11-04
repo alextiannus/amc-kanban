@@ -20,7 +20,7 @@ import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { postfastGetSignedUploadUrls, postfastUploadFile } from '@/lib/integrations/postfast'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, makeBrandAssetKey, uploadHuaweiObsObject } from '@/lib/integrations/huaweiObs'
 import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
@@ -35,9 +35,15 @@ import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calen
 import { assertCollectionTarget, findReusableAsset, linkAssetToCollection } from '@/lib/asset-library/collections'
 import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
 
+import { createClassifiedAsset, updateAssetFiling, filingError } from '@/lib/asset-library/filing'
+import { materialClass, subtreeIds } from '@/lib/asset-library/material-policy'
+
 type Params = { params: Promise<{ id: string }> }
 
 interface UploadAssetRequest {
+  folderId?: string
+  materialClass?: string
+  materialForm?: string
   filename: string      // original filename with extension
   mimeType?: string      // e.g., 'image/jpeg', 'video/mp4'
   fileBase64?: string    // base64-encoded file data (no 'data:' prefix)
@@ -91,6 +97,7 @@ export async function POST(request: Request, { params }: Params) {
   const { id: brandId } = await params
   const ok = await canSessionAccessBrandProject(brandId, user.id, user.type ?? 'HUMAN', user.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!await canSessionWriteBrandProject(brandId, user.id, user.type || 'HUMAN')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const brand = await prisma.brand.findFirst({
     where: { id: brandId },
@@ -206,8 +213,7 @@ export async function POST(request: Request, { params }: Params) {
         return NextResponse.json({ error: uploadResult.error || 'Huawei OBS upload failed' }, { status: 400 })
       }
 
-      const asset = await prisma.mediaAsset.create({
-        data: {
+      const asset = await createClassifiedAsset(prisma, brandId, { ...body }, {
           brandId,
           url: uploadResult.url,
           filename,
@@ -226,7 +232,7 @@ export async function POST(request: Request, { params }: Params) {
           aiReady: true,
           uploadedBy: user.id,
           sourceType: 'huawei_obs',
-        },
+
       })
       await attachAsset(asset.id)
 
@@ -286,8 +292,7 @@ export async function POST(request: Request, { params }: Params) {
         )
       }
 
-      const asset = await prisma.mediaAsset.create({
-        data: {
+      const asset = await createClassifiedAsset(prisma, brandId, { ...body }, {
           brandId,
           url: slot.storageKey || slot.fileToken || filename,
           filename,
@@ -306,7 +311,7 @@ export async function POST(request: Request, { params }: Params) {
           aiReady: true,
           uploadedBy: user.id,
           sourceType: 'postfast',
-        },
+
       })
       await attachAsset(asset.id)
 
@@ -335,8 +340,7 @@ export async function POST(request: Request, { params }: Params) {
     await writeFile(path.join(absoluteDir, safeName), fileBuffer)
     const assetUrl = `/${relativeDir.replace(/\\/g, '/')}/${safeName}`
 
-    const asset = await prisma.mediaAsset.create({
-      data: {
+    const asset = await createClassifiedAsset(prisma, brandId, { ...body }, {
         brandId,
         url: assetUrl,
         filename,
@@ -355,7 +359,7 @@ export async function POST(request: Request, { params }: Params) {
         aiReady: true,
         uploadedBy: user.id,
         sourceType: 'local',
-      },
+
     })
     await attachAsset(asset.id)
 
@@ -424,6 +428,15 @@ export async function GET(request: Request, { params }: Params) {
   const sourceGroup = url.searchParams.get('sourceGroup') || 'all'
   const assetIds = url.searchParams.get('assetIds')?.split(',').filter(Boolean)
   if (!['all','original','ai_clip','finished'].includes(sourceGroup) || (assetIds && (assetIds.length > 40 || new Set(assetIds).size !== assetIds.length))) return NextResponse.json({error:'Invalid asset filter'}, {status:400})
+  const classFilter = url.searchParams.get('materialClass')
+  if (classFilter && !['ORIGINAL','MANUAL','AI','UNCONFIRMED'].includes(classFilter)) return NextResponse.json({ error: 'Invalid material class' }, { status: 400 })
+  const requestedFolderId = url.searchParams.get('folderId')
+  let folderIds: string[] | undefined
+  if (requestedFolderId) {
+    const tree = await prisma.brandFolder.findMany({ where: { brandId } })
+    if (!tree.some((f: { id: string }) => f.id === requestedFolderId)) return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+    folderIds = url.searchParams.get('includeDescendants') === 'true' ? subtreeIds(requestedFolderId, tree) : [requestedFolderId]
+  }
   const picker = url.searchParams.get('view') === 'picker'
   const assetType = url.searchParams.get('assetType') || 'all'
   if (!['all','image','video'].includes(assetType)) return NextResponse.json({error:'Invalid asset type'}, {status:400})
@@ -462,13 +475,15 @@ export async function GET(request: Request, { params }: Params) {
       ] }],
     } : {}),
   }
+  if (classFilter) where.materialClass = materialClass(classFilter)
+  if (folderIds) where.folderId = { in: folderIds }
   if (sourceGroup !== 'all') where.sourceType = sourceGroup === 'finished' ? 'generated_video' : sourceGroup === 'ai_clip' ? 'ai_video' : { notIn: ['generated_video','ai_video','basic_video_reference'] }
   if (assetIds) where.id = { in: assetIds }
   if (picker) {
     if (assetType!=='all') where.mimeType = { startsWith: assetType+'/', mode:'insensitive' }
     if (assetType === 'all') where.AND = [...(Array.isArray(where.AND)?where.AND:where.AND?[where.AND]:[]), {OR:[{mimeType:{startsWith:'image/',mode:'insensitive'}},{mimeType:{startsWith:'video/',mode:'insensitive'}}]}]
-    const rows = await prisma.mediaAsset.findMany({where, select:{id:true,url:true,mimeType:true,filename:true,aiCaption:true,aiTags:true,sourceType:true,sizeBytes:true,technicalMetadata:true},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1})
-    return NextResponse.json({assets:rows.slice(0,pageSize).map((asset:any)=>({id:asset.id,url:asset.sourceType==='postfast'&&!/^(https?:|\/)/.test(asset.url)?`/api/integrations/postfast/file/${brandId}/${asset.url}`:asset.url,mimeType:asset.mimeType.toLowerCase(),filename:asset.filename,aiCaption:asset.aiCaption,aiTags:asset.aiTags,sourceType:asset.sourceType,...publicThumbnail(asset)})),pagination:{page,pageSize,hasMore:rows.length>pageSize}}, {headers:{'Cache-Control':'private, no-store'}})
+    const rows = await prisma.mediaAsset.findMany({where, select:{id:true,url:true,mimeType:true,filename:true,aiCaption:true,aiTags:true,sourceType:true,sizeBytes:true,technicalMetadata:true,folderId:true,materialClass:true,materialForm:true},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1})
+    return NextResponse.json({assets:rows.slice(0,pageSize).map((asset:any)=>({id:asset.id,url:asset.sourceType==='postfast'&&!/^(https?:|\/)/.test(asset.url)?`/api/integrations/postfast/file/${brandId}/${asset.url}`:asset.url,mimeType:asset.mimeType.toLowerCase(),filename:asset.filename,aiCaption:asset.aiCaption,aiTags:asset.aiTags,sourceType:asset.sourceType,folderId:asset.folderId,materialClass:asset.materialClass,materialForm:asset.materialForm,...publicThumbnail(asset)})),pagination:{page,pageSize,hasMore:rows.length>pageSize}}, {headers:{'Cache-Control':'private, no-store'}})
   }
   const [assets, total] = await Promise.all([
     prisma.mediaAsset.findMany({
@@ -543,90 +558,11 @@ export async function PATCH(request: Request, { params }: Params) {
   const ok = await canSessionAccessBrandProject(brandId, user.id, user.type ?? 'HUMAN', user.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
+  if (!await canSessionWriteBrandProject(brandId, user.id, user.type || 'HUMAN')) return NextResponse.json({ error: '没有素材编辑权限' }, { status: 403 })
   const body = await request.json().catch(() => ({}))
-  const assetIds = body.assetIds
-  const aiTags = body.aiTags
-  const appendTags = body.appendTags
-  const aiReady = body.aiReady
-  const folder = typeof body.folder === 'string' ? body.folder.trim() : ''
-  const aiCategory = typeof body.aiCategory === 'string' ? body.aiCategory.trim() : ''
-  const aiCaption = typeof body.aiCaption === 'string' ? body.aiCaption.trim() : ''
-  const creativeId = typeof body.creativeId === 'string' ? body.creativeId.trim() : ''
-  const requestedFolder = folder || aiCategory
-  if (requestedFolder) await ensureAssetFolders(brandId)
-  const folderRecord = requestedFolder && requestedFolder !== '素材库'
-    ? await prisma.brandFolder.findFirst({ where: { brandId, name: requestedFolder }, select: { id: true, name: true } })
-    : null
-  if (requestedFolder && requestedFolder !== '素材库' && !folderRecord) {
-    return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
-  }
-
-  if (!Array.isArray(assetIds) || assetIds.length === 0) {
-    return NextResponse.json({ error: 'assetIds must be a non-empty array' }, { status: 400 })
-  }
-
-  let updatedCount = 0
-  let validAssets: Array<{ id: string }> = []
-
-  if (Array.isArray(appendTags) && appendTags.length > 0) {
-    const assets = await prisma.mediaAsset.findMany({
-      where: { id: { in: assetIds }, brandId },
-      select: { id: true, aiTags: true }
-    })
-    validAssets = assets.map((asset: { id: string }) => ({ id: asset.id }))
-    
-    // Process sequentially to avoid deadlocks under high concurrency
-    await prisma.$transaction(
-      assets.map((asset: any) => {
-        const merged = Array.from(new Set([...asset.aiTags, ...appendTags]))
-        return prisma.mediaAsset.update({
-          where: { id: asset.id },
-          data: {
-            aiTags: merged,
-            ...(aiReady !== undefined ? { aiReady } : {}),
-            ...(requestedFolder ? { folderId: folderRecord?.id || null, aiCategory: requestedFolder } : {}),
-            ...(aiCaption ? { aiCaption } : {}),
-            ...(creativeId ? { creativeId } : {}),
-          }
-        })
-      })
-    )
-    updatedCount = assets.length
-  } else {
-    const dataToUpdate: any = {}
-    if (aiTags !== undefined) dataToUpdate.aiTags = aiTags
-    if (aiReady !== undefined) dataToUpdate.aiReady = aiReady
-    if (requestedFolder) {
-      dataToUpdate.folderId = folderRecord?.id || null
-      dataToUpdate.aiCategory = requestedFolder
-    }
-    if (aiCaption) dataToUpdate.aiCaption = aiCaption
-    if (creativeId) dataToUpdate.creativeId = creativeId
-
-    const result = await prisma.mediaAsset.updateMany({
-      where: {
-        id: { in: assetIds },
-        brandId,
-      },
-      data: dataToUpdate,
-    })
-    updatedCount = result.count
-  }
-
-  if (creativeId) {
-    if (!validAssets.length) {
-      validAssets = await prisma.mediaAsset.findMany({
-        where: { id: { in: assetIds }, brandId },
-        select: { id: true },
-      })
-    }
-    await Promise.all(validAssets.map((asset: { id: string }) => submitAssetToCalendarCreativeRequirement({
-      brandId,
-      assetId: asset.id,
-      creativeId,
-      submittedBy: user.id,
-    })))
-  }
-
-  return NextResponse.json({ ok: true, updatedCount })
+  try {
+    const assets = await updateAssetFiling(prisma, brandId, { id: user.id, type: user.type || 'HUMAN' }, body.assetIds, body)
+    if (typeof body.creativeId === 'string' && body.creativeId.trim()) for (const asset of assets) await submitAssetToCalendarCreativeRequirement({ brandId, assetId: asset.id, creativeId: body.creativeId, submittedBy: user.id })
+    return NextResponse.json({ ok: true, updatedCount: assets.length })
+  } catch (e) { const result = filingError(e); return NextResponse.json(result.body, { status: result.status }) }
 }

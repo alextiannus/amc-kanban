@@ -1,5 +1,7 @@
 # AI Marketing Crew API Services
 
+素材目录树及分类接口（2026-11-04，本地实现，待部署）：[目录管理与类别](asset-folder-management.md)。目录以 ID 为主，标准一级允许改名，写权限由服务端校验，PATCH/DELETE 使用 revision；新增素材类别过滤与跨类别调整确认。
+
 ## 发布日历日期备注
 
 `GET /api/brands/:id/calendar-notes?month=YYYY-MM` / `PUT /api/brands/:id/calendar-notes/:date` now include optional title and atomic title/body versions. Conversation requests accept optional `calendarContext`; `amc.context.calendarPlanning` and read-only paginated `amc.calendar_notes` share current database notes. Compatibility, errors, context limits and migration/deployment order: [calendar-notes.md](calendar-notes.md). Implemented and locally verified; production migration, deployment and real-account acceptance pending.
@@ -297,7 +299,7 @@ MM 成功提交订阅后统一发送 Quotation，替代旧附服务条款的品�
 
 视频生产原片扩展：
 
-- 固定系统目录：`视频原片`，不可删除或重命名；目录内以 `VideoShootBatch` 业务分组，不创建二级目录。
+- 固定系统目录：`视频原片`，不可删除或移动，允许改显示名称（固定标识不变）；拍摄批次以 `VideoShootBatch` 业务分组，不自动创建二级目录。主理人可人工新建子目录，最多三级。
 - Content 通过 `POST /api/internal/content-assets` 调用 `createShootBatch|updateShootBatch|listShootBatches|list|presign|confirm`。
 - `list` 增加 `mediaKind=image|video`（缺省为 `image`）、`assetIds`、`shootBatchId`、`videoProjectId`；返回批次、项目、创意/拆解版本、拍摄日期、原始文件名和权利状态。
 - 视频 `presign/confirm` 要求 `videoProjectId + shootBatchId`，真实媒体校验通过后写入 `aiCategory=视频原片`、`sourceType=video_production_upload`，单文件最大 `250_000_000` 字节。

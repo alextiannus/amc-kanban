@@ -155,7 +155,7 @@ Each script receives its own `AssetCollectionItem` pointing to the same asset ID
 - Existing creative uploads using `creativeId` are translated into the corresponding virtual collection.
 - Asset search reads canonical folder, structured fields, tags, and collection references.
 - Existing draft `ContentAssetRef` continues to represent assets selected for a produced draft. It is not reused for pre-production script collections because it requires a `ContentDraft`.
-- Folder management exposes standard folders as non-deletable/non-renamable and custom folders as user-managed.
+- Folder management exposes standard roots as non-deletable/non-movable with editable display names and stable system keys. Human-created children and processed custom folders are managed through the tree dialog. See ../../asset-folder-management.md for the current class, permission, concurrency and API contract.
 
 ## Northeast Chinese Restaurant migration
 

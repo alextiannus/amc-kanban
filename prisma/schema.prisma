@@ -369,6 +369,7 @@ model CrewMember {
 model Brand {
   inboxReceipts           InboxReceipt[]
   assetFoldersInitialized Boolean              @default(false)
+  processedFoldersInitialized Boolean          @default(false)
   assetAnalysisBatches    AssetAnalysisBatch[]
   creditAccount           AmcCreditAccount?
   creditCycles            AmcCreditCycle[]
@@ -820,6 +821,8 @@ model MediaAsset {
   lastUsedAt        DateTime?
   uploadedBy        String?
   sourceType        String              @default("upload")
+  materialClass     String              @default("UNCONFIRMED")
+  materialForm      String              @default("UNKNOWN")
   shootBatchId      String?
   shootBatch        VideoShootBatch?    @relation(fields: [shootBatchId], references: [id], onDelete: SetNull)
   videoProjectId    String?
@@ -857,6 +860,7 @@ model MediaAsset {
   @@index([brandId, shootBatchId])
   @@index([brandId, duplicateGroupId])
   @@index([brandId, contentHash])
+  @@index([brandId, materialClass, folderId])
   @@index([brandId, analysisVersion])
   @@index([folderId])
   @@index([videoProjectId])
@@ -1523,6 +1527,8 @@ model BrandFolder {
   name            String
   systemKey       String?
   folderKind      String        @default("CUSTOM")
+  materialClass   String        @default("UNCONFIRMED")
+  revision        Int           @default(0)
   templateVersion String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

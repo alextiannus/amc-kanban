@@ -51,6 +51,7 @@ export async function assetCuratorNode(state: any) {
   const assets = await prisma.mediaAsset.findMany({
     where: {
       brandId,
+      materialClass: 'ORIGINAL',
       aiReady: true
     },
     orderBy: { createdAt: "desc" }
@@ -63,7 +64,7 @@ export async function assetCuratorNode(state: any) {
         where: { id: taskId },
         data: {
           status: "pending",
-          requiredInput: "Incomplete materials: No assets found in the brand library. Please upload images or videos to the Asset Library (素材库) first."
+          requiredInput: "Incomplete materials: No confirmed original assets available. Upload or confirm original materials in the Asset Library (素材库)."
         }
       });
     }
@@ -162,6 +163,7 @@ Do NOT write any other explanation or markdown code fences.`;
       const freshAssets = await prisma.mediaAsset.findMany({
         where: {
           brandId,
+          materialClass: 'ORIGINAL',
           aiReady: true
         },
         orderBy: { createdAt: "desc" }

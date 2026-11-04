@@ -1,10 +1,12 @@
+import { createClassifiedAsset } from '@/lib/asset-library/filing'
+import { storeGeneratedMedia } from '@/lib/generatedMediaStorage'
+import fs from 'node:fs'
+import path from 'node:path'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { generateText } from '@/lib/gemini'
-import fs from 'fs'
-import path from 'path'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -156,6 +158,7 @@ export async function POST(request: Request, { params }: Params) {
   const { id: brandId } = await params
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!await canSessionWriteBrandProject(brandId, actor.id, actor.type)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
   const userPrompt = String(body.prompt || '').trim()
@@ -244,15 +247,8 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const videoBuffer = await fetch(finalVideoUrl).then(res => res.arrayBuffer()).then(ab => Buffer.from(ab))
-  const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'video-director')
-  if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true })
-  }
-
   const filename = `video-director-${Date.now()}.mp4`
-  const outputPath = path.join(uploadDir, filename)
-  fs.writeFileSync(outputPath, videoBuffer)
-  const publicUrl = `/uploads/video-director/${filename}`
+  const publicUrl = await storeGeneratedMedia(brandId, filename, videoBuffer, 'video/mp4')
 
   const mergedTags = Array.from(new Set([
     ...assets.flatMap((a: { aiTags?: string[] | null }) => a.aiTags || []),
@@ -260,8 +256,7 @@ export async function POST(request: Request, { params }: Params) {
     'VideoDirector',
   ]))
 
-  const newAsset = await prisma.mediaAsset.create({
-    data: {
+  const newAsset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI', materialForm: 'CLIP' }, {
       brandId,
       url: publicUrl,
       filename,
@@ -273,7 +268,6 @@ export async function POST(request: Request, { params }: Params) {
       aiCaption: `VideoDirector 图生视频: ${enhancedPrompt}`,
       sourceType: 'video_director',
       uploadedBy: actor.id,
-    },
   })
 
   return NextResponse.json({

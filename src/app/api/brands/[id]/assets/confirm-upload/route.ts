@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { extractApiKey, getAgentFromApiKey, getSession } from '@/lib/auth'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { triggerDesignerAutoTag } from '@/lib/designer'
 import {
   deleteHuaweiObsObject,
@@ -18,9 +18,14 @@ import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calen
 import { assertCollectionTarget, findReusableAsset, linkAssetToCollection } from '@/lib/asset-library/collections'
 import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
 
+import { createClassifiedAsset } from '@/lib/asset-library/filing'
+
 type Params = { params: Promise<{ id: string }> }
 
 interface ConfirmUploadRequest {
+  folderId?: string
+  materialClass?: string
+  materialForm?: string
   filename: string
   mimeType: string
   sizeBytes?: number
@@ -162,8 +167,7 @@ async function createConfirmedAsset(input: {
     const reviewFolder = body.collectionId
       ? await prisma.brandFolder.findUnique({ where: { brandId_systemKey: { brandId, systemKey: 'needs_review' } } })
       : null
-    const asset = await prisma.mediaAsset.create({
-      data: {
+    const asset = await createClassifiedAsset(prisma, brandId, { ...body }, {
         brandId,
         url,
         filename,
@@ -182,7 +186,6 @@ async function createConfirmedAsset(input: {
         aiReady: true,
         uploadedBy,
         sourceType: 'huawei_obs',
-      },
     })
     if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: asset.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
     if (body.creativeId) {
@@ -213,7 +216,7 @@ async function createConfirmedAsset(input: {
     console.error('[confirm-upload] Database creation failed:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Database creation failed' },
-      { status: 500 },
+      { status: (error as any)?.status || 500 },
     )
   }
 }
@@ -224,6 +227,7 @@ export async function POST(request: Request, { params }: Params) {
   const body: ConfirmUploadRequest = await request.json().catch(() => ({}))
 
   if (isInternalMmRequest(request)) {
+    if (!body.userId || !await canSessionWriteBrandProject(brandId, body.userId, 'HUMAN')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     const response = await createConfirmedAsset({
       brandId,
       body,
@@ -261,6 +265,7 @@ export async function POST(request: Request, { params }: Params) {
     user.role,
   )
   if (!hasAccess) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!await canSessionWriteBrandProject(brandId, user.id, user.type || 'HUMAN')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const response = await createConfirmedAsset({
     brandId,

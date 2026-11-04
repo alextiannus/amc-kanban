@@ -43,6 +43,8 @@ import {
   Loader2,
   Sparkles
 } from 'lucide-react'
+import { type ManagedFolder } from './AssetFolderManager'
+import { subtreeIds } from '@/lib/asset-library/material-policy'
 import AssetAnalysisTools, { AssetInfoButton } from './AssetAnalysisTools'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
 
@@ -96,6 +98,9 @@ interface DashboardAsset {
   usedCount: number
   lastUsedAt: string | null
   sourceType: string
+  folderId?: string | null
+  materialClass?: string
+  materialForm?: string
   uploadedBy?: string | null
   shootBatchId?: string | null
   shootBatchName?: string | null
@@ -103,6 +108,7 @@ interface DashboardAsset {
   captureDate?: string | null
   originalFilename?: string | null
   createdAt: string
+  updatedAt?: string
 }
 
 interface CalendarCreativeOption {
@@ -233,11 +239,27 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     setIsBatchSelectMode(selected.length > 0)
   }, [selected.length])
   
+  const assetBrand = useRef(brandId)
+  assetBrand.current = brandId
   const [assets, setAssets] = useState<DashboardAsset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
+  const [pendingFiling, setPendingFiling] = useState<{ ids: string[]; body: Record<string, unknown>; targetClass: string } | null>(null)
+  const filingDialog = useRef<HTMLDialogElement>(null)
+  const filingBusyRef = useRef(false)
+  const [filingBusy, setFilingBusy] = useState(false)
+  useEffect(() => { if (pendingFiling) filingDialog.current?.showModal(); return () => filingDialog.current?.close() }, [pendingFiling])
+  useEffect(() => { setPendingFiling(null); setUploadDialogOpen(false); setCanManageFolders(false) }, [brandId])
+  const [folderCreateToken, setFolderCreateToken] = useState(0)
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const uploadDialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => { if (uploadDialogOpen) uploadDialog.current?.showModal(); return () => uploadDialog.current?.close() }, [uploadDialogOpen])
+  const [uploadClass, setUploadClass] = useState('ORIGINAL')
+  const [uploadForm, setUploadForm] = useState('UNKNOWN')
+  const [materialFilter, setMaterialFilter] = useState('all')
+  const [canManageFolders, setCanManageFolders] = useState(false)
   const [targetFolder, setTargetFolder] = useState('素材库')
   const [calendarCreatives, setCalendarCreatives] = useState<CalendarCreativeOption[]>([])
   const [selectedCreativeId, setSelectedCreativeId] = useState('')
@@ -246,8 +268,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [selectedCollectionSlotId, setSelectedCollectionSlotId] = useState('')
   const [moveFolder, setMoveFolder] = useState('')
   const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '已使用'])
-  const [folderRecords, setFolderRecords] = useState<Array<{ id: string; name: string; folderKind: string; canRename?: boolean; canDelete?: boolean }>>([])
-  const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('folder') === 'AI视频' ? 'AI视频' : 'all')
+  const [folderRecords, setFolderRecords] = useState<ManagedFolder[]>([])
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('folderId') || new URLSearchParams(window.location.search).get('folder') || 'all' : 'all')
   const [collapsedShootBatches, setCollapsedShootBatches] = useState<Set<string>>(() => new Set())
 
   const [previewMedia, setPreviewMedia] = useState<DashboardAsset | null>(null)
@@ -396,71 +418,20 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       const res = await fetch(`/api/brands/${brandId}/folders`)
       if (res.ok) {
         const data = await res.json()
+        if (assetBrand.current !== brandId) return
         setFolderRecords(data.folders || [])
+        setCanManageFolders(data.canCreate === true)
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
         setFolders(['素材库', '已使用', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
-        setSelectedFolder(current => ['all', '素材库', '已使用'].includes(current) || folderNames.includes(current) ? current : '素材库')
+        setSelectedFolder(current => ['all', '素材库', '已使用'].includes(current) ? current : data.folders.find((f: ManagedFolder) => f.id === current || f.name === current || (current === 'AI视频' && f.systemKey === 'processed_ai'))?.id || 'all')
       }
     } catch (err) {
       console.error('Failed to load folders:', err)
     }
   }, [brandId])
 
-  const handleCreateFolder = async () => {
-    if (!brandId) return
-    const name = window.prompt('请输入新文件夹名称：')
-    if (!name || !name.trim()) return
-
-    const folderName = name.trim()
-    if (folders.includes(folderName)) {
-      alert('文件夹已存在')
-      return
-    }
-
-    try {
-      const res = await fetch(`/api/brands/${brandId}/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: folderName }),
-      })
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error || '创建文件夹失败')
-      }
-      await loadFolders()
-      setSelectedFolder(folderName)
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : '创建文件夹失败')
-    }
-  }
-
-  const handleDeleteFolder = async (folderName: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!brandId) return
-    if (['素材库', '封面图', 'AI视频', '视频原片', '已使用'].includes(folderName)) {
-      alert('系统默认文件夹不可删除')
-      return
-    }
-
-    if (!window.confirm(`确定要删除文件夹 “${folderName}” 吗？\n删除文件夹后，其中的素材将自动移至 “素材库” 根目录。`)) return
-
-    try {
-      const res = await fetch(`/api/brands/${brandId}/folders?name=${encodeURIComponent(folderName)}`, {
-        method: 'DELETE',
-      })
-      if (!res.ok) {
-        const json = await res.json().catch(() => ({}))
-        throw new Error(json.error || '删除文件夹失败')
-      }
-      await loadFolders()
-      if (selectedFolder === folderName) {
-        setSelectedFolder('素材库')
-      }
-      await loadAssets()
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : '删除文件夹失败')
-    }
-  }
+  const handleCreateFolder = () => setFolderCreateToken(n => n + 1)
+  const handleFoldersChanged = async () => { await loadAssets(true) }
 
   const handleDragStart = (assetId: string, e: React.DragEvent) => {
     if (isDragSelecting.current) {
@@ -476,6 +447,24 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const handleDragEnd = () => {
     setDraggingIds(null)
     setDragOverFolder(null)
+  }
+
+  const saveFiling = async (ids: string[], body: Record<string, unknown>, confirmed = false) => {
+    if (!brandId || filingBusyRef.current) return false
+    const requestBrand = brandId
+    const target = folderRecords.find(f => f.id === body.folderId || f.name === body.folder || f.name === body.aiCategory)
+    if (target && !confirmed && assets.some(a => ids.includes(a.id) && (a.materialClass || 'UNCONFIRMED') !== target.materialClass)) {
+      setPendingFiling({ ids, body: { ...body, folderId: target.id }, targetClass: target.materialClass }); return false
+    }
+    setError(null); filingBusyRef.current = true; setFilingBusy(true)
+    try {
+      const res = await fetch(`/api/brands/${brandId}/assets`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, ...(target ? { folderId: target.id } : {}), assetIds: ids, confirmMaterialClassChange: confirmed }) })
+      const data = await res.json()
+      if (assetBrand.current !== requestBrand) return false
+      if (!res.ok) throw new Error(data.error || '素材更新失败')
+      setPendingFiling(null); await loadAssets(true); return true
+    } catch (e) { if (assetBrand.current === requestBrand) setError(e instanceof Error ? e.message : '素材更新失败'); return false }
+    finally { filingBusyRef.current = false; setFilingBusy(false) }
   }
 
   const handleDropOnFolder = async (folderName: string, e: React.DragEvent) => {
@@ -498,27 +487,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
     if (!brandId || ids.length === 0) return
 
-    setUploading(true)
-    setError(null)
-    try {
-      await Promise.all(ids.map((assetId) => {
-        const payload: Record<string, unknown> = {
-          folder: folderName,
-          aiCategory: folderName
-        }
-        return fetch(`/api/brands/${brandId}/assets/${assetId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      }))
-      setDraggingIds(null)
-      await loadAssets()
-    } catch {
-      setError('移动素材文件夹失败')
-    } finally {
-      setUploading(false)
-    }
+    await saveFiling(ids, { folder: folderName })
+    setDraggingIds(null)
   }
 
   const getChatMessages = (assetId: string) => {
@@ -601,9 +571,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const loadAssets = useCallback(async (cancelled = false) => {
+  const loadAssets = useCallback(async (background = false) => {
+    const requestedBrand = brandId
+    const current = () => assetBrand.current === requestedBrand
     Promise.resolve().then(() => {
-      if (!cancelled) setLoading(true)
+      if (current() && !background) setLoading(true)
     })
     setError(null)
     try {
@@ -613,7 +585,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       const res = await fetch(url)
       if (!res.ok) throw new Error('load failed')
       const data = await res.json()
-      if (!cancelled) {
+      if (current()) {
         const loadedAssets = data.assets || []
         setAssets(loadedAssets)
         // Auto-select first asset for Single AI Insight
@@ -624,13 +596,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           })
         }
       }
-      if (!cancelled) {
+      if (current()) {
         await loadFolders()
       }
     } catch {
-      if (!cancelled) setError('素材库加载失败')
+      if (current()) setError('素材库加载失败')
     } finally {
-      if (!cancelled) setLoading(false)
+      if (current() && !background) setLoading(false)
     }
   }, [brandId, loadFolders])
 
@@ -1283,12 +1255,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
   // Filter logic
   const filtered = assets.filter(a => {
+    if (materialFilter !== 'all' && (a.materialClass || 'UNCONFIRMED') !== materialFilter) return false
     // Folder filter
     const folderMatch = selectedFolder === 'all'
       ? true
       : selectedFolder === '素材库'
         ? (!a.aiCategory || a.aiCategory === '素材库' || a.aiCategory === 'raw')
-        : a.aiCategory === selectedFolder
+        : subtreeIds(selectedFolder, folderRecords).includes(a.folderId || folderRecords.find(f => f.name === a.aiCategory)?.id || '')
     if (!folderMatch) return false
     // 1. Sidebar views filter
     if (viewFilter === 'recent') {
@@ -1321,7 +1294,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     return catMatch && searchMatch
   })
 
-  const displayedAssets = selectedFolder === '视频原片'
+  const displayedAssets = folderRecords.find(f => f.id === selectedFolder)?.systemKey === 'original_video'
     ? [...filtered].sort((left, right) => String(right.shootBatchName || '').localeCompare(String(left.shootBatchName || '')) || new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
     : filtered
 
@@ -1422,7 +1395,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 key: presignData.key,
                 analysisBatchKey,
                 analysisLanguage: language,
-                folder: creativePayload.folder,
+                folderId: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.id,
+                folder: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.name || '素材库',
+                materialClass: uploadClass, materialForm: uploadForm,
                 aiTags: creativePayload.aiTags,
                 aiCaption: creativePayload.aiCaption,
                 creativeId: creativePayload.creativeId,
@@ -1474,7 +1449,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               fileBase64,
               analysisBatchKey,
                 analysisLanguage: language,
-                folder: creativePayload.folder,
+                folderId: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.id,
+                folder: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.name || '素材库',
+                materialClass: uploadClass, materialForm: uploadForm,
               aiCategory: creativePayload.aiCategory,
               aiTags: creativePayload.aiTags,
               aiCaption: creativePayload.aiCaption,
@@ -1558,38 +1535,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
   const handleFloatingFolderMove = async () => {
     if (!floatingFolderSelect || selected.length === 0 || !brandId) return
-    for (const id of selected) {
-      await fetch(`/api/brands/${brandId}/assets/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: floatingFolderSelect, aiCategory: floatingFolderSelect }),
-      })
-    }
-    setAssets(prev => prev.map(a => selected.includes(a.id) ? { ...a, aiCategory: floatingFolderSelect } : a))
-    setFloatingFolderSelect('')
-    setShowFloatingFolder(false)
-    await loadAssets()
+    if (await saveFiling(selected, { folder: floatingFolderSelect })) { setFloatingFolderSelect(''); setShowFloatingFolder(false) }
   }
 
   const handleAssignSelectedToCreative = async () => {
     if (!selectedCreative || selected.length === 0 || !brandId) return
     const payload = selectedCreativeUploadPayload()
-    await fetch(`/api/brands/${brandId}/assets`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        assetIds: selected,
-        appendTags: payload.aiTags,
-        folder: payload.folder,
-        aiCategory: payload.aiCategory,
-        aiCaption: payload.aiCaption,
-        creativeId: payload.creativeId,
-        aiReady: true,
-      }),
-    })
-    setSelected([])
-    setIsBatchSelectMode(false)
-    await loadAssets()
+    if (await saveFiling(selected, { appendTags: payload.aiTags, folder: payload.folder, aiCaption: payload.aiCaption, creativeId: payload.creativeId, aiReady: true })) { setSelected([]); setIsBatchSelectMode(false) }
   }
 
   const updateAssetTags = async (assetId: string, updatedTags: string[]) => {
@@ -1630,36 +1582,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
   // Apply batch changes
   const applyBatchChanges = async () => {
-    if (!brandId || selected.length === 0) return
-    setUploading(true)
-    setError(null)
-    const newTags = batchTagsText
-      .split(/[#,，\s]+/)
-      .map(t => t.trim().replace(/^#/, ''))
-      .filter(Boolean)
-    try {
-      await Promise.all(selected.map((assetId) => {
-        const original = assets.find(a => a.id === assetId)
-        const combinedTags = Array.from(new Set([...(original?.aiTags || []), ...newTags]))
-        const payload: Record<string, unknown> = { aiTags: combinedTags, aiReady: true }
-        if (moveFolder.trim()) {
-          payload.folder = moveFolder.trim()
-          payload.aiCategory = moveFolder.trim()
-        }
-        return fetch(`/api/brands/${brandId}/assets/${assetId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-      }))
-      setBatchTagsText('')
-      setMoveFolder('')
-      await loadAssets()
-    } catch {
-      setError('批量更新素材失败')
-    } finally {
-      setUploading(false)
-    }
+    if (!brandId || !selected.length) return
+    const appendTags = batchTagsText.split(/[#,，\s]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean)
+    if (await saveFiling(selected, { appendTags, aiReady: true, ...(moveFolder.trim() ? { folder: moveFolder.trim() } : {}) })) { setBatchTagsText(''); setMoveFolder('') }
   }
 
   const handleDeleteAsset = async (assetId: string) => {
@@ -1751,6 +1676,16 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       {/* MAIN COLUMN: full width mobile-first */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
 
+        {uploadDialogOpen && <dialog ref={uploadDialog} onCancel={e => { e.preventDefault(); setUploadDialogOpen(false) }} aria-label={t('上传素材', 'Upload materials')} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white">
+          <h2 className="mb-4 font-semibold">{t('上传素材', 'Upload materials')}</h2><div className="space-y-4">
+          <label className="flex items-center gap-1 text-xs">{t('上传类别', 'Upload class')}<select aria-label={t('上传素材类别', 'Upload material class')} value={uploadClass} onChange={e => { setUploadClass(e.target.value); setTargetFolder('素材库') }} className="rounded-lg border bg-transparent p-1.5"><option value="ORIGINAL">{t('原始素材', 'Original')}</option><option value="MANUAL">{t('人工加工', 'Human edited')}</option><option value="AI">{t('AI 制作', 'AI created')}</option><option value="UNCONFIRMED">{t('待确认', 'Unconfirmed')}</option></select></label>
+          <select aria-label={t('上传片段或成片', 'Upload clip or finished')} value={uploadForm} onChange={e => setUploadForm(e.target.value)} className="rounded-lg border bg-transparent p-1.5 text-xs"><option value="UNKNOWN">{t('未标记形态', 'Unspecified form')}</option><option value="CLIP">{t('片段', 'Clip')}</option><option value="FINISHED">{t('成片', 'Finished')}</option></select>
+          <p className="text-sm text-slate-500">{t('请确认类别，再选择文件。素材会归档到对应类别目录。', 'Confirm the class, then choose files. Materials are filed in the matching category.')}</p><div className="flex gap-2"><button type="button" onClick={() => { fileInputRef.current?.click(); setUploadDialogOpen(false) }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('选择文件', 'Choose files')}</button><button type="button" onClick={() => setUploadDialogOpen(false)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div></div>
+        </dialog>}
+        {pendingFiling && <dialog ref={filingDialog} onCancel={e => { e.preventDefault(); setPendingFiling(null) }} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white" aria-label={t('确认素材类别调整', 'Confirm material class change')}>
+          <h2 className="font-semibold">{t('确认素材类别调整', 'Confirm material class change')}</h2><p className="my-3 text-sm">{t(`将 ${pendingFiling.ids.length} 份素材移到目标目录，并调整为${({ ORIGINAL: '原始素材', MANUAL: '人工加工', AI: 'AI 制作', UNCONFIRMED: '待确认' } as Record<string,string>)[pendingFiling.targetClass]}。`, `Move ${pendingFiling.ids.length} assets and change their material class to ${pendingFiling.targetClass}.`)}</p>
+          {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}<div className="flex gap-2"><button type="button" disabled={filingBusy} onClick={() => void saveFiling(pendingFiling.ids, pendingFiling.body, true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('确认调整', 'Confirm change')}</button><button type="button" disabled={filingBusy} onClick={() => setPendingFiling(null)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div>
+        </dialog>}
         {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
         <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-10 flex flex-wrap items-center gap-2">
 
@@ -1796,11 +1731,14 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           {/* 文件夹 dropdown */}
           <div className="relative shrink-0">
             <select
+              aria-label={t('素材目录', 'Material folder')}
               value={selectedFolder}
               onChange={e => {
                 const val = e.target.value
                 setSelectedFolder(val)
-                setTargetFolder(val === 'all' ? '素材库' : val)
+                const record = folderRecords.find(f => f.id === val)
+                setTargetFolder(record?.name || '素材库')
+                if (record) setUploadClass(record.materialClass)
               }}
               className="appearance-none pl-2 pr-6 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200 outline-none cursor-pointer hover:border-indigo-400 transition-all"
             >
@@ -1810,14 +1748,14 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 <option value="已使用">📁 已使用</option>
               </optgroup>
               <optgroup label="标准目录">
-                {folderRecords.filter(folder => folder.folderKind === 'STANDARD').map(folder => (
-                  <option key={folder.id} value={folder.name}>📁 {folder.name}</option>
+                {folderRecords.filter(folder => folder.section === 'STANDARD').map(folder => (
+                  <option key={folder.id} value={folder.id}>📁 {folder.path}</option>
                 ))}
               </optgroup>
-              {folderRecords.some(folder => folder.folderKind !== 'STANDARD') && (
+              {folderRecords.some(folder => folder.section !== 'STANDARD') && (
                 <optgroup label="自定义目录">
-                  {folderRecords.filter(folder => folder.folderKind !== 'STANDARD').map(folder => (
-                    <option key={folder.id} value={folder.name}>📁 {folder.name}</option>
+                  {folderRecords.filter(folder => folder.section !== 'STANDARD').map(folder => (
+                    <option key={folder.id} value={folder.id}>📁 {folder.path}</option>
                   ))}
                 </optgroup>
               )}
@@ -1842,6 +1780,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             <ChevronRight className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-amber-500 rotate-90" />
           </div>
 
+          <select aria-label={t('素材类别筛选', 'Filter material class')} value={materialFilter} onChange={e => setMaterialFilter(e.target.value)} className="rounded-lg border bg-transparent px-2 py-1.5 text-xs"><option value="all">{t('全部类别', 'All classes')}</option><option value="ORIGINAL">{t('原始素材', 'Original')}</option><option value="MANUAL">{t('人工加工', 'Human edited')}</option><option value="AI">{t('AI 制作', 'AI created')}</option><option value="UNCONFIRMED">{t('待确认', 'Unconfirmed')}</option></select>
           {/* Search */}
           <div className="flex-1 flex items-center gap-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 rounded-lg px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all min-w-0">
             <Search className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
@@ -1861,7 +1800,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
           {/* Upload button */}
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => setUploadDialogOpen(true)}
+            aria-label={t('上传素材', 'Upload materials')}
             disabled={uploading}
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-white rounded-lg bg-indigo-600 hover:bg-indigo-700 shadow-sm active:scale-95 transition-all disabled:opacity-60 shrink-0"
           >
@@ -1869,10 +1809,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             <span className="hidden sm:inline">{uploading ? (uploadProgress || '上传中...') : '上传'}</span>
           </button>
 
-          <AssetAnalysisTools brandId={brandId} selected={selected} infoAsset={assets.find(a => a.id === infoAssetId) || null} closeInfo={() => setInfoAssetId(null)} onChanged={loadAssets} />
+          <AssetAnalysisTools brandId={brandId} selected={selected} infoAsset={assets.find(a => a.id === infoAssetId) || null} closeInfo={() => setInfoAssetId(null)} onChanged={loadAssets} folderCreateToken={folderCreateToken} onFoldersChanged={handleFoldersChanged} />
           {/* New folder button */}
           <button
             onClick={handleCreateFolder}
+            disabled={!canManageFolders}
             title="新建文件夹"
             className="flex items-center p-1.5 text-xs font-bold text-slate-500 rounded-lg border border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 hover:text-indigo-600 transition-all shrink-0"
           >
@@ -1970,10 +1911,10 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 const isVideo = isVideoAsset(asset)
                 const shootBatchKey = asset.shootBatchId || 'unassigned'
                 const previousBatchKey = i > 0 ? (displayedAssets[i - 1].shootBatchId || 'unassigned') : ''
-                const showShootBatchHeader = selectedFolder === '视频原片' && shootBatchKey !== previousBatchKey
+                const showShootBatchHeader = folderRecords.find(f => f.id === selectedFolder)?.systemKey === 'original_video' && shootBatchKey !== previousBatchKey
                 const batchCollapsed = collapsedShootBatches.has(shootBatchKey)
 
-                if (selectedFolder === '视频原片' && batchCollapsed && !showShootBatchHeader) return null
+                if (folderRecords.find(f => f.id === selectedFolder)?.systemKey === 'original_video' && batchCollapsed && !showShootBatchHeader) return null
 
                 return (
                   <React.Fragment key={asset.id}>
@@ -2044,7 +1985,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                         </div>
                       )}
 
-                      {isImageAsset(asset) && <AssetInfoButton asset={asset} onClick={() => setInfoAssetId(asset.id)} />}
+                        <span className="absolute bottom-2 left-2 z-10 rounded bg-slate-950/70 px-2 py-1 text-[10px] text-white">{({ ORIGINAL: t('原始', 'Original'), MANUAL: t('人工加工', 'Human edited'), AI: t('AI 制作', 'AI created'), UNCONFIRMED: t('待确认', 'Unconfirmed') } as Record<string,string>)[asset.materialClass || 'UNCONFIRMED']}{asset.materialForm === 'FINISHED' ? t(' · 成片', ' · Finished') : asset.materialForm === 'CLIP' ? t(' · 片段', ' · Clip') : ''}</span>
+                      {(isImageAsset(asset) || isVideoAsset(asset)) && <AssetInfoButton asset={asset} onClick={() => setInfoAssetId(asset.id)} />}
                       {/* Bottom-right: Used Count Badge */}
                       <div className="absolute bottom-2 right-2 z-10 bg-slate-950/70 dark:bg-black/70 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full select-none">
                         {asset.usedCount}

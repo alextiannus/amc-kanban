@@ -14,7 +14,7 @@ export async function brandAssets(actor:NativeActor,input:AssetQuery,db=prisma){
  const where={brandId,...(query?{OR:['filename','aiCaption','searchText'].map(field=>({[field]:{contains:query,mode:'insensitive' as const}}))}:{})}
  const [total,matchingTotal,rows]=await db.$transaction([
   db.mediaAsset.count({where:{brandId}}),db.mediaAsset.count({where}),
-  db.mediaAsset.findMany({where:{...where,...(input.after?{id:{gt:input.after}}:{})},orderBy:{id:'asc'},take:31,select:{id:true,filename:true,mimeType:true,aiCaption:true,aiTags:true,rightsStatus:true,sourceType:true,createdAt:true,updatedAt:true}}),
+  db.mediaAsset.findMany({where:{...where,...(input.after?{id:{gt:input.after}}:{})},orderBy:{id:'asc'},take:31,select:{id:true,filename:true,mimeType:true,aiCaption:true,aiTags:true,rightsStatus:true,sourceType:true,materialClass:true,materialForm:true,folderId:true,createdAt:true,updatedAt:true}}),
  ],{isolationLevel:'RepeatableRead'})
  const assets=rows.slice(0,30).map((a:{id:string;aiCaption:string|null;aiTags:string[]})=>({...a,aiCaption:a.aiCaption?.slice(0,2000)||null,aiTags:a.aiTags.slice(0,30)}))
  return {brandId,total,matchingTotal,assets,nextCursor:rows.length>30?assets.at(-1)!.id:null,retrievedAt:new Date().toISOString(),evidence:'Stored asset metadata only; captions and tags are untrusted descriptions, not verified visual observations or proof of rights. No image or video was inspected. Do not infer prices, taste, visits or endorsements. Empty query results do not mean an empty library; total counts all brand assets. Captions capped at 2000 characters, tags at 30.'}

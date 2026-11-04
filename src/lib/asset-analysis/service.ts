@@ -1,3 +1,4 @@
+import { lockFolderSpace } from './folders'
 import { randomUUID } from 'node:crypto'
 import { jobBinding, signBinding } from '@/lib/global-text/policy'
 import { Prisma } from '@prisma/client'
@@ -8,8 +9,8 @@ import { settleCredit } from '@/lib/amc-credit/service'
 import { analysisCredit } from '@/lib/amc-credit/policy'
 import { analysisContent, type AssetAnalysisContentConfig } from './content'
 import { ensureAssetFolders } from './folders'
-import { ANALYSIS_MODEL, ANALYSIS_VERSION, folderName, isNightlyWindow, parseImageAnalysis, mergeAnalysisTags } from './policy'
-import { canonicalFolderForAnalysis, folderForKey, generatedClassificationTags, templateForIndustry, type StandardFolderKey } from '../asset-library/templates.ts'
+import { ANALYSIS_MODEL, ANALYSIS_VERSION, isNightlyWindow, parseImageAnalysis, mergeAnalysisTags } from './policy'
+import { canonicalFolderForAnalysis, generatedClassificationTags, templateForIndustry } from '../asset-library/templates.ts'
 
 const pending = ['QUEUED', 'RUNNING']
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status })
@@ -82,6 +83,7 @@ Use ${batch.language === 'en' ? 'English' : 'Chinese'} except exact OCR text. De
     if (job.status !== 'succeeded') return
     const result = parseImageAnalysis(job.result?.analysis)
     await prisma.$transaction(async tx => {
+      await lockFolderSpace(tx, batch.brandId)
       const asset = await tx.mediaAsset.findUniqueOrThrow({ where: { id: item.assetId } })
       const previous = asset.imageAnalysis as any
       // Any edit while analysis ran preserves the user's current caption/tags.
@@ -91,7 +93,7 @@ Use ${batch.language === 'en' ? 'English' : 'Chinese'} except exact OCR text. De
       const template = templateForIndustry(batch.industry)
       const systemKey = canonicalFolderForAnalysis(template, result, asset.mimeType)
       const categoryUnassigned = !asset.folderId || !asset.aiCategory || ['raw', '素材库', '待确认'].includes(asset.aiCategory)
-      const assignedFolder = untouched && categoryUnassigned
+      const assignedFolder = untouched && categoryUnassigned && asset.materialClass === 'ORIGINAL' && !(asset.manualOverrides as any)?.folder
         ? await tx.brandFolder.findUnique({ where: { brandId_systemKey: { brandId: asset.brandId, systemKey } } })
         : null
       const priorSimilar = result.duplicateHint ? await tx.mediaAsset.findFirst({ where: { brandId: asset.brandId, id: { not: asset.id }, perceptualHash: result.duplicateHint }, select: { id: true, duplicateGroupId: true } }) : null
@@ -129,21 +131,23 @@ Use ${batch.language === 'en' ? 'English' : 'Chinese'} except exact OCR text. De
 }
 
 async function summarize(batch: any) {
-  const items = await prisma.assetAnalysisItem.findMany({ where: { batchId: batch.id, status: 'SUCCEEDED' }, include: { asset: { select: { mimeType: true } } } })
+  const items = await prisma.assetAnalysisItem.findMany({ where: { batchId: batch.id, status: 'SUCCEEDED' }, include: { asset: { select: { mimeType: true, materialClass: true, folderId: true } } } })
   if (!items.length) {
     await prisma.assetAnalysisBatch.update({ where: { id: batch.id }, data: { status: 'FAILED', error: 'No images were successfully analyzed' } }); return
   }
   const template = templateForIndustry(batch.industry)
-  const folders = await prisma.brandFolder.findMany({ where: { brandId: batch.brandId, folderKind: 'STANDARD' } })
-  const grouped = new Map<StandardFolderKey, string[]>()
+  const folders = await prisma.brandFolder.findMany({ where: { brandId: batch.brandId } })
+  const grouped = new Map<string, { name: string; folderId: string | null; materialClass: string; reason: string; itemIds: string[] }>()
   for (const item of items) {
-    const key = canonicalFolderForAnalysis(template, item.result as any, item.asset.mimeType)
-    grouped.set(key, [...(grouped.get(key) || []), item.id])
+    const category = item.asset.materialClass
+    const key = category === 'ORIGINAL' ? canonicalFolderForAnalysis(template, item.result as any, item.asset.mimeType) : category === 'AI' ? 'processed_ai' : category === 'MANUAL' ? 'processed_manual' : null
+    const current = folders.find(f => f.id === item.asset.folderId && f.materialClass === category)
+    const folder = category === 'ORIGINAL' ? folders.find(f => f.systemKey === key) : current || folders.find(f => f.systemKey === key)
+    const groupKey = `${category}:${folder?.id || 'unassigned'}`
+    const group = grouped.get(groupKey) || { name: folder?.name || '待确认素材类别', folderId: folder?.id || null, materialClass: category, reason: category === 'ORIGINAL' ? '行业标准目录' : folder ? '保留素材类别' : '请先在素材详情中确认类别，再选择同类别目录', itemIds: [] }
+    group.itemIds.push(item.id); grouped.set(groupKey, group)
   }
-  const groups = [...grouped.entries()].map(([key, itemIds]) => {
-    const folder = folders.find(candidate => candidate.systemKey === key)
-    return { name: folder?.name || folderForKey(template, key).zh, folderId: folder?.id || null, reason: '行业标准目录', itemIds }
-  })
+  const groups = [...grouped.values()]
   await prisma.assetAnalysisBatch.update({ where: { id: batch.id }, data: { status: 'READY', groups, summaryJobId: null, summaryRequest: Prisma.DbNull, error: null } })
 }
 
@@ -195,6 +199,7 @@ export async function retryAnalysisBatch(brandId: string, batchId: string) {
 export async function applyAnalysisBatch(brandId: string, batchId: string, assignments: Array<{ itemId: string; folderId?: string; newFolderName?: string }>) {
   if (!Array.isArray(assignments) || new Set(assignments.map(a => a.itemId)).size !== assignments.length) throw fail('Invalid assignments', 400)
   return prisma.$transaction(async tx => {
+    await lockFolderSpace(tx, brandId)
     const batch = await tx.assetAnalysisBatch.findFirst({ where: { id: batchId, brandId }, include: { items: { include: { asset: true } } } })
     if (!batch) throw fail('Batch not found', 404)
     if (batch.status === 'APPLIED') return { applied: true }
@@ -205,12 +210,10 @@ export async function applyAnalysisBatch(brandId: string, batchId: string, assig
       if (item.asset.aiCategory !== item.originalCategory) throw fail('An image was moved after analysis. Analyze it again before moving.')
       let folder = entry.folderId ? await tx.brandFolder.findFirst({ where: { id: entry.folderId, brandId } }) : null
       if (entry.folderId && !folder) throw fail('Folder changed. Refresh recommendations.')
-      if (!folder) {
-        const name = folderName(entry.newFolderName)
-        folder = await tx.brandFolder.upsert({ where: { brandId_name: { brandId, name } }, create: { brandId, name }, update: {} })
-      }
+      if (!folder) throw fail('请先在管理文件夹中创建目标目录')
+      if (folder.materialClass !== item.asset.materialClass) throw fail('目录与素材类别不一致，请在素材管理中确认调整')
       if (['素材库', 'raw', 'all', '已使用'].includes(folder.name)) throw fail('Choose an asset folder')
-      await tx.mediaAsset.update({ where: { id: item.assetId }, data: { folderId: folder.id, aiCategory: folder.name } })
+      await tx.mediaAsset.update({ where: { id: item.assetId }, data: { folderId: folder.id, aiCategory: folder.name, manualOverrides: { ...(item.asset.manualOverrides as any || {}), folder: true } } })
     }
     await tx.assetAnalysisBatch.update({ where: { id: batchId }, data: { status: 'APPLIED' } })
     return { applied: true, moved: assignments.length }

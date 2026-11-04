@@ -1,3 +1,5 @@
+import { ensureFoldersInTransaction } from './asset-analysis/folders'
+import { resolveMaterialFolder } from './asset-library/filing'
 import type {Prisma} from '@prisma/client'
 import {createHash} from 'node:crypto'
 import {prisma} from './prisma'
@@ -28,6 +30,9 @@ export async function saveVideoToLibrary(userId:string,brandId:string,input:{vid
  const jobId=typeof input?.videoJobId==='string'?input.videoJobId.trim():''
  if(!jobId||jobId.length>200)throw fail('video_job_required',400)
  return prisma.$transaction(async (tx:Prisma.TransactionClient)=>{
+  await ensureFoldersInTransaction(tx,brandId)
+  const aiFolder=await resolveMaterialFolder(tx,brandId,{},'AI')
+  if(!aiFolder)throw fail('ai_folder_unavailable',409)
   await tx.$queryRaw`SELECT id FROM "VideoProductionJob" WHERE id=${jobId} AND "brandId"=${brandId} FOR UPDATE`
   const job=await tx.videoProductionJob.findFirst({where:{id:jobId,brandId}})
   if(!job||job.historyDeletedAt)throw fail('not_found',404)
@@ -43,7 +48,7 @@ export async function saveVideoToLibrary(userId:string,brandId:string,input:{vid
   const legacyScript=metadata.script||(job.voiceoverState as any)?.script
   const repairLegacy=existing?.url===job.finalVideoUrl&&previous?.version===1&&previous?.jobId===job.id&&previous?.editor?.script===job.idea&&!metadata.editor&&typeof legacyScript==='string'&&legacyScript.trim()&&legacyScript!==job.idea
   const repairedMetadata=repairLegacy?{...(existing!.technicalMetadata as any),videoDraft:{...previous,version:2,editor:{...previous.editor,script:legacyScript},scriptSource:'legacy_submitted_script',repairedAt:new Date().toISOString()}}:undefined
-const asset=await tx.mediaAsset.upsert({where:{id},update:repairedMetadata?{technicalMetadata:repairedMetadata}:{},create:{id,brandId,url:job.finalVideoUrl,filename:job.title+'.mp4',mimeType:'video/mp4',sourceType:'generated_video',aiCategory:'视频草稿',aiCaption:job.title,aiReady:true,uploadedBy:userId,creativeId:job.creativeId,videoProjectId:metadata.basicVideoProjectId||null,technicalMetadata:{videoDraft} as any}})
+const asset=await tx.mediaAsset.upsert({where:{id},update:repairedMetadata?{technicalMetadata:repairedMetadata}:{},create:{id,brandId,url:job.finalVideoUrl,filename:job.title+'.mp4',mimeType:'video/mp4',sourceType:'generated_video',materialClass:'AI',materialForm:'FINISHED',folderId:aiFolder.id,aiCategory:aiFolder.name,aiCaption:job.title,aiReady:true,uploadedBy:userId,creativeId:job.creativeId,videoProjectId:metadata.basicVideoProjectId||null,technicalMetadata:{videoDraft} as any}})
   return {ok:true,asset}
  })
 }

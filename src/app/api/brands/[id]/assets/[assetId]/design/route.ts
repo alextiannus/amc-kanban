@@ -1,7 +1,9 @@
+import { createClassifiedAsset } from '@/lib/asset-library/filing'
+import { storeGeneratedMedia } from '@/lib/generatedMediaStorage'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { generateText } from '@/lib/gemini'
 import sharp from 'sharp'
 import fs from 'fs'
@@ -104,6 +106,7 @@ export async function POST(request: Request, { params }: Params) {
   const { id: brandId, assetId } = await params
   const ok = await canSessionAccessBrandProject(brandId, actor.id, actor.type, actor.role)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!await canSessionWriteBrandProject(brandId, actor.id, actor.type)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await request.json().catch(() => ({}))
   const userPrompt = (body.prompt || '').trim()
@@ -190,19 +193,10 @@ export async function POST(request: Request, { params }: Params) {
       console.log(`[Veo3] Downloading video from: ${finalVideoUrl}`)
       const videoBuffer = await fetch(finalVideoUrl).then(res => res.arrayBuffer()).then(ab => Buffer.from(ab))
       
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'designer')
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true })
-      }
-      
       const filename = `veo3-${assetId}-${Date.now()}.mp4`
-      const outputPath = path.join(uploadDir, filename)
-      fs.writeFileSync(outputPath, videoBuffer)
-      
-      const publicUrl = `/uploads/designer/${filename}`
-      
-      const newAsset = await prisma.mediaAsset.create({
-        data: {
+      const publicUrl = await storeGeneratedMedia(brandId, filename, videoBuffer, 'video/mp4')
+
+      const newAsset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI', materialForm: 'CLIP' }, {
           brandId,
           url: publicUrl,
           filename: `veo3-${original.filename ? original.filename.replace(/\.[^/.]+$/, "") : 'asset'}.mp4`,
@@ -214,7 +208,6 @@ export async function POST(request: Request, { params }: Params) {
           aiCaption: `Veo3 视频生成 (${userPrompt}): ${original.aiCaption || ''}`,
           sourceType: 'veo3',
           uploadedBy: actor.id
-        }
       })
       
       return NextResponse.json({ ok: true, asset: newAsset })
@@ -479,21 +472,11 @@ export async function POST(request: Request, { params }: Params) {
 
     // Save final designed buffer to file
     const outputBuffer = await finalSharp.jpeg({ quality: 92 }).toBuffer()
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'designer')
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true })
-    }
-
     const filename = `design-${assetId}-${Date.now()}.jpg`
-    const outputPath = path.join(uploadDir, filename)
-    fs.writeFileSync(outputPath, outputBuffer)
-
-    const publicUrl = `/uploads/designer/${filename}`
-    console.log(`[Asset Designer AI] Saved designed image locally: ${outputPath}`)
+    const publicUrl = await storeGeneratedMedia(brandId, filename, outputBuffer, 'image/jpeg')
 
     // 6. Create a NEW MediaAsset in the database (do NOT overwrite original)
-    const newAsset = await prisma.mediaAsset.create({
-      data: {
+    const newAsset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI' }, {
         brandId,
         url: publicUrl,
         filename: `edit-${original.filename || 'asset.jpg'}`,
@@ -507,7 +490,6 @@ export async function POST(request: Request, { params }: Params) {
         aiCaption: `AI修改 (${userPrompt}): ${original.aiCaption || ''}`,
         sourceType: 'designer',
         uploadedBy: actor.id
-      }
     })
 
     console.log(`[Asset Designer AI] Registered new asset in DB: ${newAsset.id}`)

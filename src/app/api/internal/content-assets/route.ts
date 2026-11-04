@@ -1,7 +1,8 @@
+import { createClassifiedAsset } from '@/lib/asset-library/filing'
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import type { Prisma } from '@prisma/client'
-import { canSessionAccessBrandProject } from '@/lib/brandAccess'
+import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { getHuaweiObsConfig, getHuaweiObsPresignedPutUrl, makeBrandAssetKey, makeBrandVideoOriginalKey } from '@/lib/integrations/huaweiObs'
 import { assertUploadMedia, inspectMediaUrl, MediaValidationError, mediaValidationResponse, mediaValidationStatus, type MediaTechnicalMetadata } from '@/lib/mediaValidation'
 import { prisma } from '@/lib/prisma'
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     catch (error: any) { if ([404,422,503].includes(error?.status)) return NextResponse.json({error:error.message},{status:error.status}); throw error }
   }
   if (body.action === 'list') return listAssets(brandId, body, new URL(request.url).origin)
+  if (body.action !== 'listShootBatches' && !await canSessionWriteBrandProject(brandId, actorId, actorType)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   if (body.action === 'createShootBatch') return createShootBatch(brandId, actorId, body)
   if (body.action === 'updateShootBatch') return updateShootBatch(brandId, body)
   if (body.action === 'unlinkVideoProject') return unlinkVideoProject(brandId, body)
@@ -60,14 +62,13 @@ async function importAiVideo(brandId: string, actorId: string, body: any) {
     const metadata = await inspectMediaUrl(upload.publicUrl, { filename, mimeType: 'video/mp4' })
     assertUploadMedia(metadata, { filename })
     assertProductionVideo(metadata, filename)
-    const asset = await prisma.mediaAsset.upsert({ where: { id }, update: {}, create: {
+    const asset = await createClassifiedAsset(prisma, brandId, { materialClass: 'AI', materialForm: 'FINISHED' }, {
       id, brandId, url: upload.publicUrl, filename, originalFilename: filename,
       mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes,
       width: metadata.width ?? null, height: metadata.height ?? null, technicalMetadata: metadata,
       aiTags: [], aiCategory: 'AI视频', aiReady: true, uploadedBy: actorId,
       sourceType: 'ai_video', videoProjectId: projectId, rightsStatus: 'owned',
-    } })
-    await prisma.brandFolder.createMany({ data: [{ brandId, name: 'AI视频' }], skipDuplicates: true })
+    })
     return NextResponse.json({ ok: true, assetId: asset.id })
   } catch (error) {
     return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
@@ -75,6 +76,7 @@ async function importAiVideo(brandId: string, actorId: string, body: any) {
 }
 
 async function listAssets(brandId: string, body: any, requestOrigin: string) {
+  if (body.materialClass !== undefined && !['ORIGINAL', 'MANUAL', 'AI', 'UNCONFIRMED'].includes(body.materialClass)) return NextResponse.json({ error: 'Invalid material class' }, { status: 400 })
   const page = Math.max(1, Number(body.page) || 1)
   const pageSize = Math.min(60, Math.max(1, Number(body.pageSize) || 24))
   const query = text(body.q)
@@ -100,6 +102,7 @@ async function listAssets(brandId: string, body: any, requestOrigin: string) {
   const where: Prisma.MediaAssetWhereInput = {
     brandId,
     AND: filters,
+    ...(body.materialClass && ['ORIGINAL','MANUAL','AI','UNCONFIRMED'].includes(body.materialClass) ? { materialClass: body.materialClass } : {}),
     ...(assetIds.length ? { id: { in: assetIds } } : {}),
     ...(shootBatchId ? { shootBatchId } : {}),
     ...(videoProjectId ? { videoProjectId } : {}),
@@ -113,6 +116,7 @@ async function listAssets(brandId: string, body: any, requestOrigin: string) {
       id: asset.id, url: readableAssetUrl(brandId, asset, requestOrigin), filename: asset.filename, mimeType: asset.mimeType,
       ...publicThumbnail(asset),
       width: asset.width, height: asset.height, sizeBytes: asset.sizeBytes,
+      materialClass: asset.materialClass, materialForm: asset.materialForm, folderId: asset.folderId,
       caption: asset.aiCaption, category: asset.aiCategory, tags: asset.aiTags,
       shootBatchId: asset.shootBatchId, shootBatchName: asset.shootBatch?.name,
       videoProjectId: asset.videoProjectId, creativeId: asset.creativeId,
@@ -185,7 +189,7 @@ async function confirmAsset(brandId: string, actorId: string, body: any) {
     const metadata = await inspectMediaUrl(url, { filename, mimeType, sizeBytes: Number(body.sizeBytes) || undefined })
     assertUploadMedia(metadata, { filename })
     if (mediaKind === 'video') assertProductionVideo(metadata, filename)
-    const asset = await prisma.mediaAsset.create({ data: {
+    const asset = await createClassifiedAsset(prisma, brandId, { ...body, materialClass: body.materialClass || 'UNCONFIRMED', folder: undefined }, {
       brandId, url, filename, mimeType: metadata.mimeType, sizeBytes: metadata.sizeBytes,
       width: metadata.width ?? null, height: metadata.height ?? null, technicalMetadata: metadata,
       aiTags: [], aiCategory: mediaKind === 'video' ? (basicVideoReference ? '视频制作参考' : '视频原片') : text(body.folder) || '视频生产', aiReady: true,
@@ -194,7 +198,7 @@ async function confirmAsset(brandId: string, actorId: string, body: any) {
       creativeId: batch?.creativeId, creativeVersion: batch?.creativeVersion,
       extractionVersion: batch?.extractionVersion, captureDate: batch?.captureDate,
       originalFilename: filename, rightsStatus: text(body.rightsStatus) || (mediaKind === 'video' ? 'owned' : null),
-    } })
+    })
     return NextResponse.json({ ok: true, asset })
   } catch (error) {
     return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
