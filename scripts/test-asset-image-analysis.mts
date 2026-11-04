@@ -150,6 +150,23 @@ await db.assetAnalysisBatch.update({ where: { id: immediateBatch.id }, data: { r
 await service.processAnalysisQueue({ now: new Date('2026-10-03T12:00:00Z'), batchId: immediateBatch.id })
 assert.equal(rows.assetAnalysisItem.find(i => i.assetId === 'run-immediately').status, 'SUCCEEDED', 'manual immediate batches bypass only the nightly window')
 
+// Display labels are editable; automatic filing must use the stable folder key.
+const review = rows.brandFolder.find(f => f.systemKey === 'needs_review')!
+review.name = '待审核原素材'
+addVideo('renamed-review-video')
+const renamedAsset = rows.mediaAsset.find(a => a.id === 'renamed-review-video')!
+renamedAsset.folderId = review.id; renamedAsset.aiCategory = review.name
+await service.createAnalysisBatch({ brandId: 'brand', assetIds: [renamedAsset.id] })
+await service.processAnalysisQueue({ force: true })
+assert.equal(rows.mediaAsset.find(a => a.id === renamedAsset.id).folderId, 'folder-original_video', 'renaming needs-review must not disable automatic filing')
+
+addVideo('manual-review-video')
+const manualReview = rows.mediaAsset.find(a => a.id === 'manual-review-video')!
+manualReview.folderId = review.id; manualReview.aiCategory = review.name; manualReview.manualOverrides = { folder: true }
+await service.createAnalysisBatch({ brandId: 'brand', assetIds: [manualReview.id] })
+await service.processAnalysisQueue({ force: true })
+assert.equal(rows.mediaAsset.find(a => a.id === manualReview.id).folderId, review.id, 'manual filing still wins after renaming')
+
 enabled = false
 assert.equal(await service.createAnalysisBatch({ brandId: 'brand', upload: true, assetIds: ['one'] }), null)
 await assert.rejects(service.createAnalysisBatch({ brandId: 'brand', assetIds: ['one'] }), /disabled/)

@@ -13,8 +13,29 @@ export function materialForm(value: unknown): MaterialForm {
   return value as MaterialForm
 }
 export function isAiSource(source: string | null | undefined) { return AI_SOURCES.includes(source || '') }
-export function assertClassChange(current: string, next: string, confirmed: unknown, source?: string | null) {
-  if (isAiSource(source) && next !== 'AI') throw Object.assign(new Error('AI 制作素材应保留 AI 类别'), { status: 409 })
+export function isKnownAiAsset(asset: { sourceType?: string | null; technicalMetadata?: unknown }) {
+  if (isAiSource(asset.sourceType)) return true
+  const metadata = asset.technicalMetadata
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return false
+  const provenance = (metadata as Record<string, unknown>).materialProvenance
+  return !!provenance && typeof provenance === 'object' && (provenance as Record<string, unknown>).origin === 'AI_GENERATION'
+}
+export function requestedFolderTarget(body: Record<string, unknown>): { id: string } | { name: string } | null {
+  if (body.folderId === null) return null
+  if (body.folderId !== undefined) {
+    if (typeof body.folderId !== 'string' || !body.folderId.trim()) throw Object.assign(new Error('目录标识无效'), { status: 400 })
+    return { id: body.folderId.trim() }
+  }
+  // An explicit root is a real choice, not permission to fall through to a
+  // conflicting legacy aiCategory (for example a creative's suggested label).
+  const value = body.folder !== undefined ? body.folder : body.aiCategory
+  if (value === undefined) return null
+  if (typeof value !== 'string') throw Object.assign(new Error('目录名称无效'), { status: 400 })
+  const name = value.trim()
+  return !name || ['素材库', 'raw'].includes(name) ? null : { name }
+}
+export function assertClassChange(current: string, next: string, confirmed: unknown, source?: string | null, knownAi = false) {
+  if ((knownAi || isAiSource(source)) && next !== 'AI') throw Object.assign(new Error('AI 制作素材应保留 AI 类别'), { status: 409 })
   if (current !== next && confirmed !== true) throw Object.assign(new Error('请确认素材类别调整'), { status: 409, code: 'MATERIAL_CLASS_CONFIRMATION_REQUIRED' })
 }
 

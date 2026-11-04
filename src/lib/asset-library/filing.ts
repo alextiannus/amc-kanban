@@ -1,11 +1,16 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
-import { materialClass, materialForm, assertClassChange, isAiSource } from './material-policy.ts'
+import { materialClass, materialForm, assertClassChange, isAiSource, isKnownAiAsset, requestedFolderTarget } from './material-policy.ts'
 import { ensureFoldersInTransaction } from '../asset-analysis/folders'
 
 type Db = PrismaClient
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status })
+// Brand locking serializes tree changes; asset row locks also coordinate with
+// publishers and other writers that do not take the folder namespace lock.
+export async function lockMaterialAssets(tx: Prisma.TransactionClient, brandId: string, assetIds: string[]) {
+  if (assetIds.length) await tx.$queryRaw`SELECT id FROM "MediaAsset" WHERE "brandId" = ${brandId} AND id = ANY(${assetIds}::text[]) ORDER BY id FOR UPDATE`
+}
 export async function resolveMaterialFolder(tx: Prisma.TransactionClient, brandId: string, body: Record<string, unknown>, category: string) {
-  const requested = typeof body.folderId === 'string' && body.folderId ? { id: body.folderId } : typeof body.folder === 'string' && body.folder && body.folder !== '素材库' ? { name: body.folder } : typeof body.aiCategory === 'string' && body.aiCategory && body.aiCategory !== '素材库' ? { name: body.aiCategory } : null
+  const requested = requestedFolderTarget(body)
   const folder = requested ? await tx.brandFolder.findFirst({ where: { brandId, ...requested } }) : null
   if (requested && !folder) throw fail('目录不存在', 404)
   if (folder && folder.materialClass === category) return folder
@@ -21,7 +26,7 @@ export async function resolveMaterialFolder(tx: Prisma.TransactionClient, brandI
   const collision = await tx.brandFolder.findUnique({ where: { brandId_name: { brandId, name } } })
   return tx.brandFolder.create({ data: { brandId, name: collision ? `${name} (${systemKey})` : name, systemKey, materialClass: category } })
 }
-export async function createClassifiedAsset(db: Db, brandId: string, body: Record<string, unknown>, data: Prisma.MediaAssetUncheckedCreateInput) {
+export async function createClassifiedAsset(db: Db, brandId: string, body: Record<string, unknown>, data: Prisma.MediaAssetUncheckedCreateInput, options: { knownAiGenerated?: boolean } = {}) {
   return db.$transaction(async tx => {
     await ensureFoldersInTransaction(tx, brandId)
     if (data.id) {
@@ -31,15 +36,18 @@ export async function createClassifiedAsset(db: Db, brandId: string, body: Recor
         return existing
       }
     }
-    const category = isAiSource(data.sourceType) ? 'AI' : materialClass(body.materialClass ?? 'UNCONFIRMED')
+    const generated = options.knownAiGenerated === true || isAiSource(data.sourceType)
+    const category = generated ? 'AI' : materialClass(body.materialClass ?? 'UNCONFIRMED')
     const folder = await resolveMaterialFolder(tx, brandId, body, category)
-    return tx.mediaAsset.create({ data: { ...data, brandId, materialClass: category, materialForm: materialForm(body.materialForm ?? 'UNKNOWN'), folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } })
+    const priorMetadata = data.technicalMetadata && typeof data.technicalMetadata === 'object' && !Array.isArray(data.technicalMetadata) ? data.technicalMetadata as Prisma.InputJsonObject : {}
+    return tx.mediaAsset.create({ data: { ...data, ...(generated ? { technicalMetadata: { ...priorMetadata, materialProvenance: { origin: 'AI_GENERATION' } } } : {}), brandId, materialClass: category, materialForm: materialForm(body.materialForm ?? 'UNKNOWN'), folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } })
   }, { timeout: 30_000 })
 }
 export async function updateAssetFiling(db: Db, brandId: string, actor: { id: string; type: string }, assetIds: string[], body: Record<string, unknown>) {
   if (!Array.isArray(assetIds) || !assetIds.length || assetIds.length > 500 || assetIds.some(id => typeof id !== 'string') || new Set(assetIds).size !== assetIds.length) throw fail('请选择有效素材', 400)
   return db.$transaction(async tx => {
     await ensureFoldersInTransaction(tx, brandId)
+    await lockMaterialAssets(tx, brandId, assetIds)
     const assets = await tx.mediaAsset.findMany({ where: { brandId, id: { in: assetIds } } })
     if (assets.length !== assetIds.length) throw fail('素材不存在或不属于当前品牌', 404)
     const requested = body.folderId !== undefined || body.folder !== undefined || body.aiCategory !== undefined
@@ -49,20 +57,23 @@ export async function updateAssetFiling(db: Db, brandId: string, actor: { id: st
       if (body.revision !== undefined && body.revision !== asset.updatedAt.toISOString()) throw fail('素材已被修改，请刷新后重试')
       let category = body.materialClass !== undefined ? materialClass(body.materialClass) : asset.materialClass
       let folder = null
+      let movesFolder = false
       if (wantsFiling) {
         if (requested && body.materialClass === undefined) {
-          const target = await tx.brandFolder.findFirst({ where: { brandId, ...(typeof body.folderId === 'string' ? { id: body.folderId } : { name: typeof body.folder === 'string' ? body.folder : typeof body.aiCategory === 'string' ? body.aiCategory : '' }) } })
+          const targetFilter = requestedFolderTarget(body)
+          const target = targetFilter ? await tx.brandFolder.findFirst({ where: { brandId, ...targetFilter } }) : null
           if (target) category = target.materialClass
         }
-        assertClassChange(asset.materialClass, category, body.confirmMaterialClassChange, asset.sourceType)
-        folder = await resolveMaterialFolder(tx, brandId, { ...body, materialClass: category }, category)
+        assertClassChange(asset.materialClass, category, body.confirmMaterialClassChange, asset.sourceType, isKnownAiAsset(asset))
+        movesFolder = requested || category !== asset.materialClass
+        if (movesFolder) folder = await resolveMaterialFolder(tx, brandId, { ...body, materialClass: category }, category)
       }
       const priorAnalysis = asset.imageAnalysis && typeof asset.imageAnalysis === 'object' && !Array.isArray(asset.imageAnalysis) ? asset.imageAnalysis : {}
       const priorOverrides = asset.manualOverrides && typeof asset.manualOverrides === 'object' && !Array.isArray(asset.manualOverrides) ? asset.manualOverrides : {}
       const tags = Array.isArray(body.appendTags) ? [...new Set([...asset.aiTags, ...body.appendTags.filter((t: unknown) => typeof t === 'string')])]
         : Array.isArray(body.aiTags) ? body.aiTags.filter((t: unknown) => typeof t === 'string').map((t: string) => t.trim()).filter(Boolean) : undefined
       const updated = await tx.mediaAsset.update({ where: { id: asset.id }, data: {
-        ...(wantsFiling ? { materialClass: category, folderId: folder?.id || null, aiCategory: folder?.name || '素材库', manualOverrides: { ...priorOverrides, folder: true, materialClass: true } } : {}),
+        ...(wantsFiling ? { materialClass: category, ...(movesFolder ? { folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } : {}), manualOverrides: { ...priorOverrides, ...(movesFolder ? { folder: true } : {}), materialClass: true } } : {}),
         ...(body.materialForm !== undefined ? { materialForm: materialForm(body.materialForm) } : {}),
         ...(typeof body.filename === 'string' ? { filename: body.filename.trim() || null } : {}),
         ...(typeof body.aiCaption === 'string' ? { aiCaption: body.aiCaption.trim() || null } : {}),

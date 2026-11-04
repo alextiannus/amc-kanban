@@ -6,7 +6,7 @@
 
 保留素材库「管理文件夹」入口，窗口展示可搜索、可展开的目录树。标准目录存原始素材；自定义目录存加工素材，首次提供人工剪辑、AI 制作。主理人及原有品牌写权限成员可管理授权品牌，查看权限不授予写操作。标准一级可改显示名，systemKey 固定，不可移动、删除。自建目录可新建、改名、移动、删除空目录；最多三级，品牌内名称唯一。新建、改名、移动、删除确认均使用内嵌表单。旁边 + 打开同一新建表单。手机端使用底部抽屉。
 
-素材类别独立于上传渠道 sourceType、目录名称和片段/成片形态。materialClass 为 ORIGINAL、MANUAL、AI、UNCONFIRMED；materialForm 为 UNKNOWN、CLIP、FINISHED。标准目录及其子目录限定 ORIGINAL；自定义顶层限定 MANUAL 或 AI，子目录继承。上传展示类别；已知 AI 生成入口强制 AI。跨类别移动需确认，不得通过改名改变类别。人工归档与分类不被 AI 分析覆盖。
+素材类别独立于上传渠道 sourceType、目录名称和片段/成片形态。materialClass 为 ORIGINAL、MANUAL、AI、UNCONFIRMED；materialForm 为 UNKNOWN、CLIP、FINISHED。标准目录及其子目录限定 ORIGINAL；自定义顶层限定 MANUAL 或 AI，子目录继承。上传展示类别；已知 AI 生成入口强制 AI，并在服务端保存 materialProvenance.origin=AI_GENERATION，不用存储渠道代替来源。用户提交字段不授予该可信标记；人工误标可确认纠正，已知生成产物不可降为原始或人工加工。跨类别移动需确认，不得通过改名改变类别。人工归档与分类不被 AI 分析覆盖。
 
 自动匹配只查询 ORIGINAL，并沿用质量、权利、相关度及品牌范围；不足提示补充，不自动放宽。人工选择可使用加工素材，已选历史引用不因分类变化失效。改名/移动保持素材 ID、文件及素材集引用。历史无法证明来源的素材默认为 UNCONFIRMED，不凭上传渠道、文件名或现有目录推断为原始。
 
@@ -17,9 +17,9 @@
 - PATCH 同路径：folderId、revision、name 和/或 parentId。移动要求同类别，禁止环与超过三级；标准一级只改名。revision 必填，过期返回 409。
 - DELETE 同路径：folderId、revision 查询参数；只删除无素材且无子目录的自建目录。旧 name 定位保留兼容，但仍需 revision，且遵循相同权限与删除规则。
 - 素材列表增加 materialClass、folderId、includeDescendants；保留 folder 和 sourceGroup 的原含义。人工选择器使用 materialClass；默认自动匹配由服务端限定 ORIGINAL。
-- 上传及素材 PATCH 接收 materialClass、materialForm、folderId。跨类别调整要求 confirmMaterialClassChange=true，分类/归档留审计。已知 AI 来源不可改为 ORIGINAL/MANUAL。
+- 上传及素材 PATCH 接收 materialClass、materialForm、folderId；显式 folderId 优先，其次 folder（包括选择根目录），最后兼容 aiCategory，不能让旧创意分类覆盖已选择的目录。跨类别调整要求 confirmMaterialClassChange=true，分类/归档留审计。已知 AI 来源不可改为 ORIGINAL/MANUAL。
 
-写操作在事务内锁定品牌目录空间、校验当前版本和品牌写权限，冲突不覆盖输入。目录改名同步兼容 aiCategory，但 folderId 为真相。读取不把旧素材自动归为原始。
+写操作在事务内锁定品牌目录空间、校验当前版本和品牌写权限，冲突不覆盖输入。目录改名同步兼容 aiCategory，但 folderId 为真相。 标准归类按固定标识判断，同类别重复保存保留现有目录；已完成上传的分类失败重试复用原回执，不重复上传。归档与历史迁移须锁定素材行后核对版本，防止覆盖并发写入。读取不把旧素材自动归为原始。
 
 ## 数据整理与发布
 

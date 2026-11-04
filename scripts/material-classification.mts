@@ -1,6 +1,6 @@
 import { readFile, writeFile, open } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { isAiSource, materialClass, materialForm } from '../src/lib/asset-library/material-policy.ts'
+import { isKnownAiAsset, materialClass, materialForm } from '../src/lib/asset-library/material-policy.ts'
 
 // No database writes on the preview path. Labels are an explicit human-reviewed
 // JSON array of { id, materialClass, materialForm? }, not filename heuristics.
@@ -13,8 +13,9 @@ if (args.includes('--help') || !args.length) {
   console.log('Rollback: tsx scripts/material-classification.mts --rollback receipt.json --actor ID')
   process.exit(0)
 }
-const [{prisma}, {ensureFoldersInTransaction}, {canSessionWriteBrandProject}] = await Promise.all([
+const [{prisma}, {ensureFoldersInTransaction}, {canSessionWriteBrandProject}, {lockMaterialAssets, resolveMaterialFolder}] = await Promise.all([
   import('../src/lib/asset-analysis/db.ts'), import('../src/lib/asset-analysis/folders.ts'), import('../src/lib/brandAccess.ts'),
+  import('../src/lib/asset-library/filing.ts'),
 ])
 type State = { materialClass: string; materialForm: string; folderId: string | null; aiCategory: string | null }
 type Entry = { id: string; sourceType: string; updatedAt: string; before: State; after: { materialClass: string; materialForm: string }; evidence: string }
@@ -41,6 +42,7 @@ try {
     if (!rollback) { const handle = await open(option('--receipt')!, 'wx'); await handle.writeFile(JSON.stringify({ status: 'prepared; consult MATERIAL_CLASSIFICATION_APPLY audit if interrupted', brandId: source.brandId })); await handle.close() }
     const receipt = await prisma.$transaction(async tx => {
       await ensureFoldersInTransaction(tx, source.brandId)
+      await lockMaterialAssets(tx, source.brandId, source.entries.map((entry: Entry) => entry.id))
       const applied = []
       for (const entry of source.entries) {
         const current = await tx.mediaAsset.findFirst({ where: { id: entry.id, brandId: source.brandId } })
@@ -48,15 +50,14 @@ try {
         if (!current || current.updatedAt.toISOString() !== expectedDate) throw new Error(`Asset changed: ${entry.id}; no updates committed`)
         if (rollback) {
           const before = restoredState(entry.before)
-          if (isAiSource(current.sourceType) && !['AI', 'UNCONFIRMED'].includes(before.materialClass)) throw new Error('Cannot restore a known AI asset as original or human edited')
+          if (isKnownAiAsset(current) && !['AI', 'UNCONFIRMED'].includes(before.materialClass)) throw new Error('Cannot restore a known AI asset as original or human edited')
           if (before.folderId && !await tx.brandFolder.findFirst({ where: { id: before.folderId, brandId: source.brandId } })) throw new Error(`Original folder is missing: ${entry.id}`)
           await tx.mediaAsset.update({ where: { id: entry.id }, data: before })
         } else {
-          if (isAiSource(current.sourceType) && entry.after.materialClass !== 'AI') throw new Error('Known AI assets must remain AI')
+          if (isKnownAiAsset(current) && entry.after.materialClass !== 'AI') throw new Error('Known AI assets must remain AI')
           const category = materialClass(entry.after.materialClass)
-          const systemKey = category === 'ORIGINAL' ? 'needs_review' : category === 'MANUAL' ? 'processed_manual' : category === 'AI' ? 'processed_ai' : null
           const existingFolder = current.folderId ? await tx.brandFolder.findFirst({ where: { id: current.folderId, brandId: source.brandId, materialClass: category } }) : null
-          const folder = existingFolder || (systemKey ? await tx.brandFolder.findUnique({ where: { brandId_systemKey: { brandId: source.brandId, systemKey } } }) : null)
+          const folder = existingFolder || await resolveMaterialFolder(tx, source.brandId, {}, category)
           const updated = await tx.mediaAsset.update({ where: { id: entry.id }, data: { materialClass: category, materialForm: materialForm(entry.after.materialForm), folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } })
           applied.push({ ...entry, appliedAt: updated.updatedAt.toISOString(), actualAfter: { materialClass: updated.materialClass, materialForm: updated.materialForm, folderId: updated.folderId, aiCategory: updated.aiCategory } })
         }
@@ -78,13 +79,13 @@ try {
     const preview: Preview = { version: 1, brandId, entries: [] }
     for (const asset of assets) {
       const label = labels.find(l => l.id === asset.id)
-      const category = isAiSource(asset.sourceType) ? 'AI' : label ? materialClass(label.materialClass) : asset.materialClass
+      const category = isKnownAiAsset(asset) ? 'AI' : label ? materialClass(label.materialClass) : asset.materialClass
       const form = label?.materialForm ? materialForm(label.materialForm) : ['generated_video', 'ai_video_final'].includes(asset.sourceType) ? 'FINISHED' : asset.materialForm
       const currentFolder = folders.find(f => f.id === asset.folderId || (!asset.folderId && f.name === asset.aiCategory))
       const expectedClass = currentFolder?.folderKind === 'STANDARD' ? 'ORIGINAL' : currentFolder?.materialClass
       const inconsistentFolder = !!currentFolder && expectedClass !== category
       if (category === asset.materialClass && form === asset.materialForm && !inconsistentFolder) continue
-      preview.entries.push({ id: asset.id, sourceType: asset.sourceType, updatedAt: asset.updatedAt.toISOString(), before: { materialClass: asset.materialClass, materialForm: asset.materialForm, folderId: asset.folderId, aiCategory: asset.aiCategory }, after: { materialClass: category, materialForm: form }, evidence: isAiSource(asset.sourceType) ? 'known_generation_entry' : label ? 'human_reviewed_label' : 'inconsistent_folder_requires_review' })
+      preview.entries.push({ id: asset.id, sourceType: asset.sourceType, updatedAt: asset.updatedAt.toISOString(), before: { materialClass: asset.materialClass, materialForm: asset.materialForm, folderId: asset.folderId, aiCategory: asset.aiCategory }, after: { materialClass: category, materialForm: form }, evidence: isKnownAiAsset(asset) ? 'known_generation_entry' : label ? 'human_reviewed_label' : 'inconsistent_folder_requires_review' })
     }
     await writeFile(output, JSON.stringify(preview, null, 2), { flag: 'wx' })
     console.log(JSON.stringify({ action: 'preview', brandId, total: assets.length, changes: preview.entries.length, unconfirmed: assets.filter(a => a.materialClass === 'UNCONFIRMED' && !preview.entries.some(e => e.id === a.id)).length, digest: digest(preview) }))

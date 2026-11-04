@@ -9,15 +9,16 @@ const compile = (file, deps) => {
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, { exports, require: name => { assert(name in deps, name); return deps[name] }, console, Set, Map, Object, Number, JSON, Error })
   return exports
 }
+let activeDb
 async function main() {
-  const pg = new PGlite()
+  const pg = activeDb = new PGlite()
   await pg.exec(`CREATE TABLE "Brand" (id text PRIMARY KEY, industry text, "assetFoldersInitialized" boolean DEFAULT false);
     CREATE TABLE "BrandFolder" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), name text, "parentId" text REFERENCES "BrandFolder"(id), "systemKey" text, "folderKind" text DEFAULT 'CUSTOM', "templateVersion" text, "createdAt" timestamptz DEFAULT now(), "updatedAt" timestamptz DEFAULT now(), UNIQUE("brandId",name), UNIQUE("brandId","systemKey"));
-    CREATE TABLE "MediaAsset" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), "folderId" text REFERENCES "BrandFolder"(id), "aiCategory" text, "sourceType" text DEFAULT 'upload', "mimeType" text, url text, "aiTags" jsonb DEFAULT '[]', "manualOverrides" jsonb, "imageAnalysis" jsonb, "updatedAt" timestamptz DEFAULT now());
+    CREATE TABLE "MediaAsset" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), "folderId" text REFERENCES "BrandFolder"(id), "aiCategory" text, "sourceType" text DEFAULT 'upload', "mimeType" text, url text, "aiTags" jsonb DEFAULT '[]', "manualOverrides" jsonb, "imageAnalysis" jsonb, "technicalMetadata" jsonb, "updatedAt" timestamptz DEFAULT now());
     CREATE TABLE "AuditLog" (id text PRIMARY KEY, "actorId" text, "actorType" text, action text, "resourceType" text, "resourceId" text, metadata jsonb);
     INSERT INTO "Brand" (id,industry) VALUES ('brand','restaurant'),('other','restaurant');`)
   await pg.exec(fs.readFileSync('prisma/migrations/20261104090000_material_folder_management/migration.sql', 'utf8'))
-  const json = new Set(['aiTags', 'manualOverrides', 'imageAnalysis', 'metadata'])
+  const json = new Set(['aiTags', 'manualOverrides', 'imageAnalysis', 'technicalMetadata', 'metadata'])
   const whereSQL = (where, values) => Object.entries(where || {}).map(([key, value]) => {
     if (key === 'OR' || key === 'AND') return `(${value.map(v => whereSQL(v, values)).join(key === 'OR' ? ' OR ' : ' AND ')})`
     if (key === 'brandId_name' || key === 'brandId_systemKey') return whereSQL(value, values)
@@ -89,14 +90,27 @@ async function main() {
   const unknown = await filing.createClassifiedAsset(db, 'brand', {}, { brandId: 'brand', url: 'https://fixture/unknown', mimeType: 'image/jpeg', sourceType: 'huawei_obs' })
   assert.equal(unknown.materialClass, 'UNCONFIRMED'); assert.equal(unknown.folderId, null)
   const original = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'ORIGINAL', folderId: leaf.id }, { brandId: 'brand', url: 'https://fixture/original', mimeType: 'image/jpeg' })
+  const fallbackUpload = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'MANUAL', folder: '素材库', aiCategory: '旧创意建议分类' }, { brandId: 'brand', url: 'https://fixture/fallback-upload', mimeType: 'image/jpeg' })
+  assert.equal(fallbackUpload.materialClass, 'MANUAL')
+  await filing.updateAssetFiling(db, 'brand', actor, [fallbackUpload.id], { folderId: manual.id })
   assert.equal(original.folderId, leaf.id)
+  const [sameClass] = await filing.updateAssetFiling(db, 'brand', actor, [original.id], { materialClass: 'ORIGINAL' })
+  assert.equal(sameClass.folderId, leaf.id, 'saving the same class preserves an existing child folder')
+
   const ai = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'ORIGINAL' }, { brandId: 'brand', url: 'https://fixture/ai', mimeType: 'image/jpeg', sourceType: 'designer' })
   assert.equal(ai.materialClass, 'AI')
   const replay = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'AI' }, { id: ai.id, brandId: 'brand', url: ai.url, mimeType: 'image/jpeg', sourceType: 'designer' })
   assert.equal(replay.id, ai.id)
   await assert.rejects(filing.createClassifiedAsset(db, 'brand', { materialClass: 'AI' }, { id: ai.id, brandId: 'brand', url: 'https://fixture/different', mimeType: 'image/jpeg' }), /其他文件/)
-  const generatedUpload = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'AI' }, { brandId: 'brand', url: 'https://fixture/designer-upload', mimeType: 'image/jpeg', sourceType: 'huawei_obs' })
+  const generatedUpload = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'AI' }, { brandId: 'brand', url: 'https://fixture/designer-upload', mimeType: 'image/jpeg', sourceType: 'huawei_obs' }, { knownAiGenerated: true })
   assert.equal(generatedUpload.materialClass, 'AI', 'generation entry class is independent of storage channel')
+  assert.equal(generatedUpload.technicalMetadata.materialProvenance.origin, 'AI_GENERATION')
+  await assert.rejects(filing.updateAssetFiling(db, 'brand', actor, [generatedUpload.id], { materialClass: 'ORIGINAL', confirmMaterialClassChange: true }), /AI/)
+  const declaredAi = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'AI', knownAiGenerated: true }, { brandId: 'brand', url: 'https://fixture/user-declared-ai', mimeType: 'image/jpeg', sourceType: 'huawei_obs' })
+  assert.equal(declaredAi.technicalMetadata, null, 'client payload cannot forge trusted provenance')
+  const [correctedLabel] = await filing.updateAssetFiling(db, 'brand', actor, [declaredAi.id], { materialClass: 'ORIGINAL', confirmMaterialClassChange: true })
+  assert.equal(correctedLabel.materialClass, 'ORIGINAL', 'a mistaken user label can still be explicitly corrected')
+
   await assert.rejects(filing.updateAssetFiling(db, 'brand', actor, [original.id], { folderId: manual.id }), /确认/)
   const [moved] = await filing.updateAssetFiling(db, 'brand', actor, [original.id], { folderId: manual.id, confirmMaterialClassChange: true, materialForm: 'FINISHED' })
   assert.equal(moved.id, original.id); assert.equal(moved.url, original.url); assert.equal(moved.materialClass, 'MANUAL'); assert.equal(moved.manualOverrides.folder, true)
@@ -130,4 +144,4 @@ async function main() {
   await pg.close()
   console.log('PASS material folders: additive migration, real SQL tree/filing transactions, revision races, rename seeding, permissions, brand isolation, AI protection and reference identity')
 }
-main().catch(e => { console.error(e); process.exitCode = 1 })
+main().catch(async e => { console.error(e); if (activeDb) await activeDb.close(); process.exitCode = 1 })

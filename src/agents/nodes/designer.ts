@@ -47,7 +47,7 @@ async function saveAsset({
           aiReady: true,
           aiCategory,
           sourceType: "huawei_obs"
-      });
+      }, { knownAiGenerated: true });
       console.log(`[Designer Node] Registered Huawei OBS asset in DB: ${newAsset.id}`);
       return uploadResult.url;
     } else {
@@ -77,7 +77,7 @@ async function saveAsset({
             aiReady: true,
             aiCategory,
             sourceType: "postfast"
-        });
+        }, { knownAiGenerated: true });
         console.log(`[Designer Node] Registered PostFast asset in DB: ${newAsset.id}`);
         return `/api/integrations/postfast/file/${brandId}/${storageKey}`;
       } else {
@@ -100,7 +100,7 @@ async function saveAsset({
       aiReady: true,
       aiCategory,
       sourceType: sourceTypeFallback
-  });
+  }, { knownAiGenerated: true });
   console.log(`[Designer Node] Registered local asset in DB: ${newAsset.id}`);
   return publicUrl;
 }

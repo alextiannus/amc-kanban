@@ -92,7 +92,11 @@ Use ${batch.language === 'en' ? 'English' : 'Chinese'} except exact OCR text. De
       const generatedTags = untouched ? nextGeneratedTags : (previous?.generatedTags || [])
       const template = templateForIndustry(batch.industry)
       const systemKey = canonicalFolderForAnalysis(template, result, asset.mimeType)
-      const categoryUnassigned = !asset.folderId || !asset.aiCategory || ['raw', '素材库', '待确认'].includes(asset.aiCategory)
+      const currentFolder = asset.folderId
+        ? await tx.brandFolder.findFirst({ where: { id: asset.folderId, brandId: asset.brandId } })
+        : asset.aiCategory ? await tx.brandFolder.findFirst({ where: { brandId: asset.brandId, name: asset.aiCategory } }) : null
+      const categoryUnassigned = currentFolder ? currentFolder.systemKey === 'needs_review'
+        : !asset.folderId && (!asset.aiCategory || ['raw', '素材库', '待确认'].includes(asset.aiCategory))
       const assignedFolder = untouched && categoryUnassigned && asset.materialClass === 'ORIGINAL' && !(asset.manualOverrides as any)?.folder
         ? await tx.brandFolder.findUnique({ where: { brandId_systemKey: { brandId: asset.brandId, systemKey } } })
         : null
