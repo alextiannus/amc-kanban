@@ -262,6 +262,22 @@
       },
       "version": "sha256:c4d31e42e545d4d2cfb5106932bdea9d971254bc772ed5654d1f9459b2bfdd30",
       "description": "Draft or review AMC social copy using verified creative briefs and repository-default Content native writing skills. Use for platform-specific content; do not treat compatibility registry rules as automatically active or claim access to private runtime settings."
+    },
+    {
+      "id": "amc-shoot-coordinator",
+      "path": "skills/amc-shoot-coordinator",
+      "audience": "host",
+      "category": "production",
+      "requires": [
+        "authorized AMC shooting-plan generation"
+      ],
+      "dependsOn": [],
+      "origin": {
+        "repository": "amc-kanban",
+        "path": "skills/amc-shoot-coordinator"
+      },
+      "description": "为已选短视频脚本编制摄影执行单，判断素材能否一拍多用，并为每个来源镜头标出可剪片段。",
+      "version": "sha256:1eda8fb2cdf779343ddac0fd24933cecd6e8fce50a798374220c3c998ae23af2"
     }
   ],
   "mirrors": [
@@ -549,6 +565,11 @@
       "source": "skills/amc-marketing-expert/references/brand-interview.md",
       "consumer": "kanban",
       "target": "skills/amc-marketing-expert/references/brand-interview.md"
+    },
+    {
+      "source": "skills/amc-shoot-coordinator/SKILL.md",
+      "consumer": "kanban",
+      "target": "skills/amc-shoot-coordinator/SKILL.md"
     }
   ],
   "generatedResources": [
@@ -599,6 +620,7 @@
     "skills/amc-marketing-expert/agents/openai.yaml": "5b1847a111e572f648bdf94d223a60c896545bce50f398b15d335ff15163bf43",
     "skills/amc-marketing-expert/references/brand-interview.md": "f8ee4a39b00858408f9e1d884af61725ce8e58f52e759a999fbc10c0087d1a73",
     "skills/amc-marketing-expert/references/overseas-platform-strategy.md": "fb9fc12c24f19691cfb0bda1fd82595dcd3a2c6e3bd9ce811dbfef75da64ea6a",
+    "skills/amc-shoot-coordinator/SKILL.md": "dfb20bb4b865bebc13ea597dddfecb3dc3be971b9543ee9271dbe60bc42a298c",
     "skills/brand-intelligence-intake/SKILL.md": "aea6f0010f18cc49d576382a1d85ff94e4362cda6298bb4b6fb0fb69cf4fa2ce",
     "skills/brand-intelligence-intake/agents/openai.yaml": "e21863b50a0d25e0fa895efaf7900c2752d8e942989f4960e976698ca4eb0d8a",
     "skills/brand-intelligence-intake/references/collector-modules.md": "b1cebca9efa60d5969c042d58d1b44211fb0915bcf50fb5a1cdc447431f8760b",
