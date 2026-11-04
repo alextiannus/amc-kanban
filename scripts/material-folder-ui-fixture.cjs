@@ -22,6 +22,11 @@ async function main() {
   const picture = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><rect width="300" height="300" fill="#c7d2fe"/><text x="90" y="150" font-size="30">Fixture</text></svg>').toString('base64')
   const assets = ['ORIGINAL', 'MANUAL', 'AI', 'UNCONFIRMED'].map((materialClass, i) => ({ id: `asset-${i}`, brandId: 'fixture', brandName: '测试品牌', url: picture, filename: `${materialClass}.jpg`, mimeType: 'image/jpeg', folderId: ['dish', 'manual', 'ai', null][i], aiCategory: ['招牌菜实拍', '人工剪辑', 'AI 制作', '素材库'][i], materialClass, materialForm: i === 1 ? 'FINISHED' : 'UNKNOWN', aiTags: [], usedCount: 0, aiReady: true, sourceType: 'upload', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }))
   for (let i=4;i<33;i++) assets.push({...assets[0],id:`asset-${i}`,filename:`原始素材 ${i}.jpg`,usedCount:i%2,materialForm:i%2?'CLIP':'FINISHED'})
+  assets.push(
+    {...assets[3], id:'review-video-cover', filename:'有封面视频.mp4', mimeType:'video/mp4', url:'/fixture/preview.mp4', thumbnailUrl:picture, thumbnailStatus:'ready'},
+    {...assets[3], id:'review-video-frame', filename:'无封面视频.mp4', mimeType:'video/mp4', url:'/fixture/preview.mp4'},
+    {...assets[3], id:'review-broken', filename:'失效图片.jpg', url:'/fixture/missing.jpg', thumbnailUrl:'/fixture/missing.webp'},
+  )
   const receipts = new Map()
   const present = readonly => folders.map(f => {
     const lineage = [f]; while (lineage[0].parentId) lineage.unshift(folders.find(p => p.id === lineage[0].parentId))
@@ -34,6 +39,15 @@ async function main() {
     let body = ''; for await (const chunk of req) body += chunk
     const input = body ? JSON.parse(body) : {}
     const json = (data, status = 200) => { res.statusCode = status; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)) }
+    if (url.pathname === '/fixture/preview.mp4') {
+      const clip = Buffer.from(fs.readFileSync(path.join(root,'scripts/fixtures/material-preview-video.base64'),'ascii').trim(),'base64')
+      const range = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '')
+      const start = range ? Number(range[1]) : 0, end = range && range[2] ? Math.min(Number(range[2]),clip.length-1) : clip.length-1
+      res.setHeader('Content-Type','video/mp4');res.setHeader('Accept-Ranges','bytes');res.setHeader('Content-Length',String(end-start+1))
+      if(range){res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${clip.length}`)}
+      return res.end(clip.subarray(start,end+1))
+    }
+    if (url.pathname.startsWith('/fixture/missing')) { res.statusCode=404; return res.end() }
     if (url.pathname === '/api/dashboard/assets') {
       const p = url.searchParams, root = p.get('root') || p.get('materialClass'), folderId = p.get('folderId'), page = Number(p.get('page') || 1), size = Number(p.get('pageSize') || 24)
       let ids = folderId ? [folderId] : []; for (let j=0;j<3;j++) ids.push(...folders.filter(f=>ids.includes(f.parentId)).map(f=>f.id))
