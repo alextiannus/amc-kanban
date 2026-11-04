@@ -1,3 +1,4 @@
+import { prepareCoverAssets, markDraftCover } from '@/lib/asset-library/covers'
 import {returnedCreativePlaceholderFilters} from '@/lib/brand-plan/creativeVisibility'
 import {creativeWorkspace} from '@/lib/brand-plan/creativeRevisionContract'
 import { resolveDraftAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
@@ -301,6 +302,11 @@ async function createDraft(request: Request, { params }: Params) {
   if (coverAssetId && !coverAsset) {
     return NextResponse.json({ error: 'coverAssetId must reference a JPEG or PNG image in this brand' }, { status: 400 })
   }
+  let coverProof: Awaited<ReturnType<typeof prepareCoverAssets>>[number] | null = null
+  if (coverAsset) {
+    try { [coverProof] = await prepareCoverAssets(prisma, brandId, [coverAsset.id]) }
+    catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: (e as { status?: number }).status || 422 }) }
+  }
   const status = typeof body.status === 'string' ? body.status : 'draft'
   if (!DRAFT_STATUSES.has(status)) {
     return NextResponse.json({ error: 'Invalid draft status' }, { status: 400 })
@@ -367,6 +373,8 @@ async function createDraft(request: Request, { params }: Params) {
       },
       select: { id: true },
     })
+
+    if (coverProof) await markDraftCover(tx, brandId, { id: actor.id, type: actor.type }, coverProof, created.id)
 
     if (assetIds.length > 0) {
       const validAssets = (await tx.mediaAsset.findMany({
@@ -518,6 +526,7 @@ function normalizeOptionalPastDate(value: unknown, fallback: Date | null): Date 
 
 export async function POST(request: Request, context: Params) {
   try { return await createDraft(request, context) } catch (error) {
+    if (error && typeof error === 'object' && 'status' in error && [400,404,409,422].includes(Number(error.status))) return NextResponse.json({ error: 'message' in error ? String(error.message) : '封面保存失败' }, { status: Number(error.status) })
     if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     throw error
   }

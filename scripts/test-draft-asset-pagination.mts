@@ -1,3 +1,5 @@
+import * as coverPolicy from '../src/lib/asset-library/cover-policy.ts'
+import * as materialPolicy from '../src/lib/asset-library/material-policy.ts'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -7,7 +9,7 @@ const rows = Array.from({ length: 245 }, (_, index) => ({
   id: `asset-${String(245 - index).padStart(3, '0')}`, brandId: 'brand-a',
   createdAt: new Date('2026-09-08'), filename: `Photo ${index + 1}`,
   mimeType: index % 3 === 0 ? 'video/mp4' : index % 3 === 1 ? 'IMAGE/JPEG' : 'image/png',
-  usedCount: index < 210 ? 1 : 0, aiCategory: index < 210 ? '产品' : '封面图',
+  usedCount: index < 210 ? 1 : 0, isCoverMaterial: index >= 210, aiCategory: index < 210 ? '产品' : '封面图',
   url: `key-${index}`, sourceType: 'postfast',
 }))
 rows.push({ ...rows[0], id: 'other-brand', brandId: 'brand-b' })
@@ -16,7 +18,7 @@ function matches(row: any, where: any): boolean {
     if (key === 'AND') return value.every((item: any) => matches(row, item))
     if (key === 'OR') return value.some((item: any) => matches(row, item))
     if (typeof value === 'object' && value !== null) {
-      if ('in' in value) return value.in.includes(row[key])
+      if ('in' in value) return value.mode === 'insensitive' ? value.in.map((v: string) => v.toLowerCase()).includes(String(row[key]).toLowerCase()) : value.in.includes(row[key])
       if ('notIn' in value) return !value.notIn.includes(row[key])
       if ('startsWith' in value) return String(row[key]??'').toLowerCase().startsWith(value.startsWith.toLowerCase())
       if ('contains' in value) return String(row[key] ?? '').toLowerCase().includes(value.contains.toLowerCase())
@@ -32,6 +34,7 @@ let queries = 0
 let counts = 0
 let lastWhere: any
 const deps: Record<string, any> = {
+  '@/lib/asset-library/cover-policy': coverPolicy, '@/lib/asset-library/material-policy': materialPolicy, '@/lib/asset-library/filing': {},
   'next/server': { NextResponse: { json: (data: any, init: any) => Response.json(data, init) } },
   '@/lib/assetThumbnails': {publicThumbnail:()=>({thumbnailUrl:'https://preview.test/480.webp',thumbnailStatus:'ready'})},
   '@/lib/auth': { getSession: async () => user ? { user } : null, extractApiKey: () => null },
@@ -82,6 +85,16 @@ assert(unused.assets.every((row: any) => row.usedCount === 0))
 const cover = await read('?page=1&mediaType=cover&folder=' + encodeURIComponent('封面图'))
 assert.equal(cover.pagination.total, 23)
 assert(cover.assets.every((row: any) => row.mimeType.toLowerCase().startsWith('image/') && row.aiCategory === '封面图'))
+rows[1].isCoverMaterial = true
+const markedOutsideFolder = await read('?page=1&coverOnly=true&pageSize=100')
+assert.equal(markedOutsideFolder.pagination.total,24)
+assert(markedOutsideFolder.assets.some((a:any)=>a.id===rows[1].id && a.aiCategory!=='封面图'))
+assert(markedOutsideFolder.assets.every((a:any)=>a.isCoverMaterial&&['image/jpeg','image/png'].includes(a.mimeType.toLowerCase())))
+const legacyCoverAlias = await read('?page=1&mediaType=cover&folder='+encodeURIComponent('封面图')+'&pageSize=100')
+assert.equal(legacyCoverAlias.pagination.total,24,'Old cover query aliases the new purpose view')
+rows[1].aiCategory='重命名后的目录'
+assert((await read('?page=1&coverOnly=true&pageSize=100')).assets.some((a:any)=>a.id===rows[1].id),'Renaming does not change cover membership')
+assert.equal((await request('?coverOnly=invalid')).status,400)
 const searchedCover = await read('?page=1&mediaType=cover&q=Photo%20245')
 assert.equal(searchedCover.pagination.total, 1)
 assert.equal(searchedCover.assets[0].filename, 'Photo 245')

@@ -1,3 +1,4 @@
+import { COVER_MIMES, coverOnly } from '@/lib/asset-library/cover-policy'
 import { canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
@@ -117,6 +118,8 @@ export async function GET(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'filename query parameter is required' }, { status: 400 })
   }
   const mimeType = resolveUploadMimeType(filename, url.searchParams.get('mimeType'))
+  try { if (coverOnly(url.searchParams.get('isCoverMaterial')) && !COVER_MIMES.includes(mimeType)) return NextResponse.json({ error: '封面素材仅支持 JPEG 或 PNG 图片' }, { status: 422 }) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
+
 
   const earlyIssues = mimeType === 'application/octet-stream'
     ? []

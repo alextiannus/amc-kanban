@@ -8,6 +8,8 @@ export interface BrandPickerAsset {
   filename?: string | null
   mimeType: string
   aiCategory?: string | null
+  isCoverMaterial?: boolean
+  thumbnailUrl?: string | null
   usedCount?: number
   createdAt?: string | Date
 }

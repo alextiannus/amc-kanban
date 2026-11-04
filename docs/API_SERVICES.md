@@ -987,3 +987,5 @@ AMCMM 脚本适配当前入口（本地已实现，未部署）：既有 `kind=c
 # Merchant report reading contract (2026-11-04, deployed 8b9afc6d)
 
 See [latest-merchant-report.md](latest-merchant-report.md) for the unified authorized latest/pinned report, PDF, Markdown and frozen-source APIs. Viewing performs no model calls. Deployment status is recorded in that document.
+
+封面用途接口（本地实现，待部署）：isCoverMaterial 上传/更新字段、coverOnly 查询参数、folders.views 固定用途入口，以及与 draft.coverAssetId 的事务关联；兼容及回填详见 [封面素材规范](cover-materials.md)。

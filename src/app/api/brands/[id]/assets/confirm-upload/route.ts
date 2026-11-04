@@ -1,3 +1,4 @@
+import { coverFlag, assertCoverMedia } from '@/lib/asset-library/cover-policy'
 import { NextResponse } from 'next/server'
 import { extractApiKey, getAgentFromApiKey, getSession } from '@/lib/auth'
 import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
@@ -18,12 +19,13 @@ import { submitAssetToCalendarCreativeRequirement } from '@/lib/brand-plan/calen
 import { assertCollectionTarget, findReusableAsset, linkAssetToCollection } from '@/lib/asset-library/collections'
 import { ensureAssetFolders } from '@/lib/asset-analysis/folders'
 
-import { createClassifiedAsset } from '@/lib/asset-library/filing'
+import { updateAssetFiling, filingError, createClassifiedAsset } from '@/lib/asset-library/filing'
 
 type Params = { params: Promise<{ id: string }> }
 
 interface ConfirmUploadRequest {
   folderId?: string
+  isCoverMaterial?: boolean
   materialClass?: string
   materialForm?: string
   filename: string
@@ -140,10 +142,12 @@ async function createConfirmedAsset(input: {
     )
   }
 
+  try { coverFlag(body.isCoverMaterial); if (body.isCoverMaterial) assertCoverMedia(metadata.mimeType, metadata) } catch (e) { const result = filingError(e); return NextResponse.json(result.body, { status: result.status }) }
   try {
     const contentHash = typeof body.contentHash === 'string' && /^[a-f0-9]{64}$/i.test(body.contentHash) ? body.contentHash.toLowerCase() : null
     const reusable = contentHash ? await findReusableAsset(brandId, contentHash) : null
     if (reusable && reusable.sizeBytes === metadata.sizeBytes && reusable.mimeType === metadata.mimeType) {
+      if (body.isCoverMaterial) { Object.assign(reusable, (await updateAssetFiling(prisma, brandId, { id: uploadedBy, type: 'HUMAN' }, [reusable.id], { isCoverMaterial: true }))[0]) }
       if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: reusable.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
       if (body.creativeId) await submitAssetToCalendarCreativeRequirement({ brandId, assetId: reusable.id, creativeId: body.creativeId, submittedBy: uploadedBy })
       const duplicateObjectDeleted = await deleteHuaweiObsObject(key).catch((cleanupError) => {

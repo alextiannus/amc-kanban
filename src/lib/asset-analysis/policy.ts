@@ -2,14 +2,14 @@ import { canonicalFolderForAnalysis, folderForKey, templateForIndustry } from '.
 
 export const ANALYSIS_MODEL = 'doubao-seed-2.1-pro'
 export const ANALYSIS_VERSION = 'asset-image-video-v2'
-export const PROTECTED_FOLDERS = ['素材库', 'raw', '封面图', '视频原片', 'AI视频', '已使用', '待确认', '重复素材', '不建议使用', 'all', '品牌与门头', '菜品与饮品', '门店与空间', '人物与服务', '制作过程', '活动与氛围', '菜单与价格']
+export const PROTECTED_FOLDERS = ['素材库', 'raw', '封面素材', '封面图', '视频原片', 'AI视频', '已使用', '待确认', '重复素材', '不建议使用', 'all', '品牌与门头', '菜品与饮品', '门店与空间', '人物与服务', '制作过程', '活动与氛围', '菜单与价格']
 export const INITIAL_FOLDERS = templateForIndustry('restaurant').folders.map(folder => folder.zh)
 
 export function folderName(value: unknown, allowSystemLabel = false): string {
   if (typeof value !== 'string') throw new Error('Folder name is required')
   const name = value.trim().normalize('NFC')
   if (!name || name.length > 80 || /[/\\\u0000-\u001f]/.test(name)) throw new Error('Invalid folder name (1–80 characters, no slashes)')
-  if (PROTECTED_FOLDERS.includes(name) && (!allowSystemLabel || ['素材库', 'raw', 'all', '已使用'].includes(name))) throw new Error('System folder name is reserved')
+  if (PROTECTED_FOLDERS.includes(name) && (!allowSystemLabel || ['素材库', 'raw', 'all', '已使用', '封面素材'].includes(name))) throw new Error('System folder name is reserved')
   return name
 }
 

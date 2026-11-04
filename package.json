@@ -132,6 +132,7 @@
     "test:creative-usage": "tsx scripts/test-brainstorm-service.mts && tsx scripts/test-brainstorm-usage-sql.mts && tsx scripts/test-brainstorm-route.mts && tsx scripts/test-browse-knowledge.mts && tsx scripts/test-browse-source.mts",
     "test:merchant-report-read": "tsx scripts/test-merchant-report-read.mts && tsx scripts/test-insight-pdf-route.mts",
     "test:material-folders": "node scripts/test-material-folder-management.cjs",
+    "materials:covers": "tsx scripts/cover-material-backfill.mts",
     "materials:classify": "tsx scripts/material-classification.mts"
   },
   "dependencies": {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronRight, FolderOpen, Plus, Search, X, Loader2 } from 'lucide-react'
+import { COVER_VIEW } from '@/lib/asset-library/cover-policy'
 import { MATERIAL_ROOTS, STATUS_FOLDER_KEYS } from '@/lib/asset-library/roots'
 import { RootPurpose } from './MaterialDirectoryPicker'
 import { useI18n } from '@/lib/i18n'
@@ -13,6 +14,7 @@ export default function AssetFolderManager({ brandId, createToken = 0, onChanged
   const { t } = useI18n()
   const [open, setOpen] = useState(false), [folders, setFolders] = useState<ManagedFolder[]>([]), [canCreate, setCanCreate] = useState(false)
   const [search, setSearch] = useState(''), [expanded, setExpanded] = useState<Set<string>>(new Set()), [form, setForm] = useState<Form | null>(null)
+  const [views, setViews] = useState<Array<typeof COVER_VIEW>>([])
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [error, setError] = useState('')
   const dialog = useRef<HTMLDialogElement>(null), version = useRef(0), token = useRef(createToken)
   const load = useCallback(async () => {
@@ -21,7 +23,7 @@ export default function AssetFolderManager({ brandId, createToken = 0, onChanged
       const res = await fetch(`/api/brands/${brandId}/folders`, { cache: 'no-store' }); const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       if (v !== version.current) return
-      setFolders(data.folders); setCanCreate(data.canCreate)
+      setFolders(data.folders); setCanCreate(data.canCreate); setViews(data.views || [])
       return data.folders as ManagedFolder[]
     } finally { if (v === version.current) setLoading(false) }
   }, [brandId])
@@ -114,6 +116,7 @@ export default function AssetFolderManager({ brandId, createToken = 0, onChanged
         </form>}
         {loading && <p role="status" className="text-sm text-slate-500">{t('正在读取目录…', 'Loading folders…')}</p>}
         {MATERIAL_ROOTS.map(root => <section key={root.id} className="rounded-xl border p-2"><div className="flex items-center gap-1 px-2 py-1"><h3 className="flex-1 text-sm font-semibold">{root.name}</h3><RootPurpose root={root} />{canCreate && <button type="button" onClick={() => create(undefined, root.id)} className="rounded border px-2 py-1 text-xs">新建子目录</button>}</div><ul className="text-sm">{folders.filter(f => !f.parentId && f.materialClass === root.id && !STATUS_FOLDER_KEYS.includes(f.systemKey || '')).map(renderNode)}</ul></section>)}
+        {views.map(view => <section key={view.id} className="rounded-xl border p-2"><div className="flex items-center px-2"><h3 className="flex-1 text-sm font-semibold">{view.name}</h3><RootPurpose root={view} /></div><p className="p-2 text-xs text-slate-500">在素材卡片上设为封面，即可在发布草稿和排期时选择；来源目录保持原样。</p></section>)}
         {folders.some(f => f.materialClass === 'UNCONFIRMED') && <details className="rounded-xl border p-2"><summary className="cursor-pointer p-2 text-sm">历史目录（待整理）</summary><p className="px-2 text-xs text-slate-500">请到“待整理”检查素材来源并确认，支持分批整理混合目录；整理后可删除空目录。不会按文件夹名称自动判断。</p><ul>{folders.filter(f => !f.parentId && f.materialClass === 'UNCONFIRMED').map(renderNode)}</ul></details>}
         {!canCreate && !loading && <p className="text-sm text-slate-500">{t('当前账号可查看目录，没有编辑权限', 'You can browse folders with read-only access')}</p>}
       </div>

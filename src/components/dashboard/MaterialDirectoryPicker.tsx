@@ -8,7 +8,7 @@ import type { ManagedFolder } from './AssetFolderManager'
 
 // Portal into the current dialog when present, so the explanation remains in
 // the modal top layer. Fixed positioning avoids scroll-container clipping.
-export function RootPurpose({ root }: { root: MaterialRoot }) {
+export function RootPurpose({ root }: { root: Pick<MaterialRoot, 'id' | 'name' | 'description'> }) {
   const [open, setOpen] = useState(false)
   const [portalHost, setPortalHost] = useState<Element | null>(null)
   const [position, setPosition] = useState({ top: 0, left: 0 })
@@ -36,7 +36,7 @@ export function RootPurpose({ root }: { root: MaterialRoot }) {
     {open && portalHost && createPortal(<div ref={tip} id={id} role="tooltip" style={position} className="fixed z-[100] w-[280px] max-w-[calc(100vw-16px)] rounded-lg bg-slate-800 p-3 text-xs font-normal leading-5 text-white shadow-lg">{root.description}</div>, portalHost)}</>
 }
 
-export default function MaterialDirectoryPicker({ roots = MATERIAL_ROOTS, folders, rootId, folderId, onChange }: { roots?: readonly MaterialRoot[]; folders: ManagedFolder[]; rootId: string; folderId: string; onChange: (root: string, folder: string) => void }) {
+export default function MaterialDirectoryPicker({ roots = MATERIAL_ROOTS, folders, rootId, folderId, onChange }: { roots?: readonly Pick<MaterialRoot, 'id' | 'name' | 'description'>[]; folders: ManagedFolder[]; rootId: string; folderId: string; onChange: (root: string, folder: string) => void }) {
   const [open, setOpen] = useState(false), [search, setSearch] = useState(''), [expanded, setExpanded] = useState<string[]>([])
   const container = useRef<HTMLDivElement>(null)
   const current = roots.find(r => r.id === rootId) || roots[0]

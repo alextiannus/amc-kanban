@@ -7,7 +7,7 @@ const tailwind = require('@tailwindcss/postcss')
 const root = process.cwd(), out = path.join(root, 'output/playwright/material-folders')
 fs.mkdirSync(out, { recursive: true })
 async function main() {
-  await esbuild.build({ stdin: { contents: `import React from 'react';import {createRoot} from 'react-dom/client';import DashboardAssets from './src/components/dashboard/DashboardAssets';createRoot(document.getElementById('root')).render(<DashboardAssets brandId="fixture"/>);`, resolveDir: root, loader: 'tsx' }, bundle: true, outfile: path.join(out, 'app.js'), platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' } })
+  await esbuild.build({ stdin: { contents: `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import DashboardAssets from './src/components/dashboard/DashboardAssets';import PostEditDrawer from './src/components/dashboard/PostEditDrawer';function Fixture(){const[open,setOpen]=useState(false);return new URLSearchParams(location.search).has('draft')?<><button onClick={()=>setOpen(true)}>新建发布草稿</button><PostEditDrawer isOpen={open} onClose={()=>setOpen(false)} postId={null} brandId="fixture" onSuccess={()=>setOpen(false)}/></>:<DashboardAssets brandId="fixture"/>}createRoot(document.getElementById('root')).render(<Fixture/>);`, resolveDir: root, loader: 'tsx' }, bundle: true, outfile: path.join(out, 'app.js'), platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' } })
   const css = await postcss([tailwind({ base: root })]).process(fs.readFileSync('src/app/globals.css', 'utf8'), { from: path.join(root, 'src/app/globals.css') })
   fs.writeFileSync(path.join(out, 'app.css'), css.css)
   let counter = 10
@@ -27,6 +27,8 @@ async function main() {
     {...assets[3], id:'review-video-frame', filename:'无封面视频.mp4', mimeType:'video/mp4', url:'/fixture/preview.mp4'},
     {...assets[3], id:'review-broken', filename:'失效图片.jpg', url:'/fixture/missing.jpg', thumbnailUrl:'/fixture/missing.webp'},
   )
+  assets.forEach((a,i) => a.isCoverMaterial = i < 25 && a.mimeType === 'image/jpeg')
+  const drafts = []
   const receipts = new Map()
   const present = readonly => folders.map(f => {
     const lineage = [f]; while (lineage[0].parentId) lineage.unshift(folders.find(p => p.id === lineage[0].parentId))
@@ -48,11 +50,11 @@ async function main() {
       return res.end(clip.subarray(start,end+1))
     }
     if (url.pathname.startsWith('/fixture/missing')) { res.statusCode=404; return res.end() }
-    if (url.pathname === '/api/dashboard/assets') {
+    if (url.pathname === '/api/dashboard/assets' || url.pathname === '/api/brands/fixture/assets' && req.method === 'GET') {
       const p = url.searchParams, root = p.get('root') || p.get('materialClass'), folderId = p.get('folderId'), page = Number(p.get('page') || 1), size = Number(p.get('pageSize') || 24)
       let ids = folderId ? [folderId] : []; for (let j=0;j<3;j++) ids.push(...folders.filter(f=>ids.includes(f.parentId)).map(f=>f.id))
-      const filtered = assets.filter(a => (!root || a.materialClass === root) && (!folderId || ids.includes(a.folderId)) && (!p.get('q') || a.filename.includes(p.get('q'))) && (p.get('usage') !== 'unused' || a.usedCount===0) && (p.get('usage') !== 'used' || a.usedCount>0) && (!p.get('materialForm') || a.materialForm===p.get('materialForm')) && (!p.get('assetType') || p.get('assetType')==='all' || a.mimeType.startsWith(p.get('assetType')+'/')))
-      return json({ assets: filtered.slice((page-1)*size,page*size), total:filtered.length, page, pageSize:size })
+      const filtered = assets.filter(a => (p.get('coverOnly') !== 'true' || a.isCoverMaterial) && (p.get('mediaType') !== 'cover' || ['image/jpeg','image/png'].includes(a.mimeType)) && (!root || a.materialClass === root) && (!folderId || ids.includes(a.folderId)) && (!p.get('q') || a.filename.includes(p.get('q'))) && (p.get('usage') !== 'unused' || a.usedCount===0) && (p.get('usage') !== 'used' || a.usedCount>0) && (!p.get('materialForm') || a.materialForm===p.get('materialForm')) && (!p.get('assetType') || p.get('assetType')==='all' || a.mimeType.startsWith(p.get('assetType')+'/')))
+      return json({ assets: filtered.slice((page-1)*size,page*size), total:filtered.length, page, pageSize:size, pagination:{page,pageSize:size,total:filtered.length,totalPages:Math.max(1,Math.ceil(filtered.length/size))} })
     }
     if (url.pathname.endsWith('/assets/organize')) {
       if(input.action==='rollback'){const before=receipts.get(input.receiptId);if(!before)return json({error:'整理回执不存在'},409);before.forEach(previous=>Object.assign(assets.find(a=>a.id===previous.id),previous));receipts.delete(input.receiptId);return json({restored:before.length})}
@@ -75,7 +77,23 @@ async function main() {
         folder.revision++; return json({ folder })
       }
       if (req.method === 'DELETE') { folders = folders.filter(f => f.id !== url.searchParams.get('folderId')); return json({ success: true }) }
-      return json({ folders: present(false), canCreate: true })
+      return json({ folders: present(false), canCreate: true, views:[{id:'COVERS',name:'封面素材',description:'集中管理发布封面图片，可在新建草稿和排期时选择；原目录与来源类别保留。',canUpload:true}] })
+    }
+    if (url.pathname === '/api/brands/fixture/accounts') return json({accounts:[{id:'ig-account',platformId:'instagram',handle:'fixture',displayName:'测试品牌'}]})
+    if (url.pathname === '/fixture/reset-cover-state') { assets.forEach((a,i)=>a.isCoverMaterial=i<25&&a.mimeType==='image/jpeg');drafts.length=0;return json({ok:true}) }
+    if (url.pathname === '/fixture/cover-state') return json({assets:assets.map(a=>({id:a.id,filename:a.filename,isCoverMaterial:a.isCoverMaterial,folderId:a.folderId,materialClass:a.materialClass})),drafts})
+    if (url.pathname === '/fixture/clear-covers') { assets.forEach(a=>a.isCoverMaterial=false); return json({ok:true}) }
+    if (url.pathname === '/api/brands/fixture/assets' && req.method === 'PATCH') {
+      const chosen=assets.filter(a=>input.assetIds.includes(a.id))
+      if(input.isCoverMaterial && chosen.some(a=>!['image/jpeg','image/png'].includes(a.mimeType)))return json({error:'封面素材仅支持 JPEG 或 PNG 图片'},422)
+      chosen.forEach(a=>{if(input.isCoverMaterial!==undefined)a.isCoverMaterial=input.isCoverMaterial;a.updatedAt=new Date().toISOString()})
+      return json({ok:true,assets:chosen})
+    }
+    if (url.pathname === '/api/brands/fixture/drafts' && req.method === 'POST') {
+      const cover=assets.find(a=>a.id===input.coverAssetId)
+      if(cover)cover.isCoverMaterial=true
+      const draft={...input,id:`draft-${counter++}`,brandId:'fixture',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),coverAsset:cover,assetRefs:[],account:{id:input.accountId,platformId:'instagram'}}
+      drafts.push(draft);return json({ok:true,draft},201)
     }
     if (url.pathname.endsWith('/asset-analysis')) return json({ batches: [] })
     if (url.pathname.startsWith('/api/')) return json({ accounts: [], creatives: [], collections: [] })

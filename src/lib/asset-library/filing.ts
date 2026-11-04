@@ -1,6 +1,8 @@
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { materialClass, materialForm, assertClassChange, isAiSource, isKnownAiAsset, requestedFolderTarget } from './material-policy.ts'
 import { ensureFoldersInTransaction } from '../asset-analysis/folders'
+import { coverFlag, assertCoverMedia } from './cover-policy'
+import { prepareCoverAssets } from './covers'
 
 type Db = PrismaClient
 const fail = (message: string, status = 409) => Object.assign(new Error(message), { status })
@@ -27,6 +29,8 @@ export async function resolveMaterialFolder(tx: Prisma.TransactionClient, brandI
   return tx.brandFolder.create({ data: { brandId, name: collision ? `${name} (${systemKey})` : name, systemKey, materialClass: category } })
 }
 export async function createClassifiedAsset(db: Db, brandId: string, body: Record<string, unknown>, data: Prisma.MediaAssetUncheckedCreateInput, options: { knownAiGenerated?: boolean } = {}) {
+  const cover = coverFlag(body.isCoverMaterial) ?? false
+  if (cover) assertCoverMedia(data.mimeType, data.technicalMetadata)
   return db.$transaction(async tx => {
     await ensureFoldersInTransaction(tx, brandId)
     if (data.id) {
@@ -40,11 +44,15 @@ export async function createClassifiedAsset(db: Db, brandId: string, body: Recor
     const category = generated ? 'AI' : materialClass(body.materialClass ?? 'UNCONFIRMED')
     const folder = await resolveMaterialFolder(tx, brandId, body, category)
     const priorMetadata = data.technicalMetadata && typeof data.technicalMetadata === 'object' && !Array.isArray(data.technicalMetadata) ? data.technicalMetadata as Prisma.InputJsonObject : {}
-    return tx.mediaAsset.create({ data: { ...data, ...(generated ? { technicalMetadata: { ...priorMetadata, materialProvenance: { origin: 'AI_GENERATION' } } } : {}), brandId, materialClass: category, materialForm: materialForm(body.materialForm ?? 'UNKNOWN'), folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } })
+    const created = await tx.mediaAsset.create({ data: { ...data, isCoverMaterial: cover, ...(generated ? { technicalMetadata: { ...priorMetadata, materialProvenance: { origin: 'AI_GENERATION' } } } : {}), brandId, materialClass: category, materialForm: materialForm(body.materialForm ?? 'UNKNOWN'), folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } })
+    if (cover) await tx.auditLog.create({ data: { actorId: typeof data.uploadedBy === 'string' ? data.uploadedBy : null, actorType: 'SYSTEM', action: 'ASSET_COVER_PURPOSE_UPDATED', resourceType: 'MediaAsset', resourceId: created.id, metadata: { brandId, source: 'upload', before: false, after: true } } })
+    return created
   }, { timeout: 30_000 })
 }
 export async function updateAssetFiling(db: Db, brandId: string, actor: { id: string; type: string }, assetIds: string[], body: Record<string, unknown>, receipt?: { id?: string }) {
   if (!Array.isArray(assetIds) || !assetIds.length || assetIds.length > 500 || assetIds.some(id => typeof id !== 'string') || new Set(assetIds).size !== assetIds.length) throw fail('请选择有效素材', 400)
+  const cover = coverFlag(body.isCoverMaterial)
+  const verified = cover ? await prepareCoverAssets(db, brandId, assetIds) : []
   return db.$transaction(async tx => {
     await ensureFoldersInTransaction(tx, brandId)
     await lockMaterialAssets(tx, brandId, assetIds)
@@ -54,6 +62,7 @@ export async function updateAssetFiling(db: Db, brandId: string, actor: { id: st
     const wantsFiling = requested || body.materialClass !== undefined
     const updates = []
     for (const asset of assets) {
+      if (cover && verified.find(a => a.id === asset.id)?.updatedAt.toISOString() !== asset.updatedAt.toISOString()) throw fail('素材已被修改，请刷新后重试')
       if (body.revisions !== undefined) {
         if (!body.revisions || typeof body.revisions !== 'object' || Array.isArray(body.revisions) || (body.revisions as Record<string, unknown>)[asset.id] !== asset.updatedAt.toISOString()) throw fail('素材已被修改，请刷新预览后重试')
       }
@@ -77,6 +86,7 @@ export async function updateAssetFiling(db: Db, brandId: string, actor: { id: st
         : Array.isArray(body.aiTags) ? body.aiTags.filter((t: unknown) => typeof t === 'string').map((t: string) => t.trim()).filter(Boolean) : undefined
       const updated = await tx.mediaAsset.update({ where: { id: asset.id }, data: {
         ...(wantsFiling ? { materialClass: category, ...(movesFolder ? { folderId: folder?.id || null, aiCategory: folder?.name || '素材库' } : {}), manualOverrides: { ...priorOverrides, ...(movesFolder ? { folder: true } : {}), materialClass: true } } : {}),
+        ...(cover !== undefined ? { isCoverMaterial: cover, manualOverrides: { ...priorOverrides, ...(wantsFiling ? { ...(movesFolder ? { folder: true } : {}), materialClass: true } : {}), isCoverMaterial: true } } : {}),
         ...(body.materialForm !== undefined ? { materialForm: materialForm(body.materialForm) } : {}),
         ...(typeof body.filename === 'string' ? { filename: body.filename.trim() || null } : {}),
         ...(typeof body.aiCaption === 'string' ? { aiCaption: body.aiCaption.trim() || null } : {}),
@@ -90,6 +100,7 @@ export async function updateAssetFiling(db: Db, brandId: string, actor: { id: st
       brandId, before: assets.map(a => ({ id: a.id, folderId: a.folderId, aiCategory: a.aiCategory, materialClass: a.materialClass, materialForm: a.materialForm, manualOverrides: a.manualOverrides, updatedAt: a.updatedAt.toISOString() })),
       after: updates.map(a => ({ id: a.id, folderId: a.folderId, aiCategory: a.aiCategory, materialClass: a.materialClass, materialForm: a.materialForm, updatedAt: a.updatedAt.toISOString() })),
     } } }); if (receipt) receipt.id = log.id }
+    if (cover !== undefined) { const log = await tx.auditLog.create({ data: { actorId: actor.id, actorType: actor.type, action: 'ASSET_COVER_PURPOSE_UPDATED', resourceType: 'MediaAsset', resourceId: brandId, metadata: { brandId, before: assets.map(a => ({ id: a.id, isCoverMaterial: a.isCoverMaterial, manualOverrides: a.manualOverrides, updatedAt: a.updatedAt.toISOString() })), after: updates.map(a => ({ id: a.id, isCoverMaterial: a.isCoverMaterial, manualOverrides: a.manualOverrides, updatedAt: a.updatedAt.toISOString() })) } } }); if (receipt) receipt.id = log.id }
     return updates
   }, { timeout: 30_000 })
 }

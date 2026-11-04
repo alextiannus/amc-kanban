@@ -823,6 +823,7 @@ model MediaAsset {
   sourceType        String              @default("upload")
   materialClass     String              @default("UNCONFIRMED")
   materialForm      String              @default("UNKNOWN")
+  isCoverMaterial   Boolean             @default(false)
   shootBatchId      String?
   shootBatch        VideoShootBatch?    @relation(fields: [shootBatchId], references: [id], onDelete: SetNull)
   videoProjectId    String?
@@ -861,6 +862,7 @@ model MediaAsset {
   @@index([brandId, duplicateGroupId])
   @@index([brandId, contentHash])
   @@index([brandId, materialClass, folderId])
+  @@index([brandId, isCoverMaterial])
   @@index([brandId, analysisVersion])
   @@index([folderId])
   @@index([videoProjectId])

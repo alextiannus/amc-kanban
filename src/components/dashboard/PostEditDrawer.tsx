@@ -351,7 +351,7 @@ export default function PostEditDrawer({
     setBrandAssets(current => [...new Map([...current, ...assets].map(asset => [asset.id, asset])).values()])
   }, [])
   const mediaPicker = useBrandAssetPage(brandId, isOpen, `usage=${assetTypeFilter}`, rememberAssets)
-  const coverPicker = useBrandAssetPage(brandId, isOpen, `mediaType=cover${coverAssetFilter === 'cover' ? `&folder=${encodeURIComponent('封面图')}` : ''}`, rememberAssets)
+  const coverPicker = useBrandAssetPage(brandId, isOpen, `mediaType=cover${coverAssetFilter === 'cover' ? '&coverOnly=true' : ''}`, rememberAssets)
 
   // Comments / conversion states (For Published Posts)
   const [commentsList, setCommentsList] = useState<Comment[]>([])
@@ -1595,7 +1595,7 @@ Return the output strictly in a valid JSON array format, containing:
               {selectedDraft ? (isPublished ? '查看已发布文章' : isScheduled ? '编辑已排期文章' : isPendingReview ? '审核文章' : '编辑草稿') : '新建发布草稿'}
             </h3>
           </div>
-          <button onClick={onClose} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+          <button aria-label={t('关闭发布草稿', 'Close publishing draft')} onClick={onClose} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -1963,7 +1963,7 @@ Return the output strictly in a valid JSON array format, containing:
                           onClick={() => setCoverAssetFilter('cover')}
                           className={`rounded px-2 py-0.5 text-[9px] font-black ${coverAssetFilter === 'cover' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300' : 'text-slate-400'}`}
                         >
-                          封面图库
+                          封面素材
                         </button>
                         <button
                           type="button"
@@ -1975,7 +1975,7 @@ Return the output strictly in a valid JSON array format, containing:
                       </div>
                     </div>
                     {coverPicker.loading || coverPicker.error ? null : coverAssets.length === 0 ? (
-                      <p className="py-2 text-center text-[11px] italic text-slate-400">{t('暂无可用 JPEG/PNG 图片，请先在素材库上传', 'No JPEG/PNG images available. Upload images to the asset library first.')}</p>
+                      <div className="space-y-2 py-3 text-center text-xs text-slate-500"><p>{coverAssetFilter === 'cover' ? '尚未设置封面素材' : '暂无可用 JPEG/PNG 图片'}</p><div className="flex flex-wrap justify-center gap-3">{coverAssetFilter === 'cover' && <button type="button" onClick={() => setCoverAssetFilter('all')} className="text-indigo-600 underline">从全部图片选择</button>}<a href={`/board?brandId=${encodeURIComponent(brandId)}&tab=assets&assetView=covers`} className="text-indigo-600 underline">前往封面素材</a></div></div>
                     ) : (
                       <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">
                         {coverAssets.map((asset) => {
@@ -1989,7 +1989,7 @@ Return the output strictly in a valid JSON array format, containing:
                               title={asset.filename || '封面图'}
                               aria-pressed={selected}
                             >
-                              <img src={asset.url} alt="" className="h-full w-full object-cover" />
+                              <img src={asset.thumbnailUrl || asset.url} alt="" className="h-full w-full object-cover" />
                               {selected && (
                                 <span className="absolute inset-0 flex items-center justify-center bg-indigo-500/15">
                                   <span className="rounded-full bg-indigo-600 p-1 text-white"><Check className="h-3 w-3 stroke-[3px]" /></span>

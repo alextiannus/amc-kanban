@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client'
+import { COVER_MIMES, coverOnly } from './cover-policy'
 import { materialClass, materialForm, subtreeIds, type FolderNode } from './material-policy'
 
 const invalid = () => { throw Object.assign(new Error('素材筛选参数无效'), { status: 400 }) }
@@ -8,7 +9,9 @@ export function assetListQuery(params: URLSearchParams, brandIds: string[], fold
   if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) invalid()
   const where: Prisma.MediaAssetWhereInput = { brandId: { in: brandIds } }
   const and: Prisma.MediaAssetWhereInput[] = []
-  const category = params.get('materialClass') || params.get('root')
+  const cover = coverOnly(params.get('coverOnly')) || params.get('root') === 'COVERS'
+  if (cover) { where.isCoverMaterial = true; and.push({ mimeType: { in: COVER_MIMES, mode: 'insensitive' } }) }
+  const category = params.get('materialClass') || (params.get('root') === 'COVERS' ? null : params.get('root'))
   if (category) where.materialClass = materialClass(category)
   const id = params.get('folderId')
   if (id) {

@@ -1,3 +1,5 @@
+import { COVER_MIMES, assertCoverMedia } from '../../asset-library/cover-policy'
+import { prepareCoverAssets, markDraftCover } from '../../asset-library/covers'
 import { createClassifiedAsset, updateAssetFiling } from '../../asset-library/filing'
 import {readBrandInformation,updateBrandInformation} from '@/lib/brand-information'
 import { resolveDraftAccount, resolveDraftPlatformAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
@@ -1772,15 +1774,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         ? gbpLocationId.trim() || null
         : null
 
-      if (coverAssetId) {
-        const coverAsset = await prisma.mediaAsset.findFirst({
-          where: { id: coverAssetId, brandId, mimeType: { in: ['image/jpeg', 'image/png'] } },
-          select: { id: true },
-        })
-        if (!coverAsset) {
-          return { content: [{ type: 'text' as const, text: 'Error: coverAssetId must reference a JPEG or PNG image in this brand' }], isError: true }
-        }
-      }
+      const coverProof = coverAssetId ? (await prepareCoverAssets(prisma, brandId, [coverAssetId]))[0] : null
 
       const draft = await prisma.$transaction(async (tx: any) => {
         await lockBrandSync(tx, brandId, true)
@@ -1836,6 +1830,8 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
           })
           savedId = created.id
         }
+
+        if (coverProof) await markDraftCover(tx, brandId, { id: agent.id, type: agent.type || 'AI_AGENT' }, coverProof, savedId)
 
         if (assetIds) {
           await tx.contentAssetRef.deleteMany({ where: { draftId: savedId } })
@@ -1923,13 +1919,14 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     {
       brandId: z.string(),
       q: z.string().optional(),
+      coverOnly: z.boolean().optional(),
       folderId: z.string().optional(),
       materialClass: z.enum(['ORIGINAL','MANUAL','AI','UNCONFIRMED']).optional(),
       folder: z.string().optional().describe('Maps to aiCategory/folder.'),
       readyOnly: z.boolean().optional(),
       limit: z.number().int().min(1).max(100).optional().default(50),
     },
-    async ({ brandId, q, folder, folderId, materialClass, readyOnly, limit }) => {
+    async ({ coverOnly, brandId, q, folder, folderId, materialClass, readyOnly, limit }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id)
@@ -1938,6 +1935,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const assets = await prisma.mediaAsset.findMany({
         where: {
           brandId,
+          ...(coverOnly ? { isCoverMaterial: true, mimeType: { in: COVER_MIMES, mode: 'insensitive' } } : {}),
           ...(folderId ? { folderId } : {}), ...(materialClass ? { materialClass } : {}),
           ...(readyOnly ? { aiReady: true } : {}),
           ...(folder ? { aiCategory: folder } : {}),
@@ -1961,12 +1959,13 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       imageUrl: z.string().optional().describe('Direct URL of the image/asset to download.'),
       folderId: z.string().optional(),
       materialClass: z.enum(['ORIGINAL','MANUAL','AI','UNCONFIRMED']).optional(),
+      isCoverMaterial: z.boolean().optional(),
       materialForm: z.enum(['UNKNOWN','CLIP','FINISHED']).optional(),
       folder: z.string().optional(),
       aiTags: z.array(z.string()).optional(),
       aiCaption: z.string().optional(),
     },
-    async ({ brandId, filename, mimeType, fileBase64, imageUrl, folder, folderId, materialClass, materialForm, aiTags, aiCaption }) => {
+    async ({ brandId, filename, mimeType, fileBase64, imageUrl, folder, folderId, materialClass, isCoverMaterial, materialForm, aiTags, aiCaption }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
@@ -2002,6 +2001,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         technicalMetadata = await inspectMediaBuffer(fileBuffer, { filename, mimeType: resolvedMimeType })
         assertUploadMedia(technicalMetadata, { filename })
         resolvedMimeType = technicalMetadata.mimeType
+        if (isCoverMaterial) assertCoverMedia(resolvedMimeType, technicalMetadata)
       } catch (error) {
         const { mediaValidationResponse } = await import('@/lib/mediaValidation')
         return {
@@ -2047,7 +2047,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
         storageEngine = 'local'
       }
 
-      const asset = await createClassifiedAsset(prisma, brandId, { folder, folderId, materialClass, materialForm }, {
+      const asset = await createClassifiedAsset(prisma, brandId, { folder, folderId, materialClass, isCoverMaterial, materialForm }, {
           brandId,
           url: assetUrl,
           filename,
@@ -2101,6 +2101,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       filename: z.string().optional(),
       folderId: z.string().optional(),
       materialClass: z.enum(['ORIGINAL','MANUAL','AI','UNCONFIRMED']).optional(),
+      isCoverMaterial: z.boolean().optional(),
       materialForm: z.enum(['UNKNOWN','CLIP','FINISHED']).optional(),
       confirmMaterialClassChange: z.boolean().optional(),
       folder: z.string().optional().describe('Maps to aiCategory/folder.'),
@@ -2108,7 +2109,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       aiTags: z.array(z.string()).optional(),
       aiReady: z.boolean().optional(),
     },
-    async ({ brandId, assetId, filename, folder, folderId, materialClass, materialForm, confirmMaterialClassChange, aiCaption, aiTags, aiReady }) => {
+    async ({ brandId, assetId, filename, folder, folderId, materialClass, isCoverMaterial, materialForm, confirmMaterialClassChange, aiCaption, aiTags, aiReady }) => {
       const agent = await resolveAgent()
       if (!agent) return { content: [{ type: 'text' as const, text: 'Error: Invalid API key' }], isError: true }
       const link = await requireActiveBrandLink(brandId, agent.id, 'WRITE')
@@ -2120,7 +2121,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       })
       if (!existing) return { content: [{ type: 'text' as const, text: 'Error: Asset not found' }], isError: true }
 
-      const [asset] = await updateAssetFiling(prisma, brandId, { id: agent.id, type: agent.type || 'HUMAN' }, [assetId], { filename, folder, folderId, materialClass, materialForm, confirmMaterialClassChange, aiCaption, aiTags, aiReady })
+      const [asset] = await updateAssetFiling(prisma, brandId, { id: agent.id, type: agent.type || 'HUMAN' }, [assetId], { filename, folder, folderId, materialClass, isCoverMaterial, materialForm, confirmMaterialClassChange, aiCaption, aiTags, aiReady })
 
       return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, asset }, null, 2) }] }
     }

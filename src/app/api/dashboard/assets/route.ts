@@ -154,7 +154,7 @@ export async function GET(request: Request) {
     usedCount: asset.usedCount,
     lastUsedAt: asset.lastUsedAt?.toISOString() ?? null,
     sourceType: asset.sourceType,
-    folderId: asset.folderId, materialClass: asset.materialClass, materialForm: asset.materialForm,
+    isCoverMaterial: asset.isCoverMaterial, folderId: asset.folderId, materialClass: asset.materialClass, materialForm: asset.materialForm,
     videoProjectId: asset.videoProjectId,
     createdAt: asset.createdAt.toISOString(), updatedAt: asset.updatedAt.toISOString(),
   }))

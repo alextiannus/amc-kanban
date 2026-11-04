@@ -1,3 +1,4 @@
+import { prepareCoverAssets, markDraftCover } from '@/lib/asset-library/covers'
 import { resolveDraftAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
 import { lockBrandSync } from '@/lib/socialAccountLocks'
 import { SocialAccountBindingError } from '@/lib/socialAccountIdentity'
@@ -299,6 +300,11 @@ async function patchDraft(request: Request, { params }: Params) {
   if (hasCoverAssetUpdate && requestedCoverAssetId && !coverAsset) {
     return NextResponse.json({ error: 'coverAssetId must reference a JPEG or PNG image in this brand' }, { status: 400 })
   }
+  let coverProof: Awaited<ReturnType<typeof prepareCoverAssets>>[number] | null = null
+  if (coverAsset) {
+    try { [coverProof] = await prepareCoverAssets(prisma, brandId, [coverAsset.id]) }
+    catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: (e as { status?: number }).status || 422 }) }
+  }
   const coverAssetIdUpdate = hasCoverAssetUpdate ? (coverAsset?.id ?? null) : undefined
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
   const hasPostUrlUpdate = Object.prototype.hasOwnProperty.call(body, 'postUrl')
@@ -409,6 +415,8 @@ async function patchDraft(request: Request, { params }: Params) {
       },
       select: { id: true, caption: true, accountId: true },
     })
+
+    if (coverProof) await markDraftCover(tx, brandId, { id: actor.id, type: actor.type }, coverProof, draftId)
 
     if (assetIds) {
       await tx.contentAssetRef.deleteMany({ where: { draftId } })
@@ -630,6 +638,7 @@ export async function DELETE(request: Request, { params }: Params) {
 class CreativeDraftLinkConflict extends Error {}
 export async function PATCH(request: Request, context: Params) {
   try { return await patchDraft(request, context) } catch (error) {
+    if (error && typeof error === 'object' && 'status' in error && [400,404,409,422].includes(Number(error.status))) return NextResponse.json({ error: 'message' in error ? String(error.message) : '封面保存失败' }, { status: Number(error.status) })
     if (error instanceof SocialAccountBindingError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     throw error
   }

@@ -1,3 +1,4 @@
+import { COVER_VIEW } from '@/lib/asset-library/cover-policy'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/asset-analysis/db'
@@ -26,7 +27,7 @@ export async function GET(request: Request, { params }: Params) {
   try {
     const { id } = await params; const actor = await actorFor(request, id)
     await ensureAssetFolders(id)
-    return NextResponse.json({ roots: presentRoots(actor.canWrite), folders: await presentFolders(prisma, id, actor.canWrite), canCreate: actor.canWrite }, { headers: { 'Cache-Control': 'private, no-store' } })
+    return NextResponse.json({ roots: presentRoots(actor.canWrite), views: [{ ...COVER_VIEW, canUpload: actor.canWrite, canRename: false, canDelete: false, canCreateChild: false }], folders: await presentFolders(prisma, id, actor.canWrite), canCreate: actor.canWrite }, { headers: { 'Cache-Control': 'private, no-store' } })
   } catch (e) { return failure(e) }
 }
 export async function POST(request: Request, { params }: Params) {

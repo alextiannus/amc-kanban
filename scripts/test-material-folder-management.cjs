@@ -14,20 +14,23 @@ async function main() {
   const pg = activeDb = new PGlite()
   await pg.exec(`CREATE TABLE "Brand" (id text PRIMARY KEY, industry text, "assetFoldersInitialized" boolean DEFAULT false);
     CREATE TABLE "BrandFolder" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), name text, "parentId" text REFERENCES "BrandFolder"(id), "systemKey" text, "folderKind" text DEFAULT 'CUSTOM', "templateVersion" text, "createdAt" timestamptz DEFAULT now(), "updatedAt" timestamptz DEFAULT now(), UNIQUE("brandId",name), UNIQUE("brandId","systemKey"));
-    CREATE TABLE "MediaAsset" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), "folderId" text REFERENCES "BrandFolder"(id), "aiCategory" text, "sourceType" text DEFAULT 'upload', "mimeType" text, url text, "aiTags" jsonb DEFAULT '[]', "manualOverrides" jsonb, "imageAnalysis" jsonb, "technicalMetadata" jsonb, "updatedAt" timestamptz DEFAULT now());
+    CREATE TABLE "MediaAsset" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), "folderId" text REFERENCES "BrandFolder"(id), "aiCategory" text, "sourceType" text DEFAULT 'upload', "mimeType" text, url text, filename text, "sizeBytes" int, "aiTags" jsonb DEFAULT '[]', "manualOverrides" jsonb, "imageAnalysis" jsonb, "technicalMetadata" jsonb, "updatedAt" timestamptz DEFAULT now());
+    CREATE TABLE "ContentDraft" (id text PRIMARY KEY, "brandId" text REFERENCES "Brand"(id), "coverAssetId" text REFERENCES "MediaAsset"(id), "updatedAt" timestamptz DEFAULT now());
     CREATE TABLE "AuditLog" (id text PRIMARY KEY, "actorId" text, "actorType" text, action text, "resourceType" text, "resourceId" text, metadata jsonb);
     INSERT INTO "Brand" (id,industry) VALUES ('brand','restaurant'),('other','restaurant');`)
   await pg.exec(fs.readFileSync('prisma/migrations/20261104090000_material_folder_management/migration.sql', 'utf8'))
+  await pg.exec(fs.readFileSync('prisma/migrations/20261104170000_cover_material_purpose/migration.sql', 'utf8'))
   const json = new Set(['aiTags', 'manualOverrides', 'imageAnalysis', 'technicalMetadata', 'metadata'])
   const whereSQL = (where, values) => Object.entries(where || {}).map(([key, value]) => {
     if (key === 'OR' || key === 'AND') return `(${value.map(v => whereSQL(v, values)).join(key === 'OR' ? ' OR ' : ' AND ')})`
     if (key === 'brandId_name' || key === 'brandId_systemKey') return whereSQL(value, values)
     if (value === null) return `"${key}" IS NULL`
+    if (typeof value === 'object' && value && 'not' in value) { if(value.not===null)return `"${key}" IS NOT NULL`;values.push(value.not);return `"${key}"<>$${values.length}` }
     if (typeof value === 'object' && value && 'in' in value) { values.push(value.in); return `"${key}" = ANY($${values.length})` }
     values.push(value); return `"${key}"=$${values.length}`
   }).join(' AND ') || 'TRUE'
   const db = {}
-  for (const [model, table] of Object.entries({ brand: 'Brand', brandFolder: 'BrandFolder', mediaAsset: 'MediaAsset', auditLog: 'AuditLog' })) {
+  for (const [model, table] of Object.entries({ brand: 'Brand', brandFolder: 'BrandFolder', mediaAsset: 'MediaAsset', auditLog: 'AuditLog', contentDraft: 'ContentDraft' })) {
     const findMany = async ({ where, orderBy } = {}) => {
       const values = []; const cond = whereSQL(where, values)
       return (await pg.query(`SELECT * FROM "${table}" WHERE ${cond}`, values)).rows
@@ -66,7 +69,9 @@ async function main() {
   const analysisPolicy = compile('src/lib/asset-analysis/policy.ts', { '../asset-library/templates.ts': templates })
   const folders = compile('src/lib/asset-analysis/folders.ts', { '@/lib/asset-analysis/db': { prisma: db }, '../asset-library/templates.ts': templates })
   const management = compile('src/lib/asset-library/folder-management.ts', { './material-policy.ts': policy, '../asset-analysis/folders': folders, '../asset-analysis/policy': analysisPolicy, './roots': compile('src/lib/asset-library/roots.ts', {}) })
-  const filing = compile('src/lib/asset-library/filing.ts', { './material-policy.ts': policy, '../asset-analysis/folders': folders })
+  const coverPolicy = compile('src/lib/asset-library/cover-policy.ts', {})
+  const covers = compile('src/lib/asset-library/covers.ts', { './cover-policy': coverPolicy, '../publishMediaValidation': { inspectStoredMedia: async asset => ({ kind: 'image', mimeType: asset.url.includes('spoof') ? 'image/webp' : asset.mimeType, sizeBytes: 100 }) } })
+  const filing = compile('src/lib/asset-library/filing.ts', { './material-policy.ts': policy, '../asset-analysis/folders': folders, './cover-policy': coverPolicy, './covers': covers })
   const actor = { id: 'writer', type: 'HUMAN' }
   await Promise.all([folders.ensureAssetFolders('brand'), folders.ensureAssetFolders('brand')])
   assert.equal(await db.brandFolder.count({ where: { brandId: 'brand' } }), 12)
@@ -152,23 +157,88 @@ async function main() {
   assert.equal(countsForTopic.assetCount, 2, 'Deletion considers all assets regardless of class')
   assert.equal(countsForTopic.subtreeAssetCount, 1, 'Navigation counts only the root class')
   assert.equal(countsForTopic.pendingAssetCount, 1, 'Pending history is counted separately')
-  const listing = compile('src/lib/asset-library/list-query.ts', { './material-policy': policy })
+  const listing = compile('src/lib/asset-library/list-query.ts', { './material-policy': policy, './cover-policy': coverPolicy })
   const q = listing.assetListQuery(new URLSearchParams('root=ORIGINAL&page=2&pageSize=24&usage=unused&assetType=video&since=7&materialForm=CLIP'), ['brand'], [])
   assert.equal(q.page, 2); assert.equal(q.where.materialClass, 'ORIGINAL'); assert.equal(q.where.usedCount, 0); assert.equal(q.where.mimeType.startsWith, 'video/'); assert.equal(q.where.materialForm, 'CLIP')
   assert.throws(() => listing.assetListQuery(new URLSearchParams('page=-1'), ['brand'], []))
   assert.throws(() => listing.assetListQuery(new URLSearchParams('folderId=foreign'), ['brand'], []), /目录/)
+  // Cover purpose is independent of source classification and folder placement.
+  const coverSnapshot = await db.mediaAsset.findUnique({ where: { id: original.id } })
+  const [markedCover] = await filing.updateAssetFiling(db, 'brand', actor, [original.id], { isCoverMaterial: true })
+  assert.equal(markedCover.isCoverMaterial, true); assert.equal(markedCover.folderId, coverSnapshot.folderId); assert.equal(markedCover.materialClass, coverSnapshot.materialClass)
+  assert.equal(markedCover.url, coverSnapshot.url)
+  for (const materialClass of ['AI','MANUAL','UNCONFIRMED']) {
+    const asset = await filing.createClassifiedAsset(db, 'brand', { materialClass, isCoverMaterial: true }, { brandId: 'brand', url: `https://fixture/cover-${materialClass}`, mimeType: 'image/png', technicalMetadata: { kind:'image', mimeType:'image/png', sizeBytes:100 } })
+    assert.equal(asset.isCoverMaterial, true); assert.equal(asset.materialClass, materialClass)
+  }
+  const unsupported = await db.mediaAsset.create({ data: { brandId:'brand', url:'https://fixture/video', mimeType:'video/mp4' } })
+  const spoof = await db.mediaAsset.create({ data: { brandId:'brand', url:'https://fixture/spoof', mimeType:'image/jpeg' } })
+  await assert.rejects(filing.updateAssetFiling(db,'brand',actor,[unsupported.id],{isCoverMaterial:true}),/JPEG/)
+  await assert.rejects(filing.updateAssetFiling(db,'brand',actor,[spoof.id],{isCoverMaterial:true}),/JPEG/)
+  await assert.rejects(filing.updateAssetFiling(db,'brand',actor,[original.id,unsupported.id],{isCoverMaterial:true}),/JPEG/)
+  await assert.rejects(filing.updateAssetFiling(db,'other',actor,[original.id],{isCoverMaterial:true}),/品牌/)
+  await assert.rejects(filing.updateAssetFiling(db,'brand',actor,[original.id],{isCoverMaterial:'true'}),/布尔/)
+  const coverQuery = listing.assetListQuery(new URLSearchParams('coverOnly=true&page=1'), ['brand'], [])
+  assert.throws(()=>listing.assetListQuery(new URLSearchParams('materialClass=COVERS'),['brand'],[]),/类别/)
+  assert.equal(listing.assetListQuery(new URLSearchParams('root=COVERS'),['brand'],[]).where.isCoverMaterial,true)
+  assert.equal(coverQuery.where.isCoverMaterial,true);assert.equal(coverQuery.where.materialClass,undefined)
+  assert.throws(()=>listing.assetListQuery(new URLSearchParams('coverOnly=1'),['brand'],[]),/封面筛选/)
+  // Failed saves roll back purpose changes; existing draft references survive unmarking.
+  const saveCandidate = await db.mediaAsset.create({data:{brandId:'brand',url:'https://fixture/draft-cover',mimeType:'image/jpeg'}})
+  const [proof] = await covers.prepareCoverAssets(db,'brand',[saveCandidate.id])
+  await assert.rejects(db.$transaction(async tx=>{await tx.contentDraft.create({data:{id:'failed-cover-draft',brandId:'brand',coverAssetId:proof.id}});await covers.markDraftCover(tx,'brand',actor,proof,'failed-cover-draft');throw Error('save failed')}),/save failed/)
+  assert.equal((await db.mediaAsset.findUnique({where:{id:proof.id}})).isCoverMaterial,false)
+  await db.$transaction(async tx=>{await tx.contentDraft.create({data:{id:'saved-cover-draft',brandId:'brand',coverAssetId:proof.id}});await covers.markDraftCover(tx,'brand',actor,proof,'saved-cover-draft')})
+  assert.equal((await db.mediaAsset.findUnique({where:{id:proof.id}})).isCoverMaterial,true)
+  await db.$transaction(tx=>covers.markDraftCover(tx,'brand',actor,proof,'parallel-platform-draft'))
+  await filing.updateAssetFiling(db,'brand',actor,[proof.id],{isCoverMaterial:false})
+  assert.equal((await db.contentDraft.findUnique({where:{id:'saved-cover-draft'}})).coverAssetId,proof.id)
+  await assert.rejects(db.$transaction(tx=>covers.markDraftCover(tx,'brand',actor,proof,'saved-cover-draft')),/变化/)
+  const statsCover = await db.mediaAsset.create({data:{brandId:'brand',url:'https://fixture/stats-cover',mimeType:'image/jpeg'}})
+  const [statsProof] = await covers.prepareCoverAssets(db,'brand',[statsCover.id])
+  await db.mediaAsset.update({where:{id:statsCover.id},data:{aiCategory:'已使用'}})
+  await db.$transaction(tx=>covers.markDraftCover(tx,'brand',actor,statsProof,'stats-draft'))
+  assert.equal((await db.mediaAsset.findUnique({where:{id:statsCover.id}})).aiCategory,'已使用','Usage updates are retained when adding a cover purpose')
+  const history = compile('src/lib/asset-library/cover-history.ts', { '@prisma/client':{Prisma:{DbNull:null}}, './cover-policy':coverPolicy,'./material-policy':policy,'./filing':filing,'../asset-analysis/folders':folders })
+  const legacy = await db.brandFolder.create({data:{brandId:'brand',name:'封面图',materialClass:'MANUAL',folderKind:'CUSTOM'}})
+  const childCover = await management.createFolder(db,'brand',actor,{name:'节日封面',parentId:legacy.id})
+  const historical = await db.mediaAsset.create({data:{brandId:'brand',url:'https://fixture/old-cover',mimeType:'image/png',folderId:childCover.id,materialClass:'UNCONFIRMED'}})
+  const draftOnlyCover = await db.mediaAsset.create({data:{brandId:'brand',url:'https://fixture/draft-only-cover',mimeType:'image/jpeg',materialClass:'AI'}})
+  await db.contentDraft.create({data:{id:'historic-draft',brandId:'brand',coverAssetId:draftOnlyCover.id}})
+  const firstPreview = await history.previewCoverBackfill(db,'brand')
+  assert(firstPreview.entries.some(a=>a.id===historical.id));assert(firstPreview.entries.some(a=>a.id===draftOnlyCover.id));assert(!firstPreview.entries.some(a=>a.id===proof.id),'Manually unmarked draft covers must not return')
+  const receiptCover = await history.applyCoverBackfill(db,firstPreview,actor)
+  const afterCover = await db.mediaAsset.findUnique({where:{id:historical.id}})
+  assert.equal(afterCover.isCoverMaterial,true);assert.equal(afterCover.folderId,childCover.id);assert.equal(afterCover.materialClass,'UNCONFIRMED')
+  await assert.rejects(history.applyCoverBackfill(db,firstPreview,actor),/修改/)
+  await history.rollbackCoverBackfill(db,'brand',receiptCover.receiptId,actor)
+  assert.equal((await db.mediaAsset.findUnique({where:{id:historical.id}})).isCoverMaterial,false)
+  await assert.rejects(history.rollbackCoverBackfill(db,'brand',receiptCover.receiptId,actor),/修改/)
+  const staleCoverPreview = await history.previewCoverBackfill(db,'brand')
+  await db.mediaAsset.update({where:{id:historical.id},data:{aiCategory:'changed'}})
+  await assert.rejects(history.applyCoverBackfill(db,staleCoverPreview,actor),/修改/)
   // Execute the actual route with current permission grants, including revoked keys.
   let write = false, read = true, session = { user: actor }, validKey = true
   const route = compile('src/app/api/brands/[id]/folders/route.ts', {
     'next/server': { NextResponse: Response }, '@/lib/auth': { getSession: async () => session, extractApiKey: r => r.headers.get('x-key'), getAgentFromApiKey: async () => validKey ? actor : null },
     '@/lib/asset-analysis/db': { prisma: db }, '@/lib/brandAccess': { canSessionAccessBrandProject: async () => read, canSessionWriteBrandProject: async () => write },
-    '@/lib/asset-analysis/folders': folders, '@/lib/asset-library/folder-management': management,
+    '@/lib/asset-analysis/folders': folders, '@/lib/asset-library/folder-management': management, '@/lib/asset-library/cover-policy': coverPolicy,
   })
   const params = { params: Promise.resolve({ id: 'brand' }) }
   assert.equal((await route.POST(new Request('https://fixture', { method: 'POST', body: '{}' }), params)).status, 403)
   read = false; assert.equal((await route.GET(new Request('https://fixture'), params)).status, 404)
   read = true; session = null; validKey = false
   assert.equal((await route.GET(new Request('https://fixture', { headers: { 'x-key': 'revoked' } }), params)).status, 401)
+  const assetRoute = compile('src/app/api/brands/[id]/assets/[assetId]/route.ts', {
+    'next/server':{NextResponse:Response},'@/lib/auth':{getSession:async()=>({user:actor}),extractApiKey:()=>null,getAgentFromApiKey:async()=>null},'@/lib/prisma':{prisma:db},'@/lib/brandAccess':{canSessionAccessBrandProject:async()=>read,canSessionWriteBrandProject:async()=>write},'@/lib/designer':{},'@/lib/brand-plan/calendarSync':{},'@/lib/asset-analysis/folders':folders,'@/lib/asset-library/filing':filing,
+  })
+  read=true;write=false
+  const coverRequest=()=>new Request('https://fixture',{method:'PATCH',body:JSON.stringify({isCoverMaterial:true})})
+  assert.equal((await assetRoute.PATCH(coverRequest(),{params:Promise.resolve({id:'brand',assetId:historical.id})})).status,403)
+  write=true;read=false
+  assert.equal((await assetRoute.PATCH(coverRequest(),{params:Promise.resolve({id:'brand',assetId:historical.id})})).status,404)
+  read=true
+  assert.equal((await assetRoute.PATCH(coverRequest(),{params:Promise.resolve({id:'other',assetId:historical.id})})).status,404)
   assert((await db.auditLog.count()) > 5)
   await pg.close()
   console.log('PASS material folders: additive migration, real SQL tree/filing transactions, revision races, rename seeding, permissions, brand isolation, AI protection and reference identity')

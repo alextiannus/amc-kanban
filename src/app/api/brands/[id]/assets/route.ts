@@ -1,3 +1,4 @@
+import { COVER_MIMES, coverOnly, coverFlag, assertCoverMedia } from '@/lib/asset-library/cover-policy'
 import {publicThumbnail} from '@/lib/assetThumbnails'
 import { triggerDesignerAutoTag } from '@/lib/designer'
 /**
@@ -43,6 +44,7 @@ type Params = { params: Promise<{ id: string }> }
 interface UploadAssetRequest {
   folderId?: string
   materialClass?: string
+  isCoverMaterial?: boolean
   materialForm?: string
   filename: string      // original filename with extension
   mimeType?: string      // e.g., 'image/jpeg', 'video/mp4'
@@ -112,6 +114,7 @@ export async function POST(request: Request, { params }: Params) {
 
   const body: UploadAssetRequest = await request.json()
   const { filename, mimeType, fileBase64, imageUrl } = body
+  try { coverFlag(body.isCoverMaterial) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
 
   if (body.collectionId) {
     try {
@@ -171,9 +174,11 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json(mediaValidationResponse(error), { status: mediaValidationStatus(error) })
   }
 
+  if (body.isCoverMaterial) { try { assertCoverMedia(resolvedMimeType!, technicalMetadata) } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 422 }) } }
   const contentHash = createHash('sha256').update(fileBuffer).digest('hex')
   const reusable = await findReusableAsset(brandId, contentHash)
   if (reusable) {
+    if (body.isCoverMaterial) { try { Object.assign(reusable, (await updateAssetFiling(prisma, brandId, { id: user.id, type: user.type || 'HUMAN' }, [reusable.id], { isCoverMaterial: true }))[0]) } catch (e) { const result = filingError(e); return NextResponse.json(result.body, { status: result.status }) } }
     if (body.collectionId) await linkAssetToCollection({ brandId, collectionId: body.collectionId, assetId: reusable.id, slotId: body.slotId, uploadOrigin: 'UPLOAD' })
     if (body.creativeId) await submitAssetToCalendarCreativeRequirement({ brandId, assetId: reusable.id, creativeId: body.creativeId, submittedBy: user.id })
     return NextResponse.json({
@@ -441,6 +446,8 @@ export async function GET(request: Request, { params }: Params) {
   const assetType = url.searchParams.get('assetType') || 'all'
   if (!['all','image','video'].includes(assetType)) return NextResponse.json({error:'Invalid asset type'}, {status:400})
   const folder = (url.searchParams.get('folder') || '').trim()
+  let onlyCovers = false
+  try { onlyCovers = coverOnly(url.searchParams.get('coverOnly')) || (url.searchParams.get('mediaType') === 'cover' && folder === '封面图') } catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: 400 }) }
   const paginated = url.searchParams.has('page') || url.searchParams.has('pageSize')
   const page = Number(url.searchParams.get('page') ?? 1)
   const pageSize = Number(url.searchParams.get('pageSize') ?? 12)
@@ -461,7 +468,8 @@ export async function GET(request: Request, { params }: Params) {
       { mimeType: { equals: 'image/jpeg', mode: 'insensitive' as const } },
       { mimeType: { equals: 'image/png', mode: 'insensitive' as const } },
     ] } : {}),
-    ...(folder ? { aiCategory: folder } : {}),
+    ...(folder && !(onlyCovers && folder === '封面图') ? { aiCategory: folder } : {}),
+    ...(onlyCovers ? { isCoverMaterial: true, mimeType: { in: COVER_MIMES, mode: 'insensitive' } } : {}),
     ...(query ? {
       AND: [{ OR: [
         { filename: { contains: query, mode: 'insensitive' } },
@@ -479,11 +487,12 @@ export async function GET(request: Request, { params }: Params) {
   if (folderIds) where.folderId = { in: folderIds }
   if (sourceGroup !== 'all') where.sourceType = sourceGroup === 'finished' ? 'generated_video' : sourceGroup === 'ai_clip' ? 'ai_video' : { notIn: ['generated_video','ai_video','basic_video_reference'] }
   if (assetIds) where.id = { in: assetIds }
+  if (onlyCovers) where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { mimeType: { in: COVER_MIMES, mode: 'insensitive' } }]
   if (picker) {
     if (assetType!=='all') where.mimeType = { startsWith: assetType+'/', mode:'insensitive' }
     if (assetType === 'all') where.AND = [...(Array.isArray(where.AND)?where.AND:where.AND?[where.AND]:[]), {OR:[{mimeType:{startsWith:'image/',mode:'insensitive'}},{mimeType:{startsWith:'video/',mode:'insensitive'}}]}]
-    const rows = await prisma.mediaAsset.findMany({where, select:{id:true,url:true,mimeType:true,filename:true,aiCaption:true,aiTags:true,sourceType:true,sizeBytes:true,technicalMetadata:true,folderId:true,materialClass:true,materialForm:true},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1})
-    return NextResponse.json({assets:rows.slice(0,pageSize).map((asset:any)=>({id:asset.id,url:asset.sourceType==='postfast'&&!/^(https?:|\/)/.test(asset.url)?`/api/integrations/postfast/file/${brandId}/${asset.url}`:asset.url,mimeType:asset.mimeType.toLowerCase(),filename:asset.filename,aiCaption:asset.aiCaption,aiTags:asset.aiTags,sourceType:asset.sourceType,folderId:asset.folderId,materialClass:asset.materialClass,materialForm:asset.materialForm,...publicThumbnail(asset)})),pagination:{page,pageSize,hasMore:rows.length>pageSize}}, {headers:{'Cache-Control':'private, no-store'}})
+    const rows = await prisma.mediaAsset.findMany({where, select:{id:true,url:true,mimeType:true,filename:true,aiCaption:true,aiTags:true,sourceType:true,sizeBytes:true,technicalMetadata:true,folderId:true,materialClass:true,materialForm:true,isCoverMaterial:true},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1})
+    return NextResponse.json({assets:rows.slice(0,pageSize).map((asset:any)=>({id:asset.id,url:asset.sourceType==='postfast'&&!/^(https?:|\/)/.test(asset.url)?`/api/integrations/postfast/file/${brandId}/${asset.url}`:asset.url,mimeType:asset.mimeType.toLowerCase(),filename:asset.filename,aiCaption:asset.aiCaption,aiTags:asset.aiTags,sourceType:asset.sourceType,folderId:asset.folderId,materialClass:asset.materialClass,materialForm:asset.materialForm,isCoverMaterial:asset.isCoverMaterial,...publicThumbnail(asset)})),pagination:{page,pageSize,hasMore:rows.length>pageSize}}, {headers:{'Cache-Control':'private, no-store'}})
   }
   const [assets, total] = await Promise.all([
     prisma.mediaAsset.findMany({

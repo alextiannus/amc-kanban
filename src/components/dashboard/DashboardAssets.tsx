@@ -44,6 +44,7 @@ import {
   Sparkles
 } from 'lucide-react'
 import { type ManagedFolder } from './AssetFolderManager'
+import { COVER_MIMES, COVER_VIEW } from '@/lib/asset-library/cover-policy'
 import { MATERIAL_ROOTS, type MaterialRoot } from '@/lib/asset-library/roots'
 import MaterialDirectoryPicker from './MaterialDirectoryPicker'
 import MaterialCleanup from './MaterialCleanup'
@@ -102,6 +103,7 @@ interface DashboardAsset {
   sourceType: string
   folderId?: string | null
   materialClass?: string
+  isCoverMaterial?: boolean
   materialForm?: string
   uploadedBy?: string | null
   shootBatchId?: string | null
@@ -235,13 +237,14 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [usage, setUsage] = useState('all'), [mediaKind, setMediaKind] = useState('all'), [since, setSince] = useState('all'), [formFilter, setFormFilter] = useState('')
   const [page, setPage] = useState(1), [total, setTotal] = useState(0), [pageIds, setPageIds] = useState<string[]>([])
   const [roots, setRoots] = useState<readonly MaterialRoot[]>(MATERIAL_ROOTS)
-  const [rootId, setRootId] = useState('ORIGINAL')
+  const [views, setViews] = useState<Array<typeof COVER_VIEW>>([])
+  const [rootId, setRootId] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('assetView') === 'covers' ? 'COVERS' : 'ORIGINAL')
   const requestVersion = useRef(0)
   const selectedRef = useRef<string[]>([])
   const resetFilters = () => { setUsage('all'); setMediaKind('all'); setSince('all'); setFormFilter(''); setPage(1) }
   const chooseDirectory = (root: string, folder: string) => {
     if (root !== rootId) { setSelected([]); setPendingFiling(null); setAssets([]); setPageIds([]); setSearch(''); resetFilters(); setSelectedCreativeId(''); setSelectedCollectionId('') }
-    setRootId(root); setSelectedFolder(folder); setUploadClass(root); setPage(1)
+    setRootId(root); setSelectedFolder(folder); setUploadClass(root === 'COVERS' ? 'UNCONFIRMED' : root); setPage(1)
     setTargetFolder(folderRecords.find(f => f.id === folder)?.name || '素材库')
   }
   const [search, setSearch] = useState('')
@@ -271,7 +274,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const uploadDialog = useRef<HTMLDialogElement>(null)
   useEffect(() => { if (uploadDialogOpen) uploadDialog.current?.showModal(); return () => uploadDialog.current?.close() }, [uploadDialogOpen])
-  const [uploadClass, setUploadClass] = useState('ORIGINAL')
+  const [uploadClass, setUploadClass] = useState(rootId === 'COVERS' ? 'UNCONFIRMED' : 'ORIGINAL')
   const [uploadForm, setUploadForm] = useState('UNKNOWN')
   const [canManageFolders, setCanManageFolders] = useState(false)
   const [targetFolder, setTargetFolder] = useState('素材库')
@@ -446,6 +449,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
         setFolders(['素材库', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
         if (data.roots?.length) setRoots(data.roots)
+        setViews(data.views || [])
         setSelectedFolder(current => { const f = data.folders.find((f: ManagedFolder) => f.id === current || f.name === current || (current === 'AI视频' && f.systemKey === 'processed_ai')); if (f && f.materialClass !== 'UNCONFIRMED') { setRootId(f.materialClass); setUploadClass(f.materialClass); return f.id } return '' })
       }
     } catch (err) {
@@ -488,6 +492,10 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       setPendingFiling(null); await loadAssets(true); return true
     } catch (e) { if (assetBrand.current === requestBrand) setError(e instanceof Error ? e.message : '素材更新失败'); return false }
     finally { filingBusyRef.current = false; setFilingBusy(false) }
+  }
+
+  const setCoverPurpose = async (ids: string[], value: boolean) => {
+    if (await saveFiling(ids, { isCoverMaterial: value })) { setAssets(prior => prior.map(a => ids.includes(a.id) ? { ...a, isCoverMaterial: value } : a)); setSelected(prior => prior.filter(id => !ids.includes(id))) }
   }
 
   const handleDropOnFolder = async (folderName: string, e: React.DragEvent) => {
@@ -607,7 +615,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     try {
       const query = new URLSearchParams()
       if (brandId) query.set('brandId', brandId)
-      query.set('page', String(page)); query.set('pageSize', '24'); query.set('root', rootId)
+      query.set('page', String(page)); query.set('pageSize', '24'); if (rootId === 'COVERS') query.set('coverOnly', 'true'); else query.set('root', rootId)
       if (selectedFolder) query.set('folderId', selectedFolder)
       query.set('q', search); query.set('usage', usage); query.set('assetType', mediaKind); query.set('since', since)
       if (formFilter) query.set('materialForm', formFilter)
@@ -1314,6 +1322,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       const mimeType = inferUploadMimeType(file)
 
       try {
+        if (rootId === 'COVERS' && !COVER_MIMES.includes(mimeType)) throw new Error('封面素材仅支持 JPEG 或 PNG 图片')
         const normalizedMime = mimeType.split(';')[0].toLowerCase()
         const isImage = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(normalizedMime)
         const isVideo = ['video/mp4', 'video/quicktime', 'video/webm'].includes(normalizedMime)
@@ -1331,7 +1340,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
         // 1. Request presigned upload URL from backend
         const presignRes = await fetch(
-          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&sizeBytes=${file.size}&folder=${encodeURIComponent(creativePayload.folder)}`
+          `/api/brands/${brandId}/assets/presign-upload?filename=${encodeURIComponent(filename)}&mimeType=${encodeURIComponent(mimeType)}&sizeBytes=${file.size}&folder=${encodeURIComponent(creativePayload.folder)}${rootId === 'COVERS' ? '&isCoverMaterial=true' : ''}`
         )
         const presignData = await presignRes.json().catch(() => ({}))
         
@@ -1374,7 +1383,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 analysisLanguage: language,
                 folderId: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.id,
                 folder: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.name || '素材库',
-                materialClass: uploadClass, materialForm: uploadForm,
+                materialClass: uploadClass, materialForm: uploadForm, ...(rootId === 'COVERS' ? { isCoverMaterial: true } : {}),
                 aiTags: creativePayload.aiTags,
                 aiCaption: creativePayload.aiCaption,
                 creativeId: creativePayload.creativeId,
@@ -1428,7 +1437,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                 analysisLanguage: language,
                 folderId: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.id,
                 folder: folderRecords.find(f => f.id === selectedFolder && f.materialClass === uploadClass)?.name || '素材库',
-                materialClass: uploadClass, materialForm: uploadForm,
+                materialClass: uploadClass, materialForm: uploadForm, ...(rootId === 'COVERS' ? { isCoverMaterial: true } : {}),
               aiCategory: creativePayload.aiCategory,
               aiTags: creativePayload.aiTags,
               aiCaption: creativePayload.aiCaption,
@@ -1655,7 +1664,8 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
         {uploadDialogOpen && <dialog ref={uploadDialog} onCancel={e => { e.preventDefault(); setUploadDialogOpen(false) }} aria-label={t('上传素材', 'Upload materials')} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white">
           <h2 className="mb-4 font-semibold">{t('上传素材', 'Upload materials')}</h2><div className="space-y-4">
-          <p className="text-sm">上传到：{roots.find(r => r.id === rootId)?.name}{selectedFolder ? ` / ${folderRecords.find(f => f.id === selectedFolder)?.path || ''}` : ''}</p>
+          <p className="text-sm">上传到：{[...roots, ...views].find(r => r.id === rootId)?.name}{selectedFolder ? ` / ${folderRecords.find(f => f.id === selectedFolder)?.path || ''}` : ''}</p>
+          {rootId === 'COVERS' && <label className="block text-sm">来源类别 <select aria-label="封面来源类别" value={uploadClass} onChange={e => setUploadClass(e.target.value)} className="rounded border bg-transparent p-2"><option value="UNCONFIRMED">待确认</option>{MATERIAL_ROOTS.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</select><span className="mt-1 block text-xs text-slate-500">仅支持 JPEG/PNG；封面用途不改变来源类别。</span></label>}
           <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm">高级选项：关联创意和脚本素材集</summary><div className="mt-3 space-y-3">          <div className="relative min-w-[220px] shrink-0">
             <select
               value={selectedCreativeId}
@@ -1757,12 +1767,12 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             type="file"
             ref={fileInputRef}
             multiple
-            accept="image/*,video/*"
+            accept={rootId === 'COVERS' ? 'image/jpeg,image/png' : 'image/*,video/*'}
             className="hidden"
             onChange={(e) => { if (e.target.files) void uploadFiles(e.target.files) }}
           />
 
-          <MaterialDirectoryPicker roots={roots} folders={folderRecords} rootId={rootId} folderId={selectedFolder} onChange={chooseDirectory} />
+          <MaterialDirectoryPicker roots={[...roots, ...views]} folders={folderRecords} rootId={rootId} folderId={selectedFolder} onChange={chooseDirectory} />
           <button type="button" aria-expanded={filterOpen} onClick={() => setFilterOpen(v => !v)} className="rounded-lg border px-3 py-2 text-xs">筛选{[usage !== 'all', mediaKind !== 'all', since !== 'all', !!formFilter].filter(Boolean).length || ''}</button>
           <MaterialCleanup key={brandId} brandId={brandId} canWrite={canManageFolders} folders={folderRecords} onChanged={() => loadAssets(true)} />
           {/* Search */}
@@ -1960,8 +1970,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
                         {isVideo ? <Play className="w-3.5 h-3.5 fill-white" /> : <Maximize2 className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-
-
+                    {(COVER_MIMES.includes(asset.mimeType) || asset.isCoverMaterial) && <div className="flex items-center justify-between gap-2 px-2 py-2 text-xs"><span className="truncate text-slate-500">{asset.isCoverMaterial ? '封面素材' : '可用于封面'}</span>{canManageFolders && <button type="button" disabled={filingBusy} aria-label={`${asset.isCoverMaterial ? '取消封面素材' : '设为封面素材'} ${asset.filename || asset.id}`} onClick={e => { e.stopPropagation(); void setCoverPurpose([asset.id], !asset.isCoverMaterial) }} className="shrink-0 rounded border px-2 py-1 text-indigo-600 disabled:opacity-40">{asset.isCoverMaterial ? '取消封面' : '设为封面'}</button>}</div>}
                   </div>}
                   </React.Fragment>
                 )
@@ -3081,6 +3090,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
               <span>AI生视频</span>
             </button>
 
+            {canManageFolders && <><button type="button" disabled={filingBusy || assets.some(a => selected.includes(a.id) && !COVER_MIMES.includes(a.mimeType))} onClick={() => void setCoverPurpose(selected, true)} className="shrink-0 rounded border px-2 py-1.5 text-xs text-indigo-600 disabled:opacity-40">设为封面素材</button><button type="button" disabled={filingBusy} onClick={() => void setCoverPurpose(selected, false)} className="shrink-0 rounded border px-2 py-1.5 text-xs text-slate-600 disabled:opacity-40">取消封面素材</button></>}
             {/* 添加标签 */}
             <button
               onClick={() => { setShowFloatingTag(v => !v); setShowFloatingFolder(false) }}
