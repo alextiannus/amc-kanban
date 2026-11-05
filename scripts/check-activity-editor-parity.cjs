@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict'),fs=require('node:fs'),path=require('node:path')
 const root=path.resolve(__dirname,'..'),peer=process.argv[2]||path.resolve(root,'../amc-mm')
-for(const file of ['src/components/dashboard/FollowEntryCard.tsx','src/components/dashboard/activityUi.ts','src/lib/activityPage.ts','src/lib/amcQrArtwork.ts','src/lib/brandAccountEvents.ts','src/lib/gameQr.ts','src/lib/activitySharePresentation.ts']) assert.equal(fs.readFileSync(path.join(root,file),'utf8'),fs.readFileSync(path.join(peer,file),'utf8'),file+' differs between products')
-assert.equal(fs.readFileSync(path.join(root,'src/components/dashboard/ActivitySettingsEditor.tsx'),'utf8').replace('function ActivitySettingsEditor(', 'function GameSettingsDashboard('),fs.readFileSync(path.join(peer,'src/components/dashboard/GameSettingsDashboard.tsx'),'utf8'))
+const read=(base,file)=>fs.readFileSync(path.join(base,file),'utf8').replace(/\r\n/g,'\n')
+for(const file of ['src/components/dashboard/FollowEntryCard.tsx','src/components/dashboard/activityUi.ts','src/lib/activityPage.ts','src/lib/amcQrArtwork.ts','src/lib/brandAccountEvents.ts','src/lib/gameQr.ts','src/lib/activitySharePresentation.ts']) assert.equal(read(root,file),read(peer,file),file+' differs between products')
+assert.equal(read(root,'src/components/dashboard/ActivitySettingsEditor.tsx').replace('function ActivitySettingsEditor(', 'function GameSettingsDashboard('),read(peer,'src/components/dashboard/GameSettingsDashboard.tsx'))
 console.log('PASS MM/Kanban editor, activity canvas, configuration and QR helpers are synchronized.')

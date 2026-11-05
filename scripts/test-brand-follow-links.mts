@@ -21,6 +21,12 @@ assert.equal(followAppUrl('instagram', 'https://www.instagram.com/p/post-id'), n
 assert.equal(followAppUrl('instagram', 'https://www.instagram.com/accounts'), null)
 assert.equal(followAppUrl('instagram', 'javascript:alert(1)'), null)
 assert.equal(followAppUrl('xiaohongshu', 'https://www.xiaohongshu.com/user/profile/123'), 'xhsdiscover://webview?url=https%3A%2F%2Fwww.xiaohongshu.com%2Fuser%2Fprofile%2F123')
+for (const host of ['xhslink.cn', 'www.xhslink.cn', 'xhslink.com', 'www.xhslink.com']) {
+  const url = `https://${host}/o/3KyCupOKbpB?xsec_token=AbC%2B123&source=share`
+  assert.equal(followAppUrl('xiaohongshu', url), `xhsdiscover://webview?url=${encodeURIComponent(url)}`)
+  assert.equal(brandFollowLinks({activityPage:{text:{},links:{},manualAccounts:[{platformId:'xiaohongshu',handle:'Cafe',profileUrl:url}]}})[0].url,url)
+}
+for (const url of ['https://xhslink.cn.evil.test/o/123', 'https://xhslink.cn/', 'https://xhslink.cn:8443/o/123', 'http://xhslink.cn/o/123']) assert.equal(followAppUrl('xiaohongshu', url), null)
 assert.equal(followAppUrl('tiktok', 'https://www.tiktok.com/@real'), null, 'keep universal links rather than guessing an app-only ID')
 console.log('App routes: exact hosts, real profile paths, reserved paths and universal-link fallback passed.')
 

@@ -1,4 +1,4 @@
-import { activityLinkKey, type ActivityPage } from './activityPage'
+import { activityLinkKey, isXiaohongshuActivityHost, type ActivityPage } from './activityPage'
 export type FollowBrand = {
   activityStoreId?: string
   activityPage?: ActivityPage
@@ -101,7 +101,7 @@ export function followAppUrl(platform: string, profileUrl: string): string | nul
   const url = new URL(safe)
   const host = url.hostname.toLowerCase()
   // Instagram universal HTTPS links preserve the account route across installed app versions.
-  if (platform === 'xiaohongshu' && ['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com', 'www.xhslink.com'].includes(host)) {
+  if (platform === 'xiaohongshu' && url.protocol === 'https:' && !url.port && url.pathname !== '/' && isXiaohongshuActivityHost(host)) {
     return `xhsdiscover://webview?url=${encodeURIComponent(safe)}`
   }
   return null

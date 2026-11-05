@@ -15,6 +15,33 @@ export const activityTextDefaults = {
 } as const
 export type ActivityTextKey = keyof typeof activityTextDefaults
 export type ActivityPage = { manualAccounts?: { platformId: 'xiaohongshu'; handle: string; profileUrl: string }[]; text: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, string>>>>; links: Record<string, string>; drawEnabled?: boolean; translations?: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, { source: string; value: string }>>>> }
+const activityAccountErrors = {
+  NAME: { zh: '请输入小红书账号名称，最多 80 个字符。', en: 'Enter an account name of up to 80 characters.' },
+  LINK_FORMAT: { zh: '请输入完整的小红书主页或分享链接，最多 2048 个字符。', en: 'Enter a complete Xiaohongshu profile or share link of up to 2048 characters.' },
+  LINK_HTTPS: { zh: '请使用 HTTPS 小红书链接。', en: 'Use an HTTPS Xiaohongshu link.' },
+  LINK_DOMAIN: { zh: '请使用 xiaohongshu.com、xhslink.com 或 xhslink.cn 的主页或分享链接。', en: 'Use a profile or share link on xiaohongshu.com, xhslink.com or xhslink.cn.' },
+  LINK_CREDENTIALS: { zh: '链接不能包含账号密码或自定义端口。', en: 'Links cannot include credentials or a custom port.' },
+  DUPLICATE_NAME: { zh: '该名称已对应其他链接，请修改已有账号或使用不同名称。', en: 'This name has another link. Edit the existing account or use a different name.' },
+  LIMIT: { zh: '最多添加 10 个小红书账号，请先删除不需要的账号。', en: 'You can add up to 10 Xiaohongshu accounts. Remove an unused account first.' },
+} as const
+export class ActivityAccountError extends Error {
+  constructor(readonly code: keyof typeof activityAccountErrors) { super(activityAccountErrors[code].en) }
+}
+export function activityAccountErrorText(error: unknown, locale: 'zh' | 'en') {
+  return error instanceof ActivityAccountError ? activityAccountErrors[error.code][locale] : locale === 'zh' ? '无法添加账号，请检查输入后重试。' : 'Unable to add this account. Check the fields and try again.'
+}
+export function isXiaohongshuActivityHost(hostname: string) {
+  return ['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com', 'www.xhslink.com', 'xhslink.cn', 'www.xhslink.cn'].includes(hostname.toLowerCase())
+}
+export function addActivityAccount(page: ActivityPage, handle: string, profileUrl: string) {
+  const candidate = normalizeActivityPage({ manualAccounts: [{ platformId: 'xiaohongshu', handle, profileUrl }] }).manualAccounts![0]
+  const existing = page.manualAccounts?.find(account => account.handle === candidate.handle)
+  if (existing) {
+    if (existing.profileUrl !== candidate.profileUrl) throw new ActivityAccountError('DUPLICATE_NAME')
+    return { page, added: false }
+  }
+  return { page: normalizeActivityPage({ ...page, manualAccounts: [...(page.manualAccounts || []), candidate] }), added: true }
+}
 export function activityLinkKey(platform: string, handle: string) { return `${platform.toLowerCase()}:${encodeURIComponent(handle)}` }
 export function activitySourceText(page: ActivityPage | null | undefined, key: ActivityTextKey, locale: 'zh' | 'en', reward?: string | null) {
   const direct = page?.text?.[locale]?.[key]
@@ -67,14 +94,19 @@ export function normalizeActivityPage(input: unknown): ActivityPage {
   if (typeof input !== 'object' || Array.isArray(input)) throw new Error('Invalid activity page')
   const source = input as Record<string, unknown>
   if (source.manualAccounts !== undefined) {
-    if (!Array.isArray(source.manualAccounts) || source.manualAccounts.length > 10) throw new Error('Maximum 10 manual accounts')
+    if (!Array.isArray(source.manualAccounts) || source.manualAccounts.length > 10) throw new ActivityAccountError('LIMIT')
     out.manualAccounts = source.manualAccounts.map(account => {
-      if (!account || account.platformId !== 'xiaohongshu' || typeof account.handle !== 'string' || !account.handle.trim() || account.handle.length > 80 || typeof account.profileUrl !== 'string' || account.profileUrl.length > 2048) throw new Error('Enter an account name and Xiaohongshu profile link')
-      const url = new URL(account.profileUrl.trim())
-      if (url.protocol !== 'https:' || url.username || url.password || url.port || !['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com', 'www.xhslink.com'].includes(url.hostname) || url.pathname === '/') throw new Error('Use an official HTTPS Xiaohongshu profile or share link')
+      if (!account || account.platformId !== 'xiaohongshu' || typeof account.handle !== 'string' || !account.handle.trim() || account.handle.length > 80) throw new ActivityAccountError('NAME')
+      if (typeof account.profileUrl !== 'string' || account.profileUrl.length > 2048) throw new ActivityAccountError('LINK_FORMAT')
+      let url: URL
+      try { url = new URL(account.profileUrl.trim()) } catch { throw new ActivityAccountError('LINK_FORMAT') }
+      if (url.protocol !== 'https:') throw new ActivityAccountError('LINK_HTTPS')
+      if (url.username || url.password || url.port) throw new ActivityAccountError('LINK_CREDENTIALS')
+      if (!isXiaohongshuActivityHost(url.hostname)) throw new ActivityAccountError('LINK_DOMAIN')
+      if (url.pathname === '/') throw new ActivityAccountError('LINK_FORMAT')
       return { platformId: 'xiaohongshu' as const, handle: account.handle.trim(), profileUrl: url.href }
     })
-    if (new Set(out.manualAccounts.map(a => a.handle)).size !== out.manualAccounts.length) throw new Error('Account names must be unique')
+    if (new Set(out.manualAccounts.map(a => a.handle)).size !== out.manualAccounts.length) throw new ActivityAccountError('DUPLICATE_NAME')
   }
   if (source.drawEnabled !== undefined) {
     if (typeof source.drawEnabled !== 'boolean') throw new Error('Invalid activity selection')
