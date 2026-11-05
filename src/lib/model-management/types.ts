@@ -6,6 +6,7 @@ export type ModelDefinition = {
   timeoutMs:number; maxRetries:number; temperature?:number; jsonMode?:boolean;
   maxTokensByTask?:Record<string,number>; videoConstraints?:Record<string,unknown>; costMetadata?:Record<string,unknown>;
   reasoningEffort?:'low'|'high'|'max';
+  qianfanApi?:'v2_fire'|'fire2';
 }
 export type Selection = {defaults:Partial<Record<Capability,string>>; exceptions:Record<string,string>}
 export type CatalogModel = {id:string;connectionId:string;legacyId?:string;definition:ModelDefinition}

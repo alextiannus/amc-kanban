@@ -3,6 +3,7 @@ import { parseKopixCredential } from './kopixCredentials.ts'
 import { prisma } from '../prisma.ts'
 import { decryptSecret, encryptSecret, secretFingerprint } from './secrets.ts'
 import { CAPABILITIES, type ModelDefinition, type RuntimeConfig, type Selection } from './types.ts'
+import { qianfanPreflightRequests, assertQianfanPreflightConfirmation } from './executionContract.ts'
 const db=prisma as any
 export function configurationFingerprint(selection:Selection){return createHash('sha256').update(JSON.stringify({defaults:Object.fromEntries(Object.entries(selection.defaults).sort()),exceptions:Object.fromEntries(Object.entries(selection.exceptions).sort())})).digest('hex')}
 export async function activeVersion():Promise<number|null>{
@@ -42,7 +43,7 @@ export function validateConnection(input:{name:string;protocol:string;baseUrl:st
   input={...input,baseUrl:input.baseUrl?.trim()}
   if(!['openai','anthropic','google','custom_shim','deepseek','kopix','minimax','stability','cn_gateway','seedance','volcengine','fal','kieai','baidu_seedance','baidu_qianfan_seedance'].includes(input.protocol))throw new Error('Unsupported model protocol')
   const url=new URL(input.baseUrl);if(!['http:','https:'].includes(url.protocol)||url.username||url.password)throw new Error('Invalid provider URL')
-  if(input.protocol==='baidu_qianfan_seedance'&&(url.protocol!=='https:'||url.pathname!=='/'||url.search||url.hash))throw new Error('Qianfan V2 requires an HTTPS origin without a path, query or fragment')
+  if(input.protocol==='baidu_qianfan_seedance'&&(url.protocol!=='https:'||url.pathname!=='/'||url.search||url.hash))throw new Error('Qianfan requires an HTTPS origin without a path, query or fragment')
   // The deployed CN Gateway uses signed timestamp/nonce/HMAC requests over HTTP.
   // Keep this compatibility specific to its executor, never to a vendor name.
   if(process.env.NODE_ENV==='production'&&url.protocol!=='https:'&&input.protocol!=='cn_gateway')throw new Error('Production model connections require HTTPS')
@@ -57,11 +58,12 @@ export async function createConnection(input:{name:string;protocol:string;baseUr
 export async function createModel(input:{connectionId:string;legacyId?:string;definition:ModelDefinition},actorId:string,client:any=db){
   const raw=input.definition
   if(raw?.isEnabled!==undefined&&typeof raw.isEnabled!=='boolean')throw new Error('Invalid model availability')
-  const d:ModelDefinition=raw&&{isEnabled:raw.isEnabled??true,previousModelId:raw.previousModelId,name:raw.name,modelName:raw.modelName,capabilities:raw.capabilities,inputCapabilities:raw.inputCapabilities,timeoutMs:raw.timeoutMs,maxRetries:raw.maxRetries,temperature:raw.temperature,jsonMode:raw.jsonMode,maxTokensByTask:raw.maxTokensByTask,reasoningEffort:raw.reasoningEffort,videoConstraints:raw.videoConstraints,costMetadata:raw.costMetadata}
+  const d:ModelDefinition=raw&&{isEnabled:raw.isEnabled??true,previousModelId:raw.previousModelId,name:raw.name,modelName:raw.modelName,capabilities:raw.capabilities,inputCapabilities:raw.inputCapabilities,timeoutMs:raw.timeoutMs,maxRetries:raw.maxRetries,temperature:raw.temperature,jsonMode:raw.jsonMode,maxTokensByTask:raw.maxTokensByTask,reasoningEffort:raw.reasoningEffort,qianfanApi:raw.qianfanApi,videoConstraints:raw.videoConstraints,costMetadata:raw.costMetadata}
   if(!d?.name||!d.modelName||!Array.isArray(d.capabilities)||!d.capabilities.length||d.capabilities.some(c=>!CAPABILITIES.includes(c)))throw new Error('Model name and declared capabilities are required')
   if(!Number.isFinite(d.timeoutMs)||d.timeoutMs<1000||d.timeoutMs>600000)throw new Error('Invalid model timeout')
   if(!Array.isArray(d.inputCapabilities)||!Number.isInteger(d.maxRetries)||d.maxRetries<0||d.maxRetries>3)throw new Error('Invalid model parameters')
   if(Object.values(d.maxTokensByTask||{}).some(n=>!Number.isInteger(n)||n<1||n>1000000))throw new Error('Invalid output token limits')
+  if(d.qianfanApi!==undefined&&!['v2_fire','fire2'].includes(d.qianfanApi))throw new Error('Invalid Qianfan API')
   if(d.reasoningEffort!==undefined&&!['low','high','max'].includes(d.reasoningEffort))throw new Error('Invalid reasoning effort')
   if(/"(?:apiKey|secret|token|authorization|password)"\s*:/i.test(JSON.stringify(d)))throw new Error('Credentials belong in provider connections only')
   const id=randomUUID()
@@ -85,6 +87,9 @@ export async function publish(selection:Selection,expectedVersion:number|null,va
     if(!state||state.version!==expectedVersion)throw new Error('Model configuration changed; reload before publishing')
     const validation=(await tx.$queryRawUnsafe('SELECT * FROM "ModelPolicyValidation" WHERE id=$1',validationId))[0]
     if(!validation?.report?.passed||validation.fingerprint!==configurationFingerprint(selection)||Date.now()-new Date(validation.createdAt).getTime()>1800000)throw new Error('Fresh successful three-system validation required')
+    const ids=[...new Set([...Object.values(selection.defaults),...Object.values(selection.exceptions)])].filter(Boolean)
+    const models=await tx.$queryRawUnsafe('SELECT m.id,m.definition,c.protocol FROM "ModelCatalogEntry" m JOIN "ModelConnection" c ON c.id=m."connectionId" WHERE m.id=ANY($1::text[])',ids)
+    assertQianfanPreflightConfirmation(qianfanPreflightRequests({selection,models}),validation.report.tasks)
     const row=(await tx.$queryRawUnsafe('INSERT INTO "ModelPolicyRevision" (configuration,"actorId") VALUES ($1::jsonb,$2) RETURNING version',JSON.stringify(selection),actorId))[0]
     await tx.$executeRawUnsafe('UPDATE "ModelPolicyState" SET version=$1 WHERE id=$2',row.version,'default')
     await tx.auditLog.create({data:{actorId,actorType:'HUMAN',action:'MODEL_POLICY_PUBLISHED',resourceType:'ModelPolicy',resourceId:'default',newValue:{version:row.version,selection}}})

@@ -15,19 +15,19 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
   const [enabled,setEnabled]=useState(d?.isEnabled!==false),[capabilities,setCapabilities]=useState<string[]>(d?.capabilities||['text'])
   const [inputs,setInputs]=useState<string>((d?.inputCapabilities||['text_input','structured_json']).join(', '))
   const [timeout,setTimeoutValue]=useState(d?.timeoutMs||120000),[retries,setRetries]=useState(d?.maxRetries||0)
-  const [parameters,setParameters]=useState(JSON.stringify({temperature:d?.temperature,jsonMode:d?.jsonMode,maxTokensByTask:d?.maxTokensByTask||{},reasoningEffort:d?.reasoningEffort,videoConstraints:d?.videoConstraints,costMetadata:d?.costMetadata},null,2))
+  const [parameters,setParameters]=useState(JSON.stringify({temperature:d?.temperature,jsonMode:d?.jsonMode,maxTokensByTask:d?.maxTokensByTask||{},reasoningEffort:d?.reasoningEffort,qianfanApi:d?.qianfanApi,videoConstraints:d?.videoConstraints,costMetadata:d?.costMetadata},null,2))
   const [localError,setLocalError]=useState('')
   const dialog=useRef<HTMLDialogElement>(null)
   const selectedProtocol=mode==='reuse'?connections.find(c=>c.id===connectionId)?.protocol:connection.protocol
   function applyPreset(preset:ModelDefinition){
     setName(preset.name);setModelName(preset.modelName);setEnabled(true);setCapabilities([...preset.capabilities]);setInputs(preset.inputCapabilities.join(', '));setTimeoutValue(preset.timeoutMs);setRetries(preset.maxRetries)
-    setParameters(JSON.stringify({videoConstraints:preset.videoConstraints},null,2));setLocalError('')
+    setParameters(JSON.stringify({qianfanApi:preset.qianfanApi,videoConstraints:preset.videoConstraints},null,2));setLocalError('')
   }
   function applyRunyPreset(){applyPreset(RUNY_SEEDANCE_25_PRESET)}
   function chooseProtocol(protocol:string){
     setConnection({...connection,protocol,...(protocol==='stability'?{baseUrl:'https://api.stability.ai',name:'Stability AI'}:{})})
     if(protocol==='baidu_qianfan_seedance'){
-      setConnection({...connection,protocol,baseUrl:'https://qianfan.baidubce.com',name:'百度千帆 Seedance V2'})
+      setConnection({...connection,protocol,baseUrl:'https://qianfan.baidubce.com',name:'百度千帆 Seedance V2 / Fire2'})
       applyPreset(QIANFAN_SEEDANCE_V2_PRESETS[0])
     }
     if(protocol==='stability'){
@@ -50,7 +50,8 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
       {(localError||error)&&<p role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{localError||error}</p>}
       <fieldset disabled={busy} className="space-y-4">
         {selectedProtocol==='baidu_qianfan_seedance'&&<div className="space-y-2">
-          <p className="text-sm font-bold">百度千帆 Seedance V2</p>
+          <p className="text-xs text-slate-500">S2.5 使用 Fire2，其他三个型号继续使用 V2。升级旧 S2.5 时选择 S2.5 预设再保存，可复用原连接。</p>
+          <p className="text-sm font-bold">百度千帆 Seedance V2 / Fire2</p>
           <div className="flex flex-wrap gap-2">{QIANFAN_SEEDANCE_V2_PRESETS.map(preset=><button key={preset.modelName} type="button" onClick={()=>applyPreset(preset)} className="rounded-xl border border-blue-300 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">{preset.modelName} 预设</button>)}</div>
           <p className="text-xs text-slate-500">四个型号可复用同一连接。首期支持 720p 和普通图片、视频参考；真人参考需认证，暂不开放。保存仅更新目录及草稿，验证并发布后才生效。未配置费率时费用未知。</p>
         </div>}

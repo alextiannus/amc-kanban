@@ -3,7 +3,8 @@ import type { ModelDefinition } from '../../lib/model-management/types'
 export const QIANFAN_SEEDANCE_V2_PRESETS: ModelDefinition[] = ['S2.0', 'S2.0-Fast', 'S2.0-Mini', 'S2.5'].map(modelName => {
   const extended = modelName === 'S2.5'
   return {
-    name: `百度千帆 Seedance ${modelName} V2`, modelName, isEnabled: true,
+    name: `百度千帆 Seedance ${modelName}${extended ? ' · Fire2' : ' V2'}`, modelName, isEnabled: true,
+    qianfanApi: extended ? 'fire2' : 'v2_fire',
     capabilities: ['video_generation'],
     inputCapabilities: ['video_output', 'reference_image', 'reference_video', 'native_audio'],
     timeoutMs: 120000, maxRetries: 0,

@@ -132,6 +132,7 @@ try{
     const item=(await overview()).models.find((m:any)=>m.id===saved.result.id)
     assert.equal(item.connectionId,qianfanConnection.id)
     assert.equal(item.definition.maxRetries,0)
+    assert.equal(item.definition.qianfanApi,preset.modelName==='S2.5'?'fire2':'v2_fire')
     assert.deepEqual(item.definition.videoConstraints.resolutions,['720p'])
     assert.equal(item.definition.videoConstraints.maxDurationSec,preset.modelName==='S2.5'?30:15)
     assert.equal(item.definition.videoConstraints.maxImages,preset.modelName==='S2.5'?30:9)
@@ -142,6 +143,25 @@ try{
   assert.equal((await runtimeConfig()).version,qianfanPolicy.version,'Qianfan presets do not publish')
   assert.equal((await runtimeConfig({jobId:'running'})).version,pinned.version)
   assert(!JSON.stringify(await overview()).includes('qianfan-fixture'),'Qianfan credential remains masked')
+  const fire2Preset=QIANFAN_SEEDANCE_V2_PRESETS.find(p=>p.modelName==='S2.5')!
+  const legacy25=await saveModelVersion({connectionId:qianfanConnection.id,definition:{...fire2Preset,qianfanApi:undefined}},(await readDraft()).revision,'admin')
+  const beforeUpgrade=await readDraft(),beforeConnections=(await overview()).connections.length
+  const upgraded=await saveModelVersion({previousModelId:legacy25.result.id,connectionId:qianfanConnection.id,definition:fire2Preset},beforeUpgrade.revision,'admin')
+  const upgradeView=await overview(),upgrade=upgradeView.models.find((m:any)=>m.id===upgraded.result.id)
+  assert.equal(upgrade.definition.qianfanApi,'fire2')
+  assert.equal(upgrade.definition.previousModelId,legacy25.result.id)
+  assert.equal(upgrade.connectionId,qianfanConnection.id)
+  assert.equal(upgradeView.models.find((m:any)=>m.id===legacy25.result.id).definition.qianfanApi,undefined)
+  assert.equal(upgradeView.connections.length,beforeConnections)
+  assert.deepEqual((await readDraft()).configuration,beforeUpgrade.configuration)
+  assert.equal((await runtimeConfig()).version,qianfanPolicy.version)
+  await assert.rejects(()=>saveModelVersion({connectionId:qianfanConnection.id,definition:fire2Preset},beforeUpgrade.revision,'other'),/Draft changed/)
+  const {publish}=await import('../src/lib/model-management/registry.ts')
+  for(const id of [legacy25.result.id,upgraded.result.id]){
+    const candidate={...beforeUpgrade.configuration,defaults:{...beforeUpgrade.configuration.defaults,video_generation:id}}
+    const staleProof=await proof(candidate)
+    await assert.rejects(()=>publish(candidate,qianfanPolicy.version,staleProof,'admin'),/Fire2/)
+  }
   assert.equal((await runtimeConfig({source:'content',jobId:'historic-job'})).active,false)
   draft=await readDraft()
   const rotated=await saveModelVersion({previousModelId:edit.result.id,connection:{name:'Rotated',protocol:'kopix',baseUrl:'https://provider.fixture/v1',secret:'rotated-fixture',previousId:originalText.connectionId},definition:originalText.definition},draft.revision,'admin')

@@ -1,10 +1,14 @@
 # AI Marketing Crew API Services
 
-## Qianfan Seedance V2 (implemented locally; not deployed or provider-accepted)
+## Baidu Qianfan Seedance: S2.5 Fire2 and S2.0 V2 (implemented locally; deployment and live acceptance pending)
 
-No new AMC public endpoint. Existing /api/admin/models manages encrypted baidu_qianfan_seedance connections and immutable catalog entries; draft/validation/publication and internal delegated-media interfaces remain authoritative. Content calls POST /v2/mm/fire/generations/tasks (top-level id) and GET /v2/mm/fire/generations/tasks/{id} (succeeded/content.video_url). Read-only credential preflight creates no generation tasks. See [unified models](unified-model-management.md).
+Keep protocol `baidu_qianfan_seedance` and reuse the encrypted origin-only connection. Immutable model definitions carry optional `qianfanApi: 'v2_fire' | 'fire2'`. S2.5 new submissions require `fire2`; S2.0, Fast and Mini use `v2_fire`. Missing markers in historical snapshots mean V2, including S2.5. Queries always use the submission snapshot, never the current catalog or model-name inference. Old V2 S2.5 entries cannot pass publication validation or start new tasks.
 
-素材目录树及分类接口（2026-11-04，本地实现，待部署）：[目录管理与类别](asset-folder-management.md)。目录以 ID 为主，固定一级导航不可修改，标准主题目录允许改名，写权限由服务端校验，PATCH/DELETE 使用 revision；新增素材类别过滤与跨类别调整确认。
+Fire2 creates via POST `/beta/video/generations/qianfan-video/fireseries` (`code=0`, `data.task_id`), queries via GET on the same path with `task_id`, and parses `processing`/`success`, `err_code`, `result.content.video_url`, `result.model`, trace IDs and token usage. Its read-only preflight uses `/fireseries/list?page_size=1&model=S2.5`, requiring `code=0` and a `data` array. Content reports the actual API marker per candidate task; Kanban requires matching Fire2 confirmation before publication. S2.0 keeps `/v2/mm/fire/generations/tasks`, top-level `id`, `succeeded` and `content.video_url`. No cross-interface fallback.
+
+MM retains its three-video product limit and reserved continuation-image slot; the existing system prompt limit is unchanged. First release keeps 720p MP4, fixed integer 4-30 second S2.5 duration, ordinary image/video references and native audio. Existing S2.5 caps (30 images, 10 videos, individual and total video duration at most 30 seconds) and reference dimension/size caps remain application safeguards, not supplier-confirmed maximum combinations. S2.0 keeps 4-15 seconds, 9 images and 3 videos totaling 15 seconds. Portrait certification, asset://, audio references, explicit frame roles, edit/extend and search are unavailable. Reuse reference preparation, audio checks, OBS transfer and segmented continuation/assembly. Timeouts, 5xx, 408 or missing task IDs preserve unknown acceptance and never automatically resubmit. Preserve failed records and pinned jobs.
+
+No schema migration or new business API. Deploy Content before Kanban. Then edit S2.5 through existing model management, reuse its encrypted connection, save an immutable replacement using draft revision checks and audit. Saving does not change active defaults/exceptions. Preflight and new short-text/reference/segmented live acceptance are separate rollout steps; never retry the original failed job or auto-publish. [Fire2 create](https://cloud.baidu.com/doc/qianfan-multimodal/s/Umszsytbn), [query](https://cloud.baidu.com/doc/qianfan-multimodal/s/Imsztp5i9), [list](https://cloud.baidu.com/doc/qianfan-multimodal/s/rmszuyolo).
 
 ## 发布日历日期备注
 
