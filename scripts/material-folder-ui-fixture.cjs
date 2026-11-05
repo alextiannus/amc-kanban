@@ -57,9 +57,10 @@ async function main() {
       return json({ assets: filtered.slice((page-1)*size,page*size), total:filtered.length, page, pageSize:size, pagination:{page,pageSize:size,total:filtered.length,totalPages:Math.max(1,Math.ceil(filtered.length/size))} })
     }
     if (url.pathname.endsWith('/assets/organize')) {
-      if(input.action==='rollback'){const before=receipts.get(input.receiptId);if(!before)return json({error:'整理回执不存在'},409);before.forEach(previous=>Object.assign(assets.find(a=>a.id===previous.id),previous));receipts.delete(input.receiptId);return json({restored:before.length})}
+      if(['rollback','rollback-cover'].includes(input.action)){const before=receipts.get(input.receiptId);if(!before)return json({error:'整理回执不存在'},409);before.forEach(previous=>Object.assign(assets.find(a=>a.id===previous.id),previous));receipts.delete(input.receiptId);return json({restored:before.length})}
       const selected=assets.filter(a=>input.assetIds.includes(a.id));if(selected.some(a=>input.revisions[a.id]!==a.updatedAt))return json({error:'素材已被修改，请刷新预览后重试'},409)
-      const receiptId=`receipt-${counter++}`;receipts.set(receiptId,selected.map(a=>({...a})));selected.forEach(a=>Object.assign(a,{materialClass:input.materialClass,folderId:input.folderId,updatedAt:new Date().toISOString()}));return json({updated:selected.length,receiptId})
+      if(input.action==='cover'&&selected.some(a=>!['image/jpeg','image/png'].includes(a.mimeType)))return json({error:'封面素材仅支持 JPEG/PNG 图片'},422)
+      const receiptId=`receipt-${counter++}`;receipts.set(receiptId,selected.map(a=>({...a})));selected.forEach(a=>Object.assign(a,{...(input.action==='cover'?{isCoverMaterial:true}:{materialClass:input.materialClass,folderId:input.folderId}),updatedAt:new Date().toISOString()}));return json({updated:selected.length,receiptId,...(input.action==='cover'?{rollbackAction:'rollback-cover'}:{})})
     }
     if (url.pathname.endsWith('/folders')) {
       if (req.method === 'POST') {

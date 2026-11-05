@@ -4,7 +4,7 @@
 
 封面素材是固定用途视图 COVERS，与原始素材、AI制作成果、人工加工并列，说明为“集中管理发布封面图片，可在新建草稿和排期时选择；原目录与来源类别保留。” 不可改名、移动、删除或创建子目录。MediaAsset.isCoverMaterial 为独立布尔字段，默认 false；不改变 materialClass、folderId、素材 ID、文件或脚本引用。第一版仅 JPEG/PNG，不做截帧或格式转换。
 
-素材卡片、批量操作支持设为/取消封面，沿用实时品牌写权限；跨品牌或含不合格格式的批次整体拒绝。既有技术元数据作为格式依据，历史缺少可靠元数据的素材先检查原媒体，再提交版本校验。设为封面不让 AI 分析覆盖人工归档。取消用途不清空已保存草稿的 coverAssetId。
+待整理“归入”菜单提供“封面素材（保留原目录与分类）”，不显示来源子目录。预览明确只添加封面用途，保留来源类别（包括待确认）及原目录；明确确认后 POST organize action=cover、assetIds、revisions、confirmCoverPurpose=true，使用同一封面校验与审计事务，返回 receiptId 和 rollbackAction=rollback-cover。撤销恢复封面前值，不改变分类/目录。只读、跨品牌、过期预览和混合不合格格式整批拒绝，失败保留选择；JPEG/PNG 之外提示分开选择，不静默跳过。素材卡片、批量操作支持设为/取消封面，沿用实时品牌写权限；跨品牌或含不合格格式的批次整体拒绝。既有技术元数据作为格式依据，历史缺少可靠元数据的素材先检查原媒体，再提交版本校验。设为封面不让 AI 分析覆盖人工归档。取消用途不清空已保存草稿的 coverAssetId。
 
 封面列表支持缩略图、大图、搜索、24 条分页和批量取消；上传自动设置 isCoverMaterial=true，来源类别单独选择，默认 UNCONFIRMED，可信 AI 来源仍由服务端标记 AI。其他三个入口上传继续继承来源类别。目录接口 roots 保留三类，新增 views 返回固定用途入口及写权限，旧 MM/Content 消费者忽略 views。
 
@@ -25,3 +25,5 @@
 发布必须先执行 additive migration `20261104170000_cover_material_purpose`，再部署 Kanban（页面/API/MCP）。此次不需要更新 MM/Content，roots 保留三个来源，views 为增量字段。由于 Prisma 常规查询也会读取新列，不能先部署新代码再补迁移。生产部署、真实品牌回填及发布平台联调未执行。
 
 执行命令：`npm run materials:covers -- --brand BRAND_ID --out preview.json`，只读生成预览与摘要。每批最多 500 条，输出 totalCandidates；剩余素材需重新生成并核对下一批预览。核对后运行 `npm run materials:covers -- --apply preview.json --digest SHA256 --actor USER_ID --receipt receipt.json`；回滚为 `npm run materials:covers -- --rollback receipt.json --actor USER_ID`。回执文件独占创建，禁止覆盖。若数据库提交成功而本地回执写入失败，按品牌、操作者与预览素材 ID 从 ASSET_COVER_PURPOSE_UPDATED 审计恢复 receiptId，核对后重建 committed 回执，不能盲目重复 apply。手动标记/取消的图片带用途覆盖标识，历史回填会跳过；回滚只恢复用途及其前值覆盖信息，不移动素材。
+
+2026-11-05 待整理封面目标（已实现并完成本地验证，部署及生产验收待核对）：类型检查、组件/API ESLint、真实 SQL 事务及实际路由校验通过；1440/390px 浏览器验证菜单入口、四种来源图片保留分类/目录、混合格式拒绝、取消预览不写入、保存失败保留预览、成功保存与撤销通过。待整理缩略图、整行选择及全选/取消回归通过。无新数据库迁移，未执行生产数据整理。

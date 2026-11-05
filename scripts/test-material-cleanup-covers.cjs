@@ -1,0 +1,62 @@
+async (page) => {
+  const check = (ok, message) => { if (!ok) throw Error(message) }
+  const writes = [], errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  page.on('request', r => { if (r.url().endsWith('/assets/organize') && r.method() === 'POST') writes.push(r.postDataJSON()) })
+  const state = async () => (await page.request.get('http://127.0.0.1:3115/fixture/cover-state')).json()
+  await page.request.post('http://127.0.0.1:3115/fixture/clear-covers')
+  const before = await state()
+  await page.setViewportSize({width:1440,height:1000})
+  await page.goto('http://127.0.0.1:3115')
+  await page.getByRole('button',{name:'待整理',exact:true}).click()
+  const review = page.getByRole('dialog',{name:'待整理工作台'})
+  const cover = review.getByRole('combobox',{name:'归入',exact:true})
+  await cover.selectOption('COVERS')
+  check(await review.getByRole('combobox',{name:'整理目标子目录'}).count()===0,'Cover purpose should not show source subfolders')
+  const image = review.getByRole('checkbox',{name:'选择 UNCONFIRMED.jpg',exact:true})
+  const video = review.getByRole('checkbox',{name:'选择 有封面视频.mp4',exact:true})
+  await image.check(); await video.check()
+  await review.getByRole('button',{name:'预览整理',exact:true}).click()
+  await review.getByRole('alert').getByText('封面素材仅支持 JPEG/PNG 图片，请取消勾选视频或其他格式后重试').waitFor()
+  check(writes.length===0,'Mixed formats should fail before submission')
+  await video.uncheck()
+  await review.getByRole('button',{name:'预览整理',exact:true}).click()
+  await review.getByRole('heading',{name:'确认整理 1 项'}).waitFor()
+  await review.getByText(/仅添加封面用途，原目录和来源分类保持不变/).waitFor()
+  await review.getByRole('button',{name:'返回修改',exact:true}).click()
+  check(writes.length===0 && !(await state()).assets.find(a=>a.id==='asset-3').isCoverMaterial,'Cancelling preview should not mark cover')
+  check(await image.isChecked(),'Returning from cover preview lost selection')
+  // All four source classes can use the same fixed purpose destination.
+  await review.getByRole('combobox',{name:'检查范围',exact:true}).selectOption('')
+  for (const name of ['ORIGINAL','MANUAL','AI','UNCONFIRMED']) await review.getByRole('checkbox',{name:`选择 ${name}.jpg`,exact:true}).check()
+  await review.getByRole('button',{name:'预览整理',exact:true}).click()
+  let failOnce = true
+  await page.route('**/assets/organize', async route => {
+    if (failOnce) { failOnce=false; return route.fulfill({status:409,json:{error:'素材已被修改，请刷新预览后重试'}}) }
+    return route.continue()
+  })
+  await review.getByRole('button',{name:'确认设为封面素材',exact:true}).click()
+  await review.getByRole('alert').getByText('素材已被修改，请刷新预览后重试').waitFor()
+  await review.getByRole('heading',{name:'确认整理 4 项'}).waitFor()
+  check(!(await state()).assets.some(a=>a.isCoverMaterial),'Failed save should not mark covers')
+  await review.getByRole('button',{name:'确认设为封面素材',exact:true}).click()
+  await review.getByRole('button',{name:'撤销本次整理',exact:true}).waitFor()
+  const after = await state()
+  for (const old of before.assets.slice(0,4)) {
+    const current=after.assets.find(a=>a.id===old.id)
+    check(current.isCoverMaterial && current.materialClass===old.materialClass && current.folderId===old.folderId,'Cover action changed original filing')
+  }
+  check(writes[1].action==='cover' && writes[1].confirmCoverPurpose===true && writes[1].materialClass===undefined && writes[1].folderId===undefined,'Cover request should only change purpose')
+  await page.setViewportSize({width:390,height:844})
+  await cover.scrollIntoViewIfNeeded()
+  check(await review.evaluate(n=>n.scrollWidth<=n.clientWidth+1),'Mobile cover destination overflows')
+  await page.screenshot({path:'output/playwright/material-folders/cleanup-cover-mobile.png'})
+  await review.getByRole('button',{name:'撤销本次整理',exact:true}).click()
+  await page.waitForFunction(()=>!document.querySelector('dialog [role=status] button'))
+  check(writes[2].action==='rollback-cover','Cover undo used source-filing rollback')
+  check(!(await state()).assets.some(a=>a.isCoverMaterial),'Undo did not restore cover flags')
+  await page.unroute('**/assets/organize')
+  await review.getByRole('button',{name:'关闭',exact:true}).click()
+  check(errors.length===0,errors.join('; '))
+  return {pass:true,coverage:'cover destination; source/folder preserved across all classes; mixed-format rejection; preview cancel; failure retains preview; save; undo; mobile'}
+}

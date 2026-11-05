@@ -239,6 +239,39 @@ async function main() {
   assert.equal((await assetRoute.PATCH(coverRequest(),{params:Promise.resolve({id:'brand',assetId:historical.id})})).status,404)
   read=true
   assert.equal((await assetRoute.PATCH(coverRequest(),{params:Promise.resolve({id:'other',assetId:historical.id})})).status,404)
+  // The cleanup cover destination is a purpose action, never a source class/folder move.
+  const organizeRoute = compile('src/app/api/brands/[id]/assets/organize/route.ts', {
+    'next/server': { NextResponse: Response }, '@/lib/auth': { getSession: async () => session },
+    '@/lib/prisma': { prisma: db }, '@/lib/brandAccess': { canSessionAccessBrandProject: async () => read, canSessionWriteBrandProject: async () => write },
+    '@/lib/asset-library/filing': filing, '@/lib/asset-library/organize': organize, '@/lib/asset-library/cover-history': history,
+  })
+  const cleanupCover = await filing.createClassifiedAsset(db, 'brand', { materialClass: 'UNCONFIRMED' }, { brandId:'brand', url:'https://fixture/cleanup-cover', mimeType:'image/png', technicalMetadata:{kind:'image',mimeType:'image/png',sizeBytes:100} })
+  const cleanupPayload = { action:'cover', assetIds:[cleanupCover.id], revisions:{[cleanupCover.id]:cleanupCover.updatedAt.toISOString()}, confirmCoverPurpose:true, materialClass:'ORIGINAL', folderId:originalTopic.id }
+  const callOrganize = (body, brandId='brand') => organizeRoute.POST(new Request('https://fixture', {method:'POST',body:JSON.stringify(body)}), {params:Promise.resolve({id:brandId})})
+  session=null; assert.equal((await callOrganize(cleanupPayload)).status,401)
+  session={user:actor}; write=false; assert.equal((await callOrganize(cleanupPayload)).status,403)
+  write=true; read=false; assert.equal((await callOrganize(cleanupPayload)).status,404); read=true
+  assert.equal((await callOrganize({...cleanupPayload, confirmCoverPurpose:false})).status,400)
+  assert.equal((await callOrganize({...cleanupPayload, revisions:undefined})).status,400)
+  assert.equal((await callOrganize({...cleanupPayload, revisions:[]})).status,400)
+  assert.equal((await callOrganize({...cleanupPayload, revisions:{[cleanupCover.id]:'old'}})).status,409)
+  assert.equal((await callOrganize(cleanupPayload,'other')).status,404)
+  assert.equal((await callOrganize({...cleanupPayload,assetIds:[cleanupCover.id,unsupported.id],revisions:{...cleanupPayload.revisions,[unsupported.id]:unsupported.updatedAt.toISOString()}})).status,422)
+  assert.equal((await db.mediaAsset.findUnique({where:{id:cleanupCover.id}})).isCoverMaterial,false, 'Mixed-format failure must be atomic')
+  const savedCoverResponse=await callOrganize(cleanupPayload)
+  assert.equal(savedCoverResponse.status,200)
+  const savedCover=await savedCoverResponse.json()
+  assert.equal(savedCover.rollbackAction,'rollback-cover'); assert(savedCover.receiptId)
+  const cleanupAfter=await db.mediaAsset.findUnique({where:{id:cleanupCover.id}})
+  assert.equal(cleanupAfter.isCoverMaterial,true)
+  assert.equal(cleanupAfter.folderId,cleanupCover.folderId); assert.equal(cleanupAfter.materialClass,'UNCONFIRMED'); assert.equal(cleanupAfter.url,cleanupCover.url)
+  assert.equal((await callOrganize(cleanupPayload)).status,409, 'Stale cover preview must not apply')
+  write=false; assert.equal((await callOrganize({action:'rollback-cover',receiptId:savedCover.receiptId})).status,403); write=true
+  assert.equal((await callOrganize({action:'rollback-cover',receiptId:savedCover.receiptId},'other')).status,409)
+  assert.equal((await callOrganize({action:'rollback-cover',receiptId:savedCover.receiptId})).status,200)
+  const cleanupRestored=await db.mediaAsset.findUnique({where:{id:cleanupCover.id}})
+  assert.equal(cleanupRestored.isCoverMaterial,false); assert.equal(cleanupRestored.folderId,cleanupCover.folderId); assert.deepEqual(cleanupRestored.manualOverrides,cleanupCover.manualOverrides)
+  assert.equal((await callOrganize({action:'rollback-cover',receiptId:savedCover.receiptId})).status,409, 'Replayed rollback must fail')
   assert((await db.auditLog.count()) > 5)
   await pg.close()
   console.log('PASS material folders: additive migration, real SQL tree/filing transactions, revision races, rename seeding, permissions, brand isolation, AI protection and reference identity')
