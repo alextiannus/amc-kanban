@@ -27,8 +27,8 @@ export function assertMediaModel(task:string,model:any){
  const rule=mediaRule(task),d=model.definition
  if(model.protocol==='baidu_qianfan_seedance'){
   if(d?.qianfanApi!==undefined&&!['v2_fire','fire2'].includes(d.qianfanApi))throw new Error('Invalid Qianfan API')
-  if(d?.modelName==='S2.5'&&d.qianfanApi!=='fire2')throw new Error('S2.5 new submissions require a Fire2 model version')
-  if(d?.modelName!=='S2.5'&&d?.qianfanApi==='fire2')throw new Error('Fire2 is enabled only for S2.5')
+  if(d?.qianfanApi==='fire2')throw new Error('Fire2 is available for historical queries only; create a new V2 plan to submit remaining segments. Existing media is preserved.')
+  if(d?.modelName==='S2.5'&&d.qianfanApi!=='v2_fire')throw new Error('S2.5 new submissions require an explicit V2 model version')
  }
  if(['image_understanding','video_understanding','speech_recognition'].includes(rule.capability)&&d?.inputCapabilities?.includes('video_output'))throw new Error('Video generation input references do not provide standalone understanding or transcription')
  if(!rule.protocols.includes(model.protocol))throw new Error('Content has no '+task+' adapter for '+model.protocol)
@@ -55,7 +55,7 @@ export function qianfanPreflightRequests(runtime:any){
   const model=runtime.models?.find((m:any)=>m.id===id)
   if(model?.protocol!=='baidu_qianfan_seedance')return
   assertMediaModel(task,model)
-  if(model.definition.qianfanApi==='fire2')requests.push({source,task,platform,modelId:id})
+  if(model.definition.modelName==='S2.5')requests.push({source,task,platform,modelId:id})
  }
  for(const [task,id]of Object.entries(s.defaults))if(id&&task!=='text')add('content',task,id as string)
  for(const [key,id]of Object.entries(s.exceptions)){const [source,task,platform]=key.split(':');add(source,task,id as string,platform)}
@@ -65,10 +65,10 @@ export function qianfanPreflightRequests(runtime:any){
  // exceptions shadow. It can still serve other video tasks after publication.
  for(const id of new Set([...Object.values(s.defaults),...Object.values(s.exceptions)])){
   const model=runtime.models?.find((m:any)=>m.id===id)
-  if(model?.protocol==='baidu_qianfan_seedance'&&model.definition.qianfanApi==='fire2')requests.push({source:'content',task:'video_generation',modelId:model.id})
+  if(model?.protocol==='baidu_qianfan_seedance'&&model.definition.modelName==='S2.5')requests.push({source:'content',task:'video_generation',modelId:model.id})
  }
  return requests
 }
 export function assertQianfanPreflightConfirmation(requests:ReturnType<typeof qianfanPreflightRequests>,tasks:any){
- if(requests.some(expected=>!Array.isArray(tasks)||!tasks.some((t:any)=>t.source===expected.source&&t.task===expected.task&&t.platform===expected.platform&&t.modelId===expected.modelId&&t.executor==='content'&&t.passed===true&&t.qianfanApi==='fire2')))throw new Error('Content did not confirm Fire2 for each selected candidate task; deploy Fire2-capable Content first')
+ if(requests.some(expected=>!Array.isArray(tasks)||!tasks.some((t:any)=>t.source===expected.source&&t.task===expected.task&&t.platform===expected.platform&&t.modelId===expected.modelId&&t.executor==='content'&&t.passed===true&&t.qianfanApi==='v2_fire')))throw new Error('Content did not confirm V2 for each selected S2.5 candidate task; deploy V2-capable Content first')
 }

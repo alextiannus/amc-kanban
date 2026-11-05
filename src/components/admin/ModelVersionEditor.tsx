@@ -27,7 +27,7 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
   function chooseProtocol(protocol:string){
     setConnection({...connection,protocol,...(protocol==='stability'?{baseUrl:'https://api.stability.ai',name:'Stability AI'}:{})})
     if(protocol==='baidu_qianfan_seedance'){
-      setConnection({...connection,protocol,baseUrl:'https://qianfan.baidubce.com',name:'百度千帆 Seedance V2 / Fire2'})
+      setConnection({...connection,protocol,baseUrl:'https://qianfan.baidubce.com',name:'百度千帆 Seedance V2'})
       applyPreset(QIANFAN_SEEDANCE_V2_PRESETS[0])
     }
     if(protocol==='stability'){
@@ -50,8 +50,8 @@ export default function ModelVersionEditor({model,connections,busy,error,onClose
       {(localError||error)&&<p role="alert" className="p-3 rounded-xl bg-red-50 text-red-700 text-sm">{localError||error}</p>}
       <fieldset disabled={busy} className="space-y-4">
         {selectedProtocol==='baidu_qianfan_seedance'&&<div className="space-y-2">
-          <p className="text-xs text-slate-500">S2.5 使用 Fire2，其他三个型号继续使用 V2。升级旧 S2.5 时选择 S2.5 预设再保存，可复用原连接。</p>
-          <p className="text-sm font-bold">百度千帆 Seedance V2 / Fire2</p>
+          <p className="text-xs text-slate-500">S2.5 新任务使用 V2，Fire2 仅保留历史查询。切换时选择 S2.5 预设并保存新版本，可复用原连接。</p>
+          <p className="text-sm font-bold">百度千帆 Seedance V2</p>
           <div className="flex flex-wrap gap-2">{QIANFAN_SEEDANCE_V2_PRESETS.map(preset=><button key={preset.modelName} type="button" onClick={()=>applyPreset(preset)} className="rounded-xl border border-blue-300 px-3 py-2 text-sm text-blue-700 dark:text-blue-300">{preset.modelName} 预设</button>)}</div>
           <p className="text-xs text-slate-500">四个型号可复用同一连接。首期支持 720p 和普通图片、视频参考；真人参考需认证，暂不开放。保存仅更新目录及草稿，验证并发布后才生效。未配置费率时费用未知。</p>
         </div>}

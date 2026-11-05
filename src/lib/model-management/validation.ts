@@ -9,7 +9,7 @@ export async function validateSelection(selection:Selection){
   if(!selection?.defaults?.text||!selection.exceptions||typeof selection.exceptions!=='object')throw new Error('A global text model and media exception map are required')
   if(Object.keys(selection.defaults).some(c=>!(CAPABILITIES as readonly string[]).includes(c)))throw new Error('Unknown default capability')
   const runtime=await configurationRuntime(selection,-1,true),checks:Record<string,boolean>={},errors:Record<string,string>={}
-  const fire2Requests=qianfanPreflightRequests(runtime)
+  const qianfanRequests=qianfanPreflightRequests(runtime)
   const diagnostics:Record<string,{latencyMs?:number;timeoutMs?:number;responseChars?:number;matchesExpected?:boolean;containsExpected?:boolean}>={}
   async function check(name:string,run:()=>Promise<boolean>,failureReason='Validation response did not satisfy the required check'){
     const started=Date.now()
@@ -69,7 +69,7 @@ export async function validateSelection(selection:Selection){
     if(source==='content'){
       if(data.executionContractVersion!==EXECUTION_CONTRACT_VERSION||data.delegatedMedia!==true||!Array.isArray(data.tasks))throw new Error('Content delegated media contract is unavailable; deploy Content first')
       if(data.tasks.some((t:any)=>t.version!==runtime.version||t.executor!=='content'))throw new Error('Content media preflight configuration version or executor mismatch')
-      assertQianfanPreflightConfirmation(fire2Requests,data.tasks)
+      assertQianfanPreflightConfirmation(qianfanRequests,data.tasks)
       tasks.push(...data.tasks)
       checks['system.kanban']=data.protocolVersion===2&&['text','json','conversation','tools'].every(k=>checks[k])&&checks.body_composition!==false&&data.tasks.filter((t:any)=>t.source==='kanban').every((t:any)=>t.passed)
       if(!checks['system.kanban'])errors['system.kanban']=[
