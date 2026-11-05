@@ -17,10 +17,8 @@ export type ActivityTextKey = keyof typeof activityTextDefaults
 export type ActivityPage = { manualAccounts?: { platformId: 'xiaohongshu'; handle: string; profileUrl: string }[]; text: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, string>>>>; links: Record<string, string>; drawEnabled?: boolean; translations?: Partial<Record<'zh' | 'en', Partial<Record<ActivityTextKey, { source: string; value: string }>>>> }
 const activityAccountErrors = {
   NAME: { zh: '请输入小红书账号名称，最多 80 个字符。', en: 'Enter an account name of up to 80 characters.' },
-  LINK_FORMAT: { zh: '请输入完整的小红书主页或分享链接，最多 2048 个字符。', en: 'Enter a complete Xiaohongshu profile or share link of up to 2048 characters.' },
-  LINK_HTTPS: { zh: '请使用 HTTPS 小红书链接。', en: 'Use an HTTPS Xiaohongshu link.' },
-  LINK_DOMAIN: { zh: '请使用 xiaohongshu.com、xhslink.com 或 xhslink.cn 的主页或分享链接。', en: 'Use a profile or share link on xiaohongshu.com, xhslink.com or xhslink.cn.' },
-  LINK_CREDENTIALS: { zh: '链接不能包含账号密码或自定义端口。', en: 'Links cannot include credentials or a custom port.' },
+  LINK_FORMAT: { zh: '请输入可打开的网页地址，最多 2048 个字符。', en: 'Enter a web address of up to 2048 characters.' },
+  LINK_CREDENTIALS: { zh: '链接不能包含账号密码。', en: 'Links cannot include credentials.' },
   DUPLICATE_NAME: { zh: '该名称已对应其他链接，请修改已有账号或使用不同名称。', en: 'This name has another link. Edit the existing account or use a different name.' },
   LIMIT: { zh: '最多添加 10 个小红书账号，请先删除不需要的账号。', en: 'You can add up to 10 Xiaohongshu accounts. Remove an unused account first.' },
 } as const
@@ -32,6 +30,21 @@ export function activityAccountErrorText(error: unknown, locale: 'zh' | 'en') {
 }
 export function isXiaohongshuActivityHost(hostname: string) {
   return ['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com', 'www.xhslink.com', 'xhslink.cn', 'www.xhslink.cn'].includes(hostname.toLowerCase())
+}
+export function isXiaohongshuActivityLink(key: string) {
+  return ['xiaohongshu', 'rednote', 'red', 'xhs', 'redbook'].includes(key.split(':', 1)[0].toLowerCase())
+}
+export function normalizeActivityAccountUrl(value: string) {
+  const raw = value.trim()
+  if (!raw || raw.length > 2048) throw new ActivityAccountError('LINK_FORMAT')
+  const hasScheme = /^[a-z][a-z\d+.-]*:/i.test(raw)
+  const bareHostPort = /^[^/?#:\s]+:\d+(?:[/?#]|$)/.test(raw)
+  const input = raw.startsWith('//') ? `https:${raw}` : !hasScheme || bareHostPort ? `https://${raw}` : raw
+  let url: URL
+  try { url = new URL(input) } catch { throw new ActivityAccountError('LINK_FORMAT') }
+  if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.href.length > 2048) throw new ActivityAccountError('LINK_FORMAT')
+  if (url.username || url.password) throw new ActivityAccountError('LINK_CREDENTIALS')
+  return url.href
 }
 export function addActivityAccount(page: ActivityPage, handle: string, profileUrl: string) {
   const candidate = normalizeActivityPage({ manualAccounts: [{ platformId: 'xiaohongshu', handle, profileUrl }] }).manualAccounts![0]
@@ -80,7 +93,7 @@ export function activityTranslationTasks(page: ActivityPage, reward?: string | n
   }
   return tasks
 }
-// Existing synchronized destinations may use HTTP; new overrides still require HTTPS.
+// Synchronized destinations and Xiaohongshu overrides may use HTTP; other new overrides require HTTPS.
 export function isActivitySourceLink(key: string, value: string): boolean {
   if (!/^[a-z_]+:[^\s]{0,150}$/i.test(key) || value.length > 2048) return false
   try {
@@ -98,13 +111,7 @@ export function normalizeActivityPage(input: unknown): ActivityPage {
     out.manualAccounts = source.manualAccounts.map(account => {
       if (!account || account.platformId !== 'xiaohongshu' || typeof account.handle !== 'string' || !account.handle.trim() || account.handle.length > 80) throw new ActivityAccountError('NAME')
       if (typeof account.profileUrl !== 'string' || account.profileUrl.length > 2048) throw new ActivityAccountError('LINK_FORMAT')
-      let url: URL
-      try { url = new URL(account.profileUrl.trim()) } catch { throw new ActivityAccountError('LINK_FORMAT') }
-      if (url.protocol !== 'https:') throw new ActivityAccountError('LINK_HTTPS')
-      if (url.username || url.password || url.port) throw new ActivityAccountError('LINK_CREDENTIALS')
-      if (!isXiaohongshuActivityHost(url.hostname)) throw new ActivityAccountError('LINK_DOMAIN')
-      if (url.pathname === '/') throw new ActivityAccountError('LINK_FORMAT')
-      return { platformId: 'xiaohongshu' as const, handle: account.handle.trim(), profileUrl: url.href }
+      return { platformId: 'xiaohongshu' as const, handle: account.handle.trim(), profileUrl: normalizeActivityAccountUrl(account.profileUrl) }
     })
     if (new Set(out.manualAccounts.map(a => a.handle)).size !== out.manualAccounts.length) throw new ActivityAccountError('DUPLICATE_NAME')
   }
@@ -151,6 +158,10 @@ export function normalizeActivityPage(input: unknown): ActivityPage {
     if (!source.links || typeof source.links !== 'object' || Array.isArray(source.links) || Object.keys(source.links).length > 50) throw new Error('Invalid account links')
     for (const [key, value] of Object.entries(source.links).sort(([a], [b]) => a.localeCompare(b))) {
       if (!/^[a-z_]+:[^\s]{0,150}$/i.test(key) || typeof value !== 'string' || value.length > 2048) throw new Error('Invalid account link')
+      if (isXiaohongshuActivityLink(key)) {
+        out.links[key] = normalizeActivityAccountUrl(value)
+        continue
+      }
       let url: URL
       try { url = new URL(value) } catch { throw new Error('Use a complete HTTPS account link') }
       if (url.protocol !== 'https:' || url.username || url.password) throw new Error('Use a complete HTTPS account link')

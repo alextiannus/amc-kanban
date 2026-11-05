@@ -13,7 +13,12 @@ assert.throws(()=>contract.addActivityAccount(added.page,'Cafe XHS','https://xhs
 const full=contract.normalizeActivityPage({manualAccounts:Array.from({length:10},(_,i)=>({platformId:'xiaohongshu',handle:`Cafe ${i}`,profileUrl:`https://xhslink.cn/o/${i}`}))});
 assert.equal(contract.addActivityAccount(full,'Cafe 0','https://xhslink.cn/o/0').added,false,'Duplicates are harmless even at the account limit');
 assert.throws(()=>contract.addActivityAccount(full,'Cafe 10','https://xhslink.cn/o/10'),error=>error.code==='LIMIT');
-for(const [url,code] of [['not a url','LINK_FORMAT'],['http://xhslink.cn/o/123','LINK_HTTPS'],['https://xhslink.cn.evil.test/o/123','LINK_DOMAIN'],['https://user:pass@xhslink.cn/o/123','LINK_CREDENTIALS'],['https://xhslink.cn:8443/o/123','LINK_CREDENTIALS'],['https://xhslink.cn/','LINK_FORMAT']]) assert.throws(()=>contract.addActivityAccount(empty,'Cafe',url),error=>error.code===code && Boolean(contract.activityAccountErrorText(error,'zh')));
+for(const [url,code] of [['','LINK_FORMAT'],['not a url','LINK_FORMAT'],['javascript:alert(1)','LINK_FORMAT'],['data:text/html,test','LINK_FORMAT'],['https://user:pass@example.com/','LINK_CREDENTIALS']]) assert.throws(()=>contract.addActivityAccount(empty,'Cafe',url),error=>error.code===code && Boolean(contract.activityAccountErrorText(error,'zh')));
+for(const [input,expected] of [['https://www.aaa.com','https://www.aaa.com/'],['http://example.com','http://example.com/'],['www.aaa.com','https://www.aaa.com/'],['example.com:8080/path?Token=AbC%2B123','https://example.com:8080/path?Token=AbC%2B123'],['//example.com/path','https://example.com/path'],['https://another-domain.test/','https://another-domain.test/'],['http://localhost:8080/','http://localhost:8080/']]){
+ assert.equal(contract.addActivityAccount(empty,'Cafe',input).page.manualAccounts[0].profileUrl,expected);
+ assert.equal(contract.normalizeActivityPage({links:{'xiaohongshu:Cafe':input}}).links['xiaohongshu:Cafe'],expected,'Xiaohongshu inline edits follow the same rules');
+}
+assert.throws(()=>contract.normalizeActivityPage({links:{'instagram:Cafe':'http://example.com/'}}),'Other platforms retain their HTTPS override rule');
 for(const host of ['xiaohongshu.com','www.xiaohongshu.com','xhslink.com','www.xhslink.com','xhslink.cn','www.xhslink.cn']) assert.equal(contract.addActivityAccount(empty,'Cafe',`https://${host}/o/CaseSensitive?token=AbC`).page.manualAccounts[0].profileUrl,`https://${host}/o/CaseSensitive?token=AbC`);
 assert.deepEqual(contract.normalizeActivityPage(null),{text:{},links:{}});
 for(const x of [{drawEnabled:'yes'},{text:{zh:{greeting:'x'.repeat(501)}}},{links:{'instagram:test':'javascript:alert(1)'}},{links:{'instagram:test':'https://u:p@example.test'}},{links:{'instagram:test':'http://example.test'}},{links:[]}])assert.throws(()=>contract.normalizeActivityPage(x));
@@ -58,6 +63,13 @@ const req=body=>new Request('https://amc-kanban.immedi.ai/api/brands/brand/activ
  data=await(await api.GET(new Request('https://example.test'),params)).json();
  r=await api.PUT(req({activityPage:added.page,followRewardDescription:'',revision:data.revision}),params);assert.equal(r.status,200);
  data=await(await api.GET(new Request('https://example.test'),params)).json();assert.equal(data.activityPage.manualAccounts[0].profileUrl,xhsUrl,'Server save and read-back must accept .cn links without rewriting tokens');
+ for(const input of ['https://www.aaa.com','http://example.com:8080/?Token=AbC%2B123','www.aaa.com']){
+  const activityPage={...added.page,manualAccounts:[{platformId:'xiaohongshu',handle:'Cafe XHS',profileUrl:input}],links:{'xiaohongshu:Cafe%20XHS':input}};
+  r=await api.PUT(req({activityPage,followRewardDescription:'',revision:data.revision}),params);assert.equal(r.status,200);
+  data=await(await api.GET(new Request('https://example.test'),params)).json();
+  assert.equal(data.activityPage.manualAccounts[0].profileUrl,contract.normalizeActivityAccountUrl(input));
+  assert.equal(data.activityPage.links['xiaohongshu:Cafe%20XHS'],contract.normalizeActivityAccountUrl(input));
+ }
  r=await api.PUT(req({activityPage:empty,followRewardDescription:'',revision:data.revision}),params);assert.equal(r.status,200);
  data=await(await api.GET(new Request('https://example.test'),params)).json();assert.equal(data.activityPage.manualAccounts,undefined,'Deletion remains persisted on read-back');
  console.log('PASS activity page: .cn/manual account validation, duplicate handling, brand independence, exact token preservation, save/read-back/delete, bilingual defaults, authorization, CSRF, revisions and draw readiness.');

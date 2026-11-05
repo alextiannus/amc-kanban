@@ -9,9 +9,12 @@ const jsx = (type, props) => ({ type, props })
 const source = fs.readFileSync(path.join(__dirname, '../src/components/ActivityCanvasEditor.tsx'), 'utf8')
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
 const mod = { exports: {} }
+const activityModule = { exports: {} }
+new Function('module', 'exports', ts.transpileModule(fs.readFileSync(path.join(__dirname, '../src/lib/activityPage.ts'), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(activityModule, activityModule.exports)
 new Function('require', 'module', 'exports', code)(name => {
   if (name === 'react') return React
   if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx }
+  if (name === '@/lib/activityPage') return activityModule.exports
   throw new Error(name)
 }, mod, mod.exports)
 function render(children) { index = 0; return mod.exports.ActivityInlineText({ as: 'h1', field: 'greeting', children }).props }
@@ -78,5 +81,19 @@ for (const value of ['javascript:alert(1)', 'not a link', 'https://user:password
   tree = linkRender(); open = find(tree, n => n.type === 'button' && n.props['aria-label'])
   assert.equal(open.props.disabled, true); open.props.onClick(); assert.equal(opened.length, 0)
 }
+editor = { ...editor, link: { key: 'xiaohongshu:Cafe', original: 'https://www.aaa.com/', url: 'https://www.aaa.com/' }, onLink: (key, value) => changes.push({ key, value }) }
+state = []; index = 0
+const xhsInput = mod.exports.ActivityInlineLinkEditor({linkKey: 'xiaohongshu:Cafe'})
+function xhsRender() { index = 0; return xhsInput.type(xhsInput.props) }
+tree = xhsRender()
+for (const [value,expected] of [['http://example.com:8080/?Token=AbC%2B123','http://example.com:8080/?Token=AbC%2B123'],['www.aaa.com','https://www.aaa.com/']]) {
+  find(tree,n=>n.type==='textarea').props.onChange({target:{value}})
+  tree=xhsRender();open=find(tree,n=>n.type==='button'&&n.props['aria-label'])
+  assert.equal(open.props.disabled,false);open.props.onClick()
+  assert.equal(opened.pop()[0],expected);assert.equal(changes.pop().value,expected)
+  assert.equal(find(tree,n=>n.type==='button'&&n.props.children==='完成').props.disabled,false)
+}
+find(tree,n=>n.type==='textarea').props.onChange({target:{value:'javascript:alert(1)'}})
+tree=xhsRender();open=find(tree,n=>n.type==='button'&&n.props['aria-label']);assert.equal(open.props.disabled,true)
 delete global.window
 console.log('PASS link suffix button: latest draft destination, safe new window, invalid URLs disabled and never opened.')

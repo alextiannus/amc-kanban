@@ -30,6 +30,10 @@ let shared='';await shareActivityPage('brand','title','text',{clipboard:{writeTe
 const page=normalizeActivityPage({manualAccounts:[{platformId:'xiaohongshu',handle:'Cafe XHS',profileUrl:'https://www.xiaohongshu.com/user/profile/123'}]})
 assert.equal(brandFollowLinks({...south,activityPage:page}).filter(l=>l.platform==='xiaohongshu').length,1)
 assert.equal(activityPageDraftSnapshot(page,''),activityPageDraftSnapshot(normalizeActivityPage(JSON.parse(JSON.stringify(page))),''))
-for(const profileUrl of ['javascript:alert(1)','http://www.xiaohongshu.com/user/profile/1','https://xiaohongshu.com.evil.test/user/1','https://user:pass@www.xiaohongshu.com/user/1','https://www.xiaohongshu.com/']) assert.throws(()=>normalizeActivityPage({manualAccounts:[{platformId:'xiaohongshu',handle:'Cafe',profileUrl}]}))
+for(const profileUrl of ['javascript:alert(1)','data:text/html,test','https://user:pass@www.xiaohongshu.com/user/1','not a url']) assert.throws(()=>normalizeActivityPage({manualAccounts:[{platformId:'xiaohongshu',handle:'Cafe',profileUrl}]}))
+for(const profileUrl of ['http://www.xiaohongshu.com/user/profile/1','https://www.aaa.com/','https://example.com:8080/']) {
+ const sharedPage=normalizeActivityPage({manualAccounts:[{platformId:'xiaohongshu',handle:'Cafe',profileUrl}]})
+ for(const store of [north,south]) assert.equal(brandFollowLinks({...store,activityPage:sharedPage}).find(l=>l.platform==='xiaohongshu')?.url,profileUrl)
+}
 assert.throws(()=>normalizeActivityPage({manualAccounts:[...page.manualAccounts!,...page.manualAccounts!]}))
 console.log('PASS store URL identity, map/review isolation, legacy selection, invalid/closed stores, scoped share, and manual Xiaohongshu validation')

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
-import { Check, Copy, Download, ExternalLink, QrCode, Save, Share2, X } from 'lucide-react'
+import { Check, Copy, Download, ExternalLink, Plus, QrCode, Save, Share2, X } from 'lucide-react'
 import { followRewardDescription as resolveFollowRewardDescription } from '@/lib/followReward'
 import { activityTextDefaults, activitySourceText, activityPageDraftSnapshot, activityTranslationTasks, isActivitySourceLink, normalizeActivityPage, addActivityAccount, activityAccountErrorText, type ActivityPage } from '@/lib/activityPage'
 import { activitySharePresentation } from '@/lib/activitySharePresentation'
@@ -24,6 +24,10 @@ export default function FollowEntryCard({ brandId, brandName, onStoreChange, isE
   const [accountName, setAccountName] = useState('')
   const [accountUrl, setAccountUrl] = useState('')
   const [accountFeedback, setAccountFeedback] = useState<{ error: boolean; message: string } | null>(null)
+  const [accountPanelOpen, setAccountPanelOpen] = useState(false)
+  const accountTrigger = useRef<HTMLButtonElement>(null)
+  const accountNameInput = useRef<HTMLInputElement>(null)
+  useEffect(() => { if (accountPanelOpen) accountNameInput.current?.focus({ preventScroll: true }) }, [accountPanelOpen])
   const selectedStore = stores.find(store => store.id && store.id === storeId)
   const url = getPermanentGameUrl(brandId, storeId)
   const qrCodeUrl = selectedStore && qr.url === url ? qr.image : ''
@@ -67,6 +71,7 @@ export default function FollowEntryCard({ brandId, brandName, onStoreChange, isE
         setStoreId(current => choices.some((s: { id: string }) => s.id && s.id === current) ? current : choices.length === 1 ? choices[0].id : '')
         setPage(next)
         setAccountFeedback(null)
+        setAccountPanelOpen(false)
         setSavedSharePage(next)
         setRevision(data.revision)
         const reward = resolveFollowRewardDescription(data.followRewardDescription)
@@ -150,15 +155,20 @@ export default function FollowEntryCard({ brandId, brandName, onStoreChange, isE
     }, 700)
     return () => { controller.abort(); window.clearTimeout(timer) }
   }, [brandId, page, rewardDescription, revision, savingPage])
+  function closeAccountPanel() {
+    setAccountPanelOpen(false)
+    accountTrigger.current?.focus({ preventScroll: true })
+  }
   function addAccount() {
     try {
       const result = addActivityAccount(page, accountName, accountUrl)
       if (result.added) {
         setPage(result.page)
         setAccountName(''); setAccountUrl('')
+        closeAccountPanel()
       }
       setAccountFeedback({ error: false, message: result.added
-        ? (isEn ? 'Added to the preview. Save the page to make it public.' : '已添加到预览，保存页面后生效。')
+        ? (isEn ? 'Added to the preview. Save the page to make it public.' : '已添加到预览，请保存页面。')
         : (isEn ? 'This account is already added and shared across your brand’s stores.' : '该账号已添加，品牌各分店共用。') })
     } catch (err) {
       setAccountFeedback({ error: true, message: activityAccountErrorText(err, isEn ? 'en' : 'zh') })
@@ -336,9 +346,29 @@ export default function FollowEntryCard({ brandId, brandName, onStoreChange, isE
       </div>
     </fieldset>
     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:p-4 dark:border-slate-800 dark:bg-slate-950">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div><h3 className="text-sm font-bold">{isEn ? 'Activity page canvas' : '活动页预览编辑框'}</h3><p className="mt-1 text-xs text-slate-500">{isEn ? 'Edit text directly. Tap an icon to edit and test its link.' : '直接修改文字，点击图标可编辑并测试链接。'}</p></div>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1"><h3 className="text-sm font-bold">{isEn ? 'Activity page canvas' : '活动页预览编辑框'}</h3><p className="mt-1 text-xs text-slate-500">{isEn ? 'Edit text directly. Tap an icon to edit and test its link.' : '直接修改文字，点击图标可编辑并测试链接。'}</p></div>
+        <div className="flex max-w-[50%] shrink-0 flex-col items-end gap-2">
+          <button ref={accountTrigger} id="activity-xhs-trigger" type="button" aria-expanded={accountPanelOpen} aria-controls="activity-xhs-panel" disabled={!revision || savingPage} className={`${activitySecondary} shrink-0`} onClick={() => { if (accountPanelOpen) closeAccountPanel(); else setAccountPanelOpen(true) }}><Plus size={14}/>{isEn ? 'Xiaohongshu' : '小红书'}</button>
+          {!accountPanelOpen && accountFeedback && !accountFeedback.error && <p id="activity-xhs-feedback" role="status" className="max-w-xs text-right text-xs leading-5 text-emerald-700 dark:text-emerald-400">{accountFeedback.message}</p>}
+        </div>
       </div>
+      {accountPanelOpen && <fieldset id="activity-xhs-panel" disabled={!revision || savingPage} aria-label={isEn ? 'Xiaohongshu accounts' : '小红书账号'} className="mb-4 min-w-0 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center justify-between gap-3"><p className="text-xs leading-5 text-slate-500">{isEn ? 'Shared across your brand’s stores. Save the page to make changes public.' : '品牌各分店共用，保存页面后生效。'}</p><button type="button" className={`${activitySecondary} shrink-0`} onClick={closeAccountPanel}>{isEn ? 'Collapse' : '收起'}</button></div>
+        {(page.manualAccounts || []).map(account => <div key={account.handle} className="mt-3 flex min-w-0 items-start justify-between gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800">
+          <div className="min-w-0"><strong className="block break-words text-sm [overflow-wrap:anywhere]">{account.handle}</strong><p className="mt-1 break-all text-xs leading-5 text-slate-500">{account.profileUrl}</p></div>
+          <button type="button" className={`${activitySecondary} shrink-0`} onClick={() => {
+            setPage(current => ({ ...current, links: Object.fromEntries(Object.entries(current.links).filter(([key]) => key !== `xiaohongshu:${encodeURIComponent(account.handle)}`)), manualAccounts: current.manualAccounts?.filter(a => a.handle !== account.handle) }))
+            setAccountFeedback({ error: false, message: isEn ? 'Removed from the preview. Save the page to make it public.' : '已从预览移除，保存页面后生效。' })
+          }}>{isEn ? 'Remove' : '删除'}</button>
+        </div>)}
+        <div className="mt-3 grid min-w-0 grid-cols-1 items-end gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
+          <label htmlFor="activity-xhs-name" className="min-w-0 text-xs">{isEn ? 'Account name' : '账号名称'}<input ref={accountNameInput} id="activity-xhs-name" value={accountName} maxLength={80} onChange={event => { setAccountName(event.target.value); setAccountFeedback(null) }} className="mt-1 block w-full min-w-0 rounded-xl border border-slate-300 bg-transparent p-3 text-base" placeholder={isEn ? 'Store account name' : '输入账号名称'}/></label>
+          <label htmlFor="activity-xhs-url" className="min-w-0 text-xs">{isEn ? 'Web address' : '网页地址'}<input id="activity-xhs-url" type="text" inputMode="url" value={accountUrl} maxLength={2048} spellCheck={false} autoCapitalize="none" onChange={event => { setAccountUrl(event.target.value); setAccountFeedback(null) }} aria-describedby={accountFeedback ? 'activity-xhs-feedback' : undefined} aria-invalid={accountFeedback?.error || undefined} className="mt-1 block w-full min-w-0 rounded-xl border border-slate-300 bg-transparent p-3 text-base" placeholder="https://www.example.com"/></label>
+          <button type="button" className={`${activitySecondary} min-h-[50px] w-full md:w-auto`} disabled={!accountName.trim() || !accountUrl.trim()} onClick={addAccount}>{isEn ? 'Add account' : '添加账号'}</button>
+        </div>
+        {accountFeedback && <p id="activity-xhs-feedback" role={accountFeedback.error ? 'alert' : 'status'} className={`mt-3 break-words text-xs leading-5 ${accountFeedback.error ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400'}`}>{accountFeedback.message}</p>}
+      </fieldset>}
       <div className="space-y-4">
         <div id="activity-preview-panel" className="min-w-0">
           {googleSync?.brandId === brandId && (googleSync.status === 'WAITING_FOR_LOCATIONS' || googleSync.lastError === 'GOOGLE_LOCATIONS_PENDING_SYNC' || googleSync.lastError === 'GOOGLE_LOCATION_SELECTION_REQUIRED') && <p role="status" data-testid="google-location-notice" className="mb-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">{isEn ? 'Google location details are still being synchronized.' : 'Google 门店资料仍在同步中。'}</p>}
@@ -346,23 +376,6 @@ export default function FollowEntryCard({ brandId, brandName, onStoreChange, isE
             <iframe ref={previewFrame} onLoad={sendPreview} key={`${brandId}-${storeId}-${activityVersion}`} src={`${url}${storeId ? '&' : '?'}preview=1&revision=${activityVersion}`} title={isEn ? 'Customer activity page preview' : '顾客活动页预览'} sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerPolicy="strict-origin-when-cross-origin" className="block h-[min(76svh,840px)] min-h-[480px] w-full border-0"/>
           </div>
         </div>
-        <fieldset id="activity-xhs-panel" disabled={!revision || savingPage} aria-labelledby="activity-xhs-title" className="mx-auto w-full min-w-0 max-w-[440px] rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-          <h3 id="activity-xhs-title" className="text-sm font-bold">{isEn ? 'Xiaohongshu account' : '小红书账号'}</h3>
-          <p className="mt-2 text-xs leading-5 text-slate-500">{isEn ? 'Shown in the activity page above once added. Shared across your brand’s stores.' : '添加后显示在上方活动页，品牌各分店共用。'}</p>
-          {(page.manualAccounts || []).map(account => <div key={account.handle} className="mt-3 flex min-w-0 items-start justify-between gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800">
-            <div className="min-w-0"><strong className="block break-words text-sm [overflow-wrap:anywhere]">{account.handle}</strong><p className="mt-1 break-all text-xs leading-5 text-slate-500">{account.profileUrl}</p></div>
-            <button type="button" className={`${activitySecondary} shrink-0`} onClick={() => {
-              setPage(current => ({ ...current, links: Object.fromEntries(Object.entries(current.links).filter(([key]) => key !== `xiaohongshu:${encodeURIComponent(account.handle)}`)), manualAccounts: current.manualAccounts?.filter(a => a.handle !== account.handle) }))
-              setAccountFeedback({ error: false, message: isEn ? 'Removed from the preview. Save the page to make it public.' : '已从预览移除，保存页面后生效。' })
-            }}>{isEn ? 'Remove' : '删除'}</button>
-          </div>)}
-          <div className="mt-4 grid min-w-0 grid-cols-1 gap-3">
-            <label htmlFor="activity-xhs-name" className="min-w-0 text-xs">{isEn ? 'Account name' : '账号名称'}<input id="activity-xhs-name" value={accountName} maxLength={80} onChange={event => { setAccountName(event.target.value); setAccountFeedback(null) }} className="mt-1 block w-full min-w-0 rounded-xl border border-slate-300 bg-transparent p-3 text-base" placeholder={isEn ? 'Store account name' : '输入小红书账号名称'}/></label>
-            <label htmlFor="activity-xhs-url" className="min-w-0 text-xs">{isEn ? 'Profile or share link' : '主页或分享链接'}<input id="activity-xhs-url" type="url" value={accountUrl} maxLength={2048} spellCheck={false} autoCapitalize="none" onChange={event => { setAccountUrl(event.target.value); setAccountFeedback(null) }} aria-describedby={accountFeedback ? 'activity-xhs-feedback' : undefined} aria-invalid={accountFeedback?.error || undefined} className="mt-1 block w-full min-w-0 rounded-xl border border-slate-300 bg-transparent p-3 text-base" placeholder="https://xhslink.cn/…"/></label>
-          </div>
-          <button type="button" className={`${activitySecondary} mt-3 w-full`} disabled={!accountName.trim() || !accountUrl.trim()} onClick={addAccount}>{isEn ? 'Add account' : '添加账号'}</button>
-          {accountFeedback && <p id="activity-xhs-feedback" role={accountFeedback.error ? 'alert' : 'status'} className={`mt-3 break-words text-xs leading-5 ${accountFeedback.error ? 'text-red-600' : 'text-emerald-700 dark:text-emerald-400'}`}>{accountFeedback.message}</p>}
-        </fieldset>
         <aside id="activity-edit-panel" className="min-w-0 space-y-3">
           {children}
         </aside>
