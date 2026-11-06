@@ -1,5 +1,13 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+## MM 发布日历新建草稿（2026-11-05，MM 代码已推送；部署、生产验收未核实）
+
+MM 发布日历内提供品牌写权限控制的新建草稿面板，覆盖多平台账号、手动/AI 文案、素材、预览、保存和确认排期。桌面采用最大约 900px 的居中面板，手机采用底部面板，沿用 MM 主题、紫色主按钮及圆角表单。默认选择已连接平台及小红书，同平台多账号须明确选择；未绑定平台可生成和保存未排期草稿。素材支持目录选择、OBS 上传、链接、排序及 JPEG/PNG 视频封面。
+
+AI 结果先作为可编辑候选，重新生成保留人工稿，用户采用后才替换。确认保存后才写入双方共用的 ContentDraft，已保存项目复用原 ID；部分失败保留成功结果及编辑面板，写回执未知时不自动重发。普通保存保持未排期；推荐或手动时间经用户确认，调用现有提交接口并保留 Google 门店、TikTok AIGC、订阅、账号和素材校验。关闭、导航与品牌切换保护未保存内容。
+
+保留 Kanban 新建入口及 MM 原草稿操作。无新增业务 API 或数据库迁移；不包含高级钩子编辑、脚本推荐、素材 AI 设计和转视频。验收覆盖两端同一草稿、部分成功、未知回执、品牌隔离及真实 .amc-page 全局 CSS 下的 320/390/768/1440px。实现、推送、部署及生产验收独立记录。接口契约见 [MM 新建草稿](mm-draft-composer.md)。
+
 ## Baidu Qianfan Seedance: S2.5 V2; Fire2 historical queries only (implemented locally; deployment and live acceptance pending)
 
 All new Qianfan video submissions use V2. S2.5 new catalog versions explicitly require `qianfanApi: 'v2_fire'` and preset name Seedance S2.5 V2; S2.0, Fast and Mini remain V2. Keep protocol `baidu_qianfan_seedance`, optional immutable API marker and the existing encrypted origin-only connection. Missing markers in historical snapshots still mean V2, including S2.5, but unmarked S2.5 entries require a new explicit V2 version before new submissions/publication. Fire2 catalog versions cannot start new jobs or pass publication validation.
