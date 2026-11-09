@@ -198,11 +198,13 @@ try {
       "UPDATE iaic_token_calls SET created_at=$1 WHERE request_id=$2",
       [at, request],
     );
+    return task
   }
   await call("settled", "2026-10-31T16:00:00Z");
   await call("unknown", "2026-11-01T01:00:00Z");
   await call("released", "2026-11-01T02:00:00Z");
   await call("settled", "2026-10-31T15:59:59.999Z");
+  const orphan=await call("settled","2026-11-02T00:00:00Z");await pool.query("DELETE FROM amc_ai_requests WHERE id=$1",[orphan]);
   const report = await monthlyTokenUsage("2026-11"),
     b = report.brands.find((b) => b.brandId === brand)!,
     u = report.users.find((u) => u.userId === user)!;
@@ -212,7 +214,7 @@ try {
   assert.equal(b.activeUsers, 1);
   assert.equal(b.pendingOrMissingUsageCalls, 1);
   assert.equal(b.releasedCalls, 1);
-  assert.equal(u.knownCostUsd, "100.000000");
+  assert.equal(u.knownCostUsd, "200.000000");assert.equal(u.totalTokens,"2000");assert.equal(report.unattributed.totalTokens,"1000");
   assert.equal(u.costComplete, false);
   assert.equal(u.budgetExceeded, true);
   assert.equal(

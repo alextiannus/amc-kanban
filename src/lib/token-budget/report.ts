@@ -161,9 +161,9 @@ export async function monthlyTokenUsage(month: string, db: any = prisma) {
     `WITH attribution AS (
  SELECT DISTINCT ON (task_id) task_id::text AS task_id,subject_id,scope_id,intent->>'brandId' AS brand_id FROM amc_iaic.amc_ai_requests WHERE task_id IS NOT NULL ORDER BY task_id,created_at
  ), sources AS (
- SELECT a.subject_id AS "userId",a.brand_id AS "brandId",c.state,c.mode,c.cost_basis AS "costBasis",
+ SELECT u.id AS "userId",a.brand_id AS "brandId",c.state,c.mode,c.cost_basis AS "costBasis",
  CASE WHEN c.state='settled' AND e.evidence->'usage'->>'input_tokens' ~ '^[0-9]{1,24}$' AND e.evidence->'usage'->>'output_tokens' ~ '^[0-9]{1,24}$' THEN e.evidence->'usage' ELSE NULL END AS usage
- FROM amc_iaic.iaic_token_calls c LEFT JOIN amc_iaic.iaic_token_entries e ON e.application_id=c.application_id AND e.subject_id=c.subject_id AND e.reference=c.request_id AND e.kind='settlement'
+ FROM amc_iaic.iaic_token_calls c LEFT JOIN "User" u ON u.type='HUMAN' AND c.subject_id='['||to_json(u.id)::text||',"amc-mm-user-ai"]' LEFT JOIN amc_iaic.iaic_token_entries e ON e.application_id=c.application_id AND e.subject_id=c.subject_id AND e.reference=c.request_id AND e.kind='settlement'
  LEFT JOIN attribution a ON a.task_id=c.attribution->>'taskId' AND a.scope_id=c.application_id AND c.subject_id='['||to_json(a.subject_id)::text||',"amc-mm-user-ai"]' WHERE c.created_at >=$1 AND c.created_at <$2
  ) SELECT "userId","brandId",state,mode,"costBasis",(usage->'input_tokens_details'->>'cached_tokens' ~ '^[0-9]{1,24}$') IS TRUE AS "cacheReported",count(*)::text AS calls,count(usage)::text AS "knownCalls",
  COALESCE(sum((usage->>'input_tokens')::numeric),0)::text AS "inputTokens",COALESCE(sum((usage->>'output_tokens')::numeric),0)::text AS "outputTokens",COALESCE(sum(CASE WHEN usage->'input_tokens_details'->>'cached_tokens' ~ '^[0-9]{1,24}$' THEN (usage->'input_tokens_details'->>'cached_tokens')::numeric END),0)::text AS "cachedTokens"
