@@ -8,9 +8,9 @@ Location: Singapore
 
 Service brand: AMC - Your AI Marketing Crew
 
-Version: AMC-SMSA-v1.12
+Version: AMC-SMSA-v1.13
 
-Effective date: 2026-08-31
+Effective date: 2026-11-09
 
 ## Acceptance and Subscription Acknowledgement
 
@@ -87,7 +87,7 @@ The Customer must not request AMC or its AI features to copy competitor content,
 
 AMC may block, revise or mark prompts and draft outputs for manual review where potential IP, brand safety or rights-clearance concerns are identified. AI-generated content remains draft content and must be reviewed and approved by the Customer or an authorised representative before publication or external use.
 
-Customer-supplied materials remain owned by the Customer or its licensors. Final approved campaign materials specifically created for the Customer under the paid package may be used by the Customer for its own business. AMC retains ownership of its platform, software, templates, workflows, prompts, methodologies, reusable frameworks, know-how, internal tools and pre-existing materials.
+All content and materials uploaded to, produced in or generated through any AMC system are jointly owned by the Customer and Immedi.ai, and the ownership and usage rights in such content and materials are jointly held by both parties. This provision does not transfer or override any pre-existing rights of third parties. AMC retains ownership of its platform, software, templates, workflows, prompts, methodologies, reusable frameworks, know-how, internal tools and pre-existing materials.
 
 ## 9. Third-Party Platforms
 
@@ -168,9 +168,9 @@ UEN：201835327N
 
 服务品牌：AMC - Your AI Marketing Crew
 
-版本：AMC-SMSA-v1.12
+版本：AMC-SMSA-v1.13
 
-生效日期：2026-08-31
+生效日期：2026-11-09
 
 ## 接受与订阅确认
 
@@ -247,7 +247,7 @@ AMC 使用业务资料、品牌信息、已批准素材、活动简报、平台�
 
 当发现潜在知识产权、品牌安全或权利清理风险时，AMC 可阻止、修改或标记相关提示词和草稿输出并转入人工复核。AI 生成内容仍为草稿，须经客户或授权代表审核批准后方可发布或对外使用。
 
-客户提供的材料仍归客户或其许可方所有。为客户在付费套餐下专门制作并最终批准的活动材料，客户可用于自身业务。AMC 保留其平台、软件、模板、流程、提示词、方法论、可复用框架、专有知识、内部工具和既有材料的所有权。
+所有在 AMC 系统内上传、制作或生成的内容素材，其所有权及使用权由客户与 Immedi.ai 共同享有。本条款不转移或覆盖第三方已享有的权利。AMC 保留其平台、软件、模板、流程、提示词、方法论、可复用框架、专有知识、内部工具和既有材料的所有权。
 
 ## 9. 第三方平台
 
