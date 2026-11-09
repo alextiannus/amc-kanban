@@ -1,3 +1,4 @@
+import {postRevision,postInclude} from './video-assistant/post-contract'
 import { checkPostfastPublishAccount } from '@/lib/postfastPublishAccount'
 import { withBoundAccount, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { prisma } from '@/lib/prisma'
@@ -5,6 +6,7 @@ import {
   postfastDeletePost,
   postfastGetGBPLocationsForInternalAccount,
   postfastPublish,
+  sanitizePostFastDraftControls,
 } from '@/lib/integrations/postfast'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
@@ -24,14 +26,11 @@ import {
 } from '@/lib/postfastDelivery'
 import { shouldQueuePostfastDelivery } from '@/lib/postfastDeliveryPolicy'
 
-function postfastControlsFromDraft(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
-  return value as Record<string, unknown>
-}
 
 type SubmitDraftInput = {
   brandId: string
   draftId: string
+  approvedVideoPost?:{revision:string;scheduledAt:string;contentRevision:string}
   actorId: string
   forcePublish?: boolean
   note?: string | null
@@ -112,8 +111,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
+  if(input.approvedVideoPost){
+    const current=await prisma.contentDraft.findFirst({where:{id:input.draftId,brandId:input.brandId},include:postInclude})
+    if(!current||postRevision(current)!==input.approvedVideoPost.revision||!['draft','pending_review'].includes(current.status)||current.platformPostId||current.deliveryFailureCode||Date.parse(input.approvedVideoPost.scheduledAt)<=Date.now())return {ok:false as const,status:409,code:'POST_APPROVAL_STALE',error:'发布草稿、素材或排期已变化，请重新确认。'}
+  }
+  const safeControls=sanitizePostFastDraftControls(draft.postfastControls)
+  if(safeControls.error)return {ok:false as const,status:422,code:'POSTFAST_CONTROLS_INVALID',error:safeControls.error}
   // AMCMM generation mandate never grants publication, even when legacy brand autopilot is on.
-  if ((draft.viralCopyScriptProvenance as any)?.autopilot?.runId) {
+  if ((draft.viralCopyScriptProvenance as any)?.autopilot?.runId || (draft.viralCopyScriptProvenance as any)?.videoAssistant) {
     brand.autoPilot = false
     if (input.forcePublish) {
       const confirmer = await prisma.user.findUnique({where:{id:input.actorId},select:{type:true,status:true}})
@@ -397,13 +402,13 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
 
   // status is already 'publishing' — set by the atomic lock above. Only clear rejectionNote.
-  await prisma.contentDraft.update({ where: { id: draft.id }, data: { rejectionNote: null } })
+  if(!input.approvedVideoPost)await prisma.contentDraft.update({ where: { id: draft.id }, data: { rejectionNote: null } })
 
 
   // ── Auto-schedule: if no scheduledAt, get the optimal time from the scheduling API ──
   // This is the unified enforcement point: ALL submissions (AI, human, voice, bulk)
   // go through the smart scheduling algorithm. Only urgency='urgent' gets a near-slot.
-  let resolvedScheduledAt = draft.scheduledAt
+  let resolvedScheduledAt = input.approvedVideoPost?new Date(input.approvedVideoPost.scheduledAt):draft.scheduledAt
   const isRescheduleRequested = typeof input.note === 'string' &&
     (input.note.includes('重新智能排期') || input.note.includes('智能重新排期'))
 
@@ -445,7 +450,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   })
   const coverImage = buildPostfastCoverImage(draft.coverAsset)
 
-  if (shouldQueuePostfastDelivery(mediaItems)) {
+  if (input.approvedVideoPost || shouldQueuePostfastDelivery(mediaItems)) {
     const latestDraft = await prisma.contentDraft.findUniqueOrThrow({ where: { id: draft.id } })
     let job
     try {
@@ -457,6 +462,8 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         immediatePublish,
         scheduled,
         draftUpdatedAt: latestDraft.updatedAt,
+        approvedRevision:input.approvedVideoPost?.revision,
+        approvedContentRevision:input.approvedVideoPost?.contentRevision,
         publish: {
           platform: platformId,
           accountId: draft.accountId || undefined,
@@ -469,7 +476,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
           coverImage,
           hashtags: draft.hashtags,
           scheduledAt: resolvedScheduledAt?.toISOString(),
-          ...postfastControlsFromDraft(draft.postfastControls),
+          ...safeControls.controls,
         },
         warnings: validationWarnings,
       })
@@ -561,7 +568,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     coverImage,
     hashtags: draft.hashtags,
     scheduledAt: resolvedScheduledAt?.toISOString(),
-    ...postfastControlsFromDraft(draft.postfastControls),
+    ...safeControls.controls,
   })
   console.log(`[submitDraftForDelivery] postfastPublish result: success=${result.success}, postId=${result.postId ?? 'none'}, error=${result.error ?? 'none'}`)
 

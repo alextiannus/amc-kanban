@@ -21,9 +21,9 @@ const server=createServer(async(req,res)=>{
  if(req.url.startsWith('/api/content/video-assistant/project')){progressReads++;res.setHeader('content-type','application/json');res.end(JSON.stringify({projectId:'p1',status:progressStatus,progress:{stage:progressStatus==='complete'?'completed':'video_generation'},libraryState:'draft'}));return}
  if(req.url.startsWith('/api/video-assistant/confirm/')){
   res.setHeader('content-type','application/json')
-  if(req.method==='POST'){submissions++;restored=true;await new Promise(r=>setTimeout(r,80));res.end(JSON.stringify({ok:true,state:kind==='generation'?'submitted':'approved'}));return}
+  if(req.method==='POST'){submissions++;restored=true;await new Promise(r=>setTimeout(r,80));res.end(JSON.stringify({ok:true,state:kind==='final'?'approved':'submitted'}));return}
   if(kind==='expired'){res.statusCode=409;res.end(JSON.stringify({error:'制作内容已更新，请返回原对话重新确认。'}));return}
-  res.end(JSON.stringify({kind,execution:restored?{state:'submitted'}:null,expiresAt:'2026-11-09T12:15:00Z',estimate:kind==='generation'?{estimatedAmount:1.2,currency:'USD',amcCredit:{amount:300,unit:'AMC Credit'}}:null,project:{title:'新品菜单短视频 · 测试',brief:'用已授权菜品素材介绍本周新品；未经确认的价格不写入。',assets:[],shots:[{shotId:'s1',durationSec:15,prompt:'先展示招牌菜品的近景，再转到用餐环境，结尾邀请查看菜单。',spokenText:'看看本周的新菜，欢迎来店品尝。',subtitle:'本周新品'}]},previews:kind==='final'?[{id:'m1',url:'/fixture.mp4'}]:[]}));return
+  res.end(JSON.stringify({kind,execution:restored?{state:'submitted'}:null,expiresAt:'2026-11-09T12:15:00Z',estimate:kind==='generation'?{estimatedAmount:1.2,currency:'USD',amcCredit:{amount:300,unit:'AMC Credit'}}:null,project:{title:'新品菜单短视频 · 测试',brief:'用已授权菜品素材介绍本周新品；未经确认的价格不写入。',assets:[],shots:[{shotId:'s1',durationSec:15,prompt:'先展示招牌菜品的近景，再转到用餐环境，结尾邀请查看菜单。',spokenText:'看看本周的新菜，欢迎来店品尝。',subtitle:'本周新品'}]},post:kind==='publication'?{caption:'测试发布文案',hashtags:['测试标签'],account:{displayName:'Fixture account',handle:'fixture',platformId:'tiktok'},postfastControls:{tiktokIsAigc:true}}:null,scheduledAt:'2026-11-09T13:30:00Z',previews:kind==='final'||kind==='publication'?[{id:'m1',url:'/fixture.mp4'}]:[]}));return
  }
  res.setHeader('content-type','text/html; charset=utf-8');res.end('<!doctype html><html lang="zh"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="app"></div><script src="/app.js"></script></html>')
 })
@@ -43,6 +43,7 @@ try{
  await page.locator('video').evaluate(v=>new Promise((resolve,reject)=>{if(v.readyState>=1)return resolve();v.addEventListener('loadedmetadata',()=>resolve(),{once:true});v.addEventListener('error',()=>reject(Error('video decode failed')),{once:true})}))
  assert.equal(await page.locator('video').evaluate(v=>v.videoWidth),360)
  await page.screenshot({path:path.join(output,'review-desktop.png'),fullPage:true})
+ kind='publication';restored=false;await page.setViewportSize({width:390,height:844});await page.reload();await page.getByRole('button',{name:'确认账号、内容与排期，提交发布'}).waitFor();assert.match(await page.locator('main').innerText(),/#测试标签/);assert.match(await page.locator('main').innerText(),/fixture/);assert.match(await page.locator('main').innerText(),/标注为 AI 内容/);await page.screenshot({path:path.join(output,'publication-mobile.png'),fullPage:true});await page.getByRole('button',{name:'确认账号、内容与排期，提交发布'}).click();await page.getByText('已提交发布队列。请返回原对话查看真实投递结果。').waitFor();assert.equal(submissions,2);
  kind='expired';await page.reload();await page.getByRole('alert').waitFor();assert.equal(await page.locator('main').getByRole('button').count(),0)
  assert.deepEqual(errors,[])
  await writeFile(path.join(output,'result.json'),JSON.stringify({mobileWidth:390,desktopWidth:1280,submissions,videoDecoded:true,refreshDidNotResubmit:true,expiredApprovalBlocked:true,conversationProgressRead:true,progressReads,pageErrors:errors},null,2))

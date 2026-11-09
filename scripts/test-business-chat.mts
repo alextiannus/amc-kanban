@@ -37,6 +37,7 @@ try{
  assert((await readConversationInterview(brand)).interview?.rawNotes.includes('Local diners'))
  console.log('PASS Profile fields MCP read/write, credential exclusion, revision conflict, UI interview visible to conversation and AI edits cannot be overwritten by stale UI')
  const asset=await prisma.mediaAsset.create({data:{brandId:brand,filename:'fixture.jpg',url:'/fixture.jpg',mimeType:'image/jpeg',sizeBytes:1,aiTags:[]}})
+ await prisma.brandFolder.create({data:{brandId:brand,name:'产品素材',materialClass:'UNCONFIRMED'}})
  const args={assetId:asset.id,folder:'产品素材',aiTags:['已核实']},task=randomUUID()
  const saved=await durableBusinessWrite(actor,task,'board_update_asset',args)
  assert.equal(saved.verified,true,JSON.stringify(saved));assert.equal((await prisma.mediaAsset.findUnique({where:{id:asset.id}}))?.aiCategory,'产品素材')

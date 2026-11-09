@@ -1,6 +1,7 @@
+import {postRevision,postContentRevision,postInclude} from './video-assistant/post-contract'
 import { requireActorPermission } from './role-permissions/delegation'
 import { PolicyError } from './role-permissions/store'
-import { lockAccountBinding, assertAccountBound } from '@/lib/socialAccountBinding'
+import { lockAccountBinding, assertAccountBound, SocialAccountBindingError } from '@/lib/socialAccountBinding'
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -33,6 +34,7 @@ export type PostfastDeliveryPayload = {
   immediatePublish: boolean
   scheduled: boolean
   draftUpdatedAt: string
+  approvedContentRevision?:string
   publish: Omit<PostFastPublishInput, 'apiKey'>
 }
 
@@ -90,6 +92,8 @@ export async function enqueuePostfastDelivery(input: {
   immediatePublish: boolean
   scheduled: boolean
   draftUpdatedAt: Date
+  approvedRevision?:string
+  approvedContentRevision?:string
   publish: Omit<PostFastPublishInput, 'apiKey'>
   warnings?: unknown[]
 }) {
@@ -103,6 +107,7 @@ export async function enqueuePostfastDelivery(input: {
     immediatePublish: input.immediatePublish,
     scheduled: input.scheduled,
     draftUpdatedAt: input.draftUpdatedAt.toISOString(),
+    approvedContentRevision:input.approvedContentRevision,
     publish: input.publish,
   })
   const key = submissionKey(input.draftId, payload)
@@ -119,6 +124,11 @@ export async function enqueuePostfastDelivery(input: {
     assertAccountBound(account)
     if (account?.handle === 'unconfigured') throw new Error('Publishing requires a real configured account.')
 
+    if(input.approvedRevision){
+      await tx.$queryRaw`SELECT id FROM "ContentDraft" WHERE id=${input.draftId} AND "brandId"=${input.brandId} FOR UPDATE`
+      const current=await tx.contentDraft.findFirst({where:{id:input.draftId,brandId:input.brandId},include:postInclude})
+      if(!current||postRevision(current)!==input.approvedRevision||!['draft','pending_review'].includes(current.status)||current.platformPostId||current.deliveryFailureCode)throw new SocialAccountBindingError('发布草稿已变化，请重新确认。',409,'POST_APPROVAL_STALE')
+    }
     const concurrent = await tx.postfastDeliveryJob.findFirst({
       where: { draftId: input.draftId, status: { in: [...POSTFAST_DELIVERY_ACTIVE_STATUSES] } },
       orderBy: { createdAt: 'desc' },
@@ -522,6 +532,7 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
   }
   try {
     await requireActorPermission(payload.actorId, 'content.publish', job.brandId)
+    if(payload.approvedContentRevision){await requireActorPermission(payload.actorId,'content.schedule',job.brandId);await requireActorPermission(payload.actorId,'draft.submit',job.brandId)}
   } catch (error) {
     if (error instanceof PolicyError && error.status === 403) {
       await markPermanentFailure(job, 'ACCESS_REVOKED', error.message)
@@ -591,7 +602,7 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
   }
 
   const originalScheduledAt = payload.publish.scheduledAt ? new Date(payload.publish.scheduledAt) : null
-  const delayed = !payload.immediatePublish && !!originalScheduledAt && originalScheduledAt.getTime() <= Date.now() + 60_000
+  const delayed = !payload.approvedContentRevision && !payload.immediatePublish && !!originalScheduledAt && originalScheduledAt.getTime() <= Date.now() + 60_000
   const effectiveScheduledAt = payload.immediatePublish || delayed
     ? new Date(Date.now() + 2 * 60_000).toISOString()
     : payload.publish.scheduledAt
@@ -611,6 +622,11 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
   if (creating.count !== 1) return 'none' as const
   await updateDraftStage(job.draftId, '大视频已传输完成，正在创建 PostFast 帖子。')
 
+  if(payload.approvedContentRevision){
+    const current=await prisma.contentDraft.findFirst({where:{id:job.draftId,brandId:job.brandId},include:postInclude})
+    if(!current||current.status!=='publishing'||current.platformPostId||current.deliveryFailureCode||postContentRevision(current)!==payload.approvedContentRevision){await markPermanentFailure(job,'POST_APPROVAL_STALE','发布内容或素材已变化，请重新确认。');return 'failed' as const}
+    if(!originalScheduledAt||originalScheduledAt.getTime()<=Date.now()+60_000){await markPermanentFailure(job,'POST_SCHEDULE_EXPIRED','确认的排期已过，请重新确认新的排期。');return 'failed' as const}
+  }
   const result = await postfastPublish({
     ...payload.publish,
     apiKey: brand.postfastApiKey,

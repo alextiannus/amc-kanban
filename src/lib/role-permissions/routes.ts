@@ -2,6 +2,7 @@
 export function kanbanRoutePermission(path: string, method: string): string | null {
   if (path === '/api/content/access-identity') return 'content.video-making.read'
   const read = ['GET', 'HEAD'].includes(method)
+  if (path.startsWith('/api/video-assistant/confirm/')) return null // Handler loads the owned video/post receipt and enforces its exact grants.
   if (path.startsWith('/api/video-assistant/')) return 'content.video-making.read' // Exact generation/update grant is checked after loading the owned confirmation.
   if (path === '/api/subscription' || path.startsWith('/api/subscription/')) return `subscription.${read ? 'read' : 'manage'}`
   if (path === '/api/agents' || /^\/api\/agents\/[^/]+$/.test(path) && !['register', 'profile', 'keys'].includes(path.split('/').pop()!)) return `agent.${read ? 'read' : 'manage'}`

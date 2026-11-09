@@ -582,7 +582,7 @@ Instagram/TikTok/Facebook/Threads replies must use the human-confirmed Social In
     *   `template`, `idea`, `videoScript`, `prompt` (string, optional)
 
 
-## 视频助手共享能力（2026-11-09，本地实现并验证，未发布）
+## 视频助手共享能力（2026-11-09，扩展实施中，待本轮验收发布）
 
 AMC-MM 是第一方商家助手。对话与外部 Personal MCP 复用同一视频业务服务、严格工具 schema、当前用户/品牌权限、持久请求键及项目回执。先接入普通视频草稿、读取与恢复、版本化重写、费用估价/人工确认后提交、停止、最终审核和授权下载。Content 继续负责模型、素材、制作与合成；不经 MM UI 路由转发执行，也不修改 IAiC core。
 
@@ -602,3 +602,6 @@ Writes require stable requestKey. Reusing a key with changed inputs returns conf
 New HTTP routes: GET/POST `/api/video-assistant/confirm/[id]`, GET `/api/video-assistant/output`. Human page `/video-assistant/confirm/[id]` is authenticated. Production requires Content estimates to include exact amcCredit alongside configured provider pricing; release Content's additive estimate contract before Kanban. Existing Personal MCP endpoint remains `/api/mcp`; OAuth/registry publication is not part of this local implementation.
 
 Normal-video output streaming uses Content's basic-video-scoped download alias, not the separate video-production module; basic-project checks prevent crossing module boundaries.
+
+
+端到端扩展（AMC-20261109-VIDEO-END-TO-END-005，实施中）：创建视频可固定目标账号、发布文案、原草稿版本和可选创意版本；最终审核导入素材库后幂等接续为同一发布草稿。也可对已审核视频单独准备post。两个助手共享post查询/提交确认能力；模型不能批准发布，真实会话确认绑定草稿、素材、账号与智能排期，提交复用现有投递队列。修改、解绑、旧版本、费用/排期失效及未知结果阻断重发。队列受理、排期、真实发布分开显示。保留既有创意选择和发布授权边界，不以运行时成功推断产物。

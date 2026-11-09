@@ -37,12 +37,8 @@ export const maxDuration = 300
 export async function POST(req: NextRequest) {
   // Auth: require CRON_SECRET header to prevent unauthorized invocation
   const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const provided = req.headers.get('x-cron-secret')
-    if (provided !== cronSecret) {
-      console.warn('[PostFast Cron] Unauthorized attempt — invalid or missing x-cron-secret')
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  if (!cronSecret || req.headers.get('x-cron-secret') !== cronSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const startedAt = new Date()
