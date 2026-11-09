@@ -1,3 +1,4 @@
+import {TOKEN_BUDGET_POLICY} from '../token-budget/policy'
 import {parseCalendarContext} from '../calendarNoteContext'
 import {visibleInterviewDraft,interviewAnswers,type InterviewDraft} from './interview-contract'
 import type {VideoRewriteIntent} from './video-rewrite'
@@ -10,7 +11,7 @@ import type {SkuBinding} from '../brand-plan/creativeSkuContract'
 
 export const CORE_VERSION = '0.1.0-candidate.114'
 export const CORE_ARCHIVE_SHA = '1eb1b87bcef1c1191eff788ca77cee678a1ac979c91ac0bcbecc77a525d79f24'
-export const USAGE_POLICY = {enforced:false,taskAllowance:null,dailyAllowance:null,mode:"meter_only"} as const
+export const USAGE_POLICY = {enforced:false,taskAllowance:null,dailyAllowance:null,mode:"meter_only",monthlyBudget:TOKEN_BUDGET_POLICY} as const
 export type NativeActor = { scopeId:string; subjectId:string }
 export type CreativeIntent = {kind:'creative';editMode?:'materials';draftScript?:string;draftMaterialRequirements?:string[];autopilotRunId?:string;requireMaterials?:boolean;adaptToBrand?:boolean;brandId:string;creativeId:string;month:string;goal:string;expectedRevision:string;artifactPath:string;requestKey:string;userId:string}
 export type BriefIntent = {kind:'brand_brief';brandId:string;goal:string;artifactPath:string;requestKey:string;userId:string}

@@ -1,3 +1,4 @@
+import {nativeCostBasis} from '../token-budget/policy'
 import {conversationDocumentBinding,conversationDocumentCall,CONVERSATION_DOCUMENT_INSTRUCTIONS} from './conversation-document'
 import {conversationTurnMessages} from './conversation-turn'
 import {latestPreviewWriter} from './latest-preview'
@@ -26,11 +27,12 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
   const current=await runtimeConfig()
   if(!current.active||!current.version)throw nativeError('central_model_not_configured',503)
   const versions=await prisma.$queryRawUnsafe('SELECT version FROM "ModelPolicyRevision" ORDER BY version DESC') as Array<{version:number}>
-  const profiles:ModelProfile[]=[]
+  const profiles:ModelProfile[]=[],costBases:Record<string,any>={}
   for(const {version} of versions){
     const config=await runtimeConfig({version})
     try{
       const model=selectModel(config,'mm','ai_native','text')
+      costBases[`central-${version}`]=nativeCostBasis(model,version)
       profiles.push({id:`central-${version}`,label:model.definition.name,provider:'openai',model:`amc-policy-${version}`,credentialRef:`amc-policy-${version}`,invocation:{parallelToolCalls:false}})
     }catch{if(version===current.version)throw nativeError('central_model_not_configured',503)}
   }
@@ -42,7 +44,7 @@ export async function centralModels():Promise<Pick<ApplicationOptions,'profiles'
       const model=selectModel(config,'mm','ai_native','text')
       return config.secrets?.[model.secretRef]
     },
-    tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:MODEL_INVOCATION_ALLOWANCE,price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
+    tokenPolicies:Object.fromEntries(profiles.map(p=>[p.id,{maximum:MODEL_INVOCATION_ALLOWANCE,...(costBases[p.id]?{costBasis:costBases[p.id]}:{}),price:{revision:'amc-ai-allowance-v1',input:1,cachedInput:1,output:1}}])),
     modelFactory:configuration=>{
      const provider=(full:boolean,scope?:PlanningScope,binding?:any,taskId?:string,review=false,documentBinding?:ReturnType<typeof strategyDocumentBinding>,conversationDocument?:ReturnType<typeof conversationDocumentBinding>)=>createModelProvider({apiKey:configuration.apiKey,model:configuration.model,provider:'openai',maxOutputTokens:full?FULL_PLANNING_OUTPUT_TOKENS:DEFAULT_NATIVE_OUTPUT_TOKENS,invocation:{parallelToolCalls:false},fetchImpl:async(_url:string,options:RequestInit)=>{
       const version=Number(configuration.model.replace('amc-policy-','')),config=await runtimeConfig({version,secrets:true})

@@ -1,4 +1,5 @@
 'use client'
+import TokenBudgetCard from './TokenBudgetCard'
 import {useEffect,useRef,useState} from 'react'
 import {ArrowLeft,Copy,KeyRound,RefreshCw} from 'lucide-react'
 type Token={id:string;name:string|null;prefix:string|null;createdAt:string;lastUsedAt:string|null;expiresAt:string|null;revokedAt:string|null}
@@ -21,6 +22,7 @@ export default function PersonalAiTokens({english=false,onBack}:{english?:boolea
  return <section aria-label={t('配置 AI','Configure AI')} className="mx-auto w-full max-w-3xl space-y-8 p-4 pb-12 text-slate-900 dark:text-slate-100 sm:p-6">
   <button className={button} onClick={onBack}><ArrowLeft size={18}/>{t('返回个人资料','Back to profile')}</button>
   <header className="space-y-3"><h1 className="text-3xl font-semibold">{t('配置 AI','Configure AI')}</h1><p className="max-w-prose text-base leading-7 text-slate-600 dark:text-slate-300">{t('连接你的外部 AI 助手，以你的身份访问 AMC。所有操作遵循你当前的账号权限和品牌范围。','Connect your external AI assistant to AMC. It acts as you, within your current account permissions and brand access.')}</p></header>
+  <TokenBudgetCard english={english}/>
   <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-700 dark:bg-slate-900"><h2 className="text-xl font-semibold">{t('连接 AI 助手','Connect an AI assistant')}</h2><p className="text-sm leading-6 text-slate-600 dark:text-slate-300">{t('在支持远程 MCP 和 Bearer Token 的客户端中，填写以下地址，并使用你自己的 AI Token。','Use the address below in a client that supports remote MCP and Bearer tokens, together with your own AI token.')}</p><div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center"><code className="min-w-0 flex-1 break-all rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-800">{endpoint}</code><button className={button} onClick={()=>copy(endpoint,'address')}><Copy size={16}/>{copied==='address'?t('已复制','Copied'):t('复制地址','Copy address')}</button></div><p className="text-sm text-slate-600 dark:text-slate-300">{t('认证方式：Bearer Token。使用当前 Token 连接。','Authentication: Bearer token. Use your current token to connect.')}</p></section>
   <section className="space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-xl font-semibold"><KeyRound size={21}/>{t('我的 AI Token','My AI token')}</h2><button className={button} disabled={busy} onClick={()=>void load()}><RefreshCw size={16}/>{t('重新加载','Reload')}</button></div>
    {error&&<p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">{error}</p>}

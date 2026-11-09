@@ -21,6 +21,8 @@ export async function register() {
     }
     const { startNativeWorker } = await import('./lib/ai-native/service')
     startNativeWorker()
+    const {startTokenBudgetWorker}=await import('./lib/token-budget/notices')
+    startTokenBudgetWorker()
     const { startBackgroundNoticeWorker } = await import('./lib/notification/background')
     await startBackgroundNoticeWorker()
     const { startPlatformWorker } = await import('./lib/platform-ai/worker')

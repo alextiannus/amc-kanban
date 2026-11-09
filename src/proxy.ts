@@ -40,7 +40,7 @@ export default async function proxy(request: NextRequest) {
   const savedProfileRead = request.method === 'GET' && (/^\/api\/brands\/[^/]+\/profile-overview$/.test(pathname) || pathname === '/api/notifications') || pathname === '/api/notifications/push'
   const videoAssistantNonModel = pathname.startsWith('/api/video-assistant/')
 
-  const engineeringNonModel = pathname === '/api/health/version' || /^\/api\/brands\/[^/]+\/ai\/bug-reports(?:\/[^/]+)?$/.test(pathname)
+  const engineeringNonModel = pathname === '/api/health/version' || pathname === '/api/profile/token-budget' || /^\/api\/brands\/[^/]+\/ai\/bug-reports(?:\/[^/]+)?$/.test(pathname)
   const permission = publicGameConfig || contentIdentity ? null : kanbanRoutePermission(pathname, request.method)
   if (permission) {
     try {
