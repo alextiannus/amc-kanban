@@ -1,3 +1,6 @@
+import {actorFor} from '@/lib/ai-native/contract'
+import {listBusinessTools,callBusinessTool} from '@/lib/ai-native/business-tools'
+import {VIDEO_TOOLS} from '@/lib/video-assistant/tools'
 import { NextResponse } from 'next/server'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -532,7 +535,9 @@ export async function POST(request: Request, { params }: Params) {
         }
 
         // Fetch and merge remote MCP tools (now loaded via Promise.all above)
+        const videoCatalog = await listBusinessTools(actorFor(brandId,actor.id),'video').catch(()=>({tools:[]}))
         const combinedTools = [
+          ...videoCatalog.tools.map(t=>({name:t.name,description:t.description||'',parameters:McpClientManager.sanitizeSchema(t.inputSchema)})) as any[],
           ...COMPANION_TOOLS,
           ...extTools
         ]
@@ -546,11 +551,11 @@ export async function POST(request: Request, { params }: Params) {
         // Call gemini-chat with history, tools, and the tool execution callback
         const tGemini = Date.now()
         const result = await callGeminiChat(
-          systemPrompt,
+          systemPrompt+'\nVideo tools use the same owned project as AMC-MM text chat and external assistants. Use real project IDs and current revisions; never claim a draft is a finished video. Present the human confirmation URL for price/materials or final review, then read the original project. Never approve for the user or resubmit an uncertain operation.',
           trimmedHistory,
           message,
           true,
-          120,  // 语音回复必须简短—max_tokens 从 500 降至 120，减少 LLM TTFT
+          (/视频|短片|剪辑|video|reel|shorts/i.test(message)?2000:120),  // Video tool arguments include the complete script; spoken replies stay concise.
           combinedTools,
           async (toolName, toolArgs) => {
             let statusMsg = isEnglish ? 'Processing...' : '正在处理...'
@@ -571,6 +576,10 @@ export async function POST(request: Request, { params }: Params) {
             console.log(`[streaming-status] sending status update: "${statusMsg}"`)
             safeEnqueue(controller, encoder.encode(JSON.stringify({ type: 'status', message: statusMsg }) + '\n'))
 
+            if(Object.hasOwn(VIDEO_TOOLS,toolName)){
+              const receipt=await callBusinessTool(actorFor(brandId,actor.id),toolName,toolArgs)
+              return {resultText:JSON.stringify(receipt)}
+            }
             const { resultText, actionReply } = await executeTool(toolName, toolArgs, brandId, locale)
             return { resultText, actionReply }
           }

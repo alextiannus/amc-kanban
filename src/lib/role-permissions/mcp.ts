@@ -1,3 +1,4 @@
+import {VIDEO_TOOLS} from '../video-assistant/tools'
 // Aliases share the same gate; no tool can bypass a revoked business action.
 export const MCP_PERMISSIONS: Record<string, string> = Object.fromEntries([
   ['brand.read', ['get_brand_information', 'get_brand_config', 'get_brand_profile_markdown', 'board_list_social_accounts', 'list_accounts', 'postfast_list_accounts', 'board_list_topics', 'board_get_topic', 'get_brand_marketing_plan']],
@@ -19,3 +20,4 @@ export const MCP_PERMISSIONS: Record<string, string> = Object.fromEntries([
   ['subscription.read', ['get_brand_subscription']],
   ['analytics.read', ['get_brand_analytics', 'get_social_insights']],
 ].flatMap(([permission, names]) => (names as string[]).map(name => [name, permission as string])))
+Object.assign(MCP_PERMISSIONS,Object.fromEntries(Object.entries(VIDEO_TOOLS).map(([name,t])=>[name,t.permission])))

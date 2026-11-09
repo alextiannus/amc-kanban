@@ -580,3 +580,25 @@ Instagram/TikTok/Facebook/Threads replies must use the human-confirmed Social In
     *   `industry` (enum: `['fb', 'fitness', 'renovation', 'winery', 'general']`, required)
     *   `platform` (string, required)
     *   `template`, `idea`, `videoScript`, `prompt` (string, optional)
+
+
+## 视频助手共享能力（2026-11-09，本地实现并验证，未发布）
+
+AMC-MM 是第一方商家助手。对话与外部 Personal MCP 复用同一视频业务服务、严格工具 schema、当前用户/品牌权限、持久请求键及项目回执。先接入普通视频草稿、读取与恢复、版本化重写、费用估价/人工确认后提交、停止、最终审核和授权下载。Content 继续负责模型、素材、制作与合成；不经 MM UI 路由转发执行，也不修改 IAiC core。
+
+原生对话通过既有业务目录发现 video 组，调用相同 MCP 工具；模型工具只能提出制作/成片审核请求，不能批准。真实用户在会话认证且同源的页面确认当前内容和费用，服务器重验版本与 Content 费用确认，再以持久记录提交。重复请求回放原回执；不确定结果保留待核对，不自动再次收费。成片审核前不交付下载；进度、成功、审核通过和已发布分别记录。遵守当前视频操作 grants 和品牌范围；Content 允许已通过中央鉴权的业务请求，不额外要求管理员身份，不新增角色授权。首版语言/时长/比例只使用服务实际支持值；同画面翻译沿用原能力，不假装新生成等于忠实翻译。
+
+验收包含双入口同一业务合同、用户/品牌越权拒绝、内容变更使确认失效、并发和跨入口重复提交、断线恢复、最终审核及真实可用输出。模拟服务测试不等同付费成片/生产验收。历史记录 AMC-20261109-VIDEO-IMPLEMENTATION-003。
+
+
+### Video tools implemented locally (unreleased)
+
+`video_create_draft`, `video_revise_draft`, `video_list_projects`, `video_get_project`, `video_request_generation`, `video_stop`, `video_request_review`, `video_get_output` are registered from one shared definition. AMC-MM native conversation discovers the `video` business group; the host fixes brandId. External Personal MCP supplies its authorized brandId. Both use the same service and persistent receipts.
+
+Workflow: list/select owned assets → create draft with explicit prompt and requestKey → read the current revision → request generation with expectedRevision → user opens the returned confirmationUrl and confirms content/cost/Credit → read the original project → request final review after assembly → human approves → retrieve authorized download. A revised normal-mode brief creates a successor draft; it does not silently overwrite a rendered project or claim same-visual translation.
+
+Writes require stable requestKey. Reusing a key with changed inputs returns conflict. An in-flight/uncertain receipt must be reconciled, never silently retried with a new key. Generation uses current `content.video-making.generate`; final review uses `.update`; brand scope and owner checks apply on every access. Tools cannot approve; the confirmation POST requires a session, same origin and no API-key credential. Output streaming accepts the same owner's session or valid Personal API credential and rechecks approval.
+
+New HTTP routes: GET/POST `/api/video-assistant/confirm/[id]`, GET `/api/video-assistant/output`. Human page `/video-assistant/confirm/[id]` is authenticated. Production requires Content estimates to include exact amcCredit alongside configured provider pricing; release Content's additive estimate contract before Kanban. Existing Personal MCP endpoint remains `/api/mcp`; OAuth/registry publication is not part of this local implementation.
+
+Normal-video output streaming uses Content's basic-video-scoped download alias, not the separate video-production module; basic-project checks prevent crossing module boundaries.

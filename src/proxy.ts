@@ -38,6 +38,8 @@ export default async function proxy(request: NextRequest) {
   const brandOperations = pathname === '/api/brand-operations' || /^\/api\/brand-operations\/[^/]+\/principal$/.test(pathname)
   // Fault reporting and release probes must work even when the model registry is unavailable.
   const savedProfileRead = request.method === 'GET' && (/^\/api\/brands\/[^/]+\/profile-overview$/.test(pathname) || pathname === '/api/notifications') || pathname === '/api/notifications/push'
+  const videoAssistantNonModel = pathname.startsWith('/api/video-assistant/')
+
   const engineeringNonModel = pathname === '/api/health/version' || /^\/api\/brands\/[^/]+\/ai\/bug-reports(?:\/[^/]+)?$/.test(pathname)
   const permission = publicGameConfig || contentIdentity ? null : kanbanRoutePermission(pathname, request.method)
   if (permission) {
@@ -77,7 +79,7 @@ export default async function proxy(request: NextRequest) {
   const isApiRoute = pathname.startsWith('/api')
 
   // Bind API work once; gateway/admin endpoints manage their own signed snapshots.
-  if (isApiRoute && !contentIdentity && !brandOperations && !engineeringNonModel && !savedProfileRead && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
+  if (isApiRoute && !videoAssistantNonModel && !contentIdentity && !brandOperations && !engineeringNonModel && !savedProfileRead && !pathname.startsWith('/api/internal/access/') && !pathname.startsWith('/api/internal/global-text') && !pathname.startsWith('/api/internal/model-') && pathname !== '/api/internal/content-brand-voices' && !pathname.startsWith('/api/admin/')) {
     try {
       requestHeaders.set('x-amc-text-binding', signBinding(await currentBinding(request.headers.get('x-client-type') === 'mm' ? 'mm' : 'kanban')))
     } catch { return NextResponse.json({ error: 'Text policy unavailable' }, { status: 503 }) }

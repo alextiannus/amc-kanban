@@ -193,7 +193,7 @@ export class McpClientManager {
     return connected
   }
 
-  private static sanitizeSchema(schema: any): any {
+  static sanitizeSchema(schema: any): any {
     if (!schema || typeof schema !== 'object') return schema
 
     if (Array.isArray(schema)) {

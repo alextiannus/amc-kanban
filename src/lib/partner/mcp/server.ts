@@ -1,6 +1,8 @@
 import { COVER_MIMES, assertCoverMedia } from '../../asset-library/cover-policy'
 import { prepareCoverAssets, markDraftCover } from '../../asset-library/covers'
 import { createClassifiedAsset, updateAssetFiling } from '../../asset-library/filing'
+import {registerVideoTools} from '../../video-assistant/tools'
+import {videoAssistant} from '../../video-assistant/runtime'
 import {readBrandInformation,updateBrandInformation} from '@/lib/brand-information'
 import { resolveDraftAccount, resolveDraftPlatformAccount, draftPlatform } from '@/lib/socialAccountPlaceholder'
 import { lockBrandSync } from '@/lib/socialAccountLocks'
@@ -300,6 +302,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
     return (server.tool as any)(...args)
   }) as typeof server.tool
+
+  registerVideoTools(server, async () => {
+    const p = agentApiKey ? await authenticateApiKey(agentApiKey) : await resolvePrincipal()
+    return p ? {userId:p.userId, authVersion:p.authVersion} : null
+  }, videoAssistant)
 
   // Durable AI work uses the same admission/control services as AMCMM.
   registerTool('discover_brand_creatives', 'Match persisted original library creatives to the current brand. Returns a durable review task, not a saved plan or publication.', {brandId:z.string(),goal:z.string().min(1).max(6000),requestKey:z.string().min(8).max(100)}, async input=>{
