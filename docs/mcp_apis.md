@@ -591,7 +591,7 @@ AMC-MM 是第一方商家助手。对话与外部 Personal MCP 复用同一视�
 验收包含双入口同一业务合同、用户/品牌越权拒绝、内容变更使确认失效、并发和跨入口重复提交、断线恢复、最终审核及真实可用输出。模拟服务测试不等同付费成片/生产验收。历史记录 AMC-20261109-VIDEO-IMPLEMENTATION-003。
 
 
-### Video tools implemented locally (unreleased)
+### Shared video and publication tool contract
 
 `video_create_draft`, `video_revise_draft`, `video_list_projects`, `video_get_project`, `video_request_generation`, `video_stop`, `video_request_review`, `video_get_output` are registered from one shared definition. AMC-MM native conversation discovers the `video` business group; the host fixes brandId. External Personal MCP supplies its authorized brandId. Both use the same service and persistent receipts.
 
@@ -599,9 +599,11 @@ Workflow: list/select owned assets → create draft with explicit prompt and req
 
 Writes require stable requestKey. Reusing a key with changed inputs returns conflict. An in-flight/uncertain receipt must be reconciled, never silently retried with a new key. Generation uses current `content.video-making.generate`; final review uses `.update`; brand scope and owner checks apply on every access. Tools cannot approve; the confirmation POST requires a session, same origin and no API-key credential. Output streaming accepts the same owner's session or valid Personal API credential and rechecks approval.
 
-New HTTP routes: GET/POST `/api/video-assistant/confirm/[id]`, GET `/api/video-assistant/output`. Human page `/video-assistant/confirm/[id]` is authenticated. Production requires Content estimates to include exact amcCredit alongside configured provider pricing; release Content's additive estimate contract before Kanban. Existing Personal MCP endpoint remains `/api/mcp`; OAuth/registry publication is not part of this local implementation.
+New HTTP routes: GET/POST `/api/video-assistant/confirm/[id]`, GET `/api/video-assistant/output`. Human page `/video-assistant/confirm/[id]` is authenticated. Production requires Content estimates to include exact amcCredit alongside configured provider pricing; release Content's additive estimate contract before Kanban. Existing Personal MCP endpoint remains `/api/mcp`; OAuth/registry publication is not part of this implementation. Production deployment evidence is recorded separately in the shared VERSION_HISTORY.md ledger.
 
 Normal-video output streaming uses Content's basic-video-scoped download alias, not the separate video-production module; basic-project checks prevent crossing module boundaries.
 
 
-端到端扩展（AMC-20261109-VIDEO-END-TO-END-005，实施中）：创建视频可固定目标账号、发布文案、原草稿版本和可选创意版本；最终审核导入素材库后幂等接续为同一发布草稿。也可对已审核视频单独准备post。两个助手共享post查询/提交确认能力；模型不能批准发布，真实会话确认绑定草稿、素材、账号与智能排期，提交复用现有投递队列。修改、解绑、旧版本、费用/排期失效及未知结果阻断重发。队列受理、排期、真实发布分开显示。保留既有创意选择和发布授权边界，不以运行时成功推断产物。
+端到端扩展（AMC-20261109-VIDEO-END-TO-END-005）：创建视频可固定目标账号、发布文案、原草稿版本和可选创意版本；最终审核导入素材库后幂等接续为同一发布草稿。也可对已审核视频单独准备post。两个助手共享post查询/提交确认能力；模型不能批准发布，真实会话确认绑定草稿、素材、账号与智能排期，提交复用现有投递队列。修改、解绑、旧版本、费用/排期失效及未知结果阻断重发。队列受理、排期、真实发布分开显示。保留既有创意选择和发布授权边界，不以运行时成功推断产物。
+
+Shared publishing tools: `video_prepare_post` binds the current approved video to a real account and a caption, `post_request_submission` returns a session-only human confirmation for the exact draft revision and smart schedule, and `post_get_delivery` reads the original draft and durable queue receipt. Optional `publication` on video creation/revision remembers accountId/caption/hashtags and optional existing draft/source revisions for the post-review handoff. The human confirmation displays the caption, hashtags, account, cover, supported publish options and exact Singapore time; assistants cannot confirm it. Queue acceptance and provider scheduling never imply platform publication.
