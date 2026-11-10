@@ -3,8 +3,8 @@ import {VIDEO_TOOLS} from '../video-assistant/tools'
 export const MCP_PERMISSIONS: Record<string, string> = Object.fromEntries([
   ['brand.read', ['get_brand_information', 'get_brand_config', 'get_brand_profile_markdown', 'board_list_social_accounts', 'list_accounts', 'postfast_list_accounts', 'board_list_topics', 'board_get_topic', 'get_brand_marketing_plan']],
   ['brand.update', ['update_brand_information', 'discover_brand_creatives', 'create_ai_brand_task', 'create_ai_creative_task', 'list_ai_tasks', 'get_ai_task', 'control_ai_task', 'refresh_brand_profile_markdown', 'update_brand_profile_markdown', 'update_brand_config', 'update_accounts', 'board_generate_account_connect_link', 'connect_account', 'postfast_generate_connect_link', 'board_save_topic', 'board_archive_topic', 'generate_brand_research_report', 'save_brand_merchant_interview', 'generate_brand_marketing_plan', 'run_brand_planning_workflow']],
-  ['draft.read', ['list_tasks', 'board_list_drafts', 'board_get_draft', 'board_list_published_content', 'postfast_list_posts']],
-  ['draft.create', ['create_task', 'create_tasks', 'create_content_drafts_from_calendar']],
+  ['draft.read', ['daily_publishing_status','daily_publishing_sources','list_tasks', 'board_list_drafts', 'board_get_draft', 'board_list_published_content', 'postfast_list_posts']],
+  ['draft.create', ['daily_publishing_refill','create_task', 'create_tasks', 'create_content_drafts_from_calendar']],
   ['draft.update', ['update_task', 'delete_task', 'board_delete_task', 'board_save_draft', 'board_delete_draft']],
   ['draft.submit', ['board_submit_draft']],
   ['content.schedule', ['generate_brand_publishing_calendar', 'board_get_schedule_recommendation']],

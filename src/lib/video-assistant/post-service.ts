@@ -320,6 +320,7 @@ export function createPostAssistant(deps: Deps) {
       };
     }
     if (name !== "post_request_submission") fail("video_tool_unavailable", 422);
+    if((draft.viralCopyScriptProvenance as any)?.dailyPublishing)return {ok:true,state:'awaiting_input',confirmationUrl:deps.origin+'/daily-publishing',instructions:'Review source rights, exact content/account/time on the daily inventory page. This tool cannot approve or publish.'};
     await auth(actor, input.brandId, "draft.submit");
     await auth(actor, input.brandId, "content.schedule");
     await auth(actor, input.brandId, "content.publish");

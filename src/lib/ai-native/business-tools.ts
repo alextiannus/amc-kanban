@@ -12,6 +12,9 @@ import {brandFor,nativeError,type NativeActor} from './contract'
 
 // Only audited, credential-free entry points. No arbitrary MCP proxy or API keys.
 export const BUSINESS_TOOLS={
+ daily_publishing_status:{group:'publishing',effect:'read'},
+ daily_publishing_sources:{group:'content',effect:'read'},
+ daily_publishing_refill:{group:'content',effect:'write'},
  ...Object.fromEntries(Object.entries(VIDEO_TOOLS).map(([name,t])=>[name,{group:'video',effect:t.effect}])) as Record<keyof typeof VIDEO_TOOLS,{group:'video';effect:'read'|'write'}>,
  get_brand_information:{group:'research',effect:'read'},
  update_brand_information:{group:'research',effect:'write'},

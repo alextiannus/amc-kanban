@@ -1,3 +1,4 @@
+import {validateDailyDraft} from './daily-publishing/sources'
 import {postRevision,postContentRevision,postInclude} from './video-assistant/post-contract'
 import { requireActorPermission } from './role-permissions/delegation'
 import { PolicyError } from './role-permissions/store'
@@ -624,7 +625,7 @@ async function processClaimedJob(job: Awaited<ReturnType<typeof claimNextJob>>, 
 
   if(payload.approvedContentRevision){
     const current=await prisma.contentDraft.findFirst({where:{id:job.draftId,brandId:job.brandId},include:postInclude})
-    if(!current||current.status!=='publishing'||current.platformPostId||current.deliveryFailureCode||postContentRevision(current)!==payload.approvedContentRevision){await markPermanentFailure(job,'POST_APPROVAL_STALE','发布内容或素材已变化，请重新确认。');return 'failed' as const}
+    if(!current||!await validateDailyDraft(current)||current.status!=='publishing'||current.platformPostId||current.deliveryFailureCode||postContentRevision(current)!==payload.approvedContentRevision){await markPermanentFailure(job,'POST_APPROVAL_STALE','发布内容或素材已变化，请重新确认。');return 'failed' as const}
     if(!originalScheduledAt||originalScheduledAt.getTime()<=Date.now()+60_000){await markPermanentFailure(job,'POST_SCHEDULE_EXPIRED','确认的排期已过，请重新确认新的排期。');return 'failed' as const}
   }
   const result = await postfastPublish({

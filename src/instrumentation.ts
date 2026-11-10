@@ -23,6 +23,8 @@ export async function register() {
     startNativeWorker()
     const {startTokenBudgetWorker}=await import('./lib/token-budget/notices')
     startTokenBudgetWorker()
+    const {startDailyPublishingWorker}=await import('./lib/daily-publishing/service')
+    startDailyPublishingWorker()
     const { startBackgroundNoticeWorker } = await import('./lib/notification/background')
     await startBackgroundNoticeWorker()
     const { startPlatformWorker } = await import('./lib/platform-ai/worker')

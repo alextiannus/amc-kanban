@@ -1,3 +1,4 @@
+import {validateDailyDraft} from './daily-publishing/sources'
 import {postRevision,postInclude} from './video-assistant/post-contract'
 import { checkPostfastPublishAccount } from '@/lib/postfastPublishAccount'
 import { withBoundAccount, SocialAccountBindingError } from '@/lib/socialAccountBinding'
@@ -115,10 +116,12 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     const current=await prisma.contentDraft.findFirst({where:{id:input.draftId,brandId:input.brandId},include:postInclude})
     if(!current||postRevision(current)!==input.approvedVideoPost.revision||!['draft','pending_review'].includes(current.status)||current.platformPostId||current.deliveryFailureCode||Date.parse(input.approvedVideoPost.scheduledAt)<=Date.now())return {ok:false as const,status:409,code:'POST_APPROVAL_STALE',error:'发布草稿、素材或排期已变化，请重新确认。'}
   }
+  if(!await validateDailyDraft(draft))return {ok:false as const,status:409,code:'DAILY_SOURCE_CHANGED',error:'日更来源已变化或撤回，请重新选材审核。'}
+  if((draft.viralCopyScriptProvenance as any)?.dailyPublishing&&input.forcePublish&&!input.approvedVideoPost)return {ok:false as const,status:403,code:'DAILY_APPROVAL_REQUIRED',error:'请在日更储备页核实来源使用权并确认精确排期。'}
   const safeControls=sanitizePostFastDraftControls(draft.postfastControls)
   if(safeControls.error)return {ok:false as const,status:422,code:'POSTFAST_CONTROLS_INVALID',error:safeControls.error}
   // AMCMM generation mandate never grants publication, even when legacy brand autopilot is on.
-  if ((draft.viralCopyScriptProvenance as any)?.autopilot?.runId || (draft.viralCopyScriptProvenance as any)?.videoAssistant) {
+  if ((draft.viralCopyScriptProvenance as any)?.autopilot?.runId || (draft.viralCopyScriptProvenance as any)?.videoAssistant || (draft.viralCopyScriptProvenance as any)?.dailyPublishing) {
     brand.autoPilot = false
     if (input.forcePublish) {
       const confirmer = await prisma.user.findUnique({where:{id:input.actorId},select:{type:true,status:true}})
