@@ -61,14 +61,14 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
     if (brandId !== AMC_BRAND_ID)
         fail('daily_amc_brand_required', 403);
     const pool = await dailyDb(), c = await pool.connect();
-    let locked = false, created = 0;
+    let locked = false, attempted = 0, created = 0;
     try {
         locked = !!(await c.query('SELECT pg_try_advisory_lock(hashtextextended($1,0))', ['daily-refill:' + brandId])).rows[0].pg_try_advisory_lock;
         if (!locked)
-            return { busy: true, created: 0 };
+            return { busy: true, attempted:0, created: 0 };
         const policy = (await c.query('SELECT * FROM amc_iaic.daily_publishing_policy WHERE brand_id=$1 AND enabled=true', [brandId])).rows[0];
         if (!policy)
-            return { disabled: true, created: 0 };
+            return { disabled: true, attempted:0, created: 0 };
         await dailyAccess(policy.owner_id, brandId, true);
         await c.query("UPDATE amc_iaic.daily_publishing_slots SET stage='needs_attention',error='interrupted_generation_requires_reconciliation',updated_at=now() WHERE brand_id=$1 AND stage='generating' AND updated_at<$2",[brandId,new Date(adapters.now().getTime()-20*60000)]);
         const daySlots = dailySlots(adapters.now()), sources = await adapters.sources();
@@ -82,7 +82,7 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
                 continue;
             }
             for (const slot of daySlots) {
-                if (created >= maxCreates)
+                if (attempted >= maxCreates)
                     break;
                 const occupied = await prisma.contentDraft.findFirst({ where: { brandId, accountId, status: { in: ['scheduled', 'publishing', 'published'] }, scheduledAt: { gte: new Date(slot.at.getTime() - 18.5 * 3600000), lt: new Date(slot.at.getTime() + 5.5 * 3600000) } } });
                 if (occupied)
@@ -95,7 +95,7 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
                         await c.query("UPDATE amc_iaic.daily_publishing_slots SET stage='needs_attention',error='interrupted_generation_requires_reconciliation',updated_at=now() WHERE id=$1 AND stage='generating'", [id]);
                     continue;
                 }
-                const source = pickSource(sources, used, previous.length + created);
+                const source = pickSource(sources, used, previous.length + attempted);
                 if (!source)
                     break;
                 if (!await adapters.validate(source))
@@ -104,7 +104,7 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
                 if (!inserted.rowCount)
                     continue;
                 used.add(sourceFingerprint(source));
-                created++;
+                attempted++;
                 try {
                     const generated = await adapters.compose({ id, brandId, ownerId: policy.owner_id, platform: account.platformId, source });
                     const fresh = (await c.query('SELECT * FROM amc_iaic.daily_publishing_policy WHERE brand_id=$1', [brandId])).rows[0];
@@ -120,6 +120,7 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
                         await tx.contentDraft.create({ data: { id, brandId, accountId, caption: generated.caption, hashtags: generated.hashtags || [], mediaUrls: [generated.mediaUrl], status: 'draft', captionLang: 'en', scheduledAt: slot.at, agentNote: 'AMC日更储备：需要审核正文、来源使用权及精确排期。', viralCopyScriptProvenance: { dailyPublishing: { slotId: id, source, policyRevision: policy.revision, requiresRightsReview: source.kind === 'asset' } }, assetRefs: { create: { assetId: asset.id, order: 0 } } } });
                     });
                     await c.query("UPDATE amc_iaic.daily_publishing_slots SET stage='awaiting_review',draft_id=$2,updated_at=now() WHERE id=$1", [id, id]);
+                    created++;
                 }
                 catch {
                     await c.query("UPDATE amc_iaic.daily_publishing_slots SET stage='needs_attention',error='generation_or_persistence_requires_reconciliation',updated_at=now() WHERE id=$1", [id]);
@@ -138,7 +139,7 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
             if (stock.failed)
                 await dailyNotice(policy.owner_id, brandId, accountId, 'failure', today, `账号 ${account.handle} 有 ${stock.failed} 条失败或结果未知的投递，请核对原记录，勿直接重发。`);
         }
-        return { created, sourceCandidates: sources.length };
+        return { attempted, created, sourceCandidates: sources.length };
     }
     finally {
         if (locked)

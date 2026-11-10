@@ -89,6 +89,10 @@ try{
  await processPostfastDeliveryQueue({maxRuntimeMs:30000});assert.equal(publishes,2,'unknown acceptance must not create another post')
  await prisma.user.update({where:{id:uid},data:{role:'BRAND_OWNER'}});await assert.rejects(()=>dailyStatus(uid,bid));await prisma.user.update({where:{id:uid},data:{role:'ADMIN'}})
  await configureDaily(uid,bid,{enabled:false,revision:1,accountIds:[a.id]});assert.equal((await refillDaily(bid,adapters)).disabled,true)
+ await configureDaily(uid,bid,{enabled:true,revision:2,accountIds:[a.id]})
+ let failedCalls=0
+ const failed=await refillDaily(bid,{...adapters,now:()=>new Date(Date.now()+2*86400000),compose:async()=>{failedCalls++;throw Error('fixture_generation_failure')}},1)
+ assert.equal(failed.attempted,1);assert.equal(failed.created,0,'failed generation must never be reported as a created draft');assert.equal(failedCalls,1)
  console.log('PASS cross-library/Academy/published source organization, revoked/private exclusion, diverse seven-day stock, concurrent/restart idempotency, exact session approval, queue -> provider schedule, changed source/content and CSRF protection, shortages/failure dedup, disabled policy')
 }finally{
  global.fetch=realFetch
