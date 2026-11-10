@@ -211,10 +211,10 @@ async function patchDraft(request: Request, { params }: Params) {
     ? existing.postfastControls as Record<string, unknown> : {}
   const nextControls = parsedPostfastControls.controls
     ? { ...previousControls, ...parsedPostfastControls.controls } : null
-  const aigcChanged = hasPostfastControlsUpdate
-    && (previousControls.tiktokIsAigc === true) !== (nextControls?.tiktokIsAigc === true)
-  if (aigcChanged && (['publishing', 'published', 'done'].includes(existing.status) || existing.platformPostId || existing.publishedAt)) {
-    return NextResponse.json({ error: 'TikTok AI disclosure is read-only after publishing has started.' }, { status: 409 })
+  const tiktokDisclosureChanged = hasPostfastControlsUpdate
+    && (['tiktokIsAigc', 'tiktokBrandOrganic'] as const).some((key) => (previousControls[key] === true) !== (nextControls?.[key] === true))
+  if (tiktokDisclosureChanged && (['publishing', 'published', 'done'].includes(existing.status) || existing.platformPostId || existing.publishedAt)) {
+    return NextResponse.json({ error: 'TikTok disclosure is read-only after publishing has started.' }, { status: 409 })
   }
 
   if (existing.status === 'publishing' && Object.prototype.hasOwnProperty.call(body, 'gbpLocationId')) {

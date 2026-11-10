@@ -607,6 +607,8 @@ Google 账号门店就绪检查（已实现；上线状态以健康检查为准�
 
 ### PostFast 运营闭环（当前规则）
 
+- TikTok 自有品牌推广披露（本地实现并通过隔离回归，待部署）：草稿 API 接受可选布尔值 `postfastControls.tiktokBrandOrganic`，直接发布 API 接受顶层同名字段，MCP 三个发布别名在 `postfastControls` 中接受它。仅明确为 `true` 且目标为 TikTok 时发送 `controls.tiktokBrandOrganic: true`；`false` 与省略均保持供应商默认关闭，历史数据不回填，不自动推断披露，不代表付费合作或 AI 内容披露。草稿合并保留其他控制项，已开始发布、已有远端帖子 ID 或已发布后不得改变该设置；即时、定时及队列重试使用相同值。无需数据库迁移；不因代码测试创建真实帖子，平台可见标签需另行实际验收。
+
 - TikTok 草稿支持手动「AI 生成的内容」开关，默认关闭，历史记录不回填。复用 `postfastControls.tiktokIsAigc`；仅开启时向 PostFast 发送 `controls.tiktokIsAigc: true`，即时、定时及后台重试保持一致。MM 预览和 Kanban 编辑、审核入口独立保存此设置，保存中或失败时禁止发布；发布中、已提交平台排期及已发布记录只读。关闭开关须保存 `false`，不得清除其他发布设置。不自动识别素材来源，不支持远端标签修改。上线须后端先于前端，真实标签显示仍需实际发帖验证。
 
 - PostFast 是已连接社媒账号的发布、账号状态、评论收件箱和平台指标来源；所有数据以 `brandId` 隔离，并沿用既有 Capability + Crew 授权。

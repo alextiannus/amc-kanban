@@ -501,29 +501,65 @@ async function main() {
     assert.equal(tiktokCoverPublish.warnings?.some((warning) => warning.field === 'coverImage') ?? false, false)
 
     assert.deepEqual(postfast.sanitizePostFastDraftControls(undefined), {})
-    for (const value of [true, false]) {
-      assert.deepEqual(postfast.sanitizePostFastDraftControls({ tiktokIsAigc: value, firstComment: 'Keep me' }).controls,
-        { tiktokIsAigc: value, firstComment: 'Keep me' })
-    }
-    for (const value of ['true', 1, null, {}, []]) {
-      assert.match(postfast.sanitizePostFastDraftControls({ tiktokIsAigc: value }).error || '', /must be boolean/)
-    }
-    for (const platform of ['tiktok', 'instagram', 'facebook']) {
-      for (const value of [true, false, undefined]) {
-        for (const schedule of [scheduledAt, undefined]) {
-          const result = await postfast.postfastPublish({
-            apiKey: API_KEY, platform,
-            accountId: platform === 'tiktok' ? 'pf_acc_video' : `pf_acc_${platform}`,
-            caption: 'AIGC test', tiktokIsAigc: value,
-            mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
-            scheduledAt: schedule,
-          })
-          assert.equal(result.success, true)
-          const sent = seen.filter(r => r.url === '/social-posts').at(-1)!.body
-          assert.equal(sent.controls?.tiktokIsAigc, platform === 'tiktok' && value === true ? true : undefined)
+    for (const field of ['tiktokIsAigc', 'tiktokBrandOrganic'] as const) {
+      for (const value of [true, false]) {
+        assert.deepEqual(postfast.sanitizePostFastDraftControls({ [field]: value, firstComment: 'Keep me' }).controls,
+          { [field]: value, firstComment: 'Keep me' })
+      }
+      for (const value of ['true', 1, null, {}, []]) {
+        assert.match(postfast.sanitizePostFastDraftControls({ [field]: value }).error || '', /must be boolean/)
+      }
+      for (const platform of ['tiktok', 'instagram', 'facebook']) {
+        for (const value of [true, false, undefined]) {
+          for (const schedule of [scheduledAt, undefined]) {
+            const result = await postfast.postfastPublish({
+              apiKey: API_KEY, platform,
+              accountId: platform === 'tiktok' ? 'pf_acc_video' : `pf_acc_${platform}`,
+              caption: 'AIGC test', [field]: value,
+              mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }],
+              scheduledAt: schedule,
+            })
+            assert.equal(result.success, true)
+            const sent = seen.filter(r => r.url === '/social-posts').at(-1)!.body
+            assert.equal(sent.controls?.[field], platform === 'tiktok' && value === true ? true : undefined)
+            assert.equal(sent.controls?.[field === 'tiktokIsAigc' ? 'tiktokBrandOrganic' : 'tiktokIsAigc'], undefined)
+          }
         }
       }
+
+      for (const value of ['true', 1, null, {}, []]) {
+        const count = seen.filter(r => r.url === '/social-posts').length
+        const result = await postfast.postfastPublish({
+          apiKey: API_KEY, platform: 'tiktok', accountId: 'pf_acc_video', caption: 'Invalid control',
+          [field]: value,
+          mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }], scheduledAt,
+        } as any)
+        assert.equal(result.code, 'POSTFAST_CONTROL_INVALID')
+        assert.equal(seen.filter(r => r.url === '/social-posts').length, count, 'invalid controls must not create posts')
+      }
     }
+    const bothDisclosures = await postfast.postfastPublish({
+      apiKey: API_KEY, platform: 'tiktok', accountId: 'pf_acc_video', caption: 'AIGC test independent disclosures',
+      tiktokBrandOrganic: true, tiktokIsAigc: true, firstComment: 'Preserved',
+      mediaItems: [{ storageKey: 'video/reel-key', metadata: validReelMetadata }], scheduledAt,
+    })
+    assert.equal(bothDisclosures.success, true)
+    const bothControls = seen.filter(r => r.url === '/social-posts').at(-1)!.body.controls
+    assert.equal(bothControls.tiktokBrandOrganic, true)
+    assert.equal(bothControls.tiktokIsAigc, true)
+    assert.equal(bothControls.firstComment, 'Preserved')
+    assert.equal(bothControls.tiktokBrandContent, undefined, 'own-brand disclosure must not enable paid partnership')
+
+    const ownBrandCarousel = await postfast.postfastPublish({
+      apiKey: API_KEY, platform: 'tiktok', accountId: 'pf_acc_video', caption: 'AIGC test own-brand carousel',
+      tiktokBrandOrganic: true,
+      mediaItems: [
+        { storageKey: 'image/content.jpg', metadata: validCoverMetadata },
+        { storageKey: 'image/second.jpg', metadata: validCoverMetadata },
+      ], scheduledAt,
+    })
+    assert.equal(ownBrandCarousel.success, true)
+    assert.equal(seen.filter(r => r.url === '/social-posts').at(-1)!.body.controls.tiktokBrandOrganic, true)
 
     const imageCoverPublish = await postfast.postfastPublish({
       apiKey: API_KEY,

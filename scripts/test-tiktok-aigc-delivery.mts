@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import ts from 'typescript'
+import * as postContract from '../src/lib/video-assistant/post-contract.ts'
 
 let job: any
 let fail = true
@@ -23,6 +24,7 @@ const db: any = {
   $transaction: async (task: any) => typeof task === 'function' ? task(db) : Promise.all(task),
 }
 const deps: Record<string, any> = {
+  './video-assistant/post-contract': postContract,
   './role-permissions/delegation': { requireActorPermission: async (_actorId: string, permission: string, brandId: string) => {
     assert.equal(permission, 'content.publish')
     assert.equal(brandId, 'brand')
@@ -52,31 +54,33 @@ new Function('require', 'module', 'exports', compiled)((name: string) => {
   return deps[name]
 }, loaded, loaded.exports)
 
-for (const enabled of [true, false, undefined]) {
-  for (const immediate of [true, false]) {
-    const publish = {
-      platform: 'tiktok', accountId: 'account', caption: 'AI content', tiktokIsAigc: enabled,
-      firstComment: 'Preserved', scheduledAt: new Date(Date.now() + 3600000).toISOString(),
-      mediaItems: [{ storageKey: 'video/already-uploaded', metadata: { kind: 'video', sizeBytes: 80000000 } }],
-    }
-    await loaded.exports.enqueuePostfastDelivery({
-      brandId: 'brand', draftId: 'draft', actorId: 'owner', draftUpdatedAt: new Date(),
-      immediatePublish: immediate, scheduled: !immediate, publish,
-    })
-    assert.equal(job.payload.publish.tiktokIsAigc, enabled)
-    publish.tiktokIsAigc = !enabled // The job must own a snapshot, not reference mutable input.
-    fail = true
-    assert.equal(await loaded.exports.processClaimedJob(job, Date.now() + 120000), 'retried')
-    assert.equal(job.payload.publish.tiktokIsAigc, enabled)
-    fail = false
-    job.payload.publish.brandId = 'stale-brand' // The persisted job scope overrides an old payload.
-    assert.equal(await loaded.exports.processClaimedJob(job, Date.now() + 120000), 'succeeded')
-    for (const input of requests.slice(-2)) {
-      assert.equal(input.brandId, 'brand', 'initial and retried delivery must retain the job brand')
-      assert.equal(input.tiktokIsAigc, enabled)
-      assert.equal(input.firstComment, 'Preserved')
-      assert.equal(input.mediaItems[0].storageKey, 'video/already-uploaded')
+for (const field of ['tiktokIsAigc', 'tiktokBrandOrganic']) {
+  for (const enabled of [true, false, undefined]) {
+    for (const immediate of [true, false]) {
+      const publish = {
+        platform: 'tiktok', accountId: 'account', caption: 'AI content', [field]: enabled,
+        firstComment: 'Preserved', scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+        mediaItems: [{ storageKey: 'video/already-uploaded', metadata: { kind: 'video', sizeBytes: 80000000 } }],
+      }
+      await loaded.exports.enqueuePostfastDelivery({
+        brandId: 'brand', draftId: 'draft', actorId: 'owner', draftUpdatedAt: new Date(),
+        immediatePublish: immediate, scheduled: !immediate, publish,
+      })
+      assert.equal(job.payload.publish[field], enabled)
+      publish[field] = !enabled // The job must own a snapshot, not reference mutable input.
+      fail = true
+      assert.equal(await loaded.exports.processClaimedJob(job, Date.now() + 120000), 'retried')
+      assert.equal(job.payload.publish[field], enabled)
+      fail = false
+      job.payload.publish.brandId = 'stale-brand' // The persisted job scope overrides an old payload.
+      assert.equal(await loaded.exports.processClaimedJob(job, Date.now() + 120000), 'succeeded')
+      for (const input of requests.slice(-2)) {
+        assert.equal(input.brandId, 'brand', 'initial and retried delivery must retain the job brand')
+        assert.equal(input[field], enabled)
+        assert.equal(input.firstComment, 'Preserved')
+        assert.equal(input.mediaItems[0].storageKey, 'video/already-uploaded')
+      }
     }
   }
 }
-console.log('PASS AIGC queue snapshots and retry delivery for immediate/scheduled, on/off/legacy settings')
+console.log('PASS AIGC/own-brand queue snapshots and retry delivery for immediate/scheduled, on/off/legacy settings')

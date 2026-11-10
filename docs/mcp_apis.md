@@ -293,6 +293,7 @@ All MCP tools execute within the context of an authenticated `AuthPrincipal`.
     *   `hashtags` (array of strings, optional)
     *   `scheduledAt` (string, optional): ISO 8601 UTC datetime
     *   `accountId` (string, optional)
+*   **Controls**: Optional `postfastControls.tiktokBrandOrganic: boolean` declares own-brand promotion for TikTok (implemented and fixture-tested locally, pending deployment). Only explicit true is sent to PostFast; false/omitted remains off. It is independent of `tiktokIsAigc` and paid-partnership disclosure. The same contract applies to both aliases. Do not infer enablement from a brand account.
 *   **Aliases**:
     *   `publish` (Active alias)
     *   `postfast_publish` (Deprecated alias)

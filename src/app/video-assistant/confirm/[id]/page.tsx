@@ -11,6 +11,7 @@ const controlLabels: Record<string, string> = {
   tiktokMusicSoundName: "配乐",
   tiktokAutoAddMusic: "自动配乐",
   tiktokIsAigc: "标注为 AI 内容",
+  tiktokBrandOrganic: "自有品牌推广披露",
   gbpTopicType: "内容类型",
   gbpCallToActionType: "行动按钮",
   gbpCallToActionUrl: "行动按钮链接",

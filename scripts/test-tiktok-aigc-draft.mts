@@ -15,7 +15,7 @@ const original = {
   postUrl: 'https://example.com/original', platformPostId: null,
   publishedAt: null,
   scheduledAt: null, gbpLocationId: null, updatedAt: new Date(),
-  postfastControls: { firstComment: 'Keep me', tiktokAutoAddMusic: true },
+  postfastControls: { firstComment: 'Keep me', tiktokAutoAddMusic: true, tiktokIsAigc: true, tiktokBrandOrganic: true },
 }
 let record: any = { ...original }
 const contentDraft = {
@@ -38,11 +38,11 @@ const prisma = {
   $transaction: async (task: any) => task({ ...prisma, $queryRaw: async () => [{ locked: true }] }),
 }
 const deps: Record<string, any> = {
+  '@/lib/asset-library/covers': {},
   '@/lib/socialAccountPlaceholder': { resolveDraftAccount, draftPlatform },
   '@/lib/socialAccountLocks': { lockBrandSync },
   '@/lib/socialAccountIdentity': { SocialAccountBindingError },
   '@/lib/brand-plan/creativeDraftMarker': draftMarkers,
-  '@/lib/postfastPublishAccount': {checkPostfastPublishAccount:async()=>{throw Error('Unexpected provider check')}},
   'next/server': { NextResponse: { json: Response.json } },
   '@/lib/auth': { getSession: async () => ({ user: { id: 'owner', type: 'HUMAN' } }), extractApiKey: () => null },
   '@/lib/prisma': { prisma },
@@ -64,32 +64,37 @@ const patch = (body: unknown) => loaded.exports.PATCH(new Request('http://localh
   method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 }), params)
 
-allowed = false
-assert.equal((await patch({ postfastControls: { tiktokIsAigc: true } })).status, 404)
-assert.equal(writes, 0)
-allowed = true
-for (const value of ['true', 1, null]) {
-  assert.equal((await patch({ postfastControls: { tiktokIsAigc: value } })).status, 400)
-}
-for (const value of [true, false]) {
-  assert.equal((await patch({ postfastControls: { tiktokIsAigc: value } })).status, 200)
-  const readback = await (await loaded.exports.GET(new Request('http://localhost'), params)).json()
-  assert.deepEqual(readback.draft.postfastControls, { ...original.postfastControls, tiktokIsAigc: value })
-}
-for (const locked of [
-  { status: 'publishing' }, { status: 'published' }, { status: 'done' },
-  { status: 'scheduled', platformPostId: 'remote' }, { publishedAt: new Date() },
-]) {
-  for (const previous of [true, false]) {
-    record = { ...original, ...locked, postfastControls: { tiktokIsAigc: previous } }
-    assert.equal((await patch({ postfastControls: { tiktokIsAigc: !previous } })).status, 409)
-    if (previous) assert.equal((await patch({ postfastControls: null })).status, 409)
+for (const field of ['tiktokIsAigc', 'tiktokBrandOrganic']) {
+  record = { ...original }
+  stale = false
+  writes = 0
+  allowed = false
+  assert.equal((await patch({ postfastControls: { [field]: true } })).status, 404)
+  assert.equal(writes, 0)
+  allowed = true
+  for (const value of ['true', 1, null]) {
+    assert.equal((await patch({ postfastControls: { [field]: value } })).status, 400)
   }
+  for (const value of [true, false]) {
+    assert.equal((await patch({ postfastControls: { [field]: value } })).status, 200)
+    const readback = await (await loaded.exports.GET(new Request('http://localhost'), params)).json()
+    assert.deepEqual(readback.draft.postfastControls, { ...original.postfastControls, [field]: value })
+  }
+  for (const locked of [
+    { status: 'publishing' }, { status: 'published' }, { status: 'done' },
+    { status: 'scheduled', platformPostId: 'remote' }, { publishedAt: new Date() },
+  ]) {
+    for (const previous of [true, false]) {
+      record = { ...original, ...locked, postfastControls: { [field]: previous } }
+      assert.equal((await patch({ postfastControls: { [field]: !previous } })).status, 409)
+      if (previous) assert.equal((await patch({ postfastControls: null })).status, 409)
+    }
+  }
+  record = { ...original, status: 'scheduled', postfastControls: null }
+  assert.equal((await patch({ postfastControls: { [field]: true } })).status, 200, 'Local schedule has not reached PostFast')
+  record = { ...original }
+  stale = true
+  assert.equal((await patch({ postfastControls: { [field]: true } })).status, 409)
+  assert.deepEqual(record.postfastControls, original.postfastControls)
 }
-record = { ...original, status: 'scheduled', postfastControls: null }
-assert.equal((await patch({ postfastControls: { tiktokIsAigc: true } })).status, 200, 'Local schedule has not reached PostFast')
-record = { ...original }
-stale = true
-assert.equal((await patch({ postfastControls: { tiktokIsAigc: true } })).status, 409)
-assert.deepEqual(record.postfastControls, original.postfastControls)
-console.log('PASS TikTok AIGC draft authorization, validation, preservation, on/off readback, publication locks and stale writes')
+console.log('PASS TikTok AIGC/own-brand draft authorization, validation, preservation, on/off readback, publication locks and stale writes')

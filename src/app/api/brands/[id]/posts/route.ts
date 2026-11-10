@@ -43,6 +43,7 @@ interface PublishPostRequest {
   tiktokMusicSoundName?: string
   tiktokAutoAddMusic?: boolean
   tiktokIsAigc?: boolean
+  tiktokBrandOrganic?: boolean
   gbpTopicType?: 'STANDARD' | 'EVENT' | 'OFFER'
   gbpCallToActionType?: 'BOOK' | 'ORDER' | 'SHOP' | 'LEARN_MORE' | 'SIGN_UP' | 'CALL'
   gbpCallToActionUrl?: string

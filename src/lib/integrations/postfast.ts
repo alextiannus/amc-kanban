@@ -210,7 +210,7 @@ export interface PostFastTikTokSound {
 export type PostFastDraftControls = Pick<PostFastPublishInput,
   'firstComment' | 'instagramLocationId' | 'instagramLocationDisplayName' |
   'instagramIsAiGenerated' | 'instagramPostToGrid' | 'instagramTrialReelStrategy' |
-  'tiktokMusicSoundId' | 'tiktokMusicSoundName' | 'tiktokAutoAddMusic' | 'tiktokIsAigc' |
+  'tiktokMusicSoundId' | 'tiktokMusicSoundName' | 'tiktokAutoAddMusic' | 'tiktokIsAigc' | 'tiktokBrandOrganic' |
   'gbpTopicType' | 'gbpCallToActionType' | 'gbpCallToActionUrl' | 'gbpEventTitle' |
   'gbpEventStartDate' | 'gbpEventEndDate' | 'gbpOfferCouponCode' | 'gbpOfferRedeemUrl' | 'gbpOfferTerms'
 >
@@ -309,6 +309,7 @@ export interface PostFastPublishInput {
   tiktokMusicSoundName?: string // UI-only metadata; never sent to PostFast
   tiktokAutoAddMusic?: boolean
   tiktokIsAigc?: boolean
+  tiktokBrandOrganic?: boolean // Own-brand promotion, independent of AIGC and paid partnership
   gbpTopicType?: PostFastGbpTopicType
   gbpCallToActionType?: PostFastGbpCallToAction
   gbpCallToActionUrl?: string
@@ -348,7 +349,7 @@ export function sanitizePostFastDraftControls(value: unknown): { controls?: Post
   const allowed = new Set([
     'firstComment', 'instagramLocationId', 'instagramLocationDisplayName', 'instagramIsAiGenerated',
     'instagramPostToGrid', 'instagramTrialReelStrategy', 'tiktokMusicSoundId', 'tiktokMusicSoundName',
-    'tiktokAutoAddMusic', 'tiktokIsAigc', 'gbpTopicType', 'gbpCallToActionType', 'gbpCallToActionUrl', 'gbpEventTitle',
+    'tiktokAutoAddMusic', 'tiktokIsAigc', 'tiktokBrandOrganic', 'gbpTopicType', 'gbpCallToActionType', 'gbpCallToActionUrl', 'gbpEventTitle',
     'gbpEventStartDate', 'gbpEventEndDate', 'gbpOfferCouponCode', 'gbpOfferRedeemUrl', 'gbpOfferTerms',
   ])
   if (Object.keys(input).some((key) => !allowed.has(key))) return { error: 'postfastControls contains an unsupported field' }
@@ -360,7 +361,7 @@ export function sanitizePostFastDraftControls(value: unknown): { controls?: Post
       controls[key] = field.trim()
     }
   }
-  for (const key of ['instagramIsAiGenerated', 'instagramPostToGrid', 'tiktokAutoAddMusic', 'tiktokIsAigc']) {
+  for (const key of ['instagramIsAiGenerated', 'instagramPostToGrid', 'tiktokAutoAddMusic', 'tiktokIsAigc', 'tiktokBrandOrganic']) {
     const field = input[key]
     if (field !== undefined) {
       if (typeof field !== 'boolean') return { error: `postfastControls.${key} must be boolean` }
@@ -945,7 +946,7 @@ function buildPublishControls(input: PostFastPublishInput, platform: string, med
   if (optionalStrings.some((value) => value !== undefined && (typeof value !== 'string' || !value.trim()))) {
     return { code: 'POSTFAST_CONTROL_INVALID', error: 'PostFast text controls must be non-empty strings.' }
   }
-  if ([input.instagramIsAiGenerated, input.instagramPostToGrid, input.tiktokAutoAddMusic, input.tiktokIsAigc].some((value) => value !== undefined && typeof value !== 'boolean')) {
+  if ([input.instagramIsAiGenerated, input.instagramPostToGrid, input.tiktokAutoAddMusic, input.tiktokIsAigc, input.tiktokBrandOrganic].some((value) => value !== undefined && typeof value !== 'boolean')) {
     return { code: 'POSTFAST_CONTROL_INVALID', error: 'PostFast boolean controls must be true or false.' }
   }
   if (input.instagramTrialReelStrategy && input.instagramTrialReelStrategy !== 'SS_PERFORMANCE') {
@@ -973,6 +974,7 @@ function buildPublishControls(input: PostFastPublishInput, platform: string, med
   }
   if (platform === 'tiktok') {
     if (input.tiktokIsAigc === true) controls.tiktokIsAigc = true
+    if (input.tiktokBrandOrganic === true) controls.tiktokBrandOrganic = true
     if (input.tiktokMusicSoundId && input.tiktokAutoAddMusic) return { code: 'TIKTOK_MUSIC_CONFLICT', error: 'TikTok selected music and automatic music are mutually exclusive.' }
     if (input.tiktokMusicSoundId) {
       if (media.length < 2 || media.some((item) => item.metadata.kind !== 'image')) return { code: 'TIKTOK_MUSIC_INVALID', error: 'TikTok commercial music is only supported for image carousels.' }
