@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import sharp from 'sharp'
 import {prisma} from '../src/lib/prisma.ts'
 import {AMC_BRAND_ID,dailySlots,inventory} from '../src/lib/daily-publishing/policy.ts'
-import {dailyCard} from '../src/lib/daily-publishing/content.ts'
+import {dailyCard,normalizeDailyImage} from '../src/lib/daily-publishing/content.ts'
 import {dailyDb} from '../src/lib/daily-publishing/store.ts'
 import {configureDaily,dailyStatus,refillDaily,dailyAdapters} from '../src/lib/daily-publishing/service.ts'
 import {dailySources,validateDailySource,validateDailyDraft} from '../src/lib/daily-publishing/sources.ts'
@@ -18,6 +18,7 @@ const database=new URL(process.env.DATABASE_URL!);assert.equal(database.hostname
 const uid='daily-test-user',bid=AMC_BRAND_ID,other='daily-other-brand',ctx={params:Promise.resolve({id:bid})}
 const realFetch=global.fetch
 let modelCalls=0,publishes=0,unknownPost=false
+const portrait=await sharp({create:{width:900,height:1600,channels:3,background:'#ffcc33'}}).jpeg().toBuffer();const normalized=await sharp(await normalizeDailyImage(portrait)).metadata();assert.equal(normalized.width,1080);assert.equal(normalized.height,1350)
 const image=await sharp({create:{width:1080,height:1350,channels:3,background:'#ffffdd'}}).png().toBuffer()
 global.fetch=async(input:any,init:any)=>{
  const url=new URL(typeof input==='string'?input:input.url)
