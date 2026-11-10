@@ -102,6 +102,7 @@ export async function tryGenerateWithRemoteContentService(
       theme: input.theme || input.idea,
       industryVertical: input.industryVertical,
       brief: {
+        sourceReference:input.sourceReference,
         industryVertical: input.industryVertical,
         theme: input.theme || input.idea,
         angle: input.angle,

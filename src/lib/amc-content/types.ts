@@ -46,6 +46,8 @@ export type ResolvedContentModelProfile = {
 }
 
 export type ContentGenerationRequest = {
+  sourceReference?:{kind:'academy'|'published'|'asset';title:string;text:string}
+
   brandId: string
   platform: string
   theme?: string

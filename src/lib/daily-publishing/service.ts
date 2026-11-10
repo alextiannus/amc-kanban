@@ -106,7 +106,8 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
                 used.add(sourceFingerprint(source));
                 attempted++;
                 try {
-                    const generated = await adapters.compose({ id, brandId, ownerId: policy.owner_id, platform: account.platformId, source });
+                    const draftId=id+'_r'+policy.revision;
+                    const generated = await adapters.compose({ id:draftId, brandId, ownerId: policy.owner_id, platform: account.platformId, source });
                     const fresh = (await c.query('SELECT * FROM amc_iaic.daily_publishing_policy WHERE brand_id=$1', [brandId])).rows[0];
                     if (!fresh?.enabled || fresh.revision !== policy.revision || !await adapters.validate(source))
                         throw Error('daily_policy_or_source_changed');
@@ -116,10 +117,10 @@ export async function refillDaily(brandId = AMC_BRAND_ID, adapters = dailyAdapte
                         const bound = await tx.socialAccount.findFirst({ where: { id: accountId, brandId, unboundAt: null } });
                         if (!bound)
                             throw Error('daily_account_changed');
-                        const asset = await tx.mediaAsset.create({ data: { id: id + '_asset', brandId, filename: generated.title.slice(0, 80) + '.' + (generated.mimeType === 'image/png' ? 'png' : 'jpg'), url: generated.mediaUrl, mimeType: generated.mimeType, sourceType: 'daily_publishing', materialClass: source.kind === 'asset' ? 'UNCONFIRMED' : 'AI', aiReady: true, aiCaption: generated.title, aiTags: ['AMC daily publishing', source.kind], rightsStatus: source.kind === 'asset' ? (source.rights || null) : 'owned', ...(generated.bytes ? { sizeBytes: generated.bytes, width: 1080, height: 1350, technicalMetadata: { kind: "image", mimeType: generated.mimeType, sizeBytes: generated.bytes, width: 1080, height: 1350, format: "png" } } : {}) } });
-                        await tx.contentDraft.create({ data: { id, brandId, accountId, caption: generated.caption, hashtags: generated.hashtags || [], mediaUrls: [generated.mediaUrl], status: 'draft', captionLang: 'en', scheduledAt: slot.at, agentNote: 'AMC日更储备：需要审核正文、来源使用权及精确排期。', viralCopyScriptProvenance: { dailyPublishing: { slotId: id, source, policyRevision: policy.revision, requiresRightsReview: source.kind === 'asset' } }, assetRefs: { create: { assetId: asset.id, order: 0 } } } });
+                        const asset = await tx.mediaAsset.create({ data: { id: draftId + '_asset', brandId, filename: generated.title.slice(0, 80) + '.' + (generated.mimeType === 'image/png' ? 'png' : 'jpg'), url: generated.mediaUrl, mimeType: generated.mimeType, sourceType: 'daily_publishing', materialClass: source.kind === 'asset' ? 'UNCONFIRMED' : 'AI', aiReady: true, aiCaption: generated.title, aiTags: ['AMC daily publishing', source.kind], rightsStatus: source.kind === 'asset' ? (source.rights || null) : 'owned', ...(generated.bytes ? { sizeBytes: generated.bytes, width: 1080, height: 1350, technicalMetadata: { kind: "image", mimeType: generated.mimeType, sizeBytes: generated.bytes, width: 1080, height: 1350, format: "png" } } : {}) } });
+                        await tx.contentDraft.create({ data: { id:draftId, brandId, accountId, caption: generated.caption, hashtags: generated.hashtags || [], mediaUrls: [generated.mediaUrl], status: 'draft', captionLang: 'en', scheduledAt: slot.at, agentNote: 'AMC日更储备：需要审核正文、来源使用权及精确排期。', viralCopyScriptProvenance: { dailyPublishing: { slotId: id, source, policyRevision: policy.revision, requiresRightsReview: source.kind === 'asset' } }, assetRefs: { create: { assetId: asset.id, order: 0 } } } });
                     });
-                    await c.query("UPDATE amc_iaic.daily_publishing_slots SET stage='awaiting_review',draft_id=$2,updated_at=now() WHERE id=$1", [id, id]);
+                    await c.query("UPDATE amc_iaic.daily_publishing_slots SET stage='awaiting_review',draft_id=$2,updated_at=now() WHERE id=$1", [id, draftId]);
                     created++;
                 }
                 catch {
