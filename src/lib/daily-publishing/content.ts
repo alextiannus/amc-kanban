@@ -34,7 +34,7 @@ export async function composeDaily(input: {
 }) {
     const s = input.source;
     const photo=await sourcePhoto(s);
-    const generated = await generateContentDirect({ brandId: input.brandId, platform: input.platform, actorId: input.ownerId, actorType: 'HUMAN', draftId: input.id, formatHint: 'photo_post', mediaUrls: photo && s.url ? [s.url] : [], sourceReference:{kind:s.kind,title:s.title.slice(0,300),text:s.text.slice(0,10000)},theme:'Recreate the specific supplied source as one useful original English post. Keep its topic and facts. No generic brand promotions or unsupported claims.' });
+    const generated = await generateContentDirect({ brandId: input.brandId, platform: input.platform, actorId: input.ownerId, actorType: 'HUMAN', draftId: input.id, formatHint: 'photo_post', mediaUrls: photo && s.url ? [s.url] : [], sourceReference:{kind:s.kind,title:s.title.slice(0,300),text:s.text.slice(0,10000)},theme:'Write a useful English post from the selected source with qualified wording. No first-person observation, adoption claims, performance promises, addresses or sales pitch.' });
     if (!generated.caption?.trim() || generated.caption.length > 2200 || generated.caption.includes('【AI 正在创作中'))
         throw Error('daily_content_invalid');
     const title = generated.caption.split(/[\n.!?]/)[0].replace(/[#*]/g, '').trim() || s.title;
