@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {prisma} from '../src/lib/prisma.ts'
-import {autopilotDb,initializeBrandAutopilotDefault} from '../src/lib/ai-native/autopilot-store.ts'
+import {autopilotDb,autopilotSettings,initializeBrandAutopilotDefault} from '../src/lib/ai-native/autopilot-store.ts'
 import {executeAutopilot,readAutopilot} from '../src/lib/ai-native/autopilot.ts'
 import {digest} from '../src/lib/ai-native/contract.ts'
 assert(process.env.DATABASE_URL?.includes('localhost')&&process.env.DATABASE_URL.includes('_test_'))
@@ -23,6 +23,7 @@ try {
  await prisma.brand.create({data:{id,name:'Known Brand',status:'ACTIVE',crew:{create:{members:{create:{userId:id,role:'PRINCIPAL'}}}}}})
  await prisma.socialAccount.create({data:{id,brandId:id,platformId:'instagram',handle:'fixture'}})
  await initializeBrandAutopilotDefault(id)
+ await autopilotSettings(id,id,{enabled:true,revision:1,accountId:id,dailyLimit:1})
  await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit,evidence) VALUES($1,$2,'2026-10-01',$2,$2,1,1,$3)`,[runId,id,JSON.stringify({researchJobId:'original-job'})])
  const read:any=await readAutopilot(id,id,runId,'research');assert.equal(read.ready,true);assert.equal(read.requiresEvidenceReview,true);assert.equal(read.snapshotId,'7')
  const review={snapshotId:'7',mode:'approve',note:'The place identity is ambiguous; only known brand facts can be used.'}

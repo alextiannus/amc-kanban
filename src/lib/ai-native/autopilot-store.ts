@@ -14,7 +14,7 @@ export async function initializeAutopilot(pool: Pool) {
   await pool.query(`CREATE SCHEMA IF NOT EXISTS amc_iaic;
     CREATE TABLE IF NOT EXISTS amc_iaic.autopilot_settings (
       brand_id text PRIMARY KEY REFERENCES public."Brand"(id) ON DELETE CASCADE,
-      enabled boolean NOT NULL DEFAULT true, revision integer NOT NULL DEFAULT 0,
+      enabled boolean NOT NULL DEFAULT false, revision integer NOT NULL DEFAULT 0,
       owner_id text NOT NULL REFERENCES public."User"(id), account_id text,
       daily_limit integer NOT NULL DEFAULT 1 CHECK(daily_limit BETWEEN 1 AND 3),
       updated_at timestamptz NOT NULL DEFAULT now());
@@ -33,7 +33,21 @@ export async function initializeAutopilot(pool: Pool) {
       status text NOT NULL DEFAULT 'pending', result jsonb, draft_id text, error text,
       created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE(brand_id,creative_id));
-    ALTER TABLE amc_iaic.autopilot_settings ALTER COLUMN enabled SET DEFAULT true;`)
+    ALTER TABLE amc_iaic.autopilot_settings ALTER COLUMN enabled SET DEFAULT false;`)
+  // Retire only untouched SYSTEM defaults. Explicit human choices survive restarts.
+  await pool.query(`WITH disabled AS (
+    UPDATE amc_iaic.autopilot_settings s SET enabled=false,revision=s.revision+1,updated_at=now()
+    WHERE s.enabled=true AND s.revision=1
+      AND EXISTS (SELECT 1 FROM public."AuditLog" a WHERE a."resourceId"=s.brand_id
+        AND a."resourceType"='Brand' AND a."actorType"='SYSTEM' AND a.action='AUTOPILOT_DEFAULT_ENABLED'
+        AND a.metadata->>'policy'='amcmm-user-ai-default-on-v1')
+      AND NOT EXISTS (SELECT 1 FROM public."AuditLog" a WHERE a."resourceId"=s.brand_id
+        AND a."resourceType"='Brand' AND a.action='AUTOPILOT_CONFIGURED')
+    RETURNING s.brand_id,s.revision
+  ) INSERT INTO public."AuditLog"(id,"actorType",action,"resourceType","resourceId",metadata,timestamp)
+    SELECT gen_random_uuid()::text,'SYSTEM','AUTOPILOT_DEFAULT_DISABLED','Brand',brand_id,
+      jsonb_build_object('policy','amcmm-user-ai-default-off-v1','previousEnabled',true,'previousRevision',1,'revision',revision,'publish',false),now()
+    FROM disabled`)
 }
 export async function requireAutopilotOwner(userId: string, brandId: string, generate = true) {
   await requireActor(actorFor(brandId,userId))
@@ -62,7 +76,7 @@ export async function autopilotSettings(userId:string,brandId:string,body?:any) 
       await c.query('COMMIT')
     } catch(e) { await c.query('ROLLBACK'); throw e } finally { c.release() }
   }
-  const settings=(await pool.query('SELECT enabled,revision,account_id AS "accountId",daily_limit AS "dailyLimit",updated_at AS "updatedAt" FROM amc_iaic.autopilot_settings WHERE brand_id=$1',[brandId])).rows[0]||{enabled:true,revision:0,accountId:null,dailyLimit:1}
+  const settings=(await pool.query('SELECT enabled,revision,account_id AS "accountId",daily_limit AS "dailyLimit",updated_at AS "updatedAt" FROM amc_iaic.autopilot_settings WHERE brand_id=$1',[brandId])).rows[0]||{enabled:false,revision:0,accountId:null,dailyLimit:1}
   const runs=(await pool.query('SELECT id,task_id,local_day,step,status,error,evidence,updated_at FROM amc_iaic.autopilot_runs WHERE brand_id=$1 ORDER BY local_day DESC LIMIT 7',[brandId])).rows
   const outputs=(await pool.query('SELECT id,creative_id,status,draft_id,error,created_at FROM amc_iaic.autopilot_outputs WHERE brand_id=$1 ORDER BY created_at DESC LIMIT 21',[brandId])).rows
   const accounts=await prisma.socialAccount.findMany({where:{brandId,unboundAt:null,platformId:{in:['instagram','facebook','xiaohongshu','google_business']}},select:{id:true,platformId:true,displayName:true,handle:true}})
@@ -71,7 +85,7 @@ export async function autopilotSettings(userId:string,brandId:string,body?:any) 
   return {settings,runs,outputs,accounts,canManage,publishRequiresConfirmation:true}
 }
 
-// Application default authorized by the product policy. Never overwrite an explicit brand setting.
+// Initialize disabled defaults only. Enabling requires an explicit principal/OWNER save.
 export function preferredAutopilotAccount(accounts:Array<{id:string;platformId:string}>){
  const order=['instagram','facebook','xiaohongshu','google_business']
  return [...accounts].sort((a,b)=>order.indexOf(a.platformId)-order.indexOf(b.platformId)||a.id.localeCompare(b.id))[0]
@@ -92,8 +106,8 @@ export async function initializeBrandAutopilotDefault(brandId:string){
    if (!(await c.query('SELECT id FROM public."SocialAccount" WHERE id=$1 AND "brandId"=$2 AND "unboundAt" IS NULL', [account.id, brandId])).rowCount) {
     await c.query('ROLLBACK');return
    }
-   const saved=await c.query(`INSERT INTO amc_iaic.autopilot_settings(brand_id,owner_id,enabled,revision,account_id,daily_limit) VALUES($1,$2,true,1,$3,1) ON CONFLICT DO NOTHING RETURNING brand_id`,[brandId,member.userId,account.id])
-   if(saved.rowCount)await c.query(`INSERT INTO public."AuditLog"(id,"actorType",action,"resourceType","resourceId",metadata,timestamp) VALUES($1,'SYSTEM','AUTOPILOT_DEFAULT_ENABLED','Brand',$2,$3,now())`,[crypto.randomUUID(),brandId,JSON.stringify({policy:'amcmm-user-ai-default-on-v1',principalId:member.userId,accountId:account.id,dailyLimit:1,publish:false})])
+   const saved=await c.query(`INSERT INTO amc_iaic.autopilot_settings(brand_id,owner_id,enabled,revision,account_id,daily_limit) VALUES($1,$2,false,1,$3,1) ON CONFLICT DO NOTHING RETURNING brand_id`,[brandId,member.userId,account.id])
+   if(saved.rowCount)await c.query(`INSERT INTO public."AuditLog"(id,"actorType",action,"resourceType","resourceId",metadata,timestamp) VALUES($1,'SYSTEM','AUTOPILOT_DEFAULT_DISABLED','Brand',$2,$3,now())`,[crypto.randomUUID(),brandId,JSON.stringify({policy:'amcmm-user-ai-default-off-v1',principalId:member.userId,accountId:account.id,dailyLimit:1,publish:false})])
    await c.query('COMMIT');return
   }catch(error){await c.query('ROLLBACK');throw error}finally{c.release()}
  }
