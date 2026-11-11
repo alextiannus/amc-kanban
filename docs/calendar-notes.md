@@ -6,18 +6,20 @@
 
 MM 沿用品牌 API 代理，Kanban 负责存储和品牌 READ / WRITE 授权。只读成员可查看，写权限成员可修改。未登录 401，无权限 404，响应均为 `Cache-Control: no-store`。
 
-每天每品牌一条 `CalendarNote`，唯一键 `(brandId,date)`。字段为 `id,brandId,date,title,body,color,version,createdBy,updatedBy,createdAt,updatedAt`。日期为有效公历 `YYYY-MM-DD`（0001–9999），不转换成 UTC 时间点。标题默认空字符串、单行、最多 40 个 Unicode 码点，去除首尾空白并拒绝控制字符。正文最多 2,000 个 Unicode 码点，保留换行及空格，CRLF/CR 规范为 LF，禁止 NUL。`color` 为 `yellow | green`，默认黄色，按整条备注共享，不绑定制作或发布状态。
+每天每品牌一条 `CalendarNote`，唯一键 `(brandId,date)`。字段为 `id,brandId,date,title,body,color,version,createdBy,updatedBy,createdAt,updatedAt`。日期为有效公历 `YYYY-MM-DD`（0001–9999），不转换成 UTC 时间点。标题默认空字符串、单行、最多 40 个 Unicode 码点，去除首尾空白并拒绝控制字符。正文最多 2,000 个 Unicode 码点，保留换行及空格，CRLF/CR 规范为 LF，禁止 NUL。`color` 为 `yellow | green | blue | purple | orange | pink`，默认黄色，按整条备注共享，不绑定制作或发布状态。
 
 | 方法与路径 | 输入 | 成功响应 |
 | --- | --- | --- |
 | GET `/api/brands/:id/calendar-notes?month=YYYY-MM` | 必填有效月份 | `{ok:true,notes:CalendarNote[],canEdit:boolean}`，按日期排序，含已清空的版本记录 |
-| PUT `/api/brands/:id/calendar-notes/:date` | `{title:string,body:string,color?:"yellow"\|"green",expectedVersion:number\|null}` | `{ok:true,note:CalendarNote}` |
+| PUT `/api/brands/:id/calendar-notes/:date` | `{title:string,body:string,color?:"yellow"\|"green"\|"blue"\|"purple"\|"orange"\|"pink",expectedVersion:number\|null}` | `{ok:true,note:CalendarNote}` |
 
 首次保存 `expectedVersion:null`；更新提交读取到的正整数版本。标题、正文和颜色原子保存，共用递增版本；只改颜色也提交当前文字与版本。唯一键冲突或旧版本返回 409 `calendar_note_conflict`，禁止静默覆盖。旧客户端省略 `title` 或 `color` 时，普通正文更新保留已有值；新建省略颜色默认黄色。清空正文仍清除标题及正文，颜色重置黄色，保留记录与递增版本。新客户端显式提交三项。只写标题、正文空白返回 400 `calendar_note_body_required`。日期、正文、版本非法返回 `invalid_calendar_note`，标题非法返回 `invalid_calendar_note_title`，非法颜色（包括 null）返回 400 `invalid_calendar_note_color`，月份非法返回 `invalid_calendar_month`；存储异常返回 500 `calendar_notes_failed`。
 
 ## 日历界面
 
-备注编辑区提供带名称、色点及勾选反馈的黄色、绿色单选项，和标题、正文一起保存。取消恢复保存值，仅改颜色也触发离开/关闭保护，失败和冲突保留当前选择，重新读取时同时展示最新已保存颜色供核对。只读成员可查看保存的颜色。日期格备注条使用黄色或绿色的背景、左侧色条及深色文字，选中日期仍保留该配色。颜色不进入 AI 备注正文或工具结果，不产生制作、排期或发布动作；保存改色沿用现有版本及上下文失效规则。
+备注提供黄、绿、蓝、紫、橙、粉六色，使用三列两行的单选区，每项有名称、色点及勾选反馈，点击区域至少 44px 高。已有备注在查看区点选颜色即保存，使用已读取的标题、正文和版本，不必先进入编辑；点选当前颜色不重复写入，保存中禁用颜色并显示状态，完成前不能切换日期或页面。快捷保存失败或冲突时进入编辑区保留文字及所选颜色，失败可重试，冲突须重新读取并核对最新内容及颜色，禁止自动覆盖。
+
+编辑文字时颜色与标题、正文一起保存，取消恢复保存值，仅改颜色也触发离开/关闭保护。空白日期先填写备注再保存颜色，不单独创建空颜色记录；只读成员可查看颜色，没有选色控件。日期格备注条使用对应背景、左侧色条及深色文字，选中日期仍保留该配色。颜色含义由团队自行约定，不进入 AI 备注正文或工具结果，不产生制作、排期或发布动作；保存改色沿用现有版本及上下文失效规则。
 
 所有日期格统一加高，数字下方用浅色标题条展示备注，通过独立样式固定字号 8px、行高 10px、常规字重，最多五行并在溢出时省略，日期格高 104px（2026-11-04 本地调整，待部署）。独立样式避免被 `.amc-page` 的通用小字体下限放大；浏览器回归必须包含真实 `.amc-page` 外层。无标题时显示正文第一行非空文字，不改写保存值。点击整个日期格查看完整标题、正文、最后更新时间。今天、选中日期、发布排期标记保持原有含义；备注不计入发布数量，不受发布状态筛选影响。
 
@@ -49,9 +51,9 @@ MM 沿用品牌 API 代理，Kanban 负责存储和品牌 READ / WRITE 授权。
 
 ## 发布顺序与回退
 
-颜色扩展（2026-11-11）：本地实现；两仓库类型检查、接口/客户端及上下文回归、隔离 PostgreSQL 迁移通过；真实日历组件加载全局样式，在 320/390/768/1440px 验证选色、键盘操作、刷新及新会话共享、只读、长标题、选中配色、发布标记、未保存保护、失败和冲突保留选择及清空重置。测试不访问生产库或 AI 服务，不代表真实账号线上验收。提交/推送状态以 Git 为准；生产迁移、部署及真实账号验收待执行。新增迁移 `20261111100000_calendar_note_colors/migration.sql` 在已有标题迁移之后应用，历史记录默认黄色且文字、日期、版本不变。生成 Prisma Client 后先发布 Kanban，再发布 MM；新 MM 要求响应含合法颜色，不应先于后端发布。回退应用时保留颜色列、枚举及数据，不执行 DROP。
+六色及快捷改色（2026-11-11）：本地实现并验证；两仓库类型检查、接口/客户端及上下文回归、隔离 PostgreSQL 迁移通过；真实日历组件加载全局样式，在 320/390/768/1440px 验证六色、一点保存、相同颜色不重复提交、保存中禁用与导航保护、快捷保存失败/冲突恢复、键盘操作、刷新及新会话共享、只读、长标题、选中配色、发布标记、未保存保护、失败和冲突保留选择及清空重置。测试不访问生产库或 AI 服务，不代表真实账号线上验收。提交/推送状态以 Git 为准；生产迁移、部署及真实账号验收待执行。迁移 `20261111100000_calendar_note_colors/migration.sql` 在已有标题迁移之后应用，再应用 `20261111110000_calendar_note_six_colors/migration.sql` 扩展枚举，已有记录的颜色、文字、日期、版本不变，新建默认黄色。生成 Prisma Client 后先发布 Kanban，再发布 MM；六色 MM 不应先于后端发布；使用新颜色前应刷新旧版客户端，回退前端时也须保留六色解析，避免旧版两色校验拒绝新增色。回退应用时保留颜色列、枚举及数据，不执行 DROP。
 
-1. 通过数据库发布流程确认原 `20261103090000_calendar_notes` 和 `20261103100000_calendar_note_titles` 已应用，再应用 `20261111100000_calendar_note_colors/migration.sql`；新库也依此顺序执行。不要改写原迁移或对已有字段重复执行 SQL。
+1. 通过数据库发布流程确认原 `20261103090000_calendar_notes` 和 `20261103100000_calendar_note_titles` 已应用，再依次应用 `20261111100000_calendar_note_colors/migration.sql` 和 `20261111110000_calendar_note_six_colors/migration.sql`；新库也依此顺序执行。不要改写原迁移或对已有字段重复执行 SQL。
 2. 生成 Prisma Client，再部署 Kanban `main`；验证标题及颜色 GET/PUT、历史默认黄色、旧客户端保留标题和颜色、清空重置、权限和并发 409。
 3. 再部署 MM `main`；真实账号保存下月备注并改色，刷新及其他授权账号查看应一致。在原对话连续询问策划，检查实际模型输入及回复；修改、清空、其他成员修改后再次询问，核对版本、日期和方向，颜色不赋予 AI 执行含义。
 4. 回退 MM / Kanban 时保留表、标题列及记录，不执行 DROP。代码推送、生产迁移、部署和生产验收分别记录。

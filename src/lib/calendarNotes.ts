@@ -1,6 +1,10 @@
 export const CALENDAR_NOTE_LIMIT = 2000
 export const CALENDAR_NOTE_TITLE_LIMIT = 40
-export type CalendarNoteColor = 'yellow' | 'green'
+export const CALENDAR_NOTE_COLORS = ['yellow', 'green', 'blue', 'purple', 'orange', 'pink'] as const
+export type CalendarNoteColor = typeof CALENDAR_NOTE_COLORS[number]
+function isCalendarNoteColor(value: unknown): value is CalendarNoteColor {
+  return typeof value === 'string' && (CALENDAR_NOTE_COLORS as readonly string[]).includes(value)
+}
 
 export class CalendarNoteError extends Error {
   constructor(public code: string, public status: number) { super(code) }
@@ -51,7 +55,7 @@ export function parseCalendarNoteInput(date: unknown, value: unknown): { date: s
     throw new CalendarNoteError('invalid_calendar_note', 400)
   }
   const normalized = body.replace(/\r\n?/g, '\n')
-  if (color !== undefined && color !== 'yellow' && color !== 'green') throw new CalendarNoteError('invalid_calendar_note_color', 400)
+  if (color !== undefined && !isCalendarNoteColor(color)) throw new CalendarNoteError('invalid_calendar_note_color', 400)
   if (title !== undefined && (typeof title !== 'string' || /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(title) || Array.from(title.trim()).length > CALENDAR_NOTE_TITLE_LIMIT)) throw new CalendarNoteError('invalid_calendar_note_title', 400)
   const normalizedTitle = typeof title === 'string' ? title.trim() : undefined
   if (!normalized.trim() && normalizedTitle) throw new CalendarNoteError('calendar_note_body_required', 400)

@@ -14,7 +14,7 @@ No schema migration or new business API. Deploy Content before Kanban and verify
 
 ## 发布日历日期备注
 
-`GET /api/brands/:id/calendar-notes?month=YYYY-MM` returns title/body/color; `PUT /api/brands/:id/calendar-notes/:date` accepts optional title and color (`yellow | green`) with atomic title/body/color versions. Omitted color preserves existing values, creates default yellow, and clears reset yellow; invalid color returns 400 `invalid_calendar_note_color`. Colors are shared display metadata and do not imply production or publishing state. Conversation requests accept optional `calendarContext`; `amc.context.calendarPlanning` and read-only paginated `amc.calendar_notes` share current database note text without color semantics. Compatibility, errors, context limits and migration/deployment order: [calendar-notes.md](calendar-notes.md). Production migration, deployment and real-account acceptance pending.
+`GET /api/brands/:id/calendar-notes?month=YYYY-MM` returns title/body/color; `PUT /api/brands/:id/calendar-notes/:date` accepts optional title and color (`yellow | green | blue | purple | orange | pink`) with atomic title/body/color versions. Omitted color preserves existing values, creates default yellow, and clears reset yellow; invalid color returns 400 `invalid_calendar_note_color`. Colors are shared display metadata and do not imply production or publishing state. Conversation requests accept optional `calendarContext`; `amc.context.calendarPlanning` and read-only paginated `amc.calendar_notes` share current database note text without color semantics. Compatibility, errors, context limits and migration/deployment order: [calendar-notes.md](calendar-notes.md). Production migration, deployment and real-account acceptance pending.
 
 版本日期：2026-07-04
 

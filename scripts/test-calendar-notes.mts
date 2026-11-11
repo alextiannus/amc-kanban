@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { calendarNotesHandlers } from '../src/lib/calendarNotesHttp.ts'
-import { validCalendarDate, validCalendarMonth, type CalendarNote, type CalendarNoteDatabase } from '../src/lib/calendarNotes.ts'
+import { CALENDAR_NOTE_COLORS, validCalendarDate, validCalendarMonth, type CalendarNote, type CalendarNoteDatabase } from '../src/lib/calendarNotes.ts'
 
 // Serialize transactions like a row-locked database; test the real handlers,
 // validation and service without production credentials or database writes.
@@ -111,7 +111,7 @@ assert.equal(titled.title, ''); assert.equal(titled.body, ''); assert.equal(titl
 let colored = (await (await put('2026-12-06', 'shared body', null, 'brand-a', 'Shared title', 'green')).json()).note
 assert.equal(colored.color, 'green')
 const invalidWrites = writes
-for (const color of ['blue', '', 'GREEN', null, 1, {}, ['green']]) {
+for (const color of ['red', '', 'GREEN', null, 1, {}, ['green']]) {
   const response = await put('2026-12-06', 'shared body', 1, 'brand-a', 'Shared title', color)
   assert.equal(response.status, 400)
   assert.equal((await response.json()).error, 'invalid_calendar_note_color')
@@ -142,6 +142,17 @@ colored = (await (await put(colored.date, '', 5)).json()).note
 assert.equal(colored.color, 'yellow', 'legacy clear resets the color')
 colored = (await (await put(colored.date, 'new plan', 6)).json()).note
 assert.equal(colored.color, 'yellow', 'refilling a cleared note starts yellow')
+let paletteVersion: number | null = null
+for (const color of CALENDAR_NOTE_COLORS) {
+  const response = await put('2026-12-07', 'Six-color body', paletteVersion, 'brand-a', 'Six-color title', color)
+  assert.equal(response.status, 200)
+  const saved = (await response.json()).note
+  assert.equal(saved.color, color); assert.equal(saved.title, 'Six-color title'); assert.equal(saved.body, 'Six-color body')
+  assert.equal((await (await get()).json()).notes.find((n: CalendarNote) => n.date === saved.date).color, color)
+  const legacy = (await (await put(saved.date, saved.body, saved.version)).json()).note
+  assert.equal(legacy.color, color, 'legacy text saves preserve every supported color')
+  paletteVersion = legacy.version
+}
 
 // Execute the real migrations against isolated PostgreSQL; never use production credentials.
 const pg = new PGlite()
@@ -158,6 +169,14 @@ try {
   await pg.exec(`UPDATE "CalendarNote" SET "color"='green' WHERE "id"='old'`)
   assert.equal((await pg.query<{ color: string }>('SELECT "color" FROM "CalendarNote"')).rows[0].color, 'green')
   await assert.rejects(pg.exec(`UPDATE "CalendarNote" SET "color"='blue' WHERE "id"='old'`))
+  const beforeSix = (await pg.query('SELECT * FROM "CalendarNote"')).rows[0]
+  await pg.exec(readFileSync('prisma/migrations/20261111110000_calendar_note_six_colors/migration.sql', 'utf8'))
+  assert.deepEqual((await pg.query('SELECT * FROM "CalendarNote"')).rows[0], beforeSix, 'six-color migration preserves existing green notes and every field')
+  for (const color of CALENDAR_NOTE_COLORS) {
+    await pg.query('UPDATE "CalendarNote" SET "color"=$1 WHERE "id"=$2', [color, 'old'])
+    assert.equal((await pg.query<{ color: string }>('SELECT "color" FROM "CalendarNote"')).rows[0].color, color)
+  }
+  await assert.rejects(pg.exec(`UPDATE "CalendarNote" SET "color"='red' WHERE "id"='old'`))
 } finally { await pg.close() }
 console.log('PASS note colors: default, legacy compatibility, validation, shared permissions, conflicts, clear and real PostgreSQL migration preservation')
 console.log('PASS calendar note dates, Unicode limits, ACL, shared reads, month isolation, concurrent creates/updates and clear versions (isolated repository)')
