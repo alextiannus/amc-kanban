@@ -477,6 +477,11 @@ model Brand {
   @@index([ownerId])
 }
 
+enum CalendarNoteColor {
+  yellow
+  green
+}
+
 model CalendarNote {
   id        String   @id @default(cuid())
   brandId   String
@@ -484,6 +489,7 @@ model CalendarNote {
   date      String   @db.VarChar(10)
   title     String   @default("")
   body      String   @default("")
+  color     CalendarNoteColor @default(yellow)
   version   Int      @default(1)
   createdBy String
   updatedBy String

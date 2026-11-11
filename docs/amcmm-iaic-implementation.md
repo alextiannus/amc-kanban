@@ -2,7 +2,7 @@
 
 ## Calendar note context (2026-11-03)
 
-Conversation `calendarContext` carries the viewed month/date without granting brand access. General and Profile planning use live `amc.context.calendarPlanning`; `amc.calendar_notes` provides full monthly pages of at most eight notes. Cached source revisions and runtime application versions include title/body/clear changes; formal saves recheck revisions under the Brand lock. Context manifests v2 log source fingerprints without private bodies. Details, validation boundaries and migration-first release: [calendar-notes.md](calendar-notes.md). Locally implemented and verified; production release and actual-model acceptance pending.
+Conversation `calendarContext` carries the viewed month/date without granting brand access. General and Profile planning use live `amc.context.calendarPlanning`; `amc.calendar_notes` provides full monthly pages of at most eight notes. Cached source revisions and runtime application versions include title/body/color/clear changes; formal saves recheck revisions under the Brand lock. Color remains shared display metadata and is not included as a production/publishing instruction in AI notes or tool results. Context manifests v2 log source fingerprints without private bodies. Details, validation boundaries and migration-first release: [calendar-notes.md](calendar-notes.md). Production release and actual-model acceptance pending.
 
 
 ## `/BUG` 与 Platform AI 工程维护（2026-10-15，已上线并完成真实修复验收）

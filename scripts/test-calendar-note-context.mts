@@ -13,7 +13,7 @@ assert.deepEqual(calendar.calendarMonths('America/Los_Angeles',{month:'2028-02',
 assert.throws(()=>calendar.parseCalendarContext({month:'2028-02',date:'2028-02-30'}))
 assert.throws(()=>calendar.parseCalendarContext({month:'2028-02',date:'2028-03-01'}))
 assert.throws(()=>calendar.parseCalendarContext({month:'2028-02',brandId:'other'}))
-const note=(date:string,title='',body='Shoot lunch')=>({brandId:'brand-a',date,title,body,version:1,updatedAt:now})
+const note=(date:string,title='',body='Shoot lunch')=>({brandId:'brand-a',date,title,body,color:'yellow',version:1,updatedAt:now})
 let rows:any[]=[note('2027-01-09','新品拍摄','上午拍摄新品；本周主推午餐。'),{...note('2027-01-10','Other brand','PRIVATE_OTHER_BRAND'),brandId:'brand-b'}]
 let failed=false
 const db:any={brand:{findUnique:async()=>({timezone:'Asia/Singapore'})},calendarNote:{findMany:async({where}:any)=>{
@@ -27,10 +27,16 @@ let context=await calendar.readCalendarPlanning(db,'brand-a',hint,now)
 assert.equal(context.status,'available');assert.equal(context.notes[0].title,'新品拍摄')
 assert(!JSON.stringify(context).includes('PRIVATE_OTHER_BRAND'))
 const firstRevision=context.revision
-rows[0]={...rows[0],title:'新标题',version:2}
+rows[0]={...rows[0],color:'green',version:rows[0].version+1}
+const recolored=await calendar.readCalendarPlanning(db,'brand-a',hint,now)
+assert.notEqual(recolored.revision,firstRevision,'color saves share existing context invalidation')
+assert(!('color' in recolored.notes[0]),'AI planning reads text without assigning color semantics')
+const colorPage=await calendar.readCalendarNotesPage(db,'brand-a',{month:hint.month})
+assert(!('color' in colorPage.notes[0]),'read-only AI tools do not interpret display colors')
+rows[0]={...rows[0],title:'新标题',version:rows[0].version+1}
 context=await calendar.readCalendarPlanning(db,'brand-a',hint,now)
-assert.notEqual(context.revision,firstRevision,'title-only changes invalidate the context')
-rows[0]={...rows[0],title:'',body:'',version:3}
+assert.notEqual(context.revision,recolored.revision,'title-only changes invalidate the context')
+rows[0]={...rows[0],title:'',body:'',version:rows[0].version+1}
 const cleared=await calendar.readCalendarPlanning(db,'brand-a',hint,now)
 assert.equal(cleared.notes.length,0);assert.notEqual(cleared.revision,context.revision)
 assert.equal(cleared.revision,await calendar.calendarPlanningRevision(db,'brand-a',hint,now))

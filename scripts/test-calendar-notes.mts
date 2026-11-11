@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { PGlite } from '@electric-sql/pglite'
 import { calendarNotesHandlers } from '../src/lib/calendarNotesHttp.ts'
 import { validCalendarDate, validCalendarMonth, type CalendarNote, type CalendarNoteDatabase } from '../src/lib/calendarNotes.ts'
 
@@ -19,7 +21,7 @@ const repository: CalendarNoteDatabase['calendarNote'] = {
   async updateMany({ where, data }) {
     const note = records.get(`${where.brandId}:${where.date}`)
     if (!note || note.version !== where.version) return { count: 0 }
-    records.set(`${where.brandId}:${where.date}`, { ...note, ...(data.title !== undefined ? { title: data.title } : {}), body: data.body, updatedBy: data.updatedBy, version: note.version + data.version.increment, updatedAt: new Date() })
+    records.set(`${where.brandId}:${where.date}`, { ...note, ...(data.title !== undefined ? { title: data.title } : {}), ...(data.color !== undefined ? { color: data.color } : {}), body: data.body, updatedBy: data.updatedBy, version: note.version + data.version.increment, updatedAt: new Date() })
     writes++; return { count: 1 }
   },
   async findUniqueOrThrow({ where }) { const note = records.get(`${where.brandId_date.brandId}:${where.brandId_date.date}`); assert(note); return copy(note) },
@@ -34,7 +36,7 @@ const handlers = calendarNotesHandlers({
   canRead: async brand => brand === 'brand-a' && !!actor,
   canWrite: async brand => brand === 'brand-a' && actor?.id === 'writer',
 })
-const put = (date: string, body: unknown, expectedVersion: unknown, brand = 'brand-a', title?: unknown) => handlers.PUT(new Request('http://local/api', { method: 'PUT', body: JSON.stringify({ body, expectedVersion, ...(title !== undefined ? { title } : {}), updatedBy: 'forged' }) }), brand, date)
+const put = (date: string, body: unknown, expectedVersion: unknown, brand = 'brand-a', title?: unknown, color?: unknown) => handlers.PUT(new Request('http://local/api', { method: 'PUT', body: JSON.stringify({ body, expectedVersion, ...(title !== undefined ? { title } : {}), ...(color !== undefined ? { color } : {}), updatedBy: 'forged' }) }), brand, date)
 const get = (month = '2026-12', brand = 'brand-a') => handlers.GET(new Request(`http://local/api?month=${month}`), brand)
 
 for (const date of ['2026-12-31', '2027-01-01', '2028-02-29', '2000-02-29', '0001-01-01']) assert(validCalendarDate(date), date)
@@ -64,6 +66,7 @@ assert.equal(createdResponse.status, 200)
 assert.equal(createdResponse.headers.get('cache-control'), 'no-store')
 const created = (await createdResponse.json()).note
 assert.equal(created.body, original.replace('\r\n', '\n')); assert.equal(created.version, 1)
+assert.equal(created.color, 'yellow', 'legacy creates use yellow')
 assert.equal(created.createdBy, 'writer'); assert.equal(created.updatedBy, 'writer')
 assert.equal((await put('2026-12-01', 'duplicate', null)).status, 409)
 const race = await Promise.all([put('2026-12-01', 'winner-a', 1), put('2026-12-01', 'winner-b', 1)])
@@ -104,4 +107,57 @@ assert.equal(titled.title, '', 'new clients may explicitly remove a title')
 titled = (await (await put('2026-12-05', 'with heading', 4, 'brand-a', 'Heading')).json()).note
 titled = (await (await put('2026-12-05', '', 5)).json()).note
 assert.equal(titled.title, ''); assert.equal(titled.body, ''); assert.equal(titled.version, 6)
+// Color-only saves use the same version as text, including legacy updates and clears.
+let colored = (await (await put('2026-12-06', 'shared body', null, 'brand-a', 'Shared title', 'green')).json()).note
+assert.equal(colored.color, 'green')
+const invalidWrites = writes
+for (const color of ['blue', '', 'GREEN', null, 1, {}, ['green']]) {
+  const response = await put('2026-12-06', 'shared body', 1, 'brand-a', 'Shared title', color)
+  assert.equal(response.status, 400)
+  assert.equal((await response.json()).error, 'invalid_calendar_note_color')
+}
+assert.equal(writes, invalidWrites)
+colored = (await (await put('2026-12-06', 'legacy text edit', 1)).json()).note
+assert.equal(colored.color, 'green', 'legacy updates preserve green')
+colored = (await (await put('2026-12-06', colored.body, 2, 'brand-a', colored.title, 'yellow')).json()).note
+assert.equal(colored.color, 'yellow'); assert.equal(colored.version, 3)
+assert.equal(colored.body, 'legacy text edit'); assert.equal(colored.title, 'Shared title')
+const colorRace = await Promise.all([
+  put('2026-12-06', colored.body, 3, 'brand-a', colored.title, 'green'),
+  put('2026-12-06', 'concurrent text', 3, 'brand-a', 'Concurrent title', 'yellow'),
+])
+assert.deepEqual(colorRace.map(r => r.status).sort(), [200, 409])
+const colorWinner = (await colorRace.find(r => r.status === 200)!.json()).note
+assert.deepEqual(
+  { title: colorWinner.title, body: colorWinner.body, color: colorWinner.color },
+  colorWinner.color === 'green' ? { title: colored.title, body: colored.body, color: 'green' } : { title: 'Concurrent title', body: 'concurrent text', color: 'yellow' },
+  'concurrent color and text changes cannot produce a mixed note',
+)
+actor = { id: 'reader', type: 'HUMAN' }
+assert.equal((await (await get()).json()).notes.find((n: CalendarNote) => n.date === colored.date).color, colorWinner.color)
+assert.equal((await put(colored.date, colored.body, 4, 'brand-a', colored.title, 'green')).status, 404)
+actor = { id: 'writer', type: 'HUMAN' }
+colored = (await (await put(colored.date, colored.body, 4, 'brand-a', colored.title, 'green')).json()).note
+colored = (await (await put(colored.date, '', 5)).json()).note
+assert.equal(colored.color, 'yellow', 'legacy clear resets the color')
+colored = (await (await put(colored.date, 'new plan', 6)).json()).note
+assert.equal(colored.color, 'yellow', 'refilling a cleared note starts yellow')
+
+// Execute the real migrations against isolated PostgreSQL; never use production credentials.
+const pg = new PGlite()
+try {
+  await pg.exec('CREATE TABLE "Brand" ("id" TEXT PRIMARY KEY); INSERT INTO "Brand" VALUES (\'brand-a\');')
+  await pg.exec(readFileSync('prisma/migrations/20261103090000_calendar_notes/migration.sql', 'utf8'))
+  await pg.exec(readFileSync('prisma/migrations/20261103100000_calendar_note_titles/migration.sql', 'utf8'))
+  await pg.exec(`INSERT INTO "CalendarNote" ("id","brandId","date","title","body","version","createdBy","updatedBy","updatedAt") VALUES ('old','brand-a','2026-12-01','Old title','Old body',7,'writer','writer',CURRENT_TIMESTAMP)`)
+  const before = (await pg.query('SELECT * FROM "CalendarNote"')).rows[0]
+  await pg.exec(readFileSync('prisma/migrations/20261111100000_calendar_note_colors/migration.sql', 'utf8'))
+  const after = (await pg.query('SELECT * FROM "CalendarNote"')).rows[0] as Record<string, unknown>
+  const { color, ...unchanged } = after
+  assert.equal(color, 'yellow'); assert.deepEqual(unchanged, before, 'migration preserves every old field')
+  await pg.exec(`UPDATE "CalendarNote" SET "color"='green' WHERE "id"='old'`)
+  assert.equal((await pg.query<{ color: string }>('SELECT "color" FROM "CalendarNote"')).rows[0].color, 'green')
+  await assert.rejects(pg.exec(`UPDATE "CalendarNote" SET "color"='blue' WHERE "id"='old'`))
+} finally { await pg.close() }
+console.log('PASS note colors: default, legacy compatibility, validation, shared permissions, conflicts, clear and real PostgreSQL migration preservation')
 console.log('PASS calendar note dates, Unicode limits, ACL, shared reads, month isolation, concurrent creates/updates and clear versions (isolated repository)')
