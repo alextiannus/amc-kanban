@@ -24,6 +24,7 @@ const db: any = {
   $transaction: async (task: any) => typeof task === 'function' ? task(db) : Promise.all(task),
 }
 const deps: Record<string, any> = {
+  './daily-publishing/sources': { validateDailyDraft: async () => { throw new Error('Unexpected daily-draft validation in legacy queue fixture') } },
   './video-assistant/post-contract': postContract,
   './role-permissions/delegation': { requireActorPermission: async (_actorId: string, permission: string, brandId: string) => {
     assert.equal(permission, 'content.publish')
