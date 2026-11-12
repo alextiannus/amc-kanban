@@ -2,6 +2,15 @@ import { growthPlanningRequest, type PlanningActor } from '@/lib/growthPlanning'
 
 const isLocal = process.env.NODE_ENV !== 'production' && process.env.RENDER !== 'true'
 
+export async function contentLibraryRequest(action:'search'|'library-source',input:unknown):Promise<any>{
+  const base=process.env.AMC_CONTENT_SERVICE_URL?.replace(/\/$/,'')||(isLocal?'http://localhost:4010':'')
+  if(!base)throw Object.assign(new Error('content_library_unavailable'),{code:'content_library_unavailable',status:503})
+  const token=process.env.AMC_CONTENT_SERVICE_TOKEN?.trim()||(isLocal?'local-service-token':'')
+  const response=await fetch(`${base}/v1/content-library/${action}`,{method:'POST',cache:'no-store',signal:AbortSignal.timeout(20000),headers:{'content-type':'application/json',...(token?{authorization:`Bearer ${token}`}:{})},body:JSON.stringify(input)})
+  if(!response.ok){await response.body?.cancel();throw Object.assign(new Error('library_source_unavailable'),{code:response.status===404||response.status===409?'library_source_unavailable':'content_library_unavailable',status:[404,409].includes(response.status)?response.status:503})}
+  return response.json()
+}
+
 export async function fetchPromotionStrategyMarketCalendar(input: {
   markets?: string[]
   year?: string | number

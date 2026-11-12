@@ -38,6 +38,9 @@ for (const path of ['/api/brands/a/content-creatives/idea/revisions', '/api/bran
   assert(!['brand.read','asset.read','asset.create'].includes(kanbanRoutePermission(path, 'POST')!))
 }
 assert.equal(kanbanRoutePermission('/api/brands/a/ai/tasks', 'POST'), 'brand.update', 'other AI operations keep their existing policy')
+assert.equal(kanbanRoutePermission('/api/brands/a/creative-library','GET'),'content.inspiration-library.read')
+assert.equal(kanbanRoutePermission('/api/brands/a/creative-library/cre_a/media','GET'),'content.inspiration-library.read')
+assert.equal(kanbanRoutePermission('/api/brands/a/creative-library','POST'),'draft.update')
 
 assert.equal(kanbanRoutePermission('/api/brands/a/posts/publish', 'POST'), 'content.publish')
 assert.equal(kanbanRoutePermission('/api/content/video/create', 'POST'), 'content.video-making.generate')

@@ -11,6 +11,7 @@ export function kanbanRoutePermission(path: string, method: string): string | nu
   if (['/api/game/tasks/override', '/api/game/share-draft-pool'].includes(path) && !read) return 'game.update'
   if (path === '/api/game/redemptions' && !read) return 'game.update'
   if (path.startsWith('/api/brands/') || path === '/api/brands') {
+    if (/^\/api\/brands\/[^/]+\/creative-library(?:\/|$)/.test(path)) return read ? 'content.inspiration-library.read' : 'draft.update'
     if (/\/subscription(\/|$)/.test(path)) return `subscription.${read ? 'read' : 'manage'}`
     if (/\/(social-inbox)(\/|$)/.test(path)) return `review.${read ? 'read' : 'reply'}`
     if (/\/social-insight(\/|$)/.test(path)) return 'analytics.read'

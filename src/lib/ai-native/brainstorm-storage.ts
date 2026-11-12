@@ -16,9 +16,9 @@ export async function storeBrainstormSources(db:any,brandId:string,userId:string
  return sources.map(source=>source.sourceSnapshotKey?source:brainstormSourceReference(source))
 }
 export function brainstormSourceReference(source:any){
- const {inspirationCreativeId,sourceRevision,sourceDigest,libraryDigest,matchScore,matchingPolicy,keywordTagIds,title,recommendationReason,contentMatchRequestId}=source
+ const {sourceType,inspirationCreativeId,sourceRevision,sourceDigest,libraryDigest,matchScore,matchingPolicy,keywordTagIds,title,recommendationReason,contentMatchRequestId}=source
  const video=source.sourceVideo||{},post=source.sourcePost||{}
- return {sourceSnapshotKey:digest([inspirationCreativeId,sourceRevision,sourceDigest]),inspirationCreativeId,sourceRevision,sourceDigest,libraryDigest,matchScore,matchingPolicy,keywordTagIds,title,recommendationReason,contentMatchRequestId,
+ return {sourceType,sourceSnapshotKey:digest([inspirationCreativeId,sourceRevision,sourceDigest]),inspirationCreativeId,sourceRevision,sourceDigest,libraryDigest,matchScore,matchingPolicy,keywordTagIds,title,recommendationReason,contentMatchRequestId,
   sourceVideo:{title:video.title,platform:video.platform,videoUrl:video.videoUrl,thumbnailUrl:video.thumbnailUrl,sourceUrl:video.sourceUrl},
   sourcePost:{title:post.title,platform:post.platform,coverUrl:post.coverUrl,sourceUrl:post.sourceUrl},
   scriptContent:{kind:source.scriptContent?.kind,opening:source.scriptContent?.opening},

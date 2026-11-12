@@ -1,3 +1,4 @@
+import * as libraryImports from '../src/lib/ai-native/library-imports.ts'
 import * as browseContext from '../src/lib/ai-native/brainstorm-context.ts'
 import * as usage from '../src/lib/ai-native/brainstorm-usage.ts'
 import * as brainstormStorage from '../src/lib/ai-native/brainstorm-storage.ts'
@@ -24,6 +25,7 @@ const db:any={
  brand:{findUnique:async()=>({id:'brand',name:'Merchant',description:'Real food',timezone:'Asia/Singapore'})},
  brandKnowledge:{findUnique:async()=>{queryCount++;return structuredClone(knowledge)},upsert:async(args:any)=>{assert.deepEqual(args.select,{id:true});return {id:"knowledge"}},update:async({data}:any)=>{knowledge={...knowledge,...structuredClone(data)};return knowledge}},
  brandMarketingSolution:{
+  findUnique:async({where}:any)=>structuredClone(rows.find(r=>r.id===where.id)||null),
   update:async({where,data}:any)=>{const row=rows.find(r=>r.id===where.id);Object.assign(row,structuredClone(data));return row},
   findFirst:async({where}:any)=>{queryCount++;return structuredClone(rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version)[0]||null)},
   findMany:async({where,distinct,take}:any)=>{queryCount++;const found=rows.filter(r=>filter(where,r)).sort((a,b)=>b.version-a.version||b.createdAt-a.createdAt),seen=new Set();return found.filter(row=>!distinct||!seen.has(row.period)&&!!seen.add(row.period)).slice(0,take||Infinity)},
@@ -34,7 +36,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'./brainstorm-context':browseContext,'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'./library-imports':libraryImports,'./brainstorm-context':browseContext,'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},
@@ -419,3 +421,26 @@ assert.equal((await browse(sessionA,()=>api.listBrainstorm('user','brand',db))).
 await assert.rejects(browse(null,()=>api.refreshBrainstorm('user','brand',{action:'refresh',keywords:'must-not-persist',expectedKeywords:''},db)),(e:any)=>e.code==='brainstorm_search_session_required')
 assert.throws(()=>browseContext.withBrainstormBrowse('user','brand','invalid',()=>null),(e:any)=>e.code==='invalid_browse_session')
 console.log('PASS transient searches: blank default, immutable legacy history, tab/user isolation, scoped pagination/media/favorites/copies, usage and monotonic default revision')
+
+const originalEvidence=clients.fetchCreativeSourceEvidence
+clients.fetchCreativeSourceEvidence=async(id:string,projection?:string)=>id==='cre_manual_text'?{creativeId:id,sourceRevision:'r1',sourceDigest:'a'.repeat(64),originalVideoUrl:null,scriptKind:'copy',scriptContent:projection?undefined:{kind:'post'},sourceEvidence:{originalText:'Shared text script'},timeline:[],tags:[]}:originalEvidence(id,projection)
+const manualSource={...source('cre_manual_text',0),sourceType:'manual-library',matchingPolicy:'manual-library-v1',matchScore:null,sourceVideo:{title:'Manual text'},scriptContent:{kind:'post',originalText:'Shared text script'},sourceEvidence:{originalText:'Shared text script',timeline:[]}}
+const [manualReference]=await brainstormStorage.storeBrainstormSources(db,'brand','user',[manualSource])
+rows.push({id:libraryImports.libraryImportId('brand','cre_manual_text'),brandId:'brand',kind:libraryImports.LIBRARY_IMPORT,period:'cre_manual_text',status:'SAVED',createdAt:new Date(),output:{source:manualReference}})
+for(const scope of [null,sessionA,sessionB]){
+ const manualBrowse=await browse(scope,()=>api.listBrainstorm('user','brand',db))
+ assert.equal(manualBrowse.items[0].sourceId,'cre_manual_text');assert.equal(manualBrowse.items[0].videoStatus,'not_provided');assert.equal(manualBrowse.items[0].originalScript,'Shared text script');assert.equal(manualBrowse.items[0].matchScore,null)
+}
+const favoriteManual=(await api.favoriteCandidates('user','brand',{sourceId:'cre_manual_text'},db))[0]
+assert.equal(favoriteManual.idea.sourceType,'manual-library')
+const manualCopy=await api.copyBrainstorm('user','brand',{action:'copy',sourceId:'cre_manual_text',requestKey:'manual-copy-000001'},db)
+assert.equal(manualCopy.current.planning,'Shared text script');assert.equal(manualCopy.current.contentType,'图文')
+const afterCopyBrowse=await browse(null,()=>api.listBrainstorm('user','brand',db))
+assert.equal(afterCopyBrowse.items.filter((i:any)=>i.sourceId==='cre_manual_text').length,1);assert.equal(afterCopyBrowse.items[0].brandUsage.status,'replicated')
+const legacyClient=await browseContext.withBrainstormBrowse('user','brand',null,()=>api.listBrainstorm('user','brand',db),false)
+assert(!legacyClient.items.some((i:any)=>i.sourceType==='manual-library'),'old clients never receive unsupported null-score manual entries')
+console.log('PASS shared manual text sources survive default/transient matching, sort first, dedup, favorite and copy without match scores')
+await browse(null,()=>api.loadMoreBrainstorm('user','brand',{action:'loadMore',requestKey:'manual-more-000001'},db,async(input:any)=>{
+ assert(input.excludeCreativeIds.includes('cre_manual_text'),'automatic continuation excludes existing manual imports')
+ return {contentMatchRequestId:'manual-more',creativeCandidates:[source('cre_more_after_manual',90)],contentLibraryGaps:[]}
+}))

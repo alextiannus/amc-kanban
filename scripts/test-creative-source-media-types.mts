@@ -19,8 +19,8 @@ declare module 'task4/policy' {export function sourceMediaAllowedHosts():Set<str
 }
 const options:ts.CompilerOptions={strict:true,noEmit:true,target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext,moduleResolution:ts.ModuleResolutionKind.Bundler,skipLibCheck:true,types:['node']}
 const host=ts.createCompilerHost(options),read=host.readFile.bind(host),exists=host.fileExists.bind(host)
-host.readFile=path=>files[path]??read(path)
-host.fileExists=path=>Object.hasOwn(files,path)||exists(path)
+host.readFile=path=>files[resolve(path)]??read(path)
+host.fileExists=path=>Object.hasOwn(files,resolve(path))||exists(path)
 host.getSourceFile=(path,version)=>{const text=host.readFile(path);return text===undefined?undefined:ts.createSourceFile(path,text,version)}
 const diagnostics=ts.getPreEmitDiagnostics(ts.createProgram(Object.keys(files),options,host))
 assert.equal(diagnostics.length,0,ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCurrentDirectory:()=>process.cwd(),getCanonicalFileName:p=>p,getNewLine:()=> '\n'}))
