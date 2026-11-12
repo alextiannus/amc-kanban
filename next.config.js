@@ -18,6 +18,11 @@ const nextConfig = {
 	turbopack: {
 		root: path.resolve(__dirname),
 	},
+	webpack(config) {
+		// Keep constrained local/CI release builds from duplicating the full compiler cache.
+		if (process.env.DISABLE_WEBPACK_CACHE === 'true') config.cache = false
+		return config
+	},
 	// Turbopack is opt-in for local dev only (next dev --turbopack).
 	// Removed from here to allow production webpack builds to succeed
 	// (framer-motion has a module resolution issue under Turbopack).

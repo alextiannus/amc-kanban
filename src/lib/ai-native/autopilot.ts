@@ -18,7 +18,7 @@ import {generateContentDirect} from '../amc-content/contentGenerationService'
 export async function autopilotRun(userId:string,brandId:string,runId:string,active=true){
  await requireAutopilotOwner(userId,brandId)
  const pool=await autopilotDb()
- const row=(await pool.query(`SELECT r.*,s.enabled,s.owner_id AS current_owner,s.account_id AS current_account,s.daily_limit AS current_limit FROM amc_iaic.autopilot_runs r JOIN amc_iaic.autopilot_settings s ON s.brand_id=r.brand_id WHERE r.id=$1 AND r.brand_id=$2 AND r.owner_id=$3`,[runId,brandId,userId])).rows[0]
+ const row=(await pool.query(`SELECT r.*,s.enabled,s.owner_id AS current_owner,s.account_id AS current_account,s.daily_limit AS current_limit,s.objective AS current_objective,s.cadence AS current_cadence,s.budget_limit_cents AS current_budget_limit_cents FROM amc_iaic.autopilot_runs r JOIN amc_iaic.autopilot_settings s ON s.brand_id=r.brand_id WHERE r.id=$1 AND r.brand_id=$2 AND r.owner_id=$3`,[runId,brandId,userId])).rows[0]
  if(!row)throw nativeError('autopilot_run_not_found',404)
  if(active&&(!row.enabled||row.current_owner!==userId||row.current_account!==row.account_id))throw nativeError('autopilot_authorization_changed',403)
  if(active&&!await prisma.socialAccount.findFirst({where:{id:row.account_id,brandId,unboundAt:null}}))throw nativeError('autopilot_account_unavailable',403)
@@ -34,9 +34,24 @@ export async function autopilotDayCapacity(pool:Pool,brandId:string,timezone:str
  const used=rows.filter(row=>brandDay(timezone,new Date(row.created_at))===day).length
  return {ready:used<limit,day,used,limit}
 }
+export function autopilotPeriodKey(timezone:string|null,cadence:string,now=new Date()){
+ const day=brandDay(timezone,now)
+ if(cadence==='monthly')return day.slice(0,7)
+ if(cadence!=='weekly')return day
+ const date=new Date(`${day}T00:00:00Z`),weekday=date.getUTCDay()||7
+ date.setUTCDate(date.getUTCDate()+4-weekday)
+ const year=date.getUTCFullYear(),first=new Date(Date.UTC(year,0,1))
+ const week=Math.ceil((((date.getTime()-first.getTime())/86400000)+1)/7)
+ return `${year}-W${String(week).padStart(2,'0')}`
+}
+export async function autopilotCycleCapacity(pool:Pool,brandId:string,timezone:string|null,cadence:string,limit:number,now=new Date()){
+ const period=autopilotPeriodKey(timezone,cadence,now)
+ const used=Number((await pool.query(`SELECT count(*) AS count FROM amc_iaic.autopilot_outputs o JOIN amc_iaic.autopilot_runs r ON r.id=o.run_id WHERE r.brand_id=$1 AND r.local_day=$2`,[brandId,period])).rows[0]?.count||0)
+ return {ready:used<limit,day:period,used,limit,cadence}
+}
 export async function readAutopilot(userId:string,brandId:string,runId:string,action='status',input:any={}){
  const run=await autopilotRun(userId,brandId,runId),pool=await autopilotDb()
- if(action==='capacity'){const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}});return autopilotDayCapacity(pool,brandId,brand.timezone,run.daily_limit)}
+ if(action==='capacity'){const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}});return autopilotCycleCapacity(pool,brandId,brand.timezone,run.cadence||'daily',run.daily_limit)}
  if(action==='profile'){
   const row=await prisma.googleBrandImport.findUnique({where:{brandId},select:{status:true,result:true,lastError:true}})
   return {ready:!row||!['PENDING','RUNNING'].includes(row.status),profile:row||{status:'not_configured'},note:'Missing Google permissions do not block a generic brand script. Never fabricate SKUs.'}
@@ -173,7 +188,7 @@ export async function executeAutopilot(userId:string,brandId:string,runId:string
    if(output){if(output.run_id!==run.id)return {alreadyGenerated:true,draftId:output.draft_id,status:output.status};if(['completed','generated'].includes(output.status))return {outputId:id,status:output.status,draftId:output.draft_id};throw nativeError('generation_result_requires_verification')}
    const count=Number((await pool.query('SELECT count(*) AS count FROM amc_iaic.autopilot_outputs WHERE run_id=$1',[run.id])).rows[0].count)
    if(count>=run.daily_limit)throw nativeError('autopilot_daily_limit')
-   if(!(await autopilotDayCapacity(pool,brandId,brand.timezone,run.daily_limit)).ready)throw nativeError('autopilot_brand_day_limit')
+   if(!(await autopilotCycleCapacity(pool,brandId,brand.timezone,run.cadence||'daily',run.daily_limit)).ready)throw nativeError('autopilot_brand_day_limit')
    const idea=(await pool.query('SELECT * FROM amc_iaic.brand_ideas WHERE brand_id=$1 AND plan_id=$2 AND replaced_at IS NULL',[brandId,input.creativeId])).rows[0]
    if(!idea)throw nativeError('adapted_idea_required')
    const revision=await readCreativeRevisions({id:userId,type:'HUMAN'},brandId,idea.plan_month,idea.plan_id)
@@ -232,12 +247,12 @@ export async function admitAutopilotDay(pool:Pool,brandId:string){
   const brand=await prisma.brand.findUniqueOrThrow({where:{id:brandId},select:{timezone:true}})
   // Finish the original business run across midnight before admitting another day.
   const pending=(await pool.query("SELECT id,local_day FROM amc_iaic.autopilot_runs WHERE brand_id=$1 AND owner_id=$2 AND status NOT IN ('succeeded','cancelled','failed') ORDER BY local_day,id LIMIT 1",[brandId,settings.owner_id])).rows[0]
-  if(!pending&&!(await autopilotDayCapacity(pool,brandId,brand.timezone,settings.daily_limit)).ready)return
-  const day=pending?.local_day||brandDay(brand.timezone),id=pending?.id||digest([brandId,day])
-  await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit])
+  if(!pending&&!(await autopilotCycleCapacity(pool,brandId,brand.timezone,settings.cadence||'daily',settings.daily_limit)).ready)return
+  const day=pending?.local_day||autopilotPeriodKey(brand.timezone,settings.cadence||'daily'),id=pending?.id||digest([brandId,day])
+  await pool.query(`INSERT INTO amc_iaic.autopilot_runs(id,brand_id,local_day,owner_id,account_id,config_revision,daily_limit,objective,cadence,budget_limit_cents) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT DO NOTHING`,[id,brandId,day,settings.owner_id,settings.account_id,settings.revision,settings.daily_limit,settings.objective,settings.cadence||'daily',settings.budget_limit_cents||0])
   const run=await autopilotRun(settings.owner_id,brandId,id)
   let taskId=run.task_id
-  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:'执行已授权的品牌调研和策划。读取 amc-autopilot Skill、amc.context 和 amc.autopilot.status。复用实际回执，保存能完成的研究和策略。创意匹配仅由用户在创意浏览按固定关键词发起，不自动匹配、改写、制作或发布。需要用户 Like、复刻、SKU确认、Review、素材或必要资料时，保存真实交接报告并完成当前任务，不调用 iaic_wait。不得把交接或缺失信息冒充制作成功。实际外部任务仅等待原始回执，不重复提交。'});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
+  if(!taskId){const task=await createNativeTask(settings.owner_id,brandId,{kind:'autopilot',runId:id,requestKey:`autopilot-${id}`,goal:`长期目标：${settings.objective}\n执行已授权的品牌调研和策划。读取 amc-autopilot Skill、amc.context 和 amc.autopilot.status。复用实际回执，保存能完成的研究和策略。创意匹配仅由用户在创意浏览按固定关键词发起，不自动匹配、改写、制作或发布。需要用户 Like、复刻、SKU确认、Review、素材或必要资料时，保存真实交接报告并完成当前任务，不调用 iaic_wait。不得把交接或缺失信息冒充制作成功。实际外部任务仅等待原始回执，不重复提交。预算上限（分）：${settings.budget_limit_cents||0}；0 表示不授权任何付费动作，所有公开发布和付费动作仍需单独人工确认。`});taskId=task.id;await pool.query('UPDATE amc_iaic.autopilot_runs SET task_id=$2 WHERE id=$1',[id,taskId])}
   const task=await readNativeTask(settings.owner_id,brandId,taskId)
   await pool.query('UPDATE amc_iaic.autopilot_runs SET status=$2,error=$3,updated_at=now() WHERE id=$1',[id,task.status,task.inputRequest?.question||task.waitingReason||null])
  }finally{await c.query('SELECT pg_advisory_unlock(hashtextextended($1,0))',[`autopilot-admission:${brandId}`]);c.release()}

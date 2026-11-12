@@ -30,6 +30,8 @@ try{
  await store.initializeAutopilot(pool)
  const initial=await store.autopilotSettings('owner','new')
  assert.equal(initial.settings.enabled,false,'missing settings must be off')
+ assert.equal(initial.settings.cadence,'daily')
+ assert.equal(initial.settings.budgetLimitCents,0)
  assert.equal(initial.canManage,true)
  const reader=await store.autopilotSettings('reader','new')
  assert.equal(reader.canManage,false,'a reader cannot edit the settings')
@@ -37,8 +39,13 @@ try{
  await assert.rejects(()=>store.autopilotSettings('owner','new',{enabled:true,revision:0,dailyLimit:1}),/autopilot_account_required/)
  await store.initializeBrandAutopilotDefault('seed')
  assert.equal((await db.query<any>("SELECT enabled FROM amc_iaic.autopilot_settings WHERE brand_id='seed'")).rows[0].enabled,false,'the background initializer cannot enable a brand')
- const saved=await store.autopilotSettings('owner','new',{enabled:true,revision:0,dailyLimit:1,accountId:'account'})
+ const saved=await store.autopilotSettings('owner','new',{enabled:true,revision:0,dailyLimit:2,accountId:'account',objective:'Prepare three source-backed social drafts for principal review.',cadence:'weekly',budgetLimitCents:2500})
  assert.equal(saved.settings.enabled,true,'an explicit principal save can enable')
+ assert.equal(saved.settings.objective,'Prepare three source-backed social drafts for principal review.')
+ assert.equal(saved.settings.cadence,'weekly')
+ assert.equal(saved.settings.dailyLimit,2)
+ assert.equal(saved.settings.budgetLimitCents,2500)
+ await assert.rejects(()=>store.autopilotSettings('owner','new',{enabled:true,revision:1,dailyLimit:1,accountId:'account',objective:'too short',cadence:'weekly',budgetLimitCents:0}),/invalid_autopilot_settings/)
  await assert.rejects(()=>store.autopilotSettings('owner','new',{enabled:false,revision:0,dailyLimit:1}),/autopilot_settings_conflict/)
  await db.exec(`INSERT INTO amc_iaic.autopilot_settings(brand_id,owner_id,enabled,revision) VALUES
  ('automatic','owner',true,1),('edited','owner',true,2),('manual','owner',true,1),
