@@ -692,6 +692,8 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 
 品牌主可通过现有订阅向导升级方案。选择“到期终止”只登记 `cancelAtPeriodEnd`，合同到期前状态和服务权益保持有效；到达 `contractEndDate` 后自动转为 `CANCELLED`。用户可在到期前撤销终止安排。
 
+生产实现 commit `637c0a23eafb312eccaa37e451006251599c1cb7` 已由 Render deploy `dep-dbqshv8ae00c738r1gj0` 发布；构建阶段已执行 Prisma migration，健康接口回读同一 commit。
+
 `Request Invoice` 要求填写 Company name 与 UEN number；每次提交创建独立、带申请人和时间的 invoice request，不覆盖历史 quotation、invoice 或付款记录，也不将申请回执描述成已开票。`Install Activity` 直接进入现有店内活动设置；“增值服务”快捷入口定位到现有免费店内活动与视频生成额度等服务内容。方案升级仍使用服务器价格目录及现有付款/账单流程。
 
 ---
