@@ -1,3 +1,4 @@
+import {creativeSourceLink} from '../src/lib/brand-plan/creativeSourceLink.ts'
 import * as libraryImports from '../src/lib/ai-native/library-imports.ts'
 import * as browseContext from '../src/lib/ai-native/brainstorm-context.ts'
 import * as usage from '../src/lib/ai-native/brainstorm-usage.ts'
@@ -36,7 +37,7 @@ const db:any={
 let beforeTransaction:(()=>Promise<void>)|null=null
 let queue=Promise.resolve()
 db.$transaction=async(fn:any)=>{if(beforeTransaction){const hook=beforeTransaction;beforeTransaction=null;await hook()}const run=queue.then(async()=>{const before=structuredClone({rows,knowledge,audits});try{return await fn(db)}catch(e){({rows,knowledge,audits}=before);throw e}});queue=run.catch(()=>{});return run}
-const deps:any={'./library-imports':libraryImports,'./brainstorm-context':browseContext,'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
+const deps:any={'../brand-plan/creativeSourceLink':{creativeSourceLink},'./library-imports':libraryImports,'./brainstorm-context':browseContext,'./brainstorm-usage':usage,'./brainstorm-storage':brainstormStorage,'./browse-source':browseSource,'./browse-knowledge':browseKnowledge,'./brainstorm-match':brainstormMatch,'../brand-plan/creativeSourceEvidence':sourceResolver,'../brand-plan/creativeSourceScript':{creativeSourceScript},'../brand-plan/creativeVisibility':visibility,
  './brainstorm-video':videoResolver,
  '../prisma':{prisma:db},'../user-management/brandAccess':{canUserAccessBrand:async(_b:any,_u:any,op:string)=>access&&(op==='READ'||write)},
  '../role-permissions/store':{readPolicies:async()=>({policies:{editor:{}}})},'../role-permissions/contract':{effectiveGrants:()=>write?['draft.update']:[]},'../auth-v2/types':{principalFromUser:()=>({globalRoles:[],permissionRoleIds:['editor']})},

@@ -6,6 +6,8 @@
     "node": "20.x"
   },
   "scripts": {
+    "test:creative-source-link": "tsx scripts/test-creative-source-link.mts",
+    "permissions:creative-source-link": "tsx scripts/prepare-creative-source-link-permissions.mts",
     "test:creative-library": "tsx scripts/test-creative-library.mts",
     "test:asset-thumbnails": "node scripts/test-asset-thumbnails.cjs",
     "test:access-overview": "tsx scripts/test-access-overview.mts",

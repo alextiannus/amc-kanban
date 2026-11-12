@@ -7,6 +7,7 @@ import {brainstormBrowseContext,brainstormFeedPeriod,browseMediaItems} from './b
 import {activeBrowseCreative,withBrainstormUsage,brainstormWorkspaceSql} from './brainstorm-usage'
 import {brainstormMatchRequest,brainstormTagContext,BRAINSTORM_KEYWORD_POLICY} from './brainstorm-match'
 import {resolveCreativeSourceEvidence} from '../brand-plan/creativeSourceEvidence'
+import {creativeSourceLink} from '../brand-plan/creativeSourceLink'
 import {creativeSourceScript} from '../brand-plan/creativeSourceScript'
 import {resolveBrainstormVideos} from './brainstorm-video'
 import {CREATIVE_SELECTION_POLICY,creativeIsSelected,creativeSourceId,dislikedCreativeSources,readDislikedCreativeSources} from '../brand-plan/creativeVisibility'
@@ -37,9 +38,9 @@ export async function authorizeBrainstorm(userId:string,brandId:string,write=fal
  if(!user||user.type!=='HUMAN'||user.status!=='ACTIVE')throw nativeError('brainstorm_access_denied',404)
  const principal=principalFromUser(user,'session')
  const grants=effectiveGrants((principal.permissionRoleIds||[]).filter(id=>Object.hasOwn(policies,id)),policies)
- const admin=principal.globalRoles.includes('ADMIN'),canDecide=admin||grants.includes('draft.update'),canSearchLibrary=admin||grants.includes('content.inspiration-library.read')
+ const admin=principal.globalRoles.includes('ADMIN'),canDecide=admin||grants.includes('draft.update'),canSearchLibrary=admin||grants.includes('content.inspiration-library.read'),canViewOriginalLink=admin||grants.includes('draft.view-source-link')
  if(write&&!canDecide)throw nativeError('creative_edit_forbidden',403)
- return {user,canDecide,canSearchLibrary}
+ return {user,canDecide,canSearchLibrary,canViewOriginalLink}
 }
 function matchKeywords(value:unknown):string{
  if(typeof value!=='string'||value.length>300)throw nativeError('invalid_match_keywords',400)
@@ -81,7 +82,7 @@ async function browserState(db:any,brandId:string,compact=false){
 }
 export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,firstScreen=false,after?:string,separateKeywords=false){
  const started=performance.now()
- const {canDecide,canSearchLibrary}=await authorizeBrainstorm(userId,brandId,false,db)
+ const {canDecide,canSearchLibrary,canViewOriginalLink}=await authorizeBrainstorm(userId,brandId,false,db)
  const authorizedAt=performance.now()
  const [saved,{entries,disliked,selected},pool,facts,manual]=await Promise.all([feed(db,brandId,true),browserState(db,brandId,true),poolSources(db,brandId,true),separateKeywords?Promise.resolve(null):db.brand.findUnique({where:{id:brandId},select:{id:true,name:true,description:true,industry:true,knowledge:{select:{menuItems:true}}}}),brainstormBrowseContext(brandId)?.manualLibrary===false?Promise.resolve([]):importedSources(db,brandId)])
  const sources=(saved?.output?.sources||[]).filter(eligibleBrainstormSource).filter((s:any)=>relevantDefaultBrainstormSource(s,saved?.input?.matchKeywords||'')),choices=await decisions(db,brandId,[...sources.map((s:any)=>s.inspirationCreativeId),...pool.map((p:any)=>p.source_id),...manual.map((s:any)=>s.inspirationCreativeId)])
@@ -123,7 +124,7 @@ export async function listBrainstorm(userId:string,brandId:string,db:any=prisma,
  const tagResult=browse.brandTags
  console.info('[brainstorm-timing]',JSON.stringify({brandId,authorizationMs:Math.round(authorizedAt-started),dataMs:Math.round(dataAt-authorizedAt),contentMs:Math.round(performance.now()-dataAt),totalMs:Math.round(performance.now()-started),candidates:candidates.length,requested:requested.length,firstScreen,items:items.length}))
  const matchingRulesChanged=!!saved&&saved.input?.keywordPolicy!==BRAINSTORM_KEYWORD_POLICY
- return {ok:true,brandId,canDecide,canSearchLibrary,hasMore,...(nextCursor?{nextCursor}:{}),matchKeywords:saved?.input?.matchKeywords||'',brandKeywordRevision:(tagResult as any)?.revision,keywordsChanged:!!(tagResult as any)?.revision&&saved?.input?.brandKeywordRevision!==(tagResult as any).revision,matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,matchingRulesChanged,needsRefresh:!saved||matchingRulesChanged||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items:browseMediaItems(withBrainstormUsage(items,entries,choices),brandId)}
+ return {ok:true,brandId,canDecide,canSearchLibrary,canViewOriginalLink,hasMore,...(nextCursor?{nextCursor}:{}),matchKeywords:saved?.input?.matchKeywords||'',brandKeywordRevision:(tagResult as any)?.revision,keywordsChanged:!!(tagResult as any)?.revision&&saved?.input?.brandKeywordRevision!==(tagResult as any).revision,matchingTags:tagResult?.tags.map(t=>t.label)||[],matchingTagDefinitions:tagResult?.tags||[],matchingTagsUnavailable:!tagResult,matchingRulesChanged,needsRefresh:!saved||matchingRulesChanged||Date.now()-new Date(saved.createdAt).getTime()>=30*60000,refreshedAt:saved?.createdAt?.toISOString()||null,videoResolutionIncomplete,items:browseMediaItems(withBrainstormUsage(items,entries,choices),brandId)}
 }
 export async function decideSavedBrainstorm(userId:string,brandId:string,body:any,db:any=prisma){
  if(!body||body.action!=='decideSaved'||Object.keys(body).some(k=>!['action','creativeId','expectedRevision','decision'].includes(k))||typeof body.creativeId!=='string'||!body.creativeId||body.creativeId.length>200||!/^[a-f0-9]{64}$/.test(body.expectedRevision||'')||!['like','dislike','defer'].includes(body.decision))throw nativeError('invalid_brainstorm_request',400)
@@ -319,6 +320,32 @@ export async function replicateBrainstorm(userId:string,brandId:string,body:any,
  const task=await createTask(userId,brandId,{kind:'creative',creativeId:body.creativeId,month:current.month,expectedRevision:current.expectedRevision,requestKey,goal:'用户已选择复刻此原创意。请读取完整原创意证据与当前品牌已确认事实，保留原脚本爆款机制、完整分镜顺序与节奏，改写为适合当前品牌的完整脚本及完整拍摄说明。仅使用真实品牌及商品事实，未知信息明确标注。产出候选供用户 Review，不自动采用、制作或发布。'})
  return {ok:true,id:task.id,creativeId:body.creativeId,month:current.month}
 }
+export async function brainstormSourceLink(userId:string,brandId:string,sourceId:string,input:{creativeId?:string|null;sourceDigest?:string|null},db:any=prisma,fetchEvidence=fetchCreativeSourceEvidence){
+ if(!/^cre_[a-zA-Z0-9_-]+$/.test(sourceId)||!input||!/^[a-f0-9]{64}$/.test(input.sourceDigest||'')||input.creativeId!=null&&(typeof input.creativeId!=='string'||!input.creativeId.trim()||input.creativeId.length>200))throw nativeError('invalid_brainstorm_request',400)
+ const authorize=async()=>{const access=await authorizeBrainstorm(userId,brandId,false,db);if(!access.canViewOriginalLink)throw nativeError('creative_source_link_forbidden',403)}
+ await authorize()
+ const [{entries,disliked},choices]=await Promise.all([browserState(db,brandId),decisions(db,brandId,[sourceId])])
+ if(disliked.has(sourceId)||choices[0]?.input?.decision==='dislike')throw nativeError('brainstorm_source_not_found',404)
+ let current:any
+ if(input.creativeId){
+  const matches=entries.filter(({item})=>item.id===input.creativeId&&creativeSourceId(item)===sourceId&&activeBrowseCreative(item))
+  if(matches.length!==1)throw nativeError('brainstorm_source_not_found',404)
+  current=matches[0].item
+ }else{
+  const saved=await feed(db,brandId)
+  const source=await importedSource(db,brandId,sourceId)||await storedBrainstormSource(db,brandId,saved?.output?.sources?.find((s:any)=>s.inspirationCreativeId===sourceId))||(await poolSources(db,brandId)).find((row:any)=>row.source_id===sourceId)?.source||await favoriteStoredSource(db,brandId,userId,sourceId)
+  if(!source||!eligibleBrainstormSource(source))throw nativeError('brainstorm_source_not_found',404)
+  current={inspirationCreativeId:sourceId,nativeSourceSnapshot:{source}}
+ }
+ const {raw}=await resolveCreativeSourceEvidence(current,revisionSource(current,null,new Date().toISOString()),fetchEvidence)
+ if(raw.sourceDigest!==input.sourceDigest)throw nativeError('creative_source_changed',409)
+ const url=creativeSourceLink(raw)
+ if(!url)throw nativeError('creative_source_link_missing',404)
+ // External evidence reads can outlive a permission change. Never return a stale grant.
+ await authorize()
+ return {url}
+}
+
 export async function brainstormVideo(userId:string,brandId:string,sourceId:string,signal?:AbortSignal,db:any=prisma,range?:string|null,thumbnail=false){
  await authorizeBrainstorm(userId,brandId,false,db)
  const [saved,choices]=await Promise.all([feed(db,brandId,true),decisions(db,brandId,[sourceId])])
