@@ -100,18 +100,25 @@ export async function GET(request: Request, { params }: Params) {
   const ok = await canSessionAccessBrandProject(brandId, userId, userType, userRole)
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const subscription = await prisma.brandSubscription.findFirst({
+  let subscription = await prisma.brandSubscription.findFirst({
     where: {
       brandId,
       status: 'ACTIVE',
-      OR: [{ contractEndDate: null }, { contractEndDate: { gt: new Date() } }],
     },
     orderBy: { createdAt: 'desc' },
   })
 
+  const now = new Date()
+  if (subscription?.cancelAtPeriodEnd && subscription.contractEndDate && subscription.contractEndDate <= now) {
+    subscription = await prisma.brandSubscription.update({
+      where: { id: subscription.id },
+      data: { status: 'CANCELLED', cancelledAt: now },
+    })
+  }
+
   const storeEntitlements = await getStoreEntitlements(brandId)
 
-  if (!subscription) {
+  if (!subscription || subscription.status !== 'ACTIVE' || (subscription.contractEndDate && subscription.contractEndDate <= now)) {
     return NextResponse.json({
       plan_name: 'NONE',
       included_services: [],
@@ -148,6 +155,9 @@ export async function GET(request: Request, { params }: Params) {
     contract_start: subscription.contractStartDate?.toISOString() ?? null,
     contract_end: subscription.contractEndDate?.toISOString() ?? null,
     status: subscription.status,
+    subscription_id: subscription.id,
+    cancel_at_period_end: subscription.cancelAtPeriodEnd,
+    cancellation_requested_at: subscription.cancellationRequestedAt?.toISOString() ?? null,
     selectedAddons: subscription.selectedAddons || {},
     ...storeEntitlements,
   })

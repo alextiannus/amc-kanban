@@ -63,6 +63,7 @@ model User {
   businessRoles        UserBusinessRole[]
   brandMemberships     BrandAgent[]        @relation("BrandAgents")
   createdSubscriptions BrandSubscription[]
+  invoiceRequests      SubscriptionInvoiceRequest[]
   comments             Comment[]
   sentInvitations      Invitation[]        @relation("InvitationInviter")
   receivedInvitations  Invitation[]        @relation("InvitationInvitee")
@@ -446,6 +447,7 @@ model Brand {
   socialInsightAccountMetrics SocialInsightAccountMetric[]
   brandAgents                 BrandAgent[]
   subscriptions               BrandSubscription[]
+  invoiceRequests             SubscriptionInvoiceRequest[]
   gameConfig                  GameConfig?
   gameSessions                GameSession[]
   gameShareDrafts             GameShareDraft[]
@@ -574,6 +576,9 @@ model BrandSubscription {
   termsAcceptedAt    DateTime?
   contractStartDate  DateTime?
   contractEndDate    DateTime?
+  cancelAtPeriodEnd  Boolean   @default(false)
+  cancellationRequestedAt DateTime?
+  cancelledAt        DateTime?
   trialStartsAt      DateTime?
   trialEndsAt        DateTime?
   billingStartsAt    DateTime?
@@ -583,6 +588,7 @@ model BrandSubscription {
   brand              Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
   createdById        String?
   createdBy          User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  invoiceRequests    SubscriptionInvoiceRequest[]
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -590,6 +596,24 @@ model BrandSubscription {
   @@index([createdById])
   @@index([brandId])
   @@index([createdById, status, brandId])
+}
+
+model SubscriptionInvoiceRequest {
+  id             String            @id @default(cuid())
+  subscriptionId String
+  subscription   BrandSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  brandId        String
+  brand          Brand             @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  requestedById  String?
+  requestedBy    User?             @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+  companyName    String
+  uen            String
+  status         String            @default("REQUESTED") // REQUESTED | PROCESSING | ISSUED | REJECTED
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([subscriptionId, createdAt])
+  @@index([brandId, status])
 }
 
 model PostfastApiKeyPool {
