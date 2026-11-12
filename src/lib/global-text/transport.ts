@@ -109,9 +109,13 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
       ...(input.tools?.length?{tools:[{functionDeclarations:input.tools.map(t=>t.function)}],...(typeof input.toolChoice==='object'?{toolConfig:{functionCallingConfig:{mode:'ANY',allowedFunctionNames:[input.toolChoice.function.name]}}}:{})}:{}) }
   }
   const timeout = AbortSignal.timeout(textTimeoutMs(c.timeoutMs,input))
-  const response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'})
-  if (!response.ok) throw new Error(`Text provider HTTP ${response.status}`)
-  const data = stream&&response.headers.get('content-type')?.includes('text/event-stream')?await readOpenAIStream(response,input.onStreamTools,input.onStreamText):await response.json()
+  let response:Response
+  try { response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'}) }
+  catch(error) { if(error instanceof Error)Object.assign(error,{textFailureKind:'provider_transport'});throw error }
+  if (!response.ok) throw Object.assign(new Error(`Text provider HTTP ${response.status}`),{textFailureKind:'provider_http',providerHttpStatus:response.status})
+  let data:any
+  try { data = stream&&response.headers.get('content-type')?.includes('text/event-stream')?await readOpenAIStream(response,input.onStreamTools,input.onStreamText):await response.json() }
+  catch(error) { if(error instanceof Error)Object.assign(error,{textFailureKind:'provider_protocol'});throw error }
   logMarketingPlanResponse(c, input, body, response, data, started)
   if (protocol==='openai' && data.choices?.[0]?.finish_reason==='length') throw Object.assign(new TextOutputLimitError({
     finishReason:'length', maxTokens, reasoningEffort:body.reasoning_effort||'unspecified',
@@ -123,7 +127,7 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   if (protocol === 'openai') message = data.choices?.[0]?.message
   else if (protocol === 'anthropic') message = {role:'assistant',content:(data.content||[]).filter((v:any)=>v.type==='text').map((v:any)=>v.text).join(''),tool_calls:(data.content||[]).filter((v:any)=>v.type==='tool_use').map((v:any)=>({id:v.id,type:'function',function:{name:v.name,arguments:JSON.stringify(v.input)}}))}
   else { const parts=data.candidates?.[0]?.content?.parts||[]; message={role:'assistant',content:parts.filter((v:any)=>v.text&&!v.thought).map((v:any)=>v.text).join(''),tool_calls:parts.filter((v:any)=>v.functionCall).map((v:any,i:number)=>({id:`call_${i}`,thoughtSignature:v.thoughtSignature,type:'function',function:{name:v.functionCall.name,arguments:JSON.stringify(v.functionCall.args)}}))} }
-  if (!message || (!message.content && !message.tool_calls?.length)) throw new Error('Text provider returned an empty response')
+  if (!message || (!message.content && !message.tool_calls?.length)) throw Object.assign(new Error('Text provider returned an empty response'),{textFailureKind:'provider_protocol'})
   const rawUsage=protocol==='google'?data.usageMetadata:data.usage
   return {text:typeof message.content==='string'?message.content:null,message,provider:c.provider,modelName:c.modelName,responseModel:data.model||data.modelVersion||null,latencyMs:Date.now()-started,
     providerReference:typeof data.id==='string'?data.id:response.headers.get('x-request-id')||undefined,

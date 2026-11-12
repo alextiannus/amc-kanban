@@ -4,6 +4,7 @@ process.env.DATABASE_URL ||= 'postgresql://test:test@localhost/test'
 process.env.JWT_SECRET='test-signing-secret-not-production'
 const {prisma}=await import('../src/lib/prisma.ts')
 const {fingerprint,complete}=await import('../src/lib/global-text/transport.ts')
+const {internalLLMFailure}=await import('../src/lib/internal-llm-errors.ts')
 const {currentBinding,withTextScope,strictText,signBinding,verifyBinding,executeBound,applyPolicy}=await import('../src/lib/global-text/policy.ts')
 const {callLLM,callLLMChat}=await import('../src/lib/llmRouter.ts')
 const c={id:'one',provider:'custom_shim',displayName:'Any compatible supplier',modelName:'glm-5.3',baseUrl:'https://supplier.test/v1',apiKey:'test-only',timeoutMs:1000,isEnabled:true}
@@ -129,7 +130,11 @@ try{
  assert.throws(()=>verifyBinding(signBinding({...binding,expires:1})))
  for(const status of [400,401,429,500]){
    failure=status;const before=requests.length
-   await assert.rejects(()=>callLLM('copywriting','hello'),new RegExp(`HTTP ${status}`))
+   await assert.rejects(()=>callLLM('copywriting','hello'),(error:any)=>{
+     assert.match(error.message,new RegExp(`HTTP ${status}`));const safe=internalLLMFailure(error);
+     assert.equal(safe.diagnostics.failureKind,'provider_http');assert.equal(safe.diagnostics.providerHttpStatus,status);
+     assert(!JSON.stringify(safe).includes('Do not reveal'));assert(!JSON.stringify(safe).includes('test-only'));return true
+   })
    assert.equal(requests.length,before+1,'strict error must never call a second provider')
  }
  failure=0

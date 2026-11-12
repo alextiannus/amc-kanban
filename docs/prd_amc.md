@@ -1,5 +1,8 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+Internal text diagnostics (2026-11-12, implemented locally; deployment pending): authenticated callers receive bounded provider HTTP status and an allowlisted failure kind, with the existing request ID. No provider body, exception text, prompt, model output, URL or credential crosses the error boundary. Retry/fallback behavior remains unchanged; unknown failures remain unknown.
+
+
 ## 创意浏览原始链接（2026-11-12，本地实现及针对性回归通过，未部署）
 
 单条创意详情的“更多操作”在“搜索创意库”之后提供“查看原始链接”，新标签页打开原始平台帖子并保留浏览位置。独立权限 `draft.view-source-link` 仅向主理人和已核验稳定 ID 的兼职主理人角色组授予，ADMIN 保留权限；同时校验当前品牌访问权限，不沿用收藏或编辑权限，也不因该查看能力授予品牌写权限。既有生产角色策略须经版本校验增补授权后生效，本次未执行生产授权。无权限隐藏入口，无有效链接置灰提示“暂无原始链接”；缓存预览等待实时权限校验。接口仅按需返回经来源归属和版本校验的 HTTP/HTTPS 原帖链接，浏览列表不下发链接。完整交互、权限、接口及上线要求见 [创意原始链接](creative-source-link-api.md)。
