@@ -61,7 +61,7 @@ export async function GET(request: Request) {
     // Dashboard bootstrap only needs its brand selector, not every report snapshot.
     // Apply this projection after the identical authorization/filter construction.
     const projection = searchParams.get('view') === 'selector'
-      ? { select: { id:true,name:true,description:true,location:true,address:true,phone:true,website:true,timezone:true,autoPilot:true,status:true,logoUrl:true,industry:true,growthBrandKey:true } }
+      ? { select: { id:true,name:true,description:true,location:true,address:true,phone:true,website:true,timezone:true,autoPilot:true,status:true,logoUrl:true,industry:true,growthBrandKey:true,workspaceKind:true,storeName:true,parentBrandId:true } }
       : { include: { accounts: accountsSelect, _count: countsSelect, subscriptions: subscriptionSummarySelect } }
 
     const activeBrandFilter = {
