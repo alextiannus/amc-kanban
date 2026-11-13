@@ -1,5 +1,8 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+Internal text Retry-After diagnostics (2026-11-13, implemented locally): authenticated callers may receive only a validated 0-86400 second duration, alongside the existing safe HTTP status and failure kind. No raw upstream header/body or exception text is exposed. The gateway performs no automatic retries. Growth handles only explicitly user-authorized, request-bound HTTP 429 policies; unknown and other failed requests retain their guards.
+
+
 Internal text diagnostics (2026-11-12, implemented locally; deployment pending): authenticated callers receive bounded provider HTTP status and an allowlisted failure kind, with the existing request ID. No provider body, exception text, prompt, model output, URL or credential crosses the error boundary. Retry/fallback behavior remains unchanged; unknown failures remain unknown.
 
 

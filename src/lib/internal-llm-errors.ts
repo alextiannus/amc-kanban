@@ -23,12 +23,13 @@ export function internalLLMFailure(error: unknown) {
     }
   }
   const timedOut = error instanceof Error && (error.name === 'TimeoutError' || /timeout/i.test(error.message))
-  const evidence=error as {textFailureKind?:unknown;providerHttpStatus?:unknown}
+  const evidence=error as {textFailureKind?:unknown;providerHttpStatus?:unknown;retryAfterSeconds?:unknown}
   const kind=['provider_http','provider_transport','provider_protocol'].includes(String(evidence?.textFailureKind))?String(evidence.textFailureKind):undefined
   const status=typeof evidence?.providerHttpStatus==='number'&&Number.isInteger(evidence.providerHttpStatus)&&evidence.providerHttpStatus>=400&&evidence.providerHttpStatus<=599?evidence.providerHttpStatus:undefined
+  const retryAfterSeconds=typeof evidence?.retryAfterSeconds==='number'&&Number.isInteger(evidence.retryAfterSeconds)&&evidence.retryAfterSeconds>=0&&evidence.retryAfterSeconds<=86400?evidence.retryAfterSeconds:undefined
   return {
     error: timedOut ? 'LLM generation timed out' : 'LLM generation failed',
     code: timedOut ? 'LLM_TIMEOUT' : 'LLM_GENERATION_FAILED', timedOut,
-    diagnostics: { requestId,...(kind?{failureKind:kind}:{}),...(kind==='provider_http'&&status?{providerHttpStatus:status}:{}) },
+    diagnostics: { requestId,...(kind?{failureKind:kind}:{}),...(kind==='provider_http'&&status?{providerHttpStatus:status}:{}),...(kind==='provider_http'&&retryAfterSeconds!==undefined?{retryAfterSeconds}:{}) },
   }
 }

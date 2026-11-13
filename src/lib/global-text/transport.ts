@@ -112,7 +112,12 @@ export async function complete(c: Connection, input: TextRequest): Promise<Compl
   let response:Response
   try { response = await fetch(url, {method:'POST', headers, body:JSON.stringify(body), signal:input.signal?AbortSignal.any([input.signal,timeout]):timeout, cache:'no-store'}) }
   catch(error) { if(error instanceof Error)Object.assign(error,{textFailureKind:'provider_transport'});throw error }
-  if (!response.ok) throw Object.assign(new Error(`Text provider HTTP ${response.status}`),{textFailureKind:'provider_http',providerHttpStatus:response.status})
+  if (!response.ok) {
+    const header=response.headers.get('retry-after')
+    const seconds=header&&/^\d+$/.test(header)?Number(header):header?Math.max(0,Math.ceil((Date.parse(header)-Date.now())/1000)):undefined
+    const retryAfterSeconds=typeof seconds==='number'&&Number.isSafeInteger(seconds)&&seconds>=0&&seconds<=86400?seconds:undefined
+    throw Object.assign(new Error(`Text provider HTTP ${response.status}`),{textFailureKind:'provider_http',providerHttpStatus:response.status,...(retryAfterSeconds!==undefined?{retryAfterSeconds}:{})})
+  }
   let data:any
   try { data = stream&&response.headers.get('content-type')?.includes('text/event-stream')?await readOpenAIStream(response,input.onStreamTools,input.onStreamText):await response.json() }
   catch(error) { if(error instanceof Error)Object.assign(error,{textFailureKind:'provider_protocol'});throw error }

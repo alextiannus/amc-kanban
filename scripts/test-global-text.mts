@@ -31,7 +31,7 @@ prisma.$executeRawUnsafe=async(sql:string,...args:any[])=>{
 prisma.$transaction=async(fn:any)=>fn({...prisma,auditLog:{create:async()=>({})}})
 globalThis.fetch=async(url,init)=>{
  requests.push({url:String(url),body:JSON.parse(String(init?.body))})
- if(failure)return new Response('Do not reveal provider response body',{status:failure})
+ if(failure)return new Response('Do not reveal provider response body',{status:failure,headers:{'retry-after':'120'}})
  return Response.json({model:'glm-5.3-resolved',choices:[{message:{role:'assistant',content:'OK'}}]})
 }
 try{
@@ -133,6 +133,7 @@ try{
    await assert.rejects(()=>callLLM('copywriting','hello'),(error:any)=>{
      assert.match(error.message,new RegExp(`HTTP ${status}`));const safe=internalLLMFailure(error);
      assert.equal(safe.diagnostics.failureKind,'provider_http');assert.equal(safe.diagnostics.providerHttpStatus,status);
+     assert.equal(safe.diagnostics.retryAfterSeconds,120);
      assert(!JSON.stringify(safe).includes('Do not reveal'));assert(!JSON.stringify(safe).includes('test-only'));return true
    })
    assert.equal(requests.length,before+1,'strict error must never call a second provider')
