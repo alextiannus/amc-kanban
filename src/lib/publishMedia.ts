@@ -1,4 +1,5 @@
 import type { MediaTechnicalMetadata } from './mediaValidation.ts'
+import { draftMediaIdentity } from './draftMedia.ts'
 
 type MediaItem = {
   storageKey?: string
@@ -28,15 +29,17 @@ function normalizeMimeType(value?: string | null) {
 
 export function extractPostfastStorageKey(url?: string | null) {
   if (!url) return ''
-  if (url.startsWith('/api/integrations/postfast/file/')) {
-    return url.split('/').slice(6).join('/')
-  }
+  try {
+    const parsed = new URL(url, 'https://local.invalid')
+    if (parsed.pathname.startsWith('/api/integrations/postfast/file/')) return parsed.pathname.split('/').slice(6).join('/')
+  } catch { /* Preserve legacy storage keys. */ }
   if (!url.startsWith('http') && !url.startsWith('/')) return url
   return ''
 }
 
 function mediaIdentity(item: MediaItem) {
-  return item.storageKey || item.url || ''
+  const url = item.storageKey || item.url
+  return url ? draftMediaIdentity(url) : ''
 }
 
 function upsertMediaItem(items: MediaItem[], seen: Map<string, number>, item: MediaItem) {

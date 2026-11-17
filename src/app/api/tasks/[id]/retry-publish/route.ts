@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { postfastPublish } from '@/lib/integrations/postfast'
+import { postfastPublish, sanitizePostFastDraftControls } from '@/lib/integrations/postfast'
 import { canHumanAccessBrandProject } from '@/lib/brandAccess'
 import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
 import {
@@ -76,10 +76,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: '草稿未关联发布平台账号' }, { status: 400 })
   }
 
+  const safeControls = sanitizePostFastDraftControls(draft.postfastControls)
+  if (safeControls.error) return NextResponse.json({ code: 'POSTFAST_CONTROLS_INVALID', error: safeControls.error }, { status: 422 })
   let validationWarnings: MediaValidationIssue[] = []
   try {
     const issues = await validateDraftMediaForPlatform({
       platform: platformName,
+      instagramPublishType: draft.instagramPublishType,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
       coverAsset: draft.coverAsset,
@@ -134,6 +137,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     accountId: draft.accountId || undefined,
     gbpLocationId: draft.gbpLocationId || undefined,
     caption: draft.caption,
+    instagramPublishType: draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY' ? draft.instagramPublishType : undefined,
+    ...safeControls.controls,
     mediaItems,
     coverImage: buildPostfastCoverImage(draft.coverAsset),
     hashtags: draft.hashtags,

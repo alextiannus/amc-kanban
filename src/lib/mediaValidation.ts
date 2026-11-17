@@ -8,6 +8,7 @@ import mediaInfoFactory, {
   type VideoTrack,
 } from 'mediainfo.js'
 import sharp from 'sharp'
+import { socialMediaCompositionIssues } from './socialMediaComposition.ts'
 
 export const MEDIA_UPLOAD_LIMITS = {
   imageBytes: 10_000_000,
@@ -605,7 +606,7 @@ export function validatePlatformMedia(platform: string, media: Array<{
   filename?: string | null
   assetId?: string
   metadata: MediaTechnicalMetadata
-}>): MediaValidationIssue[] {
+}>, options: { instagramPublishType?: string | null } = {}): MediaValidationIssue[] {
   const normalized = platform.trim().toLowerCase()
   const uploadIssues = media.flatMap((item) => validateUploadMedia(item.metadata, {
     filename: item.filename,
@@ -652,20 +653,7 @@ export function validatePlatformMedia(platform: string, media: Array<{
     return googleIssues
   }
   if (!['instagram', 'tiktok'].includes(normalized)) return uploadIssues
-  if (media.length === 0) {
-    return [{
-      filename: 'draft',
-      platform: normalized,
-      field: 'mediaCount',
-      actual: 0,
-      limit: '1-10 images or exactly 1 video',
-      message: '该平台发布必须包含图片或视频',
-    }]
-  }
-
   const issues: MediaValidationIssue[] = [...uploadIssues]
-  const imageCount = media.filter((item) => item.metadata.kind === 'image').length
-  const videoCount = media.length - imageCount
   const add = (
     item: typeof media[number],
     field: string,
@@ -686,16 +674,12 @@ export function validatePlatformMedia(platform: string, media: Array<{
     })
   }
 
-  if (imageCount > 0 && videoCount > 0) {
-    for (const item of media) add(item, 'mediaMix', `${imageCount} image(s), ${videoCount} video(s)`, 'images only or one video', '该平台不支持图片与视频混合发布')
-    return issues
-  }
-
-  if (imageCount > 0 && (imageCount < 1 || imageCount > 10)) {
-    for (const item of media) add(item, 'mediaCount', imageCount, '1-10 images', '图片数量必须为 1 至 10 张')
-  }
-  if (videoCount > 0 && (videoCount !== 1 || media.length !== 1)) {
-    for (const item of media) add(item, 'mediaCount', videoCount, 'exactly 1 video', '视频发布必须且只能包含一个视频')
+  for (const issue of socialMediaCompositionIssues(normalized, media.map(item => item.metadata.kind), options.instagramPublishType)) {
+    const sources = media.length ? media : [{ filename: 'draft', assetId: undefined }]
+    for (const source of sources) issues.push({
+      filename: source.filename || 'unknown', assetId: source.assetId, platform: normalized,
+      severity: 'error', field: issue.field, actual: issue.actual, limit: issue.limit, message: issue.message,
+    })
   }
 
   for (const item of media) {

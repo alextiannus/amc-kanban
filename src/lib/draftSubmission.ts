@@ -224,6 +224,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   if (shouldValidateForPublish) {
     const mediaIssues = await validateDraftMediaForPlatform({
       platform: platformId,
+      instagramPublishType: draft.instagramPublishType,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
       coverAsset: draft.coverAsset,

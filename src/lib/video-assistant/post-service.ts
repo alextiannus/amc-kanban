@@ -337,6 +337,7 @@ export function createPostAssistant(deps: Deps) {
     const a = await account(actor, input.brandId, draft.accountId);
     const issues = await validateDraftMediaForPlatform({
       platform: a.platformId,
+      instagramPublishType: draft.instagramPublishType,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
       coverAsset: draft.coverAsset,

@@ -42,6 +42,7 @@ async function main() {
   assert.equal(POSTFAST_ASYNC_VIDEO_THRESHOLD_BYTES, 50_000_000)
   assert.equal(POSTFAST_MAX_UPLOAD_BYTES, 250_000_000)
   assert.equal(shouldQueuePostfastDelivery([{ metadata: { kind: 'video', sizeBytes: 49_999_999 } }]), false)
+  assert.equal(shouldQueuePostfastDelivery([{ metadata: { kind: 'video', sizeBytes: 1_000_000 } }, { metadata: { kind: 'video', sizeBytes: 1_000_000 } }]), true, 'multi-video uploads use the durable queue')
   assert.equal(shouldQueuePostfastDelivery([{ metadata: { kind: 'video', sizeBytes: 50_000_000 } }]), true)
   assert.equal(shouldQueuePostfastDelivery([{ metadata: { kind: 'video', sizeBytes: 79_560_000 } }]), true)
   assert.equal(shouldQueuePostfastDelivery([{ metadata: { kind: 'video', sizeBytes: 150_000_000 } }]), true)

@@ -108,7 +108,7 @@ assert.match(warningText, /不会阻止提交/)
 assert.match(warningText, /已继续提交/)
 assert.match(warningText, /unusual-reel\.mp4/)
 
-const mixedIssues = validatePlatformMedia('instagram', [
+const mixedIssues = validatePlatformMedia('tiktok', [
   { filename: 'photo.jpg', metadata: { ...failingCashmereImage, sizeBytes: 1_000_000, width: 1_080, height: 1_350 } },
   { filename: 'reel.mp4', metadata: validInstagramReel },
 ])

@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma.ts";
-import { postfastPublish } from "../../lib/integrations/postfast.ts";
+import { postfastPublish, sanitizePostFastDraftControls } from "../../lib/integrations/postfast.ts";
 import { extractTopicKeywords } from "../../lib/topicExtractor.ts";
 import { buildPostfastCoverImage, buildPostfastMediaItems } from "../../lib/publishMedia.ts";
 import { validateDraftMediaForPlatform } from "../../lib/publishMediaValidation.ts";
@@ -235,6 +235,7 @@ export async function publisherNode(state: any) {
         try {
           const issues = await validateDraftMediaForPlatform({
             platform,
+            instagramPublishType: draftForPublish.instagramPublishType,
             mediaUrls: draftForPublish.mediaUrls,
             assetRefs: draftForPublish.assetRefs,
             coverAsset: draftForPublish.coverAsset,
@@ -309,6 +310,8 @@ export async function publisherNode(state: any) {
         brandId: brand.id,
         platform,
         caption,
+        instagramPublishType: draftForPublish?.instagramPublishType === 'TIMELINE' || draftForPublish?.instagramPublishType === 'REEL' || draftForPublish?.instagramPublishType === 'STORY' ? draftForPublish.instagramPublishType : undefined,
+        ...sanitizePostFastDraftControls(draftForPublish?.postfastControls).controls,
         ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),
         coverImage: buildPostfastCoverImage(draftForPublish?.coverAsset),
         hashtags: cleanHashtags,

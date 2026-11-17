@@ -35,6 +35,9 @@ import {
   Send,
   Image as ImageIcon
 } from 'lucide-react'
+import { orderedDraftMedia, orderedMediaUrls } from '@/lib/draftMedia'
+import { uploadAssetDirect } from '@/vendor/mm-video/lib/directAssetUpload'
+import { mediaKind, socialMediaNotice } from '@/lib/socialMediaComposition'
 import TiktokAigcControl from './TiktokAigcControl'
 import PostPreviewModal from './PostPreviewModal'
 import AssetPickerPagination from './AssetPickerPagination'
@@ -158,6 +161,7 @@ interface DraftItem {
   caption: string
   hashtags: string[]
   mediaUrls: string[]
+  instagramPublishType?: string | null
   coverAssetId?: string | null
   coverAsset?: {
     id: string
@@ -344,7 +348,7 @@ export default function PostEditDrawer({
   const [mediaProcessingIndex, setMediaProcessingIndex] = useState<number | null>(null)
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null)
-  const { t } = useI18n()
+  const { t, isEn } = useI18n()
   useEffect(() => { setBrandAssets([]) }, [brandId, isOpen])
   // Keep visited assets available for selected-cover previews and video metadata.
   const rememberAssets = useCallback((assets: BrandPickerAsset[]) => {
@@ -359,6 +363,31 @@ export default function PostEditDrawer({
   const [clicksCount, setClicksCount] = useState(0)
   const [roiAmount, setRoiAmount] = useState(0)
 
+  const [instagramPublishType, setInstagramPublishType] = useState<'TIMELINE' | 'REEL' | 'STORY' | ''>('')
+  const [mediaUploading, setMediaUploading] = useState(false)
+  const mediaUploadLock = useRef(false)
+  const mediaUploadEpoch = useRef(0)
+  useEffect(() => {
+    mediaUploadEpoch.current += 1
+    mediaUploadLock.current = false
+    setMediaUploading(false)
+    return () => { mediaUploadEpoch.current += 1; mediaUploadLock.current = false }
+  }, [brandId, postId, isOpen])
+  async function uploadDraftMedia(files: FileList | null) {
+    if (!files?.length || mediaUploadLock.current) return
+    const epoch = mediaUploadEpoch.current
+    mediaUploadLock.current = true; setMediaUploading(true); setError(null)
+    try {
+      for (const file of Array.from(files)) {
+        const asset = await uploadAssetDirect(file, brandId)
+        if (epoch !== mediaUploadEpoch.current) return
+        setBrandAssets(current => [...current.filter(item => item.id !== asset.id), asset as BrandPickerAsset])
+        setAttachedMedia(current => current.some(item => item.id === asset.id) ? current : [...current, { id: asset.id, type: 'asset', url: asset.url }])
+      }
+    } catch (error) { if (epoch === mediaUploadEpoch.current) setError(error instanceof Error ? error.message : 'Upload failed') }
+    finally { if (epoch === mediaUploadEpoch.current) { mediaUploadLock.current = false; setMediaUploading(false) } }
+  }
+
   const selectedAssetIds = useMemo(() => {
     return attachedMedia.filter(m => m.type === 'asset').map(m => m.id)
   }, [attachedMedia])
@@ -370,6 +399,9 @@ export default function PostEditDrawer({
     const raw = account?.platformId || (accountId.startsWith('unconfigured_') ? accountId.replace('unconfigured_', '') : '')
     return canonicalScriptPlatform(raw)
   }, [selectedAccountIds, accounts])
+
+  const mediaKinds = attachedMedia.map(item => mediaKind({ url: item.url, mimeType: brandAssets.find(asset => asset.id === item.id)?.mimeType || selectedDraft?.assetRefs.find(ref => ref.asset.id === item.id)?.asset.mimeType }))
+  const mediaNotices = [...new Set(selectedAccountIds.map(id => accounts.find(account => account.id === id)?.platformId || id.replace('unconfigured_', '')))].map(platform => ({ platform, notice: socialMediaNotice(platform, mediaKinds, isEn, instagramPublishType) })).filter(item => item.notice)
 
   const selectedGoogleAccountId = useMemo(() => {
     return selectedAccountIds.find((accountId) => {
@@ -396,10 +428,10 @@ export default function PostEditDrawer({
   }, [brandAssets, coverAssetId, selectedDraft?.coverAsset])
 
   const previewAttachedMedia = useMemo(() => {
-    if (!selectedCoverAsset?.url) return attachedMedia
+    if (!selectedCoverAsset?.url || attachedMedia.some(item => mediaKind({ url: item.url, mimeType: brandAssets.find(asset => asset.id === item.id)?.mimeType || selectedDraft?.assetRefs.find(ref => ref.asset.id === item.id)?.asset.mimeType }) === 'video')) return attachedMedia
     const withoutDuplicate = attachedMedia.filter((item) => item.id !== selectedCoverAsset.id && item.url !== selectedCoverAsset.url)
     return [{ id: selectedCoverAsset.id, type: 'asset' as const, url: selectedCoverAsset.url }, ...withoutDuplicate]
-  }, [attachedMedia, selectedCoverAsset])
+  }, [attachedMedia, selectedCoverAsset, brandAssets, selectedDraft])
 
   const coverCompatibilityText = useMemo(() => {
     const isSingleVideo = attachedMedia.length === 1 && (() => {
@@ -409,10 +441,11 @@ export default function PostEditDrawer({
         || selectedDraft?.assetRefs.find((ref) => ref.asset.id === media.id)?.asset.mimeType
       return media.type === 'asset' && mimeType?.startsWith('video/')
     })()
+    if (mediaKinds.includes('video') && attachedMedia.length > 1) return t('轮播帖使用正文素材顺序，不发送独立视频封面。', 'Carousels use the media order; a separate video cover is not sent.')
     if (!isSingleVideo) return '图片帖发布时，封面将作为第一张图片。'
 
     return 'Instagram/Facebook 单视频将按 Reel 发布并使用自定义封面；其他平台会保留封面记录，但发布时不发送自定义封面。'
-  }, [attachedMedia, brandAssets, selectedDraft?.assetRefs])
+  }, [attachedMedia, brandAssets, selectedDraft?.assetRefs, t])
 
   // Load configuration & accounts
   useEffect(() => {
@@ -532,6 +565,7 @@ export default function PostEditDrawer({
       // Create mode: reset all states
       setNewAigcValue(false)
       setSelectedDraft(null)
+      setInstagramPublishType('')
       setCaption('')
       setHashtags('')
       // Default: select all configured accounts + XHS (always, via unconfigured_xhs if needed)
@@ -610,28 +644,8 @@ export default function PostEditDrawer({
           setAgentNote(draft.agentNote || '')
         }
 
-        const initialMedia: Array<{ id: string; type: 'asset' | 'url'; url: string }> = []
-        if (draft.assetRefs) {
-          draft.assetRefs.forEach((ref) => {
-            if (ref.asset) {
-              initialMedia.push({
-                id: ref.asset.id,
-                type: 'asset',
-                url: ref.asset.url || '',
-              })
-            }
-          })
-        }
-        if (draft.mediaUrls) {
-          draft.mediaUrls.forEach((url) => {
-            initialMedia.push({
-              id: url,
-              type: 'url',
-              url,
-            })
-          })
-        }
-        setAttachedMedia(initialMedia)
+        setAttachedMedia(orderedDraftMedia(draft))
+        setInstagramPublishType(draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY' ? draft.instagramPublishType : '')
         setCoverAssetId(draft.coverAssetId || draft.coverAsset?.id || null)
         setCoverAssetFilter('cover')
         setMediaUrlsInput((draft.mediaUrls || []).join(', '))
@@ -837,6 +851,7 @@ export default function PostEditDrawer({
       setError('草稿正文、内容创意或素材不能为空')
       return null
     }
+    if (mediaUploadLock.current) return null
     const activeAccountIds = accountIdsOverride || selectedAccountIds
     if (activeAccountIds.length === 0) {
       setError('请至少选择一位 Copywriter')
@@ -855,7 +870,7 @@ export default function PostEditDrawer({
     }
     setSaving(true)
     setError(null)
-    const mediaUrls = attachedMedia.filter((m) => m.type === 'url').map((m) => m.url)
+    const mediaUrls = orderedMediaUrls(attachedMedia)
     const formattedAgentNote = contentIdea.trim() ? `【AI 生成指令】${contentIdea.trim()}【/AI 生成指令】\n${agentNote}` : agentNote
     try {
       const savedDrafts: DraftItem[] = []
@@ -875,6 +890,7 @@ export default function PostEditDrawer({
             agentNote: formattedAgentNote,
             status: nextStatus || selectedDraft.status || 'draft',
             mediaUrls,
+            instagramPublishType: instagramPublishType || null,
             assetIds: selectedAssetIds,
             coverAssetId,
             creativeHooks: creativeHooks.trim(),
@@ -903,6 +919,7 @@ export default function PostEditDrawer({
                   agentNote: formattedAgentNote,
                   status: nextStatus || 'draft',
                   mediaUrls,
+            instagramPublishType: instagramPublishType || null,
                   assetIds: selectedAssetIds,
                   coverAssetId,
                   creativeHooks: creativeHooks.trim(),
@@ -935,6 +952,7 @@ export default function PostEditDrawer({
                 agentNote: formattedAgentNote,
                 status: nextStatus || 'draft',
                 mediaUrls,
+            instagramPublishType: instagramPublishType || null,
                 assetIds: selectedAssetIds,
                 coverAssetId,
                 creativeHooks: creativeHooks.trim(),
@@ -1142,6 +1160,7 @@ export default function PostEditDrawer({
   }
 
   const handleScheduleFromModal = async (customTime?: string) => {
+    if (mediaUploadLock.current) return
     const draftsToSchedule = completedModalDrafts()
     if (draftsToSchedule.length === 0) {
       alert('暂无已完成的内容可排期')
@@ -1217,6 +1236,7 @@ export default function PostEditDrawer({
   }
 
   const handleSmartScheduleDirect = async () => {
+    if (mediaUploadLock.current) return
     if (!selectedDraft || aigcBlocked) return
     if (!ensureGoogleLocationReady()) return
     setSaving(true)
@@ -1253,7 +1273,8 @@ export default function PostEditDrawer({
           scheduledAt: targetDateISO,
           assetIds: selectedAssetIds,
           coverAssetId,
-          mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
+          mediaUrls: orderedMediaUrls(attachedMedia),
+          instagramPublishType: instagramPublishType || null,
         })
       })
       if (!patchRes.ok) throw new Error('更新排期失败')
@@ -1283,6 +1304,7 @@ export default function PostEditDrawer({
   }
 
   const handlePublishNow = async () => {
+    if (mediaUploadLock.current) return
     if (!selectedDraft || aigcBlocked) return
     if (!ensureGoogleLocationReady()) return
     if (!confirm('确定要立即发布此帖文吗？')) return
@@ -1299,7 +1321,8 @@ export default function PostEditDrawer({
           gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           assetIds: selectedAssetIds,
           coverAssetId,
-          mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
+          mediaUrls: orderedMediaUrls(attachedMedia),
+          instagramPublishType: instagramPublishType || null,
         })
       })
       if (!patchRes.ok) throw new Error('更新内容失败')
@@ -1342,7 +1365,8 @@ export default function PostEditDrawer({
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
           coverAssetId,
-          mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
+          mediaUrls: orderedMediaUrls(attachedMedia),
+          instagramPublishType: instagramPublishType || null,
         })
       })
       if (!patchRes.ok) throw new Error('更新内容失败')
@@ -1386,7 +1410,8 @@ export default function PostEditDrawer({
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
           coverAssetId,
-          mediaUrls: attachedMedia.filter(m => m.type === 'url').map(m => m.url),
+          mediaUrls: orderedMediaUrls(attachedMedia),
+          instagramPublishType: instagramPublishType || null,
         })
       })
       if (!patchRes.ok) throw new Error('保存内容失败')
@@ -1580,7 +1605,7 @@ Return the output strictly in a valid JSON array format, containing:
   const publishedPostUrl = normalizeHttpUrl(selectedDraft?.postUrl)
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30 p-3 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/30 p-3 backdrop-blur-sm" onClick={() => { if (!mediaUploadLock.current) onClose() }}>
       <div
         className="flex h-full w-full max-w-xl flex-col rounded-lg border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 animate-in slide-in-from-right duration-250"
         onClick={(event) => event.stopPropagation()}
@@ -1595,7 +1620,7 @@ Return the output strictly in a valid JSON array format, containing:
               {selectedDraft ? (isPublished ? '查看已发布文章' : isScheduled ? '编辑已排期文章' : isPendingReview ? '审核文章' : '编辑草稿') : '新建发布草稿'}
             </h3>
           </div>
-          <button aria-label={t('关闭发布草稿', 'Close publishing draft')} onClick={onClose} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
+          <button aria-label={t('关闭发布草稿', 'Close publishing draft')} onClick={() => { if (!mediaUploadLock.current) onClose() }} className="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -2025,12 +2050,14 @@ Return the output strictly in a valid JSON array format, containing:
                   </div>
                 </div>
 
+                {mediaNotices.some(item => item.platform === 'instagram') && !isPublished && <label className="block text-xs">{t('Instagram 发布类型', 'Instagram publish type')}<select aria-label={t('Instagram 发布类型', 'Instagram publish type')} value={instagramPublishType} onChange={event => setInstagramPublishType(event.target.value as typeof instagramPublishType)} className="mt-2 min-h-11 w-full rounded-xl border p-2 dark:bg-slate-900"><option value="">{t('自动选择', 'Automatic')}</option><option value="TIMELINE">{t('帖子 / 轮播帖', 'Timeline / carousel')}</option><option value="REEL">Reel</option><option value="STORY">Story</option></select></label>}
+                {mediaNotices.map(({ platform, notice }) => notice && <p key={platform} role={notice.error ? 'alert' : 'status'} className="text-xs leading-6 text-amber-700 dark:text-amber-300">{notice.text}</p>)}
                 {attachedMedia.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-bold text-slate-400">
                       {isPublished ? '媒体内容' : '拖拽调整媒体排序'}
                     </p>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {attachedMedia.map((item, index) => {
                         const isVid = isVideoUrl(item.url)
                         return (
@@ -2067,12 +2094,16 @@ Return the output strictly in a valid JSON array format, containing:
                                 <Play className="h-3 w-3 text-white fill-white" />
                               </div>
                             )}
-                            <div className={`absolute bottom-1 left-1 px-1 rounded text-[8px] font-black text-white ${
+                            <div className={`absolute top-1 left-1 px-1 rounded text-[8px] font-black text-white ${
                               item.type === 'asset' ? 'bg-emerald-500/80' : 'bg-blue-500/80'
                             }`}>
                               {item.type === 'asset' ? '素材库' : '外链'}
                             </div>
 
+                            {!isPublished && <div className="absolute bottom-1 left-1 flex gap-1 rounded bg-white/95 p-0.5 text-slate-900 z-20">
+                              <button type="button" disabled={index === 0} aria-label={t(`前移素材 ${index + 1}`, `Move media ${index + 1} earlier`)} className="h-7 w-7 disabled:opacity-30" onClick={() => setAttachedMedia(current => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next })}><ChevronLeft size={16} /></button>
+                              <button type="button" disabled={index === attachedMedia.length - 1} aria-label={t(`后移素材 ${index + 1}`, `Move media ${index + 1} later`)} className="h-7 w-7 disabled:opacity-30" onClick={() => setAttachedMedia(current => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next })}><ChevronRight size={16} /></button>
+                            </div>}
                             {/* AI Image design & Video generation overlays */}
                             {!isPublished && item.type === 'asset' && !isVid && (
                               <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 p-1">
@@ -2173,18 +2204,23 @@ Return the output strictly in a valid JSON array format, containing:
                         value={newUrlInput}
                         onChange={(e) => setNewUrlInput(e.target.value)}
                         placeholder="输入外链媒体 URL..."
-                        className="flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100"
+                        className="min-w-0 flex-1 h-9 rounded-md border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-indigo-400 dark:border-slate-700 dark:bg-slate-955 dark:text-slate-100"
                       />
                       <button
                         type="button"
                         onClick={handleAddUrl}
-                        className="h-9 px-3 bg-slate-100 hover:bg-slate-200 text-slate-705 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 font-bold text-xs rounded-md flex items-center justify-center gap-1"
+                        className="h-9 shrink-0 whitespace-nowrap px-3 bg-slate-100 hover:bg-slate-200 text-slate-705 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 font-bold text-xs rounded-md flex items-center justify-center gap-1"
                       >
                         <Plus className="h-3.5 w-3.5" />
                         <span>添加外链</span>
                       </button>
                     </div>
 
+                    <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold dark:border-slate-700">
+                      {mediaUploading ? t('正在上传素材，请稍候…', 'Uploading materials, please wait…') : t('批量上传图片 / 视频', 'Upload photos / videos')}
+                      <input type="file" multiple accept="image/*,video/*" disabled={mediaUploading || saving} onChange={event => { void uploadDraftMedia(event.target.files); event.target.value = '' }} className="sr-only" />
+                    </label>
+                    {mediaUploading && <p role="status" className="text-xs text-amber-700">{t('全部素材上传完成后再保存或发布。上传失败时已完成的素材会保留。', 'Wait for all uploads before saving or publishing. Completed uploads are retained if another file fails.')}</p>}
                     {/* Browse assets */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">

@@ -1,5 +1,6 @@
 import { resolve, sep } from 'node:path'
 import { prisma } from '@/lib/prisma'
+import { draftMediaIdentity } from './draftMedia.ts'
 import {
   inspectMediaFile,
   inspectMediaUrl,
@@ -117,6 +118,7 @@ function issuesFromInspectionError(error: unknown, input: {
 
 export async function validateDraftMediaForPlatform(input: {
   platform: string
+  instagramPublishType?: string | null
   mediaUrls?: string[] | null
   assetRefs?: DraftAssetRef[] | null
   coverAsset?: DraftAsset | null
@@ -131,8 +133,8 @@ export async function validateDraftMediaForPlatform(input: {
 
   for (const ref of input.assetRefs || []) {
     const asset = ref.asset
-    if (!asset?.url || seen.has(asset.url)) continue
-    seen.add(asset.url)
+    if (!asset?.url || seen.has(draftMediaIdentity(asset.url))) continue
+    seen.add(draftMediaIdentity(asset.url))
     let metadata = isTechnicalMetadata(asset.technicalMetadata)
       ? asset.technicalMetadata
       : null
@@ -171,8 +173,8 @@ export async function validateDraftMediaForPlatform(input: {
   }
 
   for (const url of input.mediaUrls || []) {
-    if (!url || seen.has(url)) continue
-    seen.add(url)
+    if (!url || seen.has(draftMediaIdentity(url))) continue
+    seen.add(draftMediaIdentity(url))
     try {
       const metadata = await inspectStoredMedia({ url })
       media.push({ filename: url.split('/').pop(), metadata })
@@ -185,7 +187,8 @@ export async function validateDraftMediaForPlatform(input: {
   }
 
   const coverAsset = input.coverAsset
-  if (coverAsset?.url && !seen.has(coverAsset.url)) {
+  const usesStandaloneCover = media.length === 1 || !media.some(item => item.metadata.kind === 'video')
+  if (usesStandaloneCover && coverAsset?.url && !seen.has(draftMediaIdentity(coverAsset.url))) {
     let coverMetadata = isTechnicalMetadata(coverAsset.technicalMetadata)
       ? coverAsset.technicalMetadata
       : null
@@ -244,6 +247,6 @@ export async function validateDraftMediaForPlatform(input: {
     }
   }
 
-  issues.push(...validatePlatformMedia(input.platform, media))
+  issues.push(...validatePlatformMedia(input.platform, media, { instagramPublishType: input.instagramPublishType }))
   return issues
 }

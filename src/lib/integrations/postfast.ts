@@ -1274,7 +1274,9 @@ async function preparePostfastMedia(
   })
   const hasVideo = prepared.some((item) => item.metadata.kind === 'video')
   let preparedCover: PreparedPostFastMedia | undefined
-  if (input.coverImage) {
+  // A legacy single-video cover is not part of a video/mixed carousel. Do not
+  // inspect it: a missing or oversized unused cover must not block the post.
+  if (input.coverImage && (!hasVideo || prepared.length === 1)) {
     const coverStorageKey = postfastStorageKey(input.coverImage)
     const coverFilename = input.coverImage.filename || (coverStorageKey || input.coverImage.url || 'cover.jpg').split('/').pop() || 'cover.jpg'
     const coverMetadata = input.coverImage.metadata || await inspectPostfastMediaSource(
@@ -1331,6 +1333,7 @@ async function preparePostfastMedia(
       assetId: item.assetId,
       metadata: item.metadata,
     })),
+    { instagramPublishType: input.instagramPublishType },
   )
   const blockingIssues = blockingMediaIssues(issues)
   const warnings = mediaValidationWarnings(issues)
@@ -1582,7 +1585,9 @@ export async function postfastPublish(input: PostFastPublishInput): Promise<Post
 
   if (resolvedMediaItems.length > 0) {
     post.mediaItems = resolvedMediaItems.map((item, index) => {
-      const type = detectMediaType(item.key, item.mimeType, item.type)
+      const type = item.metadata?.kind === 'video' ? 'VIDEO'
+        : item.metadata?.kind === 'image' ? 'IMAGE'
+        : detectMediaType(item.key, item.mimeType, item.type)
       return {
         key: item.key,
         type,

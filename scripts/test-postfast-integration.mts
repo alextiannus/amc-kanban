@@ -151,6 +151,17 @@ async function startMockPostFast() {
 
     if (method === 'POST' && url === '/social-posts') {
       const post = body?.posts?.[0]
+      if (post.content.startsWith('Carousel test')) {
+        const [, , platform, kind, count] = post.content.split(' ')
+        assert.equal(body.posts.length, 1, 'a carousel must be one post')
+        assert.equal(post.mediaItems.length, Number(count))
+        assert.deepEqual(post.mediaItems.map((item: any) => item.sortOrder), Array.from({ length: Number(count) }, (_, i) => i))
+        assert.deepEqual(post.mediaItems.map((item: any) => item.key), Array.from({ length: Number(count) }, (_, i) => `carousel/${kind === 'mixed' ? i === 0 ? 'image' : 'video' : kind}-${i}`))
+        assert.deepEqual(post.mediaItems.map((item: any) => item.type), Array.from({ length: Number(count) }, (_, i) => kind === 'image' || kind === 'mixed' && i === 0 ? 'IMAGE' : 'VIDEO'))
+        assert(post.mediaItems.every((item: any) => item.coverImageKey === undefined), 'a separate cover must not become a carousel slide')
+        if (platform === 'instagram') assert.equal(body.controls.instagramPublishType, 'TIMELINE')
+        return json(res, 201, { postIds: ['pf_carousel_test'] })
+      }
       if (post.content.startsWith('AIGC test')) {
         return json(res, 201, { postIds: ['pf_aigc_test'] })
       }
@@ -561,6 +572,43 @@ async function main() {
     assert.equal(ownBrandCarousel.success, true)
     assert.equal(seen.filter(r => r.url === '/social-posts').at(-1)!.body.controls.tiktokBrandOrganic, true)
 
+    for (const [platform, kind, count] of [
+      ['instagram', 'video', 2], ['instagram', 'video', 10], ['instagram', 'mixed', 3],
+      ['tiktok', 'image', 2], ['tiktok', 'image', 10],
+    ] as const) {
+      const result = await postfast.postfastPublish({
+        apiKey: API_KEY, platform, accountId: platform === 'instagram' ? 'pf_acc_instagram' : 'pf_acc_video',
+        caption: `Carousel test ${platform} ${kind} ${count}`, scheduledAt,
+        mediaItems: Array.from({ length: count }, (_, i) => ({
+          storageKey: `carousel/${kind === 'mixed' ? i === 0 ? 'image' : 'video' : kind}-${i}`,
+          metadata: kind === 'image' || kind === 'mixed' && i === 0 ? validCoverMetadata : validReelMetadata,
+        })),
+        ...(kind !== 'image' ? { coverImage: count === 2
+          ? { url: `${BASE_URL}/unused-missing-cover.jpg` }
+          : { storageKey: 'image/separate-cover', metadata: { ...validCoverMetadata, sizeBytes: 9_000_000 } },
+        } : {}),
+      })
+      assert.equal(result.success, true, JSON.stringify(result))
+      assert.equal(result.postId, 'pf_carousel_test')
+    }
+    for (const [platform, kind, count, publishType] of [
+      ['instagram', 'video', 11, undefined], ['instagram', 'video', 2, 'REEL'],
+      ['instagram', 'video', 2, 'STORY'], ['tiktok', 'image', 11, undefined],
+      ['tiktok', 'video', 2, undefined], ['tiktok', 'mixed', 2, undefined],
+    ] as const) {
+      const before = seen.length
+      const result = await postfast.postfastPublish({
+        apiKey: API_KEY, platform, accountId: platform === 'instagram' ? 'pf_acc_instagram' : 'pf_acc_video',
+        caption: 'Invalid carousel', scheduledAt, instagramPublishType: publishType,
+        mediaItems: Array.from({ length: count }, (_, i) => ({ storageKey: `invalid/${i}`,
+          metadata: kind === 'image' || kind === 'mixed' && i === 0 ? validCoverMetadata : validReelMetadata,
+        })),
+      })
+      assert.equal(result.success, false)
+      assert.equal(result.code, 'MEDIA_VALIDATION_FAILED')
+      assert.equal(seen.length, before, 'invalid compositions must not look up accounts, upload or create posts')
+    }
+
     const imageCoverPublish = await postfast.postfastPublish({
       apiKey: API_KEY,
       platform: 'instagram',
@@ -637,7 +685,7 @@ async function main() {
       scheduledAt,
     })
     assert.equal(invalidReelPublish.success, false)
-    assert.equal(invalidReelPublish.code, 'INSTAGRAM_PUBLISH_TYPE_INVALID')
+    assert.equal(invalidReelPublish.code, 'MEDIA_VALIDATION_FAILED')
 
     const publish = await postfast.postfastPublish({
       apiKey: API_KEY,

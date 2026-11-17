@@ -244,6 +244,8 @@ MM 成功提交订阅后统一发送 Quotation，替代旧附服务条款的品�
 
 职责：草稿创建、读取、编辑、提交、审批、驳回、发布/排期。
 
+轮播发布契约（2026-11-17，本地实现及验证，未部署）：沿用草稿 `mediaUrls` 完整顺序、`assetIds` 素材引用和 `instagramPublishType`；Instagram 支持 2–10 项图片、视频或混排 TIMELINE，TikTok 支持 2–10 张纯图片轮播且拒绝多视频/混排。单视频及显式 REEL/STORY 规则见 [轮播发布](carousel-publishing.md)。无新增数据库字段；结构化发布校验在所有提交与重试链路一致执行。
+
 接口：
 
 - `GET/POST /api/brands/:id/drafts`
