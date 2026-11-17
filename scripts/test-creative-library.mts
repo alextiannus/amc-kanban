@@ -33,6 +33,17 @@ const api=mod.exports,body={sourceId:'cre_text',sourceRevision:'r1',sourceDigest
 libraryRead=false;await assert.rejects(()=>api.searchCreativeLibrary('u','brand','',1,db,load),{code:'library_access_denied'});assert.equal(contentCalls,0)
 libraryRead=true;await assert.rejects(()=>api.searchCreativeLibrary('u','forbidden','',1,db,load),{code:'brainstorm_access_denied'})
 write=false;const read=await api.searchCreativeLibrary('u','brand','',1,db,load);assert.equal(read.canAdd,false);await assert.rejects(()=>api.addCreativeLibrary('u','brand',body,db,load),{code:'creative_edit_forbidden'})
+const searches:any[]=[]
+const curatedLoad=async(action:string,input:any)=>{searches.push(input);return {...await load(action),items:[{...raw(),curation:{labels:['hot','potential']}}]}}
+const curated=await api.searchCreativeLibrary('u','brand',' 烧烤 ',2,db,curatedLoad,'potential,hot')
+assert.deepEqual(searches[0],{q:'烧烤',page:2,curation:['hot','potential']})
+assert.deepEqual(curated.items[0].curation,{labels:['hot','potential']})
+await assert.rejects(()=>api.searchCreativeLibrary('u','brand','',1,db,curatedLoad,'bogus'),{code:'invalid_library_search'})
+assert.equal(searches.length,1,'invalid curation must not reach Content')
+libraryRead=false
+await assert.rejects(()=>api.searchCreativeLibrary('u','brand','',1,db,curatedLoad,'hot'),{code:'library_access_denied'})
+assert.equal(searches.length,1,'curation never bypasses the existing read permission')
+libraryRead=true
 write=true;disliked=true;await assert.rejects(()=>api.addCreativeLibrary('u','brand',body,db,load),{code:'library_source_disliked'});assert.equal(rows.size,0)
 disliked=false
 knowledge={brandPlan:{publishingCalendar:{months:{legacy:[{inspirationCreativeId:'cre_text',brandDismissal:{decision:'dislike',sourceId:'cre_text'}}]}}},marketingSolution:{}}

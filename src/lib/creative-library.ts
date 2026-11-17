@@ -32,10 +32,14 @@ function mediaPath(brandId:string,raw:any,thumbnail=false){
   const query=new URLSearchParams({sourceRevision:raw.sourceRevision,sourceDigest:raw.sourceDigest,...(thumbnail?{kind:'thumbnail'}:{})})
   return `/api/brands/${encodeURIComponent(brandId)}/creative-library/${encodeURIComponent(raw.creativeId)}/media?${query}`
 }
-export async function searchCreativeLibrary(userId:string,brandId:string,q:string,page:number,db:any=prisma,load=contentLibraryRequest){
+export async function searchCreativeLibrary(userId:string,brandId:string,q:string,page:number,db:any=prisma,load=contentLibraryRequest,curationInput:string=''){
   const {canAdd}=await authorizeLibrary(userId,brandId,false,db)
   if(typeof q!=='string'||q.length>300||!Number.isSafeInteger(page)||page<1||page>10000)throw nativeError('invalid_library_search',400)
-  const result=await load('search',{q:q.trim(),page})
+  if(typeof curationInput!=='string')throw nativeError('invalid_library_search',400)
+  const requested=curationInput?curationInput.split(',').map(label=>label.trim()):[]
+  if(requested.length>3||requested.some(label=>!['new','hot','potential'].includes(label)))throw nativeError('invalid_library_search',400)
+  const curation=['new','hot','potential'].filter(label=>requested.includes(label))
+  const result=await load('search',{q:q.trim(),page,...(curation.length?{curation}:{})})
   const ids=result.items.map((i:any)=>i.creativeId)
   const [rows,disliked]=await Promise.all([db.brandMarketingSolution.findMany({where:{brandId,kind:LIBRARY_IMPORT,period:{in:ids},status:'SAVED'},select:{period:true}}),libraryDislikes(db,brandId)])
   const imported=new Set(rows.map((r:any)=>r.period))
@@ -47,7 +51,7 @@ export async function readCreativeLibrary(userId:string,brandId:string,sourceId:
   const raw=await currentSource(sourceId,load)
   const [row,disliked]=await Promise.all([db.brandMarketingSolution.findUnique({where:{id:libraryImportId(brandId,sourceId)}}),libraryDislikes(db,brandId)])
   return {brandId,canAdd,sourceId,sourceRevision:raw.sourceRevision,sourceDigest:raw.sourceDigest,title:raw.title||'',platform:raw.platform||'',scriptKind:raw.scriptKind,
-    originalScript:creativeSourceScript(raw),scriptTypes:(raw.tags||[]).filter((t:any)=>t.groupKey==='script_type').map((t:any)=>({id:t.id,label:t.label})),
+    curation:{labels:raw.curation?.labels||[]},originalScript:creativeSourceScript(raw),scriptTypes:(raw.tags||[]).filter((t:any)=>t.groupKey==='script_type').map((t:any)=>({id:t.id,label:t.label})),
     videoUrl:raw.originalVideoUrl?mediaPath(brandId,raw):null,thumbnailUrl:mediaPath(brandId,raw,true),imported:row?.status==='SAVED',blocked:disliked.has(sourceId)||!usableSource(raw)}
 }
 export async function addCreativeLibrary(userId:string,brandId:string,body:any,db:any=prisma,load=contentLibraryRequest){
