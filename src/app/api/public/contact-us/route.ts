@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { sendContactUsTrialInviteEmail } from '@/lib/email'
 
@@ -31,6 +32,29 @@ function isRateLimited(key: string, now = Date.now()): boolean {
   recent.push(now)
   ipSubmissions.set(key, recent)
   return false
+}
+
+// Never truncate earlier human notes. Reject further growth rather than lose history.
+const MAX_NOTES_LENGTH = 65_536
+class ContactHistoryFullError extends Error {}
+
+function appendNotes(existing: string | null, addition: string): string {
+  if (existing?.includes(addition)) return existing
+  const merged = existing ? `${existing}\n\n${addition}` : addition
+  if (merged.length > MAX_NOTES_LENGTH) throw new ContactHistoryFullError()
+  return merged
+}
+
+// A serializable read/create also protects simultaneous first submissions without
+// introducing a schema change. Retry only rolled-back serialization conflicts.
+async function serializable<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await prisma.$transaction(work, { isolationLevel: 'Serializable' })
+    } catch (error: unknown) {
+      if (!(error && typeof error === 'object' && 'code' in error && error.code === 'P2034') || attempt >= 2) throw error
+    }
+  }
 }
 
 export async function OPTIONS() {
@@ -94,34 +118,36 @@ export async function POST(req: NextRequest) {
       `Preferred language: ${preferredLanguage}`,
     ].filter(Boolean).join('\n')
 
-    const db = prisma as any
-    const existingLead = await db.salesLead.findFirst({
-      where: {
-        email: { equals: email, mode: 'insensitive' },
-        notes: { contains: `Source: ${SOURCE}` },
-      },
-      orderBy: { createdAt: 'desc' },
+    const { lead, existingLead } = await serializable(async (db) => {
+      const existingLead = await db.salesLead.findFirst({
+        where: {
+          email: { equals: email, mode: 'insensitive' },
+          notes: { contains: `Source: ${SOURCE}` },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      const lead = existingLead
+        ? await db.salesLead.update({
+            where: { id: existingLead.id },
+            data: {
+              name: brandName,
+              phone: phone || existingLead.phone,
+              notes: appendNotes(existingLead.notes, notes),
+              // Enquiries never reset a human's status or owner.
+            },
+          })
+        : await db.salesLead.create({
+            data: {
+              bdUserId: null,
+              name: brandName,
+              phone: phone || null,
+              email,
+              notes,
+              status: 'NEW',
+            },
+          })
+      return { lead, existingLead }
     })
-    const lead = existingLead
-      ? await db.salesLead.update({
-          where: { id: existingLead.id },
-          data: {
-            name: brandName,
-            phone: phone || existingLead.phone,
-            notes,
-            status: existingLead.status === 'ONBOARDED' ? existingLead.status : 'NEW',
-          },
-        })
-      : await db.salesLead.create({
-          data: {
-            bdUserId: null,
-            name: brandName,
-            phone: phone || null,
-            email,
-            notes,
-            status: 'NEW',
-          },
-        })
 
     const shouldSendEmail = !existingLead || Date.now() - new Date(existingLead.updatedAt).getTime() > 24 * 60 * 60 * 1000
     const emailResult = shouldSendEmail
@@ -135,11 +161,22 @@ export async function POST(req: NextRequest) {
       : { success: false, error: 'Duplicate submission within 24 hours' }
 
     if (emailResult.success && emailResult.messageId) {
-      await db.salesLead.update({
-        where: { id: lead.id },
-        data: {
-          notes: `${notes}\nEmail message ID: ${emailResult.messageId}`,
-        },
+      await serializable(async (db) => {
+        const current = await db.salesLead.findUnique({ where: { id: lead.id } })
+        if (!current) return
+        // The enquiry and mail already succeeded. If a concurrent human edit
+        // fills the history, do not truncate it or falsely reject the enquiry.
+        let updatedNotes: string
+        try {
+          updatedNotes = appendNotes(current.notes, `Email message ID: ${emailResult.messageId}`)
+        } catch (error) {
+          if (error instanceof ContactHistoryFullError) return
+          throw error
+        }
+        await db.salesLead.update({
+          where: { id: lead.id },
+          data: { notes: updatedNotes },
+        })
       })
     }
 
@@ -152,7 +189,10 @@ export async function POST(req: NextRequest) {
       emailMessageId: emailResult.success ? emailResult.messageId || null : null,
       emailError: emailResult.success ? null : emailResult.error || 'Email send failed',
     }, { status: existingLead ? 200 : 201 })
-  } catch (err: any) {
+  } catch (err: unknown) {
+    if (err instanceof ContactHistoryFullError) {
+      return NextResponse.json({ error: 'Contact history is full; please contact AMC directly' }, { status: 409 })
+    }
     console.error('[public_contact_us] POST failed:', err)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }

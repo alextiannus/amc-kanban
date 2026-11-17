@@ -58,16 +58,16 @@ model User {
   organizationsJoined OrganizationMember[] @relation("OrganizationMember")
 
   // 权限映射表（人类用户能看到哪些 AI Agent 的工作）
-  permittedAgents      AgentPermission[]   @relation("HumanUser")
-  assignedToHumans     AgentPermission[]   @relation("AiAgent")
+  permittedAgents      AgentPermission[]            @relation("HumanUser")
+  assignedToHumans     AgentPermission[]            @relation("AiAgent")
   businessRoles        UserBusinessRole[]
-  brandMemberships     BrandAgent[]        @relation("BrandAgents")
+  brandMemberships     BrandAgent[]                 @relation("BrandAgents")
   createdSubscriptions BrandSubscription[]
   invoiceRequests      SubscriptionInvoiceRequest[]
   comments             Comment[]
-  sentInvitations      Invitation[]        @relation("InvitationInviter")
-  receivedInvitations  Invitation[]        @relation("InvitationInvitee")
-  schoolItems          SchoolItem[]        @relation("AgentSchoolItems")
+  sentInvitations      Invitation[]                 @relation("InvitationInviter")
+  receivedInvitations  Invitation[]                 @relation("InvitationInvitee")
+  schoolItems          SchoolItem[]                 @relation("AgentSchoolItems")
 
   // Relations to Marketing Promo Codes
   createdCampaigns CampaignPromoCode[] @relation("CreatedPromoCodes")
@@ -368,41 +368,46 @@ model CrewMember {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
-  inboxReceipts           InboxReceipt[]
-  assetFoldersInitialized Boolean              @default(false)
-  processedFoldersInitialized Boolean          @default(false)
-  assetAnalysisBatches    AssetAnalysisBatch[]
-  creditAccount           AmcCreditAccount?
-  creditCycles            AmcCreditCycle[]
-  manualStoreLimit        Int? // Administrator granted total capacity; independent of billing
-  id                      String               @id @default(cuid())
-  growthBrandKey          String?              @unique
-  crew                    MarketingCrew?
+  inboxReceipts               InboxReceipt[]
+  assetFoldersInitialized     Boolean              @default(false)
+  processedFoldersInitialized Boolean              @default(false)
+  assetAnalysisBatches        AssetAnalysisBatch[]
+  creditAccount               AmcCreditAccount?
+  creditCycles                AmcCreditCycle[]
+  manualStoreLimit            Int? // Administrator granted total capacity; independent of billing
+  id                          String               @id @default(cuid())
+  growthBrandKey              String?              @unique
+  crew                        MarketingCrew?
   // Legacy single-owner field — kept for zero-downtime migration,
   // new code uses the BrandOwner join table for multi-owner support.
-  ownerId                 String?
-  name                    String
-  location                String?
-  timezone                String               @default("Asia/Singapore")
-  autoPilot               Boolean              @default(true)
-  status                  String               @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
+  ownerId                     String?
+  name                        String
+  location                    String?
+  timezone                    String               @default("Asia/Singapore")
+  autoPilot                   Boolean              @default(true)
+  status                      String               @default("ACTIVE") // ACTIVE | PAUSED | ARCHIVED
+  workspaceKind               String               @default("BRAND") // BRAND | STORE
+  storeName                   String?
+  parentBrandId               String?
+  parentBrand                 Brand?               @relation("BrandStoreWorkspaces", fields: [parentBrandId], references: [id], onDelete: SetNull)
+  storeWorkspaces             Brand[]              @relation("BrandStoreWorkspaces")
 
   // Brand profile (Agent can populate these)
   followRewardDescription String? @db.Text // Optional merchant-written follow reward copy
-  activityPage Json? // Merchant-owned page copy, destination overrides and activity selection
-  description       String? // Brand tagline / about text
-  industry          String? // Merchant industry/category synchronized to Growth
-  logoUrl           String? // Brand logo image URL
-  watermarkUrl      String? // Custom watermark image URL (fallback to logoUrl if null)
-  watermarkPosition String  @default("bottom-right") // position: top-left | top-right | bottom-left | bottom-right | center
-  watermarkOpacity  Float   @default(0.8) // Opacity level from 0.0 to 1.0
-  watermarkPadding  Int     @default(20) // Padding in pixels from the edge
-  watermarkText     String? // Optional watermark text (fallback to brand name if both logo and custom text null)
-  website           String? // Brand website URL
-  phone             String? // Contact phone
-  address           String? // Full address
-  latitude          Float?
-  longitude         Float?
+  activityPage            Json? // Merchant-owned page copy, destination overrides and activity selection
+  description             String? // Brand tagline / about text
+  industry                String? // Merchant industry/category synchronized to Growth
+  logoUrl                 String? // Brand logo image URL
+  watermarkUrl            String? // Custom watermark image URL (fallback to logoUrl if null)
+  watermarkPosition       String  @default("bottom-right") // position: top-left | top-right | bottom-left | bottom-right | center
+  watermarkOpacity        Float   @default(0.8) // Opacity level from 0.0 to 1.0
+  watermarkPadding        Int     @default(20) // Padding in pixels from the edge
+  watermarkText           String? // Optional watermark text (fallback to brand name if both logo and custom text null)
+  website                 String? // Brand website URL
+  phone                   String? // Contact phone
+  address                 String? // Full address
+  latitude                Float?
+  longitude               Float?
 
   // Integration credentials (stored encrypted in production)
   postfastApiKey        String?
@@ -477,6 +482,7 @@ model Brand {
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+  @@index([parentBrandId, status])
 }
 
 enum CalendarNoteColor {
@@ -489,18 +495,18 @@ enum CalendarNoteColor {
 }
 
 model CalendarNote {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   brandId   String
-  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  date      String   @db.VarChar(10)
-  title     String   @default("")
-  body      String   @default("")
+  brand     Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  date      String            @db.VarChar(10)
+  title     String            @default("")
+  body      String            @default("")
   color     CalendarNoteColor @default(yellow)
-  version   Int      @default(1)
+  version   Int               @default(1)
   createdBy String
   updatedBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
 
   @@unique([brandId, date])
 }
@@ -557,40 +563,40 @@ model BrandGrowthSyncState {
 }
 
 model BrandSubscription {
-  id                 String    @id @default(cuid())
-  planId             String
-  planName           String
-  durationMonths     Int
-  billedMonths       Int
-  monthlyBaseUsd     Int
-  recurringAddonsUsd Int       @default(0)
-  oneTimeAddonsUsd   Int       @default(0)
-  totalDueUsd        Int
-  currency           String    @default("USD")
-  status             String    @default("PENDING") // PENDING | ACTIVE | CANCELLED | FAILED
-  paymentProvider    String? // STRIPE
-  paymentSessionId   String?   @unique
-  paymentUrl         String?
-  selectedAddons     Json?
-  termsVersion       String?
-  termsAcceptedAt    DateTime?
-  contractStartDate  DateTime?
-  contractEndDate    DateTime?
-  cancelAtPeriodEnd  Boolean   @default(false)
+  id                      String                       @id @default(cuid())
+  planId                  String
+  planName                String
+  durationMonths          Int
+  billedMonths            Int
+  monthlyBaseUsd          Int
+  recurringAddonsUsd      Int                          @default(0)
+  oneTimeAddonsUsd        Int                          @default(0)
+  totalDueUsd             Int
+  currency                String                       @default("USD")
+  status                  String                       @default("PENDING") // PENDING | ACTIVE | CANCELLED | FAILED
+  paymentProvider         String? // STRIPE
+  paymentSessionId        String?                      @unique
+  paymentUrl              String?
+  selectedAddons          Json?
+  termsVersion            String?
+  termsAcceptedAt         DateTime?
+  contractStartDate       DateTime?
+  contractEndDate         DateTime?
+  cancelAtPeriodEnd       Boolean                      @default(false)
   cancellationRequestedAt DateTime?
-  cancelledAt        DateTime?
-  trialStartsAt      DateTime?
-  trialEndsAt        DateTime?
-  billingStartsAt    DateTime?
-  feeWaived          Boolean   @default(false)
-  paidAt             DateTime?
-  brandId            String?
-  brand              Brand?    @relation(fields: [brandId], references: [id], onDelete: SetNull)
-  createdById        String?
-  createdBy          User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  invoiceRequests    SubscriptionInvoiceRequest[]
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  cancelledAt             DateTime?
+  trialStartsAt           DateTime?
+  trialEndsAt             DateTime?
+  billingStartsAt         DateTime?
+  feeWaived               Boolean                      @default(false)
+  paidAt                  DateTime?
+  brandId                 String?
+  brand                   Brand?                       @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  createdById             String?
+  createdBy               User?                        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  invoiceRequests         SubscriptionInvoiceRequest[]
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
 
   @@index([status])
   @@index([createdById])
@@ -883,7 +889,7 @@ model MediaAsset {
   manualOverrides   Json?
 
   contentRefs         ContentAssetRef[]
-  coverDrafts         ContentDraft[]       @relation("DraftCoverAsset")
+  coverDrafts         ContentDraft[]        @relation("DraftCoverAsset")
   materialSubmissions MaterialSubmission[]
   collectionItems     AssetCollectionItem[]
 
@@ -1005,32 +1011,32 @@ model VideoShootBatch {
 
 model VideoProductionJob {
   historyDeletedAt DateTime?
-  voiceoverState  Json?
-  id              String   @id
-  brandId         String
-  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  creativeId      String?
-  title           String
-  platform        String
-  idea            String
-  status          String
-  progress        Int      @default(0)
-  thumbnailUrl    String?
-  finalVideoUrl   String?
-  narration       String?
-  musicBrief      String?
-  creatorType     String?
-  aspectRatio     String?
-  assetIds        String[] @default([])
-  mediaUrls       String[] @default([])
-  scenes          Json
-  plan            Json?
-  sceneExecutions Json?
-  finalExecution  Json?
-  error           String?
-  createdBy       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  voiceoverState   Json?
+  id               String    @id
+  brandId          String
+  brand            Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creativeId       String?
+  title            String
+  platform         String
+  idea             String
+  status           String
+  progress         Int       @default(0)
+  thumbnailUrl     String?
+  finalVideoUrl    String?
+  narration        String?
+  musicBrief       String?
+  creatorType      String?
+  aspectRatio      String?
+  assetIds         String[]  @default([])
+  mediaUrls        String[]  @default([])
+  scenes           Json
+  plan             Json?
+  sceneExecutions  Json?
+  finalExecution   Json?
+  error            String?
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([brandId, status, updatedAt])
   @@index([brandId, creativeId])
@@ -2350,13 +2356,14 @@ model InboxReceipt {
 }
 
 model ImmediServiceOrder {
-  id String @id @default(cuid())
-  brandId String
+  id          String   @id @default(cuid())
+  brandId     String
   createdById String
-  requestKey String @unique
+  requestKey  String   @unique
   requestHash String
-  payload Json
-  createdAt DateTime @default(now())
+  payload     Json
+  createdAt   DateTime @default(now())
+
   @@index([brandId, createdAt])
 }
 
@@ -2364,29 +2371,30 @@ model ImmediServiceOrder {
 model AgentSkillSetting {
   agentId   String
   skillId   String
-  content   String? @db.Text
+  content   String?  @db.Text
   installed Boolean
-  revision  Int @default(1)
+  revision  Int      @default(1)
   updatedAt DateTime @default(now()) @updatedAt
+
   @@id([agentId, skillId])
 }
 
 // Immutable MM quotation and durable SMTP delivery receipt. Intentionally kept
 // independently of Brand/User deletion, as a commercial record.
 model SubscriptionQuotation {
-  subscriptionId String   @id
+  subscriptionId String    @id
   recipient      String
   snapshot       Json
   pdf            Bytes?
-  state          String   @default("PENDING") // PENDING | PREPARING | SENDING | SENT | FAILED | UNKNOWN
+  state          String    @default("PENDING") // PENDING | PREPARING | SENDING | SENT | FAILED | UNKNOWN
   leaseToken     String?
-  attempts       Int      @default(0)
-  nextAttemptAt  DateTime @default(now())
+  attempts       Int       @default(0)
+  nextAttemptAt  DateTime  @default(now())
   lastError      String?
   messageId      String?
   sentAt         DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([state, nextAttemptAt])
 }

@@ -26,7 +26,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   if (_req.nextUrl.searchParams.get('profile') === '1') {
-    const profile = await prisma.brand.findUnique({where:{id},select:{id:true,name:true,description:true,address:true,phone:true,website:true,location:true,accounts:{where:{unboundAt:null,NOT:{handle:'unconfigured'}},orderBy:{updatedAt:'desc'},select:{id:true,platformId:true,handle:true,displayName:true,autoPilot:true,followerCount:true,followerDelta:true,ratingScore:true,snapshotAt:true,profileUrl:true,expiresAt:true}}}})
+    const profile = await prisma.brand.findUnique({where:{id},select:{id:true,name:true,description:true,address:true,phone:true,website:true,location:true,workspaceKind:true,storeName:true,parentBrandId:true,accounts:{where:{unboundAt:null,NOT:{handle:'unconfigured'}},orderBy:{updatedAt:'desc'},select:{id:true,platformId:true,handle:true,displayName:true,autoPilot:true,followerCount:true,followerDelta:true,ratingScore:true,snapshotAt:true,profileUrl:true,expiresAt:true}}}})
     return NextResponse.json(profile||{error:'Not found'},{status:profile?200:404,headers:{'Cache-Control':'no-store'}})
   }
 
