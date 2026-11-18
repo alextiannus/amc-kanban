@@ -421,7 +421,7 @@ Instagram/TikTok/Facebook/Threads replies must use the human-confirmed Social In
 *   **Arguments**:
     *   `placeId` (string, required)
 
-*   **Errors**: Fixed safe message plus allowlisted `failureKind` and `googleStatus`; never raw upstream details or credentials. Invalid API keys are reported as `INVALID_API_KEY`. Success payload remains unchanged. Local implementation; production verification pending.
+*   **Errors**: Fixed safe message plus allowlisted `failureKind` and `googleStatus`; never raw upstream details or credentials. Invalid API keys are reported as `INVALID_API_KEY`. Success payload remains unchanged. Deployed at e43f5e56; production INVALID_API_KEY / REQUEST_DENIED path verified 2026-11-18. Successful response compatibility verified by local regression; live success still requires valid Places credentials.
 
 ---
 
