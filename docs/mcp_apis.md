@@ -421,6 +421,8 @@ Instagram/TikTok/Facebook/Threads replies must use the human-confirmed Social In
 *   **Arguments**:
     *   `placeId` (string, required)
 
+*   **Errors**: Fixed safe message plus allowlisted `failureKind` and `googleStatus`; never raw upstream details or credentials. Invalid API keys are reported as `INVALID_API_KEY`. Success payload remains unchanged. Local implementation; production verification pending.
+
 ---
 
 ## 9. Action Execution & Notifications

@@ -1,5 +1,7 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+Google Places MCP diagnostics (2026-11-18, local patch; production pending): `google_get_place_info` preserves successful responses and reports failures using fixed messages, allowlisted Google status and failure category only. Raw upstream details, credentials, URLs and arbitrary error text are never forwarded. Invalid credentials remain a configuration issue; no fallback key, retry, billing or account change is performed.
+
 Internal text Retry-After diagnostics (2026-11-13, implemented locally): authenticated callers may receive only a validated 0-86400 second duration, alongside the existing safe HTTP status and failure kind. No raw upstream header/body or exception text is exposed. The gateway performs no automatic retries. Growth handles only explicitly user-authorized, request-bound HTTP 429 policies; unknown and other failed requests retain their guards.
 
 

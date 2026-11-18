@@ -1,3 +1,4 @@
+import { googlePlaceMcpResult } from './google-place-result'
 import { COVER_MIMES, assertCoverMedia } from '../../asset-library/cover-policy'
 import { prepareCoverAssets, markDraftCover } from '../../asset-library/covers'
 import { createClassifiedAsset, updateAssetFiling } from '../../asset-library/filing'
@@ -3017,11 +3018,7 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
       const response = await handleGetPlaces(req)
       const data = await response.json()
       
-      if (response.status >= 400) {
-        return { content: [{ type: 'text' as const, text: `Error: ${data.error || 'Failed to fetch place details'}` }], isError: true }
-      }
-      
-      return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+      return googlePlaceMcpResult(response.status, data)
     }
   )
 
