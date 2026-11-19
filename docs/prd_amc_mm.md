@@ -168,7 +168,9 @@ Kanban 创建调研立即返回任务标识，将请求关联保存在现有 JSO
 
 ## Stable Audio background music (implemented locally; deployment pending)
 
-Video background music can use Stable Audio 3 selected in Kanban unified model management. The project brief and existing 10-120 second business duration produce one continuous instrumental MP3. Task IDs survive restarts, polling resumes against the original model connection version, and paid results are reused after upload failures. Existing music assets and MiniMax narration remain compatible. Final acceptance requires rendered background music mixed with narration.
+Video background music can use Stable Audio 3 selected in Kanban unified model management. The project brief and existing 10-120 second business duration produce one continuous instrumental MP3. Task IDs survive restarts, polling resumes against the original model connection version, and paid results are reused after upload failures. Existing music assets and MiniMax narration remain compatible. Final acceptance verifies the selected background-music mode, narration, timing and playback.
+
+Music failure recovery (implemented locally; deployment and production acceptance pending): default assembly requires background music. When completed video segments are available but music fails, show the distinct music error and offer an explicit “Continue without background music” action that preserves clip audio and existing narration. Unknown music outcomes remain protected against duplicate paid requests. Label resulting videos as having no added background music and allow adding music later using existing clips and narration, retaining the previous downloadable final until replacement succeeds. Assembly requests accept backgroundMusicMode=required|off (omitted means required); retries, page reloads and language versions retain the persisted assembly mode. Both failures before assembly enqueue and failed queued assemblies are recoverable without regenerating completed video.
 
 ## 对话驱动的品牌营销策略（2026-10-19 已上线）
 
