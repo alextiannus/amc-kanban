@@ -64,6 +64,17 @@ export async function POST(request: Request) {
   const pendingBrandTimezone = typeof checkout.metadata?.pendingBrandTimezone === 'string'
     ? checkout.metadata.pendingBrandTimezone.trim()
     : ''
+  let pendingBrandProfile: Parameters<typeof createBrandForActivatedSubscription>[0]['profile']
+  try {
+    const raw = JSON.parse(checkout.metadata?.pendingBrandProfile || '{}')
+    if (raw.brandType === 'personal_ip' && typeof raw.industry === 'string' && Array.isArray(raw.services) && raw.services.length && Array.isArray(raw.keywords) && raw.keywords.length && raw.source === 'user_confirmed_registration') {
+      pendingBrandProfile = raw
+    } else if (raw.brandType === 'store') {
+      pendingBrandProfile = { brandType: 'store', source: 'registration' }
+    }
+  } catch {
+    pendingBrandProfile = undefined
+  }
 
   const existingQuotation = await prisma.subscriptionQuotation.findUnique({ where: { subscriptionId }, select: { subscriptionId: true } })
   const useQuotation = Boolean(existingQuotation) || checkout.metadata?.clientType === 'mm' || request.headers.get('x-client-type') === 'mm'
@@ -79,6 +90,7 @@ export async function POST(request: Request) {
         ownerEmail: pendingBrandOwnerEmail || '',
         timezone: pendingBrandTimezone || null,
         address: pendingBrandAddress || null,
+        profile: pendingBrandProfile,
       })
     : null
   if (pendingBrandName && !createdBrand?.ok) {

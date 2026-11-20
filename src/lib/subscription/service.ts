@@ -10,6 +10,9 @@ import { queueBrandGrowthSync, seedInitialBrandStores, syncBrandGrowthState } fr
 import { buildBillingActivationData } from '@/lib/subscription/workflow'
 import { provisionPostfastKeyForBrand } from '@/lib/postfastKeyPool'
 import { triggerErpOnboardingFlow } from '@/lib/integrations/immediErp'
+import { refreshBrainstorm } from '@/lib/ai-native/brainstorm'
+import { fetchBrandKeywords } from '@/lib/promotion-strategy/clients'
+import { brainstormTagContext } from '@/lib/ai-native/brainstorm-match'
 
 export async function activateSubscriptionByPaymentSession(paymentSessionId: string) {
   const sub = await prisma.brandSubscription.findFirst({
@@ -72,6 +75,43 @@ type CreateBrandForSubscriptionInput = {
   description?: string | null
   stores?: unknown[] | null
   notificationMode?: 'service_terms' | 'quotation'
+  profile?: {
+    brandType: 'store' | 'personal_ip'
+    industry?: string
+    services?: Array<{ id: string; name: string; label?: string; category?: string; type?: string }>
+    keywords?: string[]
+    source: string
+    confirmedAt?: string
+  }
+}
+
+async function updateCreativeBootstrapState(brandId: string, state: 'PENDING' | 'READY' | 'FAILED', error?: string) {
+  const current = await prisma.brandKnowledge.findUnique({ where: { brandId }, select: { brandClaim: true } })
+  const claim = current?.brandClaim && typeof current.brandClaim === 'object' && !Array.isArray(current.brandClaim) ? current.brandClaim as Record<string, unknown> : {}
+  await prisma.brandKnowledge.upsert({
+    where: { brandId },
+    create: { brandId, negPrompts: [], brandClaim: { ...claim, creativeBootstrap: { state, updatedAt: new Date().toISOString(), ...(error ? { error } : {}) } } },
+    update: { brandClaim: { ...claim, creativeBootstrap: { state, updatedAt: new Date().toISOString(), ...(error ? { error } : {}) } } },
+  })
+}
+
+async function bootstrapPersonalIpCreativeFeed(userId: string, brandId: string, profile: NonNullable<CreateBrandForSubscriptionInput['profile']>) {
+  try {
+    await updateCreativeBootstrapState(brandId, 'PENDING')
+    const brand = await prisma.brand.findUnique({ where: { id: brandId }, select: { id: true, name: true, description: true, industry: true } })
+    if (!brand) throw new Error('brand_context_unavailable')
+    const context = brainstormTagContext({ ...brand, productCatalog: profile.services || [] }, '')
+    const current = await fetchBrandKeywords({ action: 'read', brandId, context })
+    const forbidden = new Set(['会员优惠', '团购套餐', '节日活动', '当前热门', '餐饮'])
+    const confirmed = [...new Set((profile.keywords || []).map(value => value.trim()).filter(value => value && !forbidden.has(value)))]
+    if (!confirmed.length) throw new Error('personal_ip_keywords_required')
+    await fetchBrandKeywords({ action: 'save', brandId, actorId: userId, expectedRevision: current.revision, entries: confirmed.map(label => ({ label })) })
+    await refreshBrainstorm(userId, brandId, { action: 'refresh', force: true })
+    await updateCreativeBootstrapState(brandId, 'READY')
+  } catch (error) {
+    console.error('[createBrand] personal IP creative bootstrap failed:', error)
+    await updateCreativeBootstrapState(brandId, 'FAILED', 'creative_match_failed').catch(() => undefined)
+  }
 }
 
 export async function createBrandForActivatedSubscription(input: CreateBrandForSubscriptionInput) {
@@ -167,8 +207,31 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
         timezone: input.timezone || 'Asia/Singapore',
         address: input.address?.trim() || null,
         status: 'ACTIVE',
+        industry: input.profile?.industry?.trim() || null,
+        workspaceKind: 'BRAND',
       },
     })
+
+    if (input.profile) {
+      await tx.brandKnowledge.create({
+        data: {
+          brandId: created.id,
+          negPrompts: [],
+          menuItems: (input.profile.services || []) as any,
+          brandClaim: {
+            onboardingProfile: {
+              brandType: input.profile.brandType,
+              industry: input.profile.industry || null,
+              services: input.profile.services || [],
+              keywords: input.profile.keywords || [],
+              source: input.profile.source,
+              confirmedAt: input.profile.confirmedAt || null,
+            },
+            creativeBootstrap: { state: input.profile.brandType === 'personal_ip' ? 'PENDING' : 'NOT_REQUESTED', updatedAt: new Date().toISOString() },
+          },
+        },
+      })
+    }
 
     await provisionPostfastKeyForBrand({
       brandId: created.id,
@@ -195,6 +258,10 @@ export async function createBrandForActivatedSubscription(input: CreateBrandForS
   })
   const brand = result.brand
   console.log(`[createBrand] $transaction done, brand.id=${brand.id}, alreadyCreated=${result.alreadyCreated} (${Date.now() - t0}ms)`)
+
+  if (!result.alreadyCreated && input.profile?.brandType === 'personal_ip') {
+    void bootstrapPersonalIpCreativeFeed(brandOwnerId, brand.id, input.profile)
+  }
 
   syncBrandGrowthState(brand.id).catch(error => {
     console.error('[createBrand] Growth snapshot deferred:', error)

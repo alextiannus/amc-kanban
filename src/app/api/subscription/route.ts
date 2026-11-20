@@ -420,6 +420,31 @@ export async function POST(request: Request) {
   const pendingBrandOwnerEmail = String(body.pendingBrandOwnerEmail ?? '').trim().toLowerCase()
   const pendingBrandTimezone = String(body.timezone ?? '').trim() || 'Asia/Singapore'
   const pendingBrandDescription = String(body.pendingBrandDescription ?? '').trim()
+  const pendingBrandType = body.pendingBrandType === 'personal_ip' ? 'personal_ip' : 'store'
+  const pendingBrandIndustry = String(body.pendingBrandIndustry ?? '').trim()
+  const pendingBrandProfileSource = String(body.pendingBrandProfileSource ?? '').trim()
+  const pendingBrandProfileConfirmed = body.pendingBrandProfileConfirmed === true
+  const pendingBrandServices: Array<{ id: string; name: string; label: string; category: string; type: string }> = Array.isArray(body.pendingBrandServices) ? body.pendingBrandServices.slice(0, 24).map((item: any) => ({
+    id: String(item?.id ?? '').trim().slice(0, 80),
+    name: String(item?.name ?? item?.label ?? '').trim().slice(0, 160),
+    label: String(item?.label ?? item?.name ?? '').trim().slice(0, 160),
+    category: String(item?.category ?? pendingBrandIndustry).trim().slice(0, 160),
+    type: 'service',
+  })).filter((item: any) => item.id && item.name) : []
+  const pendingBrandKeywords: string[] = Array.isArray(body.pendingBrandKeywords) ? [...new Set<string>(body.pendingBrandKeywords.map((item: unknown) => String(item).trim()).filter(Boolean))].slice(0, 24) : []
+
+  if (pendingBrandType === 'personal_ip' && (!pendingBrandIndustry || !pendingBrandServices.length || !pendingBrandProfileConfirmed || pendingBrandProfileSource !== 'user_confirmed_registration')) {
+    return NextResponse.json({ error: 'Personal brand registration requires a confirmed profession and at least one service.' }, { status: 400 })
+  }
+  const pendingBrandProfileMetadata = JSON.stringify({
+    brandType: pendingBrandType,
+    industry: pendingBrandIndustry || undefined,
+    services: pendingBrandServices.map(item => ({ id: item.id, name: item.name })),
+    keywords: pendingBrandKeywords,
+    source: pendingBrandProfileSource || 'registration',
+    confirmedAt: pendingBrandProfileConfirmed ? new Date().toISOString() : undefined,
+  })
+  if (pendingBrandProfileMetadata.length > 500) return NextResponse.json({ error: 'Personal brand profile is too large.' }, { status: 400 })
 
   if (brandId && pendingBrandName) {
     return NextResponse.json({ error: 'brandId and pendingBrandName cannot be used together' }, { status: 400 })
@@ -599,6 +624,14 @@ export async function POST(request: Request) {
           ownerEmail: pendingBrandOwnerEmail || '',
           timezone: pendingBrandTimezone,
           address: pendingBrandAddress || null,
+          profile: pendingBrandType === 'personal_ip' ? {
+            brandType: pendingBrandType,
+            industry: pendingBrandIndustry,
+            services: pendingBrandServices,
+            keywords: pendingBrandKeywords,
+            source: pendingBrandProfileSource,
+            confirmedAt: new Date().toISOString(),
+          } : { brandType: 'store', source: 'registration' },
         })
       : null
     if (pendingBrandName && !createdBrand?.ok) {
@@ -685,6 +718,7 @@ export async function POST(request: Request) {
       pendingBrandOwnerEmail,
       pendingBrandTimezone,
       pendingBrandAddress,
+      pendingBrandProfile: pendingBrandProfileMetadata,
       multiStoreQty: String(addonQuantities['multi_store'] ?? 0),
     },
   })
