@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getSession, extractApiKey, getAgentFromApiKey } from '@/lib/auth'
 import { canWriteBrandProject } from '@/lib/brandAccess'
 import { prisma } from '@/lib/prisma'
@@ -40,7 +41,7 @@ export async function PUT(request: Request, context: Context) {
   if (!industry || !description || !services.length || !keywords.length) return NextResponse.json({ error: 'industry, description, services and keywords are required' }, { status: 400 })
 
   const confirmedAt = new Date().toISOString()
-  const snapshot = await prisma.$transaction(async tx => {
+  const snapshot = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const current = await tx.brand.findUnique({ where: { id: brandId }, select: { id: true, name: true, description: true, industry: true, knowledge: { select: { menuItems: true, brandClaim: true } } } })
     if (!current) return null
     const claim = current.knowledge?.brandClaim && typeof current.knowledge.brandClaim === 'object' && !Array.isArray(current.knowledge.brandClaim) ? current.knowledge.brandClaim as Record<string, unknown> : {}
