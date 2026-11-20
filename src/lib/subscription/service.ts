@@ -95,6 +95,17 @@ async function updateCreativeBootstrapState(brandId: string, state: 'PENDING' | 
   })
 }
 
+async function canonicalKeywordEntries(brandId: string, labels: string[]) {
+  return Promise.all(labels.map(async label => {
+    const catalog = await fetchBrandKeywords({ action: 'catalog', brandId, q: label })
+    const normalized = label.normalize('NFKC').toLowerCase()
+    const exact = (catalog.items || []).find((item: any) => String(item.label || '').normalize('NFKC').toLowerCase() === normalized)
+    if (exact?.id) return { id: exact.id }
+    if ((catalog.items || []).length > 1) throw new Error(`ambiguous_confirmed_keyword:${label}`)
+    return catalog.items?.[0]?.id ? { id: catalog.items[0].id } : { label }
+  }))
+}
+
 async function bootstrapPersonalIpCreativeFeed(userId: string, brandId: string, profile: NonNullable<CreateBrandForSubscriptionInput['profile']>) {
   try {
     await updateCreativeBootstrapState(brandId, 'PENDING')
@@ -105,7 +116,7 @@ async function bootstrapPersonalIpCreativeFeed(userId: string, brandId: string, 
     const forbidden = new Set(['会员优惠', '团购套餐', '节日活动', '当前热门', '餐饮'])
     const confirmed = [...new Set((profile.keywords || []).map(value => value.trim()).filter(value => value && !forbidden.has(value)))]
     if (!confirmed.length) throw new Error('personal_ip_keywords_required')
-    await fetchBrandKeywords({ action: 'save', brandId, actorId: userId, expectedRevision: current.revision, entries: confirmed.map(label => ({ label })) })
+    await fetchBrandKeywords({ action: 'save', brandId, actorId: userId, expectedRevision: current.revision, entries: await canonicalKeywordEntries(brandId, confirmed) })
     await refreshBrainstorm(userId, brandId, { action: 'refresh', force: true })
     await updateCreativeBootstrapState(brandId, 'READY')
   } catch (error) {

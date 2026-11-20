@@ -20,6 +20,17 @@ async function actorFor(request: Request): Promise<Actor | null> {
 
 const forbiddenDefaults = new Set(['会员优惠', '团购套餐', '节日活动', '当前热门', '餐饮', 'restaurant', 'group buying'])
 
+async function canonicalKeywordEntries(brandId: string, labels: string[]) {
+  return Promise.all(labels.map(async label => {
+    const catalog = await fetchBrandKeywords({ action: 'catalog', brandId, q: label })
+    const normalized = label.normalize('NFKC').toLowerCase()
+    const exact = (catalog.items || []).find((item: any) => String(item.label || '').normalize('NFKC').toLowerCase() === normalized)
+    if (exact?.id) return { id: exact.id }
+    if ((catalog.items || []).length > 1) throw new Error(`ambiguous_confirmed_keyword:${label}`)
+    return catalog.items?.[0]?.id ? { id: catalog.items[0].id } : { label }
+  }))
+}
+
 export async function PUT(request: Request, context: Context) {
   const actor = await actorFor(request)
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -64,7 +75,7 @@ export async function PUT(request: Request, context: Context) {
 
   try {
     const currentKeywords = await fetchBrandKeywords({ action: 'read', brandId, context: brainstormTagContext({ id: brandId, name: snapshot.name, industry, description, productCatalog: services }, '') })
-    const savedKeywords = await fetchBrandKeywords({ action: 'save', brandId, actorId: actor.id, expectedRevision: currentKeywords.revision, entries: keywords.map(label => ({ label })) })
+    const savedKeywords = await fetchBrandKeywords({ action: 'save', brandId, actorId: actor.id, expectedRevision: currentKeywords.revision, entries: await canonicalKeywordEntries(brandId, keywords) })
     const feed = body.forceMatch === false ? null : await refreshBrainstorm(actor.id, brandId, { action: 'refresh', force: true })
     return NextResponse.json({ ok: true, profile: snapshot, keywordRevision: savedKeywords.revision, keywords: savedKeywords.tags, matchStatus: feed?.matchStatus || 'PENDING', playableIdeas: Array.isArray(feed?.items) ? feed.items.length : null }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (error) {
