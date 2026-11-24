@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { assignRemoteCopyScriptExperiment, RemoteContentServiceError } from '@/lib/amc-content/remoteContentService'
 import { normalizeContentPlatform } from '@/lib/amc-content/platforms'
 import { generateContentDirect } from '@/lib/amc-content/contentGenerationService'
-import { resolveContentGenerationTheme } from '@/lib/amc-content/generationTheme'
+import { resolveContentGenerationTheme, resolveDraftCaptionLanguage } from '@/lib/amc-content/generationTheme'
 
 type Params = { params: Promise<{ id: string; draftId: string }> }
 
@@ -105,6 +105,7 @@ export async function POST(request: Request, { params }: Params) {
     result = await generateContentDirect({
       brandId,
       platform,
+      language: resolveDraftCaptionLanguage(draft.captionLang),
       theme: resolveContentGenerationTheme(body?.theme, draft),
       mediaUrls,
       assetIds,

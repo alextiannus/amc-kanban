@@ -1,3 +1,9 @@
+export function resolveDraftCaptionLanguage(value: unknown): 'zh' | 'en' | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'zh' || normalized === 'en' ? normalized : undefined
+}
+
 type DraftInstructionSource = {
   caption?: string | null
   agentNote?: string | null

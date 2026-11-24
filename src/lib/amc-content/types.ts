@@ -50,6 +50,7 @@ export type ContentGenerationRequest = {
 
   brandId: string
   platform: string
+  language?: 'zh' | 'en'
   theme?: string
   idea?: string
   industryVertical?: IndustryVertical

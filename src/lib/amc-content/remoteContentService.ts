@@ -99,6 +99,7 @@ export async function tryGenerateWithRemoteContentService(
     body: JSON.stringify({
       brandId: input.brandId,
       platform: input.platform,
+      language: input.language,
       theme: input.theme || input.idea,
       industryVertical: input.industryVertical,
       brief: {
