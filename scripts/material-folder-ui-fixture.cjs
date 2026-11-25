@@ -4,10 +4,30 @@ const http = require('node:http')
 const esbuild = require('esbuild')
 const postcss = require('postcss')
 const tailwind = require('@tailwindcss/postcss')
-const root = process.cwd(), out = path.join(root, 'output/playwright/material-folders')
+const root = process.cwd(), out = path.resolve(root, process.env.MATERIAL_FOLDER_FIXTURE_OUTPUT || 'output/playwright/material-folders')
+const port = Number(process.env.MATERIAL_FOLDER_FIXTURE_PORT || 3115)
 fs.mkdirSync(out, { recursive: true })
 async function main() {
-  await esbuild.build({ stdin: { contents: `import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import DashboardAssets from './src/components/dashboard/DashboardAssets';import PostEditDrawer from './src/components/dashboard/PostEditDrawer';function Fixture(){const[open,setOpen]=useState(false);return new URLSearchParams(location.search).has('draft')?<><button onClick={()=>setOpen(true)}>新建发布草稿</button><PostEditDrawer isOpen={open} onClose={()=>setOpen(false)} postId={null} brandId="fixture" onSuccess={()=>setOpen(false)}/></>:<DashboardAssets brandId="fixture"/>}createRoot(document.getElementById('root')).render(<Fixture/>);`, resolveDir: root, loader: 'tsx' }, bundle: true, outfile: path.join(out, 'app.js'), platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' } })
+  await esbuild.build({ stdin: { contents: `
+    import React, { useState } from 'react'
+    import { createRoot } from 'react-dom/client'
+    import DashboardAssets from './src/components/dashboard/DashboardAssets'
+    import PostEditDrawer from './src/components/dashboard/PostEditDrawer'
+    function Fixture() {
+      const [open, setOpen] = useState(false)
+      const [brandId, setBrandId] = useState('fixture')
+      const params = new URLSearchParams(location.search)
+      if (params.has('draft')) return <>
+        <button onClick={() => setOpen(true)}>新建发布草稿</button>
+        <PostEditDrawer isOpen={open} onClose={() => setOpen(false)} postId={null} brandId={brandId} onSuccess={() => setOpen(false)} />
+      </>
+      return <>
+        {params.has('switchBrand') && <button onClick={() => setBrandId('fixture-other')}>切换测试品牌</button>}
+        <DashboardAssets brandId={brandId} />
+      </>
+    }
+    createRoot(document.getElementById('root')).render(<Fixture />)
+  `, resolveDir: root, loader: 'tsx' }, bundle: true, outfile: path.join(out, 'app.js'), platform: 'browser', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"development"' } })
   const css = await postcss([tailwind({ base: root })]).process(fs.readFileSync('src/app/globals.css', 'utf8'), { from: path.join(root, 'src/app/globals.css') })
   fs.writeFileSync(path.join(out, 'app.css'), css.css)
   let counter = 10
@@ -100,6 +120,6 @@ async function main() {
     if (url.pathname.startsWith('/api/')) return json({ accounts: [], creatives: [], collections: [] })
     if (['/app.js', '/app.css'].includes(url.pathname)) { res.setHeader('Content-Type', url.pathname.endsWith('.css') ? 'text/css' : 'text/javascript'); return res.end(fs.readFileSync(path.join(out, url.pathname.slice(1)))) }
     res.setHeader('Content-Type', 'text/html'); res.end('<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body><div id="root" style="height:100dvh"></div><script src="/app.js"></script></body></html>')
-  }).listen(3115, '127.0.0.1', () => console.log('Material folder UI fixture: http://127.0.0.1:3115'))
+  }).listen(port, '127.0.0.1', () => console.log(`Material folder UI fixture: http://127.0.0.1:${port}`))
 }
 main().catch(e => { console.error(e); process.exitCode = 1 })

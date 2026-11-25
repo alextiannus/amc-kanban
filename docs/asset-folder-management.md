@@ -18,12 +18,15 @@
 
 待整理“归入”菜单同样提供“封面素材（保留原目录与分类）”。选中后仅添加封面用途，允许待确认图片，支持预览与撤销；保留原目录、来源类别和引用。仅接受 JPEG/PNG，含视频或其他格式提示分批选择，服务端仍校验真实格式；不新增封面物理目录。固定“封面素材”用途入口与三个来源目录并列，保留原目录和类别；规范见 [封面素材与草稿](cover-materials.md)。
 
+多选素材后，底部「转移文件夹」向上展开与顶部导航共用的目录树。一级来源以标题分组，子目录逐级缩进，搜索命中时显示上级路径。点选后显示「来源 / 目录路径」，点击「移动」才提交。跨来源分类再次确认。原分类的默认归档入口及旧有可选目录继续提供。收起或取消确认保留当前素材选择，保存失败保留目标供重试。窄屏内可滚动浏览目录及底部操作。已实现并通过本地验证，待发布。
+
 ## 接口
 
 GET /api/brands/:id/folders 保留 folders/canCreate 并新增 roots（固定 id、materialClass、name、description、canCreateChild、禁止改名移动删除）；实体目录提供类别匹配数量及独立 pendingAssetCount（删除权限按全部素材计算）。实体目录仍使用 folderId。
 POST folders：name、parentId、materialClass；三个固定入口下新建通过 materialClass 指定类别，子目录继承。PATCH/DELETE 继续要求 revision。旧客户端未传类别仍默认 MANUAL。
 GET /api/dashboard/assets 支持 root/materialClass、folderId 及后代、q、assetType、usage、since、materialForm、page/pageSize，返回精确 total/page/pageSize；默认兼容旧无分页请求。分页固定稳定排序，筛选总数不使用本地缓存估算。已选素材在当前一级入口跨页保留，动作从选中缓存解析完整对象。
 素材列表的旧 sourceGroup、folder 参数及已有链接保持兼容。MM 与 Content 使用相同 ORIGINAL/AI/MANUAL 映射。素材 PATCH 的 revisions 可指定每条预览版本，任一冲突整体拒绝；confirmMaterialClassChange=true 明确确认类别变化。归档修改留 before/after 审计。
+底部「转移文件夹」向既有素材 PATCH 接口提交实体目录的 folderId；按原分类归入默认位置提交 folderId=null。
 
 ## 验证与发布
 
@@ -32,6 +35,8 @@ GET /api/dashboard/assets 支持 root/materialClass、folderId 及后代、q、a
 沿用 additive migration 20261104090000_material_folder_management，不新增破坏性迁移。先数据库兼容列，再 Kanban API/页面，随后 MM/Content。历史脚本 npm run materials:classify -- --help，默认只读预览，明确 apply 前核对 digest，回执保留前值与 CAS 版本，rollback 再次验证版本和目录。工作台 POST /api/brands/:id/assets/organize 使用 action=apply、assetIds、revisions、materialClass、folderId 和明确确认，返回 receiptId；action=cover+assetIds+revisions+confirmCoverPurpose=true 只添加封面用途，返回 rollbackAction=rollback-cover，配合 receiptId 撤销用途，沿用同一权限/真实格式/版本校验；action=rollback+receiptId 从服务端审计回执恢复前值，要求当前操作者、品牌写权限和逐条当前版本一致，目录删除或后续改动则拒绝。不能盲目重复提交。生产迁移、真实品牌历史整理及部署不在本地验证范围内。
 
 ## 本轮本地验证结果
+
+2026-11-24 底部转移文件夹验证通过。1440px 桌面和 390px 手机覆盖三级目录、中英混排搜索、路径显示、关闭与取消时不写入、跨类别确认、保存失败重试、提交期间锁定及品牌切换。顶部目录导航与待整理工作台的浏览器回归、素材目录 SQL 回归及类型检查通过。
 
 Kanban、MM、Content 类型检查通过；目录真实 SQL 事务套件与分析保护套件通过，覆盖固定入口权限、业务目录、逐条版本冲突、整理撤销、品牌隔离、AI 来源保护及分类数量。Kanban 1440/390px 浏览器检查通过：用途悬停/聚焦/点击、筛选清理、24 条分页和跨页选择、管理表单失败保留、整理预览/应用/撤销。MM 320/390/768/1440px 既有上传/重试/预览/选择回归通过。Content 新目录导航与手机说明专项通过，自动选材隔离测试通过。
 

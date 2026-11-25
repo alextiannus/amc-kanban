@@ -1,7 +1,7 @@
 'use client'
 /* eslint-disable @next/next/no-img-element */
 import { useI18n } from '@/lib/i18n'
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import React, { useEffect, useState, useRef, useCallback, useMemo, useId } from 'react'
 import {
   Search,
   Upload,
@@ -46,7 +46,7 @@ import {
 import { type ManagedFolder } from './AssetFolderManager'
 import { COVER_MIMES, COVER_VIEW } from '@/lib/asset-library/cover-policy'
 import { MATERIAL_ROOTS, type MaterialRoot } from '@/lib/asset-library/roots'
-import MaterialDirectoryPicker from './MaterialDirectoryPicker'
+import MaterialDirectoryPicker, { MaterialDirectoryTree } from './MaterialDirectoryPicker'
 import MaterialCleanup from './MaterialCleanup'
 import AssetAnalysisTools, { AssetInfoButton } from './AssetAnalysisTools'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
@@ -252,9 +252,16 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   selectedRef.current = selected
   const [isBatchSelectMode, setIsBatchSelectMode] = useState(false)
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null)
+  // Undefined closes the picker. An empty string opens it without a destination.
+  const [floatingFolderId, setFloatingFolderId] = useState<string | null>()
+  const showFloatingFolder = floatingFolderId !== undefined
+  const floatingFolderPanelId = useId()
+  const floatingFolderPanel = useRef<HTMLDivElement>(null)
+  const floatingFolderTrigger = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     setIsBatchSelectMode(selected.length > 0)
+    if (!selected.length) setFloatingFolderId(undefined)
   }, [selected.length])
   
   const assetBrand = useRef(brandId)
@@ -264,10 +271,13 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<string | null>(null)
-  const [pendingFiling, setPendingFiling] = useState<{ ids: string[]; body: Record<string, unknown>; targetClass: string } | null>(null)
+  const [pendingFiling, setPendingFiling] = useState<{ ids: string[]; body: Record<string, unknown>; targetClass: string; onSaved?: () => void } | null>(null)
   const filingDialog = useRef<HTMLDialogElement>(null)
   const filingBusyRef = useRef(false)
   const [filingBusy, setFilingBusy] = useState(false)
+  useEffect(() => {
+    if (showFloatingFolder) floatingFolderPanel.current?.focus({ preventScroll: true })
+  }, [showFloatingFolder])
   useEffect(() => { if (pendingFiling) filingDialog.current?.showModal(); return () => filingDialog.current?.close() }, [pendingFiling])
   useEffect(() => { setPendingFiling(null); setUploadDialogOpen(false); setCanManageFolders(false) }, [brandId])
   const [folderCreateToken, setFolderCreateToken] = useState(0)
@@ -284,8 +294,10 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   const [selectedCollectionId, setSelectedCollectionId] = useState('')
   const [selectedCollectionSlotId, setSelectedCollectionSlotId] = useState('')
   const [moveFolder, setMoveFolder] = useState('')
-  const [folders, setFolders] = useState<string[]>(['素材库', '产品', '环境', '活动', '封面图', 'AI视频', '已使用'])
   const [folderRecords, setFolderRecords] = useState<ManagedFolder[]>([])
+  const moveFolderGroups = [...roots, { id: 'UNCONFIRMED', name: '待归类' }]
+  const defaultMoveFolderLabel = '按原分类归入默认位置'
+  const floatingTargetFolder = folderRecords.find(folder => folder.id === floatingFolderId)
   const [selectedFolder, setSelectedFolder] = useState<string>(() => typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('folderId') || new URLSearchParams(window.location.search).get('folder') || '' : '')
   const listingContext = useRef('')
   listingContext.current = JSON.stringify([brandId, rootId, selectedFolder, page, search, usage, mediaKind, since, formFilter])
@@ -293,6 +305,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   useEffect(() => {
     if (previousBrand.current === brandId) return
     previousBrand.current = brandId; requestVersion.current++
+    setFloatingFolderId(undefined)
     setAssets([]); setPageIds([]); setTotal(0); setSelected([]); setSelectedFolder(''); setRootId('ORIGINAL'); setUploadClass('ORIGINAL'); setSearch(''); setUsage('all'); setMediaKind('all'); setSince('all'); setFormFilter(''); setPage(1); setSelectedCreativeId(''); setSelectedCollectionId(''); setFolderRecords([])
   }, [brandId])
   const [collapsedShootBatches, setCollapsedShootBatches] = useState<Set<string>>(() => new Set())
@@ -446,8 +459,6 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
         if (assetBrand.current !== brandId) return
         setFolderRecords(data.folders || [])
         setCanManageFolders(data.canCreate === true)
-        const folderNames = (data.folders || []).map((f: { name: string }) => f.name)
-        setFolders(['素材库', ...folderNames.filter((name: string) => !['素材库', 'raw', '已使用'].includes(name))])
         if (data.roots?.length) setRoots(data.roots)
         setViews(data.views || [])
         setSelectedFolder(current => { const f = data.folders.find((f: ManagedFolder) => f.id === current || f.name === current || (current === 'AI视频' && f.systemKey === 'processed_ai')); if (f && f.materialClass !== 'UNCONFIRMED') { setRootId(f.materialClass); setUploadClass(f.materialClass); return f.id } return '' })
@@ -476,20 +487,25 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     setDragOverFolder(null)
   }
 
-  const saveFiling = async (ids: string[], body: Record<string, unknown>, confirmed = false) => {
+  const saveFiling = async (ids: string[], body: Record<string, unknown>, confirmed = false, onSaved?: () => void) => {
     if (!brandId || filingBusyRef.current) return false
     const requestBrand = brandId
     const target = folderRecords.find(f => f.id === body.folderId || f.name === body.folder || f.name === body.aiCategory)
+    setError(null)
     if (target && !confirmed && assets.some(a => ids.includes(a.id) && (a.materialClass || 'UNCONFIRMED') !== target.materialClass)) {
-      setPendingFiling({ ids, body: { ...body, folderId: target.id }, targetClass: target.materialClass }); return false
+      setPendingFiling({ ids, body: { ...body, folderId: target.id }, targetClass: target.materialClass, onSaved }); return false
     }
-    setError(null); filingBusyRef.current = true; setFilingBusy(true)
+    filingBusyRef.current = true; setFilingBusy(true)
     try {
       const res = await fetch(`/api/brands/${brandId}/assets`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, ...(target ? { folderId: target.id } : {}), assetIds: ids, confirmMaterialClassChange: confirmed }) })
       const data = await res.json()
       if (assetBrand.current !== requestBrand) return false
       if (!res.ok) throw new Error(data.error || '素材更新失败')
-      setPendingFiling(null); await loadAssets(true); return true
+      setPendingFiling(null)
+      await loadAssets(true)
+      if (assetBrand.current !== requestBrand) return false
+      onSaved?.()
+      return true
     } catch (e) { if (assetBrand.current === requestBrand) setError(e instanceof Error ? e.message : '素材更新失败'); return false }
     finally { filingBusyRef.current = false; setFilingBusy(false) }
   }
@@ -596,9 +612,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
   // Floating bottom bar inline tag/folder state
   const [floatingTagInput, setFloatingTagInput] = useState('')
-  const [floatingFolderSelect, setFloatingFolderSelect] = useState('')
   const [showFloatingTag, setShowFloatingTag] = useState(false)
-  const [showFloatingFolder, setShowFloatingFolder] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -1520,8 +1534,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   }
 
   const handleFloatingFolderMove = async () => {
-    if (!floatingFolderSelect || selected.length === 0 || !brandId) return
-    if (await saveFiling(selected, { folder: floatingFolderSelect })) { setFloatingFolderSelect(''); setShowFloatingFolder(false) }
+    if ((!floatingTargetFolder && floatingFolderId !== null) || !selected.length) return
+    await saveFiling(selected, { folderId: floatingFolderId }, false, () => {
+      setFloatingFolderId(undefined)
+      floatingFolderTrigger.current?.focus()
+    })
   }
 
   const handleAssignSelectedToCreative = async () => {
@@ -1621,6 +1638,16 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (document.querySelector('dialog[open]')) return
+      if (showFloatingFolder) {
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          if (!filingBusyRef.current) {
+            setFloatingFolderId(undefined)
+            floatingFolderTrigger.current?.focus()
+          }
+        }
+        return
+      }
       const activeEl = document.activeElement
       if (activeEl) {
         const tagName = activeEl.tagName.toUpperCase()
@@ -1654,7 +1681,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [selected, activeAssetId, brandId, assets, handleDeleteAsset, handleBatchDeleteAssets])
+  }, [selected, activeAssetId, brandId, assets, showFloatingFolder, handleDeleteAsset, handleBatchDeleteAssets])
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 font-sans relative">
@@ -1744,9 +1771,9 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           <select aria-label={t('上传片段或成片', 'Upload clip or finished')} value={uploadForm} onChange={e => setUploadForm(e.target.value)} className="rounded-lg border bg-transparent p-1.5 text-xs"><option value="UNKNOWN">{t('未标记形态', 'Unspecified form')}</option><option value="CLIP">{t('片段', 'Clip')}</option><option value="FINISHED">{t('成片', 'Finished')}</option></select>
           <p className="text-sm text-slate-500">{t('请确认类别，再选择文件。素材会归档到对应类别目录。', 'Confirm the class, then choose files. Materials are filed in the matching category.')}</p><div className="flex gap-2"><button type="button" onClick={() => { fileInputRef.current?.click(); setUploadDialogOpen(false) }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('选择文件', 'Choose files')}</button><button type="button" onClick={() => setUploadDialogOpen(false)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div></div>
         </dialog>}
-        {pendingFiling && <dialog ref={filingDialog} onCancel={e => { e.preventDefault(); setPendingFiling(null) }} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white" aria-label={t('确认素材类别调整', 'Confirm material class change')}>
+        {pendingFiling && <dialog ref={filingDialog} onCancel={e => { e.preventDefault(); if (!filingBusyRef.current) setPendingFiling(null) }} className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl bg-white p-5 text-slate-900 shadow-xl backdrop:bg-black/50 dark:bg-slate-900 dark:text-white" aria-label={t('确认素材类别调整', 'Confirm material class change')}>
           <h2 className="font-semibold">{t('确认素材类别调整', 'Confirm material class change')}</h2><p className="my-3 text-sm">{t(`将 ${pendingFiling.ids.length} 份素材移到目标目录，并调整为${({ ORIGINAL: '原始素材', MANUAL: '人工加工', AI: 'AI 制作', UNCONFIRMED: '待确认' } as Record<string,string>)[pendingFiling.targetClass]}。`, `Move ${pendingFiling.ids.length} assets and change their material class to ${pendingFiling.targetClass}.`)}</p>
-          {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}<div className="flex gap-2"><button type="button" disabled={filingBusy} onClick={() => void saveFiling(pendingFiling.ids, pendingFiling.body, true)} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('确认调整', 'Confirm change')}</button><button type="button" disabled={filingBusy} onClick={() => setPendingFiling(null)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div>
+          {error && <p role="alert" className="mb-3 text-sm text-red-600">{error}</p>}<div className="flex gap-2"><button type="button" disabled={filingBusy} onClick={() => void saveFiling(pendingFiling.ids, pendingFiling.body, true, pendingFiling.onSaved)} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">{t('确认调整', 'Confirm change')}</button><button type="button" disabled={filingBusy} onClick={() => setPendingFiling(null)} className="rounded-lg border px-3 py-2 text-sm">{t('取消', 'Cancel')}</button></div>
         </dialog>}
         {/* ── Top Toolbar: view dropdown + folder dropdown + search + upload ── */}
         <div className="px-3 py-2.5 border-b border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 shadow-sm z-30 flex flex-wrap items-center gap-2">
@@ -1827,7 +1854,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
           }}
           className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-50/40 dark:bg-slate-950/20"
         >
-          {error && (
+          {error && !showFloatingFolder && (
             <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" />
               <span>{error}</span>
@@ -3017,8 +3044,11 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
       )}
 
       {/* Floating Bottom Bar for selection operations */}
+      {selected.length > 0 && showFloatingFolder && (
+        <div aria-hidden="true" className="fixed inset-0 z-[39]" onClick={() => { if (!filingBusyRef.current) setFloatingFolderId(undefined) }} />
+      )}
       {selected.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[40] flex flex-col items-center gap-2 select-none" style={{maxWidth: 'calc(100vw - 32px)'}}>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[40] flex max-w-[calc(100vw-32px)] flex-col items-center gap-2 select-none">
           
           {/* Expanded tag input row */}
           {showFloatingTag && (
@@ -3038,26 +3068,38 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             </div>
           )}
 
-          {/* Expanded folder select row */}
           {showFloatingFolder && (
-            <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900 shadow-xl backdrop-blur-md">
-              <FolderOpen className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <select
-                value={floatingFolderSelect}
-                onChange={e => setFloatingFolderSelect(e.target.value)}
-                className="text-xs outline-none bg-transparent text-slate-700 dark:text-slate-200 w-36"
-                autoFocus
-              >
-                <option value="">-- 选择文件夹 --</option>
-                {folders.map(f => <option key={f} value={f}>{f === '素材库' ? '根目录 (素材库)' : f === 'AI视频' ? t('AI视频', 'AI Videos') : f}</option>)}
-              </select>
-              <button onClick={() => void handleFloatingFolderMove()} disabled={!floatingFolderSelect} className="px-2.5 py-1 bg-amber-500 disabled:bg-slate-200 text-white text-[11px] font-bold rounded-lg active:scale-95 cursor-pointer disabled:cursor-not-allowed">移动</button>
-              <button onClick={() => setShowFloatingFolder(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+            <div ref={floatingFolderPanel} id={floatingFolderPanelId} role="dialog" aria-label="选择文件夹" tabIndex={-1} className="flex max-h-[min(65dvh,calc(100dvh-5rem))] w-[360px] max-w-full flex-col rounded-xl border bg-white shadow-xl outline-none dark:bg-slate-900">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-1.5">
+                <h2 className="flex items-center gap-2 text-sm font-semibold"><FolderOpen size={16} />选择文件夹</h2>
+                <button type="button" aria-label="收起文件夹选择" disabled={filingBusy} onClick={() => { setFloatingFolderId(undefined); floatingFolderTrigger.current?.focus() }} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-slate-800"><X size={16} /></button>
+              </div>
+              <div className="min-h-0 overflow-y-auto overscroll-contain p-2">
+                <MaterialDirectoryTree
+                  groups={moveFolderGroups}
+                  folders={folderRecords.filter(folder => !['素材库', 'raw', '已使用'].includes(folder.name))}
+                  folderId={floatingTargetFolder?.id}
+                  disabled={filingBusy}
+                  onSelectFolder={folder => setFloatingFolderId(folder.id)}
+                />
+                <button type="button" aria-current={floatingFolderId === null || undefined} disabled={filingBusy} onClick={() => setFloatingFolderId(null)} className="mt-2 w-full rounded-lg border px-2 py-1.5 text-left text-sm hover:bg-indigo-50 aria-[current]:bg-indigo-50 aria-[current]:font-medium dark:hover:bg-slate-800 dark:aria-[current]:bg-indigo-950/60">{defaultMoveFolderLabel}</button>
+              </div>
+              <div className="shrink-0 border-t px-3 py-2">
+                {error && !pendingFiling && <p role="alert" className="mb-2 break-words text-xs text-rose-600 dark:text-rose-400">{error}</p>}
+                <div className="flex items-center gap-3">
+                  <p aria-live="polite" className="min-w-0 flex-1 break-words text-sm text-slate-600 dark:text-slate-300">
+                    {floatingTargetFolder
+                      ? [moveFolderGroups.find(group => group.id === floatingTargetFolder.materialClass)?.name, floatingTargetFolder.path].filter(Boolean).join(' / ')
+                      : floatingFolderId === null ? defaultMoveFolderLabel : '请选择目标文件夹'}
+                  </p>
+                  <button type="button" onClick={() => void handleFloatingFolderMove()} disabled={filingBusy || (!floatingTargetFolder && floatingFolderId !== null)} className="shrink-0 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">{filingBusy ? '移动中…' : '移动'}</button>
+                </div>
+              </div>
             </div>
           )}
 
           {/* Main action bar */}
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl border border-slate-200/50 dark:border-slate-800/50 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-2xl whitespace-nowrap">
+          <div className="flex max-w-full items-center gap-2 overflow-x-auto whitespace-nowrap rounded-2xl border border-slate-200/50 bg-white/90 px-4 py-2.5 shadow-2xl backdrop-blur-md dark:border-slate-800/50 dark:bg-slate-900/90 [&>*]:shrink-0">
             <span className="text-xs font-bold text-slate-500 dark:text-slate-400 shrink-0">
               已选 <span className="text-indigo-600 dark:text-indigo-400 font-black">{selected.length}</span>
             </span>
@@ -3093,7 +3135,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
             {canManageFolders && <><button type="button" disabled={filingBusy || assets.some(a => selected.includes(a.id) && !COVER_MIMES.includes(a.mimeType))} onClick={() => void setCoverPurpose(selected, true)} className="shrink-0 rounded border px-2 py-1.5 text-xs text-indigo-600 disabled:opacity-40">设为封面素材</button><button type="button" disabled={filingBusy} onClick={() => void setCoverPurpose(selected, false)} className="shrink-0 rounded border px-2 py-1.5 text-xs text-slate-600 disabled:opacity-40">取消封面素材</button></>}
             {/* 添加标签 */}
             <button
-              onClick={() => { setShowFloatingTag(v => !v); setShowFloatingFolder(false) }}
+              onClick={() => { setShowFloatingTag(v => !v); setFloatingFolderId(undefined) }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all active:scale-95 ${showFloatingTag ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
               <Tag className="w-3.5 h-3.5" />
@@ -3102,7 +3144,21 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
             {/* 转移文件夹 */}
             <button
-              onClick={() => { setShowFloatingFolder(v => !v); setShowFloatingTag(false) }}
+              ref={floatingFolderTrigger}
+              type="button"
+              aria-label="转移文件夹"
+              aria-expanded={showFloatingFolder}
+              aria-controls={showFloatingFolder ? floatingFolderPanelId : undefined}
+              aria-disabled={filingBusy}
+              onClick={() => {
+                if (filingBusyRef.current) return
+                if (showFloatingFolder) setFloatingFolderId(undefined)
+                else {
+                  setError(null)
+                  setFloatingFolderId('')
+                  setShowFloatingTag(false)
+                }
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all active:scale-95 ${showFloatingFolder ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
               <FolderOpen className="w-3.5 h-3.5" />
@@ -3134,7 +3190,7 @@ export default function DashboardAssets({ brandId, onNavigateToCalendar, onNavig
 
             {/* 取消 */}
             <button
-              onClick={() => { setSelected([]); setIsBatchSelectMode(false); setShowFloatingTag(false); setShowFloatingFolder(false) }}
+              onClick={() => { setSelected([]); setIsBatchSelectMode(false); setShowFloatingTag(false); setFloatingFolderId(undefined) }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-xl bg-slate-900 dark:bg-slate-800 hover:bg-slate-700 text-white active:scale-95 transition-all cursor-pointer"
             >
               <X className="w-3.5 h-3.5" strokeWidth={2.5} />
