@@ -35,7 +35,9 @@ import {
   Send,
   Image as ImageIcon
 } from 'lucide-react'
-import { orderedDraftMedia, orderedMediaUrls } from '@/lib/draftMedia'
+import { draftMediaIdentity, orderedDraftMedia, orderedMediaUrls } from '@/lib/draftMedia'
+import { SHORT_VIDEO_CAROUSEL, SHORT_VIDEO_LIMIT, shortVideoIssue, type MediaPickerFilter } from '@/lib/shortVideoCarousel'
+import { DraftMediaType, ShortVideoClipLabel, ShortVideoSummary, useShortVideoDurations } from '@/components/modals/DraftMediaType'
 import { uploadAssetDirect } from '@/vendor/mm-video/lib/directAssetUpload'
 import { mediaKind, socialMediaNotice } from '@/lib/socialMediaComposition'
 import TiktokAigcControl from './TiktokAigcControl'
@@ -162,6 +164,7 @@ interface DraftItem {
   hashtags: string[]
   mediaUrls: string[]
   instagramPublishType?: string | null
+  mediaMode?: string | null
   coverAssetId?: string | null
   coverAsset?: {
     id: string
@@ -341,6 +344,10 @@ export default function PostEditDrawer({
   // Media assets states
   const [brandAssets, setBrandAssets] = useState<BrandPickerAsset[]>([])
   const [assetTypeFilter, setAssetTypeFilter] = useState<'unused' | 'all'>('unused')
+  const [mediaPickerFilter, setMediaPickerFilter] = useState<MediaPickerFilter>('all')
+  const [shortVideos, setShortVideos] = useState(false)
+  const [mediaModeError, setMediaModeError] = useState('')
+  const { durations, recordDuration } = useShortVideoDurations()
   const [mediaUrlsInput, setMediaUrlsInput] = useState('')
   const [newUrlInput, setNewUrlInput] = useState('')
   const [activeMediaOp, setActiveMediaOp] = useState<{ index: number; action: 'design' | 'video' } | null>(null)
@@ -354,7 +361,7 @@ export default function PostEditDrawer({
   const rememberAssets = useCallback((assets: BrandPickerAsset[]) => {
     setBrandAssets(current => [...new Map([...current, ...assets].map(asset => [asset.id, asset])).values()])
   }, [])
-  const mediaPicker = useBrandAssetPage(brandId, isOpen, `usage=${assetTypeFilter}`, rememberAssets)
+  const mediaPicker = useBrandAssetPage(brandId, isOpen, `usage=${assetTypeFilter}&assetType=${shortVideos ? 'video' : mediaPickerFilter}`, rememberAssets)
   const coverPicker = useBrandAssetPage(brandId, isOpen, `mediaType=cover${coverAssetFilter === 'cover' ? '&coverOnly=true' : ''}`, rememberAssets)
 
   // Comments / conversion states (For Published Posts)
@@ -375,10 +382,15 @@ export default function PostEditDrawer({
   }, [brandId, postId, isOpen])
   async function uploadDraftMedia(files: FileList | null) {
     if (!files?.length || mediaUploadLock.current) return
+    const batch = Array.from(files)
+    if (shortVideos) {
+      const issue = shortVideoIssue('instagram', [...mediaKinds, ...batch.map(file => mediaKind({ url: file.name, mimeType: file.type }))])
+      if (issue) { setMediaModeError(isEn ? issue.en : issue.zh); return }
+    }
     const epoch = mediaUploadEpoch.current
-    mediaUploadLock.current = true; setMediaUploading(true); setError(null)
+    mediaUploadLock.current = true; setMediaUploading(true); setError(null); setMediaModeError('')
     try {
-      for (const file of Array.from(files)) {
+      for (const file of batch) {
         const asset = await uploadAssetDirect(file, brandId)
         if (epoch !== mediaUploadEpoch.current) return
         setBrandAssets(current => [...current.filter(item => item.id !== asset.id), asset as BrandPickerAsset])
@@ -401,6 +413,37 @@ export default function PostEditDrawer({
   }, [selectedAccountIds, accounts])
 
   const mediaKinds = attachedMedia.map(item => mediaKind({ url: item.url, mimeType: brandAssets.find(asset => asset.id === item.id)?.mimeType || selectedDraft?.assetRefs.find(ref => ref.asset.id === item.id)?.asset.mimeType }))
+  const mediaPlatform = (id: string) => {
+    const platform = accounts.find(account => account.id === id)?.platformId || id.replace('unconfigured_', '')
+    return normalizePlatformLabel(platform) === 'ig' ? 'instagram' : platform
+  }
+  const shortAccountIssue = shortVideos && selectedAccountIds.some(id => mediaPlatform(id) !== 'instagram')
+  const mediaModePayload = {
+    mediaMode: shortVideos ? SHORT_VIDEO_CAROUSEL : selectedDraft?.mediaMode === SHORT_VIDEO_CAROUSEL ? null : undefined,
+    instagramPublishType: shortVideos ? 'TIMELINE' : instagramPublishType || null,
+  }
+  function chooseMediaType(type: 'image' | 'video' | 'shortVideos') {
+    setMediaModeError('')
+    if (type === 'shortVideos') {
+      const issue = shortVideoIssue('instagram', mediaKinds)
+      if (issue) { setMediaModeError(isEn ? issue.en : issue.zh); return }
+      setShortVideos(true)
+      return
+    }
+    if (shortVideos) setInstagramPublishType('')
+    setShortVideos(false)
+    setMediaPickerFilter(type)
+  }
+  function checkShortVideoAction(accountIds: string[], publish = false) {
+    if (!shortVideos) return true
+    const platform = accountIds.map(mediaPlatform).find(item => item !== 'instagram') ?? 'instagram'
+    const issue = shortVideoIssue(platform, mediaKinds, publish)
+    if (issue) {
+      setMediaModeError(isEn ? issue.en : issue.zh)
+      return false
+    }
+    return true
+  }
   const mediaNotices = [...new Set(selectedAccountIds.map(id => accounts.find(account => account.id === id)?.platformId || id.replace('unconfigured_', '')))].map(platform => ({ platform, notice: socialMediaNotice(platform, mediaKinds, isEn, instagramPublishType) })).filter(item => item.notice)
 
   const selectedGoogleAccountId = useMemo(() => {
@@ -566,6 +609,9 @@ export default function PostEditDrawer({
       setNewAigcValue(false)
       setSelectedDraft(null)
       setInstagramPublishType('')
+      setShortVideos(false)
+      setMediaPickerFilter('all')
+      setMediaModeError('')
       setCaption('')
       setHashtags('')
       // Default: select all configured accounts + XHS (always, via unconfigured_xhs if needed)
@@ -645,6 +691,7 @@ export default function PostEditDrawer({
         }
 
         setAttachedMedia(orderedDraftMedia(draft))
+        setShortVideos(draft.mediaMode === SHORT_VIDEO_CAROUSEL)
         setInstagramPublishType(draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY' ? draft.instagramPublishType : '')
         setCoverAssetId(draft.coverAssetId || draft.coverAsset?.id || null)
         setCoverAssetFilter('cover')
@@ -853,6 +900,7 @@ export default function PostEditDrawer({
     }
     if (mediaUploadLock.current) return null
     const activeAccountIds = accountIdsOverride || selectedAccountIds
+    if (!checkShortVideoAction(activeAccountIds, nextStatus === 'pending_review' || nextStatus === 'scheduled')) return null
     if (activeAccountIds.length === 0) {
       setError('请至少选择一位 Copywriter')
       return null
@@ -890,9 +938,9 @@ export default function PostEditDrawer({
             agentNote: formattedAgentNote,
             status: nextStatus || selectedDraft.status || 'draft',
             mediaUrls,
-            instagramPublishType: instagramPublishType || null,
+            ...mediaModePayload,
             assetIds: selectedAssetIds,
-            coverAssetId,
+            coverAssetId: shortVideos ? undefined : coverAssetId,
             creativeHooks: creativeHooks.trim(),
             ...viralScriptPayloadForAccount(activeAccountIds[0]),
           }),
@@ -919,9 +967,9 @@ export default function PostEditDrawer({
                   agentNote: formattedAgentNote,
                   status: nextStatus || 'draft',
                   mediaUrls,
-            instagramPublishType: instagramPublishType || null,
+            ...mediaModePayload,
                   assetIds: selectedAssetIds,
-                  coverAssetId,
+                  coverAssetId: shortVideos ? undefined : coverAssetId,
                   creativeHooks: creativeHooks.trim(),
                   ...viralScriptPayloadForAccount(accId),
                 }),
@@ -952,9 +1000,9 @@ export default function PostEditDrawer({
                 agentNote: formattedAgentNote,
                 status: nextStatus || 'draft',
                 mediaUrls,
-            instagramPublishType: instagramPublishType || null,
+            ...mediaModePayload,
                 assetIds: selectedAssetIds,
-                coverAssetId,
+                coverAssetId: shortVideos ? undefined : coverAssetId,
                 creativeHooks: creativeHooks.trim(),
                 ...viralScriptPayloadForAccount(accId),
               }),
@@ -1238,7 +1286,7 @@ export default function PostEditDrawer({
   const handleSmartScheduleDirect = async () => {
     if (mediaUploadLock.current) return
     if (!selectedDraft || aigcBlocked) return
-    if (!ensureGoogleLocationReady()) return
+    if (mediaUploadLock.current || !checkShortVideoAction(shortVideos && selectedDraft.accountId ? [selectedDraft.accountId] : selectedAccountIds, true) || !ensureGoogleLocationReady()) return
     setSaving(true)
     setError(null)
     try {
@@ -1272,9 +1320,9 @@ export default function PostEditDrawer({
           gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           scheduledAt: targetDateISO,
           assetIds: selectedAssetIds,
-          coverAssetId,
+          coverAssetId: shortVideos ? undefined : coverAssetId,
           mediaUrls: orderedMediaUrls(attachedMedia),
-          instagramPublishType: instagramPublishType || null,
+          ...mediaModePayload,
         })
       })
       if (!patchRes.ok) throw new Error('更新排期失败')
@@ -1306,7 +1354,7 @@ export default function PostEditDrawer({
   const handlePublishNow = async () => {
     if (mediaUploadLock.current) return
     if (!selectedDraft || aigcBlocked) return
-    if (!ensureGoogleLocationReady()) return
+    if (!checkShortVideoAction(shortVideos && selectedDraft.accountId ? [selectedDraft.accountId] : selectedAccountIds, true) || !ensureGoogleLocationReady()) return
     if (!confirm('确定要立即发布此帖文吗？')) return
     setSaving(true)
     setError(null)
@@ -1320,12 +1368,13 @@ export default function PostEditDrawer({
           hashtags: parseTags(hashtags),
           gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           assetIds: selectedAssetIds,
-          coverAssetId,
+          coverAssetId: shortVideos ? undefined : coverAssetId,
           mediaUrls: orderedMediaUrls(attachedMedia),
-          instagramPublishType: instagramPublishType || null,
+          ...mediaModePayload,
+          ...(selectedDraft.platformPostId && (shortVideos || selectedDraft.mediaMode === SHORT_VIDEO_CAROUSEL) ? { status: 'draft' } : {}),
         })
       })
-      if (!patchRes.ok) throw new Error('更新内容失败')
+      if (!patchRes.ok) throw new Error(mediaValidationErrorMessage(await patchRes.json().catch(() => ({})), '更新内容失败'))
 
       const res = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}/approve`, {
         method: 'PATCH',
@@ -1351,10 +1400,25 @@ export default function PostEditDrawer({
 
   const handleReschedule = async () => {
     if (!selectedDraft || aigcBlocked) return
-    if (!ensureGoogleLocationReady()) return
+    if (mediaUploadLock.current || !checkShortVideoAction(shortVideos && selectedDraft.accountId ? [selectedDraft.accountId] : selectedAccountIds, true) || !ensureGoogleLocationReady()) return
+    const shortVideoSchedule = shortVideos || selectedDraft.mediaMode === SHORT_VIDEO_CAROUSEL
     setSaving(true)
     setError(null)
     try {
+      let targetScheduledAt = fromDateTimeLocal(scheduledAt)
+      if (shortVideoSchedule) {
+        const suggestion = await fetch(`/api/brands/${brandId}/scheduling/recommend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ platform: 'instagram', numberOfPosts: 1, urgency: 'normal' }),
+        })
+        const data = await suggestion.json().catch(() => ({}))
+        const recommendedAt = data.recommendations?.[0]?.recommendedAt
+        if (!suggestion.ok || typeof recommendedAt !== 'string' || !(Date.parse(recommendedAt) > Date.now())) {
+          throw new Error(t('暂时无法推荐新的排期，请稍后重试。', 'No new time is available. Please try again later.'))
+        }
+        targetScheduledAt = recommendedAt
+      }
       const patchRes = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1362,23 +1426,23 @@ export default function PostEditDrawer({
           caption,
           hashtags: parseTags(hashtags),
           gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
-          scheduledAt: fromDateTimeLocal(scheduledAt),
+          scheduledAt: targetScheduledAt,
           assetIds: selectedAssetIds,
-          coverAssetId,
+          coverAssetId: shortVideos ? undefined : coverAssetId,
           mediaUrls: orderedMediaUrls(attachedMedia),
-          instagramPublishType: instagramPublishType || null,
+          ...mediaModePayload,
         })
       })
-      if (!patchRes.ok) throw new Error('更新内容失败')
-
-      const res = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}/submit`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: '重新排期发布' }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(mediaValidationErrorMessage(json, '重新排期失败'))
+      let json = await patchRes.json().catch(() => ({}))
+      if (!patchRes.ok) throw new Error(mediaValidationErrorMessage(json, '更新内容失败'))
+      if (!json.rescheduled) {
+        const res = await fetch(`/api/brands/${brandId}/drafts/${selectedDraft.id}/${shortVideoSchedule ? 'approve' : 'submit'}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ note: '重新排期发布' }),
+        })
+        json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(mediaValidationErrorMessage(json, '重新排期失败'))
       }
       const warningText = formatMediaWarnings(json)
       alert(json.queued
@@ -1395,7 +1459,8 @@ export default function PostEditDrawer({
 
   const handleReview = async (action: 'approve' | 'reject') => {
     if (!selectedDraft || aigcBlocked) return
-    if (action === 'approve' && !ensureGoogleLocationReady()) return
+    if (mediaUploadLock.current) return
+    if (action === 'approve' && (!checkShortVideoAction(shortVideos && selectedDraft.accountId ? [selectedDraft.accountId] : selectedAccountIds, true) || !ensureGoogleLocationReady())) return
     setSaving(true)
     setError(null)
     try {
@@ -1409,9 +1474,9 @@ export default function PostEditDrawer({
           gbpLocationId: gbpLocationForAccount(selectedDraft.accountId || selectedAccountIds[0]),
           scheduledAt: fromDateTimeLocal(scheduledAt),
           assetIds: selectedAssetIds,
-          coverAssetId,
+          coverAssetId: shortVideos ? undefined : coverAssetId,
           mediaUrls: orderedMediaUrls(attachedMedia),
-          instagramPublishType: instagramPublishType || null,
+          ...mediaModePayload,
         })
       })
       if (!patchRes.ok) throw new Error('保存内容失败')
@@ -1535,8 +1600,15 @@ Return the output strictly in a valid JSON array format, containing:
   }
 
   const handleAddUrl = () => {
-    if (!newUrlInput.trim()) return
+    if (!newUrlInput.trim() || mediaUploadLock.current) return
     const url = newUrlInput.trim()
+    if (shortVideos) {
+      if (!normalizeHttpUrl(url)) { setMediaModeError(t('请输入有效的 HTTP/HTTPS 视频外链。', 'Enter a valid HTTP/HTTPS video URL.')); return }
+      if (attachedMedia.some(item => draftMediaIdentity(item.url) === draftMediaIdentity(url))) { setNewUrlInput(''); return }
+      const issue = shortVideoIssue('instagram', [...mediaKinds, mediaKind({ url })])
+      if (issue) { setMediaModeError(isEn ? issue.en : issue.zh); return }
+    }
+    setMediaModeError('')
     setAttachedMedia(prev => [...prev, { id: url, type: 'url', url }])
     setNewUrlInput('')
   }
@@ -1566,11 +1638,18 @@ Return the output strictly in a valid JSON array format, containing:
     setDraggedIndex(null)
   }
 
-  const handleToggleAsset = (asset: any) => {
+  const handleToggleAsset = (asset: BrandPickerAsset) => {
+    if (mediaUploadLock.current) return
+    setMediaModeError('')
     const isSelected = attachedMedia.some(m => m.id === asset.id)
     if (isSelected) {
       setAttachedMedia(prev => prev.filter(m => m.id !== asset.id))
     } else {
+      if (shortVideos) {
+        if (attachedMedia.some(item => draftMediaIdentity(item.url) === draftMediaIdentity(asset.url))) return
+        const issue = shortVideoIssue('instagram', [...mediaKinds, mediaKind(asset)])
+        if (issue) { setMediaModeError(isEn ? issue.en : issue.zh); return }
+      }
       setAttachedMedia(prev => [...prev, { id: asset.id, type: 'asset', url: asset.url }])
     }
   }
@@ -1947,7 +2026,7 @@ Return the output strictly in a valid JSON array format, containing:
               )}
 
               {/* Optional cover image */}
-              <div className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/10">
+              <div hidden={shortVideos} className="space-y-3 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-900/50 dark:bg-indigo-950/10">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h4 className="text-sm font-black text-slate-800 dark:text-slate-200">封面图 <span className="text-xs font-semibold text-slate-400">（可选）</span></h4>
@@ -2050,8 +2129,12 @@ Return the output strictly in a valid JSON array format, containing:
                   </div>
                 </div>
 
-                {mediaNotices.some(item => item.platform === 'instagram') && !isPublished && <label className="block text-xs">{t('Instagram 发布类型', 'Instagram publish type')}<select aria-label={t('Instagram 发布类型', 'Instagram publish type')} value={instagramPublishType} onChange={event => setInstagramPublishType(event.target.value as typeof instagramPublishType)} className="mt-2 min-h-11 w-full rounded-xl border p-2 dark:bg-slate-900"><option value="">{t('自动选择', 'Automatic')}</option><option value="TIMELINE">{t('帖子 / 轮播帖', 'Timeline / carousel')}</option><option value="REEL">Reel</option><option value="STORY">Story</option></select></label>}
-                {mediaNotices.map(({ platform, notice }) => notice && <p key={platform} role={notice.error ? 'alert' : 'status'} className="text-xs leading-6 text-amber-700 dark:text-amber-300">{notice.text}</p>)}
+                {!isPublished && <DraftMediaType filter={mediaPickerFilter} shortVideos={shortVideos} disabled={saving || mediaUploading} english={isEn} onChange={chooseMediaType} />}
+                {shortVideos && <ShortVideoSummary count={attachedMedia.length} english={isEn} />}
+                {shortAccountIssue && <p role="alert" className="text-xs text-rose-600">{t('多段视频仅支持 Instagram，请调整发布账号。', 'Multi-clip video is available for Instagram accounts only.')}</p>}
+                {mediaModeError && <p role="alert" className="text-xs text-rose-600">{mediaModeError}</p>}
+                {!shortVideos && mediaNotices.some(item => item.platform === 'instagram') && !isPublished && <label className="block text-xs">{t('Instagram 发布类型', 'Instagram publish type')}<select aria-label={t('Instagram 发布类型', 'Instagram publish type')} value={instagramPublishType} onChange={event => setInstagramPublishType(event.target.value as typeof instagramPublishType)} className="mt-2 min-h-11 w-full rounded-xl border p-2 dark:bg-slate-900"><option value="">{t('自动选择', 'Automatic')}</option><option value="TIMELINE">{t('帖子 / 轮播帖', 'Timeline / carousel')}</option><option value="REEL">Reel</option><option value="STORY">Story</option></select></label>}
+                {!shortVideos && mediaNotices.map(({ platform, notice }) => notice && <p key={platform} role={notice.error ? 'alert' : 'status'} className="text-xs leading-6 text-amber-700 dark:text-amber-300">{notice.text}</p>)}
                 {attachedMedia.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-bold text-slate-400">
@@ -2059,10 +2142,10 @@ Return the output strictly in a valid JSON array format, containing:
                     </p>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                       {attachedMedia.map((item, index) => {
-                        const isVid = isVideoUrl(item.url)
+                        const isVid = mediaKinds[index] === 'video'
                         return (
+                          <div key={`${item.type}-${item.id}-${index}`} className="min-w-0">
                           <div
-                            key={`${item.type}-${item.id}-${index}`}
                             draggable={!isPublished}
                             onDragStart={(e) => !isPublished && handleDragStart(e, index)}
                             onDragOver={(e) => !isPublished && handleDragOver(e, index)}
@@ -2076,7 +2159,7 @@ Return the output strictly in a valid JSON array format, containing:
                             }`}
                           >
                             {isVid ? (
-                              <video src={item.url.startsWith('http') ? item.url : `${item.url}#t=0.1`} preload="metadata" className="h-full w-full object-cover pointer-events-none" muted />
+                              <video src={item.url.startsWith('http') ? item.url : `${item.url}#t=0.1`} preload="metadata" onLoadedMetadata={event => recordDuration(item.url, event.currentTarget.duration)} className="h-full w-full object-cover pointer-events-none" muted />
                             ) : (
                               <img src={item.url} className="h-full w-full object-cover pointer-events-none" alt="" />
                             )}
@@ -2141,6 +2224,8 @@ Return the output strictly in a valid JSON array format, containing:
                                 </span>
                               </div>
                             )}
+                          </div>
+                          {shortVideos && <ShortVideoClipLabel index={index} seconds={durations[item.url]} english={isEn} />}
                           </div>
                         )
                       })}
@@ -2209,6 +2294,7 @@ Return the output strictly in a valid JSON array format, containing:
                       <button
                         type="button"
                         onClick={handleAddUrl}
+                          disabled={mediaUploading || saving}
                         className="h-9 shrink-0 whitespace-nowrap px-3 bg-slate-100 hover:bg-slate-200 text-slate-705 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 font-bold text-xs rounded-md flex items-center justify-center gap-1"
                       >
                         <Plus className="h-3.5 w-3.5" />
@@ -2217,8 +2303,8 @@ Return the output strictly in a valid JSON array format, containing:
                     </div>
 
                     <label className="inline-flex min-h-11 cursor-pointer items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold dark:border-slate-700">
-                      {mediaUploading ? t('正在上传素材，请稍候…', 'Uploading materials, please wait…') : t('批量上传图片 / 视频', 'Upload photos / videos')}
-                      <input type="file" multiple accept="image/*,video/*" disabled={mediaUploading || saving} onChange={event => { void uploadDraftMedia(event.target.files); event.target.value = '' }} className="sr-only" />
+                      {mediaUploading ? t('正在上传素材，请稍候…', 'Uploading materials, please wait…') : shortVideos ? t('批量上传视频', 'Upload videos') : t('批量上传图片 / 视频', 'Upload photos / videos')}
+                      <input type="file" multiple accept={shortVideos ? 'video/*' : 'image/*,video/*'} disabled={mediaUploading || saving} onChange={event => { void uploadDraftMedia(event.target.files); event.target.value = '' }} className="sr-only" />
                     </label>
                     {mediaUploading && <p role="status" className="text-xs text-amber-700">{t('全部素材上传完成后再保存或发布。上传失败时已完成的素材会保留。', 'Wait for all uploads before saving or publishing. Completed uploads are retained if another file fails.')}</p>}
                     {/* Browse assets */}
@@ -2531,14 +2617,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={aigcBlocked || saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || isAiGenerating || googleLocationBlocked}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 创作
               </button>
               <button
-                disabled={aigcBlocked || saving || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || (!caption.trim() && !contentIdea.trim() && attachedMedia.length === 0) || selectedAccountIds.length === 0 || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('draft')
                   if (saved) {
@@ -2553,7 +2639,7 @@ Return the output strictly in a valid JSON array format, containing:
               {selectedDraft && (
                 <button
                   type="button"
-                  disabled={aigcBlocked || saving || googleLocationBlocked}
+                  disabled={aigcBlocked || saving || mediaUploading || googleLocationBlocked}
                   onClick={handleSmartScheduleDirect}
                   className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                 >
@@ -2565,14 +2651,14 @@ Return the output strictly in a valid JSON array format, containing:
             <>
               <button
                 type="button"
-                disabled={aigcBlocked || saving || isAiGenerating || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || isAiGenerating || googleLocationBlocked}
                 onClick={handleAiCopywrite}
                 className="inline-flex items-center gap-2 rounded-md bg-indigo-600 hover:bg-indigo-700 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
                 ✨ AI 重新创作
               </button>
               <button
-                disabled={aigcBlocked || saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('pending_review')
                   if (saved) {
@@ -2586,14 +2672,14 @@ Return the output strictly in a valid JSON array format, containing:
                 保存
               </button>
               <button
-                disabled={aigcBlocked || saving || !reviewNote.trim()}
+                disabled={aigcBlocked || saving || mediaUploading || !reviewNote.trim()}
                 onClick={() => handleReview('reject')}
                 className="inline-flex items-center gap-2 rounded-md border border-rose-200 px-4 py-2 text-sm font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-50"
               >
                 <X className="h-4 w-4" /> 驳回
               </button>
               <button
-                disabled={aigcBlocked || saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || googleLocationBlocked}
                 onClick={() => handleReview('approve')}
                 className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
@@ -2603,13 +2689,13 @@ Return the output strictly in a valid JSON array format, containing:
           ) : isScheduled ? (
             <>
               <button
-                disabled={aigcBlocked || saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || googleLocationBlocked}
                 onClick={async () => {
                   const saved = await saveDraft('scheduled')
                   if (saved) {
                     onClose()
                     onSuccess()
-                    alert('排期内容已更新')
+                    alert(saved.some(draft => draft.status === 'publishing') ? '修改已保存，已进入后台重新排期队列' : '排期内容已更新')
                   }
                 }}
                 className="rounded-md border border-slate-200 px-4 py-2 text-sm font-bold text-slate-655 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -2618,7 +2704,7 @@ Return the output strictly in a valid JSON array format, containing:
               </button>
               <button
                 type="button"
-                disabled={aigcBlocked || saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || googleLocationBlocked}
                 onClick={handlePublishNow}
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-755 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >
@@ -2626,7 +2712,7 @@ Return the output strictly in a valid JSON array format, containing:
               </button>
               <button
                 type="button"
-                disabled={aigcBlocked || saving || googleLocationBlocked}
+                disabled={aigcBlocked || saving || mediaUploading || googleLocationBlocked}
                 onClick={handleReschedule}
                 className="inline-flex items-center gap-1.5 rounded-md bg-amber-500 hover:bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
               >

@@ -12,6 +12,10 @@ import {
   type MediaValidationIssue,
 } from '@/lib/mediaValidation'
 import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
+import { SHORT_VIDEO_CAROUSEL } from '@/lib/shortVideoCarousel'
+import { submitDraftForDelivery } from '@/lib/draftSubmission'
+import { requireActorPermission } from '@/lib/role-permissions/delegation'
+import { PolicyError } from '@/lib/role-permissions/store'
 
 type SessionUser = {
   id: string
@@ -74,6 +78,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const platformName = draft.account?.platformId
   if (!platformName) {
     return NextResponse.json({ error: '草稿未关联发布平台账号' }, { status: 400 })
+  }
+
+  if (draft.mediaMode === SHORT_VIDEO_CAROUSEL) {
+    if (!draftIdFromMaterials) return NextResponse.json({ error: '请从明确关联的草稿重试发布。' }, { status: 409 })
+    try {
+      await requireActorPermission(session.user.id, 'content.publish', brand.id)
+    } catch (error) {
+      if (error instanceof PolicyError) return NextResponse.json({ error: error.message }, { status: error.status })
+      throw error
+    }
+    const result = await submitDraftForDelivery({
+      brandId: brand.id, draftId: draft.id, actorId: session.user.id, forcePublish: true,
+      note: '人工重试多段视频发布', retryTaskId: task.id,
+    })
+    return NextResponse.json({ ...result, success: result.ok }, { status: result.ok ? result.mode === 'queued' ? 202 : 200 : result.status })
   }
 
   const safeControls = sanitizePostFastDraftControls(draft.postfastControls)

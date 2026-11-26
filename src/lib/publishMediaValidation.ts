@@ -1,6 +1,7 @@
 import { resolve, sep } from 'node:path'
 import { prisma } from '@/lib/prisma'
 import { draftMediaIdentity } from './draftMedia.ts'
+import { SHORT_VIDEO_CAROUSEL } from './shortVideoCarousel.ts'
 import {
   inspectMediaFile,
   inspectMediaUrl,
@@ -119,6 +120,8 @@ function issuesFromInspectionError(error: unknown, input: {
 export async function validateDraftMediaForPlatform(input: {
   platform: string
   instagramPublishType?: string | null
+  mediaMode?: string | null
+  inspectedMedia?: Map<string, MediaTechnicalMetadata>
   mediaUrls?: string[] | null
   assetRefs?: DraftAssetRef[] | null
   coverAsset?: DraftAsset | null
@@ -169,6 +172,7 @@ export async function validateDraftMediaForPlatform(input: {
         continue
       }
     }
+    input.inspectedMedia?.set(draftMediaIdentity(asset.url), metadata)
     media.push({ filename: asset.filename, assetId: asset.id, metadata })
   }
 
@@ -177,6 +181,7 @@ export async function validateDraftMediaForPlatform(input: {
     seen.add(draftMediaIdentity(url))
     try {
       const metadata = await inspectStoredMedia({ url })
+      input.inspectedMedia?.set(draftMediaIdentity(url), metadata)
       media.push({ filename: url.split('/').pop(), metadata })
     } catch (error) {
       issues.push(...issuesFromInspectionError(error, {
@@ -187,7 +192,7 @@ export async function validateDraftMediaForPlatform(input: {
   }
 
   const coverAsset = input.coverAsset
-  const usesStandaloneCover = media.length === 1 || !media.some(item => item.metadata.kind === 'video')
+  const usesStandaloneCover = input.mediaMode !== SHORT_VIDEO_CAROUSEL && (media.length === 1 || !media.some(item => item.metadata.kind === 'video'))
   if (usesStandaloneCover && coverAsset?.url && !seen.has(draftMediaIdentity(coverAsset.url))) {
     let coverMetadata = isTechnicalMetadata(coverAsset.technicalMetadata)
       ? coverAsset.technicalMetadata
@@ -247,6 +252,6 @@ export async function validateDraftMediaForPlatform(input: {
     }
   }
 
-  issues.push(...validatePlatformMedia(input.platform, media, { instagramPublishType: input.instagramPublishType }))
+  issues.push(...validatePlatformMedia(input.platform, media, input))
   return issues
 }

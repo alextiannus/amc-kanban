@@ -1,5 +1,6 @@
 import { postfastProfileUrl } from '../postfastProfileUrl.ts'
 import { SocialAccountBindingError, providerForLocal } from '../socialAccountIdentity.ts'
+import { SHORT_VIDEO_CAROUSEL } from '../shortVideoCarousel.ts'
 /**
  * PostFast Integration — Complete API wrapper
  * Covers: accounts, posts (CRUD + schedule), media upload, connect links, review replies.
@@ -289,6 +290,7 @@ export interface PostFastPublishInput {
   apiKey: string
   platform: string
   instagramPublishType?: PostFastInstagramPublishType
+  mediaMode?: string | null
   caption: string
   mediaItems?: PostFastMediaInput[] // preferred: preserves MIME/type metadata
   coverImage?: PostFastMediaInput    // optional custom cover; image posts use it as the first media item
@@ -1276,7 +1278,7 @@ async function preparePostfastMedia(
   let preparedCover: PreparedPostFastMedia | undefined
   // A legacy single-video cover is not part of a video/mixed carousel. Do not
   // inspect it: a missing or oversized unused cover must not block the post.
-  if (input.coverImage && (!hasVideo || prepared.length === 1)) {
+  if (input.mediaMode !== SHORT_VIDEO_CAROUSEL && input.coverImage && (!hasVideo || prepared.length === 1)) {
     const coverStorageKey = postfastStorageKey(input.coverImage)
     const coverFilename = input.coverImage.filename || (coverStorageKey || input.coverImage.url || 'cover.jpg').split('/').pop() || 'cover.jpg'
     const coverMetadata = input.coverImage.metadata || await inspectPostfastMediaSource(
@@ -1333,7 +1335,7 @@ async function preparePostfastMedia(
       assetId: item.assetId,
       metadata: item.metadata,
     })),
-    { instagramPublishType: input.instagramPublishType },
+    input,
   )
   const blockingIssues = blockingMediaIssues(issues)
   const warnings = mediaValidationWarnings(issues)

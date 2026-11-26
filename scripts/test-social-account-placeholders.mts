@@ -6,6 +6,7 @@ import { lockAccountBinding, lockBrandSync } from '../src/lib/socialAccountLocks
 import { placeholderTestDb } from './helpers/placeholder-test-db.mts'
 import * as creativeVisibility from '../src/lib/brand-plan/creativeVisibility.ts'
 import * as creativeRevisionContract from '../src/lib/brand-plan/creativeRevisionContract.ts'
+import * as shortVideoCarousel from '../src/lib/shortVideoCarousel.ts'
 import { disablePlaceholderAutopilot, resolveDraftPlatformAccount, resolveDraftAccount, reconcilePlaceholderAccounts, placeholderReferences, draftPlatform, isPurePlaceholder } from '../src/lib/socialAccountPlaceholder.ts'
 
 const test = await placeholderTestDb()
@@ -161,6 +162,9 @@ try {
   let canWrite = true
   let reclaimCalls = 0
   const deps: Record<string, any> = {
+    '@/lib/shortVideoCarousel': shortVideoCarousel,
+    '@/lib/shortVideoDraft': await import('../src/lib/shortVideoDraft.ts'),
+    '@/lib/asset-library/covers': await import('../src/lib/asset-library/covers.ts'),
     '@/lib/brand-plan/creativeVisibility': creativeVisibility,
     '@/lib/brand-plan/creativeRevisionContract': creativeRevisionContract,
     'next/server': { NextResponse: { json: (data: any, options: any) => Response.json(data, options) } },
@@ -234,6 +238,30 @@ try {
   await db.socialAccount.create({ data: real({ id: 'second-real', handle: 'other-page', postfastAccountId: 'other-provider' }) })
   assert.equal((await create({ accountId: 'unconfigured_facebook' })).accountId, 'placeholder')
   assert.equal((await create({ accountId: 'real' })).accountId, 'real', 'explicit selection remains valid with multiple accounts')
+
+  await test.pg.exec(readFileSync(new URL('../prisma/migrations/20261126090000_draft_short_video_carousel/migration.sql', import.meta.url), 'utf8'))
+  const historicalMode = await test.pg.query('SELECT "mediaMode" FROM "ContentDraft" WHERE id = $1', ['draft'])
+  assert.equal(historicalMode.rows[0]?.mediaMode, null, 'migration preserves existing drafts without a backfill')
+  await db.socialAccount.create({ data: real({ id: 'instagram', platformId: 'instagram', handle: 'restaurant-ig' }) })
+  const mode = shortVideoCarousel.SHORT_VIDEO_CAROUSEL
+  const videoUrls = Array.from({ length: 6 }, (_, i) => `https://cdn.example.test/clip-${i}.mp4`)
+  for (const count of [0, 1, 2, 5]) {
+    const short = await create({ accountId: 'instagram', mediaMode: mode, mediaUrls: videoUrls.slice(0, count).reverse() })
+    assert.equal(short.mediaMode, mode)
+    assert.equal(short.instagramPublishType, 'TIMELINE')
+    assert.deepEqual(short.mediaUrls, videoUrls.slice(0, count).reverse())
+  }
+  for (const body of [
+    { accountId: 'real', mediaUrls: videoUrls.slice(0, 2) },
+    { accountId: 'instagram', mediaUrls: videoUrls },
+    { accountId: 'instagram', mediaUrls: ['https://cdn.example.test/photo.jpg'] },
+    { accountId: 'instagram', mediaUrls: videoUrls.slice(0, 1), status: 'pending_review' },
+  ]) {
+    const response = await draftRoute.POST(new Request('http://localhost/api/brands/brand/drafts', {
+      method: 'POST', body: JSON.stringify({ ...body, mediaMode: mode, caption: 'Short clip test' }),
+    }), { params: Promise.resolve({ id: 'brand' }) })
+    assert.equal(response.status, 422)
+  }
   await test.pg.exec('DROP SCHEMA amc_iaic CASCADE')
   const legacyRefs = await placeholderReferences(db, 'brand', 'placeholder')
   assert.equal(legacyRefs.nativeSettings, 0)

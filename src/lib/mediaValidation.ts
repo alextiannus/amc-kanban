@@ -9,6 +9,7 @@ import mediaInfoFactory, {
 } from 'mediainfo.js'
 import sharp from 'sharp'
 import { socialMediaCompositionIssues } from './socialMediaComposition.ts'
+import { SHORT_VIDEO_CAROUSEL, shortVideoDurationOutsideRange, shortVideoIssue } from './shortVideoCarousel.ts'
 
 export const MEDIA_UPLOAD_LIMITS = {
   imageBytes: 10_000_000,
@@ -606,8 +607,14 @@ export function validatePlatformMedia(platform: string, media: Array<{
   filename?: string | null
   assetId?: string
   metadata: MediaTechnicalMetadata
-}>, options: { instagramPublishType?: string | null } = {}): MediaValidationIssue[] {
+}>, options: { instagramPublishType?: string | null; mediaMode?: string | null } = {}): MediaValidationIssue[] {
   const normalized = platform.trim().toLowerCase()
+  const shortVideos = options.mediaMode === SHORT_VIDEO_CAROUSEL
+  const modeIssue = shortVideos ? shortVideoIssue(normalized, media.map(item => item.metadata.kind), true) : undefined
+  if (modeIssue) return [{
+    filename: 'draft', platform: normalized, field: modeIssue.field, actual: modeIssue.actual,
+    limit: modeIssue.limit, message: modeIssue.zh,
+  }]
   const uploadIssues = media.flatMap((item) => validateUploadMedia(item.metadata, {
     filename: item.filename,
     assetId: item.assetId,
@@ -684,6 +691,9 @@ export function validatePlatformMedia(platform: string, media: Array<{
 
   for (const item of media) {
     const metadata = item.metadata
+    if (shortVideos && shortVideoDurationOutsideRange(metadata.durationSeconds)) {
+      add(item, 'durationSeconds', metadata.durationSeconds, '3–5 seconds', '多段视频建议每段 3–5 秒。', 'warning')
+    }
     if (normalized === 'instagram' && metadata.kind === 'image') {
       if (metadata.mimeType !== 'image/jpeg') add(item, 'mimeType', metadata.mimeType, 'image/jpeg', 'Instagram 建议使用 JPEG 图片，仍将继续提交', 'warning')
       if (metadata.sizeBytes > 8_000_000) add(item, 'sizeBytes', metadata.sizeBytes, 8_000_000, 'Instagram 建议图片不超过 8 MB，仍将继续提交', 'warning')

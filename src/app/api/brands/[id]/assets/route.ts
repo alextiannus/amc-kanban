@@ -488,8 +488,11 @@ export async function GET(request: Request, { params }: Params) {
   if (sourceGroup !== 'all') where.sourceType = sourceGroup === 'finished' ? 'generated_video' : sourceGroup === 'ai_clip' ? 'ai_video' : { notIn: ['generated_video','ai_video','basic_video_reference'] }
   if (assetIds) where.id = { in: assetIds }
   if (onlyCovers) where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), { mimeType: { in: COVER_MIMES, mode: 'insensitive' } }]
+  if (assetType !== 'all') where.AND = [
+    ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+    { mimeType: { startsWith: assetType + '/', mode: 'insensitive' } },
+  ]
   if (picker) {
-    if (assetType!=='all') where.mimeType = { startsWith: assetType+'/', mode:'insensitive' }
     if (assetType === 'all') where.AND = [...(Array.isArray(where.AND)?where.AND:where.AND?[where.AND]:[]), {OR:[{mimeType:{startsWith:'image/',mode:'insensitive'}},{mimeType:{startsWith:'video/',mode:'insensitive'}}]}]
     const rows = await prisma.mediaAsset.findMany({where, select:{id:true,url:true,mimeType:true,filename:true,aiCaption:true,aiTags:true,sourceType:true,sizeBytes:true,technicalMetadata:true,folderId:true,materialClass:true,materialForm:true,isCoverMaterial:true},orderBy:[{createdAt:'desc'},{id:'desc'}],skip:(page-1)*pageSize,take:pageSize+1})
     return NextResponse.json({assets:rows.slice(0,pageSize).map((asset:any)=>({id:asset.id,url:asset.sourceType==='postfast'&&!/^(https?:|\/)/.test(asset.url)?`/api/integrations/postfast/file/${brandId}/${asset.url}`:asset.url,mimeType:asset.mimeType.toLowerCase(),filename:asset.filename,aiCaption:asset.aiCaption,aiTags:asset.aiTags,sourceType:asset.sourceType,folderId:asset.folderId,materialClass:asset.materialClass,materialForm:asset.materialForm,isCoverMaterial:asset.isCoverMaterial,...publicThumbnail(asset)})),pagination:{page,pageSize,hasMore:rows.length>pageSize}}, {headers:{'Cache-Control':'private, no-store'}})

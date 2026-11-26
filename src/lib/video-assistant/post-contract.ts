@@ -36,6 +36,7 @@ export function postRevisionFields(d: any) {
     },
     gbpLocationId: d.gbpLocationId,
     instagramPublishType: d.instagramPublishType,
+    ...(d.mediaMode ? { mediaMode: d.mediaMode } : {}),
     postfastControls: d.postfastControls,
     coverAssetId: d.coverAssetId,
     mediaUrls: d.mediaUrls,

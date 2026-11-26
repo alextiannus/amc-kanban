@@ -338,6 +338,7 @@ export function createPostAssistant(deps: Deps) {
     const issues = await validateDraftMediaForPlatform({
       platform: a.platformId,
       instagramPublishType: draft.instagramPublishType,
+      mediaMode: draft.mediaMode,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
       coverAsset: draft.coverAsset,

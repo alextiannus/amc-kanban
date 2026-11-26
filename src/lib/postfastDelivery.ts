@@ -3,18 +3,21 @@ import {postRevision,postContentRevision,postInclude} from './video-assistant/po
 import { requireActorPermission } from './role-permissions/delegation'
 import { PolicyError } from './role-permissions/store'
 import { lockAccountBinding, assertAccountBound, SocialAccountBindingError } from '@/lib/socialAccountBinding'
+import { lockBrandSync } from '@/lib/socialAccountLocks'
 import { createHash, randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import {
   postfastPublish,
+  postfastDeletePost,
   postfastUploadPublicUrlStream,
   type PostFastMediaInput,
   type PostFastPublishInput,
   type PostFastPublishResult,
 } from '@/lib/integrations/postfast'
 import { syncBrandDraftStatuses, POSTFAST_RESULT_UNKNOWN } from '@/lib/syncDraftStatuses'
+import { SHORT_VIDEO_CAROUSEL } from '@/lib/shortVideoCarousel'
 
 export const POSTFAST_DELIVERY_ACTIVE_STATUSES = ['QUEUED', 'TRANSFERRING', 'CREATING_POST', 'RESULT_UNKNOWN'] as const
 
@@ -36,6 +39,7 @@ export type PostfastDeliveryPayload = {
   scheduled: boolean
   draftUpdatedAt: string
   approvedContentRevision?:string
+  retryTaskId?: string
   publish: Omit<PostFastPublishInput, 'apiKey'>
 }
 
@@ -95,6 +99,8 @@ export async function enqueuePostfastDelivery(input: {
   draftUpdatedAt: Date
   approvedRevision?:string
   approvedContentRevision?:string
+  retryTaskId?: string
+  previousSchedule?: { postId: string; scheduledAt: Date | null; apiKey: string }
   publish: Omit<PostFastPublishInput, 'apiKey'>
   warnings?: unknown[]
 }) {
@@ -109,6 +115,7 @@ export async function enqueuePostfastDelivery(input: {
     scheduled: input.scheduled,
     draftUpdatedAt: input.draftUpdatedAt.toISOString(),
     approvedContentRevision:input.approvedContentRevision,
+    retryTaskId: input.retryTaskId,
     publish: input.publish,
   })
   const key = submissionKey(input.draftId, payload)
@@ -117,9 +124,11 @@ export async function enqueuePostfastDelivery(input: {
     ? jsonSnapshot(input.warnings) as unknown as Prisma.InputJsonValue
     : undefined
 
+  const shortVideoMode = input.publish.mediaMode === SHORT_VIDEO_CAROUSEL
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const accountId = input.publish.accountId
     if (!accountId) throw new Error('Publishing requires a bound account.')
+    if (shortVideoMode) await lockBrandSync(tx, input.brandId)
     await lockAccountBinding(tx, accountId)
     const account = await tx.socialAccount.findFirst({ where: { id: accountId, brandId: input.brandId } })
     assertAccountBound(account)
@@ -141,11 +150,17 @@ export async function enqueuePostfastDelivery(input: {
         id: input.draftId,
         brandId: input.brandId,
         status: { not: 'publishing' },
+        ...(shortVideoMode ? { updatedAt: input.draftUpdatedAt, publishedAt: null } : {}),
       },
       data: {
         status: 'publishing',
         deliveryFailureCode: null,
         deliveryFailureAt: null,
+        ...(shortVideoMode ? {
+          rejectionNote: null,
+          ...(input.publish.scheduledAt ? { scheduledAt: new Date(input.publish.scheduledAt) } : {}),
+          ...(input.previousSchedule ? { platformPostId: null } : {}),
+        } : {}),
         agentNote: '大视频已进入后台发布队列，系统将在下一次任务运行时开始传输。',
       },
     })
@@ -155,6 +170,7 @@ export async function enqueuePostfastDelivery(input: {
         orderBy: { createdAt: 'desc' },
       })
       if (activeAfterLock) return activeAfterLock
+      if (shortVideoMode) throw new SocialAccountBindingError('草稿在校验期间已更新，请刷新后重新提交。', 409, 'SHORT_VIDEO_DRAFT_CHANGED')
       throw new Error('Draft is already publishing without an active PostFast delivery job.')
     }
 
@@ -189,8 +205,18 @@ export async function enqueuePostfastDelivery(input: {
           },
         })
 
+    if (input.previousSchedule) {
+      const previous = input.previousSchedule
+      if (!previous.scheduledAt || previous.scheduledAt.getTime() <= Date.now()) {
+        throw new SocialAccountBindingError('原帖子已到发布时间，请先刷新发布状态。', 409, 'SHORT_VIDEO_SCHEDULE_EXPIRED')
+      }
+      const cancelled = await postfastDeletePost(previous.apiKey, previous.postId)
+      if (!cancelled.success) {
+        throw new SocialAccountBindingError('原排期取消结果未确认，请先刷新发布状态。', 409, 'SHORT_VIDEO_SCHEDULE_CANCEL_FAILED')
+      }
+    }
     return job
-  })
+  }, input.previousSchedule ? { timeout: 25_000 } : undefined)
 }
 
 function retryablePublishFailure(result: PostFastPublishResult) {
@@ -369,6 +395,12 @@ async function finishSuccess(input: {
         resolvedNote: input.payload.note || '大视频后台发布成功',
       },
     })
+    if (input.payload.retryTaskId) {
+      await tx.workUnit.updateMany({
+        where: { id: input.payload.retryTaskId, brandId: input.job.brandId, status: 'pending' },
+        data: { status: 'done', requiredInput: null },
+      })
+    }
     return draft
   })
 
@@ -511,6 +543,10 @@ async function reconcileUnknownJobs() {
             resolvedNote: payload.note || '大视频后台发布结果已完成对账',
           },
         }),
+        ...(payload.retryTaskId ? [prisma.workUnit.updateMany({
+          where: { id: payload.retryTaskId, brandId: current.brandId, status: 'pending' },
+          data: { status: 'done', requiredInput: null },
+        })] : []),
       ])
       reconciled += 1
     } else if (current.draft.status === 'failed' && current.draft.deliveryFailureCode === POSTFAST_RESULT_UNKNOWN) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mediaKind, socialMediaCompositionIssues, socialMediaNotice } from '../src/lib/socialMediaComposition.ts'
 import { orderedDraftMedia, orderedMediaUrls } from '../src/lib/draftMedia.ts'
+import { shortVideoDurationOutsideRange, shortVideoIssue } from '../src/lib/shortVideoCarousel.ts'
 
 for (const count of [2, 10]) {
   assert.deepEqual(socialMediaCompositionIssues('instagram', Array(count).fill('video')), [])
@@ -37,3 +38,12 @@ assert.equal(proxies.length,1)
 assert.equal(proxies[0].id,'pf')
 assert.deepEqual(orderedMediaUrls(proxies), [proxy])
 console.log('Carousel composition, ordering, metadata and mixed-source removal checks passed')
+
+for (const count of [0, 1, 2, 5, 6]) {
+  const clips = Array(count).fill('video')
+  assert.equal(!!shortVideoIssue('instagram', clips), count > 5)
+  assert.equal(!!shortVideoIssue('instagram', clips, true), count < 2 || count > 5)
+}
+assert.equal(shortVideoIssue('tiktok', ['video', 'video'])?.field, 'platform')
+assert.equal(shortVideoIssue('instagram', ['video', 'image'])?.field, 'mediaMix')
+assert.deepEqual([2.9, 3, 5, 5.1, undefined].map(shortVideoDurationOutsideRange), [true, false, false, true, false])

@@ -13,11 +13,13 @@ import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { getSchedulingRecommendations } from '@/lib/schedulingRecommendation'
 import { buildPostfastCoverImage, buildPostfastMediaItems } from '@/lib/publishMedia'
 import { validateDraftMediaForPlatform } from '@/lib/publishMediaValidation'
+import { SHORT_VIDEO_CAROUSEL } from '@/lib/shortVideoCarousel'
 import { shouldValidateMediaForDraftDelivery } from '@/lib/mediaPublishPolicy'
 import {
   blockingMediaIssues,
   mediaValidationWarnings,
   type MediaValidationIssue,
+  type MediaTechnicalMetadata,
 } from '@/lib/mediaValidation'
 import { writeAuditLog } from '@/lib/audit'
 import { POSTFAST_RESULT_UNKNOWN } from '@/lib/syncDraftStatuses'
@@ -39,6 +41,7 @@ type SubmitDraftInput = {
   urgency?: 'normal' | 'urgent'
   immediatePublish?: boolean
   confirmedUnknownResult?: boolean
+  retryTaskId?: string
 }
 
 function isFuture(value?: Date | null) {
@@ -112,6 +115,10 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     },
   })
   if (!draft) return { ok: false as const, status: 404, error: 'Draft not found' }
+  const shortVideoMode = draft.mediaMode === SHORT_VIDEO_CAROUSEL
+  if (shortVideoMode && (draft.publishedAt || ['published', 'done'].includes(draft.status))) {
+    return { ok: false as const, status: 409, error: '此多段视频已发布。' }
+  }
   if(input.approvedVideoPost){
     const current=await prisma.contentDraft.findFirst({where:{id:input.draftId,brandId:input.brandId},include:postInclude})
     if(!current||postRevision(current)!==input.approvedVideoPost.revision||!['draft','pending_review'].includes(current.status)||current.platformPostId||current.deliveryFailureCode||Date.parse(input.approvedVideoPost.scheduledAt)<=Date.now())return {ok:false as const,status:409,code:'POST_APPROVAL_STALE',error:'发布草稿、素材或排期已变化，请重新确认。'}
@@ -150,6 +157,14 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       reason: 'User confirmed the social platform was checked before retrying delivery.',
       metadata: { brandId: input.brandId },
     })
+  }
+
+  if (shortVideoMode && draft.status === 'publishing') {
+    const active = await findActivePostfastDeliveryJob(draft.id)
+    if (active && active.status !== 'RESULT_UNKNOWN') {
+      return { ok: true as const, mode: 'queued' as const, queued: true as const, jobId: active.id, status: active.status, draft }
+    }
+    return { ok: false as const, status: 409, code: 'SHORT_VIDEO_DELIVERY_IN_PROGRESS', error: '多段视频的发布结果待确认，请先刷新草稿状态。' }
   }
 
   // ── 快速校验（在抢锁之前，避免空跑）────────────────────────────────────────
@@ -221,10 +236,13 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     accountHandle: draft.account.handle,
   })
   let validationWarnings: MediaValidationIssue[] = []
-  if (shouldValidateForPublish) {
+  const inspectedMedia = shortVideoMode ? new Map<string, MediaTechnicalMetadata>() : undefined
+  if (shouldValidateForPublish || shortVideoMode) {
     const mediaIssues = await validateDraftMediaForPlatform({
       platform: platformId,
       instagramPublishType: draft.instagramPublishType,
+      mediaMode: draft.mediaMode,
+      inspectedMedia,
       mediaUrls: draft.mediaUrls,
       assetRefs: draft.assetRefs,
       coverAsset: draft.coverAsset,
@@ -253,7 +271,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   }
 
   // 已经排期的post，一定要先确认之前的排期成功取消掉，否则不要安排新的发布避免重复
-  if (draft.platformPostId && !draft.publishedAt) {
+  if (draft.platformPostId && !draft.publishedAt && !shortVideoMode) {
     if (!brand.postfastApiKey) {
       return { ok: false as const, status: 400, error: '品牌尚未配置 PostFast API Key，无法取消排期。' }
     }
@@ -302,7 +320,17 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   const needsPublishingLock = brand.autoPilot || input.forcePublish
 
   if (!brand.autoPilot && !input.forcePublish) {
+    if (shortVideoMode && draft.platformPostId) {
+      return { ok: false as const, status: 409, code: 'SHORT_VIDEO_ALREADY_SCHEDULED', error: '此多段视频已排期，请通过重新排期操作修改。' }
+    }
     const updated = await prisma.$transaction(async (tx: any) => {
+      if (shortVideoMode) {
+        const locked = await tx.contentDraft.updateMany({
+          where: { id: draft.id, updatedAt: draft.updatedAt, publishedAt: null },
+          data: { status: 'pending_review', rejectionNote: null },
+        })
+        if (locked.count !== 1) return null
+      }
       const nextDraft = await tx.contentDraft.update({
         where: { id: draft.id },
         data: { status: 'pending_review', rejectionNote: null },
@@ -339,6 +367,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
       return nextDraft
     })
+    if (!updated) return { ok: false as const, status: 409, code: 'SHORT_VIDEO_DRAFT_CHANGED', error: '草稿在校验期间已更新，请刷新后重新提交。' }
 
     void persistDraftSnapshotToObs({ brandId: input.brandId, draftId: draft.id, data: updated }).catch((error) => {
       console.error('[submitDraftForDelivery] OBS pending snapshot failed:', error)
@@ -406,7 +435,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
 
 
   // status is already 'publishing' — set by the atomic lock above. Only clear rejectionNote.
-  if(!input.approvedVideoPost)await prisma.contentDraft.update({ where: { id: draft.id }, data: { rejectionNote: null } })
+  if (!input.approvedVideoPost && !shortVideoMode) await prisma.contentDraft.update({ where: { id: draft.id }, data: { rejectionNote: null } })
 
 
   // ── Auto-schedule: if no scheduledAt, get the optimal time from the scheduling API ──
@@ -428,14 +457,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
       draft.account.platformId,
       input.urgency ?? 'normal',
     )
-    if (recommended) {
+    if (recommended && (!shortVideoMode || isFuture(recommended))) {
       resolvedScheduledAt = recommended
       // Persist the recommended time back to DB for visibility/audit trail
-      await prisma.contentDraft.update({
-        where: { id: draft.id },
-        data: { scheduledAt: resolvedScheduledAt },
-      })
+      if (!shortVideoMode) {
+        await prisma.contentDraft.update({
+          where: { id: draft.id },
+          data: { scheduledAt: resolvedScheduledAt },
+        })
+      }
       console.log(`[submitDraftForDelivery] Auto-scheduled ${draft.id} → ${resolvedScheduledAt.toISOString()} (platform: ${draft.account.platformId})`)
+    } else if (shortVideoMode && isRescheduleRequested) {
+      return { ok: false as const, status: 503, code: 'SHORT_VIDEO_SCHEDULE_UNAVAILABLE', error: '暂时无法推荐新的排期，请稍后重试。' }
     } else {
       // Recommend API unavailable — fall through to immediate publish (graceful degradation)
       console.warn(`[submitDraftForDelivery] Could not get schedule recommendation for draft ${draft.id}, publishing immediately`)
@@ -451,11 +484,12 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
   const mediaItems = buildPostfastMediaItems({
     mediaUrls: draft.mediaUrls,
     assetRefs: draft.assetRefs,
+    inspectedMedia,
   })
-  const coverImage = buildPostfastCoverImage(draft.coverAsset)
+  const coverImage = shortVideoMode ? undefined : buildPostfastCoverImage(draft.coverAsset)
 
-  if (input.approvedVideoPost || shouldQueuePostfastDelivery(mediaItems)) {
-    const latestDraft = await prisma.contentDraft.findUniqueOrThrow({ where: { id: draft.id } })
+  if (input.approvedVideoPost || shortVideoMode || shouldQueuePostfastDelivery(mediaItems)) {
+    const draftUpdatedAt = shortVideoMode ? draft.updatedAt : (await prisma.contentDraft.findUniqueOrThrow({ where: { id: draft.id } })).updatedAt
     let job
     try {
       job = await enqueuePostfastDelivery({
@@ -465,13 +499,18 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
         note: input.note,
         immediatePublish,
         scheduled,
-        draftUpdatedAt: latestDraft.updatedAt,
+        draftUpdatedAt,
+        previousSchedule: shortVideoMode && draft.platformPostId
+          ? { postId: draft.platformPostId, scheduledAt: draft.scheduledAt, apiKey: brand.postfastApiKey }
+          : undefined,
         approvedRevision:input.approvedVideoPost?.revision,
         approvedContentRevision:input.approvedVideoPost?.contentRevision,
+        retryTaskId: input.retryTaskId,
         publish: {
           platform: platformId,
           accountId: draft.accountId || undefined,
           gbpLocationId: draft.gbpLocationId || undefined,
+          mediaMode: draft.mediaMode || undefined,
           instagramPublishType: draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY'
             ? draft.instagramPublishType
             : undefined,
@@ -564,6 +603,7 @@ export async function submitDraftForDelivery(input: SubmitDraftInput) {
     platform: platformId,
     accountId: draft.accountId || undefined,
     gbpLocationId: draft.gbpLocationId || undefined,
+    mediaMode: draft.mediaMode || undefined,
     instagramPublishType: draft.instagramPublishType === 'TIMELINE' || draft.instagramPublishType === 'REEL' || draft.instagramPublishType === 'STORY'
       ? draft.instagramPublishType
       : undefined,

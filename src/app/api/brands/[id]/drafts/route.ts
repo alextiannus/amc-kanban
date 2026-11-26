@@ -11,6 +11,8 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject, canSessionWriteBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
+import { SHORT_VIDEO_CAROUSEL } from '@/lib/shortVideoCarousel'
+import { parseDraftMediaMode, ShortVideoDraftError, validateShortVideoDraft } from '@/lib/shortVideoDraft'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
 import { sanitizePostFastDraftControls } from '@/lib/integrations/postfast'
@@ -22,6 +24,7 @@ const DRAFT_SELECT = {
   accountId: true,
   gbpLocationId: true,
   instagramPublishType: true,
+  mediaMode: true,
   postfastControls: true,
   caption: true,
   captionLang: true,
@@ -282,6 +285,8 @@ async function createDraft(request: Request, { params }: Params) {
     ? optionalString(body.gbpLocationId)
     : null
   const instagramPublishType = optionalInstagramPublishType(body.instagramPublishType)
+  const mediaMode = parseDraftMediaMode(body.mediaMode)
+  if (mediaMode === false) return NextResponse.json({ error: 'Invalid mediaMode' }, { status: 400 })
   if (instagramPublishType === false) {
     return NextResponse.json({ error: 'instagramPublishType must be TIMELINE, REEL, STORY, or null' }, { status: 400 })
   }
@@ -308,6 +313,7 @@ async function createDraft(request: Request, { params }: Params) {
     catch (e) { return NextResponse.json({ error: (e as Error).message }, { status: (e as { status?: number }).status || 422 }) }
   }
   const status = typeof body.status === 'string' ? body.status : 'draft'
+  const mediaUrls = normalizeStringArray(body.mediaUrls)
   if (!DRAFT_STATUSES.has(status)) {
     return NextResponse.json({ error: 'Invalid draft status' }, { status: 400 })
   }
@@ -325,6 +331,16 @@ async function createDraft(request: Request, { params }: Params) {
     return NextResponse.json({ error: 'postUrl must be an http(s) URL or null' }, { status: 400 })
   }
   const platformPostId = optionalString(body.platformPostId)
+  if (mediaMode === SHORT_VIDEO_CAROUSEL && ['pending_review', 'scheduled', 'publishing'].includes(status)) {
+    try {
+      await validateShortVideoDraft(prisma, {
+        platform: draftAccount.platformId, brandId, mediaUrls, assetIds, status, instagramPublishType, verifyReadable: true,
+      })
+    } catch (error) {
+      if (error instanceof ShortVideoDraftError) return NextResponse.json({ error: error.message }, { status: 422 })
+      throw error
+    }
+  }
 
   let newTask: any = null
 
@@ -335,6 +351,9 @@ async function createDraft(request: Request, { params }: Params) {
   let videoReplay = false
   const draft = await prisma.$transaction(async (tx: any) => {
     const boundAccount = await resolveDraftAccount(tx, brandId, accountId, status === 'draft' && !scheduledAt && !publishedAt && !platformPostId && !postUrl && body.createTask !== true)
+    if (mediaMode === SHORT_VIDEO_CAROUSEL) {
+      await validateShortVideoDraft(tx, { platform: boundAccount.platformId, brandId, mediaUrls, assetIds, status, instagramPublishType })
+    }
     accountId = boundAccount.id
     body.accountId = accountId
     if (videoJobId) {
@@ -351,11 +370,12 @@ async function createDraft(request: Request, { params }: Params) {
         brandId,
         accountId,
         gbpLocationId,
-        instagramPublishType,
+        instagramPublishType: mediaMode === SHORT_VIDEO_CAROUSEL ? 'TIMELINE' : instagramPublishType,
+        mediaMode,
         postfastControls: parsedPostfastControls.controls ?? null,
         caption,
         captionLang: typeof body.captionLang === 'string' && body.captionLang ? body.captionLang : 'en',
-        mediaUrls: normalizeStringArray(body.mediaUrls),
+        mediaUrls,
         coverAssetId: coverAsset?.id ?? null,
         hashtags: normalizeStringArray(body.hashtags),
         scheduledAt,
@@ -472,8 +492,12 @@ async function createDraft(request: Request, { params }: Params) {
     }
 
     return tx.contentDraft.findUniqueOrThrow({ where: { id: created.id }, select: DRAFT_SELECT })
+  }).catch((error: unknown) => {
+    if (error instanceof ShortVideoDraftError) return { mediaModeError: error.message } as const
+    throw error
   })
 
+  if (draft.mediaModeError) return NextResponse.json({ error: draft.mediaModeError }, { status: 422 })
   if (draft.videoError) return NextResponse.json({ error: draft.videoError }, { status: draft.status })
 
   if (newTask) {

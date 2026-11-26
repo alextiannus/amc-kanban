@@ -19,6 +19,10 @@
 
 浏览器回归使用模拟 AI 与发布响应；真实付费生成及生产发布不是自动测试的一部分。功能实施、Git 推送、部署、生产验收分别标注。
 
+## 多段视频（Live 视频图）
+
+MM 新建和编辑草稿通过 Kanban 代理接口读写 `mediaMode: SHORT_VIDEO_CAROUSEL`。该模式只面向 Instagram，固定为 `TIMELINE`。接口继续按 `mediaUrls` 保存正文顺序，`assetIds` 保存素材库引用。0–1 段可保存，2–5 段可提交。离开该模式时，PATCH 传 `mediaMode: null`。详细契约与上线顺序见 [轮播发布](carousel-publishing.md)。
+
 ## 本地验证
 
 2026-11-06 复查修正已包含在上述 MM 提交，部署及生产验收未核实：保存完整且有序的 mediaUrls，并保留 assetIds 作为元数据关联，确保 MM 重新打开可见素材且发布不重复；PostFast 素材保留相对文件代理路径，以复用既有 storageKey 去重。普通保存 POST 使用 scheduledAt=null，PATCH 清空通过现有接口支持的空字符串传递；浏览器测试模拟真实 PATCH 忽略 null 的行为。上传传递所选 folderId，确保素材进入所选目录。目录及用途提示的 Escape 先关闭自身，不触发编辑面板离开确认。AI 改写同时传入当前人工正文和创作主题，返回候选供用户采用。

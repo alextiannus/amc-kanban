@@ -236,6 +236,7 @@ export async function publisherNode(state: any) {
           const issues = await validateDraftMediaForPlatform({
             platform,
             instagramPublishType: draftForPublish.instagramPublishType,
+            mediaMode: draftForPublish.mediaMode,
             mediaUrls: draftForPublish.mediaUrls,
             assetRefs: draftForPublish.assetRefs,
             coverAsset: draftForPublish.coverAsset,
@@ -310,6 +311,7 @@ export async function publisherNode(state: any) {
         brandId: brand.id,
         platform,
         caption,
+        mediaMode: draftForPublish?.mediaMode || undefined,
         instagramPublishType: draftForPublish?.instagramPublishType === 'TIMELINE' || draftForPublish?.instagramPublishType === 'REEL' || draftForPublish?.instagramPublishType === 'STORY' ? draftForPublish.instagramPublishType : undefined,
         ...sanitizePostFastDraftControls(draftForPublish?.postfastControls).controls,
         ...(publishMediaItems ? { mediaItems: publishMediaItems } : { mediaUrls: mediaUrls || [] }),

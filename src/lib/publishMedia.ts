@@ -70,13 +70,15 @@ function upsertMediaItem(items: MediaItem[], seen: Map<string, number>, item: Me
 export function buildPostfastMediaItems(input: {
   mediaUrls?: string[] | null
   assetRefs?: AssetRefLike[] | null
+  inspectedMedia?: ReadonlyMap<string, MediaTechnicalMetadata>
 }) {
   const items: MediaItem[] = []
   const seen = new Map<string, number>()
 
   for (const url of input.mediaUrls || []) {
     const storageKey = extractPostfastStorageKey(url)
-    upsertMediaItem(items, seen, storageKey ? { storageKey } : { url })
+    const metadata = input.inspectedMedia?.get(draftMediaIdentity(url))
+    upsertMediaItem(items, seen, { ...(storageKey ? { storageKey } : { url }), ...(metadata ? { metadata } : {}) })
   }
 
   for (const ref of input.assetRefs || []) {

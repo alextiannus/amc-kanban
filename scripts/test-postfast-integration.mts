@@ -609,6 +609,41 @@ async function main() {
       assert.equal(seen.length, before, 'invalid compositions must not look up accounts, upload or create posts')
     }
 
+    for (const future of [undefined, scheduledAt]) {
+      const before = seen.filter(r => r.url === '/social-posts').length
+      const result = await postfast.postfastPublish({
+        apiKey: API_KEY, platform: 'instagram', accountId: 'pf_acc_instagram',
+        caption: 'Carousel test instagram video 5',
+        scheduledAt: future,
+        mediaMode: 'SHORT_VIDEO_CAROUSEL', instagramPublishType: 'TIMELINE',
+        coverImage: { url: `${BASE_URL}/unused-missing-cover.jpg` },
+        mediaItems: Array.from({ length: 5 }, (_, index) => ({
+          storageKey: `carousel/video-${index}`,
+          metadata: { ...validReelMetadata, durationSeconds: index === 4 ? 5.25 : 3 + index * 0.5 },
+        })),
+      })
+      assert.equal(result.success, true, JSON.stringify(result))
+      assert.equal(seen.filter(r => r.url === '/social-posts').length, before + 1)
+      assert(result.warnings?.some(issue => issue.field === 'durationSeconds' && issue.limit === '3–5 seconds'))
+    }
+    for (const [platform, kinds] of [
+      ['instagram', ['video']], ['instagram', Array(6).fill('video')],
+      ['instagram', ['video', 'image']], ['tiktok', ['video', 'video']],
+    ] as const) {
+      const before = seen.length
+      const result = await postfast.postfastPublish({
+        apiKey: API_KEY, platform, accountId: 'pf_acc_instagram',
+        caption: 'Invalid short video carousel', scheduledAt,
+        mediaMode: 'SHORT_VIDEO_CAROUSEL', instagramPublishType: 'TIMELINE',
+        coverImage: { url: `${BASE_URL}/unused-missing-cover.jpg` },
+        mediaItems: kinds.map((kind, index) => ({
+          storageKey: `invalid-short/${index}`, metadata: kind === 'video' ? validReelMetadata : validCoverMetadata,
+        })),
+      })
+      assert.equal(result.code, 'MEDIA_VALIDATION_FAILED')
+      assert.equal(seen.length, before)
+    }
+
     const imageCoverPublish = await postfast.postfastPublish({
       apiKey: API_KEY,
       platform: 'instagram',

@@ -692,6 +692,7 @@ model ContentDraft {
   account                         SocialAccount? @relation(fields: [accountId], references: [id])
   gbpLocationId                   String?
   instagramPublishType            String?
+  mediaMode                       String?
   postfastControls                Json?
   caption                         String
   captionLang                     String         @default("en")

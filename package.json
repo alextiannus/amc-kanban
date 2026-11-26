@@ -36,7 +36,7 @@
     "test:postfast-integration": "node --import tsx scripts/test-postfast-integration.mts",
     "test:social-account-unbinding": "node --experimental-strip-types scripts/test-social-account-unbinding.mts",
     "test:postfast-inbox": "node --experimental-strip-types scripts/test-postfast-inbox.mts",
-    "test:postfast-delivery": "node --experimental-strip-types scripts/test-postfast-delivery.mts",
+    "test:postfast-delivery": "node --import tsx scripts/test-postfast-delivery.mts",
     "test:tiktok-aigc": "node --import tsx scripts/test-tiktok-aigc-draft.mts && node --import tsx scripts/test-tiktok-aigc-delivery.mts",
     "test:tiktok-disclosures": "npm run test:tiktok-aigc && node --import tsx scripts/test-tiktok-brand-mcp.mts",
     "test:draft-status-reconciliation": "node --experimental-strip-types scripts/test-draft-status-reconciliation.mts",

@@ -9,6 +9,8 @@ import { prisma } from '@/lib/prisma'
 import { canSessionAccessBrandProject } from '@/lib/brandAccess'
 import { persistDraftSnapshotToObs } from '@/lib/integrations/huaweiObs'
 import { parseBrandComplianceConfig, validateContentCompliance } from '@/lib/compliance'
+import { SHORT_VIDEO_CAROUSEL } from '@/lib/shortVideoCarousel'
+import { parseDraftMediaMode, ShortVideoDraftError, validateShortVideoDraft } from '@/lib/shortVideoDraft'
 import { actorFromContext, writeAuditLog } from '@/lib/audit'
 import { eventEmitter } from '@/lib/events'
 import { findActivePostfastDeliveryJob } from '@/lib/postfastDelivery'
@@ -21,6 +23,7 @@ const DRAFT_SELECT = {
   accountId: true,
   gbpLocationId: true,
   instagramPublishType: true,
+  mediaMode: true,
   postfastControls: true,
   caption: true,
   captionLang: true,
@@ -91,7 +94,7 @@ async function lockCurrentDraft(client: any, brandId: string, draftId: string) {
   // adoption can establish a link after the route's first read.
   await client.$queryRaw`SELECT "id" FROM "BrandKnowledge" WHERE "brandId" = ${brandId} FOR UPDATE`
   await client.$queryRaw`SELECT "id" FROM "ContentDraft" WHERE "id" = ${draftId} FOR UPDATE`
-  const current = await client.contentDraft.findUnique({where: {id: draftId}, select: {brandId: true, accountId: true, scheduledAt: true, agentNote: true}})
+  const current = await client.contentDraft.findUnique({where: {id: draftId}, select: {brandId: true, accountId: true, scheduledAt: true, agentNote: true, mediaMode: true, mediaUrls: true, status: true, updatedAt: true}})
   if (!current || current.brandId !== brandId) throw new CreativeDraftLinkConflict()
   return {current, linked: await isLinkedCreativeDraft(client, brandId, draftId)}
 }
@@ -185,6 +188,10 @@ async function patchDraft(request: Request, { params }: Params) {
       accountId: true,
       gbpLocationId: true,
       instagramPublishType: true,
+      mediaMode: true,
+      mediaUrls: true,
+      caption: true,
+      hashtags: true,
       postfastControls: true,
       agentNote: true,
     },
@@ -192,6 +199,8 @@ async function patchDraft(request: Request, { params }: Params) {
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const body = await request.json().catch(() => ({}))
+  const mediaModeUpdate = parseDraftMediaMode(body.mediaMode)
+  if (mediaModeUpdate === false) return NextResponse.json({ error: 'Invalid mediaMode' }, { status: 400 })
   if (changesCreativeSchedule(body, existing) && (isReservedCreativeDraft(existing.agentNote) || await isLinkedCreativeDraft(prisma, brandId, draftId))) {
     return NextResponse.json({error: '请通过创意排期入口修改账号或时间。'}, {status: 409})
   }
@@ -223,7 +232,7 @@ async function patchDraft(request: Request, { params }: Params) {
 
   const publishCriticalFields = [
     'caption', 'captionLang', 'accountId', 'mediaUrls', 'assetIds', 'coverAssetId',
-    'hashtags', 'scheduledAt', 'status', 'gbpLocationId', 'instagramPublishType', 'postfastControls',
+    'hashtags', 'scheduledAt', 'status', 'gbpLocationId', 'instagramPublishType', 'postfastControls', 'mediaMode',
   ]
   if (existing.status === 'publishing' && publishCriticalFields.some((field) => Object.prototype.hasOwnProperty.call(body, field))) {
     const activeJob = await findActivePostfastDeliveryJob(draftId)
@@ -307,6 +316,27 @@ async function patchDraft(request: Request, { params }: Params) {
   }
   const coverAssetIdUpdate = hasCoverAssetUpdate ? (coverAsset?.id ?? null) : undefined
   const nextStatus = typeof body.status === 'string' ? body.status : undefined
+  const mediaUrlsUpdate = Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined
+  const nextMediaMode = mediaModeUpdate === undefined ? existing.mediaMode : mediaModeUpdate
+  const shortVideoEdit = existing.mediaMode === SHORT_VIDEO_CAROUSEL || nextMediaMode === SHORT_VIDEO_CAROUSEL
+  const currentAssetIds = shortVideoEdit && (assetIds !== null || nextMediaMode === SHORT_VIDEO_CAROUSEL)
+    ? (await prisma.contentAssetRef.findMany({ where: { draftId }, orderBy: { order: 'asc' }, select: { assetId: true } }))
+        .map((ref: { assetId: string }) => ref.assetId)
+    : []
+  if (nextMediaMode === SHORT_VIDEO_CAROUSEL) {
+    try {
+      await validateShortVideoDraft(prisma, {
+        platform: nextAccount.platformId, brandId, mediaUrls: mediaUrlsUpdate ?? existing.mediaUrls,
+        assetIds: assetIds ?? currentAssetIds, status: nextStatus ?? existing.status, instagramPublishType: instagramPublishTypeUpdate,
+        verifyReadable: (['pending_review', 'scheduled'].includes(nextStatus ?? existing.status)
+          && (nextStatus !== undefined || mediaUrlsUpdate !== undefined || assetIds !== null || body.scheduledAt !== undefined))
+          || (existing.status === 'scheduled' && nextStatus === 'draft' && (mediaUrlsUpdate !== undefined || assetIds !== null)),
+      })
+    } catch (error) {
+      if (error instanceof ShortVideoDraftError) return NextResponse.json({ error: error.message }, { status: 422 })
+      throw error
+    }
+  }
   const hasPostUrlUpdate = Object.prototype.hasOwnProperty.call(body, 'postUrl')
   const postUrlUpdate = hasPostUrlUpdate ? normalizeOptionalHttpUrl(body.postUrl) : undefined
   if (postUrlUpdate === false) {
@@ -338,18 +368,43 @@ async function patchDraft(request: Request, { params }: Params) {
   const scheduledAtChanged = incomingScheduledAt !== undefined &&
     isScheduledOnPostfast &&
     (!existing.scheduledAt || Math.abs(incomingScheduledAt.getTime() - existing.scheduledAt.getTime()) > 60_000)
+  const movingBackFromSchedule = nextStatus !== undefined && ['draft', 'pending_review', 'rejected'].includes(nextStatus)
+  const shortContentChanged = shortVideoEdit && (
+    nextMediaMode !== existing.mediaMode || accountChanged || hasPostfastControlsUpdate
+    || (typeof body.caption === 'string' && body.caption.trim() !== existing.caption)
+    || (Array.isArray(body.hashtags) && JSON.stringify(normalizeStringArray(body.hashtags)) !== JSON.stringify(existing.hashtags))
+    || (mediaUrlsUpdate !== undefined && JSON.stringify(mediaUrlsUpdate) !== JSON.stringify(existing.mediaUrls))
+    || (assetIds !== null && JSON.stringify(assetIds) !== JSON.stringify(currentAssetIds))
+  )
+  const replaceShortSchedule = isScheduledOnPostfast && shortVideoEdit && !movingBackFromSchedule
+    && (scheduledAtChanged || shortContentChanged)
+  const cancelShortSchedule = isScheduledOnPostfast && shortVideoEdit && (replaceShortSchedule || movingBackFromSchedule)
+  if (shortVideoEdit && incomingScheduledAt && !Number.isFinite(incomingScheduledAt.getTime())) {
+    return NextResponse.json({ error: '请选择有效的发布时间。' }, { status: 422 })
+  }
+  if (cancelShortSchedule && (!existing.scheduledAt || existing.scheduledAt.getTime() <= Date.now())) {
+    return NextResponse.json({ error: '原帖子已到发布时间，请先刷新发布状态。' }, { status: 409 })
+  }
+  if (replaceShortSchedule && incomingScheduledAt && incomingScheduledAt.getTime() <= Date.now()) {
+    return NextResponse.json({ error: '请选择未来的发布时间。' }, { status: 422 })
+  }
 
   let brand: { postfastApiKey: string | null; timezone: string | null } | null = null
-  if (isScheduledOnPostfast && (nextStatus && ['draft', 'pending_review', 'rejected'].includes(nextStatus) || scheduledAtChanged || gbpLocationChanged)) {
+  if (cancelShortSchedule || (!shortVideoEdit && isScheduledOnPostfast && (movingBackFromSchedule || scheduledAtChanged || gbpLocationChanged))) {
     brand = await prisma.brand.findUnique({
       where: { id: brandId },
       select: { postfastApiKey: true, timezone: true }
     })
+    if (cancelShortSchedule && !brand?.postfastApiKey) {
+      return NextResponse.json({ error: '品牌未配置 PostFast API Key，当前排期仍保留。' }, { status: 409 })
+    }
     if (brand?.postfastApiKey) {
-      if (scheduledAtChanged || gbpLocationChanged) {
+      if (replaceShortSchedule || scheduledAtChanged || gbpLocationChanged) {
         const health = await checkPostfastPublishAccount({ apiKey: brand.postfastApiKey, brandId, accountId: nextAccountId || undefined, platform: nextAccount.platformId })
         if (!health.success) return NextResponse.json({ ok: false, code: health.code, error: health.error }, { status: health.status })
       }
+    }
+    if (!shortVideoEdit && brand?.postfastApiKey) {
       const { postfastDeletePost } = await import('@/lib/integrations/postfast')
       const cancelResult = await postfastDeletePost(brand.postfastApiKey, existing.platformPostId!)
       if (cancelResult.success) {
@@ -373,6 +428,9 @@ async function patchDraft(request: Request, { params }: Params) {
   const draft = await prisma.$transaction(async (tx: any) => {
     await lockBrandSync(tx, brandId, true)
     const {current, linked} = await lockCurrentDraft(tx, brandId, draftId)
+    if ((shortVideoEdit || current.mediaMode === SHORT_VIDEO_CAROUSEL) && current.updatedAt.getTime() !== existing.updatedAt.getTime()) {
+      return 'media-mode-conflict' as const
+    }
     if (changesCreativeSchedule(body, current) && (isReservedCreativeDraft(current.agentNote) || linked)) {
       throw new CreativeDraftLinkConflict()
     }
@@ -380,6 +438,7 @@ async function patchDraft(request: Request, { params }: Params) {
     if (!requestedAccountId) throw new SocialAccountBindingError('accountId is required', 400, 'ACCOUNT_NOT_FOUND')
     const boundAccount = await resolveDraftAccount(tx, brandId, requestedAccountId, false)
     if (body.accountId !== undefined) body.accountId = boundAccount.id
+    if (cancelShortSchedule) platformPostIdUpdate = null
     const updated = await tx.contentDraft.update({
       // Prevent controls from overwriting a concurrent edit or publication transition.
       where: { id: draftId, ...(hasPostfastControlsUpdate ? { updatedAt: existing.updatedAt } : {}) },
@@ -388,13 +447,17 @@ async function patchDraft(request: Request, { params }: Params) {
         captionLang: typeof body.captionLang === 'string' ? body.captionLang : undefined,
         accountId: typeof body.accountId === 'string' ? body.accountId : undefined,
         gbpLocationId: gbpLocationIdUpdate,
-        instagramPublishType: instagramPublishTypeUpdate,
+        instagramPublishType: (mediaModeUpdate === undefined ? current.mediaMode : mediaModeUpdate) === SHORT_VIDEO_CAROUSEL
+          ? 'TIMELINE'
+          : mediaModeUpdate === null && current.mediaMode === SHORT_VIDEO_CAROUSEL && instagramPublishTypeUpdate === undefined
+            ? null : instagramPublishTypeUpdate,
+        mediaMode: mediaModeUpdate,
         postfastControls: hasPostfastControlsUpdate ? nextControls : undefined,
-        mediaUrls: Array.isArray(body.mediaUrls) ? normalizeStringArray(body.mediaUrls) : undefined,
+        mediaUrls: mediaUrlsUpdate,
         coverAssetId: coverAssetIdUpdate,
         hashtags: Array.isArray(body.hashtags) ? normalizeStringArray(body.hashtags) : undefined,
         scheduledAt: typeof body.scheduledAt === 'string' ? (body.scheduledAt ? new Date(body.scheduledAt) : null) : undefined,
-        status: nextStatus,
+        status: replaceShortSchedule ? 'draft' : nextStatus,
         platformPostId: platformPostIdUpdate,
         postUrl: postUrlUpdate,
         publishedAt: publishedAtUpdate,
@@ -490,14 +553,24 @@ async function patchDraft(request: Request, { params }: Params) {
       })
     }
 
-    return tx.contentDraft.findUniqueOrThrow({ where: { id: draftId }, select: DRAFT_SELECT })
-  }).catch((error: unknown) => {
+    const saved = await tx.contentDraft.findUniqueOrThrow({ where: { id: draftId }, select: DRAFT_SELECT })
+    if (cancelShortSchedule && brand?.postfastApiKey) {
+      if (!existing.scheduledAt || existing.scheduledAt.getTime() <= Date.now()) throw new ShortVideoDraftError('原帖子已到发布时间，请先刷新发布状态。')
+      const { postfastDeletePost } = await import('@/lib/integrations/postfast')
+      const cancelled = await postfastDeletePost(brand.postfastApiKey, existing.platformPostId!)
+      if (!cancelled.success) throw new ShortVideoDraftError('原排期取消结果未确认，请先刷新发布状态。')
+    }
+    return saved
+  }, cancelShortSchedule ? { timeout: 25_000 } : undefined).catch((error: unknown) => {
     if (error instanceof CreativeDraftLinkConflict) return 'creative-link-conflict' as const
+    if (error instanceof ShortVideoDraftError) return error
     if (hasPostfastControlsUpdate && (error as { code?: string })?.code === 'P2025') return null
     throw error
   })
 
   if (draft === 'creative-link-conflict') return NextResponse.json({error: '请通过创意排期入口修改账号或时间。'}, {status: 409})
+  if (draft === 'media-mode-conflict') return NextResponse.json({ error: '草稿已更新，请重新打开后再保存。' }, { status: 409 })
+  if (draft instanceof ShortVideoDraftError) return NextResponse.json({ error: draft.message }, { status: 409 })
   if (!draft) return NextResponse.json({ error: 'Draft changed while saving controls. Reload and retry.' }, { status: 409 })
 
   void persistDraftSnapshotToObs({ brandId, draftId: draft.id, data: draft }).catch((error) => {
@@ -506,7 +579,7 @@ async function patchDraft(request: Request, { params }: Params) {
 
   // Re-submit when a queued post changes schedule or Google location.
   // PostFast has no update API for either field. Strategy: delete above, then recreate.
-  if ((scheduledAtChanged || gbpLocationChanged) && platformPostIdUpdate === null) {
+  if ((shortVideoEdit ? replaceShortSchedule : scheduledAtChanged || gbpLocationChanged) && platformPostIdUpdate === null) {
     try {
       const { submitDraftForDelivery } = await import('@/lib/draftSubmission')
       const resubmitResult = await submitDraftForDelivery({
@@ -516,7 +589,7 @@ async function patchDraft(request: Request, { params }: Params) {
         forcePublish: true,
         note: scheduledAtChanged && incomingScheduledAt
           ? `已更新排期时间至 ${incomingScheduledAt.toLocaleString('zh-CN', { timeZone: brand?.timezone || 'Asia/Singapore' })}`
-          : '已更新 Google Business 发布门店',
+          : replaceShortSchedule ? '已更新多段视频排期内容' : '已更新 Google Business 发布门店',
       })
       if (resubmitResult.ok) {
         console.log(`[PATCH Draft] Re-submitted to PostFast with new scheduledAt ${incomingScheduledAt?.toISOString()}`)
