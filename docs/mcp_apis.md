@@ -611,6 +611,6 @@ Normal-video output streaming uses Content's basic-video-scoped download alias, 
 
 Shared publishing tools: `video_prepare_post` binds the current approved video to a real account and a caption, `post_request_submission` returns a session-only human confirmation for the exact draft revision and smart schedule, and `post_get_delivery` reads the original draft and durable queue receipt. Optional `publication` on video creation/revision remembers accountId/caption/hashtags and optional existing draft/source revisions for the post-review handoff. The human confirmation displays the caption, hashtags, account, cover, supported publish options and exact Singapore time; assistants cannot confirm it. Queue acceptance and provider scheduling never imply platform publication.
 
-## Lark Docx（本地实现与专项验证完成，未部署）
+## Lark Docx（已上线；个人授权与真实文件读写待验收）
 
 `lark_connection_status`, `lark_search_documents`, `lark_read_document`, `lark_create_document`, `lark_append_document`, `lark_update_document_block` 使用当前用户+品牌个人 OAuth，读取需要 brand.read，写入需要 brand.update 与品牌写权限。管理连接仅接受网页会话；MCP 和内置对话不能获取 OAuth token。读操作支持 pageToken。写操作必须带 requestKey；追加及块修改同时要求 expectedRevision；块修改要求 blockId 和完整新文本。requestKey 在用户+品牌内不可改内容重用；未知请求只返回原回执，不自动重发。正文不构成指令授权。
