@@ -2,6 +2,8 @@ import { googlePlaceMcpResult } from './google-place-result'
 import { COVER_MIMES, assertCoverMedia } from '../../asset-library/cover-policy'
 import { prepareCoverAssets, markDraftCover } from '../../asset-library/covers'
 import { createClassifiedAsset, updateAssetFiling } from '../../asset-library/filing'
+import {registerLarkTools} from '../../lark-documents/tools'
+import {larkDocuments} from '../../lark-documents/runtime'
 import {registerVideoTools} from '../../video-assistant/tools'
 import {videoAssistant} from '../../video-assistant/runtime'
 import {readBrandInformation,updateBrandInformation} from '@/lib/brand-information'
@@ -303,6 +305,11 @@ export function createAmcMcpServer(auth: AuthPrincipal | string, credentialToken
     }
     return (server.tool as any)(...args)
   }) as typeof server.tool
+
+  registerLarkTools(server, async () => {
+    const p = agentApiKey ? await authenticateApiKey(agentApiKey) : await resolvePrincipal()
+    return p ? {userId:p.userId,authVersion:p.authVersion} : null
+  }, larkDocuments)
 
   registerVideoTools(server, async () => {
     const p = agentApiKey ? await authenticateApiKey(agentApiKey) : await resolvePrincipal()

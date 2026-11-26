@@ -8,6 +8,8 @@ datasource db {
 }
 
 model User {
+  larkConnections LarkUserConnection[]
+  larkOAuthStates LarkOAuthState[]
   inboxReceipts InboxReceipt[]
   id            String         @id @default(cuid())
   email         String         @unique
@@ -368,6 +370,8 @@ model CrewMember {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Brand {
+  larkConnections LarkUserConnection[]
+  larkOAuthStates LarkOAuthState[]
   inboxReceipts               InboxReceipt[]
   assetFoldersInitialized     Boolean              @default(false)
   processedFoldersInitialized Boolean              @default(false)
@@ -2398,4 +2402,36 @@ model SubscriptionQuotation {
   updatedAt      DateTime  @updatedAt
 
   @@index([state, nextAttemptAt])
+}
+
+
+// Personal Lark OAuth is never inherited by another brand member.
+model LarkUserConnection {
+  userId String
+  brandId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  appId String
+  tokenCipher String
+  openId String
+  displayName String
+  expiresAt DateTime @db.Timestamptz(3)
+  connectedAt DateTime @default(now()) @db.Timestamptz(3)
+  @@id([userId, brandId])
+}
+
+model LarkOAuthState {
+  stateHash String @id
+  userId String
+  brandId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  authVersion Int
+  appId String
+  redirectUri String
+  verifierCipher String
+  expiresAt DateTime @db.Timestamptz(3)
+  consumed Boolean @default(false)
+  @@index([userId, brandId])
+  @@index([expiresAt])
 }

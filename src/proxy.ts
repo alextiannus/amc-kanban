@@ -38,7 +38,7 @@ export default async function proxy(request: NextRequest) {
   const brandOperations = pathname === '/api/brand-operations' || /^\/api\/brand-operations\/[^/]+\/principal$/.test(pathname)
   // Fault reporting and release probes must work even when the model registry is unavailable.
   const savedProfileRead = request.method === 'GET' && (/^\/api\/brands\/[^/]+\/profile-overview$/.test(pathname) || pathname === '/api/notifications') || pathname === '/api/notifications/push'
-  const videoAssistantNonModel = pathname.startsWith('/api/video-assistant/')
+  const videoAssistantNonModel = pathname.startsWith('/api/video-assistant/') || pathname.startsWith('/api/integrations/lark/documents')
 
   const engineeringNonModel = pathname === '/api/health/version' || /^\/api\/brands\/[^/]+\/daily-publishing$/.test(pathname) || pathname === '/api/profile/token-budget' || /^\/api\/brands\/[^/]+\/ai\/bug-reports(?:\/[^/]+)?$/.test(pathname)
   const permission = publicGameConfig || contentIdentity ? null : kanbanRoutePermission(pathname, request.method)

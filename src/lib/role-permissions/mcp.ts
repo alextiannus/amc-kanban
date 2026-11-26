@@ -1,3 +1,4 @@
+import {LARK_TOOLS} from '../lark-documents/tools'
 import {VIDEO_TOOLS} from '../video-assistant/tools'
 // Aliases share the same gate; no tool can bypass a revoked business action.
 export const MCP_PERMISSIONS: Record<string, string> = Object.fromEntries([
@@ -21,3 +22,5 @@ export const MCP_PERMISSIONS: Record<string, string> = Object.fromEntries([
   ['analytics.read', ['get_brand_analytics', 'get_social_insights']],
 ].flatMap(([permission, names]) => (names as string[]).map(name => [name, permission as string])))
 Object.assign(MCP_PERMISSIONS,Object.fromEntries(Object.entries(VIDEO_TOOLS).map(([name,t])=>[name,t.permission])))
+
+Object.assign(MCP_PERMISSIONS,Object.fromEntries(Object.entries(LARK_TOOLS).map(([name,t])=>[name,t.permission])))

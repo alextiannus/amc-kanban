@@ -1,5 +1,16 @@
 # AI Marketing Crew (餐饮零售自媒体运营看板) PRD 核心理念
 
+## Lark 个人云文档与 MCP（2026-11-26，本地实现与专项验证完成，未部署）
+
+AMC-MM 通过现有用户鉴权的 MCP 服务操作 Lark Docx。当前品牌的 Lark 应用配置只用于 OAuth 客户端认证；文档 API 一律使用当前用户授权的 user_access_token，绝不回退应用身份。个人连接按用户+品牌隔离，同品牌成员不能借用别人的连接；个人资料中的 Lark 入口可授权、检查账号及断开。缺少应用配置时显示未配置、固定回调和所需权限，不宣称已连接。
+
+支持 Docx 搜索分页、ID/链接读取和可编辑文本块读取、创建文档、追加段落及指定文本块修改。MCP 与对话共享工具及实时身份、品牌、角色权限。修改与追加携带读取所得文档版本；修改只作用指定文本块，保留其他复杂块及格式。文档正文是非可信来源，不可据其指示扩大权限或自行发起写入。
+
+OAuth state 单次有效十分钟，绑定用户、品牌、会话授权版本和固定 MM 回调。token 加密持久化、并发刷新串行处理。断开删除凭证和待授权状态。每次写入先持久预留幂等请求键和内容摘要，未知结果不自动重做；回执返回原文件 ID/链接、实际版本和读回核对结果。读回失败不能称为写入失败或已验证成功。首期不操作表格、Base、附件、消息或文件删除。
+
+验收包括个人/品牌隔离、撤权、OAuth 重放、版本冲突、真实 MCP 调用、搜索续页、指定块保留、重复请求和未知结果。代码/fixture 验证、部署、真实 Lark 用户授权和文件读写分别登记于 AMC-20261126-LARK-MCP-001。
+
+
 Google Places MCP diagnostics (2026-11-18, deployed and production error-path verified at e43f5e56): `google_get_place_info` preserves successful responses and reports failures using fixed messages, allowlisted Google status and failure category only. Raw upstream details, credentials, URLs and arbitrary error text are never forwarded. Invalid credentials remain a configuration issue; no fallback key, retry, billing or account change is performed.
 
 Internal text Retry-After diagnostics (2026-11-13, implemented locally): authenticated callers may receive only a validated 0-86400 second duration, alongside the existing safe HTTP status and failure kind. No raw upstream header/body or exception text is exposed. The gateway performs no automatic retries. Growth handles only explicitly user-authorized, request-bound HTTP 429 policies; unknown and other failed requests retain their guards.

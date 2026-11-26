@@ -610,3 +610,7 @@ Normal-video output streaming uses Content's basic-video-scoped download alias, 
 端到端扩展（AMC-20261109-VIDEO-END-TO-END-005）：创建视频可固定目标账号、发布文案、原草稿版本和可选创意版本；最终审核导入素材库后幂等接续为同一发布草稿。也可对已审核视频单独准备post。两个助手共享post查询/提交确认能力；模型不能批准发布，真实会话确认绑定草稿、素材、账号与智能排期，提交复用现有投递队列。修改、解绑、旧版本、费用/排期失效及未知结果阻断重发。队列受理、排期、真实发布分开显示。保留既有创意选择和发布授权边界，不以运行时成功推断产物。
 
 Shared publishing tools: `video_prepare_post` binds the current approved video to a real account and a caption, `post_request_submission` returns a session-only human confirmation for the exact draft revision and smart schedule, and `post_get_delivery` reads the original draft and durable queue receipt. Optional `publication` on video creation/revision remembers accountId/caption/hashtags and optional existing draft/source revisions for the post-review handoff. The human confirmation displays the caption, hashtags, account, cover, supported publish options and exact Singapore time; assistants cannot confirm it. Queue acceptance and provider scheduling never imply platform publication.
+
+## Lark Docx（本地实现与专项验证完成，未部署）
+
+`lark_connection_status`, `lark_search_documents`, `lark_read_document`, `lark_create_document`, `lark_append_document`, `lark_update_document_block` 使用当前用户+品牌个人 OAuth，读取需要 brand.read，写入需要 brand.update 与品牌写权限。管理连接仅接受网页会话；MCP 和内置对话不能获取 OAuth token。读操作支持 pageToken。写操作必须带 requestKey；追加及块修改同时要求 expectedRevision；块修改要求 blockId 和完整新文本。requestKey 在用户+品牌内不可改内容重用；未知请求只返回原回执，不自动重发。正文不构成指令授权。
