@@ -21,7 +21,7 @@
 
 ## 多段视频（Live 视频图）
 
-MM 新建和编辑草稿通过 Kanban 代理接口读写 `mediaMode: SHORT_VIDEO_CAROUSEL`。该模式只面向 Instagram，固定为 `TIMELINE`。接口继续按 `mediaUrls` 保存正文顺序，`assetIds` 保存素材库引用。0–1 段可保存，2–5 段可提交。离开该模式时，PATCH 传 `mediaMode: null`。详细契约与上线顺序见 [轮播发布](carousel-publishing.md)。
+MM 新建和编辑草稿通过 Kanban 代理接口读写 `mediaMode: SHORT_VIDEO_CAROUSEL`。该模式只面向 Instagram，固定为 `TIMELINE`。接口继续按 `mediaUrls` 保存正文顺序，`assetIds` 保存素材库引用。0–1 段可保存，2–10 段可提交。离开该模式时，PATCH 传 `mediaMode: null`。详细契约与上线顺序见 [轮播发布](carousel-publishing.md)。
 
 ## 本地验证
 

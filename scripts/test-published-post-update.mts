@@ -125,7 +125,7 @@ console.log('PASS published post updates: authorization, validation, date-only, 
 
 platform = 'instagram'
 const mode = shortVideoCarousel.SHORT_VIDEO_CAROUSEL
-const mediaUrls = ['https://cdn.example.test/c.mp4', 'https://cdn.example.test/a.mp4', 'https://cdn.example.test/b.mp4']
+const mediaUrls = [3, 1, 2, 10, 4, 6, 5, 7, 9, 8].map(index => `https://cdn.example.test/clip-${index}.mp4`)
 record = { ...original, status: 'draft', postUrl: null, platformPostId: null, publishedAt: null, scheduledAt: null, mediaUrls: [] }
 assert.equal((await patch({ mediaMode: mode, mediaUrls })).status, 200)
 assert.equal(record.instagramPublishType, 'TIMELINE')
@@ -138,6 +138,7 @@ assert.equal(shortReadback.draft.mediaMode, mode)
 const beforeInvalid = writes
 assert.equal((await patch({ instagramPublishType: 'REEL' })).status, 422)
 assert.equal((await patch({ mediaUrls: ['https://cdn.example.test/photo.jpg'] })).status, 422)
+assert.equal((await patch({ mediaUrls: [...mediaUrls, 'https://cdn.example.test/clip-11.mp4'] })).status, 422)
 assert.equal(writes, beforeInvalid)
 assert.equal((await patch({ mediaMode: null })).status, 200)
 assert.equal(record.mediaMode, null)

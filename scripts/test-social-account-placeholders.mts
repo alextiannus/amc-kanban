@@ -244,8 +244,8 @@ try {
   assert.equal(historicalMode.rows[0]?.mediaMode, null, 'migration preserves existing drafts without a backfill')
   await db.socialAccount.create({ data: real({ id: 'instagram', platformId: 'instagram', handle: 'restaurant-ig' }) })
   const mode = shortVideoCarousel.SHORT_VIDEO_CAROUSEL
-  const videoUrls = Array.from({ length: 6 }, (_, i) => `https://cdn.example.test/clip-${i}.mp4`)
-  for (const count of [0, 1, 2, 5]) {
+  const videoUrls = Array.from({ length: 11 }, (_, i) => `https://cdn.example.test/clip-${i}.mp4`)
+  for (const count of [0, 1, 2, 5, 6, 10]) {
     const short = await create({ accountId: 'instagram', mediaMode: mode, mediaUrls: videoUrls.slice(0, count).reverse() })
     assert.equal(short.mediaMode, mode)
     assert.equal(short.instagramPublishType, 'TIMELINE')

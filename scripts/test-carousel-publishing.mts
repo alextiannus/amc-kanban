@@ -39,10 +39,10 @@ assert.equal(proxies[0].id,'pf')
 assert.deepEqual(orderedMediaUrls(proxies), [proxy])
 console.log('Carousel composition, ordering, metadata and mixed-source removal checks passed')
 
-for (const count of [0, 1, 2, 5, 6]) {
+for (const count of [0, 1, 2, 5, 6, 10, 11]) {
   const clips = Array(count).fill('video')
-  assert.equal(!!shortVideoIssue('instagram', clips), count > 5)
-  assert.equal(!!shortVideoIssue('instagram', clips, true), count < 2 || count > 5)
+  assert.equal(!!shortVideoIssue('instagram', clips), count > 10)
+  assert.equal(!!shortVideoIssue('instagram', clips, true), count < 2 || count > 10)
 }
 assert.equal(shortVideoIssue('tiktok', ['video', 'video'])?.field, 'platform')
 assert.equal(shortVideoIssue('instagram', ['video', 'image'])?.field, 'mediaMix')

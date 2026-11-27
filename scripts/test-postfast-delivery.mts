@@ -45,7 +45,7 @@ function json(res: ServerResponse, status: number, body: unknown) {
 }
 
 async function verifyCarouselRetry() {
-  const orderedClips = ['c', 'a', 'e', 'd', 'b']
+  const orderedClips = ['c', 'a', 'e', 'd', 'b', 'h', 'g', 'j', 'f', 'i']
   const urls = orderedClips.map(name => `https://cdn.example.test/${name}.mp4`)
   const inspectedMedia = new Map(urls.map(url => [draftMediaIdentity(url), {
     kind: 'video' as const, mimeType: 'video/mp4', durationSeconds: 4, sizeBytes: 1000,
@@ -145,7 +145,7 @@ async function verifyCarouselRetry() {
   job.nextAttemptAt = new Date(0)
   assert.equal((await run()).succeeded, 1)
   assert.equal((await run()).processed, 0)
-  assert.deepEqual(transferred, ['c', 'a', 'a', 'e', 'd', 'b'])
+  assert.deepEqual(transferred, ['c', 'a', ...orderedClips.slice(1)])
   assert.equal(posts.length, 1)
   assert.equal(posts[0].mediaMode, SHORT_VIDEO_CAROUSEL)
   assert.equal(posts[0].scheduledAt, scheduledAt)

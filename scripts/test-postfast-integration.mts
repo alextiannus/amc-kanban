@@ -613,13 +613,13 @@ async function main() {
       const before = seen.filter(r => r.url === '/social-posts').length
       const result = await postfast.postfastPublish({
         apiKey: API_KEY, platform: 'instagram', accountId: 'pf_acc_instagram',
-        caption: 'Carousel test instagram video 5',
+        caption: 'Carousel test instagram video 10',
         scheduledAt: future,
         mediaMode: 'SHORT_VIDEO_CAROUSEL', instagramPublishType: 'TIMELINE',
         coverImage: { url: `${BASE_URL}/unused-missing-cover.jpg` },
-        mediaItems: Array.from({ length: 5 }, (_, index) => ({
+        mediaItems: Array.from({ length: 10 }, (_, index) => ({
           storageKey: `carousel/video-${index}`,
-          metadata: { ...validReelMetadata, durationSeconds: index === 4 ? 5.25 : 3 + index * 0.5 },
+          metadata: { ...validReelMetadata, durationSeconds: index === 9 ? 5.25 : 4 },
         })),
       })
       assert.equal(result.success, true, JSON.stringify(result))
@@ -627,7 +627,7 @@ async function main() {
       assert(result.warnings?.some(issue => issue.field === 'durationSeconds' && issue.limit === '3–5 seconds'))
     }
     for (const [platform, kinds] of [
-      ['instagram', ['video']], ['instagram', Array(6).fill('video')],
+      ['instagram', ['video']], ['instagram', Array(11).fill('video')],
       ['instagram', ['video', 'image']], ['tiktok', ['video', 'video']],
     ] as const) {
       const before = seen.length
