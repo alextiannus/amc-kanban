@@ -3,7 +3,6 @@ import React, { useState } from 'react'
 import { CopywriterPersona } from '@/lib/copywriters'
 import {
   PhoneFrame, PlatformPreview, normalizePlatform,
-  type PlatformKey,
 } from './PhonePreview'
 import {
   X,
@@ -112,6 +111,7 @@ interface PostPreviewModalProps {
   isAiGenerating: boolean
   saving: boolean
   attachedMedia: PreviewMedia[]
+  instagramMedia?: React.ComponentProps<typeof PlatformPreview>['instagramMedia']
   onCancel: () => void
   onSaveDraft: () => void
   onSchedule: (customTime?: string) => void
@@ -135,6 +135,7 @@ export default function PostPreviewModal({
   isAiGenerating,
   saving,
   attachedMedia,
+  instagramMedia,
   onCancel,
   onSaveDraft,
   onSchedule,
@@ -158,7 +159,7 @@ export default function PostPreviewModal({
       {/* Floating panel — contained, not full-screen */}
       <div
         className="relative flex flex-col w-full max-w-5xl bg-slate-950 rounded-2xl shadow-2xl border border-white/8 overflow-hidden"
-        style={{ height: 'min(88vh, 900px)' }}
+        style={{ height: 'min(88dvh, 900px)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -190,7 +191,7 @@ export default function PostPreviewModal({
         {/* Scroll region: outer=block flex-item (overflow both axes); inner=flex row for alignment */}
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           {/* flex row on a NON-overflowing div so items-start reliably aligns all cards at same Y */}
-          <div className="flex items-start px-8 py-6 gap-5 min-w-max">
+          <div className="flex items-start px-2 py-6 gap-5 min-w-max sm:px-8">
           {selectedCopywriters.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center gap-2 text-slate-600">
               <Eye className="w-10 h-10 opacity-30" />
@@ -200,6 +201,7 @@ export default function PostPreviewModal({
             selectedCopywriters.map((copywriter) => {
               const cwId = copywriter.id
               const platform = normalizePlatformLabel(copywriter.platform)
+              const previewPlatform = normalizePlatform(copywriter.platform)
               const status = draftStatuses[cwId] || 'completed'
               const isGenerating = status === 'generating'
               const isFailed = status === 'failed'
@@ -212,7 +214,7 @@ export default function PostPreviewModal({
                 <article
                   key={cwId}
                   className={`flex-shrink-0 self-start rounded-2xl border ${platformMeta.border} bg-slate-900 p-4 shadow-2xl ${platformMeta.glow} ${platformMeta.ring} focus-within:ring-2`}
-                  style={{ width: 324 }}
+                  style={{ width: previewPlatform === 'instagram' ? 'min(324px, calc(100vw - 3rem))' : 324 }}
                 >
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -249,7 +251,10 @@ export default function PostPreviewModal({
                   </div>
 
                   <div
-                    onClick={() => !isGenerating && !isFailed && setEditingCopywriterId(cwId)}
+                    onClick={event => {
+                      if (event.target instanceof Element && event.target.closest('[data-instagram-preview]')) return
+                      if (!isGenerating && !isFailed) setEditingCopywriterId(cwId)
+                    }}
                     className={`flex min-h-[520px] items-center justify-center rounded-2xl border border-slate-800 bg-slate-950/55 p-3 ${
                       !isGenerating && !isFailed ? 'cursor-pointer hover:border-slate-700' : ''
                     }`}
@@ -280,15 +285,16 @@ export default function PostPreviewModal({
                         </button>
                       </div>
                     ) : (
-                      <PhoneFrame dark={normalizePlatform(copywriter.platform) === 'tiktok'} scale={0.85}>
+                      <PhoneFrame dark={previewPlatform === 'tiktok'} scale={0.85}>
                         <PlatformPreview
                           post={{
                             caption: currentCaption,
                             hashtags: parseTags(currentHashtagsString),
                             mediaUrls: attachedMedia.map((m) => m.url).filter(Boolean) as string[],
                           }}
-                          platform={normalizePlatform(copywriter.platform) as PlatformKey}
+                          platform={previewPlatform}
                           account={brandName}
+                          instagramMedia={previewPlatform === 'instagram' ? instagramMedia : undefined}
                         />
                       </PhoneFrame>
                     )}
@@ -335,7 +341,7 @@ export default function PostPreviewModal({
 
         {/* Footer Action Buttons */}
         {!previewOnly && (
-          <div className="border-t border-slate-800 bg-slate-900/80 px-8 py-4 flex items-center justify-between shrink-0 gap-3">
+          <div className="relative flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-slate-800 bg-slate-900/80 px-3 py-4 sm:gap-3 sm:px-8">
             <button
               type="button"
               disabled={saving}
@@ -345,7 +351,7 @@ export default function PostPreviewModal({
               <Trash2 className="w-3.5 h-3.5" />
               <span>取消创作</span>
             </button>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 disabled={saving || isAiGenerating}
@@ -364,7 +370,7 @@ export default function PostPreviewModal({
                 {saving && !isAiGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5 text-indigo-400" />}
                 <span>保存草稿</span>
               </button>
-              <div className="relative flex items-center bg-emerald-700 rounded-xl shadow-md">
+              <div className="flex items-center bg-emerald-700 rounded-xl shadow-md sm:relative">
                 <button
                   type="button"
                   disabled={saving || completedCopywriterCount === 0}
@@ -383,7 +389,7 @@ export default function PostPreviewModal({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {showScheduleDropdown && (
-                  <div className="absolute bottom-full right-0 mb-2.5 w-56 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl z-50 text-left animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="absolute inset-x-3 bottom-full mb-2.5 rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl z-50 text-left animate-in fade-in slide-in-from-bottom-2 duration-150 sm:left-auto sm:right-0 sm:w-56">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-wider mb-2">排期发布设置</p>
                     <button
                       type="button"

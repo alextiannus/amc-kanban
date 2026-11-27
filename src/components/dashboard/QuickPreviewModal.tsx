@@ -3,14 +3,15 @@ import TiktokAigcControl from './TiktokAigcControl'
 import React, { useState, useEffect } from 'react'
 import {
   X, Check, RefreshCw, Edit3, Trash2, ExternalLink,
-  Heart, MessageCircle, Bookmark, Send,
   Loader2, Calendar, AlertTriangle,
 } from 'lucide-react'
 import {
-  PhoneFrame, PlatformPreview, MediaSlot,
+  PhoneFrame, PlatformPreview, MediaCarousel,
   normalizePlatform, platformLabel, platformGradient,
-  type PlatformKey, type PreviewPost,
+  type PreviewPost,
 } from './PhonePreview'
+import { orderedDraftMedia } from '@/lib/draftMedia'
+import { instagramDraftMedia } from '@/lib/instagramDraftMedia'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,9 +21,12 @@ export interface QuickPreviewDraft {
   caption: string
   hashtags: string[]
   mediaUrls: string[]
+  instagramPublishType?: string | null
+  mediaMode?: string | null
   coverAsset?: {
     id: string
     url?: string | null
+    mimeType?: string | null
   } | null
   scheduledAt?: string | null
   publishedAt?: string | null
@@ -42,11 +46,12 @@ export interface QuickPreviewDraft {
   } | null
   assetRefs: Array<{
     id: string
+    order?: number
     asset: {
       id: string
       filename?: string | null
       url?: string | null
-      type: string
+      mimeType?: string | null
     }
   }>
 }
@@ -111,8 +116,20 @@ export default function QuickPreviewModal({
   const [loading, setLoading] = useState<'approve' | 'regenerate' | 'discard' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [narrow, setNarrow] = useState(false)
+  const platform = normalizePlatform(draft?.account?.platformId)
+  const instagramReview = platform === 'instagram' && !!draft && !['published', 'done'].includes(draft.status) && !draft.publishedAt
 
-  useEffect(() => { setMediaIndex(0); setError(null); setLoading(null); setConfirmDiscard(false) }, [draft?.id])
+  useEffect(() => {
+    if (!isOpen || !instagramReview) return
+    const query = window.matchMedia('(width < 40rem)')
+    const update = () => setNarrow(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [isOpen, instagramReview])
+
+  useEffect(() => { setMediaIndex(0); setError(null); setLoading(null); setConfirmDiscard(false) }, [draft?.id, isOpen])
   useEffect(() => {
     if (!isOpen) return
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -123,7 +140,9 @@ export default function QuickPreviewModal({
   if (!isOpen || !draft) return null
 
   const media = allMedia(draft)
-  const platform = normalizePlatform(draft.account?.platformId)
+  const instagramMedia = instagramReview ? instagramDraftMedia(orderedDraftMedia(draft), {
+    cover: draft.coverAsset, mediaMode: draft.mediaMode, publishType: draft.instagramPublishType,
+  }) : undefined
   const accountName = draft.account?.displayName || draft.account?.handle || brandName
   const scheduledTime = formatDateTime(draft.scheduledAt)
   const publishedTime = formatDateTime(draft.publishedAt)
@@ -172,9 +191,12 @@ export default function QuickPreviewModal({
             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black ${statusClass(draft.status)}`}>{statusLabel(draft.status)}</span>
           </div>
 
-          <PhoneFrame dark={isDark}>
-            <PlatformPreview post={previewPost} platform={platform} account={accountName} mediaIndex={mediaIndex} onMediaIndex={setMediaIndex} />
-          </PhoneFrame>
+          {!(instagramReview && narrow) && (
+            <PhoneFrame dark={isDark} maxScreenHeight={instagramReview ? 'calc(100dvh - 8rem)' : undefined}>
+              <PlatformPreview key={draft.id} post={previewPost} platform={platform} account={accountName} mediaIndex={mediaIndex}
+                onMediaIndex={setMediaIndex} instagramMedia={instagramMedia} maxMediaHeight="clamp(120px, calc(100dvh - 21rem), 370px)" />
+            </PhoneFrame>
+          )}
 
           <p className="text-[11px] text-white/35">手机预览 · 仅供参考</p>
         </div>
@@ -182,7 +204,7 @@ export default function QuickPreviewModal({
         {/* ── Actions Panel ──────────────────────── */}
         <div
           className="w-full sm:w-72 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
-          style={{ maxHeight: '92vh' }}
+          style={{ maxHeight: '92dvh' }}
         >
           {/* Header */}
           <div className={`bg-gradient-to-r ${gradClass} p-4 flex items-center justify-between shrink-0`}>
@@ -197,6 +219,11 @@ export default function QuickPreviewModal({
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {instagramReview && narrow && !!instagramMedia?.items.length && (
+              <MediaCarousel key={draft.id} media={media} index={mediaIndex} setIndex={setMediaIndex}
+                instagramMedia={instagramMedia} maxHeight="min(44dvh, 320px)" />
+            )}
+
             {platform === 'tiktok' && <TiktokAigcControl key={draft.id} value={aigcValue}
               readOnly={['publishing', 'published', 'done'].includes(draft.status) || !!draft.platformPostId || !!draft.publishedAt}
               disabled={!!loading} onBlockedChange={setAigcBlocked}
@@ -213,7 +240,7 @@ export default function QuickPreviewModal({
 
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-1.5">文案</p>
-              <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-100 whitespace-pre-wrap line-clamp-6">
+              <p className={`text-sm leading-relaxed text-slate-800 dark:text-slate-100 whitespace-pre-wrap ${instagramReview ? 'break-words' : 'line-clamp-6'}`}>
                 {draft.caption || <span className="text-slate-400 italic">暂无正文</span>}
               </p>
             </div>

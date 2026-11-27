@@ -25,7 +25,13 @@
 
 接口依据：https://postfa.st/api-guides/instagram/carousels 、https://postfa.st/api-guides/tiktok/carousels 、https://postfa.st/docs/posts/create 。按 PostFast 的 10 项上限，不将 Meta 其他接口上限直接用于本通道。
 
+## Instagram 发布前预览
+
+Kanban 与 MM 的 Instagram 草稿预览默认 4:5，可切换至 9:16 和 1:1。图片和视频等比完整展示，切换时保留当前素材与播放位置。有效图片封面作为图帖首图并去重，单视频 Reel 封面作为播放前画面，视频及混排轮播按正文发布顺序展示。比例只用于当前预览，重新打开恢复默认值。保存和发布继续使用原始素材与发布类型。
+
 ## 本地验证
+
+- Instagram 比例切换通过两仓类型检查、轮播回归及 320、390、768、1440px 的组件浏览器验证。模拟提交覆盖原始素材顺序和发布类型，部署及真实发布验收待核实。
 
 - 两端 `npm run typecheck`、`npm run test:carousel-publishing` 通过。
 - Kanban 媒体校验、PostFast 模拟接口、队列阈值及流式传输回归通过；覆盖 2/10 项成功、11 项及不兼容组合在上游调用前拒绝、媒体类型/顺序及独立封面。多视频使用现有持久队列。

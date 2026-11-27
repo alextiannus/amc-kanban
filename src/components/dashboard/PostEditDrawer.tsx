@@ -42,6 +42,7 @@ import { uploadAssetDirect } from '@/vendor/mm-video/lib/directAssetUpload'
 import { mediaKind, socialMediaNotice } from '@/lib/socialMediaComposition'
 import TiktokAigcControl from './TiktokAigcControl'
 import PostPreviewModal from './PostPreviewModal'
+import { instagramDraftMedia } from '@/lib/instagramDraftMedia'
 import AssetPickerPagination from './AssetPickerPagination'
 import { useBrandAssetPage, type BrandPickerAsset } from '@/hooks/useBrandAssetPage'
 import { useI18n } from '@/lib/i18n'
@@ -412,7 +413,12 @@ export default function PostEditDrawer({
     return canonicalScriptPlatform(raw)
   }, [selectedAccountIds, accounts])
 
-  const mediaKinds = attachedMedia.map(item => mediaKind({ url: item.url, mimeType: brandAssets.find(asset => asset.id === item.id)?.mimeType || selectedDraft?.assetRefs.find(ref => ref.asset.id === item.id)?.asset.mimeType }))
+  const attachedMediaWithMetadata = attachedMedia.map(item => ({
+    url: item.url,
+    mimeType: brandAssets.find(asset => asset.id === item.id)?.mimeType
+      || selectedDraft?.assetRefs.find(ref => ref.asset.id === item.id)?.asset.mimeType,
+  }))
+  const mediaKinds = attachedMediaWithMetadata.map(mediaKind)
   const mediaPlatform = (id: string) => {
     const platform = accounts.find(account => account.id === id)?.platformId || id.replace('unconfigured_', '')
     return normalizePlatformLabel(platform) === 'ig' ? 'instagram' : platform
@@ -475,6 +481,10 @@ export default function PostEditDrawer({
     const withoutDuplicate = attachedMedia.filter((item) => item.id !== selectedCoverAsset.id && item.url !== selectedCoverAsset.url)
     return [{ id: selectedCoverAsset.id, type: 'asset' as const, url: selectedCoverAsset.url }, ...withoutDuplicate]
   }, [attachedMedia, selectedCoverAsset, brandAssets, selectedDraft])
+
+  const instagramMedia = previewModalOpen ? instagramDraftMedia(attachedMediaWithMetadata, {
+    cover: selectedCoverAsset, mediaMode: mediaModePayload.mediaMode, publishType: mediaModePayload.instagramPublishType,
+  }) : undefined
 
   const coverCompatibilityText = useMemo(() => {
     const isSingleVideo = attachedMedia.length === 1 && (() => {
@@ -2742,6 +2752,7 @@ Return the output strictly in a valid JSON array format, containing:
         isAiGenerating={isAiGenerating}
         saving={saving}
         attachedMedia={previewAttachedMedia}
+        instagramMedia={instagramMedia}
         onCancel={() => {
           setPreviewModalOpen(false)
           setCreatedDrafts(null)

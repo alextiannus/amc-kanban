@@ -43,7 +43,7 @@ import {
   RotateCcw,
 } from 'lucide-react'
 import PostPreviewModal from './PostPreviewModal'
-import QuickPreviewModal, { type QuickPreviewDraft } from './QuickPreviewModal'
+import QuickPreviewModal from './QuickPreviewModal'
 import { callGeminiDirect } from '@/lib/gemini-direct'
 import PostEditDrawer from './PostEditDrawer'
 import { COPYWRITER_ROSTER, draftAccountIdForCopywriter } from '@/lib/copywriters'
@@ -64,6 +64,8 @@ type DraftItem = {
   caption: string
   hashtags: string[]
   mediaUrls: string[]
+  instagramPublishType?: string | null
+  mediaMode?: string | null
   coverAssetId?: string | null
   coverAsset?: {
     id: string
@@ -91,6 +93,7 @@ type DraftItem = {
   } | null
   assetRefs: Array<{
     id: string
+    order?: number
     asset: {
       id: string
       filename?: string | null
@@ -1958,7 +1961,7 @@ Never include any markdown backticks, conversational preamble, or explanation ou
       />
 
       <QuickPreviewModal
-        draft={quickPreviewDraft as QuickPreviewDraft | null}
+        draft={quickPreviewDraft}
         brandId={brandId}
         isOpen={!!quickPreviewDraftId}
         onClose={closeQuickPreview}

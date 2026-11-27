@@ -8,6 +8,10 @@
  *   - PostPreviewModal    (creation-flow multi-platform preview cards)
  */
 import React, { useState, useRef } from 'react'
+import InstagramMediaFrame from '@/components/shared/InstagramMediaFrame'
+import type { instagramDraftMedia } from '@/lib/instagramDraftMedia'
+import { mediaKind } from '@/lib/socialMediaComposition'
+import { useI18n } from '@/lib/i18n'
 import {
   Eye, ChevronLeft, ChevronRight,
   Play, Pause, Volume2, VolumeX,
@@ -118,33 +122,56 @@ export function MediaSlot({ url, className }: { url: string; className?: string 
   return <img src={url} alt="" className={`object-cover ${className}`} />
 }
 
-export function MediaCarousel({ media, index, setIndex }: { media: string[]; index: number; setIndex: (i: number) => void }) {
-  const cur = media[index]
+type InstagramMedia = ReturnType<typeof instagramDraftMedia>
+
+export function MediaCarousel({ media, index, setIndex, instagramMedia, maxHeight = '300px' }: {
+  media: string[]; index: number; setIndex: (i: number) => void
+  instagramMedia?: InstagramMedia; maxHeight?: string
+}) {
+  const { t } = useI18n()
+  const count = instagramMedia?.items.length ?? media.length
+  const currentIndex = Math.min(index, Math.max(0, count - 1))
+  const item = instagramMedia?.items[currentIndex]
+  const video = !!item && mediaKind(item) === 'video'
+  const navigation = count > 1 && (
+    <>
+      <button type="button" aria-label={t('上一项素材', 'Previous media')} onClick={() => setIndex(currentIndex - 1)} disabled={currentIndex === 0}
+        className="absolute left-1 top-1/2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white disabled:opacity-20 sm:size-6">
+        <ChevronLeft className="h-3.5 w-3.5" />
+      </button>
+      <button type="button" aria-label={t('下一项素材', 'Next media')} onClick={() => setIndex(currentIndex + 1)} disabled={currentIndex === count - 1}
+        className="absolute right-1 top-1/2 z-10 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white disabled:opacity-20 sm:size-6">
+        <ChevronRight className="h-3.5 w-3.5" />
+      </button>
+      <span className="sr-only" aria-live="polite">{currentIndex + 1} / {count}</span>
+      <div className={`pointer-events-none absolute left-1/2 -translate-x-1/2 flex gap-1 z-10 ${video ? 'top-2' : 'bottom-2'}`} aria-hidden="true">
+        {Array.from({ length: count }, (_, i) => <div key={i} className={`rounded-full transition-all ${i === currentIndex ? 'w-3 h-1.5 bg-blue-500' : 'w-1.5 h-1.5 bg-white/60'}`} />)}
+      </div>
+    </>
+  )
+  if (item) {
+    return (
+      <InstagramMediaFrame maxHeight={maxHeight}>
+        {video
+          ? <video key={item.url} src={item.url} poster={instagramMedia?.poster} controls playsInline preload="metadata" className="absolute inset-0 h-full w-full object-contain" />
+          : <img src={item.url} alt={t(`素材 ${currentIndex + 1}`, `Media ${currentIndex + 1}`)} className="absolute inset-0 h-full w-full object-contain" />}
+        {navigation}
+      </InstagramMediaFrame>
+    )
+  }
   return (
     <div className="relative w-full" style={{ aspectRatio: '1/1' }}>
-      <MediaSlot url={cur ?? ''} className="w-full h-full" />
-      {media.length > 1 && (
-        <>
-          <button onClick={() => setIndex(Math.max(0, index - 1))} disabled={index === 0}
-            className="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 text-white flex items-center justify-center disabled:opacity-20 z-10">
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <button onClick={() => setIndex(Math.min(media.length - 1, index + 1))} disabled={index === media.length - 1}
-            className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/40 text-white flex items-center justify-center disabled:opacity-20 z-10">
-            <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
-            {media.map((_, i) => <div key={i} className={`rounded-full transition-all ${i === index ? 'w-3 h-1.5 bg-blue-500' : 'w-1.5 h-1.5 bg-white/60'}`} />)}
-          </div>
-        </>
-      )}
+      <MediaSlot url={instagramMedia ? '' : media[currentIndex] ?? ''} className="w-full h-full" />
+      {navigation}
     </div>
   )
 }
 
 // ─── Phone Frame ─────────────────────────────────────────────────────────────
 
-export function PhoneFrame({ children, dark, scale = 1 }: { children: React.ReactNode; dark?: boolean; scale?: number }) {
+export function PhoneFrame({ children, dark, scale = 1, maxScreenHeight }: {
+  children: React.ReactNode; dark?: boolean; scale?: number; maxScreenHeight?: string
+}) {
   const baseWidth = 294
   const border = Math.round(10 * scale)
   const br = Math.round(44 * scale)
@@ -163,7 +190,7 @@ export function PhoneFrame({ children, dark, scale = 1 }: { children: React.Reac
   const statusFs = Math.round(11 * scale)
 
   return (
-    <div className="relative mx-auto" style={{ width: baseWidth * scale }}>
+    <div className="relative mx-auto min-w-0 max-w-full" style={{ width: baseWidth * scale }}>
       {/* Outer shell */}
       <div
         className={`relative ${dark ? 'bg-slate-900' : 'bg-white'}`}
@@ -182,7 +209,7 @@ export function PhoneFrame({ children, dark, scale = 1 }: { children: React.Reac
         {/* Screen */}
         <div
           className={`overflow-hidden flex flex-col ${dark ? 'bg-black' : 'bg-white'}`}
-          style={{ borderRadius: brInner, height: screenH }}
+          style={{ borderRadius: brInner, height: screenH, maxHeight: maxScreenHeight }}
         >
           {/* Status bar */}
           <div
@@ -228,8 +255,9 @@ export function PhoneFrame({ children, dark, scale = 1 }: { children: React.Reac
 
 // ─── Platform-native App Previews ─────────────────────────────────────────────
 
-export function InstagramPreview({ post, media, idx, setIdx, account }: {
+export function InstagramPreview({ post, media, idx, setIdx, account, instagramMedia, maxMediaHeight }: {
   post: PreviewPost; media: string[]; idx: number; setIdx: (i: number) => void; account: string
+  instagramMedia?: InstagramMedia; maxMediaHeight?: string
 }) {
   const caption = post.caption
   const tags = post.hashtags.map(h => `#${h}`).join(' ')
@@ -252,7 +280,7 @@ export function InstagramPreview({ post, media, idx, setIdx, account }: {
         </div>
 
         {/* Media */}
-        <MediaCarousel media={media} index={idx} setIndex={setIdx} />
+        <MediaCarousel media={media} index={idx} setIndex={setIdx} instagramMedia={instagramMedia} maxHeight={maxMediaHeight} />
 
         {/* Action row */}
         <div className="flex items-center px-3 pt-2 pb-1 gap-3">
@@ -615,13 +643,15 @@ export function GoogleBusinessPreview({ post, media, idx, setIdx, account }: {
 // ─── Composed Platform Preview (picks the right app UI) ──────────────────────
 
 export function PlatformPreview({
-  post, platform, account, mediaIndex = 0, onMediaIndex,
+  post, platform, account, mediaIndex = 0, onMediaIndex, instagramMedia, maxMediaHeight,
 }: {
   post: PreviewPost
   platform: PlatformKey
   account: string
   mediaIndex?: number
   onMediaIndex?: (i: number) => void
+  instagramMedia?: InstagramMedia
+  maxMediaHeight?: string
 }) {
   const [localIdx, setLocalIdx] = useState(0)
   const idx = onMediaIndex ? mediaIndex : localIdx
@@ -632,7 +662,7 @@ export function PlatformPreview({
   if (platform === 'xhs')     return <XHSPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
   if (platform === 'facebook') return <FacebookPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
   if (platform === 'google' || platform === 'channel') return <GoogleBusinessPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
-  return <InstagramPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} />
+  return <InstagramPreview post={post} media={media} idx={idx} setIdx={setIdx} account={account} instagramMedia={instagramMedia} maxMediaHeight={maxMediaHeight} />
 }
 
 // ─── Convenience: PhonePreview (frame + platform content) ────────────────────

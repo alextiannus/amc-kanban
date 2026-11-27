@@ -904,7 +904,8 @@ AMC Kanban 面向新加坡及海外本地服务商家，所有品牌主可见功
 **QuickPreviewModal 功能**：
 - 顶部：平台渐变 Header + 账号名 + 状态 badge。
 - 左侧媒体区：图片或视频（视频带完整播放控件 play/pause/muted/progress）。支持多图/多视频左右翻页（含圆点指示器）。
-- 右侧内容区：Caption、Hashtags、scheduledAt、publishedAt、postUrl 外链、agentNote、rejectionNote。
+- Instagram 发布前快捷审核和新建/编辑草稿的 Instagram 平台预览提供 4:5、9:16、1:1，默认 4:5。图片、封面和视频完整等比显示，必要时留边。窄屏可查看媒体、切换比例和访问审核操作。
+- 右侧内容区可滚动阅读完整文案，并显示 Hashtags、scheduledAt、publishedAt、postUrl 外链、agentNote、rejectionNote。
 - 底部操作按钮（4 个）：
   - ✅ **确认发布**：调用 `PATCH /api/brands/:id/drafts/:id/approve`，成功后关闭 Modal 并切换到 Scheduled Tab。
   - 🔄 **重新创作**：调用 `POST /api/brands/:id/drafts/:id/trigger-copywriter`，关闭 Modal 等待 AI 重新生成。
