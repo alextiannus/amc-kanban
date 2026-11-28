@@ -1,3 +1,4 @@
+import {boundedLibrarySources} from './library-evidence'
 import {poolIdeaLibrary} from './idea-pool'
 import { matchPromotionStrategyCreativeCandidates } from '../promotion-strategy/clients'
 import { digest, nativeError, type DiscoveryIntent } from './contract'
@@ -10,7 +11,7 @@ export function sourceExcerpt(source:Record<string,any>){
   if(Buffer.byteLength(JSON.stringify(result))>180000)throw nativeError('library_evidence_too_large',502)
   return result
 }
-export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<LibrarySnapshot>{
+export async function brandLibrary(intent:DiscoveryIntent,facts:any,options:{boundedCompleteSources?:boolean}={}):Promise<LibrarySnapshot>{
   if(!facts)throw nativeError('brand_context_unavailable',404)
   if(intent.poolIdeaId){
     return poolIdeaLibrary(intent.brandId,intent.poolIdeaId,facts)
@@ -19,9 +20,11 @@ export async function brandLibrary(intent:DiscoveryIntent,facts:any):Promise<Lib
   const excluded=[...new Set([...disliked,...(intent.planningRequest?.excludeCreativeIds||[])])].slice(0,72)
   const response=await matchPromotionStrategyCreativeCandidates({merchantId:intent.brandId,merchantName:facts.name,merchantCategory:facts.industry||'',market:facts.knowledge?.market||facts.location||undefined,promotionPointId:`amc-native-${intent.requestKey}`,promotionGoal:intent.goal,sellingPoint:JSON.stringify({description:facts.description,knowledge:facts.knowledge}).slice(0,6000),requestedCandidateCount:3,requirePersistedCreative:true,platforms:intent.planningRequest?[intent.planningRequest.platform]:['instagram','xiaohongshu','tiktok'],excludeCreativeIds:excluded,diversify:true})
   const seen=new Set<string>()
-  const sources=(response.creativeCandidates||[]).filter(c=>typeof c.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(c.inspirationCreativeId)&&!disliked.has(c.inspirationCreativeId)&&!seen.has(c.inspirationCreativeId)&&!!seen.add(c.inspirationCreativeId)).slice(0,3).map(sourceExcerpt)
-  if(!sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
-  const payload={...(intent.planningRequest?{contextPortfolio:facts.creativePortfolio||[]}:{}),contentMatchRequestId:response.contentMatchRequestId,sources,gaps:response.contentLibraryGaps||[],libraryVersions:response.libraryVersions||{},contextDigest:digest(facts)}
+  const candidates=(response.creativeCandidates||[]).filter(c=>typeof c.inspirationCreativeId==='string'&&/^cre_[a-zA-Z0-9_-]+$/.test(c.inspirationCreativeId)&&!disliked.has(c.inspirationCreativeId)&&!seen.has(c.inspirationCreativeId)&&!!seen.add(c.inspirationCreativeId)).slice(0,3)
+  const base={...(intent.planningRequest?{contextPortfolio:facts.creativePortfolio||[]}:{}),contentMatchRequestId:response.contentMatchRequestId,gaps:response.contentLibraryGaps||[],libraryVersions:response.libraryVersions||{},contextDigest:digest(facts)}
+  const selected=options.boundedCompleteSources?boundedLibrarySources(candidates,base):{sources:candidates.map(sourceExcerpt),gaps:[]}
+  if(!selected.sources.length&&(response.contentLibraryGaps||[]).some(g=>Number(g.status)>=400))throw nativeError('content_library_unavailable',503)
+  const payload={...(intent.planningRequest?{contextPortfolio:facts.creativePortfolio||[]}:{}),contentMatchRequestId:base.contentMatchRequestId,sources:selected.sources,gaps:[...base.gaps,...selected.gaps],libraryVersions:base.libraryVersions,contextDigest:base.contextDigest}
   // A read is bounded; oversized source text must never silently become different evidence.
   if(Buffer.byteLength(JSON.stringify(payload))>180000)throw nativeError('library_evidence_too_large',502)
   return {...payload,libraryDigest:digest(payload),retrievedAt:new Date().toISOString()}

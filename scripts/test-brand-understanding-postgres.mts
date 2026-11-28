@@ -7,9 +7,9 @@ import {brandUnderstandingCapabilities} from '../src/lib/ai-native/brand-underst
 import {readBrandUnderstanding,saveBrandUnderstanding} from '../src/lib/ai-native/brand-understanding-store.ts'
 const url=new URL(process.env.DATABASE_URL||'');assert.equal(url.hostname,'127.0.0.1');assert(url.pathname.startsWith('/amc_lineage_test_'))
 const brand='understanding-'+randomUUID(),other=brand+'-other',user='fixture-user',actor=actorFor(brand,user)
-let proposalTask='',proposalContent=''
+let proposalTask='',proposalContent='',oversized=false
 let revoked=false,intent:any={kind:'conversation',brandId:brand,goal:'我们的顾客是家庭，不面向儿童。',artifactPath:'work/test.json',requestKey:'request'}
-const caps=brandUnderstandingCapabilities(async()=>intent,async a=>!revoked&&a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,async()=>({name:'Fixture',description:'真实品牌'}),{readPrevious:async()=>({status:'succeeded',report:{content:proposalContent}}),match:async(i,f)=>{assert(i.goal.includes('direction'));assert(i.goal.includes('家庭'));return {sources:[{inspirationCreativeId:'cre_fixture',sourceRevision:'fixture-v1',matchScore:90,sourceDigest:'a'.repeat(64)}],libraryDigest:'b'.repeat(64),contextDigest:'c'.repeat(64),retrievedAt:new Date().toISOString(),contentMatchRequestId:'fixture',gaps:[],libraryVersions:{}}}})
+const caps=brandUnderstandingCapabilities(async()=>intent,async a=>!revoked&&a.scopeId===actor.scopeId&&a.subjectId===actor.subjectId,async()=>({name:'Fixture',description:'真实品牌'}),{readPrevious:async()=>({status:'succeeded',report:{content:proposalContent}}),match:async(i,f,options)=>{assert.equal(options?.boundedCompleteSources,true);assert(i.goal.includes('direction'));assert(i.goal.includes('家庭'));return {sources:oversized?[]:[{inspirationCreativeId:'cre_fixture',sourceRevision:'fixture-v1',matchScore:90,sourceDigest:'a'.repeat(64)}],libraryDigest:'b'.repeat(64),contextDigest:'c'.repeat(64),retrievedAt:new Date().toISOString(),contentMatchRequestId:'fixture',gaps:oversized?[{code:'source_evidence_too_large',sourceCreativeId:'cre_huge'}]:[],libraryVersions:{}}}})
 const dispatcher=new CapabilityDispatcher({capabilities:caps,validateActor:()=>true})
 const invoke=(name:string,input:any={},id=randomUUID())=>dispatcher.invoke(name,input,{actor,taskId:id,callId:randomUUID()})
 const read=async()=>await invoke('amc.brand_understanding.read') as any
@@ -46,6 +46,10 @@ try{
  intent.goal='就按这个方向做';intent.afterTaskId=proposalTask
  await invoke('amc.brand_understanding.save',{expectedRevision:current.revision,patch:{plans:[{month,content:current.plans[0].content,status:'decided',quote:intent.goal,acceptPrevious:true}]}})
  current=await read();const matched:any=await invoke('amc.brand_understanding.match',{month,expectedRevision:current.revision});assert.equal(matched.briefRevision,current.revision)
+ oversized=true
+ const unavailable:any=await invoke('amc.brand_understanding.match',{month,expectedRevision:current.revision})
+ assert.equal(unavailable.status,'source_evidence_unavailable');assert.equal(unavailable.sources.length,0)
+ oversized=false
  const simultaneous=await Promise.allSettled(['本店位于新加坡。','本店营业到晚上。'].map((goal,i)=>saveBrandUnderstanding({brandId:brand,userId:user,taskId:randomUUID(),goal,expectedRevision:current.revision,patch:{entries:[{key:'concurrent'+i,scope:'brand',kind:'fact',quote:goal}]}})))
  assert.equal(simultaneous.filter(x=>x.status==='fulfilled').length,1)
  current=await read();assert.equal(current.plans[0].status,'needs_recheck')

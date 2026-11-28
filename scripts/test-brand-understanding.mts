@@ -51,3 +51,14 @@ const scopedGoal='请保存以下两条完整原话，适用于2026-12。\n新�
 const scoped=reduceUnderstanding({}, {entries:[item('新品视觉以绿色和紫色为主要元素，画面为主、文字辅助。','visual',{month:'2026-12'})]},source(scopedGoal))
 assert.equal(scoped.entries[0].month,'2026-12')
 for(const goal of [scopedGoal.replace('适用于','不适用于'),scopedGoal+'2027-01另议。',scopedGoal.replace('适用于','参考')])assert.throws(()=>reduceUnderstanding({}, {entries:[item('新品视觉以绿色和紫色为主要元素，画面为主、文字辅助。','visual',{month:'2026-12'})]},source(goal)),/month_evidence_required/)
+
+const {boundedLibrarySources}=await import('../src/lib/ai-native/library-evidence.ts')
+const full=(id:string,n:number)=>({inspirationCreativeId:id,scenes:[{text:'x'.repeat(n)}],sourceRevision:'r1'})
+const evidence=[full('cre_one',90000),full('cre_oversized',190000),full('cre_two',70000),full('cre_three',50000)]
+const bounded=boundedLibrarySources(evidence,{contentMatchRequestId:'fixture'})
+assert.deepEqual(bounded.sources.map(s=>s.inspirationCreativeId),['cre_one','cre_two'])
+assert.deepEqual(bounded.sources[0].scenes,evidence[0].scenes)
+assert.deepEqual(bounded.sources[1].scenes,evidence[2].scenes)
+assert.deepEqual(bounded.gaps.map(g=>g.sourceCreativeId),['cre_oversized','cre_three'])
+assert(Buffer.byteLength(JSON.stringify(bounded))<180000)
+assert.equal(boundedLibrarySources([full('cre_huge',190000)],{}).sources.length,0)
