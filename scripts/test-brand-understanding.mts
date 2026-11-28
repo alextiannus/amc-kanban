@@ -46,3 +46,8 @@ chosen=reduceUnderstanding(chosen,{plans:[{month:'2026-12',content:'替代建议
 assert.equal(chosen.plans[0].content,'12月确定主推牛肉新品。')
 assert.equal(chosen.plans[0].status,'decided')
 assert.equal(chosen.plans[0].proposal?.content,'替代建议：圣诞活动主线')
+
+const scopedGoal='请保存以下两条完整原话，适用于2026-12。\n新品视觉以绿色和紫色为主要元素，画面为主、文字辅助。'
+const scoped=reduceUnderstanding({}, {entries:[item('新品视觉以绿色和紫色为主要元素，画面为主、文字辅助。','visual',{month:'2026-12'})]},source(scopedGoal))
+assert.equal(scoped.entries[0].month,'2026-12')
+for(const goal of [scopedGoal.replace('适用于','不适用于'),scopedGoal+'2027-01另议。',scopedGoal.replace('适用于','参考')])assert.throws(()=>reduceUnderstanding({}, {entries:[item('新品视觉以绿色和紫色为主要元素，画面为主、文字辅助。','visual',{month:'2026-12'})]},source(goal)),/month_evidence_required/)
