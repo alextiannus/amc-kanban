@@ -24,6 +24,11 @@ function wholeClause(goal:string,quote:string){
 const noise=/(?:[?？]|假如|假设|比如|举例|可能|也许|待定|未确定|尚未确定|还没确定|考虑|是否|如果|suppose|hypothetic|maybe|for example|not sure)/i
 const correction=/(?:不是.{1,80}(?:而是|是)|更正|纠正|改为|改成|不再采用|以.{0,60}为准|替换|恢复|重新采用|correct|replace|instead|restore)/i
 const acceptance=/(?:按.{0,30}(?:方向|方案|建议).{0,12}(?:做|推进|执行)|确定.{0,20}(?:方向|方案)|采用.{0,20}(?:方向|方案|建议)|确认|同意|就这个|go with|use (?:this|that)|agree|confirm)/i
+function declaredMonth(goal:string,quote:string,month:string){
+ // A preceding explicit scope applies to the following exact statements. Never infer from mere date mentions.
+ const prefix=goal.slice(0,goal.indexOf(quote)),months=[...goal.matchAll(/20\d{2}-(?:0[1-9]|1[0-2])/g)].map(m=>m[0])
+ return prefix.includes('适用于'+month)&&!/(?:不|未|暂不|不要|不能)适用于/.test(prefix)&&months.every(m=>m===month)
+}
 function evidence(goal:string,quote:string){if(typeof quote!=='string'||!quote.trim()||quote.length>1600||!goal.includes(quote))fail('current_user_evidence_required')}
 export function reduceUnderstanding(value:unknown,patch:UnderstandingPatch,source:{goal:string;taskId:string;userId:string;now:string;previousTaskId?:string;timeZone?:string}):BrandUnderstanding{
  const p=record(patch);if(Object.keys(p).some(k=>!['entries','forget','plans'].includes(k))||!Object.keys(p).length)fail('invalid_understanding_patch')
@@ -35,7 +40,7 @@ export function reduceUnderstanding(value:unknown,patch:UnderstandingPatch,sourc
   wholeClause(source.goal,x.quote)
   if(noise.test(x.quote)||/^(?:谢谢|好的|好|嗯|收到|继续|thank you|thanks|ok)[。！!\s]*$/i.test(x.quote)||x.quote.length<5)fail('not_a_current_fact')
   if(x.scope!=='brand'&&!x.quote.includes(x.scope))fail('scope_evidence_required')
-  if(x.month!==undefined&&(!monthPattern.test(x.month)||!x.quote.includes(x.month)&&!x.quote.includes(Number(x.month.slice(5))+'月')))fail('month_evidence_required')
+  if(x.month!==undefined&&(!monthPattern.test(x.month)||!x.quote.includes(x.month)&&!x.quote.includes(Number(x.month.slice(5))+'月')&&!declaredMonth(source.goal,x.quote,x.month)))fail('month_evidence_required')
   const retiredKey=fingerprint(x.quote,x.scope,x.month)
   if(next.retired.includes(retiredKey)&&!x.resolve)fail('explicit_resolution_required')
   const i=next.entries.findIndex(e=>identity(e)===identity(x)),old=next.entries[i]
