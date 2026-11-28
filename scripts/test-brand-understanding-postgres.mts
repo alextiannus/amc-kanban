@@ -54,6 +54,12 @@ try{
  assert.equal(simultaneous.filter(x=>x.status==='fulfilled').length,1)
  current=await read();assert.equal(current.plans[0].status,'needs_recheck')
  await assert.rejects(()=>invoke('amc.brand_understanding.match',{month,expectedRevision:matched.briefRevision}),/changed_read_again/)
+ // A current exact direction can reconfirm after facts change, even if the model adds acceptPrevious.
+ intent.goal=month+'确定以家庭聚餐为本月方向。';delete intent.afterTaskId
+ const direct:any=await invoke('amc.brand_understanding.save',{expectedRevision:current.revision,patch:{plans:[{month,content:intent.goal,quote:intent.goal,status:'decided',acceptPrevious:true}]}})
+ assert.equal(direct.verified,true);current=await read();assert.equal(current.plans[0].status,'decided')
+ intent.goal='就按之前的方案做'
+ await assert.rejects(()=>invoke('amc.brand_understanding.save',{expectedRevision:current.revision,patch:{plans:[{month,content:'not the current user statement',quote:intent.goal,status:'decided',acceptPrevious:true}]}}),(e:any)=>e.preflightRejected===true&&e.preflightFeedback.includes('previous_visible_direction_required'))
  revoked=true;await assert.rejects(()=>read(),/denied/);revoked=false
  intent={...intent,brandId:other};await assert.rejects(()=>read(),/conversation_task_required/)
  console.log('real PostgreSQL + capabilities: replay, conflicts, original receipt, isolation, scope, concurrency, proposed/decided plans, matching binding, revocation and unrelated work preservation passed')
