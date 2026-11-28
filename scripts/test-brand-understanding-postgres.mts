@@ -17,6 +17,10 @@ try{
  await prisma.brand.createMany({data:[{id:brand,name:'Understanding fixture'},{id:other,name:'Other brand'}]})
  await prisma.brandKnowledge.create({data:{brandId:brand,marketingSolution:{marketingPlan:{content:'preserve strategy'},publishingCalendar:{months:{'2026-12':[{id:'selected',planning:'preserve edits'}]}}}}})
  let current=await read(),task=randomUUID(),patch={entries:[{key:'audience',scope:'brand',kind:'fact',quote:intent.goal}]},input={expectedRevision:current.revision,patch}
+ const auditBefore=await prisma.auditLog.count({where:{action:'BRAND_UNDERSTANDING_SAVED',actorId:user}})
+ await assert.rejects(()=>invoke('amc.brand_understanding.save',{...input,patch:{entries:[{...patch.entries[0],quote:'面向儿童。'}]}}),(e:any)=>e.preflightRejected===true&&e.preflightFeedback.includes('whole_user_statement_required'))
+ assert.equal((await read()).revision,current.revision)
+ assert.equal(await prisma.auditLog.count({where:{action:'BRAND_UNDERSTANDING_SAVED',actorId:user}}),auditBefore)
  const saved:any=await invoke('amc.brand_understanding.save',input,task);assert.equal(saved.verified,true);assert.equal(saved.current,true)
  const replay:any=await invoke('amc.brand_understanding.save',input,task);assert.equal(replay.revision,saved.revision)
  current=await read();assert.equal(current.current.length,1)

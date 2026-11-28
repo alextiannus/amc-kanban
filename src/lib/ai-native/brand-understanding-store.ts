@@ -6,6 +6,16 @@ export async function readBrandUnderstanding(brandId:string,db:any=prisma){
  const [knowledge,brand]=await Promise.all([db.brandKnowledge.findUnique({where:{brandId},select:{marketingSolution:true}}),db.brand.findUnique({where:{id:brandId},select:{timezone:true}})])
  return {brandId,...projectUnderstanding((knowledge?.marketingSolution as any)?.brandUnderstanding,undefined,brand?.timezone)}
 }
+/** Reject deterministic input errors before dispatch records a write outcome as uncertain. Atomic save repeats all checks. */
+export async function validateBrandUnderstanding(args:{brandId:string;userId:string;taskId:string;previousTaskId?:string;goal:string;expectedRevision:string;patch:UnderstandingPatch},db:any=prisma){
+ const resourceId=`brand-understanding:${args.brandId}:${args.userId}:${args.taskId}:${understandingRevision({entries:[args.patch],plans:[]})}`
+ if(await db.auditLog.findFirst({where:{actorId:args.userId,resourceId,action:'BRAND_UNDERSTANDING_SAVED'}}))return
+ const [row,brand]=await Promise.all([db.brandKnowledge.findUnique({where:{brandId:args.brandId},select:{marketingSolution:true}}),db.brand.findUnique({where:{id:args.brandId},select:{timezone:true}})])
+ if(!brand)throw error('brand_not_found',404)
+ const before=(row?.marketingSolution as any)?.brandUnderstanding
+ if(understandingRevision(before)!==args.expectedRevision)throw error('brand_understanding_changed_read_again')
+ reduceUnderstanding(before,args.patch,{goal:args.goal,userId:args.userId,taskId:args.taskId,previousTaskId:args.previousTaskId,timeZone:brand.timezone,now:new Date().toISOString()})
+}
 export async function saveBrandUnderstanding(args:{brandId:string;userId:string;taskId:string;previousTaskId?:string;goal:string;expectedRevision:string;patch:UnderstandingPatch},db:any=prisma){
  const resourceId=`brand-understanding:${args.brandId}:${args.userId}:${args.taskId}:${understandingRevision({entries:[args.patch],plans:[]})}`
  const receipt=await db.$transaction(async(tx:any)=>{
