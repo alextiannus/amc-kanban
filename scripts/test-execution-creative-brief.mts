@@ -10,3 +10,9 @@ const current=executionCreativeBrief(facts,{...workspace,marketingPlan:{...works
 assert.equal(current.strategyDocument,edited);assert.equal(current.strategyVersion,'now')
 assert.deepEqual(current.sellingPoints,[]);assert.equal(current.monthlyCampaign,null)
 console.log('PASS: current strategy document takes precedence over stale selling point and month arrays')
+
+const understood=executionCreativeBrief({}, {brandUnderstanding:{revision:'memory-v1',current:[{text:'不做低价促销'}],unresolved:[],plans:[{month:'2026-12',content:'新品',status:'decided'}]}}, '2026-12')
+assert.equal(understood.currentUnderstanding[0].text,'不做低价促销')
+assert.equal(understood.monthDirection.content,'新品')
+assert.equal(understood.understandingRevision,'memory-v1')
+console.log('PASS execution brief preserves projected current understanding and selected month direction')
