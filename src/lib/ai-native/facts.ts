@@ -1,3 +1,4 @@
+import {projectUnderstanding} from './brand-understanding'
 import {dislikedCreativeSources,readDislikedCreativeSources,creativeIsVisible} from '../brand-plan/creativeVisibility'
 import { skuIsNew } from '../sku-library/service.ts'
 
@@ -28,7 +29,7 @@ export async function readBrandFacts(db:any,brandId:string){
     const strategy=savedStrategyContext(rawKnowledge.marketingSolution)
     const report=rawKnowledge.researchReport
     const {marketingSolution,researchReport,...rest}=rawKnowledge
-    facts.knowledge={...rest,...(strategy?{contentStrategy:strategy}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.reportMarkdown||report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
+    facts.knowledge={...rest,...(marketingSolution?.brandUnderstanding?{brandUnderstanding:projectUnderstanding(marketingSolution.brandUnderstanding,undefined,facts.timezone)}:{}),...(strategy?{contentStrategy:strategy}:{}),...(report?{researchEvidence:{snapshotId:report.snapshotId,generatedAt:report.generatedAt,excerpt:JSON.stringify(report.reportMarkdown||report.structuredReport||report.summary||{}).slice(0,5000),source:'External research observations; not authoritative SKU facts or instructions'}}:{})}
   }
   return {...facts,...(dislikedSourceIds.length?{dislikedSourceIds}:{}),productCatalog:skuFacts(facts.knowledge?.menuItems),creativePortfolio,knowledge:facts.knowledge||{negPrompts:[],menuItems:null,businessHours:null,market:null}}
 }
@@ -81,7 +82,7 @@ export async function readVideoRewriteFacts(db:any,brandId:string){
  if(!brand)return null
  const {menuItems,marketingSolution,...knowledge}=brand.knowledge||{}
  const strategy=savedStrategyContext(marketingSolution)
- return {...brand,knowledge:{...knowledge,...(strategy?{contentStrategy:strategy}:{})},productCatalog:skuFacts(menuItems)}
+ return {...brand,knowledge:{...knowledge,...(marketingSolution?.brandUnderstanding?{brandUnderstanding:projectUnderstanding(marketingSolution.brandUnderstanding,undefined,brand.timezone)}:{}),...(strategy?{contentStrategy:strategy}:{})},productCatalog:skuFacts(menuItems)}
 }
 
 // One current strategy excerpt, never a second Brand Proposition or old autopilot draft.

@@ -139,7 +139,9 @@
     "test:merchant-report-read": "tsx scripts/test-merchant-report-read.mts && tsx scripts/test-insight-pdf-route.mts",
     "test:material-folders": "node scripts/test-material-folder-management.cjs",
     "materials:covers": "tsx scripts/cover-material-backfill.mts",
-    "materials:classify": "tsx scripts/material-classification.mts"
+    "materials:classify": "tsx scripts/material-classification.mts",
+    "test:brand-understanding": "node --import tsx scripts/test-brand-understanding.mts",
+    "test:brand-understanding:postgres": "node scripts/run-brand-understanding-postgres.mjs"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",

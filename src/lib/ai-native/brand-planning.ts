@@ -1,3 +1,4 @@
+import {projectUnderstanding} from './brand-understanding'
 import {strategyInterviewVersion} from '../brand-plan/strategy-sources'
 import {insightDownloads} from '../brand-plan/report-download'
 import {interviewInput} from '../brand-plan/interview-information'
@@ -81,7 +82,7 @@ export async function readMarketingWorkspace(actor:NativeActor,scope?:{stage:str
   const brandId=brandFor(actor)
   const workspace=await getBrandPlanningContext(brandId)
   if(!workspace)return {brandId,status:'missing' as const,revision:planningRevision({}),workspace:null}
-  const sections:any={executionChecklist:(workspace.marketingSolution as any).executionChecklist||null,brandInformation:workspace.brandInformation,coCreation:currentPlanningDocuments(record(workspace.marketingSolution)),merchantInterview:workspace.merchantInterview,annualPlan:workspace.marketingSolution.annualPlan||null,marketingPlan:(workspace.marketingSolution as any).marketingPlan||null}
+  const sections:any={brandUnderstanding:projectUnderstanding((workspace.marketingSolution as any).brandUnderstanding),executionChecklist:(workspace.marketingSolution as any).executionChecklist||null,brandInformation:workspace.brandInformation,coCreation:currentPlanningDocuments(record(workspace.marketingSolution)),merchantInterview:workspace.merchantInterview,annualPlan:workspace.marketingSolution.annualPlan||null,marketingPlan:(workspace.marketingSolution as any).marketingPlan||null}
   if(scope?.stage==='marketing_plan'||scope?.stage==='execution_checklist'){delete sections.merchantInterview;if(sections.coCreation)delete sections.coCreation.interview}
   // Per-section budgets keep long interviews from hiding existing quarterly plans.
   const attachments=await prisma.mediaAsset.findMany({where:{brandId,id:{in:(record(record(workspace.marketingSolution).coCreation).interview?.attachmentIds||[]).slice(0,20)}},select:{id:true,filename:true,aiCaption:true,imageAnalysis:true,textDetection:true,technicalMetadata:true}})
